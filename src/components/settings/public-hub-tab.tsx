@@ -1,26 +1,24 @@
 'use client';
 
 /**
- * Public Hub Settings Tab
+ * Public Hub Settings Tab — Public Presentation & Discovery Layer
  *
- * Lets a business owner/admin edit every field that appears on their public
- * Business Hub page at /{industry}/{city}/{slug}.
- *
- * Organised into 8 cards:
- *   1. Visibility & URL   — enable toggle + URL preview + Preview button
- *   2. About              — tagline + description (≥100 chars for SEO)
- *   3. Location           — city, state, postalCode + service areas (chips)
- *   4. Images             — cover image URL + gallery (repeatable)
- *   5. Business Hours     — per-day open/close toggles
- *   6. Social Links       — facebook, instagram, twitter, linkedin, youtube
- *   7. FAQs               — repeatable {question, answer}
- *   8. SEO                — seoTitle + seoDescription with char counters
- *
- * Saves via PUT /api/tenants/[id] (extended to accept the 17 Hub fields).
- * The API also calls revalidatePath so the public page refreshes instantly.
+ * Single Source of Truth architecture:
+ *   - Business Name, Industry, Tagline, Description, Contact, and Base Address
+ *     are inherited from Company Information.
+ *   - Logo and Brand Colors are inherited from Branding.
+ *   - This component manages marketplace-specific discovery extensions:
+ *     1. Visibility & Public URL Preview with Profile Readiness Meter (0-100%)
+ *     2. Inherited Business Profile summary card
+ *     3. Service Areas (Travel radius in km + served suburbs/neighborhoods)
+ *     4. Photos & Portfolio Gallery (Cover Hero + Work Gallery via S3)
+ *     5. Inherited Business Hours summary card
+ *     6. Social Media Links
+ *     7. FAQs (Customer-facing accordion + Schema.org)
+ *     8. SEO Metadata (Meta title, Meta description, Google SERP preview)
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Globe,
   MapPin,
@@ -41,6 +39,11 @@ import {
   Upload,
   X,
   Navigation,
+  Building2,
+  ArrowUpRight,
+  Sparkles,
+  Layers,
+  FileCheck,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,7 +55,6 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { authFetch } from '@/lib/api';
 import { toast } from 'sonner';
-import { RichTextEditor } from '@/components/templates/rich-text-editor';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -60,14 +62,12 @@ interface GalleryItem {
   url: string;
   caption: string;
 }
+
 interface FaqItem {
   question: string;
   answer: string;
 }
-interface BusinessHours {
-  // per-day: { open: "09:00", close: "17:00" } | { closed: true }
-  [day: string]: { open: string; close: string; closed: boolean };
-}
+
 interface SocialLinks {
   facebook?: string;
   instagram?: string;
@@ -87,11 +87,7 @@ interface HubForm {
   description: string;
   coverImage: string;
   gallery: GalleryItem[];
-  businessHours: BusinessHours;
   serviceAreas: string[];
-  // Provider service radius (km). 0 / null = "will travel anywhere".
-  // Default 25 (mirrors the Prisma schema). Powers the marketplace
-  // "near me" radius search filter.
   serviceRadiusKm: number;
   socialLinks: SocialLinks;
   faqs: FaqItem[];
@@ -101,30 +97,18 @@ interface HubForm {
 
 interface Props {
   tenantId: string | null;
-  /** industry + slug are needed to build the URL preview */
   industry: string;
   slug: string;
-  /** Called after a successful save so the parent can refresh auth/tenant
-   * state (e.g. so the sidebar reacts to marketplaceOptIn changes). */
   onSaved?: () => void;
 }
 
-const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 const DAY_LABELS: Record<string, string> = {
-  mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday',
-  fri: 'Friday', sat: 'Saturday', sun: 'Sunday',
+  monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', thursday: 'Thu',
+  friday: 'Fri', saturday: 'Sat', sunday: 'Sun',
 };
 
-function defaultBusinessHours(): BusinessHours {
-  const hours: BusinessHours = {};
-  for (const d of DAYS) {
-    hours[d] = { open: '09:00', close: '17:00', closed: d === 'sun' };
-  }
-  return hours;
-}
-
-function emptyForm(): HubForm {
-  return {
+export function PublicHubTab({ tenantId, industry, slug, onSaved }: Props) {
+  const [form, setForm] = useState<HubForm>({
     publicProfileEnabled: false,
     marketplaceOptIn: false,
     publicSlug: '',
@@ -135,109 +119,105 @@ function emptyForm(): HubForm {
     description: '',
     coverImage: '',
     gallery: [],
-    businessHours: defaultBusinessHours(),
     serviceAreas: [],
     serviceRadiusKm: 25,
     socialLinks: {},
     faqs: [],
     seoTitle: '',
     seoDescription: '',
-  };
-}
+  });
 
-// ─── Component ─────────────────────────────────────────────────────────────
+  // Inherited snapshot fields
+  const [inheritedData, setInheritedData] = useState<{
+    name: string;
+    logo: string | null;
+    tagline: string;
+    description: string;
+    phone: string;
+    email: string;
+    website: string;
+    country: string;
+    hoursSummary: string;
+  }>({
+    name: '',
+    logo: null,
+    tagline: '',
+    description: '',
+    phone: '',
+    email: '',
+    website: '',
+    country: 'US',
+    hoursSummary: 'Mon – Fri: 9:00 AM – 5:00 PM',
+  });
 
-// ─── Image upload helper ─────────────────────────────────────────────────
-// Posts a File to /api/public-hub/upload and returns the resulting URL.
-// Used by both the cover-image uploader and the gallery uploader.
-async function uploadImage(file: File, kind: 'cover' | 'gallery'): Promise<string> {
-  const fd = new FormData();
-  fd.append('file', file);
-  fd.append('kind', kind);
-  const res = await authFetch('/api/public-hub/upload', { method: 'POST', body: fd });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Upload failed');
-  }
-  const data = await res.json();
-  return data.url as string;
-}
-
-export function PublicHubTab({ tenantId, industry, slug, onSaved }: Props) {
-  const [form, setForm] = useState<HubForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [newArea, setNewArea] = useState('');
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
-  // Upload state — shown as a small spinner overlay on the upload tile.
+  const [newArea, setNewArea] = useState('');
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadingGalleryIdx, setUploadingGalleryIdx] = useState<number | null>(null);
 
-  // ── Service radius auto-save state ────────────────────────────────────────
-  // `serviceRadiusKm` PATCHes the tenant on change (debounced) — independent
-  // of the main "Save changes" button — so the user gets instant feedback.
-  // `radiusSavedAt` is a timestamp used to show a temporary "Saved ✓" badge
-  // next to the input. Initial-load value is captured in a ref so the first
-  // loadHub() effect doesn't trigger a spurious PATCH.
-  const [radiusSaving, setRadiusSaving] = useState(false);
-  const [radiusSavedAt, setRadiusSavedAt] = useState<number | null>(null);
-  const initialRadiusRef = useRef<number | null>(null);
-
-  // ── Load existing Hub data from the API ──────────────────────────────────
+  // ── Load Hub & Tenant Data ──────────────────────────────────────────────
   const loadHub = useCallback(async () => {
-    if (!tenantId) {
-      setLoading(false);
-      return;
-    }
+    if (!tenantId) return;
+    setLoading(true);
     try {
-      const res = await authFetch(`/api/tenants/${tenantId}`, { method: 'GET' });
-      if (!res.ok) {
-        toast.error('Failed to load public hub data');
-        return;
-      }
+      const res = await authFetch(`/api/tenants/${tenantId}`);
+      if (!res.ok) throw new Error('Failed to load tenant');
       const data = await res.json();
       const t = data.tenant;
 
-      // Parse JSON fields safely.
-      // CRITICAL: each JSON.parse result MUST be type-checked before assignment.
-      // If the DB column contains `"null"`, `"\"some string\""`, or a JSON
-      // object instead of an array, JSON.parse succeeds but returns a non-array
-      // value — and the later `.map()` call crashes the entire Settings view
-      // (TypeError: serviceAreas.map is not a function → Error Boundary).
       let gallery: GalleryItem[] = [];
-      let businessHours: BusinessHours = defaultBusinessHours();
-      let serviceAreas: string[] = [];
-      let socialLinks: SocialLinks = {};
-      let faqs: FaqItem[] = [];
+      try {
+        gallery = JSON.parse(t.galleryJson || '[]');
+      } catch {}
 
+      let serviceAreas: string[] = [];
       try {
-        const parsed = JSON.parse(t.galleryJson || '[]');
-        if (Array.isArray(parsed)) gallery = parsed as GalleryItem[];
+        serviceAreas = JSON.parse(t.serviceAreasJson || '[]');
       } catch {}
+
+      let socialLinks: SocialLinks = {};
       try {
-        const parsed = JSON.parse(t.businessHoursJson || '{}');
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          businessHours = { ...defaultBusinessHours(), ...(parsed as BusinessHours) };
-        }
+        socialLinks = JSON.parse(t.socialLinksJson || '{}');
       } catch {}
+
+      let faqs: FaqItem[] = [];
       try {
-        const parsed = JSON.parse(t.serviceAreasJson || '[]');
-        if (Array.isArray(parsed)) serviceAreas = parsed.filter((x) => typeof x === 'string');
+        faqs = JSON.parse(t.faqsJson || '[]');
       } catch {}
-      try {
-        const parsed = JSON.parse(t.socialLinksJson || '{}');
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          socialLinks = parsed as SocialLinks;
-        }
-      } catch {}
-      try {
-        const parsed = JSON.parse(t.faqsJson || '[]');
-        if (Array.isArray(parsed)) faqs = parsed as FaqItem[];
-      } catch {}
+
+      // Format business hours summary
+      let hoursSummary = 'Mon – Fri: 9:00 AM – 5:00 PM (Sat–Sun Closed)';
+      if (t.businessHoursJson) {
+        try {
+          const parsed = JSON.parse(t.businessHoursJson);
+          if (parsed && typeof parsed === 'object') {
+            const openDays = Object.keys(parsed).filter((d) => !parsed[d]?.closed);
+            if (openDays.length > 0) {
+              hoursSummary = `${openDays.map((d) => DAY_LABELS[d] || d).join(', ')}: ${parsed[openDays[0]]?.open || '09:00'} – ${parsed[openDays[0]]?.close || '17:00'}`;
+            } else {
+              hoursSummary = 'Schedule set in Company Profile';
+            }
+          }
+        } catch {}
+      }
+
+      setInheritedData({
+        name: t.name || 'Your Business',
+        logo: t.logo || null,
+        tagline: t.tagline || '',
+        description: t.description || '',
+        phone: t.phone || '',
+        email: t.email || '',
+        website: t.website || '',
+        country: t.country || 'US',
+        hoursSummary,
+      });
 
       setForm({
-        publicProfileEnabled: t.publicProfileEnabled ?? false,
-        marketplaceOptIn: t.marketplaceOptIn ?? false,
+        publicProfileEnabled: Boolean(t.publicProfileEnabled),
+        marketplaceOptIn: Boolean(t.marketplaceOptIn),
         publicSlug: t.publicSlug || '',
         city: t.city || '',
         state: t.state || '',
@@ -246,7 +226,6 @@ export function PublicHubTab({ tenantId, industry, slug, onSaved }: Props) {
         description: t.description || '',
         coverImage: t.coverImage || '',
         gallery,
-        businessHours,
         serviceAreas,
         serviceRadiusKm: typeof t.serviceRadiusKm === 'number' ? t.serviceRadiusKm : 25,
         socialLinks,
@@ -255,23 +234,21 @@ export function PublicHubTab({ tenantId, industry, slug, onSaved }: Props) {
         seoDescription: t.seoDescription || '',
       });
       setPublicUrl(t.publicUrl || null);
-    } catch {
-      toast.error('Network error loading hub data');
+    } catch (err) {
+      console.error('[PublicHubTab] Error loading hub:', err);
+      toast.error('Network error loading marketplace settings');
     } finally {
       setLoading(false);
     }
   }, [tenantId]);
 
   useEffect(() => {
-    loadHub();
+    void loadHub();
   }, [loadHub]);
 
-  // ── Save handler ─────────────────────────────────────────────────────────
+  // ── Save Handler ────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!tenantId) {
-      toast.error('No tenant found');
-      return;
-    }
+    if (!tenantId) return;
     setSaving(true);
     try {
       const res = await authFetch(`/api/tenants/${tenantId}`, {
@@ -281,364 +258,309 @@ export function PublicHubTab({ tenantId, industry, slug, onSaved }: Props) {
           publicProfileEnabled: form.publicProfileEnabled,
           marketplaceOptIn: form.marketplaceOptIn,
           publicSlug: form.publicSlug,
-          city: form.city,
-          state: form.state,
-          postalCode: form.postalCode,
-          tagline: form.tagline,
-          description: form.description,
           coverImage: form.coverImage,
           galleryJson: JSON.stringify(form.gallery),
-          businessHoursJson: JSON.stringify(form.businessHours),
           serviceAreasJson: JSON.stringify(form.serviceAreas),
+          serviceRadiusKm: form.serviceRadiusKm,
           socialLinksJson: JSON.stringify(form.socialLinks),
           faqsJson: JSON.stringify(form.faqs),
           seoTitle: form.seoTitle,
           seoDescription: form.seoDescription,
-          serviceRadiusKm: form.serviceRadiusKm,
         }),
       });
+
       if (res.ok) {
         const data = await res.json();
         setPublicUrl(data.tenant.publicUrl || null);
-        toast.success('Public Hub saved — your page is live');
-        // Notify parent so it can refresh auth/tenant state (e.g. so the
-        // sidebar reacts to marketplaceOptIn changes in real-time).
+        toast.success('Marketplace & Public Hub settings saved!');
         onSaved?.();
       } else {
         const err = await res.json().catch(() => ({}));
         toast.error(err.error || 'Failed to save');
       }
     } catch {
-      toast.error('Network error saving hub data');
+      toast.error('Network error saving hub settings');
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Service radius: debounced auto-PATCH on change ────────────────────────
-  // Skips the initial load value (so loading the form doesn't fire a save).
-  // Sends only `{ serviceRadiusKm }` to the PATCH endpoint (not the full
-  // form) so concurrent edits to other fields don't get clobbered.
-  useEffect(() => {
-    if (!tenantId) return;
-    const value = form.serviceRadiusKm;
-    // Capture the initial value the first time we have one, then skip
-    // PATCHing if the value hasn't actually changed from the server state.
-    if (initialRadiusRef.current === null) {
-      initialRadiusRef.current = value;
-      return;
+  // ── Image Upload Helper ──────────────────────────────────────────────────
+  const uploadImage = async (file: File, folder: string): Promise<string> => {
+    if (!tenantId) throw new Error('No tenant ID');
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('bucket', 'company-assets');
+    formData.append('folder', folder);
+
+    const res = await authFetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Upload failed');
     }
-    if (initialRadiusRef.current === value) return;
+    const data = await res.json();
+    return data.url;
+  };
 
-    setRadiusSaving(true);
-    const timer = setTimeout(async () => {
-      try {
-        const res = await authFetch(`/api/tenants/${tenantId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ serviceRadiusKm: value }),
-        });
-        if (res.ok) {
-          initialRadiusRef.current = value;
-          setRadiusSavedAt(Date.now());
-          toast.success(
-            value === 0
-              ? 'Service radius saved — you will travel anywhere'
-              : `Service radius saved — ${value} km`
-          );
-        } else {
-          const err = await res.json().catch(() => ({}));
-          toast.error(err.error || 'Failed to save service radius');
-        }
-      } catch {
-        toast.error('Network error saving service radius');
-      } finally {
-        setRadiusSaving(false);
-      }
-    }, 700);
+  // ── URL Preview & Readiness Score ────────────────────────────────────────
+  const urlIndustry = (industry || 'services').toLowerCase().replace(/\s+/g, '-');
+  const urlCity = (form.city || 'city').toLowerCase().replace(/\s+/g, '-');
+  const urlSlug = (form.publicSlug || slug || 'profile').toLowerCase().replace(/\s+/g, '-');
+  const urlPreview = `${urlIndustry}/${urlCity}/${urlSlug}`;
 
-    return () => clearTimeout(timer);
-  }, [form.serviceRadiusKm, tenantId]);
-
-  // ── Auto-clear the "Saved ✓" inline badge after 2.5s ──────────────────────
-  useEffect(() => {
-    if (radiusSavedAt === null) return;
-    const t = setTimeout(() => setRadiusSavedAt(null), 2500);
-    return () => clearTimeout(t);
-  }, [radiusSavedAt]);
-
-  // ── URL preview ──────────────────────────────────────────────────────────
-  const urlIndustry = industry || 'industry';
-  const urlCity = form.city || 'city';
-  const urlSlug = form.publicSlug || slug || 'business-slug';
-  const urlPreview = `${urlIndustry}/${urlCity.toLowerCase().replace(/\s+/g, '-')}/${urlSlug.toLowerCase().replace(/\s+/g, '-')}`;
-
-  // ── Indexability checklist (mirrors the "rich enough" rule) ──────────────
-  // Strip HTML tags before counting characters so the SEO check is accurate.
-  const descPlain = form.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  const descLongEnough = descPlain.length >= 100;
-  const hasCity = form.city.trim().length > 0;
-  const hasIndustry = (industry || '').length > 0;
-  const hasImage = Boolean(form.coverImage) || form.gallery.length > 0;
-  const checklist = [
-    { ok: hasIndustry, label: 'Industry set (in Company Profile)' },
-    { ok: hasCity, label: 'City set' },
-    { ok: descLongEnough, label: 'Description ≥ 100 characters' },
-    { ok: hasImage, label: 'At least 1 image (cover or gallery)' },
+  // Compute profile readiness percentage
+  const checks = [
+    { label: 'Business Name', ok: Boolean(inheritedData.name) },
+    { label: 'Base Location & Country', ok: Boolean(form.city && inheritedData.country) },
+    { label: 'Business Logo', ok: Boolean(inheritedData.logo) },
+    { label: 'Business Tagline / Description', ok: Boolean(inheritedData.tagline || inheritedData.description) },
+    { label: 'Cover Image or Gallery', ok: Boolean(form.coverImage || form.gallery.length > 0) },
+    { label: 'Service Areas', ok: form.serviceAreas.length > 0 || form.serviceRadiusKm > 0 },
   ];
-  // Note: ≥3 public services is also required but managed elsewhere
-  const allChecklistPass = checklist.every((c) => c.ok);
+  const passedChecks = checks.filter((c) => c.ok).length;
+  const readinessPct = Math.round((passedChecks / checks.length) * 100);
 
-  // ─── Loading state ───────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-muted-foreground">
-        <Loader2 className="size-5 animate-spin mr-2" /> Loading public hub settings...
+      <div className="flex items-center justify-center py-16 text-muted-foreground">
+        <Loader2 className="size-5 animate-spin mr-2" /> Loading public profile settings...
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* ═══════════════════════════════════════════════════════════════════
-          1. VISIBILITY & URL
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* ─── 1. Visibility, Public URL & Readiness Meter ───────────────── */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <Globe className="size-4 text-emerald-600" />
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                <Globe className="size-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Public Hub & Marketplace Visibility</CardTitle>
+                <CardDescription>Control your public-facing profile and discovery listing on Fieseros</CardDescription>
+              </div>
             </div>
-            <div>
-              <CardTitle className="text-base">Public Business Hub</CardTitle>
-              <CardDescription>Control your public-facing page at fieseros.com</CardDescription>
+
+            {/* Live Badges */}
+            <div className="flex items-center gap-2">
+              {form.publicProfileEnabled ? (
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 gap-1.5">
+                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" /> Public Page Live
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="gap-1.5">
+                  <span className="size-2 rounded-full bg-muted-foreground" /> Page Offline
+                </Badge>
+              )}
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Enable toggle */}
-          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-muted/30">
-            <div className="space-y-1">
-              <Label htmlFor="hub-enabled" className="text-sm font-medium">Enable public page</Label>
-              <p className="text-xs text-muted-foreground">
-                When ON, your business is live at the URL below. When OFF, the page returns 404.
-              </p>
+          {/* Toggles */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-border bg-muted/20">
+              <div className="space-y-1">
+                <Label htmlFor="hub-enabled" className="text-sm font-semibold">Enable Public Business Page</Label>
+                <p className="text-xs text-muted-foreground">
+                  Publishes your verified business landing page at your dedicated URL.
+                </p>
+              </div>
+              <Switch
+                id="hub-enabled"
+                checked={form.publicProfileEnabled}
+                onCheckedChange={(v) => setForm({ ...form, publicProfileEnabled: v })}
+              />
             </div>
-            <Switch
-              id="hub-enabled"
-              checked={form.publicProfileEnabled}
-              onCheckedChange={(v) => setForm({ ...form, publicProfileEnabled: v })}
-            />
+
+            <div className="flex items-start justify-between gap-4 p-4 rounded-xl border border-border bg-muted/20">
+              <div className="space-y-1">
+                <Label htmlFor="marketplace-optin" className="text-sm font-semibold">List in Marketplace Directory</Label>
+                <p className="text-xs text-muted-foreground">
+                  Displays your business in search, city directories, and category results.
+                </p>
+              </div>
+              <Switch
+                id="marketplace-optin"
+                checked={form.marketplaceOptIn}
+                onCheckedChange={(v) => setForm({ ...form, marketplaceOptIn: v })}
+              />
+            </div>
           </div>
 
-          {/* Marketplace listing toggle — independent from the public page
-              toggle. publicProfileEnabled controls the hub page at
-              /{industry}/{city}/{slug}; marketplaceOptIn controls whether
-              the provider shows up in the /marketplace browse grid. */}
-          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-muted/30">
-            <div className="space-y-1">
-              <Label htmlFor="marketplace-optin" className="text-sm font-medium">List on Fieseros Marketplace</Label>
-              <p className="text-xs text-muted-foreground">
-                When ON, your business appears in the marketplace browse grid at{' '}
-                <a href="/marketplace" target="_blank" rel="noreferrer" className="font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800 dark:text-emerald-400">
-                  /marketplace
-                </a>{' '}
-                so customers can find and book you. When OFF, your public page (above) still works, but you won&rsquo;t be listed in the marketplace. You can toggle this anytime.
-              </p>
-            </div>
-            <Switch
-              id="marketplace-optin"
-              checked={form.marketplaceOptIn}
-              onCheckedChange={(v) => setForm({ ...form, marketplaceOptIn: v })}
-            />
-          </div>
-
-          {/* URL preview */}
+          {/* URL Preview */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Your public URL</Label>
-            <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30 font-mono text-sm break-all">
-              <span className="text-muted-foreground">fieseros.com/</span>
-              <span className="text-emerald-700 dark:text-emerald-400">{urlPreview}</span>
+            <Label className="text-sm font-medium">Your Public Dedicated URL</Label>
+            <div className="flex items-center gap-2 p-3 rounded-lg border border-border bg-muted/30 font-mono text-xs sm:text-sm break-all">
+              <span className="text-muted-foreground">https://fieseros.com/</span>
+              <span className="text-emerald-700 dark:text-emerald-400 font-bold">{urlPreview}</span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              The URL is built from your <strong>industry</strong> (set in Company Profile), your <strong>city</strong>, and your <strong>public slug</strong> below.
-            </p>
           </div>
 
-          {/* Public slug */}
-          <div className="space-y-2">
-            <Label htmlFor="public-slug" className="text-sm font-medium">Public slug</Label>
-            <Input
-              id="public-slug"
-              value={form.publicSlug}
-              onChange={(e) => setForm({ ...form, publicSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
-              placeholder={slug || 'acme-plumbing'}
-              className="font-mono"
-            />
-            <p className="text-xs text-muted-foreground">Leave blank to use your default slug &quot;{slug}&quot;. Lowercase letters, numbers, and hyphens only.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+            <div className="space-y-1.5">
+              <Label htmlFor="public-slug" className="text-sm font-medium">Custom Public Slug</Label>
+              <Input
+                id="public-slug"
+                value={form.publicSlug}
+                onChange={(e) => setForm({ ...form, publicSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                placeholder={slug || 'acme-services'}
+                className="font-mono text-sm h-9"
+              />
+            </div>
+
+            <div className="pt-5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!form.publicProfileEnabled}
+                onClick={() => {
+                  if (publicUrl) window.open(publicUrl, '_blank');
+                  else window.open(`/${urlPreview}`, '_blank');
+                }}
+                className="gap-1.5 w-full sm:w-auto text-xs font-medium"
+              >
+                <ExternalLink className="size-3.5" />
+                Preview Live Page
+              </Button>
+            </div>
           </div>
 
-          {/* Preview button + status */}
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!form.publicProfileEnabled}
-              onClick={() => {
-                if (publicUrl) window.open(publicUrl, '_blank');
-              }}
-              className="gap-1.5"
-            >
-              <ExternalLink className="size-3.5" />
-              Preview public page
-            </Button>
-            {form.publicProfileEnabled ? (
-              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1">
-                <span className="size-1.5 rounded-full bg-emerald-500" /> Live
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="gap-1">
-                <span className="size-1.5 rounded-full bg-muted-foreground" /> Hidden
-              </Badge>
+          {/* Profile Readiness Meter */}
+          <Separator />
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-amber-500" />
+                <span className="text-sm font-semibold">Public Profile Readiness</span>
+              </div>
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{readinessPct}% Complete</span>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-600 transition-all duration-500 rounded-full"
+                style={{ width: `${readinessPct}%` }}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+              {checks.map((c) => (
+                <div key={c.label} className="flex items-center gap-1.5 text-xs">
+                  {c.ok ? (
+                    <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0" />
+                  ) : (
+                    <XCircle className="size-3.5 text-muted-foreground/60 shrink-0" />
+                  )}
+                  <span className={c.ok ? 'text-foreground font-medium' : 'text-muted-foreground'}>{c.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ─── 2. Inherited Business Profile (Read-Only) ─────────────────── */}
+      <Card className="border-emerald-200/60 bg-emerald-50/20 dark:border-emerald-900/40 dark:bg-emerald-950/10">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <Building2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+              <CardTitle className="text-sm font-bold">Business Information (Inherited)</CardTitle>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Source of Truth: <strong>Company Information</strong>
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <p className="text-muted-foreground">Business Name</p>
+              <p className="font-semibold text-foreground text-sm mt-0.5">{inheritedData.name}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Industry & Region</p>
+              <p className="font-medium text-foreground mt-0.5">{industry || 'Home Services'} · {inheritedData.country}</p>
+            </div>
+            {inheritedData.tagline && (
+              <div className="sm:col-span-2">
+                <p className="text-muted-foreground">Tagline</p>
+                <p className="font-medium text-foreground italic mt-0.5">&ldquo;{inheritedData.tagline}&rdquo;</p>
+              </div>
+            )}
+            {inheritedData.description && (
+              <div className="sm:col-span-2">
+                <p className="text-muted-foreground">Description</p>
+                <p className="text-muted-foreground mt-0.5 line-clamp-2">{inheritedData.description}</p>
+              </div>
             )}
           </div>
-
-          {/* Indexability checklist */}
-          {form.publicProfileEnabled && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Search engine indexing checklist</p>
-                <p className="text-xs text-muted-foreground">Your page is indexed by Google only when all checks pass (plus ≥3 public services, managed in the Services tab).</p>
-                <div className="grid gap-1.5">
-                  {checklist.map((c) => (
-                    <div key={c.label} className="flex items-center gap-2 text-sm">
-                      {c.ok ? (
-                        <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
-                      ) : (
-                        <XCircle className="size-4 text-muted-foreground shrink-0" />
-                      )}
-                      <span className={c.ok ? 'text-foreground' : 'text-muted-foreground'}>{c.label}</span>
-                    </div>
-                  ))}
-                </div>
-                {allChecklistPass && (
-                  <p className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 pt-1">
-                    <CheckCircle2 className="size-3.5" /> Ready for indexing (add ≥3 services in the Services tab)
-                  </p>
-                )}
-              </div>
-            </>
-          )}
+          <p className="text-[11px] text-muted-foreground pt-1 flex items-center gap-1.5">
+            <FileCheck className="size-3.5 text-emerald-600 shrink-0" />
+            To update your business name, tagline, description, or physical address, edit your <strong>Company Information</strong> tab.
+          </p>
         </CardContent>
       </Card>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          2. ABOUT
-          ═══════════════════════════════════════════════════════════════════ */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">About Your Business</CardTitle>
-          <CardDescription>The headline and description shown at the top of your public page</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="tagline" className="text-sm font-medium">Tagline</Label>
-            <Input
-              id="tagline"
-              value={form.tagline}
-              onChange={(e) => setForm({ ...form, tagline: e.target.value })}
-              placeholder="Denver's trusted 24/7 plumbing experts"
-              maxLength={120}
-            />
-            <p className="text-xs text-muted-foreground">A short one-liner shown under your business name. Max 120 characters.</p>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="description" className="text-sm font-medium">Description</Label>
-              <span className={`text-xs ${descLongEnough ? 'text-emerald-600' : 'text-amber-600'}`}>
-                {form.description.replace(/<[^>]+>/g, '').length} / 100 min
-              </span>
-            </div>
-            <RichTextEditor
-              value={form.description}
-              onChange={(html) => setForm({ ...form, description: html })}
-              placeholder="Tell customers what you do, where you operate, and why they should choose you. Aim for 2-3 paragraphs (200-500 words is ideal for SEO)."
-              ariaLabel="Business description"
-            />
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              {descLongEnough ? (
-                <><CheckCircle2 className="size-3.5 text-emerald-600" /> Long enough for search indexing</>
-              ) : (
-                <><AlertCircle className="size-3.5 text-amber-600" /> Add {100 - form.description.replace(/<[^>]+>/g, '').length} more characters to be indexed</>
-              )}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          3. LOCATION & SERVICE AREAS
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* ─── 3. Service Areas & Travel Radius ─────────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <MapPin className="size-4 text-emerald-600" />
+              <MapPin className="size-4 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <CardTitle className="text-base">Location & Service Areas</CardTitle>
-              <CardDescription>Where you're based and which areas you serve</CardDescription>
+              <CardTitle className="text-base">Service Areas & Travel Radius</CardTitle>
+              <CardDescription>Configure which suburbs, cities, and distance radius your technicians cover</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Auto-fill notice — clarifies that city/state/postal are pre-filled
-              from onboarding so the user knows they don't need to re-enter them. */}
-          <div className="flex items-start gap-2 rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">
-            <MapPin className="size-3.5 mt-0.5 shrink-0" />
+          {/* Base Location Note */}
+          <div className="flex items-center gap-2 text-xs bg-muted/40 p-2.5 rounded-lg border border-border">
+            <MapPin className="size-3.5 text-emerald-600 shrink-0" />
             <span>
-              <strong>Pre-filled from onboarding.</strong> These fields are auto-populated from your business
-              address entered during setup — edit here only if your location has changed.
+              Primary Base: <strong>{form.city || 'City'}, {form.state || 'State'} ({inheritedData.country})</strong> — automatically synced from Company Address.
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="city" className="text-sm font-medium">City</Label>
+
+          {/* Travel Radius */}
+          <div className="space-y-2">
+            <Label htmlFor="service-radius" className="text-sm font-medium flex items-center gap-1.5">
+              <Navigation className="size-3.5 text-emerald-600" />
+              Customer Travel Radius (km)
+            </Label>
+            <div className="flex items-center gap-3">
               <Input
-                id="city"
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-                placeholder="Denver"
+                id="service-radius"
+                type="number"
+                min={0}
+                max={500}
+                step={5}
+                value={form.serviceRadiusKm}
+                onChange={(e) => setForm({ ...form, serviceRadiusKm: Number(e.target.value) || 0 })}
+                className="max-w-[150px] h-9 text-xs"
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="state" className="text-sm font-medium">State / Province</Label>
-              <Input
-                id="state"
-                value={form.state}
-                onChange={(e) => setForm({ ...form, state: e.target.value })}
-                placeholder="CO"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="postalCode" className="text-sm font-medium">Postal code</Label>
-              <Input
-                id="postalCode"
-                value={form.postalCode}
-                onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
-                placeholder="80202"
-              />
+              <span className="text-xs text-muted-foreground">
+                {form.serviceRadiusKm === 0 ? 'Will travel anywhere' : `Covers up to ${form.serviceRadiusKm} km from base`}
+              </span>
             </div>
           </div>
 
           <Separator />
 
-          {/* Service areas — chip input */}
+          {/* Specific Suburbs Chips */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Service areas</Label>
-            <p className="text-xs text-muted-foreground">Cities or neighborhoods you travel to. Press Enter or click Add.</p>
+            <Label className="text-sm font-medium">Served Neighborhoods & Suburbs</Label>
+            <p className="text-xs text-muted-foreground">Add specific suburbs or districts for hyper-local marketplace matching.</p>
             <div className="flex gap-2">
               <Input
                 value={newArea}
@@ -652,7 +574,8 @@ export function PublicHubTab({ tenantId, industry, slug, onSaved }: Props) {
                     }
                   }
                 }}
-                placeholder="e.g. Aurora, Lakewood, Englewood"
+                placeholder="e.g. Richmond, South Yarra, St Kilda"
+                className="h-9 text-xs"
               />
               <Button
                 type="button"
@@ -664,566 +587,311 @@ export function PublicHubTab({ tenantId, industry, slug, onSaved }: Props) {
                     setNewArea('');
                   }
                 }}
-                className="gap-1.5"
+                className="gap-1.5 h-9 text-xs"
               >
-                <Plus className="size-3.5" /> Add
+                <Plus className="size-3.5" /> Add Suburb
               </Button>
             </div>
-            {(Array.isArray(form.serviceAreas) ? form.serviceAreas : []).length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {(Array.isArray(form.serviceAreas) ? form.serviceAreas : []).map((area, i) => (
-                  <Badge key={i} variant="secondary" className="gap-1 pl-2.5 pr-1 py-1">
+            {form.serviceAreas.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-2">
+                {form.serviceAreas.map((area, i) => (
+                  <Badge key={i} variant="secondary" className="gap-1 pl-2.5 pr-1 py-0.5 text-xs">
                     {area}
                     <button
                       type="button"
                       onClick={() => setForm({ ...form, serviceAreas: form.serviceAreas.filter((_, idx) => idx !== i) })}
                       className="ml-1 rounded-full hover:bg-muted p-0.5"
-                      aria-label={`Remove ${area}`}
                     >
-                      <Trash2 className="size-3" />
+                      <Trash2 className="size-3 text-muted-foreground hover:text-red-600" />
                     </button>
                   </Badge>
                 ))}
               </div>
             )}
           </div>
-
-          <Separator />
-
-          {/* Service radius — numeric input with debounced auto-PATCH.
-              Powers the marketplace "near me" radius search filter:
-              providers within `serviceRadiusKm` of the customer's location
-              appear in results. 0 / blank = "will travel anywhere". */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="service-radius" className="text-sm font-medium flex items-center gap-1.5">
-                <Navigation className="size-3.5 text-emerald-600" />
-                Service radius (km)
-              </Label>
-              {/* Inline status indicator — spinner while saving, "Saved ✓"
-                  for ~2s after a successful PATCH. Kept compact so the row
-                  doesn't shift when status changes. */}
-              <span className="text-xs text-muted-foreground flex items-center gap-1 min-h-[16px]">
-                {radiusSaving ? (
-                  <>
-                    <Loader2 className="size-3 animate-spin" />
-                    Saving…
-                  </>
-                ) : radiusSavedAt !== null ? (
-                  <>
-                    <CheckCircle2 className="size-3 text-emerald-600" />
-                    Saved
-                  </>
-                ) : null}
-              </span>
-            </div>
-            <Input
-              id="service-radius"
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={500}
-              step={5}
-              value={Number.isFinite(form.serviceRadiusKm) ? form.serviceRadiusKm : 0}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                // Clamp to [0, 500]. Blank input → 0 ("will travel anywhere").
-                const clamped = Number.isNaN(n) ? 0 : Math.min(500, Math.max(0, n));
-                setForm({ ...form, serviceRadiusKm: clamped });
-              }}
-              className="max-w-[180px]"
-              aria-describedby="service-radius-help"
-            />
-            <p id="service-radius-help" className="text-xs text-muted-foreground">
-              How far are you willing to travel for jobs? Providers within this radius will see
-              you in their &lsquo;near me&rsquo; search results. Default: 25 km. Set to 0 or leave
-              blank for &lsquo;will travel anywhere&rsquo;.
-            </p>
-            {form.serviceRadiusKm === 0 && (
-              <p className="text-xs flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-                <CheckCircle2 className="size-3.5" />
-                You&rsquo;ll appear in marketplace results regardless of customer distance.
-              </p>
-            )}
-          </div>
         </CardContent>
       </Card>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          4. IMAGES
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* ─── 4. Photos & Work Gallery ──────────────────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <ImageIcon className="size-4 text-emerald-600" />
+              <ImageIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <CardTitle className="text-base">Images</CardTitle>
-              <CardDescription>Upload a cover image and photos of your work. You can also paste image URLs.</CardDescription>
+              <CardTitle className="text-base">Photos & Work Portfolio</CardTitle>
+              <CardDescription>Hero cover image and gallery showcasing your past projects and equipment</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* ── Cover image ────────────────────────────────────────────────── */}
+        <CardContent className="space-y-5">
+          {/* Cover Hero Image */}
           <div className="space-y-2">
-            <Label htmlFor="cover-image" className="text-sm font-medium">Cover image</Label>
+            <Label className="text-sm font-medium">Hero Cover Image</Label>
             {form.coverImage ? (
-              <div className="relative group rounded-lg overflow-hidden border max-w-sm">
-                <img
-                  src={form.coverImage}
-                  alt="Cover preview"
-                  className="w-full h-40 object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={uploadingCover}
-                    onClick={() => document.getElementById('cover-upload-input')?.click()}
-                    className="gap-1.5"
-                  >
-                    {uploadingCover ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
-                    Replace
-                  </Button>
+              <div className="relative group rounded-xl overflow-hidden border border-border max-w-md h-44 bg-muted">
+                <img src={form.coverImage} alt="Cover" className="size-full object-cover" />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
                     onClick={() => setForm({ ...form, coverImage: '' })}
-                    className="gap-1.5"
+                    className="gap-1 text-xs"
                   >
-                    <X className="size-3.5" /> Remove
+                    <Trash2 className="size-3.5" /> Remove
                   </Button>
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => document.getElementById('cover-upload-input')?.click()}
-                disabled={uploadingCover}
-                className="flex flex-col items-center justify-center gap-2 w-full max-w-sm h-40 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-colors text-muted-foreground"
-              >
-                {uploadingCover ? (
-                  <><Loader2 className="size-6 animate-spin" /> <span className="text-sm">Uploading...</span></>
-                ) : (
-                  <><Upload className="size-6" /> <span className="text-sm font-medium">Click to upload cover image</span> <span className="text-xs">PNG, JPG, WebP up to 8MB</span></>
-                )}
-              </button>
+              <label className="flex flex-col items-center justify-center gap-2 w-full max-w-md h-36 rounded-xl border-2 border-dashed border-border hover:border-emerald-500 cursor-pointer bg-muted/20 text-muted-foreground">
+                <Upload className="size-5" />
+                <span className="text-xs font-medium">Upload Cover Hero Banner</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingCover(true);
+                    try {
+                      const url = await uploadImage(file, 'cover');
+                      setForm((prev) => ({ ...prev, coverImage: url }));
+                      toast.success('Cover image uploaded');
+                    } catch {
+                      toast.error('Failed to upload cover image');
+                    } finally {
+                      setUploadingCover(false);
+                    }
+                  }}
+                />
+              </label>
             )}
-            <input
-              id="cover-upload-input"
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setUploadingCover(true);
-                try {
-                  const url = await uploadImage(file, 'cover');
-                  setForm({ ...form, coverImage: url });
-                  toast.success('Cover image uploaded');
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : 'Upload failed');
-                } finally {
-                  setUploadingCover(false);
-                  e.target.value = '';
-                }
-              }}
-            />
-            <details className="text-xs text-muted-foreground">
-              <summary className="cursor-pointer hover:text-foreground">Or paste an image URL instead</summary>
-              <Input
-                id="cover-image"
-                value={form.coverImage}
-                onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
-                placeholder="https://example.com/your-cover-photo.jpg"
-                className="mt-2 text-sm"
-              />
-            </details>
           </div>
 
           <Separator />
 
-          {/* ── Gallery ───────────────────────────────────────────────────── */}
+          {/* Portfolio Gallery */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium">Photo gallery</Label>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => document.getElementById('gallery-upload-input')?.click()}
-                  disabled={uploadingGalleryIdx !== null}
-                  className="gap-1.5"
-                >
-                  {uploadingGalleryIdx === -1 ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
-                  Upload photo
+              <Label className="text-sm font-medium">Portfolio Photo Gallery</Label>
+              <label className="cursor-pointer">
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs" asChild>
+                  <span>
+                    <Upload className="size-3.5" /> Upload Portfolio Photo
+                  </span>
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setForm({ ...form, gallery: [...form.gallery, { url: '', caption: '' }] })}
-                  className="gap-1.5"
-                >
-                  <Plus className="size-3.5" /> Add by URL
-                </Button>
-              </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const url = await uploadImage(file, 'gallery');
+                      setForm((prev) => ({
+                        ...prev,
+                        gallery: [...prev.gallery, { url, caption: '' }],
+                      }));
+                      toast.success('Photo added to gallery');
+                    } catch {
+                      toast.error('Failed to upload photo');
+                    }
+                  }}
+                />
+              </label>
             </div>
-            {/* Hidden file input for gallery uploads. Reused for each "Upload photo" click. */}
-            <input
-              id="gallery-upload-input"
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setUploadingGalleryIdx(-1);
-                try {
-                  const url = await uploadImage(file, 'gallery');
-                  setForm({ ...form, gallery: [...form.gallery, { url, caption: '' }] });
-                  toast.success('Photo added to gallery');
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : 'Upload failed');
-                } finally {
-                  setUploadingGalleryIdx(null);
-                  e.target.value = '';
-                }
-              }}
-            />
-            {form.gallery.length === 0 && (
-              <div className="flex flex-col items-center justify-center gap-2 w-full h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
-                <Camera className="size-6" />
-                <p className="text-xs">No gallery photos yet. Add photos of your work, team, or storefront.</p>
+
+            {form.gallery.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No portfolio photos yet. Upload photos to enhance customer trust.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                {form.gallery.map((item, idx) => (
+                  <div key={idx} className="relative group rounded-lg overflow-hidden border border-border bg-muted h-28">
+                    <img src={item.url} alt={`Gallery ${idx + 1}`} className="size-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, gallery: prev.gallery.filter((_, i) => i !== idx) }))}
+                      className="absolute top-1.5 right-1.5 p-1 rounded bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
-            {(Array.isArray(form.gallery) ? form.gallery : []).map((item, i) => (
-              <div key={i} className="flex gap-3 items-start p-3 rounded-lg border bg-muted/20">
-                <div className="relative size-16 rounded-md overflow-hidden border bg-muted shrink-0 flex items-center justify-center">
-                  {item.url ? (
-                    <img src={item.url} alt={item.caption || 'Gallery'} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = ''; }} />
-                  ) : (
-                    <Camera className="size-5 text-muted-foreground" />
-                  )}
-                  {uploadingGalleryIdx === i && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                      <Loader2 className="size-4 animate-spin text-white" />
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 space-y-2">
-                  <Input
-                    value={item.url}
-                    onChange={(e) => {
-                      const next = [...form.gallery];
-                      next[i] = { ...next[i], url: e.target.value };
-                      setForm({ ...form, gallery: next });
-                    }}
-                    placeholder="https://example.com/photo.jpg"
-                    className="text-sm"
-                  />
-                  <Input
-                    value={item.caption}
-                    onChange={(e) => {
-                      const next = [...form.gallery];
-                      next[i] = { ...next[i], caption: e.target.value };
-                      setForm({ ...form, gallery: next });
-                    }}
-                    placeholder="Caption (optional)"
-                    className="text-sm"
-                  />
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => document.getElementById(`gallery-replace-${i}`)?.click()}
-                      disabled={uploadingGalleryIdx !== null}
-                      className="gap-1.5 h-7 text-xs"
-                    >
-                      <Upload className="size-3" /> Replace
-                    </Button>
-                    <input
-                      id={`gallery-replace-${i}`}
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
-                      className="hidden"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        setUploadingGalleryIdx(i);
-                        try {
-                          const url = await uploadImage(file, 'gallery');
-                          const next = [...form.gallery];
-                          next[i] = { ...next[i], url };
-                          setForm({ ...form, gallery: next });
-                          toast.success('Photo replaced');
-                        } catch (err) {
-                          toast.error(err instanceof Error ? err.message : 'Upload failed');
-                        } finally {
-                          setUploadingGalleryIdx(null);
-                          e.target.value = '';
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-destructive shrink-0"
-                  onClick={() => setForm({ ...form, gallery: form.gallery.filter((_, idx) => idx !== i) })}
-                  aria-label="Remove photo"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            ))}
           </div>
         </CardContent>
       </Card>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          5. BUSINESS HOURS
-          ═══════════════════════════════════════════════════════════════════ */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <Clock className="size-4 text-emerald-600" />
+      {/* ─── 5. Inherited Operating Hours ──────────────────────────────── */}
+      <Card className="border-border bg-muted/10">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <Clock className="size-4 text-emerald-600 dark:text-emerald-400" />
+              <CardTitle className="text-sm font-bold">Operating Hours (Inherited)</CardTitle>
             </div>
-            <div>
-              <CardTitle className="text-base">Business Hours</CardTitle>
-              <CardDescription>Shown as &quot;Open now&quot; status and a hours table on your page</CardDescription>
-            </div>
+            <span className="text-xs text-muted-foreground font-medium">{inheritedData.hoursSummary}</span>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {DAYS.map((day) => {
-            const hours = form.businessHours[day] || { open: '09:00', close: '17:00', closed: false };
-            return (
-              <div key={day} className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/20">
-                <div className="w-24">
-                  <Label className="text-sm font-medium">{DAY_LABELS[day]}</Label>
-                </div>
-                <Switch
-                  checked={!hours.closed}
-                  onCheckedChange={(v) => setForm({
-                    ...form,
-                    businessHours: { ...form.businessHours, [day]: { ...hours, closed: !v } },
-                  })}
-                />
-                <span className="text-xs text-muted-foreground w-12">{hours.closed ? 'Closed' : 'Open'}</span>
-                {!hours.closed && (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="time"
-                      value={hours.open}
-                      onChange={(e) => setForm({
-                        ...form,
-                        businessHours: { ...form.businessHours, [day]: { ...hours, open: e.target.value } },
-                      })}
-                      className="w-32 text-sm"
-                    />
-                    <span className="text-muted-foreground text-sm">to</span>
-                    <Input
-                      type="time"
-                      value={hours.close}
-                      onChange={(e) => setForm({
-                        ...form,
-                        businessHours: { ...form.businessHours, [day]: { ...hours, close: e.target.value } },
-                      })}
-                      className="w-32 text-sm"
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <CardContent>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Marketplace visitors see your live open/closed status and schedule based on the weekly hours configured under <strong>Company Information → Business Hours</strong>.
+          </p>
         </CardContent>
       </Card>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          6. SOCIAL LINKS
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* ─── 6. Social Media & FAQs ────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <Share2 className="size-4 text-emerald-600" />
+              <Share2 className="size-4 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <CardTitle className="text-base">Social Media Links</CardTitle>
-              <CardDescription>Optional — shown as icons in your page footer</CardDescription>
+              <CardTitle className="text-base">Social Media Profiles</CardTitle>
+              <CardDescription>Connect your official social media pages</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {(['facebook', 'instagram', 'twitter', 'linkedin', 'youtube'] as const).map((platform) => (
-            <div key={platform} className="space-y-2">
-              <Label htmlFor={`social-${platform}`} className="text-sm font-medium capitalize">{platform}</Label>
+          {(['facebook', 'instagram', 'twitter', 'linkedin', 'youtube'] as const).map((network) => (
+            <div key={network} className="space-y-1.5">
+              <Label className="text-xs font-medium capitalize">{network}</Label>
               <Input
-                id={`social-${platform}`}
-                value={form.socialLinks[platform] || ''}
-                onChange={(e) => setForm({
-                  ...form,
-                  socialLinks: { ...form.socialLinks, [platform]: e.target.value },
-                })}
-                placeholder={`https://${platform}.com/yourbusiness`}
+                placeholder={`https://${network}.com/yourpage`}
+                value={form.socialLinks[network] || ''}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    socialLinks: { ...form.socialLinks, [network]: e.target.value },
+                  })
+                }
+                className="h-9 text-xs"
               />
             </div>
           ))}
         </CardContent>
       </Card>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          7. FAQs
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* ─── 7. FAQs ───────────────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                <HelpCircle className="size-4 text-emerald-600" />
+                <HelpCircle className="size-4 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <CardTitle className="text-base">Frequently Asked Questions</CardTitle>
-                <CardDescription>Shown in an accordion + added to FAQPage schema for SEO</CardDescription>
+                <CardTitle className="text-base">Frequently Asked Questions (FAQs)</CardTitle>
+                <CardDescription>Answer common customer questions on your public page</CardDescription>
               </div>
             </div>
+
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setForm({ ...form, faqs: [...form.faqs, { question: '', answer: '' }] })}
-              className="gap-1.5"
+              className="gap-1 text-xs"
             >
               <Plus className="size-3.5" /> Add FAQ
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {(Array.isArray(form.faqs) ? form.faqs : []).length === 0 && (
-            <p className="text-xs text-muted-foreground">No FAQs yet. Common questions: &quot;Do you offer emergency service?&quot;, &quot;What areas do you cover?&quot;, &quot;Do you offer free estimates?&quot;</p>
-          )}
-          {(Array.isArray(form.faqs) ? form.faqs : []).map((faq, i) => (
-            <div key={i} className="space-y-2 p-3 rounded-lg border bg-muted/20">
-              <div className="flex gap-2">
-                <Input
-                  value={faq.question}
+          {form.faqs.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">No FAQs added yet.</p>
+          ) : (
+            form.faqs.map((faq, i) => (
+              <div key={i} className="p-3.5 rounded-xl border border-border bg-muted/20 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Input
+                    placeholder="Question (e.g. Do you provide emergency same-day service?)"
+                    value={faq.question}
+                    onChange={(e) => {
+                      const next = [...form.faqs];
+                      next[i].question = e.target.value;
+                      setForm({ ...form, faqs: next });
+                    }}
+                    className="text-xs font-semibold h-9"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setForm({ ...form, faqs: form.faqs.filter((_, idx) => idx !== i) })}
+                  >
+                    <Trash2 className="size-3.5 text-red-600" />
+                  </Button>
+                </div>
+                <Textarea
+                  placeholder="Answer..."
+                  rows={2}
+                  value={faq.answer}
                   onChange={(e) => {
                     const next = [...form.faqs];
-                    next[i] = { ...next[i], question: e.target.value };
+                    next[i].answer = e.target.value;
                     setForm({ ...form, faqs: next });
                   }}
-                  placeholder="What is your service area?"
-                  className="text-sm font-medium"
+                  className="text-xs"
                 />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-destructive shrink-0"
-                  onClick={() => setForm({ ...form, faqs: form.faqs.filter((_, idx) => idx !== i) })}
-                  aria-label="Remove FAQ"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
               </div>
-              <RichTextEditor
-                value={faq.answer}
-                onChange={(html) => {
-                  const next = [...form.faqs];
-                  next[i] = { ...next[i], answer: html };
-                  setForm({ ...form, faqs: next });
-                }}
-                placeholder="We serve the greater Denver metro area including Aurora, Lakewood, and Englewood."
-                ariaLabel={`Answer for FAQ ${i + 1}`}
-                className="[&_[contenteditable]]:min-h-[80px]"
-              />
-            </div>
-          ))}
+            ))
+          )}
         </CardContent>
       </Card>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          8. SEO
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* ─── 8. SEO Metadata ───────────────────────────────────────────── */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <Search className="size-4 text-emerald-600" />
+              <Search className="size-4 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <CardTitle className="text-base">SEO Settings</CardTitle>
-              <CardDescription>Override the page title and meta description for search engines</CardDescription>
+              <CardTitle className="text-base">Search Engine Optimization (SEO)</CardTitle>
+              <CardDescription>Custom metadata for Google and search engine rankings</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="seo-title" className="text-sm font-medium">SEO title</Label>
-              <span className="text-xs text-muted-foreground">{form.seoTitle.length} / 60</span>
-            </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Custom SEO Title</Label>
             <Input
-              id="seo-title"
+              placeholder={`${inheritedData.name} | Top-Rated ${industry || 'Services'} in ${form.city || 'Your City'}`}
               value={form.seoTitle}
               onChange={(e) => setForm({ ...form, seoTitle: e.target.value })}
-              placeholder="Acme Plumbing | 24/7 Emergency Plumbers in Denver, CO"
-              maxLength={60}
+              className="h-9 text-xs"
             />
-            <p className="text-xs text-muted-foreground">Leave blank to auto-generate from your business name + tagline.</p>
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="seo-description" className="text-sm font-medium">SEO description</Label>
-              <span className="text-xs text-muted-foreground">{form.seoDescription.length} / 160</span>
-            </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Meta Description</Label>
             <Textarea
-              id="seo-description"
+              placeholder="Search snippet description shown in Google search results..."
+              rows={2}
               value={form.seoDescription}
               onChange={(e) => setForm({ ...form, seoDescription: e.target.value })}
-              placeholder="Acme Plumbing has served the Denver metro area since 2005. Licensed, insured, and available 24/7 for emergency repairs. Free estimates. Call now."
-              rows={3}
-              maxLength={160}
+              className="text-xs"
             />
-            <p className="text-xs text-muted-foreground">Leave blank to auto-generate from your description.</p>
           </div>
         </CardContent>
       </Card>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          SAVE BAR
-          ═══════════════════════════════════════════════════════════════════ */}
-      <div className="sticky bottom-4 z-10 flex items-center justify-end gap-3 p-4 rounded-xl border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-lg">
+      {/* ─── Save Changes ──────────────────────────────────────────────── */}
+      <div className="flex justify-end pt-2">
         <Button
-          type="button"
-          variant="outline"
-          onClick={loadHub}
-          disabled={saving}
-        >
-          Reset
-        </Button>
-        <Button
-          type="button"
+          className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 px-6 font-semibold shadow-sm"
           onClick={handleSave}
           disabled={saving}
-          className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
         >
-          {saving ? (
-            <><Loader2 className="size-4 animate-spin" /> Saving...</>
-          ) : (
-            <><Save className="size-4" /> Save Hub</>
-          )}
+          {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          {saving ? 'Saving...' : 'Save Marketplace Settings'}
         </Button>
       </div>
     </div>

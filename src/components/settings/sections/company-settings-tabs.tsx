@@ -22,7 +22,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Building2, Palette, Brain, Store } from 'lucide-react';
 import { CompanySettings } from '@/components/settings/sections/company-settings';
-import { BusinessProfileSettings } from '@/components/settings/sections/business-profile-section';
 import { BrandingSettings } from '@/components/settings/sections/branding-settings';
 import { BrandBrainView } from '@/components/views/tenant/brand-brain-view';
 import { MarketplaceSettings } from '@/components/settings/sections/marketplace-settings';
@@ -136,16 +135,11 @@ export function CompanySettingsTabs({ initialTab = 'information', onSaved }: Com
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="information" className="mt-6 space-y-8">
-          {/* CompanySettings owns: name, industry, currency, phone, email, address */}
+        <TabsContent value="information" className="mt-6">
           <CompanySettings onSaved={() => {
             void refreshTenant();
             onSaved?.();
           }} />
-          {/* BusinessProfileSettings owns: logo, tagline, description, hours */}
-          <div className="border-t pt-8">
-            <BusinessProfileSettings onSaved={onSaved} />
-          </div>
         </TabsContent>
 
         <TabsContent value="branding" className="mt-6">

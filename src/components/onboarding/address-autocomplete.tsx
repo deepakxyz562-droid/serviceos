@@ -40,6 +40,8 @@ export interface AddressValue {
   city: string;
   state: string;
   pincode: string;
+  country?: string;
+  countryCode?: string;
   latitude: number | null;
   longitude: number | null;
 }
@@ -161,6 +163,8 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
       const city = a.city || a.town || a.village || a.municipality || '';
       const state = a.state || a.region || '';
       const pincode = a.postcode || '';
+      const country = a.country || '';
+      const countryCode = a.country_code ? a.country_code.toUpperCase() : '';
 
       let lat: number | null = null;
       let lng: number | null = null;
@@ -174,6 +178,8 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
         city,
         state,
         pincode,
+        country,
+        countryCode,
         latitude: lat,
         longitude: lng,
       });

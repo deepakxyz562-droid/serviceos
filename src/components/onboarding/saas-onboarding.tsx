@@ -77,6 +77,8 @@ interface Step1Data {
   city: string;
   state: string;
   pincode: string;
+  country?: string;
+  countryCode?: string;
   latitude: number | null;
   longitude: number | null;
 }
@@ -447,6 +449,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     city: tenant?.city || '',
     state: tenant?.state || '',
     pincode: tenant?.postalCode || '',
+    country: tenant?.country || 'US',
+    countryCode: tenant?.country || 'US',
     latitude: tenant?.latitude ?? null,
     longitude: tenant?.longitude ?? null,
   });
@@ -646,6 +650,18 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     }
     setSaving(true);
     try {
+      const resolvedCountry = (step1.countryCode || step1.country || 'US').toUpperCase();
+      const currencyMap: Record<string, string> = {
+        AU: 'AUD',
+        CA: 'CAD',
+        GB: 'GBP',
+        IN: 'INR',
+        NZ: 'NZD',
+        EU: 'EUR',
+        US: 'USD',
+      };
+      const resolvedCurrency = currencyMap[resolvedCountry] || 'USD';
+
       await saveTenantProgress({
         onboardingStep: 2,
         name: step1.businessName,
@@ -653,6 +669,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         city: step1.city,
         state: step1.state,
         pincode: step1.pincode,
+        country: resolvedCountry,
+        currency: resolvedCurrency,
         latitude: step1.latitude,
         longitude: step1.longitude,
       });
@@ -1061,6 +1079,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
             city: step1.city,
             state: step1.state,
             pincode: step1.pincode,
+            country: step1.country,
+            countryCode: step1.countryCode,
             latitude: step1.latitude,
             longitude: step1.longitude,
           }}
@@ -1071,6 +1091,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
               city: v.city,
               state: v.state,
               pincode: v.pincode,
+              country: v.country,
+              countryCode: v.countryCode,
               latitude: v.latitude,
               longitude: v.longitude,
             }))
