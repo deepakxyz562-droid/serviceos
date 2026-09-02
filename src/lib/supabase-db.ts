@@ -285,8 +285,6 @@ const MISSING_TABLES = new Set<string>([
 const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
   // ── Originally listed (manually discovered) ──
   'ImageLibrary',
-  'BrandKit',
-  'TemplatePack',
   'TemplateAsset',
   'Execution',
   'ContactGroup',
