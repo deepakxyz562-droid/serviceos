@@ -144,17 +144,18 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
   const [submitting, setSubmitting] = useState(false);
 
   // ─── Load supporting data (employees/services/checklists) ──────────────
-  // NOTE: customers are NO LONGER fetched upfront — the CustomerSelect
-  // component does debounced server-side search on demand (max 10 results).
-  // A small customers array is still kept for initialCustomer lookup when
-  // editing an existing schedule (populated from the schedule's customer).
+  // Performance fix: reduced limits from 200 → 50. These are supporting
+  // datasets for the form, not the full list. 50 is enough for most tenants;
+  // if a tenant has more, the select components should use server-side search.
+  // Customers are NO LONGER fetched upfront — the CustomerSelect component
+  // does debounced server-side search on demand (max 10 results).
   const loadSupporting = useCallback(async () => {
     try {
       setLoadingSupporting(true);
       const [empRes, svcRes, chkRes] = await Promise.all([
-        authFetch('/api/employees?limit=200'),
-        authFetch('/api/services?limit=200'),
-        authFetch('/api/checklists'),
+        authFetch('/api/employees?limit=50'),
+        authFetch('/api/services?limit=50'),
+        authFetch('/api/checklists?limit=50'),
       ]);
       if (empRes.ok) {
         const d = await empRes.json();

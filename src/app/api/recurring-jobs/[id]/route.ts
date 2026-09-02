@@ -134,7 +134,28 @@ export async function GET(
       lastJobCreatedAt: lastGenerated?.createdAt ?? null,
     };
 
-    return NextResponse.json({ schedule, recentJobs, metrics });
+    // ── Fix: Resolve assignee names inline (eliminates client-side fetch) ──
+    // Previously the detail page fetched /api/employees?ids=... separately
+    // to resolve assignee names from assigneeIdsJson. Now the API returns
+    // the resolved names directly, eliminating one network round-trip.
+    let assignees: { id: string; name: string }[] = [];
+    try {
+      const assigneeIds: string[] = JSON.parse(schedule.assigneeIdsJson || '[]');
+      if (assigneeIds.length > 0) {
+        const employees = await db.employee.findMany({
+          where: { id: { in: assigneeIds } },
+          select: { id: true, name: true },
+        });
+        // Preserve the order from assigneeIdsJson (not DB order)
+        assignees = assigneeIds
+          .map((id) => employees.find((e) => e.id === id))
+          .filter((e): e is { id: string; name: string } => e != null);
+      }
+    } catch {
+      // assigneeIdsJson is malformed or employee lookup failed — return empty
+    }
+
+    return NextResponse.json({ schedule, recentJobs, metrics, assignees });
   } catch (error) {
     console.error('Get recurring job error:', error);
     return NextResponse.json({ error: 'Failed to fetch recurring job schedule' }, { status: 500 });

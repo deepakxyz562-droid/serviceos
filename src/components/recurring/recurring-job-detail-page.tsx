@@ -253,10 +253,15 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
         schedule: Schedule;
         recentJobs: GeneratedJob[];
         metrics?: ScheduleMetrics;
+        assignees?: { id: string; name: string }[];
       }>(`/api/recurring-jobs/${scheduleId}`);
       setSchedule(data.schedule);
       setRecentJobs(data.recentJobs || []);
       setMetrics(data.metrics ?? null);
+      // Fix: use API-returned assignees (eliminates separate employee fetch)
+      if (data.assignees) {
+        setAssignees(data.assignees);
+      }
     } catch (err) {
       console.error('[RecurringJobDetailPage] fetch failed:', err);
       toast.error('Failed to load schedule. It may have been deleted.');
@@ -701,10 +706,11 @@ function OverviewTab({
     return schedule.nextRunAt ? formatVisitLabel(schedule.nextRunAt) : '—';
   }, [status, schedule.nextRunAt]);
 
-  // Assignees — try to resolve names client-side. assigneeIdsJson holds an
-  // array of employee IDs. We fetch /api/employees?ids=… to get names.
-  // If the fetch fails (e.g. employees API doesn't accept `ids` query), we
-  // fall back to showing the raw IDs so the user still sees something useful.
+  // Assignees — now returned inline by the API (eliminates separate fetch).
+  // assigneeIdsJson holds an array of employee IDs. The detail endpoint now
+  // resolves these to { id, name } and returns them in `assignees`.
+  // Fallback: if the API didn't return assignees (e.g., Supabase RPC path
+  // doesn't include them yet), fall back to the old client-side fetch.
   const assigneeIds = useMemo(
     () => parseStrArr(schedule.assigneeIdsJson),
     [schedule.assigneeIdsJson],
@@ -712,8 +718,11 @@ function OverviewTab({
   const [assignees, setAssignees] = useState<{ id: string; name: string }[]>([]);
   const [loadingAssignees, setLoadingAssignees] = useState(false);
 
+  // Fallback: only fetch if assignees weren't returned by the detail API.
+  // The API returns assignees inline, so this effect is typically a no-op.
+  // It only runs if assignees is still empty AND we have IDs to resolve.
   useEffect(() => {
-    if (assigneeIds.length === 0) return;
+    if (assigneeIds.length === 0 || assignees.length > 0) return;
     let cancelled = false;
     (async () => {
       try {
@@ -741,7 +750,7 @@ function OverviewTab({
     return () => {
       cancelled = true;
     };
-  }, [assigneeIds]);
+  }, [assigneeIds, assignees.length]);
 
   // Render metrics compactly: small grid of stat cells, NOT big KPI cards
   // (per user direction: "don't necessarily show all these as large KPI
@@ -1155,9 +1164,20 @@ function GeneratedJobsTab({
   // filter, the "Load more" button disappears.
   const hasMore = jobs.length < total;
 
-  // Load (or reload) page 1 — used on initial mount and whenever the status
-  // filter changes. Replaces the accumulated list with the new page.
+  // Load (or reload) page 1 — used when the status filter changes.
+  // Performance fix: skip the initial fetch when we already have initialJobs
+  // from the parent detail endpoint (which returns the same 10 recent jobs).
+  // Only fetch when the user changes the filter (statusFilter !== 'all')
+  // or when initialJobs is empty.
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   useEffect(() => {
+    // Skip the initial mount fetch if we have initialJobs AND no filter is applied.
+    if (!hasInitiallyLoaded && initialJobs.length > 0 && statusFilter === 'all') {
+      setHasInitiallyLoaded(true);
+      return;
+    }
+    setHasInitiallyLoaded(true);
+
     let cancelled = false;
     (async () => {
       try {
@@ -1187,7 +1207,7 @@ function GeneratedJobsTab({
     return () => {
       cancelled = true;
     };
-  }, [scheduleId, statusFilter]);
+  }, [scheduleId, statusFilter, initialJobs, hasInitiallyLoaded]);
 
   // Load the NEXT page and APPEND to the existing list (Load More pattern,
   // per user direction: "I would personally choose Load more"). Page size is
