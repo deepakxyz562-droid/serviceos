@@ -107,7 +107,7 @@ export function InspectorTechnician({
               <h3 className="font-semibold text-sm truncate">{e.name}</h3>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <Badge variant="outline" className={`text-[9px] h-4 ${getEmployeeStatusBg(e.status)}`}>
-                  {e.status.replace('_', ' ')}
+                  {(e.status || 'offline').replace('_', ' ')}
                 </Badge>
                 {e.team && (
                   <Badge variant="outline" className="text-[9px] h-4" style={{ borderColor: e.team.color, color: e.team.color }}>
@@ -322,7 +322,7 @@ export function InspectorJob({
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
               <Badge variant="outline" className={`text-[9px] h-4 ${getPriorityColor(job.priority)}`}>{job.priority}</Badge>
-              <Badge variant="outline" className={`text-[9px] h-4 ${getStatusColor(job.status)}`}>{job.status.replace('_', ' ')}</Badge>
+              <Badge variant="outline" className={`text-[9px] h-4 ${getStatusColor(job.status)}`}>{(job.status || 'pending').replace('_', ' ')}</Badge>
               {late && (
                 <Badge variant="outline" className="text-[9px] h-4 bg-red-100 text-red-700 border-red-200 animate-pulse">
                   <AlertTriangle className="size-2.5 mr-0.5" /> late

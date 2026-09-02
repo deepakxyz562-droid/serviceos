@@ -171,7 +171,7 @@ function EmployeeRow({
               variant="outline"
               className={cn('text-[9px] h-4 px-1', getEmployeeStatusBg(e.status))}
             >
-              {e.status.replace('_', ' ')}
+              {(e.status || 'offline').replace('_', ' ')}
             </Badge>
             {activeCount > 0 ? (
               <span className="flex items-center gap-0.5 text-amber-600">

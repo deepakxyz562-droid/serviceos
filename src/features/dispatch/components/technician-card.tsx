@@ -125,7 +125,7 @@ export function TechnicianCard({
                 getEmployeeStatusBg(e.status)
               )}
             >
-              {e.status === 'available' ? 'Available' : e.status.replace('_', ' ')}
+              {e.status === 'available' ? 'Available' : (e.status || 'offline').replace('_', ' ')}
             </Badge>
           </div>
 
