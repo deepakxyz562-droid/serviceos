@@ -43,6 +43,7 @@ import { AddressAutocomplete, type AddressValue } from '@/components/onboarding/
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { CURRENCIES as SHARED_CURRENCIES } from '@/lib/currency';
+import { CUSTOMER_COUNTRIES } from '@/lib/customer-countries';
 import { invalidateCurrencyCache } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/api';
 
@@ -550,13 +551,22 @@ export function CompanySettings({ onSaved }: CompanySettingsProps) {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Country Code</Label>
-              <Input
+              <Label className="text-xs text-muted-foreground">Country</Label>
+              <Select
                 value={companyForm.country}
-                onChange={(e) => setCompanyForm({ ...companyForm, country: e.target.value.toUpperCase() })}
-                placeholder="AU, US, CA, GB"
-                className="h-9 text-xs font-mono font-bold"
-              />
+                onValueChange={(v) => setCompanyForm({ ...companyForm, country: v })}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Select Country" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  {CUSTOMER_COUNTRIES.map((c) => (
+                    <SelectItem key={c.code} value={c.code} className="text-xs">
+                      {c.name} ({c.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
