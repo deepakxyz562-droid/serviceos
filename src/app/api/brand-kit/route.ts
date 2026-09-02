@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { revalidatePublicBusiness } from '@/lib/public-business'
 
 /**
  * GET /api/brand-kit
@@ -73,6 +75,23 @@ export async function POST(request: NextRequest) {
       create: { tenantId, ...data },
       update: data,
     })
+
+    if (body.logoUrl && tenantId !== 'default') {
+      try {
+        await db.tenant.update({
+          where: { id: tenantId },
+          data: { logo: body.logoUrl },
+        })
+      } catch (tErr) {
+        console.warn('[BrandKit] Tenant.logo sync non-fatal:', tErr)
+      }
+    }
+
+    revalidatePublicBusiness(tenantId)
+    try {
+      revalidatePath('/[companySlug]/[city]/[slug]', 'page')
+      revalidatePath('/marketplace', 'page')
+    } catch {}
 
     return NextResponse.json({ data: kit })
   } catch (error) {

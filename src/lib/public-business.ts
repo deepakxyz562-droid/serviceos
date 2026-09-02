@@ -694,16 +694,12 @@ export async function getPublicReviews(tenantId: string, limit = 10) {
  * (Public Hub tab, Settings, etc.) so the next visitor sees fresh data.
  */
 export function revalidatePublicBusiness(slugOrTenantId?: string): void {
-  if (slugOrTenantId) {
-    sharedCacheDeleteByPrefix(`fieseros:public-business:${slugOrTenantId}`);
-    sharedCacheDeleteByPrefix(`fieseros:public-services:${slugOrTenantId}`);
-    sharedCacheDeleteByPrefix(`fieseros:public-reviews:${slugOrTenantId}`);
-    sharedCacheDeleteByPrefix(`fieseros:public-certs:${slugOrTenantId}`);
-  } else {
-    sharedCacheDeleteByPrefix('fieseros:public-business:');
-  }
+  sharedCacheDeleteByPrefix('fieseros:public-business:');
+  sharedCacheDeleteByPrefix('fieseros:public-services:');
+  sharedCacheDeleteByPrefix('fieseros:public-reviews:');
+  sharedCacheDeleteByPrefix('fieseros:public-certs:');
   try {
-    revalidateTag('public-business', { expire: 0 })
+    revalidateTag('public-business', { expire: 0 });
   } catch {}
 }
 

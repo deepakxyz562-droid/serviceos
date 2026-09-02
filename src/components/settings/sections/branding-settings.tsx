@@ -120,7 +120,17 @@ export function BrandingSettings() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const authRes = await fetch('/api/auth/me?XTransformPort=3000');
+      const storeTenant = useAppStore.getState().currentTenant;
+      const storeUser = useAppStore.getState().user;
+      if (storeTenant?.id) {
+        setTenantId(storeTenant.id);
+        setBusinessName(storeTenant.name || 'Your Business Name');
+        setLogoUrl(storeTenant.logo || null);
+      } else if (storeUser?.tenantId) {
+        setTenantId(storeUser.tenantId);
+      }
+
+      const authRes = await authFetch('/api/auth/me');
       if (authRes.ok) {
         const authData = await authRes.json();
         const t = authData?.tenant;
@@ -238,6 +248,7 @@ export function BrandingSettings() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          logoUrl,
           primaryColor: form.primaryColor,
           secondaryColor: form.secondaryColor,
           accentColor: form.accentColor,

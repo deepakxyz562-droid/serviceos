@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { uploadFile, STORAGE_BUCKETS } from '@/lib/supabase-storage';
 import { invalidateAuthCache } from '@/app/api/auth/me/route';
+import { revalidatePublicBusiness } from '@/lib/public-business';
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/png',
@@ -141,12 +143,33 @@ export async function POST(
     });
 
     // Update Tenant.logo in DB
-    await db.tenant.update({
+    const updatedTenant = await db.tenant.update({
       where: { id: tenantId },
       data: { logo: url },
     });
 
+    // Also sync BrandKit.logoUrl if a brand kit exists or create one
+    try {
+      await db.brandKit.upsert({
+        where: { tenantId },
+        create: {
+          tenantId,
+          logoUrl: url,
+        },
+        update: {
+          logoUrl: url,
+        },
+      });
+    } catch (bkErr) {
+      console.warn('[LogoUpload] BrandKit sync non-fatal warning:', bkErr);
+    }
+
     invalidateAuthCache();
+    revalidatePublicBusiness(updatedTenant?.slug || tenantId);
+    try {
+      revalidatePath('/[companySlug]/[city]/[slug]', 'page');
+      revalidatePath('/marketplace', 'page');
+    } catch {}
 
     return NextResponse.json({
       success: true,
@@ -188,12 +211,24 @@ export async function DELETE(
       );
     }
 
-    await db.tenant.update({
+    const updatedTenant = await db.tenant.update({
       where: { id: tenantId },
       data: { logo: null },
     });
 
+    try {
+      await db.brandKit.update({
+        where: { tenantId },
+        data: { logoUrl: null },
+      });
+    } catch {}
+
     invalidateAuthCache();
+    revalidatePublicBusiness(updatedTenant?.slug || tenantId);
+    try {
+      revalidatePath('/[companySlug]/[city]/[slug]', 'page');
+      revalidatePath('/marketplace', 'page');
+    } catch {}
 
     return NextResponse.json({
       success: true,
