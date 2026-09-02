@@ -657,6 +657,7 @@ function loadGoogleMapsApi(): Promise<void> {
       key: apiKey,
       v: 'weekly',
       libraries: 'marker',
+      loading: 'async',
     });
     if (mapId) params.set('map_ids', mapId);
 
@@ -1024,7 +1025,7 @@ export default function LiveDispatchMap({
           ),
           zIndex: color === COLOR_AVAILABLE || isFollowed ? 500 : 1,
         });
-        marker.addListener('click', () => {
+        marker.addListener('gmp-click', () => {
           const newSel = selectedTechIdRef.current === tech.id ? null : tech.id;
           onTechnicianSelectRef.current?.(newSel);
         });
@@ -1092,7 +1093,7 @@ export default function LiveDispatchMap({
         content: createJobMarkerElement(job, color),
         zIndex: 1,
       });
-      marker.addListener('click', () => openJobInfoWindow(marker, job, color));
+      marker.addListener('gmp-click', () => openJobInfoWindow(marker, job, color));
       jobMarkersRef.current.set(job.id, marker);
       markers.push(marker);
       // [dispatch-map] diagnostic — checkpoints 1+2: destination + END marker
@@ -1233,7 +1234,7 @@ export default function LiveDispatchMap({
         content: startContent,
         zIndex: 600,
       });
-      startMarker.addListener('click', () => {
+      startMarker.addListener('gmp-click', () => {
         const iw = infoWindowRef.current;
         if (!iw) return;
         iw.setContent(
@@ -1814,7 +1815,7 @@ export default function LiveDispatchMap({
             ),
             zIndex: 500,
           });
-          marker.addListener('click', () => {
+          marker.addListener('gmp-click', () => {
             const newSel = selectedTechIdRef.current === employeeId ? null : employeeId;
             onTechnicianSelectRef.current?.(newSel);
           });
