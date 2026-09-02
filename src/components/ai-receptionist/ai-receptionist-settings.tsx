@@ -11,159 +11,41 @@
  *   - The permanent AI Receptionist workspace (if all 3 are configured)
  *   - An error state with retry (if the API checks fail)
  *
- * PHASE 9.8 FIXES:
- *   1. Uses Promise.allSettled (not Promise.all) so one failed API doesn't discard
- *      the other two. Each check is independent.
- *   2. Surfaces errors with a retry UI instead of silently falling back to onboarding.
- *   3. Accepts subscription statuses ACTIVE, PAST_DUE, SUSPENDED consistently.
- *      SUSPENDED shows the workspace (with a billing warning) but the backend
- *      AdmissionController still rejects new calls — so the tenant can see their
- *      data but can't make new calls until billing is resolved.
- *   4. Safe diagnostic logging (no secrets/PII) — only HTTP status codes.
+ * Phase A: Migrated from raw fetch() to shared React Query hooks.
+ * The 3 API checks (subscription, receptionist, phones) now use the SAME
+ * query keys as the Workspace's data hook, so React Query deduplicates
+ * them — no more 3+4 double-fetch pattern.
  *
  * The workspace is the PERMANENT home for the AI Receptionist — the wizard
  * is only for initial setup. After activation, the tenant always lands here.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { AiReceptionistWorkspace } from './workspace/ai-receptionist-workspace';
-import { AiReceptionistOnboarding } from './ai-receptionist-onboarding';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-// Subscription statuses that grant access to the workspace (not just onboarding).
-// SUSPENDED is included so the tenant can see their data + billing warning,
-// but the backend AdmissionController rejects new calls when SUSPENDED.
-const ACTIVE_SUBSCRIPTION_STATUSES = ['ACTIVE', 'PAST_DUE', 'SUSPENDED'] as const;
-
-interface CheckResult {
-  hasSubscription: boolean;
-  hasReceptionist: boolean;
-  hasPhone: boolean;
-  // Per-API status codes for diagnostic logging (no secrets/PII)
-  statuses: {
-    subscriptions: number | null;
-    receptionist: number | null;
-    phoneConnections: number | null;
-  };
-  // True if at least one API failed entirely (network error, not just non-200)
-  hasNetworkError: boolean;
-}
+import { AiReceptionistWorkspace } from './workspace/ai-receptionist-workspace';
+import { AiReceptionistOnboarding } from './ai-receptionist-onboarding';
+import {
+  useAddonSubscription,
+  useReceptionistSettings,
+  usePhoneConnections,
+} from './workspace/use-receptionist-queries';
 
 export function AiReceptionistSettings() {
-  const [loading, setLoading] = useState(true);
-  const [result, setResult] = useState<CheckResult | null>(null);
+  // Phase A: React Query deduplicates these with the Workspace's queries.
+  // Both components use the SAME qk.* keys → only ONE network request per resource.
+  const subQuery = useAddonSubscription();
+  const recvQuery = useReceptionistSettings();
+  const phoneQuery = usePhoneConnections();
 
-  const check = useCallback(async () => {
-    // Use Promise.allSettled so one failed API doesn't discard the others.
-    // Each fetch is independent — a single failure doesn't nuke all 3 checks.
-    const [subSettled, recvSettled, phoneSettled] = await Promise.allSettled([
-      fetch('/api/addons/subscriptions'),
-      fetch('/api/addons/receptionist'),
-      fetch('/api/addons/phones/connections'),
-    ]);
+  const loading = subQuery.isLoading || recvQuery.isLoading || phoneQuery.isLoading;
+  const hasNetworkError =
+    subQuery.isError && recvQuery.isError && phoneQuery.isError; // all 3 failed
 
-    let hasSubscription = false;
-    let hasReceptionist = false;
-    let hasPhone = false;
-    let hasNetworkError = false;
-
-    const statuses: CheckResult['statuses'] = {
-      subscriptions: null,
-      receptionist: null,
-      phoneConnections: null,
-    };
-
-    // ── Subscription check ──
-    if (subSettled.status === 'fulfilled') {
-      statuses.subscriptions = subSettled.value.status;
-      if (subSettled.value.ok) {
-        try {
-          const subData = await subSettled.value.json();
-          const aiSub = subData.subscriptions?.find(
-            (s: { addonProduct: { code: string }; status: string }) =>
-              s.addonProduct?.code === 'AI_RECEPTIONIST' &&
-              ACTIVE_SUBSCRIPTION_STATUSES.includes(s.status as never),
-          );
-          hasSubscription = !!aiSub;
-        } catch {
-          // JSON parse failed — treat as not found
-        }
-      }
-    } else {
-      // Network error / fetch threw
-      hasNetworkError = true;
-    }
-
-    // ── Receptionist check ──
-    if (recvSettled.status === 'fulfilled') {
-      statuses.receptionist = recvSettled.value.status;
-      if (recvSettled.value.ok) {
-        try {
-          const recvData = await recvSettled.value.json();
-          hasReceptionist = !!recvData.receptionist;
-        } catch {
-          // JSON parse failed — treat as not found
-        }
-      }
-    } else {
-      hasNetworkError = true;
-    }
-
-    // ── Phone connections check ──
-    if (phoneSettled.status === 'fulfilled') {
-      statuses.phoneConnections = phoneSettled.value.status;
-      if (phoneSettled.value.ok) {
-        try {
-          const phoneData = await phoneSettled.value.json();
-          hasPhone = phoneData.connections?.length > 0;
-        } catch {
-          // JSON parse failed — treat as not found
-        }
-      }
-    } else {
-      hasNetworkError = true;
-    }
-
-    // Safe diagnostic logging — HTTP status codes only, no secrets/PII
-    if (typeof console !== 'undefined' && console.debug) {
-      console.debug('[AiReceptionistSettings] visibility check', {
-        subscription: statuses.subscriptions,
-        receptionist: statuses.receptionist,
-        phoneConnections: statuses.phoneConnections,
-        hasSubscription,
-        hasReceptionist,
-        hasPhone,
-        hasNetworkError,
-      });
-    }
-
-    return { hasSubscription, hasReceptionist, hasPhone, statuses, hasNetworkError } satisfies CheckResult;
-  }, []);
-
-  useEffect(() => {
-    // Fetch on mount. The async function only calls setState after awaiting
-    // Promise.allSettled — so there's no synchronous setState in the effect body.
-    let active = true;
-    check().then((r) => {
-      if (active) {
-        setResult(r);
-        setLoading(false);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [check]);
-
-  // Retry handler — resets loading + result, then re-runs the check
+  // Retry handler — refetch all 3 queries
   const handleRetry = () => {
-    setLoading(true);
-    setResult(null);
-    check().then((r) => {
-      setResult(r);
-      setLoading(false);
-    });
+    subQuery.refetch();
+    recvQuery.refetch();
+    phoneQuery.refetch();
   };
 
   if (loading) {
@@ -174,20 +56,8 @@ export function AiReceptionistSettings() {
     );
   }
 
-  if (!result) {
-    // Should never happen (loading just turned false), but defensive
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   // ── Error state: only if ALL 3 APIs failed entirely ──
-  // A single API failure (e.g., 500) doesn't trigger this — the other two
-  // checks still run independently. This only fires on a complete network
-  // outage or auth failure (all 3 fetches threw).
-  if (result.hasNetworkError && !result.hasSubscription && !result.hasReceptionist && !result.hasPhone) {
+  if (hasNetworkError) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4 text-center max-w-md mx-auto">
         <AlertCircle className="size-10 text-amber-500" />
@@ -206,12 +76,15 @@ export function AiReceptionistSettings() {
     );
   }
 
+  const hasSubscription = !!subQuery.data;
+  const hasReceptionist = !!recvQuery.data;
+  const hasPhone = (phoneQuery.data?.length ?? 0) > 0;
+
   // ── All 3 configured → permanent workspace ──
-  if (result.hasSubscription && result.hasReceptionist && result.hasPhone) {
+  if (hasSubscription && hasReceptionist && hasPhone) {
     return <AiReceptionistWorkspace />;
   }
 
   // ── Otherwise → onboarding wizard ──
-  // (subscription missing, or receptionist not configured, or no phone number)
   return <AiReceptionistOnboarding />;
 }

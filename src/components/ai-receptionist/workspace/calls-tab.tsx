@@ -17,6 +17,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useReceptionistCalls } from './use-receptionist-queries';
 import {
   PhoneCall,
   PhoneIncoming,
@@ -101,32 +102,18 @@ const OUTCOME_META: Record<string, { label: string; className: string; icon: Rea
 };
 
 export function CallsTab() {
-  const [loading, setLoading] = useState(true);
-  const [calls, setCalls] = useState<CallRecord[]>([]);
-  const [stats, setStats] = useState<{ total: number; todayCount: number; totalDurationSec: number; totalCost: number } | null>(null);
+  // Phase A: Migrated from raw fetch() to the shared React Query hook.
+  // Uses limit=100 + the stats data (which the endpoint returns alongside calls).
+  const { data: callsData, isLoading: loading, refetch } = useReceptionistCalls(100);
+  const calls = (callsData?.calls as CallRecord[]) ?? [];
+  const stats = (callsData?.stats as { total: number; todayCount: number; totalDurationSec: number; totalCost: number } | null) ?? null;
   const [outcomeFilter, setOutcomeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
 
-  const fetchCalls = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/vapi/calls?limit=100');
-      if (res.ok) {
-        const data = await res.json();
-        setCalls(data.calls || []);
-        setStats(data.stats || null);
-      }
-    } catch {
-      toast.error('Failed to load calls');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchCalls = () => { refetch(); };
 
-  useEffect(() => {
-    fetchCalls();
-  }, []);
+  // Phase A: React Query auto-fetches on mount — no useEffect needed.
 
   // Filter + group calls by date
   const groupedCalls = useMemo(() => {

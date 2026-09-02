@@ -345,6 +345,28 @@ export const qk = {
     users: ['superadmin', 'users'] as const,
   },
 
+  // ── AI Receptionist ─────────────────────────────────────────────────────
+  // Canonical query keys for the AI Receptionist data layer. Both the
+  // Settings wrapper (ai-receptionist-settings.tsx) and the Workspace
+  // (use-ai-receptionist-data.ts) consume these so React Query can
+  // deduplicate/cache shared requests (subscription, receptionist, phones).
+  receptionist: {
+    all: ['receptionist'] as const,
+    settings: () => [...qk.receptionist.all, 'settings'] as const,
+    usage: () => [...qk.receptionist.all, 'usage'] as const,
+    calls: (limit?: number) => [...qk.receptionist.all, 'calls', { limit: limit ?? 50 }] as const,
+  },
+
+  // ── Addons (shared by AI Receptionist + future addon modules) ────────────
+  addons: {
+    all: ['addons'] as const,
+    subscriptions: () => [...qk.addons.all, 'subscriptions'] as const,
+    phones: {
+      all: ['addons', 'phones'] as const,
+      connections: () => [...qk.addons.phones.all, 'connections'] as const,
+    },
+  },
+
   // ── Public (chat widget presence, etc.) ───────────────────────────────────
   public: {
     all: ['public'] as const,

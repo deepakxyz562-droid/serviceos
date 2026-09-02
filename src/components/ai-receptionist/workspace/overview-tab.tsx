@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useReceptionistCalls } from './use-receptionist-queries';
 import {
   Phone,
   PhoneCall,
@@ -300,8 +301,9 @@ function RecentCallsCard({
 }: {
   onNavigate: (tab: 'calls') => void;
 }) {
-  const [loading, setLoading] = useState(true);
-  const [calls, setCalls] = useState<Array<{
+  // Phase A: Migrated from raw fetch() to the shared React Query hook.
+  const { data, isLoading: loading } = useReceptionistCalls(5);
+  const calls = (data?.calls as Array<{
     id: string;
     callType: string;
     status: string;
@@ -313,24 +315,7 @@ function RecentCallsCard({
     summary: string | null;
     startedAt: string | null;
     createdAt: string;
-  }>>([]);
-
-  useEffect(() => {
-    const fetchCalls = async () => {
-      try {
-        const res = await fetch('/api/vapi/calls?limit=5');
-        if (res.ok) {
-          const data = await res.json();
-          setCalls(data.calls || []);
-        }
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCalls();
-  }, []);
+  }>) ?? [];
 
   return (
     <Card>

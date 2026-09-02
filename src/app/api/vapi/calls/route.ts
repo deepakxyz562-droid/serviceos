@@ -90,21 +90,36 @@ export async function GET(request: NextRequest) {
       take: limit,
     });
 
-    // Summary stats
-    // Phase 9.8: Use _count: { id: true } instead of _count: { _all: true }
-    // because the Supabase adapter's aggregate doesn't support _all (it
-    // looks for a column called "_all" which doesn't exist).
-    const stats = await db.aiCall.aggregate({
-      where: { tenantId: auth.tenantId },
-      _sum: { durationSec: true, costUsd: true },
-      _count: { id: true },
-    });
+    // ── Phase C: Only compute stats when the caller needs them ──────────
+    // The Overview tab calls with limit=5 (just needs recent calls, no stats).
+    // The Calls tab calls with limit=100 (needs stats for the summary header).
+    // Skip the expensive aggregate + count when limit < 50 unless ?stats=true.
+    const wantsStats = limit >= 50 || searchParams.get('stats') === 'true';
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayCalls = await db.aiCall.count({
-      where: { tenantId: auth.tenantId, createdAt: { gte: today } },
-    });
+    let statsData = null;
+    if (wantsStats) {
+      // Phase 9.8: Use _count: { id: true } instead of _count: { _all: true }
+      const stats = await db.aiCall.aggregate({
+        where: { tenantId: auth.tenantId },
+        _sum: { durationSec: true, costUsd: true },
+        _count: { id: true },
+      });
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayCalls = await db.aiCall.count({
+        where: { tenantId: auth.tenantId, createdAt: { gte: today } },
+      });
+
+      statsData = {
+        total: typeof stats._count === 'number'
+          ? stats._count
+          : (stats._count as Record<string, number> | null)?.id || 0,
+        totalDurationSec: stats._sum?.durationSec || 0,
+        totalCost: stats._sum?.costUsd || 0,
+        todayCount: todayCalls,
+      };
+    }
 
     return NextResponse.json({
       calls: calls.map((c: Record<string, unknown>) => ({
@@ -114,14 +129,7 @@ export async function GET(request: NextRequest) {
         endedAt: safeDate(c.endedAt),
         createdAt: safeDate(c.createdAt),
       })),
-      stats: {
-        total: typeof stats._count === 'number'
-          ? stats._count
-          : (stats._count as Record<string, number> | null)?.id || 0,
-        totalDurationSec: stats._sum?.durationSec || 0,
-        totalCost: stats._sum?.costUsd || 0,
-        todayCount: todayCalls,
-      },
+      stats: statsData,
     });
   } catch (error) {
     console.error('[Vapi Calls GET]', error);

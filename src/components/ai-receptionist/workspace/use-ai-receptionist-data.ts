@@ -11,13 +11,26 @@
  *   - phone connections (list)
  *   - usage (from the ledger — single source of truth)
  *
+ * Phase A: Migrated from raw fetch() to shared React Query hooks.
+ * The subscription, receptionist, and phone connections queries use the SAME
+ * query keys as `ai-receptionist-settings.tsx`, so React Query deduplicates
+ * them — when the Settings wrapper has already fetched these 3 resources,
+ * the Workspace gets cached data instantly (no duplicate network requests).
+ *
  * Every tab consumes this hook so we don't re-fetch the same data in each
  * tab. The hook exposes a `refresh()` function so individual tabs can
  * invalidate the cache after a mutation (e.g., after releasing a phone
  * number).
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/query-keys';
+import {
+  useReceptionistSettings,
+  useAddonSubscription,
+  usePhoneConnections,
+  useReceptionistUsage,
+} from './use-receptionist-queries';
 
 export interface ReceptionistData {
   id: string;
@@ -120,65 +133,44 @@ interface AiReceptionistState {
 }
 
 export function useAiReceptionistData(): AiReceptionistState {
-  const [loading, setLoading] = useState(true);
-  const [receptionist, setReceptionist] = useState<ReceptionistData | null>(null);
-  const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
-  const [connections, setConnections] = useState<PhoneConnectionData[]>([]);
-  const [usage, setUsage] = useState<UsageData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const fetchAll = useCallback(async () => {
-    setError(null);
-    try {
-      const [recvRes, subRes, connRes, usageRes] = await Promise.all([
-        fetch('/api/addons/receptionist'),
-        fetch('/api/addons/subscriptions'),
-        fetch('/api/addons/phones/connections'),
-        fetch('/api/addons/usage'),
-      ]);
+  // Phase A: These use the SAME query keys as ai-receptionist-settings.tsx,
+  // so React Query deduplicates/caches across both components.
+  const recvQuery = useReceptionistSettings();
+  const subQuery = useAddonSubscription();
+  const connQuery = usePhoneConnections();
+  const usageQuery = useReceptionistUsage();
 
-      if (recvRes.ok) {
-        const data = await recvRes.json();
-        setReceptionist(data.receptionist || null);
-      }
+  const loading =
+    recvQuery.isLoading ||
+    subQuery.isLoading ||
+    connQuery.isLoading ||
+    usageQuery.isLoading;
 
-      if (subRes.ok) {
-        const subData = await subRes.json();
-        const aiSub = subData.subscriptions?.find(
-          (s: { addonProduct: { code: string }; status: string }) =>
-            s.addonProduct?.code === 'AI_RECEPTIONIST' &&
-            ['ACTIVE', 'PAST_DUE', 'SUSPENDED'].includes(s.status),
-        );
-        setSubscription(aiSub || null);
-      }
+  const error =
+    recvQuery.isError || subQuery.isError || connQuery.isError || usageQuery.isError
+      ? 'Failed to load AI Receptionist data'
+      : null;
 
-      if (connRes.ok) {
-        const connData = await connRes.json();
-        setConnections(connData.connections || []);
-      }
-
-      if (usageRes.ok) {
-        const usageData = await usageRes.json();
-        setUsage(usageData);
-      }
-    } catch {
-      setError('Failed to load AI Receptionist data');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+  // Targeted invalidation — refresh only the specific queries that changed,
+  // not a blanket refetch of everything.
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: qk.receptionist.settings() }),
+      queryClient.invalidateQueries({ queryKey: qk.addons.subscriptions() }),
+      queryClient.invalidateQueries({ queryKey: qk.addons.phones.connections() }),
+      queryClient.invalidateQueries({ queryKey: qk.receptionist.usage() }),
+    ]);
+  };
 
   return {
     loading,
-    receptionist,
-    subscription,
-    connections,
-    usage,
+    receptionist: recvQuery.data ?? null,
+    subscription: subQuery.data ?? null,
+    connections: connQuery.data ?? [],
+    usage: usageQuery.data ?? null,
     error,
-    refresh: fetchAll,
+    refresh,
   };
 }

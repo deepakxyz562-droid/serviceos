@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { getActiveEntitlement, computeRemainingSeconds } from '@/lib/entitlement-service';
 import { db } from '@/lib/db';
@@ -10,18 +10,26 @@ const safeDate = (d: unknown): string | null => {
   try { return new Date(d as string).toISOString(); } catch { return null; }
 };
 
+/** Phase B: how long the cached usage value is considered fresh. */
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
  * GET /api/addons/usage
  * ─────────────────────────────────────────────────────────────────────────
  * Returns the tenant's AI Receptionist usage for the current billing period.
  *
- * This is the SINGLE SOURCE OF TRUTH for the usage UI. The numbers come
- * directly from the immutable UsageLedger + active UsageReservations —
- * NOT from a frontend calculation.
+ * Phase B: Optimized read path. Instead of recomputing the entire usage
+ * ledger on every dashboard page load, this endpoint reads the cached
+ * `cachedRemainingSeconds` value from the entitlement (written by call
+ * start/end/reservation settlement). The expensive `computeRemainingSeconds()`
+ * (which aggregates the UsageLedger + UsageReservation) only runs when:
+ *   - The cache is stale (lastCalculatedAt > 5 minutes ago)
+ *   - The cache was never computed (lastCalculatedAt is null)
+ *   - The caller passes ?refresh=true (explicit refresh)
  *
- *   UsageLedger (immutable, finalized)   ─┐
- *                                         ├─→ computeRemainingSeconds() ─→ this API ─→ Tenant UI
- *   UsageReservation (active, in-progress) ┘
+ * The cached value is a performance cache only — billing/admission decisions
+ * always use the authoritative computation. The dashboard just needs a
+ * fast approximate reading.
  *
  * Returns:
  *   - includedMinutes / usedMinutes / remainingMinutes (human-friendly)
@@ -32,19 +40,23 @@ const safeDate = (d: unknown): string | null => {
  *   - periodStart / periodEnd
  *   - subscription status
  *
- * If no active entitlement exists (no active subscription), returns
- * { hasEntitlement: false }.
+ * Query params:
+ *   - ?refresh=true — force a recompute (bypasses the cache)
  *
  * Auth: any authenticated tenant user (read-only).
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser();
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    // Get the active entitlement for AI_RECEPTIONIST
+    // Check for explicit refresh
+    const { searchParams } = new URL(request.url);
+    const forceRefresh = searchParams.get('refresh') === 'true';
+
+    // Get the active entitlement for AI_RECEPTIONIST (with cache fields)
     const entitlement = await getActiveEntitlement(user.tenantId, 'AI_RECEPTIONIST');
 
     if (!entitlement) {
@@ -58,10 +70,43 @@ export async function GET() {
       });
     }
 
-    // Compute the authoritative remaining from the ledger + reservations
-    const calc = await computeRemainingSeconds(entitlement.id);
+    // ── Phase B: Determine whether to use cached or recompute ──────────
+    const cacheAge = entitlement.lastCalculatedAt
+      ? Date.now() - new Date(entitlement.lastCalculatedAt as string | Date).getTime()
+      : Infinity;
+    const cacheStale = cacheAge > CACHE_TTL_MS;
+    const useCache = !forceRefresh && !cacheStale && entitlement.cachedRemainingSeconds != null;
 
-    // Fetch the subscription for status + plan metadata
+    let calc: {
+      includedSeconds: number;
+      usedSeconds: number;
+      reservedSeconds: number;
+      remainingSeconds: number;
+    };
+
+    if (useCache) {
+      // Fast path: read the cached value. No ledger aggregate.
+      // Derive usedSeconds from the cache (included - remaining = used + reserved).
+      const remaining = entitlement.cachedRemainingSeconds as number;
+      const included = entitlement.includedSeconds ?? 0;
+      calc = {
+        includedSeconds: included,
+        remainingSeconds: remaining,
+        // usedSeconds is derived (includes both finalized + reserved, which
+        // is correct for the dashboard percentage — the authoritative split
+        // is only needed for billing/admission, not for the dashboard display)
+        usedSeconds: Math.max(0, included - remaining),
+        // reservedSeconds is not separately cached — set to 0 for the cached
+        // path. The activeCalls count below still works correctly.
+        reservedSeconds: 0,
+      };
+    } else {
+      // Slow path: recompute from the ledger + reservations
+      calc = await computeRemainingSeconds(entitlement.id);
+    }
+
+    // Fetch the subscription for status + plan metadata (parallel with nothing —
+    // this is the only remaining DB query after the cache optimization)
     const subscription = await db.tenantAddonSubscription.findFirst({
       where: { id: entitlement.tenantAddonSubscriptionId },
       select: {
@@ -141,6 +186,8 @@ export async function GET() {
             currency: subscription.addonPlan.currency,
           }
         : null,
+      // Phase B: indicate whether the response came from cache
+      cached: useCache,
     });
   } catch (error) {
     console.error('[GET /api/addons/usage] error:', error);
