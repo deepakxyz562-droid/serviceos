@@ -559,7 +559,16 @@ function ProviderCardImpl({
               profileHref={profileHref}
             />
           </div>
-        ) : null}
+        ) : (
+          <div className="border-t border-border/50 pt-2.5">
+            <div className="flex items-start gap-1.5">
+              <BadgeCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <p className="text-[10px] text-emerald-800 dark:text-emerald-300 leading-tight">
+                This business manages its profile on Fieseros. Contact them directly for services, availability, and enquiries.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </article>
   );
@@ -633,9 +642,16 @@ function MinimalCard({
                   </button>
                 )}
 
-                <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border/40">
-                  Unclaimed
-                </span>
+                {provider.claimed ? (
+                  <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
+                    <BadgeCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                    Claimed
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground border border-border/40">
+                    Unclaimed
+                  </span>
+                )}
               </div>
 
               <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mt-0.5">
@@ -754,20 +770,31 @@ function MinimalCard({
           )}
         </div>
 
-        <div className="border-t border-border/50 pt-2.5">
-          <p className="text-[11px] font-bold text-foreground">Own this business?</p>
-          <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
-            Claim your profile to update info, respond to leads and grow your business.
-          </p>
-          <ClaimBusinessButton
-            variant="card"
-            tenantId={provider.id}
-            tenantName={provider.name}
-            tenantCity={provider.city}
-            tenantState={provider.state}
-            profileHref={profileHref}
-          />
-        </div>
+        {provider.claimed ? (
+          <div className="border-t border-border/50 pt-2.5">
+            <div className="flex items-start gap-1.5">
+              <BadgeCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <p className="text-[10px] text-emerald-800 dark:text-emerald-300 leading-tight">
+                This business manages its profile on Fieseros. Contact them directly for services, availability, and enquiries.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-border/50 pt-2.5">
+            <p className="text-[11px] font-bold text-foreground">Own this business?</p>
+            <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+              Claim your profile to update info, respond to leads and grow your business.
+            </p>
+            <ClaimBusinessButton
+              variant="card"
+              tenantId={provider.id}
+              tenantName={provider.name}
+              tenantCity={provider.city}
+              tenantState={provider.state}
+              profileHref={profileHref}
+            />
+          </div>
+        )}
       </div>
     </article>
   );

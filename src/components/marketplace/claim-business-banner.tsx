@@ -100,14 +100,14 @@ export function ClaimBusinessBanner({
   // ── Already claimed → show "Verified owner" notice ──
   if (isClaimed) {
     return (
-      <div className="mb-3 flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900 dark:bg-emerald-950/40">
-        <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+      <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900 dark:bg-emerald-950/40">
+        <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
         <div className="min-w-0">
           <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
             Verified owner
           </p>
-          <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
-            This listing is managed by the business owner.
+          <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+            This business manages its profile on Fieseros. Contact them directly for services, availability, and enquiries.
           </p>
         </div>
       </div>
@@ -127,13 +127,15 @@ export function ClaimBusinessBanner({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
-            Are you the owner?
+            Own this business?
           </p>
           <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
-            Claim this business to manage your profile, respond to reviews, and receive customer leads.
+            Claim your profile to update info, respond to leads and grow your business.
           </p>
         </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700">
+          Claim business <ChevronRight className="h-3.5 w-3.5" />
+        </span>
       </button>
 
       {/* Full claim wizard — only for authenticated users */}
