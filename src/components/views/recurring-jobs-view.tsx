@@ -19,7 +19,7 @@
 //
 // No API, Prisma schema, or backend changes required.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { RecurringJobsListPage } from '@/components/recurring/recurring-jobs-list-page';
 import { RecurringJobDetailPage } from '@/components/recurring/recurring-job-detail-page';
@@ -50,8 +50,8 @@ export function RecurringJobsView() {
   // so we don't call setState synchronously in the effect body. Instead we
   // clear the store + navigate in a microtask (deferred to avoid the
   // cascading-render warning).
-  const lastProcessedPendingRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
+  const lastProcessedPendingRef = useRef<string | null>(null);
+  useEffect(() => {
     if (!pendingOpenEntity || pendingOpenEntity.kind !== 'recurringSchedule') return;
     const id = pendingOpenEntity.id;
     // Skip if we already processed this exact pending entity

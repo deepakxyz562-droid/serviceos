@@ -37,7 +37,7 @@
 //   - All fetches use relative paths (via apiGet/apiPost helpers from @/lib/api
 //     which transparently append XTransformPort for the gateway).
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
   Activity as ActivityIcon,
@@ -1915,7 +1915,7 @@ function groupActivitiesByDate(activities: ActivityLogRow[]): ActivityGroup[] {
 
 // ─── Row + Skeleton ────────────────────────────────────────────────────────
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <p className="text-xs text-muted-foreground shrink-0">{label}</p>
