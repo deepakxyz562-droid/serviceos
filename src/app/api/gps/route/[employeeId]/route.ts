@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 /**
  * GET /api/gps/route/[employeeId]
@@ -13,7 +14,19 @@ import { db } from '@/lib/db';
  *
  * Response:
  *   { routes: RouteHistory[], gpsPoints: GPSLocation[] }
+ *
+ * SECURITY (hotfix 2026-09-02): This endpoint previously had NO authentication —
+ * anyone who guessed/knew an employeeId could fetch their full GPS history
+ * (route path + raw GPS points) for any day. That was a textbook IDOR
+ * (Insecure Direct Object Reference) and a data-privacy breach — employee
+ * location history is PII.
+ *
+ * Fix: require `getAuthUser()`. Employees can only query their own GPS
+ * history. Admins can query any employee within their own workspace/tenant
+ * (the employee lookup is tenant-scoped so a tenant-A admin cannot read
+ * tenant-B employee GPS data by guessing the employeeId).
  */
+const ADMIN_ROLES = ['owner', 'admin', 'manager', 'super_admin'];
 
 function safeParseJson<T>(str: string | null | undefined, fallback: T): T {
   try {
@@ -35,10 +48,79 @@ export async function GET(
   { params }: { params: Promise<{ employeeId: string }> },
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { employeeId } = await params;
     const { searchParams } = new URL(request.url);
     const jobId = searchParams.get('jobId');
     const dateStr = searchParams.get('date');
+
+    // ── Authorization ───────────────────────────────────────────────────
+    // Employees can only query their own GPS history. Admins can query any
+    // employee within their workspace/tenant (enforced via the scoped where
+    // clause below — a tenant-A admin cannot read tenant-B GPS data).
+    if (!ADMIN_ROLES.includes(authUser.role)) {
+      let ownEmployeeId = authUser.employeeId;
+      if (!ownEmployeeId) {
+        const ownEmp = await db.employee.findFirst({
+          where: { userId: authUser.id },
+          select: { id: true },
+        });
+        ownEmployeeId = ownEmp?.id ?? null;
+      }
+      if (employeeId !== ownEmployeeId) {
+        return NextResponse.json(
+          { error: 'Forbidden: you can only query your own GPS history' },
+          { status: 403 },
+        );
+      }
+    }
+
+    // ── Build tenant-scoped employee lookup ─────────────────────────────
+    // Verify the target employee actually belongs to the viewer's workspace
+    // / tenant. A 404 (not 403) is returned if the employee doesn't exist in
+    // the viewer's scope — this avoids leaking whether an employeeId exists
+    // in another tenant (no enumeration oracle).
+    const empWhere: Record<string, unknown> = { id: employeeId };
+    if (!authUser.isSuperAdmin && !(authUser.role === 'admin' && !authUser.tenantId)) {
+      if (authUser.workspaceId) {
+        empWhere.workspaceId = authUser.workspaceId;
+      } else if (authUser.tenantId) {
+        const tenantWorkspaces = await db.workspace.findMany({
+          where: { tenantId: authUser.tenantId },
+          select: { id: true },
+        });
+        const workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
+        if (workspaceIds.length === 0) {
+          return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+        }
+        empWhere.workspaceId = { in: workspaceIds };
+      } else {
+        return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+      }
+    }
+
+    const targetEmployee = await db.employee.findFirst({ where: empWhere, select: { id: true } });
+    if (!targetEmployee) {
+      return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+    }
+
+    // ── Optional jobId ownership check ──────────────────────────────────
+    // If a jobId filter is supplied, verify it belongs to the same workspace
+    // as the employee (defense-in-depth — prevents reading another tenant's
+    // job-specific GPS data via this endpoint).
+    if (jobId) {
+      const job = await db.job.findUnique({
+        where: { id: jobId },
+        select: { workspaceId: true },
+      });
+      if (job?.workspaceId && job.workspaceId !== targetEmployee.workspaceId) {
+        return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+      }
+    }
 
     // Resolve the date range.
     let start: Date;
