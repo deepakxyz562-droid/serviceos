@@ -623,22 +623,11 @@ let googleMapsLoaderPromise: Promise<void> | null = null;
 /**
  * Load the Google Maps JS API once via a script tag injected into <head>.
  * Returns a cached promise — subsequent callers await the same load.
- * Resolves once `google.maps.Map` and `google.maps.marker` are fully imported.
+ * Resolves once `google.maps.Map` and `google.maps.marker` are fully imported and ready.
  */
 async function loadGoogleMapsApi(): Promise<void> {
   if (typeof window === 'undefined') {
     throw new Error('Google Maps cannot be loaded server-side');
-  }
-
-  const existing = (window as unknown as { google?: { maps?: { importLibrary?: (name: string) => Promise<unknown>; Map?: unknown } } }).google;
-  if (existing?.maps?.Map) {
-    if (existing.maps.importLibrary) {
-      await Promise.all([
-        existing.maps.importLibrary('maps'),
-        existing.maps.importLibrary('marker'),
-      ]);
-    }
-    return;
   }
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -647,38 +636,23 @@ async function loadGoogleMapsApi(): Promise<void> {
     throw new Error('NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set — cannot load Google Maps JS API');
   }
 
+  const win = window as unknown as { google?: { maps?: any } };
+  if (win.google?.maps?.Map && typeof win.google.maps.Map === 'function') {
+    return;
+  }
+
   if (!googleMapsLoaderPromise) {
     googleMapsLoaderPromise = new Promise<void>((resolve, reject) => {
       const prior = document.getElementById('google-maps-js-api') as HTMLScriptElement | null;
-      if (prior) {
-        // Script already injected — poll for importLibrary and resolve
-        const check = async () => {
-          const g = (window as unknown as { google?: { maps?: { importLibrary?: (name: string) => Promise<unknown>; Map?: unknown } } }).google;
-          if (g?.maps?.importLibrary) {
-            try {
-              await Promise.all([
-                g.maps.importLibrary('maps'),
-                g.maps.importLibrary('marker'),
-              ]);
-              resolve();
-            } catch (err) {
-              reject(err);
-            }
-          } else if (g?.maps?.Map) {
-            resolve();
-          } else {
-            setTimeout(check, 50);
-          }
-        };
-        void check();
+      if (prior && (window as any).google?.maps) {
+        resolve();
         return;
       }
 
       const params = new URLSearchParams({
         key: apiKey,
         v: 'weekly',
-        libraries: 'marker',
-        loading: 'async',
+        libraries: 'marker,geometry',
       });
       if (mapId) params.set('map_ids', mapId);
 
@@ -688,22 +662,7 @@ async function loadGoogleMapsApi(): Promise<void> {
       script.async = true;
       script.defer = true;
 
-      script.onload = async () => {
-        try {
-          const g = (window as unknown as { google?: { maps?: { importLibrary?: (name: string) => Promise<unknown>; Map?: unknown } } }).google;
-          if (g?.maps?.importLibrary) {
-            await Promise.all([
-              g.maps.importLibrary('maps'),
-              g.maps.importLibrary('marker'),
-            ]);
-          }
-          resolve();
-        } catch (err) {
-          googleMapsLoaderPromise = null;
-          reject(err);
-        }
-      };
-
+      script.onload = () => resolve();
       script.onerror = () => {
         googleMapsLoaderPromise = null;
         reject(new Error('Failed to load Google Maps JS API script'));
@@ -715,13 +674,51 @@ async function loadGoogleMapsApi(): Promise<void> {
 
   await googleMapsLoaderPromise;
 
-  // Double check library readiness
-  const g = (window as unknown as { google?: { maps?: { importLibrary?: (name: string) => Promise<unknown> } } }).google;
-  if (g?.maps?.importLibrary) {
-    await Promise.all([
-      g.maps.importLibrary('maps'),
-      g.maps.importLibrary('marker'),
-    ]);
+  if (!win.google?.maps) {
+    throw new Error('Google Maps SDK loaded but google.maps namespace is missing');
+  }
+
+  // Import and bind maps, marker, and core libraries to ensure constructors exist on google.maps
+  if (typeof win.google.maps.importLibrary === 'function') {
+    try {
+      const [mapsLib, markerLib, coreLib] = await Promise.all([
+        win.google.maps.importLibrary('maps'),
+        win.google.maps.importLibrary('marker'),
+        win.google.maps.importLibrary('core').catch(() => null),
+      ]);
+
+      if (mapsLib && typeof mapsLib === 'object') {
+        Object.assign(win.google.maps, mapsLib);
+      }
+      if (markerLib && typeof markerLib === 'object') {
+        win.google.maps.marker = win.google.maps.marker || {};
+        Object.assign(win.google.maps.marker, markerLib);
+      }
+      if (coreLib && typeof coreLib === 'object') {
+        Object.assign(win.google.maps, coreLib);
+      }
+    } catch (err) {
+      console.warn('[dispatch-map] importLibrary warning:', err);
+    }
+  }
+
+  // Poll briefly (up to 1s) if Map constructor is still finishing initialization
+  let attempts = 0;
+  while (typeof win.google.maps.Map !== 'function' && attempts < 20) {
+    await new Promise((r) => setTimeout(r, 50));
+    if (typeof win.google.maps.importLibrary === 'function') {
+      try {
+        const mapsLib = await win.google.maps.importLibrary('maps');
+        if (mapsLib && typeof mapsLib === 'object') {
+          Object.assign(win.google.maps, mapsLib);
+        }
+      } catch {}
+    }
+    attempts++;
+  }
+
+  if (typeof win.google.maps.Map !== 'function') {
+    throw new Error('Google Maps Map constructor is not available');
   }
 }
 
