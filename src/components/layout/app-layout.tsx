@@ -15,7 +15,7 @@ import { ViewCache } from '@/components/layout/view-cache';
 import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { useTrialStatus, TrialPaywallOverlay } from '@/components/billing/trial-paywall';
+import { useTrialStatus, TrialPaywallOverlay, PastDueBanner } from '@/components/billing/trial-paywall';
 import { TenantPushManager } from '@/components/pwa/tenant-push-manager';
 
 // ─── Lazy-loaded views — organized by module ──────────────────────────────────
@@ -469,6 +469,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader onLogout={onLogout} />
+        <PastDueBanner trialStatus={trialStatus} />
         <TrialBanner />
 
         <main

@@ -312,7 +312,9 @@ export function TenantsTab({
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="trial">Trial</SelectItem>
+            <SelectItem value="past_due">Past Due</SelectItem>
             <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
         <Button onClick={() => setCreateDialog(true)} className="shrink-0">

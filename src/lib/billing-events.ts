@@ -26,7 +26,13 @@ export type BillingEventType =
   | 'downgrade_applied'
   | 'renewal'
   | 'payment_method_added'
-  | 'subscription_created';
+  | 'subscription_created'
+  // Add-on subscriptions (TenantAddonSubscription) — the DB column is a plain
+  // String so these additional values are accepted at runtime even though
+  // they extend the original union.
+  | 'addon_subscription_past_due'
+  | 'addon_subscription_activated'
+  | 'addon_subscription_cancelled';
 
 export interface LogBillingEventInput {
   tenantId: string;
@@ -42,6 +48,10 @@ export interface LogBillingEventInput {
   paypalCaptureId?: string | null;
   payerEmail?: string | null;
   invoiceNumber?: string | null;
+  // Structured failure detail (populated when status='failed').
+  // Lets the SuperAdmin "Failed Payments" view filter by decline reason.
+  errorCode?: string | null;       // machine-readable, e.g. "PAYMENT.SALE.DENIED"
+  declineReason?: string | null;  // human-readable, e.g. "Card declined by issuer"
   metadata?: Record<string, unknown>;
 }
 
@@ -72,6 +82,8 @@ export async function logBillingEvent(input: LogBillingEventInput): Promise<void
         paypalCaptureId: input.paypalCaptureId ?? null,
         payerEmail: input.payerEmail ?? null,
         invoiceNumber: input.invoiceNumber ?? null,
+        errorCode: input.errorCode ?? null,
+        declineReason: input.declineReason ?? null,
         metadata: safeMeta,
       },
     });

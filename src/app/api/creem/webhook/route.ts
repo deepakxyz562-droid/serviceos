@@ -6,6 +6,7 @@ import {
   verifyCreemWebhookSignature,
 } from '@/lib/creem';
 import { logBillingEvent } from '@/lib/billing-events';
+import { firePaymentFailureAlerts } from '@/lib/platform-alerts';
 import {
   activatePurchasedNumber,
   cancelNumberSubscription,
@@ -664,6 +665,32 @@ async function handleSubscriptionPastDue(event: NormalisedEvent) {
     amount: local.amount,
     description: `Creem payment failed (webhook): ${local.plan} (${local.billingCycle})`,
     paymentProvider: 'creem',
+    errorCode: 'subscription.payment_failed',
+    declineReason: 'Creem recurring payment failed',
     metadata: { creemSubscriptionId: creemSubId },
   });
+
+  // ── Fire all payment-failure alerts (best-effort, never throws) ──────────
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: local.tenantId },
+      select: { name: true },
+    });
+    await firePaymentFailureAlerts({
+      tenantId: local.tenantId,
+      subscriptionId: local.id,
+      plan: local.plan,
+      billingCycle: local.billingCycle,
+      amount: local.amount,
+      currency: local.currency,
+      paymentProvider: 'creem',
+      providerSubscriptionId: creemSubId,
+      payerEmail: local.paypalPayerEmail || null,
+      errorCode: 'subscription.payment_failed',
+      declineReason: 'Creem recurring payment failed',
+      tenantName: tenant?.name || null,
+    });
+  } catch (err) {
+    console.error('[creem-webhook] firePaymentFailureAlerts failed (past_due):', err);
+  }
 }

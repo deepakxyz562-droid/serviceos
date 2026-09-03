@@ -469,18 +469,24 @@ model BillingEvent {
   id              String   @id @default(cuid())
   tenantId        String
   subscriptionId  String?
-  type            String   // capture | refund | cancel | fail | trial_reminder | trial_expired | plan_change | proration | downgrade_scheduled | renewal | payment_method_added
+  type            String   // capture | refund | cancel | fail | trial_reminder | trial_expired | plan_change | proration | downgrade_scheduled | renewal | payment_method_added | addon_subscription_past_due
   amount          Float    @default(0)
   currency        String   @default("USD")
   status          String   @default("success") // success | failed | pending
   description     String?
   // Raw provider response (PayPal API JSON, etc.) — capped at a reasonable size.
   providerResponse String  @default("{}")
-  paymentProvider String   @default("paypal") // paypal | stripe | manual
+  paymentProvider String   @default("paypal") // paypal | stripe | manual | creem
   paypalOrderId   String?
   paypalCaptureId String?
   payerEmail      String?
   invoiceNumber   String?
+  // Structured failure detail — populated when status='failed'.
+  // Lets the SuperAdmin "Failed Payments" view filter by decline reason
+  // (e.g. CARD_DECLINED, INSUFFICIENT_FUNDS) instead of grepping the
+  // free-text description / metadata JSON.
+  errorCode       String?  // provider's machine-readable code, e.g. "PAYMENT.SALE.DENIED" / "CARD_DECLINED"
+  declineReason   String?  // human-readable reason, e.g. "Card declined by issuer"
   metadata        String   @default("{}") // arbitrary JSON: { plan, billingCycle, daysRemaining, ... }
   createdAt       DateTime @default(now())
 
@@ -492,6 +498,7 @@ model BillingEvent {
   @@index([status])
   @@index([createdAt])
   @@index([paypalOrderId])
+  @@index([errorCode])
 }
 
 // ==========================================

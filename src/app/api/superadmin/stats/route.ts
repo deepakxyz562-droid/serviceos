@@ -44,6 +44,7 @@ export async function GET() {
       activeTenants,
       suspendedTenants,
       trialTenants,
+      pastDueTenants,
       totalUsers,
       activeUsers,
       subscriptions,
@@ -53,6 +54,7 @@ export async function GET() {
       db.tenant.count({ where: { planStatus: 'active' } }),
       db.tenant.count({ where: { planStatus: 'suspended' } }),
       db.tenant.count({ where: { planStatus: 'trial' } }),
+      db.tenant.count({ where: { planStatus: 'past_due' } }),
       db.user.count(),
       db.user.count({ where: { isActive: true } }),
       db.subscription.findMany({
@@ -63,6 +65,24 @@ export async function GET() {
         select: { mrr: true, arr: true, churnRate: true, id: true },
       }),
     ]);
+
+    // ── Payment-failure KPIs (last 24h) ──
+    // Surfaces "how many payments failed in the last day" on the Command Center
+    // so the platform owner can spot a spike immediately. Best-effort: never
+    // breaks the stats endpoint if BillingEvent query fails.
+    const failedPayments24h = await safeQuery(
+      () => db.billingEvent.count({
+        where: {
+          status: 'failed',
+          createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
+      }),
+      0,
+    );
+    const pastDueSubscriptions = await safeQuery(
+      () => db.subscription.count({ where: { status: 'past_due' } }),
+      0,
+    );
 
     // ── Revenue computation ──
     const totalMRR = allTenants.reduce((sum, t) => sum + (Number(t.mrr) || 0), 0);
@@ -178,6 +198,9 @@ export async function GET() {
       activeTenants,
       suspendedTenants,
       trialTenants,
+      pastDueTenants,
+      failedPayments24h,
+      pastDueSubscriptions,
       totalUsers,
       activeUsers,
       totalRevenue: totalMRR || subscriptionRevenue,

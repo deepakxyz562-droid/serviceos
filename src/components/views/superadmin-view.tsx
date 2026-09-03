@@ -23,7 +23,7 @@ import {
   Menu, ToggleLeft, ToggleRight, Flag, Settings2, Pause, PlayCircle,
   LayoutDashboard, UsersRound, Megaphone, ShoppingCart, MessageSquare,
   Bot, Workflow, Radio, Wallet, BookOpen, Cpu, ChevronDown, ChevronRight,
-  CheckCircle2, XCircle, AlertTriangle, ArrowUpDown, RefreshCw,
+  CheckCircle2, XCircle, AlertTriangle, AlertCircle, ArrowUpDown, RefreshCw,
   Plus, Trash2, Edit3, FileText, Clock, Activity, Globe,
   BarChart3, UserCog, Zap, Calendar, Target, Briefcase,
   Filter, Key, Store, FileInput, Receipt, Settings,
@@ -109,6 +109,7 @@ const BackupSection = lazy(() => import('@/components/views/superadmin/sections/
 const SocialPublishingConfigSection = lazy(() => import('@/components/views/superadmin/sections/social-publishing-config').then(m => ({ default: m.SocialPublishingConfigSection })));
 const ChannelCatalogSection = lazy(() => import('@/components/views/superadmin/sections/channel-catalog').then(m => ({ default: m.ChannelCatalogSection })));
 const CreemBillingSection = lazy(() => import('@/components/views/superadmin/sections/creem-billing').then(m => ({ default: m.CreemBillingSection })));
+const FailedPaymentsSection = lazy(() => import('@/components/views/superadmin/sections/failed-payments').then(m => ({ default: m.FailedPaymentsSection })));
 const OutreachSection = lazy(() => import('@/components/views/superadmin/sections/outreach').then(m => ({ default: m.OutreachSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
@@ -372,6 +373,7 @@ type TabKey =
   | 'dashboard'
   // BUSINESS
   | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates'
+  | 'failed-payments'
   // PLATFORM
   | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'ai-platform' | 'menu-management'
   // BILLING
@@ -407,6 +409,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: 'tenants', label: 'Workspaces', icon: Building2 },
       { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+      { key: 'failed-payments', label: 'Failed Payments', icon: AlertCircle },
       { key: 'creem-billing', label: 'Creem Billing', icon: CreditCard },
       { key: 'users', label: 'Users', icon: Users },
       { key: 'credits', label: 'Credits', icon: Wallet },
@@ -1336,6 +1339,7 @@ export function SuperAdminView() {
         {activeTab === 'ai-center' && <AICenterSection />}
         {activeTab === 'ai-platform' && <AiPlatformSection />}
         {activeTab === 'creem-billing' && <CreemBillingSection />}
+        {activeTab === 'failed-payments' && <FailedPaymentsSection />}
         {activeTab === 'menu-management' && <MenuManagementSection />}
         {activeTab === 'email-services' && <EmailServicesSection />}
         {activeTab === 'sms-services' && <SMSServicesSection />}

@@ -187,6 +187,8 @@ export function SubscriptionsTab({ subscriptions, subsLoading, format }: Subscri
                   <SelectItem value="all">All</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="trial">Trial</SelectItem>
+                  <SelectItem value="past_due">Past Due</SelectItem>
+                  <SelectItem value="suspended">Suspended</SelectItem>
                   <SelectItem value="paused">Paused</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>

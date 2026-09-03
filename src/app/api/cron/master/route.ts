@@ -21,6 +21,7 @@ import { verifyCronAuth } from '@/lib/cron-auth'
  *     7. recurring-invoices       — generate + send recurring invoices
  *     8. trial-expire             — expire trials past trialEndsAt
  *     9. renewal                  — apply downgrades, PayPal sync, mark expired
+ *    10. past-due-escalation      — escalate past-due tenants + daily digest
  *
  *   Monthly (ONLY on the 1st of each month, via date guard):
  *    10. sms-quota-reset          — zero smsUsageCount + emailUsageCount
@@ -98,6 +99,11 @@ const DAILY_CRONS: Array<{ name: string; path: string; description: string }> = 
     name: 'renewal',
     path: '/api/cron/renewal',
     description: 'Applies downgrades, PayPal sync, marks expired subs',
+  },
+  {
+    name: 'past-due-escalation',
+    path: '/api/cron/past-due-escalation',
+    description: 'Escalates past-due tenants (1d reminder, 3d urgent, 7d suspend) + daily digest to platform owner',
   },
 ]
 

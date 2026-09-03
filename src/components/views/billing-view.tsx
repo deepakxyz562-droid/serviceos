@@ -625,14 +625,16 @@ export function BillingView() {
       return;
     }
 
-    // 'current' direction: only proceed if the user is in a trial or
-    // pending_payment state (i.e. converting to paid). An already-active
-    // subscription for the same plan has nothing to pay for.
+    // 'current' direction: only proceed if the user is in a trial,
+    // pending_payment, OR past_due state (i.e. converting to paid OR
+    // retrying a failed payment). An already-active subscription for the
+    // same plan has nothing to pay for.
     if (
       direction === 'current' &&
       data.status !== 'trial' &&
       data.status !== 'trialing' &&
-      data.status !== 'pending_payment'
+      data.status !== 'pending_payment' &&
+      data.status !== 'past_due'
     ) {
       setConfirmPlan(null);
       return;
@@ -976,6 +978,50 @@ export function BillingView() {
                   preserved for 30 days.
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Past-due banner — payment failed, retry needed.
+              Surfaces the failure prominently on the billing page and gives a
+              one-click path to re-enter payment via the standard checkout flow.
+              The banner is non-blocking (user can still navigate the app via the
+              top PastDueBanner), but here on the billing page we make the CTA
+              impossible to miss. */}
+          {data.status === 'past_due' && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-800 dark:bg-orange-950/30">
+              <div className="flex items-start gap-2 flex-1">
+                <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-orange-800 dark:text-orange-300">
+                    Your last payment failed
+                  </p>
+                  <p className="text-xs text-orange-700 dark:text-orange-400 mt-1">
+                    We couldn&apos;t process your recurring payment. Update your
+                    payment method to restore your subscription — we&apos;ll retry
+                    the charge immediately.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="bg-orange-600 text-white hover:bg-orange-700 shrink-0"
+                onClick={() => {
+                  // Re-launch the checkout flow for the current plan —
+                  // lets the user re-enter / switch their PayPal or Creem
+                  // payment method. handlePaymentSuccess will fire on success
+                  // and refresh the subscription status.
+                  const currentPlanObj = effectivePlans.find((p) => p.id === data.plan);
+                  if (currentPlanObj) {
+                    setChooserPlan(currentPlanObj);
+                  } else {
+                    toast.error('Could not find your current plan', {
+                      description: 'Please contact support to update your payment method.',
+                    });
+                  }
+                }}
+              >
+                Update payment method
+              </Button>
             </div>
           )}
 

@@ -30,6 +30,7 @@
 
 import { db } from '@/lib/db';
 import { logBillingEvent } from '@/lib/billing-events';
+import { firePaymentFailureAlerts } from '@/lib/platform-alerts';
 // Phase 2: entitlement creation on activation/renewal
 import {
   createEntitlementForSubscription,
@@ -645,10 +646,46 @@ async function markPastDue(
     type: 'addon_subscription_past_due',
     status: 'failed',
     description: `Add-on payment failed — grace period until ${gracePeriodEndsAt.toISOString()}`,
+    errorCode: 'subscription.payment_failed',
+    declineReason: 'Creem add-on recurring payment failed',
     metadata: { subscriptionId: subscription.id, creemSubscriptionId },
   }).catch(() => {
     // non-fatal
   });
+
+  // ── Fire all payment-failure alerts (best-effort, never throws) ──────────
+  // For add-on failures we pass `addonSubscriptionId` (not `subscriptionId`)
+  // so the helper knows to skip the SubscriptionPayment row write (that table
+  // only holds SaaS sub rows). The EventBus emit + platform-owner email still fire.
+  try {
+    const [addonPlan, tenant] = await Promise.all([
+      db.addonPlan.findUnique({
+        where: { id: subscription.addonPlanId },
+        select: { code: true, name: true, price: true, currency: true, billingCycle: true },
+      }),
+      db.tenant.findUnique({
+        where: { id: subscription.tenantId },
+        select: { name: true },
+      }),
+    ]);
+
+    await firePaymentFailureAlerts({
+      tenantId: subscription.tenantId,
+      subscriptionId: null, // addon failure — not a SaaS subscription
+      addonSubscriptionId: subscription.id,
+      plan: addonPlan?.code || addonPlan?.name || 'addon',
+      billingCycle: addonPlan?.billingCycle || 'monthly',
+      amount: addonPlan?.price ?? 0,
+      currency: addonPlan?.currency || 'USD',
+      paymentProvider: 'creem',
+      providerSubscriptionId: creemSubscriptionId,
+      errorCode: 'subscription.payment_failed',
+      declineReason: 'Creem add-on recurring payment failed',
+      tenantName: tenant?.name || null,
+    });
+  } catch (err) {
+    console.error('[AddonBilling] firePaymentFailureAlerts failed (markPastDue):', err);
+  }
 
   return { ok: true, subscriptionId: subscription.id, status: 'PAST_DUE' };
 }

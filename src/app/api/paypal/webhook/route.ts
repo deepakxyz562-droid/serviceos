@@ -7,6 +7,7 @@ import {
   isPayPalConfigured,
 } from '@/lib/paypal';
 import { logBillingEvent } from '@/lib/billing-events';
+import { firePaymentFailureAlerts } from '@/lib/platform-alerts';
 import {
   activatePurchasedNumber,
   cancelNumberSubscription,
@@ -490,8 +491,34 @@ async function handleSubscriptionSuspended(body: Record<string, unknown>) {
     amount: local.amount,
     description: `PayPal subscription suspended (payment failure): ${local.plan}`,
     paymentProvider: 'paypal',
+    errorCode: 'BILLING.SUBSCRIPTION.SUSPENDED',
+    declineReason: 'PayPal subscription suspended (payment failure)',
     metadata: { paypalSubscriptionId: subId },
   });
+
+  // ── Fire all payment-failure alerts (best-effort, never throws) ──────────
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: local.tenantId },
+      select: { name: true },
+    });
+    await firePaymentFailureAlerts({
+      tenantId: local.tenantId,
+      subscriptionId: local.id,
+      plan: local.plan,
+      billingCycle: local.billingCycle,
+      amount: local.amount,
+      currency: local.currency,
+      paymentProvider: 'paypal',
+      providerSubscriptionId: subId,
+      payerEmail: local.paypalPayerEmail || null,
+      errorCode: 'BILLING.SUBSCRIPTION.SUSPENDED',
+      declineReason: 'PayPal subscription suspended (payment failure)',
+      tenantName: tenant?.name || null,
+    });
+  } catch (err) {
+    console.error('[paypal-webhook] firePaymentFailureAlerts failed (SUSPENDED):', err);
+  }
 }
 
 // ─── Payment handlers (the recurring charges) ───────────────────────────────
@@ -606,8 +633,37 @@ async function handlePaymentSaleDenied(body: Record<string, unknown>) {
     amount: local.amount,
     description: `Recurring payment DENIED (webhook): ${local.plan} (${local.billingCycle})`,
     paymentProvider: 'paypal',
+    errorCode: 'PAYMENT.SALE.DENIED',
+    declineReason: 'Recurring payment denied by PayPal',
     metadata: { paypalSubscriptionId: subId },
   });
+
+  // ── Fire all payment-failure alerts (best-effort, never throws) ──────────
+  // 1. Writes a SubscriptionPayment{status:'failed'} row (visible in tenant's Billing History)
+  // 2. Emits 'payment.failed' EventBus event → in-app bell + web push to tenant owner/admins
+  // 3. Sends a transactional email to the platform owner(s)
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: local.tenantId },
+      select: { name: true },
+    });
+    await firePaymentFailureAlerts({
+      tenantId: local.tenantId,
+      subscriptionId: local.id,
+      plan: local.plan,
+      billingCycle: local.billingCycle,
+      amount: local.amount,
+      currency: local.currency,
+      paymentProvider: 'paypal',
+      providerSubscriptionId: subId,
+      payerEmail: local.paypalPayerEmail || null,
+      errorCode: 'PAYMENT.SALE.DENIED',
+      declineReason: 'Recurring payment denied by PayPal',
+      tenantName: tenant?.name || null,
+    });
+  } catch (err) {
+    console.error('[paypal-webhook] firePaymentFailureAlerts failed (DENIED):', err);
+  }
 }
 
 async function handlePaymentSaleRefunded(body: Record<string, unknown>) {
