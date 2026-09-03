@@ -49,10 +49,29 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 2. Look up Google OAuth app credentials ────────────────────────────
-  const cred = await db.integrationCredential.findFirst({
-    where: { provider: 'googlebusiness', status: 'active' },
-    select: { id: true, clientId: true, redirectUri: true, scopes: true },
-  });
+  // The IntegrationCredential table (superadmin-managed) holds platform
+  // OAuth app credentials. We wrap this in try/catch because:
+  //   - The Supabase adapter resolves unknown models by capitalized guess
+  //     ("IntegrationCredential"), and if the table is absent or the
+  //     PostgREST schema cache doesn't have it, the query throws — we
+  //     must NOT crash the whole OAuth connect flow over a missing lookup
+  //     table (env-var fallbacks below cover the same need).
+  //   - This lookup is purely an optimization: a superadmin who hasn't yet
+  //     registered GBP in the DB can still connect if GOOGLE_CLIENT_ID is
+  //     set in the environment.
+  let cred: { clientId?: string | null; clientSecret?: string | null; redirectUri?: string | null; scopes?: string | null } | null = null;
+  try {
+    cred = await db.integrationCredential.findFirst({
+      where: { provider: 'googlebusiness', status: 'active' },
+      select: { id: true, clientId: true, redirectUri: true, scopes: true },
+    });
+  } catch (err) {
+    // Best-effort: log and fall through to env-var resolution below.
+    console.warn(
+      '[oauth/googlebusiness/connect] IntegrationCredential lookup failed — falling back to env vars:',
+      err instanceof Error ? err.message : err,
+    );
+  }
 
   const clientId = cred?.clientId || process.env.GOOGLE_BUSINESS_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
 
@@ -72,11 +91,18 @@ export async function GET(request: NextRequest) {
   // Prefer the configured redirectUri on the credential, otherwise derive
   // from the app URL. The Google Cloud Console MUST have this exact URI
   // registered as an authorized redirect URI.
+  //
+  // NOTE: `cred?.redirectUri` (optional chaining) — `cred` is null when no
+  // IntegrationCredential row exists (the common case where a tenant is
+  // relying on env-var GOOGLE_CLIENT_ID). Without `?.` this throws
+  // `TypeError: Cannot read properties of null (reading 'redirectUri')`,
+  // which previously produced an empty 500 body that Chrome rendered as
+  // "this page might be temporarily down" — the visible symptom of the bug.
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     getAppUrlFromRequest(request);
-  const callbackUrl = cred.redirectUri
+  const callbackUrl = cred?.redirectUri
     ? cred.redirectUri
     : `${appUrl}/api/oauth/googlebusiness/callback`;
 
