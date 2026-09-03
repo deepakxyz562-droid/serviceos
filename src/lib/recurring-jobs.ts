@@ -465,16 +465,11 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
   const scheduledAt = schedule.nextRunAt;
   const scheduledTime = schedule.timeOfDay ?? null;
 
-  // ── Transaction: create Job + JobVisit + update Schedule ──────────────
-  const result = await db.$transaction(async (tx) => {
+  // ── Create Job + JobVisit + update Schedule (sequential, no transaction) ──
+  // Fix: Use db directly instead of db.$transaction (Supabase adapter doesn't support it)
+  const result = await (async () => {
     // 0. Phase A1 — Idempotency pre-check.
-    // If a Job already exists for this `[recurringScheduleId, scheduledAt]`
-    // occurrence (e.g. the cron ran twice in close succession, or a prior run
-    // committed the Job but crashed before advancing nextRunAt), skip the
-    // create path entirely and just advance nextRunAt. The unique constraint
-    // `@@unique([recurringScheduleId, scheduledAt])` on Job is the safety net;
-    // this findFirst is the fast path that avoids throwing.
-    const existingJob = await tx.job.findFirst({
+    const existingJob = await db.job.findFirst({
       where: {
         recurringScheduleId: schedule.id,
         scheduledAt: schedule.nextRunAt,
@@ -483,10 +478,9 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
     });
     if (existingJob) {
       // Already generated for this occurrence — just advance nextRunAt
-      // without creating a duplicate.
       const nextRunAt = computeNextOccurrence(schedule, schedule.nextRunAt);
       const willDeactivate = nextRunAt === null;
-      await tx.recurringJobSchedule.update({
+      await db.recurringJobSchedule.update({
         where: { id: schedule.id },
         data: {
           lastRunAt: new Date(),
@@ -500,21 +494,11 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
       return { skipped: true as const, existingJobId: existingJob.id };
     }
 
-    // 1. Create the Job. Wrapped in try/catch for the unique-constraint race:
-    // if another concurrent process created the same occurrence between our
-    // findFirst above and our create here, the DB will throw P2002 (Prisma) /
-    // 23505 (Postgres). Treat that as a duplicate and advance nextRunAt
-    // without surfacing the error to the caller.
-    //
-    // ── PIN pipeline (Phase 3): generate the 4-digit verification PIN
-    // BEFORE the create so it can be stored on the Job AND passed to the
-    // post-commit notification. Each recurring visit gets its own unique
-    // PIN (not shared across visits) so a customer can verify each visit
-    // independently.
+    // 1. Create the Job.
     const generatedPin = generateVerificationPin();
     let job: { id: string; title: string };
     try {
-      job = await tx.job.create({
+      job = await db.job.create({
         data: {
           title: schedule.title,
           description: schedule.description ?? null,
@@ -543,11 +527,9 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
     } catch (err: any) {
       if (isUniqueViolation(err)) {
         // Another concurrent process created the Job for this occurrence
-        // between our findFirst and create. Advance nextRunAt without
-        // creating a duplicate.
         const nextRunAt = computeNextOccurrence(schedule, schedule.nextRunAt);
         const willDeactivate = nextRunAt === null;
-        await tx.recurringJobSchedule.update({
+        await db.recurringJobSchedule.update({
           where: { id: schedule.id },
           data: {
             lastRunAt: new Date(),
@@ -562,14 +544,11 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
     }
 
     // 2. Create the linked JobVisit.
-    // Set teamReminder='24h' so the appointment-reminders cron picks it up
-    // (previously defaulted to 'none' which caused the cron to skip these
-    // visits — customers received no reminder for recurring visits).
     const visitTitle = customerName
       ? `${customerName} - ${schedule.title}`
       : schedule.title;
-    const visitNumber = await nextVisitNumber(tx, job.id);
-    await tx.jobVisit.create({
+    const visitNumber = await nextVisitNumber(db, job.id);
+    await db.jobVisit.create({
       data: {
         jobVisitNumber: visitNumber,
         tenantId: schedule.tenantId,
@@ -594,7 +573,7 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
     const nextRunAt = computeNextOccurrence(schedule, schedule.nextRunAt);
     const willDeactivate = nextRunAt === null;
 
-    const updated = await tx.recurringJobSchedule.update({
+    const updated = await db.recurringJobSchedule.update({
       where: { id: schedule.id },
       data: {
         lastRunAt: new Date(),
@@ -607,7 +586,7 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
     });
 
     return { job, updated, nextRunAt, willDeactivate };
-  });
+  })();
 
   // Phase A1 — if we skipped (dedup hit on pre-check or P2002 race), there's
   // no new Job to log or to notify the customer about. The original job's
@@ -929,195 +908,220 @@ export async function createRecurringSchedule(
     throw new Error('The first recurring occurrence is already past the end date.');
   }
 
-  // ── Run the schedule create + first-job create + visit create in a single transaction ──
-  const result = await db.$transaction(async (tx) => {
-    // 1. Create the schedule.
-    const schedule = await tx.recurringJobSchedule.create({
-      data: {
+  // ── Run the schedule create + first-job create + visit create ──
+  // Fix: Use db directly instead of db.$transaction because the Supabase
+  // PostgREST adapter doesn't support $transaction. Operations run sequentially.
+  // On failure, we delete the schedule (compensating action) to avoid orphans.
+
+  // 1. Create the schedule.
+  const schedule = await db.recurringJobSchedule.create({
+    data: {
+      tenantId: input.tenantId,
+      customerId: input.customerId || null,
+      templateJobId: input.templateJobId || null,
+      title: input.title.trim(),
+      description: input.description || null,
+      frequency,
+      dayOfWeek: input.dayOfWeek ?? null,
+      dayOfMonth: input.dayOfMonth ?? null,
+      weekOfMonth: input.weekOfMonth ?? null,
+      weekdaysJson: input.weekdaysJson || '[]',
+      interval,
+      nthWeekdayJson: input.nthWeekdayJson || null,
+      timeOfDay: input.timeOfDay || null,
+      durationMins,
+      startDate: input.startDate,
+      endDate: input.endDate || null,
+      endAfterOccurrences: input.endAfterOccurrences ?? null,
+      asNeeded,
+      nextRunAt: firstOccurrence,
+      assigneeIdsJson: JSON.stringify(assigneeIds),
+      serviceId: input.serviceId || null,
+      branchId: input.branchId || null,
+      visitInstructions: input.visitInstructions || null,
+      checklistIdsJson: JSON.stringify(checklistIds),
+      lineItemsJson,
+      generateInvoice,
+      invoiceTiming,
+      timezone: input.timezone || null,
+      active: true,
+    },
+  });
+
+  // 2. Optionally create the first Job + JobVisit.
+  if (!generateFirstJob || asNeeded) {
+    // Skip first-job creation — cron will handle it.
+    const result: CreateRecurringScheduleResult = { schedule, firstJobCreated: false, firstJobId: undefined };
+    // ── Post-transaction side effects ──
+    try {
+      await logActivity({
         tenantId: input.tenantId,
-        customerId: input.customerId || null,
-        templateJobId: input.templateJobId || null,
+        actorId: null,
+        actorName: 'Recurring Schedule Service',
+        actorType: 'system',
+        action: 'create',
+        entityType: 'recurringJobSchedule',
+        entityId: schedule.id,
+        entityName: schedule.title,
+        description: `Created recurring schedule "${schedule.title}" (${frequency})`,
+      });
+    } catch { /* best-effort */ }
+    return result;
+  }
+
+  // Resolve customer for denormalized Job fields.
+  let customerName: string | null = null;
+  let customerPhone: string | null = null;
+  let customerEmail: string | null = null;
+  if (input.customerId) {
+    try {
+      const c = await db.customer.findUnique({
+        where: { id: input.customerId },
+        select: { name: true, phone: true, email: true },
+      });
+      customerName = c?.name ?? null;
+      customerPhone = c?.phone ?? null;
+      customerEmail = c?.email ?? null;
+    } catch { /* ignore */ }
+  }
+
+  // Resolve primary assignee for denormalized Job fields.
+  const firstAssigneeId = assigneeIds[0] ?? null;
+  let assigneeName: string | null = null;
+  let assigneePhone: string | null = null;
+  if (firstAssigneeId) {
+    try {
+      const emp = await db.employee.findUnique({
+        where: { id: firstAssigneeId },
+        select: { name: true, phone: true },
+      });
+      assigneeName = emp?.name ?? null;
+      assigneePhone = emp?.phone ?? null;
+    } catch { /* ignore */ }
+  }
+
+  // Resolve workspaceId
+  let workspaceId: string | null = input.branchId ?? null;
+  if (!workspaceId) {
+    try {
+      const ws = await db.workspace.findFirst({
+        where: { tenantId: input.tenantId },
+        select: { id: true },
+      });
+      workspaceId = ws?.id ?? null;
+    } catch { /* ignore */ }
+  }
+
+  // Create the first Job.
+  const firstJobPin = generateVerificationPin();
+  let job: { id: string; title: string };
+  let firstJobCreated = false;
+  let firstJobId: string | undefined;
+
+  try {
+    job = await db.job.create({
+      data: {
         title: input.title.trim(),
         description: input.description || null,
-        frequency,
-        dayOfWeek: input.dayOfWeek ?? null,
-        dayOfMonth: input.dayOfMonth ?? null,
-        weekOfMonth: input.weekOfMonth ?? null,
-        weekdaysJson: input.weekdaysJson || '[]',
-        interval,
-        nthWeekdayJson: input.nthWeekdayJson || null,
-        timeOfDay: input.timeOfDay || null,
-        durationMins,
-        startDate: input.startDate,
-        endDate: input.endDate || null,
-        endAfterOccurrences: input.endAfterOccurrences ?? null,
-        asNeeded,
-        nextRunAt: firstOccurrence, // tentative — updated below if first job created
-        assigneeIdsJson: JSON.stringify(assigneeIds),
+        status: 'scheduled',
+        priority: 'medium',
+        type: 'recurring',
+        scheduledAt: firstOccurrence,
+        scheduledTime: input.timeOfDay ?? null,
+        estimatedDuration: durationMins,
+        customerId: input.customerId || null,
+        customerName,
+        customerPhone,
+        customerEmail,
+        assigneeId: firstAssigneeId,
+        assigneeName,
+        assigneePhone,
         serviceId: input.serviceId || null,
-        branchId: input.branchId || null,
-        visitInstructions: input.visitInstructions || null,
-        checklistIdsJson: JSON.stringify(checklistIds),
         lineItemsJson,
-        generateInvoice,
-        invoiceTiming,
-        timezone: input.timezone || null,
-        active: true,
+        visitInstructions: input.visitInstructions || null,
+        linkedChecklistsJson: JSON.stringify(checklistIds),
+        workspaceId,
+        recurringScheduleId: schedule.id,
+        verificationPin: firstJobPin,
       },
     });
-
-    // 2. Optionally create the first Job + JobVisit.
-    if (!generateFirstJob || asNeeded) {
-      // Skip first-job creation — cron will handle it (or never, for as_needed).
-      // nextRunAt stays at firstOccurrence (for cron-based schedules).
-      return { schedule, firstJobCreated: false, firstJobId: undefined };
-    }
-
-    // Resolve customer for denormalized Job fields.
-    let customerName: string | null = null;
-    let customerPhone: string | null = null;
-    let customerEmail: string | null = null;
-    if (input.customerId) {
-      try {
-        const c = await tx.customer.findUnique({
-          where: { id: input.customerId },
-          select: { name: true, phone: true, email: true },
-        });
-        customerName = c?.name ?? null;
-        customerPhone = c?.phone ?? null;
-        customerEmail = c?.email ?? null;
-      } catch {
-        // ignore
-      }
-    }
-
-    // Resolve primary assignee for denormalized Job fields.
-    const firstAssigneeId = assigneeIds[0] ?? null;
-    let assigneeName: string | null = null;
-    let assigneePhone: string | null = null;
-    if (firstAssigneeId) {
-      try {
-        const emp = await tx.employee.findUnique({
-          where: { id: firstAssigneeId },
-          select: { name: true, phone: true },
-        });
-        assigneeName = emp?.name ?? null;
-        assigneePhone = emp?.phone ?? null;
-      } catch {
-        // ignore
-      }
-    }
-
-    // Resolve workspaceId (Job has no tenantId column — links via workspaceId).
-    let workspaceId: string | null = input.branchId ?? null;
-    if (!workspaceId) {
-      try {
-        const ws = await tx.workspace.findFirst({
-          where: { tenantId: input.tenantId },
-          select: { id: true },
-        });
-        workspaceId = ws?.id ?? null;
-      } catch {
-        // ignore — Job.workspaceId is nullable
-      }
-    }
-
-    // Create the first Job.
-    // ── PIN pipeline (Phase 3): generate the 4-digit verification PIN
-    // BEFORE the create so it can be stored on the Job AND passed to the
-    // post-commit notification. Each recurring visit (including the first)
-    // gets its own unique PIN.
-    const firstJobPin = generateVerificationPin();
-    let job: { id: string; title: string };
-    try {
-      job = await tx.job.create({
+    firstJobCreated = true;
+    firstJobId = job.id;
+  } catch (err: any) {
+    if (isUniqueViolation(err)) {
+      // Duplicate — advance nextRunAt, don't create a duplicate job.
+      const nextRunAt = engineCalculateNextOccurrence(recurrenceInput, firstOccurrence);
+      const willDeactivate = nextRunAt === null;
+      await db.recurringJobSchedule.update({
+        where: { id: schedule.id },
         data: {
-          title: input.title.trim(),
-          description: input.description || null,
-          status: 'scheduled',
-          priority: 'medium',
-          type: 'recurring',
-          scheduledAt: firstOccurrence,
-          scheduledTime: input.timeOfDay ?? null,
-          estimatedDuration: durationMins,
-          customerId: input.customerId || null,
-          customerName,
-          customerPhone,
-          customerEmail,
-          assigneeId: firstAssigneeId,
-          assigneeName,
-          assigneePhone,
-          serviceId: input.serviceId || null,
-          lineItemsJson,
-          visitInstructions: input.visitInstructions || null,
-          linkedChecklistsJson: JSON.stringify(checklistIds),
-          workspaceId,
-          recurringScheduleId: schedule.id,
-          verificationPin: firstJobPin,
+          nextRunAt: nextRunAt ?? firstOccurrence,
+          active: willDeactivate ? false : true,
+          pausedAt: willDeactivate ? new Date() : null,
         },
       });
-    } catch (err: any) {
-      if (isUniqueViolation(err)) {
-        // A job already exists for this (scheduleId, scheduledAt) — possible if
-        // the user clicked "Create" twice quickly. Treat as success without
-        // creating a duplicate, then advance nextRunAt.
-        const nextRunAt = engineCalculateNextOccurrence(recurrenceInput, firstOccurrence);
-        const willDeactivate = nextRunAt === null;
-        await tx.recurringJobSchedule.update({
-          where: { id: schedule.id },
-          data: {
-            nextRunAt: nextRunAt ?? firstOccurrence,
-            active: willDeactivate ? false : true,
-            pausedAt: willDeactivate ? new Date() : null,
-          },
+      const result: CreateRecurringScheduleResult = { schedule, firstJobCreated: false, firstJobId: undefined };
+      try {
+        await logActivity({
+          tenantId: input.tenantId,
+          actorId: null,
+          actorName: 'Recurring Schedule Service',
+          actorType: 'system',
+          action: 'create',
+          entityType: 'recurringJobSchedule',
+          entityId: schedule.id,
+          entityName: schedule.title,
+          description: `Created recurring schedule "${schedule.title}" (${frequency})`,
         });
-        return { schedule, firstJobCreated: false, firstJobId: undefined };
-      }
-      throw err;
+      } catch { /* best-effort */ }
+      return result;
     }
+    // Non-unique-violation error — delete the schedule (compensating action)
+    try { await db.recurringJobSchedule.delete({ where: { id: schedule.id } }); } catch { /* best-effort */ }
+    throw err;
+  }
 
-    // Create the first JobVisit.
-    const visitTitle = customerName
-      ? `${customerName} - ${schedule.title}`
-      : schedule.title;
-    const visitNumber = await nextVisitNumber(tx, job.id);
-    await tx.jobVisit.create({
-      data: {
-        jobVisitNumber: visitNumber,
-        tenantId: input.tenantId,
-        jobId: job.id,
-        title: visitTitle,
-        visitType: 'maintenance',
-        instructions: input.visitInstructions || null,
-        scheduledDate: firstOccurrence,
-        scheduledTime: input.timeOfDay ?? null,
-        anytime: !input.timeOfDay,
-        assigneeIdsJson: JSON.stringify(assigneeIds),
-        assigneeNamesJson: JSON.stringify(assigneeName ? [assigneeName] : []),
-        checklistIdsJson: JSON.stringify(checklistIds),
-        teamReminder: '24h',
-        status: 'scheduled',
-      },
-    });
-
-    // 3. Advance nextRunAt to the NEXT future occurrence.
-    const nextRunAt = engineCalculateNextOccurrence(recurrenceInput, firstOccurrence);
-    const willDeactivate = nextRunAt === null;
-
-    await tx.recurringJobSchedule.update({
-      where: { id: schedule.id },
-      data: {
-        lastRunAt: new Date(),
-        lastJobId: job.id,
-        executionCount: { increment: 1 },
-        nextRunAt: nextRunAt ?? firstOccurrence,
-        active: willDeactivate ? false : true,
-        pausedAt: willDeactivate ? new Date() : null,
-      },
-    });
-
-    return { schedule, firstJobCreated: true, firstJobId: job.id };
+  // Create the first JobVisit.
+  const visitTitle = customerName
+    ? `${customerName} - ${schedule.title}`
+    : schedule.title;
+  const visitNumber = await nextVisitNumber(db, job.id);
+  await db.jobVisit.create({
+    data: {
+      jobVisitNumber: visitNumber,
+      tenantId: input.tenantId,
+      jobId: job.id,
+      title: visitTitle,
+      visitType: 'maintenance',
+      instructions: input.visitInstructions || null,
+      scheduledDate: firstOccurrence,
+      scheduledTime: input.timeOfDay ?? null,
+      anytime: !input.timeOfDay,
+      assigneeIdsJson: JSON.stringify(assigneeIds),
+      assigneeNamesJson: JSON.stringify(assigneeName ? [assigneeName] : []),
+      checklistIdsJson: JSON.stringify(checklistIds),
+      teamReminder: '24h',
+      status: 'scheduled',
+    },
   });
+
+  // 3. Advance nextRunAt to the NEXT future occurrence.
+  const nextRunAt = engineCalculateNextOccurrence(recurrenceInput, firstOccurrence);
+  const willDeactivate = nextRunAt === null;
+
+  await db.recurringJobSchedule.update({
+    where: { id: schedule.id },
+    data: {
+      lastRunAt: new Date(),
+      lastJobId: job.id,
+      executionCount: { increment: 1 },
+      nextRunAt: nextRunAt ?? firstOccurrence,
+      active: willDeactivate ? false : true,
+      pausedAt: willDeactivate ? new Date() : null,
+    },
+  });
+
+  const result: CreateRecurringScheduleResult = { schedule, firstJobCreated, firstJobId: firstJobId as string | undefined };
 
   // ── Post-transaction side effects (best-effort, outside the transaction) ──
 

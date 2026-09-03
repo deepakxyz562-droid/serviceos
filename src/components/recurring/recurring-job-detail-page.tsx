@@ -246,6 +246,12 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
     'overview' | 'schedule' | 'jobs' | 'billing' | 'activity'
   >('overview');
 
+  // Fix: assignees state moved HERE (parent) so loadSchedule can set it.
+  // Previously this was in the child OverviewTab, causing setAssignees
+  // to be undefined in the parent's loadSchedule scope.
+  const [assignees, setAssignees] = useState<{ id: string; name: string }[]>([]);
+  const [loadingAssignees, setLoadingAssignees] = useState(false);
+
   const loadSchedule = useCallback(async () => {
     try {
       setLoading(true);
@@ -258,7 +264,7 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
       setSchedule(data.schedule);
       setRecentJobs(data.recentJobs || []);
       setMetrics(data.metrics ?? null);
-      // Fix: use API-returned assignees (eliminates separate employee fetch)
+      // Fix: setAssignees is now in scope (parent component)
       if (data.assignees) {
         setAssignees(data.assignees);
       }
@@ -274,6 +280,43 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
   useEffect(() => {
     loadSchedule();
   }, [loadSchedule]);
+
+  // Fix: Fallback assignee fetch — only runs if the API didn't return
+  // assignees (e.g. Supabase RPC path) AND we have assignee IDs to resolve.
+  const assigneeIds = useMemo(
+    () => parseStrArr(schedule?.assigneeIdsJson || ''),
+    [schedule?.assigneeIdsJson],
+  );
+  useEffect(() => {
+    if (assigneeIds.length === 0 || assignees.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingAssignees(true);
+        const idsQuery = assigneeIds
+          .map((id) => `ids=${encodeURIComponent(id)}`)
+          .join('&');
+        const res = await fetch(`/api/employees?${idsQuery}`, { credentials: 'include' });
+        if (!res.ok) return;
+        const d = await res.json();
+        const list = Array.isArray(d) ? d : d.employees || [];
+        if (!cancelled) {
+          const targetSet = new Set(assigneeIds);
+          const matched = list.filter((e: { id: string; name: string }) => targetSet.has(e.id));
+          setAssignees(
+            matched.map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })),
+          );
+        }
+      } catch {
+        // silent — names just won't resolve
+      } finally {
+        if (!cancelled) setLoadingAssignees(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [assigneeIds, assignees.length]);
 
   // ─── Actions ─────────────────────────────────────────────────────────────
   const handlePause = async () => {
@@ -503,7 +546,7 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
-          <OverviewTab schedule={schedule} metrics={metrics} />
+          <OverviewTab schedule={schedule} metrics={metrics} assignees={assignees} loadingAssignees={loadingAssignees} />
         </TabsContent>
 
         <TabsContent value="schedule" className="mt-4">
@@ -660,9 +703,13 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
 function OverviewTab({
   schedule,
   metrics,
+  assignees,
+  loadingAssignees,
 }: {
   schedule: Schedule;
   metrics: ScheduleMetrics | null;
+  assignees: { id: string; name: string }[];
+  loadingAssignees: boolean;
 }) {
   const { setActiveView, setPendingOpenEntity } = useAppStore();
   const recurrenceInput: RecurrenceInput = useMemo(
@@ -706,51 +753,12 @@ function OverviewTab({
     return schedule.nextRunAt ? formatVisitLabel(schedule.nextRunAt) : '—';
   }, [status, schedule.nextRunAt]);
 
-  // Assignees — now returned inline by the API (eliminates separate fetch).
-  // assigneeIdsJson holds an array of employee IDs. The detail endpoint now
-  // resolves these to { id, name } and returns them in `assignees`.
-  // Fallback: if the API didn't return assignees (e.g., Supabase RPC path
-  // doesn't include them yet), fall back to the old client-side fetch.
+  // Assignees — now passed as props from the parent component.
+  // The parent owns the assignees state + the API-returned data + the fallback fetch.
   const assigneeIds = useMemo(
     () => parseStrArr(schedule.assigneeIdsJson),
     [schedule.assigneeIdsJson],
   );
-  const [assignees, setAssignees] = useState<{ id: string; name: string }[]>([]);
-  const [loadingAssignees, setLoadingAssignees] = useState(false);
-
-  // Fallback: only fetch if assignees weren't returned by the detail API.
-  // The API returns assignees inline, so this effect is typically a no-op.
-  // It only runs if assignees is still empty AND we have IDs to resolve.
-  useEffect(() => {
-    if (assigneeIds.length === 0 || assignees.length > 0) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoadingAssignees(true);
-        const idsQuery = assigneeIds
-          .map((id) => `ids=${encodeURIComponent(id)}`)
-          .join('&');
-        const res = await fetch(`/api/employees?${idsQuery}`, { credentials: 'include' });
-        if (!res.ok) return;
-        const d = await res.json();
-        const list = Array.isArray(d) ? d : d.employees || [];
-        if (!cancelled) {
-          const targetSet = new Set(assigneeIds);
-          const matched = list.filter((e: { id: string; name: string }) => targetSet.has(e.id));
-          setAssignees(
-            matched.map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })),
-          );
-        }
-      } catch {
-        // silent — names just won't resolve
-      } finally {
-        if (!cancelled) setLoadingAssignees(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [assigneeIds, assignees.length]);
 
   // Render metrics compactly: small grid of stat cells, NOT big KPI cards
   // (per user direction: "don't necessarily show all these as large KPI
