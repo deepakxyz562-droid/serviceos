@@ -98,13 +98,13 @@ export function InspectorTechnician({
             <div className="relative shrink-0">
               <Avatar className="size-12">
                 <AvatarFallback className="bg-teal-100 text-teal-700 text-sm font-medium">
-                  {e.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                  {(e.name || 'Tech').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'T'}
                 </AvatarFallback>
               </Avatar>
               <div className={`absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-background ${getEmployeeStatusDot(e.status)}`} />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-sm truncate">{e.name}</h3>
+              <h3 className="font-semibold text-sm truncate">{e.name || 'Unnamed Technician'}</h3>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <Badge variant="outline" className={`text-[9px] h-4 ${getEmployeeStatusBg(e.status)}`}>
                   {(e.status || 'offline').replace('_', ' ')}
@@ -185,7 +185,7 @@ export function InspectorTechnician({
                 onClick={() => onRecenterOnTech(e.id)}
               >
                 <Locate className="size-3 mr-1" />
-                Recenter on {e.name.split(' ')[0]}
+                Recenter on {(e.name || 'Tech').split(' ')[0]}
               </Button>
               </>
             ) : (
@@ -367,7 +367,7 @@ export function InspectorJob({
               <div className="flex items-center gap-2">
                 <Avatar className="size-7">
                   <AvatarFallback className="bg-teal-100 text-teal-700 text-[10px]">
-                    {job.assigneeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                    {(job.assigneeName || 'Tech').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'T'}
                   </AvatarFallback>
                 </Avatar>
                 <span className="text-sm font-medium">{job.assigneeName}</span>
@@ -412,7 +412,7 @@ export function InspectorJob({
                       >
                         <Avatar className="size-7">
                           <AvatarFallback className="bg-teal-100 text-teal-700 text-[10px]">
-                            {c.employeeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                            {(c.employeeName || 'Tech').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'T'}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">

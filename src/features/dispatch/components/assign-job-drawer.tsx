@@ -243,18 +243,19 @@ export function AssignJobDrawer({
                     <div className="flex items-center gap-2.5 min-w-0">
                       <Avatar className="size-9 rounded-lg">
                         <AvatarFallback className="bg-muted text-xs font-bold">
-                          {emp.name
+                          {(emp.name || 'Tech')
                             .split(' ')
+                            .filter(Boolean)
                             .map((n) => n[0])
                             .join('')
                             .slice(0, 2)
-                            .toUpperCase()}
+                            .toUpperCase() || 'T'}
                         </AvatarFallback>
                       </Avatar>
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-xs truncate">{emp.name}</span>
+                          <span className="font-semibold text-xs truncate">{emp.name || 'Technician'}</span>
                           {isBestMatch && (
                             <Badge className="bg-teal-600 text-white text-[9px] h-4 px-1.5 gap-0.5">
                               <Sparkles className="size-2.5" /> Best Match
@@ -323,7 +324,7 @@ export function AssignJobDrawer({
                       </>
                     ) : (
                       <>
-                        <UserCheck className="size-3 mr-1.5" /> Assign {emp.name.split(' ')[0]}
+                        <UserCheck className="size-3 mr-1.5" /> Assign {(emp.name || 'Tech').split(' ')[0]}
                       </>
                     )}
                   </Button>

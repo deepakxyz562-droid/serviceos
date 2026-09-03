@@ -215,8 +215,9 @@ export function DispatchView() {
   });
 
   const connection = useDispatchConnection(realtimeConnected);
+  const { markSync } = connection;
 
-  // ─── Periodic Polling Fallbacks ───────────────────────────────────
+  // ─── Periodic Polling Fallbacks (Controlled intervals) ────────────
   useEffect(() => {
     fetchJobs();
     fetchEmployees();
@@ -224,19 +225,19 @@ export function DispatchView() {
 
     const jobsInterval = setInterval(() => {
       fetchJobs();
-      connection.markSync();
+      markSync();
     }, 20000);
 
     const empInterval = setInterval(() => {
       fetchEmployees();
-      connection.markSync();
+      markSync();
     }, 5000);
 
     return () => {
       clearInterval(jobsInterval);
       clearInterval(empInterval);
     };
-  }, [fetchJobs, fetchEmployees, fetchTeams, connection]);
+  }, [fetchJobs, fetchEmployees, fetchTeams, markSync]);
 
   // Refresh All Trigger
   const handleRefreshAll = useCallback(async () => {

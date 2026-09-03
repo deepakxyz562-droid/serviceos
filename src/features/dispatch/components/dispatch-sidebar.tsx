@@ -94,8 +94,8 @@ export function DispatchSidebar({
       // Search
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
-        const matchesName = e.name.toLowerCase().includes(q);
-        const matchesSkill = e.skills && e.skills.toLowerCase().includes(q);
+        const matchesName = (e.name || '').toLowerCase().includes(q);
+        const matchesSkill = e.skills ? e.skills.toLowerCase().includes(q) : false;
         if (!matchesName && !matchesSkill) return false;
       }
 

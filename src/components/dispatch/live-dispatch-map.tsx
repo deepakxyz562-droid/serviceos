@@ -1602,38 +1602,44 @@ export default function LiveDispatchMap({
         const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID;
         const center = computeCenter(employeesRef.current);
 
-        const map = new g.maps.Map(containerRef.current, {
-          center,
-          zoom: DEFAULT_ZOOM,
-          mapId: mapId ?? undefined,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: true,
-          zoomControl: true,
-        });
+        try {
+          const map = new g.maps.Map(containerRef.current, {
+            center,
+            zoom: DEFAULT_ZOOM,
+            mapId: mapId || 'DEMO_MAP_ID',
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: true,
+            zoomControl: true,
+          });
 
-        mapRef.current = map;
-        infoWindowRef.current = new g.maps.InfoWindow();
+          mapRef.current = map;
+          infoWindowRef.current = new g.maps.InfoWindow();
 
-        // Click on the empty map → deselect the active tech (parity with Leaflet).
-        map.addListener('click', () => {
-          if (selectedTechIdRef.current && onTechnicianSelectRef.current) {
-            onTechnicianSelectRef.current(null);
-          }
-        });
+          // Click on the empty map → deselect the active tech (parity with Leaflet).
+          map.addListener('click', () => {
+            if (selectedTechIdRef.current && onTechnicianSelectRef.current) {
+              onTechnicianSelectRef.current(null);
+            }
+          });
 
-        // Trigger a resize after layout settles (Google's container must
-        // have its final dimensions before tiles load correctly).
-        const resizeTimer = setTimeout(() => {
-          if (mapRef.current) {
-            google.maps.event.trigger(mapRef.current, 'resize');
-          }
-        }, 100);
+          // Trigger a resize after layout settles (Google's container must
+          // have its final dimensions before tiles load correctly).
+          const resizeTimer = setTimeout(() => {
+            if (mapRef.current) {
+              google.maps.event.trigger(mapRef.current, 'resize');
+            }
+          }, 100);
 
-        rerenderTechMarkers();
-        rerenderJobMarkers();
-        drawRouteLines();
-        setIsReady(true);
+          rerenderTechMarkers();
+          rerenderJobMarkers();
+          drawRouteLines();
+          setIsReady(true);
+        } catch (mapInitErr) {
+          const msg = mapInitErr instanceof Error ? mapInitErr.message : String(mapInitErr);
+          console.error('[dispatch-map] Map constructor failed:', msg);
+          setLoadError(msg);
+        }
 
         // Cleanup closure (registered with React's effect cleanup below).
         // We capture the timer ID so the unmount path can clear it.

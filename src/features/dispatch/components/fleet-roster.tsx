@@ -144,7 +144,7 @@ function EmployeeRow({
         <div className="relative shrink-0">
           <Avatar className="size-9">
             <AvatarFallback className="bg-teal-100 text-teal-700 text-xs font-medium">
-              {e.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+              {(e.name || 'Tech').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'T'}
             </AvatarFallback>
           </Avatar>
           <div
@@ -156,7 +156,7 @@ function EmployeeRow({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="font-medium text-sm truncate">{e.name}</span>
+            <span className="font-medium text-sm truncate">{e.name || 'Unnamed Technician'}</span>
             {e.team && (
               <span
                 className="inline-block size-2 rounded-full shrink-0"

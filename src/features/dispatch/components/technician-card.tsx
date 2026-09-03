@@ -85,12 +85,13 @@ export function TechnicianCard({
         <div className="relative shrink-0 mt-0.5">
           <Avatar className="size-9 rounded-lg">
             <AvatarFallback className="bg-teal-100 text-teal-800 font-semibold text-xs rounded-lg dark:bg-teal-900/60 dark:text-teal-200">
-              {e.name
+              {(e.name || 'Tech')
                 .split(' ')
+                .filter(Boolean)
                 .map((n) => n[0])
                 .join('')
                 .slice(0, 2)
-                .toUpperCase()}
+                .toUpperCase() || 'T'}
             </AvatarFallback>
           </Avatar>
           <span
@@ -98,7 +99,7 @@ export function TechnicianCard({
               'absolute -bottom-1 -right-1 size-3 rounded-full border-2 border-background',
               getEmployeeStatusDot(e.status)
             )}
-            title={`Status: ${e.status}`}
+            title={`Status: ${e.status || 'offline'}`}
           />
         </div>
 
@@ -106,7 +107,7 @@ export function TechnicianCard({
           <div className="flex items-center justify-between gap-1.5">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className="font-semibold text-xs text-foreground truncate">
-                {e.name}
+                {e.name || 'Unnamed Technician'}
               </span>
               {e.team && (
                 <span
@@ -183,7 +184,7 @@ export function TechnicianCard({
       <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/60 text-xs">
         <span className="text-[10px] text-muted-foreground truncate">
           {e.role || 'Technician'}
-          {e.completedJobs > 0 ? ` · ${e.completedJobs} completed` : ''}
+          {typeof e.completedJobs === 'number' && e.completedJobs > 0 ? ` · ${e.completedJobs} completed` : ''}
         </span>
 
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
