@@ -31,6 +31,15 @@ export function useDispatchConnection(isRealtimeConnected: boolean): DispatchCon
     setLastSyncAt(new Date());
   }, []);
 
+  // Derive connection state from the realtime flag
+  const state: DispatchConnectionState = isRealtimeConnected ? 'live' : 'syncing';
+  const label = state === 'live' ? 'Live' : 'Reconnecting';
+  const badgeClass =
+    state === 'live'
+      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-300'
+      : 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-300';
+  const dotClass = state === 'live' ? 'bg-emerald-500' : 'bg-amber-500';
+
   // Update human readable duration string every 3 seconds
   useEffect(() => {
     const updateText = () => {

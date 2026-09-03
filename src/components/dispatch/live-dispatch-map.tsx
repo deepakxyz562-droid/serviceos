@@ -1595,6 +1595,10 @@ export default function LiveDispatchMap({
       document.head.appendChild(styleEl);
     }
 
+    // Declare resizeTimer outside the try block so the cleanup closure can
+    // safely reference it even if the try block fails before it's assigned.
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+
     loadGoogleMapsApi()
       .then(() => {
         if (cancelled || !containerRef.current || mapRef.current) return;
@@ -1625,7 +1629,7 @@ export default function LiveDispatchMap({
 
           // Trigger a resize after layout settles (Google's container must
           // have its final dimensions before tiles load correctly).
-          const resizeTimer = setTimeout(() => {
+          resizeTimer = setTimeout(() => {
             if (mapRef.current) {
               google.maps.event.trigger(mapRef.current, 'resize');
             }
@@ -1644,7 +1648,7 @@ export default function LiveDispatchMap({
         // Cleanup closure (registered with React's effect cleanup below).
         // We capture the timer ID so the unmount path can clear it.
         (cleanupRef as { current: () => void }).current = () => {
-          clearTimeout(resizeTimer);
+          if (resizeTimer !== null) clearTimeout(resizeTimer);
           // Cancel any in-flight animations.
           animStateRef.current.forEach((s) => {
             if (s.rafId !== null) cancelAnimationFrame(s.rafId);
