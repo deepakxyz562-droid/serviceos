@@ -289,6 +289,17 @@ function isValidCoord(lat: unknown, lng: unknown): lat is number {
   );
 }
 
+function extractLatLng(pos: unknown): { lat: number; lng: number } | null {
+  if (!pos || typeof pos !== 'object') return null;
+  const p = pos as Record<string, unknown>;
+  const lat = typeof p.lat === 'function' ? p.lat() : typeof p.lat === 'number' ? p.lat : null;
+  const lng = typeof p.lng === 'function' ? p.lng() : typeof p.lng === 'number' ? p.lng : null;
+  if (lat !== null && lng !== null && isValidCoord(lat, lng)) {
+    return { lat, lng };
+  }
+  return null;
+}
+
 function computeCenter(techs: MapTechnician[]): { lat: number; lng: number } {
   const points = techs.filter(
     (t) =>
@@ -794,9 +805,10 @@ export default function LiveDispatchMap({
     // Current displayed position (start of the glide).
     const cur = marker.position;
     if (!cur) return;
-    const curLatLng = cur as google.maps.LatLng;
-    const fromLat = curLatLng.lat();
-    const fromLng = curLatLng.lng();
+    const curCoords = extractLatLng(cur);
+    if (!curCoords) return;
+    const fromLat = curCoords.lat;
+    const fromLng = curCoords.lng;
 
     const distM = haversineMeters(fromLat, fromLng, targetLat, targetLng);
 
@@ -1228,10 +1240,10 @@ export default function LiveDispatchMap({
         (t) => (job.assigneeId != null && t.id === job.assigneeId) || t.currentJobId === jobId,
       );
       const liveMarker = tech ? techMarkersRef.current.get(tech.id) : undefined;
-      if (liveMarker?.position) {
-        const ll = liveMarker.position as google.maps.LatLng;
-        startLat = ll.lat();
-        startLng = ll.lng();
+      const liveCoords = extractLatLng(liveMarker?.position);
+      if (liveCoords) {
+        startLat = liveCoords.lat;
+        startLng = liveCoords.lng;
       } else if (tech && isValidCoord(tech.latitude, tech.longitude)) {
         startLat = tech.latitude;
         startLng = tech.longitude as number;
@@ -1753,10 +1765,10 @@ export default function LiveDispatchMap({
         const liveMarker = tech ? techMarkersRef.current.get(tech.id) : undefined;
         let techLat: number | null = null;
         let techLng: number | null = null;
-        if (liveMarker?.position) {
-          const ll = liveMarker.position as google.maps.LatLng;
-          techLat = ll.lat();
-          techLng = ll.lng();
+        const liveCoords = extractLatLng(liveMarker?.position);
+        if (liveCoords) {
+          techLat = liveCoords.lat;
+          techLng = liveCoords.lng;
         } else if (tech && isValidCoord(tech.latitude, tech.longitude)) {
           techLat = tech.latitude;
           techLng = tech.longitude as number;
@@ -1983,10 +1995,10 @@ export default function LiveDispatchMap({
         const liveMarker = techMarkersRef.current.get(employeeId);
         let techLat: number | null = null;
         let techLng: number | null = null;
-        if (liveMarker?.position) {
-          const ll = liveMarker.position as google.maps.LatLng;
-          techLat = ll.lat();
-          techLng = ll.lng();
+        const liveCoords = extractLatLng(liveMarker?.position);
+        if (liveCoords) {
+          techLat = liveCoords.lat;
+          techLng = liveCoords.lng;
         } else {
           const tech = employeesRef.current.find((t) => t.id === employeeId);
           if (tech && isValidCoord(tech.latitude, tech.longitude)) {
