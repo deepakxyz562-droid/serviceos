@@ -155,16 +155,20 @@ export async function GET() {
       where,
       select: {
         id: true,
+        name: true,
         email: true,
+        phone: true,
+        role: true,
+        skills: true,
+        rating: true,
+        completedJobs: true,
+        teamId: true,
+        team: {
+          select: { id: true, name: true, color: true },
+        },
         latitude: true,
         longitude: true,
         lastSeenAt: true,
-        // Phase F-2: lastLocationAt is written ONLY by the GPS ping path
-        // (/api/gps/track line 431 + /api/employees/heartbeat line 111 when
-        // coords are provided). It's the authoritative GPS telemetry timestamp
-        // on the Employee row itself — so we can read it directly instead of
-        // running N separate GPSLocation.findFirst queries (the old N+1).
-        // Falls back to null for legacy employees who never had a GPS ping.
         lastLocationAt: true,
         status: true,
         currentJobId: true,
@@ -225,7 +229,7 @@ export async function GET() {
     }
 
     // Merge lastGpsAt + gpsStatus into each row.
-    const enriched = rows.map((r: { id: string; email: string | null; latitude: number | null; longitude: number | null; lastSeenAt: string | Date | null; lastLocationAt: string | Date | null; status: string; currentJobId: string | null }) => {
+    const enriched = rows.map((r: any) => {
       const lastGpsAt = lastGpsMap.get(r.id) ?? null;
       const gpsStatus = deriveGpsStatus(lastGpsAt);
       // Normalize lastSeenAt to a UTC ISO string for the client.
@@ -233,7 +237,15 @@ export async function GET() {
       const lastSeenNorm = toUtcIso(r.lastSeenAt);
       return {
         id: r.id,
+        name: r.name,
         email: r.email,
+        phone: r.phone,
+        role: r.role,
+        skills: r.skills,
+        rating: r.rating ?? 5.0,
+        completedJobs: r.completedJobs ?? 0,
+        teamId: r.teamId,
+        team: r.team,
         latitude: r.latitude,
         longitude: r.longitude,
         lastSeenAt: lastSeenNorm,

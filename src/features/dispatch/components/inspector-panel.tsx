@@ -117,10 +117,11 @@ export function InspectorTechnician({
               </div>
               <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1">
                 <span className="flex items-center gap-0.5">
-                  <Star className="size-2.5 text-amber-400 fill-amber-400" />{e.rating.toFixed(1)}
+                  <Star className="size-2.5 text-amber-400 fill-amber-400" />
+                  {typeof e.rating === 'number' && !Number.isNaN(e.rating) ? e.rating.toFixed(1) : '5.0'}
                 </span>
                 <span>·</span>
-                <span>{e.completedJobs} done</span>
+                <span>{typeof e.completedJobs === 'number' ? e.completedJobs : 0} done</span>
               </div>
             </div>
           </div>
@@ -149,7 +150,7 @@ export function InspectorTechnician({
                   <span className="text-muted-foreground">Last:</span>
                   <span className="font-medium">{timeAgo(gpsTimestamp(e))}</span>
                 </div>
-                {distKm !== null && (
+                {distKm !== null && typeof distKm === 'number' && (
                   <div className="flex items-center gap-1">
                     <Navigation className="size-3 text-muted-foreground" />
                     <span className="text-muted-foreground">Dist:</span>
@@ -163,11 +164,13 @@ export function InspectorTechnician({
                     <span className="font-medium">{arrived ? 'arrived' : `${etaMin} min`}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-1">
-                  <Gauge className="size-3 text-muted-foreground" />
-                  <span className="text-muted-foreground">Coords:</span>
-                  <span className="font-mono text-[9px]">{e.latitude!.toFixed(3)}, {e.longitude!.toFixed(3)}</span>
-                </div>
+                {typeof e.latitude === 'number' && typeof e.longitude === 'number' && (
+                  <div className="flex items-center gap-1">
+                    <Gauge className="size-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">Coords:</span>
+                    <span className="font-mono text-[9px]">{e.latitude.toFixed(3)}, {e.longitude.toFixed(3)}</span>
+                  </div>
+                )}
               </div>
               {isOfflineEmp(e) ? (
                 <p className="text-[10px] text-red-600 dark:text-red-400 italic">
@@ -417,15 +420,15 @@ export function InspectorJob({
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1">
-                            <span className="text-xs font-medium truncate">{c.employeeName}</span>
-                            {c.breakdown.distanceKm !== null && (
+                            <span className="text-xs font-medium truncate">{c.employeeName || 'Technician'}</span>
+                            {typeof c.breakdown?.distanceKm === 'number' && (
                               <span className="text-[9px] text-muted-foreground">{c.breakdown.distanceKm.toFixed(1)} km</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
                             <Star className="size-2.5 text-amber-400 fill-amber-400" />
-                            <span>{c.breakdown.total.toFixed(0)}% match</span>
-                            {c.breakdown.activeJobCount > 0 && <span>· {c.breakdown.activeJobCount} active</span>}
+                            <span>{typeof c.breakdown?.total === 'number' ? c.breakdown.total.toFixed(0) : '0'}% match</span>
+                            {typeof c.breakdown?.activeJobCount === 'number' && c.breakdown.activeJobCount > 0 && <span>· {c.breakdown.activeJobCount} active</span>}
                           </div>
                         </div>
                         {offline ? (
