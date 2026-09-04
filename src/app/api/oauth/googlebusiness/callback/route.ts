@@ -70,7 +70,7 @@ function markCodeAsProcessed(code: string): void {
  *            {accountName}/locations?readMask=name,title
  *   5. Store each location as a SocialAccount row (one row per location —
  *      the publisher publishes to a specific location, not a GBP account).
- *   6. Redirect back to /dashboard?view=social-accounts&connected=googlebusiness.
+ *   6. Redirect back to /?view=social-accounts&connected=googlebusiness.
  *
  * The SocialAccount stores:
  *   - platform: 'googlebusiness'
@@ -141,12 +141,12 @@ export async function GET(request: NextRequest) {
       process.env.APP_URL ||
       getAppUrlFromRequest(request);
     const redirectUrl = new URL(
-      '/dashboard?view=social-accounts&connected=googlebusiness&duplicate=true',
+      '/?view=social-accounts&connected=googlebusiness&duplicate=true',
       appUrl,
     );
     const res = NextResponse.redirect(redirectUrl.toString());
     res.cookies.delete('gbp_oauth_csrf');
-    // no-store to prevent any caching of this redirect.
+    // no-store to prevent any caching of this redirect (OAuth codes are sensitive).
     res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     return res;
   }
@@ -258,7 +258,7 @@ export async function GET(request: NextRequest) {
             // Redirect to the dashboard with a success indicator.
             console.log('[oauth/googlebusiness/callback] Code already used but SocialAccount exists — redirecting to success');
             const redirectUrl = new URL(
-              '/dashboard?view=social-accounts&connected=googlebusiness&duplicate=true',
+              '/?view=social-accounts&connected=googlebusiness&duplicate=true',
               appUrl,
             );
             const res = NextResponse.redirect(redirectUrl.toString());
@@ -275,7 +275,7 @@ export async function GET(request: NextRequest) {
           if (isCodeAlreadyProcessed(code)) {
             console.log('[oauth/googlebusiness/callback] Code already processed (in-flight) — redirecting to dashboard');
             const redirectUrl = new URL(
-              '/dashboard?view=social-accounts&connected=googlebusiness&duplicate=true',
+              '/?view=social-accounts&connected=googlebusiness&duplicate=true',
               appUrl,
             );
             const res = NextResponse.redirect(redirectUrl.toString());
@@ -434,8 +434,12 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 7. Clear the CSRF cookie + redirect to dashboard ───────────────────
+  // Redirect to / (root) with ?view=social-accounts — NOT /dashboard (which
+  // doesn't exist as a route). The root page is the SPA shell; HomePageClient
+  // reads ?view=social-accounts from window.location.search and switches to
+  // the social-accounts view client-side.
   const redirectUrl = new URL(
-    '/dashboard?view=social-accounts&connected=googlebusiness',
+    '/?view=social-accounts&connected=googlebusiness',
     appUrl,
   );
   const res = NextResponse.redirect(redirectUrl.toString());
@@ -682,7 +686,7 @@ a, button { background: #dc2626; color: white; border: none; padding: 0.75rem 1.
   <p>${safe}</p>
   <div style="margin-top: 1.5rem;">
     ${retryButton}
-    <a href="/dashboard?view=social-accounts">Back to Dashboard</a>
+    <a href="/?view=social-accounts">Back to Dashboard</a>
   </div>
   <script>
     if (window.opener) {
