@@ -49,10 +49,15 @@ export async function computeProration(
     : (newPlan?.monthlyPrice ?? 0);
 
   const now = new Date();
-  const endDate = subscription.endDate ?? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  // Supabase adapter returns dates as ISO strings; Prisma returns Date objects.
+  // Normalize both to Date so .getTime() works regardless of the DB backend.
+  const rawEndDate = subscription.endDate ?? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const endDate = rawEndDate instanceof Date ? rawEndDate : new Date(rawEndDate);
+  const rawStartDate = subscription.startDate;
+  const startDate = rawStartDate instanceof Date ? rawStartDate : new Date(rawStartDate);
   const daysInCycle = Math.max(
     1,
-    Math.round((endDate.getTime() - subscription.startDate.getTime()) / (1000 * 60 * 60 * 24))
+    Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
   );
   const daysRemaining = Math.max(
     0,
