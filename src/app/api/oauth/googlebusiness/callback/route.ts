@@ -5,6 +5,55 @@ import { logActivity } from '@/lib/activity-log';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
 
 /**
+ * CRITICAL: OAuth callback routes MUST be dynamic. Without this, Next.js may
+ * cache or prefetch the GET response — and since Google auth codes are
+ * SINGLE-USE, a prefetch request consumes the code before the real navigation
+ * arrives. This was the root cause of the "invalid_grant: Bad Request" error:
+ * the browser prefetched the callback URL, the prefetch consumed the code,
+ * then the real navigation got "code already used" from Google.
+ *
+ * `force-dynamic` tells Next.js to NEVER cache this route + treat every
+ * request as unique.
+ */
+export const dynamic = 'force-dynamic';
+
+/**
+ * In-memory lock to prevent double-exchange of the same auth code.
+ *
+ * Google auth codes are SINGLE-USE. If the browser prefetches the callback
+ * URL (which `force-dynamic` prevents) OR the user double-clicks, two
+ * requests with the same code arrive within milliseconds. The first exchange
+ * succeeds; the second gets "invalid_grant: Bad Request".
+ *
+ * This Set stores code hashes for 30 seconds. If a second request arrives
+ * with the same code, we short-circuit + redirect to the dashboard (the
+ * first request is already processing).
+ *
+ * Note: This is per-process — in a multi-instance deployment, each instance
+ * has its own Set. But the most common double-fetch scenario (browser prefetch
+ * + real navigation) hits the SAME instance, so this catches it.
+ */
+const processedCodes = new Map<string, number>(); // codeHash → expiry timestamp
+const CODE_LOCK_TTL_MS = 30_000; // 30 seconds
+
+function isCodeAlreadyProcessed(code: string): boolean {
+  const now = Date.now();
+  // Clean up expired entries (prevent memory leak).
+  for (const [hash, expiry] of processedCodes) {
+    if (expiry < now) processedCodes.delete(hash);
+  }
+  // Simple hash (not crypto-secure — just for dedup). The code itself is
+  // already a secret, so we don't need to protect the hash.
+  const hash = code.slice(0, 16) + code.length;
+  return processedCodes.has(hash);
+}
+
+function markCodeAsProcessed(code: string): void {
+  const hash = code.slice(0, 16) + code.length;
+  processedCodes.set(hash, Date.now() + CODE_LOCK_TTL_MS);
+}
+
+/**
  * GET /api/oauth/googlebusiness/callback
  *
  * OAuth2 callback for Google Business Profile.
@@ -78,6 +127,32 @@ export async function GET(request: NextRequest) {
   if (!cookieCsrf || cookieCsrf !== state.csrf) {
     return renderErrorPage('CSRF validation failed — please reconnect.');
   }
+
+  // ── 2.5. Code-lock check: prevent double-exchange ─────────────────────
+  // Google auth codes are SINGLE-USE. If a second request arrives with the
+  // same code within 30 seconds (browser prefetch, double-click, refresh),
+  // short-circuit + redirect to the dashboard. The first request is already
+  // processing (or finished) — exchanging the code again would fail with
+  // "invalid_grant: Bad Request".
+  if (isCodeAlreadyProcessed(code)) {
+    console.log('[oauth/googlebusiness/callback] Code already processed — redirecting to dashboard (duplicate request)');
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.APP_URL ||
+      getAppUrlFromRequest(request);
+    const redirectUrl = new URL(
+      '/dashboard?view=social-accounts&connected=googlebusiness&duplicate=true',
+      appUrl,
+    );
+    const res = NextResponse.redirect(redirectUrl.toString());
+    res.cookies.delete('gbp_oauth_csrf');
+    // no-store to prevent any caching of this redirect.
+    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res;
+  }
+  // Mark the code as "in progress" immediately. If a second request arrives
+  // while we're still exchanging, it'll be caught by the check above.
+  markCodeAsProcessed(code);
 
   // ── 3. Look up Google OAuth app credentials ────────────────────────────
   const cred = await db.integrationCredential.findFirst({
@@ -169,6 +244,7 @@ export async function GET(request: NextRequest) {
       // with success instead of showing an error.
       if (errorCode === 'invalid_grant' && state.tenantId) {
         try {
+          // Check 1: Does a SocialAccount already exist? (first exchange completed)
           const existingAccount = await db.socialAccount.findFirst({
             where: {
               tenantId: state.tenantId,
@@ -187,6 +263,24 @@ export async function GET(request: NextRequest) {
             );
             const res = NextResponse.redirect(redirectUrl.toString());
             res.cookies.delete('gbp_oauth_csrf');
+            res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+            return res;
+          }
+
+          // Check 2: Was the code already processed in this process?
+          // (The in-memory lock at the top should have caught it, but this
+          // catches the case where the first request is STILL in-flight —
+          // the SocialAccount hasn't been created yet, but the code is
+          // already consumed at Google.)
+          if (isCodeAlreadyProcessed(code)) {
+            console.log('[oauth/googlebusiness/callback] Code already processed (in-flight) — redirecting to dashboard');
+            const redirectUrl = new URL(
+              '/dashboard?view=social-accounts&connected=googlebusiness&duplicate=true',
+              appUrl,
+            );
+            const res = NextResponse.redirect(redirectUrl.toString());
+            res.cookies.delete('gbp_oauth_csrf');
+            res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
             return res;
           }
         } catch (checkErr) {
@@ -346,6 +440,8 @@ export async function GET(request: NextRequest) {
   );
   const res = NextResponse.redirect(redirectUrl.toString());
   res.cookies.delete('gbp_oauth_csrf');
+  // no-store to prevent any caching of this redirect (OAuth codes are sensitive).
+  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   return res;
 }
 
@@ -595,6 +691,13 @@ a, button { background: #dc2626; color: white; border: none; padding: 0.75rem 1.
     }
   </script>
 </body></html>`,
-    { headers: { 'Content-Type': 'text/html' } },
+    {
+      headers: {
+        'Content-Type': 'text/html',
+        // no-store prevents browsers/CDNs from caching this error page —
+        // important because the URL contains the (now-used) auth code.
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    },
   );
 }
