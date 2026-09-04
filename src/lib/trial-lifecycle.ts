@@ -18,7 +18,7 @@
  */
 import { db } from '@/lib/db';
 import { sendEmail } from '@/lib/email-send';
-import { renderTrialTemplate } from '@/lib/billing-seed';
+import { renderTrialTemplate, seedTrialEmailTemplates } from '@/lib/billing-seed';
 import { logBillingEvent } from '@/lib/billing-events';
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || process.env.APP_NAME || 'Fieseros';
@@ -133,6 +133,20 @@ export async function sendTrialReminder(
         year: 'numeric',
       })
     : '30 days from expiry';
+
+  // ── Self-healing: ensure the trial email templates are seeded ──────────
+  // Previously, if the templates weren't seeded (fresh deploy, new DB, missed
+  // the manual /api/billing/seed step), renderTrialTemplate() returned null
+  // and the reminder silently failed with "Template not seeded" — leaving
+  // tenants without trial-ending emails. This auto-seed makes the cron
+  // self-healing: it idempotently seeds any missing templates before
+  // rendering. Safe to call every time (the seed function checks "if exists,
+  // skip"). Best-effort: never fails the parent send.
+  try {
+    await seedTrialEmailTemplates();
+  } catch (seedErr) {
+    console.warn('[trial-lifecycle] seedTrialEmailTemplates failed (non-fatal, will try render anyway):', seedErr);
+  }
 
   const rendered = await renderTrialTemplate(templateSlug, {
     tenantName: tenant.name,

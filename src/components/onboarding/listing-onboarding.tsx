@@ -17,7 +17,7 @@
  * fields + onboardingCompleted=true, then calls onComplete().
  *
  * This is deliberately much simpler than the 4-step SaaSOnboarding wizard
- * — no plan selection, no Stripe, no coverage areas, no marketplace T&Cs
+ * — no plan selection, no payment setup, no coverage areas, no marketplace T&Cs
  * (the listing-only path implies opt-in already).
  */
 

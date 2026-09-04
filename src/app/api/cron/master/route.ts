@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyCronAuth } from '@/lib/cron-auth'
+import { seedTrialEmailTemplates, seedPlans } from '@/lib/billing-seed'
 
 /**
  * POST /api/cron/master  —  Master Cron Multiplexer
@@ -261,6 +262,25 @@ export async function POST(request: NextRequest) {
   console.log(`[master-cron] 🚀 Starting at ${now.toISOString()}`)
   console.log(`[master-cron] Base URL: ${baseUrl}`)
   console.log(`[master-cron] Crons to run: ${cronsToRun.length} (${DAILY_CRONS.length} daily${isMonthlyResetDay ? ` + ${MONTHLY_CRONS.length} monthly` : ''})`)
+
+  // ── Self-healing: ensure billing templates + plans are seeded ──────────
+  // The trial-reminders, pre-charge-reminder, and trial-expire sub-crons all
+  // depend on the 4 trial EmailTemplate rows being present. If they're missing
+  // (fresh deploy, new DB, missed manual /api/billing/seed), every reminder
+  // silently fails with "Template not seeded". This idempotent seed at the
+  // start of the daily master run guarantees they exist before any sub-cron
+  // runs. Best-effort: never fails the master cron.
+  try {
+    const [tplRes, planRes] = await Promise.all([
+      seedTrialEmailTemplates(),
+      seedPlans(),
+    ]);
+    if (tplRes.seeded > 0 || planRes.seeded > 0) {
+      console.log(`[master-cron] 🌱 Seeded ${tplRes.seeded} trial templates + ${planRes.seeded} plans (self-heal)`);
+    }
+  } catch (seedErr) {
+    console.warn('[master-cron] Self-heal seed failed (non-fatal):', seedErr);
+  }
 
   // ── Run each sub-cron sequentially with error isolation ──────────────
   const results: CronResult[] = []

@@ -544,7 +544,7 @@ export function CredentialsView() {
             </div>
             <div className="space-y-2">
               <Label>Service Name</Label>
-              <Input placeholder="e.g., Meta / WhatsApp, Stripe, AWS" value={newCredService} onChange={e => setNewCredService(e.target.value)} />
+              <Input placeholder="e.g., Meta / WhatsApp, PayPal, AWS" value={newCredService} onChange={e => setNewCredService(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Type</Label>

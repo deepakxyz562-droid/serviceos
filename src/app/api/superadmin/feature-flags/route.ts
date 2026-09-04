@@ -28,7 +28,7 @@ const FEATURE_DEFINITIONS = [
   { key: 'whatsapp_billing', label: 'WhatsApp Usage Billing', description: 'Charge per WhatsApp message sent' },
   { key: 'white_label_billing', label: 'White Label (£20/mo)', description: 'Custom branding and domain' },
   { key: 'premium_integrations', label: 'Premium Integrations', description: 'QuickBooks, Xero, advanced API access' },
-  { key: 'marketplace_eligibility', label: 'Marketplace Eligibility Gates', description: 'Require identity/business/insurance verification + Stripe Connect for marketplace' },
+  { key: 'marketplace_eligibility', label: 'Marketplace Eligibility Gates', description: 'Require identity/business/insurance verification + payment setup for marketplace' },
   { key: 'instant_booking', label: 'Instant Booking Flow', description: 'Allow customers to book standardized services instantly' },
   { key: 'quote_request', label: 'Quote Request Flow', description: 'Allow customers to request quotes for custom projects' },
   { key: 'emergency_dispatch', label: 'Emergency Dispatch Flow', description: 'Uber-style emergency dispatch to nearest technician' },

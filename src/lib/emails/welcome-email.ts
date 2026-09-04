@@ -98,7 +98,7 @@ Your business "${businessName}" is now set up on Fieseros. Here's how to get sta
 1. Verify your email (check your inbox for a separate verification email)
 2. Complete your business profile — add your logo, services, and hours
 3. Add your team members so they can start taking jobs
-4. Connect Stripe to start accepting payments
+4. Set up payments to start accepting customer payments
 ${marketplaceLine}
 
 Log in to your dashboard: ${dashboardUrl}
@@ -154,7 +154,7 @@ function renderWelcomeEmailHtml(params: {
                 <tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9745; Step 1:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Verify your email (check your inbox for a separate verification email)</td></tr>
                 <tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 2:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Complete your business profile — logo, services, hours</td></tr>
                 <tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 3:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Add your team members so they can take jobs</td></tr>
-                <tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 4:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Connect Stripe to start accepting payments</td></tr>
+                <tr><td style="padding:8px 0;color:#0f766e;font-size:14px;"><strong>&#9744; Step 4:</strong></td><td style="padding:8px 0;color:#334155;font-size:14px;">Set up payments to start accepting customer payments</td></tr>
                 ${step5Html}
               </table>
 

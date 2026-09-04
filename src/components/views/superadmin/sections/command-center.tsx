@@ -135,7 +135,7 @@ const LATEST_ERRORS: ErrorItem[] = [
   { service: 'API', message: 'Rate limit exceeded for tenant aquaflow on /api/jobs', minsAgo: 5 },
   { service: 'Database', message: 'Connection timeout acquiring pool slot (supabase-prod-1)', minsAgo: 12 },
   { service: 'WhatsApp', message: 'Webhook delivery failed — Meta returned 503 Service Unavailable', minsAgo: 28 },
-  { service: 'Stripe', message: 'Webhook signature invalid — possible clock drift or replay attack', minsAgo: 60 },
+  { service: 'PayPal', message: 'Webhook signature invalid — possible clock drift or replay attack', minsAgo: 60 },
   { service: 'AI Provider', message: 'Upstream timeout calling gpt-4o after 30000ms (3 retries exhausted)', minsAgo: 120 },
 ];
 
@@ -218,7 +218,7 @@ export function CommandCenterSection() {
       {/* ─── 1. Section header ────────────────────────────────────────────── */}
       <SectionHeader
         title="Command Center"
-        description="Real-time platform health, activity, and revenue — Stripe + Vercel style."
+        description="Real-time platform health, activity, and revenue — PayPal + Vercel style."
         icon={Activity}
         actions={
           <>

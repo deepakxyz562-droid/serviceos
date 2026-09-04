@@ -3,7 +3,7 @@
 /**
  * AddressAutocomplete
  * -------------------
- * A single-search address input backed by the OpenStreetMap Nominatim API.
+ * A single-search address input backed by Photon (Komoot's free OSM autocomplete).
  *
  * Calls go to our OWN server-side proxy at `/api/geocode/search?q=<query>`
  * rather than hitting `https://nominatim.openstreetmap.org/...` directly
@@ -116,8 +116,11 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
     const controller = new AbortController();
     abortRef.current = controller;
 
-    try {
-      const url = `/api/geocode/search?q=${encodeURIComponent(q)}`;
+    // ── Primary: Photon (Komoot's free autocomplete — true autocomplete behavior) ──
+    // Falls back to Nominatim (/api/geocode/search) if Photon is down or returns
+    // an error. Both are normalized to the same NominatimResult[] shape by their
+    // respective server-side proxies, so the component consumes either seamlessly.
+    const tryFetch = async (url: string): Promise<NominatimResult[]> => {
       const res = await fetch(url, {
         method: 'GET',
         signal: controller.signal,
@@ -126,12 +129,27 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
         throw new Error(`HTTP ${res.status}`);
       }
       const data = (await res.json()) as NominatimResult[];
-      setResults(Array.isArray(data) ? data : []);
+      return Array.isArray(data) ? data : [];
+    };
+
+    try {
+      const url = `/api/geocode/photon?q=${encodeURIComponent(q)}`;
+      let data: NominatimResult[] = [];
+      try {
+        data = await tryFetch(url);
+      } catch (photonErr) {
+        // Photon failed — fall back to Nominatim (different provider, same shape).
+        if ((photonErr as Error).name === 'AbortError') throw photonErr;
+        console.warn('[AddressAutocomplete] Photon failed, falling back to Nominatim:', photonErr);
+        const nominatimUrl = `/api/geocode/search?q=${encodeURIComponent(q)}`;
+        data = await tryFetch(nominatimUrl);
+      }
+      setResults(data);
       setOpen(true);
     } catch (err) {
       // AbortError is expected when a newer query supersedes an older one.
       if ((err as Error).name === 'AbortError') return;
-      console.error('[AddressAutocomplete] Nominatim search failed:', err);
+      console.error('[AddressAutocomplete] address search failed (Photon + Nominatim):', err);
       setError('Could not reach the address lookup service. Try again or enter manually.');
       setResults([]);
       setOpen(false);
@@ -156,9 +174,12 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
   const selectResult = useCallback(
     (r: NominatimResult) => {
       const a = r.address || {};
-      // Build the street address: "house_number road" (Nominatim convention).
+      // Build the street address: "house_number road" (Nominatim/Photon convention).
       const streetParts = [a.house_number, a.road].filter(Boolean);
       const street = streetParts.join(' ').trim();
+      // Photon returns a `name` field for named places (e.g. "Empire State
+      // Building") — use it as the address when there's no street/house number.
+      const name = (a as { name?: string }).name;
       // City: prefer city, then town, then village, then municipality.
       const city = a.city || a.town || a.village || a.municipality || '';
       const state = a.state || a.region || '';
@@ -174,7 +195,7 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
       if (!isNaN(parsedLon)) lng = parsedLon;
 
       onChange({
-        address: street || r.display_name.split(',')[0] || '',
+        address: street || name || r.display_name.split(',')[0] || '',
         city,
         state,
         pincode,

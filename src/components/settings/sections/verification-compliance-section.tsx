@@ -10,7 +10,7 @@
  *   1. Business Registration (licence, VAT, pricing type, call-out fee)
  *   2. Insurance (provider, policy number)
  *   3. Identity Verification (self-declaration KYC)
- *   4. Stripe Connect (wire up existing API)
+ *   4. Payments (white-label — calls /api/payments/setup)
  *
  * Used by BOTH:
  *   - CRM users → embedded in the Settings page (settings-view.tsx)
@@ -25,7 +25,9 @@
  *   - insuranceVerified = true when insuranceProvider + policyNumber are filled
  *   - identityVerified = true when the user clicks "I confirm I am the
  *     business owner" (self-declaration KYC — no document upload yet)
- *   - stripeConnected = handled via the Stripe Connect OAuth flow
+ *   - stripeConnected = legacy fallback (pre-Airwallex migration); the UI
+ *     prefers paymentsConnected but reads stripeConnected if the new column
+ *     isn't populated yet.
  */
 
 import { useState, useEffect, useCallback } from 'react';

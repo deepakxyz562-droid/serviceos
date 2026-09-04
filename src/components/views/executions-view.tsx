@@ -82,14 +82,14 @@ interface NodeDataItem {
 const MOCK_EXECUTIONS: ExecutionItem[] = [
   { id: 'ex1', workflowId: 'wf1', workflowName: 'Lead Follow-up Automation', workflowActive: true, status: 'success', mode: 'automatic', startedAt: '2025-03-13T14:30:00Z', finishedAt: '2025-03-13T14:30:02Z', durationMs: 1200, triggerType: 'webhook', executedBy: 'System' },
   { id: 'ex2', workflowId: 'wf2', workflowName: 'Appointment Reminder', workflowActive: true, status: 'success', mode: 'automatic', startedAt: '2025-03-13T08:00:00Z', finishedAt: '2025-03-13T08:00:01Z', durationMs: 800, triggerType: 'schedule', executedBy: 'Cron' },
-  { id: 'ex3', workflowId: 'wf3', workflowName: 'Payment Confirmation', workflowActive: true, status: 'error', mode: 'automatic', startedAt: '2025-03-13T07:45:00Z', finishedAt: '2025-03-13T07:45:00Z', durationMs: 300, triggerType: 'webhook', executedBy: 'Stripe' },
+  { id: 'ex3', workflowId: 'wf3', workflowName: 'Payment Confirmation', workflowActive: true, status: 'error', mode: 'automatic', startedAt: '2025-03-13T07:45:00Z', finishedAt: '2025-03-13T07:45:00Z', durationMs: 300, triggerType: 'webhook', executedBy: 'PayPal' },
   { id: 'ex4', workflowId: 'wf5', workflowName: 'Job Status Notifications', workflowActive: true, status: 'running', mode: 'automatic', startedAt: '2025-03-13T12:30:00Z', finishedAt: null, durationMs: null, triggerType: 'event', executedBy: 'System' },
   { id: 'ex5', workflowId: 'wf1', workflowName: 'Lead Follow-up Automation', workflowActive: true, status: 'success', mode: 'automatic', startedAt: '2025-03-12T16:20:00Z', finishedAt: '2025-03-12T16:20:02Z', durationMs: 1500, triggerType: 'webhook', executedBy: 'System' },
   { id: 'ex6', workflowId: 'wf4', workflowName: 'New Customer Onboarding', workflowActive: false, status: 'cancelled', mode: 'manual', startedAt: '2025-03-12T10:00:00Z', finishedAt: '2025-03-12T10:01:00Z', durationMs: 60000, triggerType: 'manual', executedBy: 'Rajesh Kumar' },
   { id: 'ex7', workflowId: 'wf2', workflowName: 'Appointment Reminder', workflowActive: true, status: 'success', mode: 'automatic', startedAt: '2025-03-12T08:00:00Z', finishedAt: '2025-03-12T08:00:01Z', durationMs: 900, triggerType: 'schedule', executedBy: 'Cron' },
   { id: 'ex8', workflowId: 'wf7', workflowName: 'Escalation Handler', workflowActive: true, status: 'success', mode: 'manual', startedAt: '2025-03-11T15:00:00Z', finishedAt: '2025-03-11T15:00:03Z', durationMs: 2500, triggerType: 'manual', executedBy: 'Priya Patel' },
   { id: 'ex9', workflowId: 'wf5', workflowName: 'Job Status Notifications', workflowActive: true, status: 'success', mode: 'automatic', startedAt: '2025-03-11T11:30:00Z', finishedAt: '2025-03-11T11:30:01Z', durationMs: 1100, triggerType: 'event', executedBy: 'System' },
-  { id: 'ex10', workflowId: 'wf3', workflowName: 'Payment Confirmation', workflowActive: true, status: 'success', mode: 'automatic', startedAt: '2025-03-11T09:15:00Z', finishedAt: '2025-03-11T09:15:02Z', durationMs: 1800, triggerType: 'webhook', executedBy: 'Stripe' },
+  { id: 'ex10', workflowId: 'wf3', workflowName: 'Payment Confirmation', workflowActive: true, status: 'success', mode: 'automatic', startedAt: '2025-03-11T09:15:00Z', finishedAt: '2025-03-11T09:15:02Z', durationMs: 1800, triggerType: 'webhook', executedBy: 'PayPal' },
   { id: 'ex11', workflowId: 'wf1', workflowName: 'Lead Follow-up Automation', workflowActive: true, status: 'error', mode: 'automatic', startedAt: '2025-03-10T14:30:00Z', finishedAt: '2025-03-10T14:30:01Z', durationMs: 500, triggerType: 'webhook', executedBy: 'System' },
   { id: 'ex12', workflowId: 'wf6', workflowName: 'Review Collection', workflowActive: false, status: 'waiting', mode: 'automatic', startedAt: '2025-03-10T09:00:00Z', finishedAt: null, durationMs: null, triggerType: 'schedule', executedBy: 'Cron' },
 ];
@@ -102,7 +102,7 @@ const MOCK_NODE_DATA: Record<string, NodeDataItem[]> = {
     { id: 'nd4', nodeName: 'Update CRM', nodeId: 'n4', inputJson: '{"leadId":"L123","status":"contacted"}', outputJson: '{"updated":true}', errorJson: null, durationMs: 200, status: 'success' },
   ],
   'ex3': [
-    { id: 'nd5', nodeName: 'Stripe Webhook', nodeId: 'n8', inputJson: '{"event":"payment.failed"}', outputJson: '{}', errorJson: null, durationMs: 30, status: 'success' },
+    { id: 'nd5', nodeName: 'PayPal Webhook', nodeId: 'n8', inputJson: '{"event":"payment.failed"}', outputJson: '{}', errorJson: null, durationMs: 30, status: 'success' },
     { id: 'nd6', nodeName: 'Update Invoice', nodeId: 'n9', inputJson: '{"invoiceId":"INV-001"}', outputJson: '{}', errorJson: 'Connection timeout: database unreachable after 5000ms', durationMs: 5000, status: 'error' },
   ],
 };

@@ -85,7 +85,7 @@ const faqs = [
   {
     question: "Can I accept online payments?",
     answer:
-      "Yes. Every invoice generated in Fieseros includes a secure online payment link. Customers can pay by credit card, debit card, UPI (for India), or bank transfer — directly from their phone, no app required. We integrate with leading payment processors including Stripe and PayPal, so you can choose the provider that works in your market. You see payment status in real time inside Fieseros, and the funds settle to your bank account on the standard processor timeline (usually 1–3 business days). Most service businesses using Fieseros get paid substantially faster than with paper invoices or PDFs sent over email.",
+      "Yes. Every invoice generated in Fieseros includes a secure online payment link. Customers can pay by credit card, debit card, UPI (for India), or bank transfer — directly from their phone, no app required. We integrate with leading payment processors including PayPal and Creem, so you can choose the provider that works in your market. You see payment status in real time inside Fieseros, and the funds settle to your bank account on the standard processor timeline (usually 1–3 business days). Most service businesses using Fieseros get paid substantially faster than with paper invoices or PDFs sent over email.",
   },
   {
     question: "Does it support multiple currencies?",

@@ -43,7 +43,7 @@ interface RecentRow {
 const RECENT: RecentRow[] = [
   { subject: 'Q1 product roundup: AI Center is live', type: 'Feature', audience: 'All Workspaces', sent: '2025-01-10T09:00:00Z', openRate: 72, status: 'Sent' },
   { subject: 'Scheduled maintenance: Jan 18, 02:00 UTC', type: 'Maintenance', audience: 'All Workspaces', sent: '2025-01-09T14:00:00Z', openRate: 64, status: 'Sent' },
-  { subject: 'New Stripe webhook signing keys', type: 'Warning', audience: 'Growth plan+', sent: '2025-01-08T11:30:00Z', openRate: 58, status: 'Sent' },
+  { subject: 'New PayPal webhook signing keys', type: 'Warning', audience: 'Growth plan+', sent: '2025-01-08T11:30:00Z', openRate: 58, status: 'Sent' },
   { subject: 'Marketplace now supports HVAC packs', type: 'Feature', audience: 'Industry: HVAC', sent: '2025-01-12T08:00:00Z', openRate: 81, status: 'Sent' },
   { subject: 'API rate limit increase rolling out', type: 'Info', audience: 'Starter plan+', sent: '2025-01-13T10:00:00Z', openRate: 0, status: 'Scheduled' },
 ];

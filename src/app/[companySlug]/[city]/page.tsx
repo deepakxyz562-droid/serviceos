@@ -792,8 +792,8 @@ export default async function PluralBrowsePage({
               The Fieseros Marketplace connects homeowners and businesses in {cityName} with
               verified local {industryPluralName.toLowerCase()}. Every provider listed here has
               opted into the marketplace, so you can see at a glance how vetted they are —
-              identity verified, business verified, insurance verified, and Stripe Connect
-              payments enabled. Read real customer reviews, compare ratings and response times,
+              identity verified, business verified, insurance verified, and marketplace payments
+              enabled. Read real customer reviews, compare ratings and response times,
               then book instantly or request a quote. New {industryPluralName.toLowerCase()} join
               the marketplace every week, so check back often.
             </p>

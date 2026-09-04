@@ -453,7 +453,7 @@ export default function DataDeletionPage() {
                     Note on Card Numbers:
                   </strong>{" "}
                   Fieseros does not store full credit/debit card numbers. Card
-                  data is processed and stored by our payment processors (Stripe
+                  data is processed and stored by our payment processors (PayPal
                   and PayPal) in compliance with PCI-DSS standards. When you
                   request data deletion, we will remove all tokenized references
                   from our systems and request deletion of your payment data from
@@ -767,10 +767,10 @@ export default function DataDeletionPage() {
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">
-                  8.2 Stripe/PayPal
+                  8.2 PayPal/Creem
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  Payment data processed through Stripe and PayPal is subject to
+                  Payment data processed through PayPal and Creem is subject to
                   their respective data retention policies. Full credit/debit
                   card numbers are never stored on Fieseros servers. When you
                   request data deletion:
@@ -781,7 +781,7 @@ export default function DataDeletionPage() {
                     records from our systems.
                   </li>
                   <li>
-                    We request deletion of your customer records from Stripe and
+                    We request deletion of your customer records from PayPal and
                     PayPal.
                   </li>
                   <li>
@@ -791,7 +791,7 @@ export default function DataDeletionPage() {
                     compliance).
                   </li>
                   <li>
-                    Stripe and PayPal handle data deletion in accordance with
+                    PayPal and Creem handle data deletion in accordance with
                     their own privacy policies and legal obligations.
                   </li>
                 </ul>

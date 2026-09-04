@@ -448,7 +448,7 @@ export default function CookiePolicyPage() {
                     cookies only if you have granted analytics consent.
                   </li>
                   <li>
-                    <strong>Payment gateways (Stripe, PayPal)</strong> — Used to
+                    <strong>Payment gateways (PayPal, Creem)</strong> — Used to
                     process subscription and invoice payments. These providers
                     may set cookies on their own hosted payment pages to support
                     fraud detection and 3-D Secure authentication.

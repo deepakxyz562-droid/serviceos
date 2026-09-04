@@ -517,7 +517,7 @@ export default async function IndustryHubPage({
             The Fieseros Marketplace connects homeowners and businesses with verified{' '}
             {industryPluralName.toLowerCase()} across the country. Every provider listed here has
             opted into the marketplace, so you can see at a glance how vetted they are — identity
-            verified, business verified, insurance verified, and Stripe Connect payments enabled.
+            verified, business verified, insurance verified, and marketplace payments enabled.
             Read real customer reviews, compare ratings and response times, then book instantly or
             request a quote.
           </p>

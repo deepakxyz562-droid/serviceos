@@ -13,7 +13,7 @@
  *
  * Search is powered by `searchSettingsSections` from the config, which
  * matches against label, description, and the `keywords` array — so
- * searching "stripe" finds the Integrations section, "2fa" finds Security,
+ * searching "paypal" finds the Integrations section, "2fa" finds Security,
  * "invoice" finds Finance, etc.
  */
 

@@ -127,7 +127,7 @@ const MOCK_WORKFLOWS: WorkflowItem[] = [
   {
     id: 'wf3', name: 'Payment Confirmation', description: 'Send payment receipt and update invoice status automatically', triggerType: 'webhook',
     nodes: [
-      { id: 'n8', name: 'Stripe Webhook', type: 'trigger' },
+      { id: 'n8', name: 'PayPal Webhook', type: 'trigger' },
       { id: 'n9', name: 'Update Invoice', type: 'action' },
       { id: 'n10', name: 'Send Receipt', type: 'action' },
       { id: 'n11', name: 'Notify Team', type: 'action' },

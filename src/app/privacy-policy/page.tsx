@@ -209,7 +209,7 @@ export default function PrivacyPolicyPage() {
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
                   <li>
-                    <strong>Stripe, Inc.</strong> — for credit/debit card and
+                    <strong>Airwallex, Inc.</strong> — for credit/debit card and
                     bank transfer payments
                   </li>
                   <li>
@@ -352,7 +352,7 @@ export default function PrivacyPolicyPage() {
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
                   <li>
-                    <strong>Stripe, Inc.</strong> — for payment processing,
+                    <strong>Creem, Inc.</strong> — for payment processing,
                     subscription billing, and invoice management
                   </li>
                   <li>

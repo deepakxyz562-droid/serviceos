@@ -491,7 +491,7 @@ const howToChooseSteps = [
   {
     step: 2,
     title: "List your must-have integrations",
-    description: "If you use QuickBooks, Stripe, or a specific VoIP provider, verify the FSM platform integrates natively. Workarounds via Zapier work but add latency, cost, and failure points. Make a list of 3–5 tools you cannot live without.",
+    description: "If you use QuickBooks, PayPal, or a specific VoIP provider, verify the FSM platform integrates natively. Workarounds via Zapier work but add latency, cost, and failure points. Make a list of 3–5 tools you cannot live without.",
   },
   {
     step: 3,
@@ -1063,7 +1063,7 @@ export default function BestFieldServiceSoftwarePage() {
                 Invoicing &amp; payments
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                The best FSM platforms close the loop from job completion to paid invoice without manual entry. A technician completes a job, the platform generates an invoice from the job data, the customer pays on-site or via a payment link, and the payment syncs to your accounting tool. Look for native integrations with QuickBooks, Xero, or your local equivalent. If you collect payments on-site, verify the platform supports your region's payment processors — Stripe works globally, but many US-built tools don't support UPI, Pix, or M-Pesa.
+                The best FSM platforms close the loop from job completion to paid invoice without manual entry. A technician completes a job, the platform generates an invoice from the job data, the customer pays on-site or via a payment link, and the payment syncs to your accounting tool. Look for native integrations with QuickBooks, Xero, or your local equivalent. If you collect payments on-site, verify the platform supports your region's payment processors — PayPal works globally, but many US-built tools don't support UPI, Pix, or M-Pesa.
               </p>
             </div>
             <div>
@@ -1090,7 +1090,7 @@ export default function BestFieldServiceSoftwarePage() {
                 Integrations &amp; ecosystem
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Most FSM platforms integrate with QuickBooks, Xero, Google Calendar, and Stripe. The differentiator is depth: does the integration sync two-way in real-time, or is it a nightly batch? Jobber and Housecall Pro have the largest integration ecosystems among small-business FSM tools. Fieseros has a smaller but growing ecosystem. If you rely on a niche tool (a specific VoIP provider, a regional accounting package), verify the integration exists and is actively maintained before committing.
+                Most FSM platforms integrate with QuickBooks, Xero, Google Calendar, and PayPal. The differentiator is depth: does the integration sync two-way in real-time, or is it a nightly batch? Jobber and Housecall Pro have the largest integration ecosystems among small-business FSM tools. Fieseros has a smaller but growing ecosystem. If you rely on a niche tool (a specific VoIP provider, a regional accounting package), verify the integration exists and is actively maintained before committing.
               </p>
             </div>
           </div>

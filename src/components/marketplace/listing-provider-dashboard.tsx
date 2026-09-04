@@ -219,7 +219,7 @@ export function ListingProviderDashboard() {
         </TabsContent>
 
         {/* Tab 3: Verification — lets listing-only users complete marketplace
-            eligibility requirements (insurance, licence, KYC, Stripe Connect). */}
+            eligibility requirements (insurance, licence, KYC, payment setup). */}
         <TabsContent value="verification" className="mt-4">
           {tenantSnap ? (
             <VerificationComplianceSection tenantId={tenantSnap.id} />
