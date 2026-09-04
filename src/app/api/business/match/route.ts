@@ -43,7 +43,10 @@ export async function POST(request: NextRequest) {
       where: {
         claimed: false,
         listingTier: { in: ['free', 'none'] },
-        name: { contains: name.trim(), mode: 'insensitive' },
+        // `contains` is already case-insensitive in the Supabase adapter
+        // (PostgREST uses `ilike` internally). Don't pass `mode: 'insensitive'`
+        // — the Supabase adapter doesn't recognize that Prisma-specific property.
+        name: { contains: name.trim() },
       },
       select: {
         id: true,
