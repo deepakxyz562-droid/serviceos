@@ -70,7 +70,7 @@ function markCodeAsProcessed(code: string): void {
  *            {accountName}/locations?readMask=name,title
  *   5. Store each location as a SocialAccount row (one row per location —
  *      the publisher publishes to a specific location, not a GBP account).
- *   6. Redirect back to /?view=social-accounts&connected=googlebusiness.
+ *   6. Redirect back to /?view=verification&google=connected.
  *
  * The SocialAccount stores:
  *   - platform: 'googlebusiness'
@@ -141,7 +141,7 @@ export async function GET(request: NextRequest) {
       process.env.APP_URL ||
       getAppUrlFromRequest(request);
     const redirectUrl = new URL(
-      '/?view=social-accounts&connected=googlebusiness&duplicate=true',
+      '/?view=verification&google=connected&duplicate=true',
       appUrl,
     );
     const res = NextResponse.redirect(redirectUrl.toString());
@@ -258,7 +258,7 @@ export async function GET(request: NextRequest) {
             // Redirect to the dashboard with a success indicator.
             console.log('[oauth/googlebusiness/callback] Code already used but SocialAccount exists — redirecting to success');
             const redirectUrl = new URL(
-              '/?view=social-accounts&connected=googlebusiness&duplicate=true',
+              '/?view=verification&google=connected&duplicate=true',
               appUrl,
             );
             const res = NextResponse.redirect(redirectUrl.toString());
@@ -275,7 +275,7 @@ export async function GET(request: NextRequest) {
           if (isCodeAlreadyProcessed(code)) {
             console.log('[oauth/googlebusiness/callback] Code already processed (in-flight) — redirecting to dashboard');
             const redirectUrl = new URL(
-              '/?view=social-accounts&connected=googlebusiness&duplicate=true',
+              '/?view=verification&google=connected&duplicate=true',
               appUrl,
             );
             const res = NextResponse.redirect(redirectUrl.toString());
@@ -376,6 +376,12 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
+    // Phase 3: Fetch the admin list for this account to capture the user's
+    // access role (OWNER / CO_OWNER / MANAGER / etc.). Best-effort — if the
+    // API call fails, we proceed without the role (the verification service
+    // treats a missing role as "unknown").
+    const admins = await listGbpAdmins(accessToken, account.name);
+
     for (const location of locations) {
       allFoundLocationNames.push(location.title || location.name);
       try {
@@ -389,6 +395,8 @@ export async function GET(request: NextRequest) {
           refreshToken,
           tokenExpiry,
           scopes,
+          // Phase 3: pass the admin list so the access role can be stored
+          admins,
         });
         createdAccounts.push({
           accountName: account.name,
@@ -439,7 +447,7 @@ export async function GET(request: NextRequest) {
   // reads ?view=social-accounts from window.location.search and switches to
   // the social-accounts view client-side.
   const redirectUrl = new URL(
-    '/?view=social-accounts&connected=googlebusiness',
+    '/?view=verification&google=connected',
     appUrl,
   );
   const res = NextResponse.redirect(redirectUrl.toString());
@@ -523,6 +531,51 @@ async function listGbpLocations(
 }
 
 /**
+ * List the admins (managers/owners) for a GBP account.
+ *
+ *   GET https://mybusinessaccountmanagement.googleapis.com/v1/{accountName}/admins
+ *
+ * Returns an array of { name, adminName, role, pendingAdmin }.
+ * `role` is one of: "PRIMARY_OWNER", "OWNER", "CO_OWNER", "MANAGER", "SITE_MANAGER".
+ * `adminName` is the email of the admin.
+ *
+ * Phase 3: We use this to capture the user's access role for each GBP account.
+ * The role is stored in the SocialAccount metadata + used by the verification
+ * service to determine verification strength (OWNER/CO_OWNER = strong, MANAGER = medium).
+ */
+async function listGbpAdmins(
+  accessToken: string,
+  accountName: string,
+): Promise<Array<{ adminName: string; role: string }>> {
+  try {
+    const res = await fetch(
+      `https://mybusinessaccountmanagement.googleapis.com/v1/${accountName}/admins`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      },
+    );
+    if (!res.ok) {
+      // Non-fatal — we can't always fetch admins (depends on permissions).
+      // The match will proceed without the role; the verification service
+      // treats a missing role as "unknown" (doesn't block verification).
+      console.warn(`[oauth/googlebusiness/callback] Could not list admins for ${accountName} (HTTP ${res.status})`);
+      return [];
+    }
+    const body = (await res.json()) as {
+      admins?: Array<{ adminName: string; role: string }>;
+    };
+    return Array.isArray(body.admins) ? body.admins : [];
+  } catch (err) {
+    console.warn(`[oauth/googlebusiness/callback] listGbpAdmins failed for ${accountName}:`, err);
+    return [];
+  }
+}
+
+/**
  * Extract the locationId (last path segment) from the location's full
  * resource name.
  *
@@ -554,12 +607,33 @@ async function upsertLocationAccount(args: {
   refreshToken: string | null;
   tokenExpiry: Date | null;
   scopes: string;
+  // Phase 3: admin list for this account (to capture the user's access role)
+  admins?: Array<{ adminName: string; role: string }>;
 }): Promise<void> {
   const locationId = extractLocationId(args.locationName);
+
+  // Phase 3: Determine the user's access role from the admin list.
+  // We don't have the user's email here (it's in the auth state), but we
+  // store the full admin list in metadata. The verification service can
+  // later match the user's email against the admin list to determine the role.
+  // For now, we store the "strongest" role found in the admin list as a
+  // hint. The verification service will refine this when the user's email
+  // is available.
+  const adminRoles = (args.admins || []).map((a) => a.role);
+  let accessRole = 'UNKNOWN';
+  if (adminRoles.includes('PRIMARY_OWNER')) accessRole = 'PRIMARY_OWNER';
+  else if (adminRoles.includes('OWNER')) accessRole = 'OWNER';
+  else if (adminRoles.includes('CO_OWNER')) accessRole = 'CO_OWNER';
+  else if (adminRoles.includes('MANAGER')) accessRole = 'MANAGER';
+  else if (adminRoles.includes('SITE_MANAGER')) accessRole = 'SITE_MANAGER';
+
   const metadata = JSON.stringify({
     accountName: args.accountName,
     locationId,
     locationName: args.locationName,
+    // Phase 3: store the access role + admin list for later verification
+    accessRole,
+    admins: args.admins || [],
   });
   const encryptedAccess = encryptToken(args.accessToken);
   // If Google returned a new refresh_token (prompt=consent forced it),
@@ -686,7 +760,7 @@ a, button { background: #dc2626; color: white; border: none; padding: 0.75rem 1.
   <p>${safe}</p>
   <div style="margin-top: 1.5rem;">
     ${retryButton}
-    <a href="/?view=social-accounts">Back to Dashboard</a>
+    <a href="/?view=verification">Back to Dashboard</a>
   </div>
   <script>
     if (window.opener) {

@@ -276,8 +276,13 @@ export function ClaimBusinessModal({
         body: JSON.stringify({
           tenantId,
           claimantEmail,
+          // The old paste-URL Google verification is replaced by OAuth.
+          // When showGoogle is true now, it means "manual verification requested"
+          // — we send a note (in gbpUrl) + the claim goes to pending (admin review).
+          // Auto-approval only happens via the OAuth-based match flow
+          // (/api/verification/google/match).
           google: hasGoogle
-            ? { gbpUrl, gbpName, gbpAddress }
+            ? { gbpUrl: `MANUAL_VERIFICATION: ${gbpUrl}`, gbpName: '', gbpAddress: '' }
             : undefined,
           documents: hasDocs
             ? { urls: documents.map((d) => d.url), note: docNote }
@@ -481,7 +486,60 @@ export function ClaimBusinessModal({
             </p>
           </div>
 
-          {/* ── Google Business Profile (optional, collapsible) ──────────── */}
+          {/* ── Google Business Profile (via OAuth, NOT paste-URL) ────────── */}
+          {/* Replaced the old paste-URL fields (gbpUrl + gbpName + gbpAddress → 80% string match → auto_approved)
+              with the secure OAuth flow: Connect Google → OAuth → server-side match → evidence.
+              The old approach trusted browser-submitted Google data (a security weakness).
+              The new approach is server-authoritative: the server fetches Google data via OAuth + matches it. */}
+          <div className="rounded-lg border border-border">
+            <div className="flex items-center gap-2.5 p-3">
+              <Globe className="h-4 w-4 shrink-0 text-emerald-600" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  Google Business Profile
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Connect your Google account to verify you manage this business
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-border p-3 space-y-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full gap-1.5"
+                disabled={loading}
+                onClick={() => {
+                  // Redirect to the Google OAuth flow with claim context.
+                  // The OAuth callback will return to the verification view,
+                  // where the user selects their Google location + the server
+                  // matches it against this marketplace listing.
+                  // The tenantId is passed via the state blob so the callback
+                  // knows which business is being claimed.
+                  window.location.href = `/api/oauth/googlebusiness/connect?claimTenantId=${tenantId}`;
+                }}
+              >
+                <Globe className="h-3.5 w-3.5" /> Connect Google Business Profile
+              </Button>
+              <p className="text-[11px] text-muted-foreground">
+                We&apos;ll check the businesses you manage on Google and match one to this listing.
+                A strong match enables auto-approval (but claim completion is still required).
+              </p>
+            </div>
+          </div>
+
+          {/* ── OR divider ──────────────────────────────────────────────── */}
+          <div className="flex items-center gap-2">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-[11px] text-muted-foreground">OR</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          {/* ── Manual verification fallback (NOT paste-URL) ─────────────── */}
+          {/* Replaces the old document-upload section. The old approach accepted
+              any Google URL + name + address → 80% match → auto_approved.
+              The new approach sends the claim to UNDER_REVIEW for admin review. */}
           <div className="rounded-lg border border-border">
             <button
               type="button"
@@ -490,13 +548,13 @@ export function ClaimBusinessModal({
               disabled={loading}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <Globe className="h-4 w-4 shrink-0 text-emerald-600" />
+                <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground">
-                    Google Business Profile
+                    Can&apos;t connect Google?
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    Instant approval if name + address match
+                    Request manual verification
                   </p>
                 </div>
               </div>
@@ -506,48 +564,25 @@ export function ClaimBusinessModal({
             </button>
             {showGoogle && (
               <div className="space-y-2 border-t border-border p-3">
+                <p className="text-[11px] text-muted-foreground">
+                  Submit a note describing your business ownership. An administrator will
+                  review your request. This may take 1-2 business days.
+                </p>
                 <div>
-                  <Label htmlFor="gbp-url" className="text-xs">
-                    Google Business Profile URL
+                  <Label htmlFor="manual-note" className="text-xs">
+                    Note for reviewer (optional)
                   </Label>
                   <Input
-                    id="gbp-url"
-                    placeholder="https://www.google.com/maps/place/..."
+                    id="manual-note"
+                    placeholder="e.g., I am the owner of this business but don't have a Google Business Profile"
                     value={gbpUrl}
                     onChange={(e) => setGbpUrl(e.target.value)}
                     disabled={loading}
                     className="mt-1"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="gbp-name" className="text-xs">
-                    Business name (as on Google)
-                  </Label>
-                  <Input
-                    id="gbp-name"
-                    placeholder={tenantName}
-                    value={gbpName}
-                    onChange={(e) => setGbpName(e.target.value)}
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="gbp-address" className="text-xs">
-                    Business address (as on Google)
-                  </Label>
-                  <Input
-                    id="gbp-address"
-                    placeholder={[tenantCity, tenantState].filter(Boolean).join(', ')}
-                    value={gbpAddress}
-                    onChange={(e) => setGbpAddress(e.target.value)}
-                    disabled={loading}
-                    className="mt-1"
-                  />
-                </div>
-                <p className="text-[11px] text-muted-foreground">
-                  We compare name + address to our records. If they match &ge;80%, your
-                  claim is auto-approved.
+                <p className="text-[11px] text-amber-600">
+                  Manual verification goes to admin review — it is NOT auto-approved.
                 </p>
               </div>
             )}

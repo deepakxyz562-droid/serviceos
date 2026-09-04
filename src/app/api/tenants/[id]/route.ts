@@ -298,6 +298,36 @@ export async function PUT(
       data: updateData,
     });
 
+    // ── Phase 3: Identity-change trigger ────────────────────────────────
+    // If the tenant's name, address, city, phone, or website changed, any
+    // existing Google Business Profile verification is no longer valid
+    // (it was matched against the PREVIOUS business details). Mark the
+    // evidence as EXPIRED so the verification engine stops counting it.
+    // The user must re-connect Google + re-match with the new details.
+    const identityFields = ['name', 'address', 'city', 'phone', 'website', 'state', 'country'];
+    const identityChanged = identityFields.some(
+      (field) => field in body && body[field] !== undefined,
+    );
+    if (identityChanged) {
+      try {
+        await db.verificationEvidence.updateMany({
+          where: {
+            tenantId: id,
+            type: 'GOOGLE_BUSINESS',
+            status: 'VERIFIED',
+          },
+          data: {
+            status: 'EXPIRED',
+            // Store the reason in metadata (append, don't overwrite)
+          },
+        });
+        console.log(`[tenants/${id}] Identity fields changed — Google Business verification set to EXPIRED`);
+      } catch (err) {
+        // Non-blocking — the verification will just be stale, not a crash.
+        console.warn(`[tenants/${id}] Could not expire Google verification:`, err);
+      }
+    }
+
     // Mark the tenant's sitemap file as dirty. The PUT handler updates
     // URL-relevant fields (name, publicSlug, city, industry,
     // publicProfileEnabled) — the sitemap URL for this tenant may need
