@@ -155,6 +155,8 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
   const [businessMatches, setBusinessMatches] = useState<Array<{
     tenantId: string;
     name: string;
+    slug: string;
+    industry: string | null;
     city: string | null;
     phone: string | null;
     website: string | null;
@@ -214,18 +216,33 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
   // ── Claim an existing listing ────────────────────────────────────────
   // When the user clicks "This is my business" on a match, we DON'T create a
   // new tenant. Instead, we redirect them to the marketplace listing page
-  // where the existing ClaimBusinessModal flow takes over (phone OTP / Google
+  // where the existing ClaimBusinessBanner flow takes over (phone OTP / Google
   // Business verification / document upload). The listing's claim flow will
   // create the tenant-user link + set claimed=true on completion.
-  const handleClaimMatch = (match: { tenantId: string; name: string; city: string | null }) => {
-    // Build the marketplace listing URL for the matched business.
-    // The listing page renders the ClaimBusinessButton which opens the
-    // ClaimBusinessModal with verification options.
-    const slug = match.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const citySlug = (match.city || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const claimUrl = citySlug
-      ? `/marketplace/${slug}/${citySlug}?claim=true`
-      : `/marketplace/${slug}?claim=true`;
+  //
+  // The canonical marketplace listing URL is /{industry}/{city}/{slug} —
+  // NOT /marketplace/{slug}/{city} (which 404s). The match endpoint returns
+  // the tenant's actual `slug` + `industry` + `city` so we build the correct
+  // URL from the DB values (not by slugifying the name, which can drift).
+  const handleClaimMatch = (match: {
+    slug: string;
+    industry: string | null;
+    city: string | null;
+    name: string;
+  }) => {
+    // Build the canonical 3-segment marketplace listing URL.
+    // Industry: the match endpoint returns the tenant.industry value (e.g.
+    // "plumbing", "hvac", "electrical"). The [companySlug] route segment
+    // accepts the raw industry slug.
+    const industrySlug = match.industry || 'services';
+    const citySlug = (match.city || 'unknown')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    // `slug` comes from the DB — it's the tenant's canonical slug, not a
+    // name-derived one. Use it directly.
+    const businessSlug = match.slug;
+    const claimUrl = `/${industrySlug}/${citySlug}/${businessSlug}?claim=true`;
     // Show a toast explaining what's happening, then redirect.
     toast.success('Great! Let\'s verify you own this business.', {
       description: 'Redirecting you to the claim flow...',

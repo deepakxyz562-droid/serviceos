@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ShieldCheck, ChevronRight, LogIn, BadgeCheck, Store } from 'lucide-react';
 import { ClaimBusinessModal } from './claim-business-modal';
 import {
@@ -88,6 +89,26 @@ export function ClaimBusinessBanner({
 
   // Hide if the current user is the owner of this business
   if (currentTenantId === tenantId) return null;
+
+  // ── Auto-open the claim modal when ?claim=true is in the URL ──────────
+  // This is used by the registration-time business match flow: when the user
+  // clicks "This is my business" on a match, they're redirected to the
+  // listing page with ?claim=true. This effect auto-opens the modal so they
+  // don't have to find + click the banner manually.
+  // Runs once on mount (after auth is hydrated). Wrapped in useEffect so it
+  // doesn't re-open if the user closes it manually.
+  const searchParams = useSearchParams();
+  React.useEffect(() => {
+    const shouldAutoOpen = searchParams?.get('claim') === 'true';
+    if (shouldAutoOpen && !isClaimed) {
+      if (isAuthenticated) {
+        setClaimOpen(true);
+      } else {
+        setSignInGateOpen(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authHydrated]); // only run once when auth hydrates
 
   function handleClick() {
     if (isAuthenticated) {

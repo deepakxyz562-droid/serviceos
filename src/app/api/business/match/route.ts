@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         name: true,
+        slug: true,
+        industry: true,
         city: true,
         phone: true,
         website: true,
@@ -106,6 +108,8 @@ export async function POST(request: NextRequest) {
         return {
           tenantId: tenant.id,
           name: tenant.name,
+          slug: tenant.slug,
+          industry: tenant.industry,
           city: tenant.city,
           phone: tenant.phone,
           website: tenant.website,
