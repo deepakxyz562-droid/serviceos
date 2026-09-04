@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -41,6 +41,12 @@ import {
   Stethoscope,
   Briefcase,
   LayoutGrid,
+  MapPin,
+  Globe,
+  Search,
+  CheckCircle2,
+  Plus,
+  AlertCircle,
 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
@@ -138,6 +144,98 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
   const [regBusinessName, setRegBusinessName] = useState('');
   const [regIndustry, setRegIndustry] = useState('');
   const [regPhone, setRegPhone] = useState('');
+  const [regCity, setRegCity] = useState('');
+  const [regWebsite, setRegWebsite] = useState('');
+  // ── Business match state ──
+  // After the user types their business name + city (debounced), we call
+  // /api/business/match to check if an unclaimed marketplace listing already
+  // exists for this business. If matches are found, we show a "We found a
+  // possible match" card with [This is my business] / [Create a new business]
+  // buttons. This prevents duplicate businesses on the marketplace.
+  const [businessMatches, setBusinessMatches] = useState<Array<{
+    tenantId: string;
+    name: string;
+    city: string | null;
+    phone: string | null;
+    website: string | null;
+    address: string | null;
+    matchScore: number;
+  }>>([]);
+  const [isSearchingMatches, setIsSearchingMatches] = useState(false);
+  const [matchDismissed, setMatchDismissed] = useState(false);
+
+  // ── Debounced business match search ──────────────────────────────────
+  // After the user types their business name + city (and stops typing for
+  // 600ms), we call /api/business/match to check for existing unclaimed
+  // marketplace listings. This is the inline (option a) approach: the match
+  // card appears BEFORE the user clicks "Create Account", so they can claim
+  // an existing listing instead of creating a duplicate.
+  useEffect(() => {
+    // Reset the dismissed flag if the user changes their business name or city.
+    setMatchDismissed(false);
+    // Need at least 3 chars of business name + a city to search meaningfully.
+    if (regBusinessName.trim().length < 3 || regCity.trim().length < 2) {
+      setBusinessMatches([]);
+      return;
+    }
+    if (matchDismissed) return;
+
+    const debounce = setTimeout(async () => {
+      setIsSearchingMatches(true);
+      try {
+        const res = await fetch('/api/business/match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: regBusinessName.trim(),
+            city: regCity.trim(),
+            phone: regPhone.trim() || undefined,
+            website: regWebsite.trim() || undefined,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setBusinessMatches(Array.isArray(data.matches) ? data.matches : []);
+        } else {
+          setBusinessMatches([]);
+        }
+      } catch {
+        // Non-blocking — if the match endpoint is down, we just don't show
+        // the match card. The user can still register normally.
+        setBusinessMatches([]);
+      } finally {
+        setIsSearchingMatches(false);
+      }
+    }, 600);
+
+    return () => clearTimeout(debounce);
+  }, [regBusinessName, regCity, regPhone, regWebsite, matchDismissed]);
+
+  // ── Claim an existing listing ────────────────────────────────────────
+  // When the user clicks "This is my business" on a match, we DON'T create a
+  // new tenant. Instead, we redirect them to the marketplace listing page
+  // where the existing ClaimBusinessModal flow takes over (phone OTP / Google
+  // Business verification / document upload). The listing's claim flow will
+  // create the tenant-user link + set claimed=true on completion.
+  const handleClaimMatch = (match: { tenantId: string; name: string; city: string | null }) => {
+    // Build the marketplace listing URL for the matched business.
+    // The listing page renders the ClaimBusinessButton which opens the
+    // ClaimBusinessModal with verification options.
+    const slug = match.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const citySlug = (match.city || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const claimUrl = citySlug
+      ? `/marketplace/${slug}/${citySlug}?claim=true`
+      : `/marketplace/${slug}?claim=true`;
+    // Show a toast explaining what's happening, then redirect.
+    toast.success('Great! Let\'s verify you own this business.', {
+      description: 'Redirecting you to the claim flow...',
+    });
+    // Use window.location for a full-page navigation (not Next router) so the
+    // marketplace listing page loads fresh + the ClaimBusinessModal opens.
+    setTimeout(() => {
+      window.location.href = claimUrl;
+    }, 800);
+  };
 
   // ─── Business Login Handler ───
   const handleBusinessLogin = async (e: React.FormEvent) => {
@@ -228,6 +326,8 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
           businessName: regBusinessName,
           industry: regIndustry,
           phone: regPhone,
+          city: regCity,
+          website: regWebsite,
         }),
       });
       const data = await res.json();
@@ -492,7 +592,129 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
                 </div>
               </motion.div>
 
-              <motion.div custom={6} variants={fadeUp} initial="hidden" animate="visible" className="pt-1">
+              <motion.div custom={6} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+                <Label htmlFor="reg-city" className="text-slate-700">City</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input id="reg-city" type="text" placeholder="London" value={regCity} onChange={(e) => setRegCity(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="address-level2" />
+                </div>
+              </motion.div>
+
+              <motion.div custom={7} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+                <Label htmlFor="reg-website" className="text-slate-700">Website <span className="text-slate-400 font-normal">(optional)</span></Label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input id="reg-website" type="url" placeholder="https://yourbusiness.com" value={regWebsite} onChange={(e) => setRegWebsite(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="url" />
+                </div>
+              </motion.div>
+
+              {/* ── Inline business match card ─────────────────────────────────── */}
+              {/* After the user types their business name + city (debounced 600ms),
+                  we call /api/business/match. If matches are found, we show a
+                  "We found a possible match" card with [This is my business] +
+                  [Create a new business] buttons. This prevents duplicate
+                  businesses on the marketplace. */}
+              {isSearchingMatches && (
+                <motion.div
+                  custom={8}
+                  variants={fadeUp}
+                  initial="hidden"
+                  animate="visible"
+                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500"
+                >
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Checking for existing businesses...
+                </motion.div>
+              )}
+
+              {!isSearchingMatches && businessMatches.length > 0 && !matchDismissed && (
+                <motion.div
+                  custom={8}
+                  variants={fadeUp}
+                  initial="hidden"
+                  animate="visible"
+                  className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3"
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-amber-900">
+                        We found {businessMatches.length === 1 ? 'a possible match' : `${businessMatches.length} possible matches`}
+                      </p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Is this your business? Claim it to avoid creating a duplicate.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Match list */}
+                  <div className="space-y-2">
+                    {businessMatches.slice(0, 3).map((match) => (
+                      <div
+                        key={match.tenantId}
+                        className="rounded-md border border-amber-200 bg-white p-3 space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-slate-900 truncate">
+                              {match.name}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-slate-500">
+                              {match.city && (
+                                <span className="flex items-center gap-0.5">
+                                  <MapPin className="w-3 h-3" />
+                                  {match.city}
+                                </span>
+                              )}
+                              {match.phone && (
+                                <span className="flex items-center gap-0.5">
+                                  <Phone className="w-3 h-3" />
+                                  {match.phone}
+                                </span>
+                              )}
+                              {match.website && (
+                                <span className="flex items-center gap-0.5 truncate">
+                                  <Globe className="w-3 h-3" />
+                                  {match.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full shrink-0">
+                            {Math.round(match.matchScore * 100)}% match
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="w-full h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                          onClick={() => handleClaimMatch(match)}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
+                          This is my business
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* "Create a new business" button */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-8 border-amber-300 text-amber-700 hover:bg-amber-100 text-xs"
+                    onClick={() => {
+                      setMatchDismissed(true);
+                      setBusinessMatches([]);
+                    }}
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Create a new business instead
+                  </Button>
+                </motion.div>
+              )}
+
+              <motion.div custom={9} variants={fadeUp} initial="hidden" animate="visible" className="pt-1">
                 <Button type="submit" disabled={isLoading} className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer">
                   {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating account...</> : 'Create Account'}
                 </Button>

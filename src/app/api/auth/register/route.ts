@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, email, password, businessName, industry, phone } = body;
+    const { name, email, password, businessName, industry, phone, city, website } = body;
 
     // Validate required fields
     if (!name || !email || !password || !businessName) {
@@ -65,6 +65,8 @@ export async function POST(request: NextRequest) {
         industry: industry || null,
         phone: phone || null,
         email,
+        city: city || null,
+        website: website || null,
         plan: 'starter',
         planStatus: 'trial',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
