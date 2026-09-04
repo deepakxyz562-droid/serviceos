@@ -66,13 +66,28 @@ model Tenant {
   // ── Marketplace Eligibility (Phase 1: Revenue Architecture) ────────────
   // A tenant must satisfy ALL gates to receive marketplace leads:
   //   paid subscription + identity verified + business verified +
-  //   insurance verified + Stripe connected + profile ≥ 80% complete +
+  //   insurance verified + marketplace payments connected + profile ≥ 80% complete +
   //   marketplace opt-in + terms accepted.
   identityVerified         Boolean   @default(false)
   businessVerified         Boolean   @default(false)
   insuranceVerified        Boolean   @default(false)
+  // ── Marketplace payments (provider-neutral) ──────────────────────────
+  // Replaces the legacy `stripeConnected` / `stripeAccountId` /
+  // `stripePayoutsEnabled` columns. The provider is identified by
+  // `paymentProvider` (currently 'airwallex'; future 'stripe' / 'paypal_marketplace').
+  // The provider's connected-account ID lives in `paymentProviderAccountId`.
+  // This abstraction lets us swap the payment infrastructure without another
+  // schema migration — see src/lib/payments/ for the adapter layer.
+  paymentsConnected        Boolean   @default(false)
+  paymentProvider          String?   // 'airwallex' | 'stripe' | 'paypal_marketplace' (future)
+  paymentProviderAccountId String?   // provider's connected-account ID (e.g. Airwallex acct_...)
+  payoutsEnabled           Boolean   @default(false)
+  // ── Legacy Stripe columns (DEPRECATED — kept for back-compat with pre-migration rows) ──
+  // The airwallex migration SQL keeps these in the DB for data continuity.
+  // New code reads paymentsConnected/paymentProviderAccountId/payoutsEnabled above.
+  // DO NOT use these in new code — they'll be dropped in a follow-up migration.
   stripeConnected          Boolean   @default(false)
-  stripeAccountId          String?   // Stripe Connect account ID (acct_...)
+  stripeAccountId          String?
   stripePayoutsEnabled     Boolean   @default(false)
   // ── Phase 3: Representative Declaration ──────────────────────────────
   // The user attests they are authorized to represent this business.
@@ -5258,19 +5273,32 @@ model MarketplaceTransaction {
   commissionAmount Float   @default(0)  // calculated: totalAmount * commissionPct / 100
   providerAmount  Float    @default(0)  // totalAmount - commissionAmount
   currency        String   @default("USD")
-  status          String   @default("pending")  // pending | escrow | released | refunded | disputed
-  paymentIntentId String?  // Stripe PaymentIntent ID
-  transferId      String?  // Stripe Transfer ID (payout to provider)
+  // Provider-neutral lifecycle — see src/lib/payments/types.ts for the enum.
+  // pending → paid_held → settlement_eligible → payout_initiated → payout_completed
+  //        ↘ failed / cancelled / refunded / disputed
+  // No "escrow" terminology — funds holding is the provider's job (Airwallex
+  // funds_split with auto_release:false), not a legal escrow account.
+  status          String   @default("pending")
+  // ── Provider-neutral payment IDs (replaces paymentIntentId + transferId) ──
+  // The provider's payment-intent id (Airwallex int_... / Stripe pi_...).
+  // Legacy `paymentIntentId` + `transferId` columns are kept for backward
+  // compatibility with pre-migration rows; new code reads/writes these.
+  paymentProvider          String?   // 'airwallex' | 'stripe' (legacy) | null
+  paymentProviderPaymentId String?   // provider's payment intent id
+  paymentProviderTransferId String?  // provider's payout/transfer id
+  // Legacy Stripe columns (kept for migration; new code uses the above):
+  paymentIntentId String?  // DEPRECATED — use paymentProviderPaymentId
+  transferId      String?  // DEPRECATED — use paymentProviderTransferId
   payoutId        String?  // -> Payout.id
   escrowReleasedAt DateTime?
   refundedAt      DateTime?
   refundAmount    Float    @default(0)
   disputeReason   String?
   // ── Settlement worker fields (P13-settlement) ──
-  escrowedAt      DateTime?  // set when payment_intent.succeeded flips status → escrow
-  releasedAt      DateTime?  // set when settlement worker calls transferToProvider → released
-  disputedAt      DateTime?  // set when charge.dispute.created webhook fires
-  retryCount      Int      @default(0)  // settlement worker transfer attempt count
+  escrowedAt      DateTime?  // set when payment_intent.succeeded flips status → paid_held
+  releasedAt      DateTime?  // set when settlement worker initiates payout → payout_initiated
+  disputedAt      DateTime?  // set when dispute.created webhook fires
+  retryCount      Int      @default(0)  // settlement worker payout attempt count
   metadataJson    String   @default("{}")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -5282,16 +5310,21 @@ model MarketplaceTransaction {
   @@index([status])
   @@index([bookingType])
   @@index([createdAt])
+  @@index([paymentProviderPaymentId])
 }
 
 model Payout {
   id              String   @id @default(cuid())
   tenantId        String?
-  stripeTransferId String? @unique  // Stripe Transfer ID (tr_...)
+  // Provider-neutral — replaces the legacy `stripeTransferId` column.
+  paymentProviderTransferId String? @unique  // provider's payout/transfer id (Airwallex cat_... / Stripe tr_...)
+  paymentProvider          String?   // 'airwallex' | 'stripe' (legacy) | null
+  // Legacy column kept for migration back-compat:
+  stripeTransferId String? @unique  // DEPRECATED — use paymentProviderTransferId
   amount          Float    @default(0)
   currency        String   @default("USD")
   status          String   @default("pending")  // pending | paid | failed | cancelled
-  method          String   @default("stripe_connect")  // stripe_connect | manual
+  method          String   @default("provider_payout")  // provider_payout | manual
   description     String?
   transactionsJson String @default("[]")  // [MarketplaceTransaction.id, ...]
   transactionCount Int    @default(0)

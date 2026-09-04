@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logger, withRequestId } from '@/lib/logger';
-import { transferToProvider, StripePayoutError } from '@/lib/stripe';
+import { payments, DEFAULT_PAYMENT_PROVIDER } from '@/lib/payments/service';
+import type { PaymentProviderName } from '@/lib/payments/service';
+import { PaymentError } from '@/lib/payments/errors';
 import { verifyCronAuth } from '@/lib/cron-auth';
 
 /**
@@ -61,12 +63,15 @@ export async function GET(request: NextRequest) {
   const auth = verifyCronAuth(request);
   if (!auth.ok) return auth.response;
 
-  // ── 2. Find releasable escrow transactions ────────────────────────────
-  // MarketplaceTransaction has a `jobId` FK but no Prisma relation to Job
-  // (Job doesn't own the relationship). So we fetch the escrow rows first,
-  // collect their jobIds, then bulk-fetch the matching Jobs and join in JS.
-  // The escrow set is small (cleared every 15 min) so this is cheap.
-  let escrowTxns: Array<{
+  // ── 2. Find releasable held transactions ──────────────────────────────
+  // Provider-neutral lifecycle: a transaction is "settlement-eligible" when
+  //   - status is 'paid_held' (customer paid, funds held by platform) OR
+  //   - status is 'settlement_eligible' (funds_split released, ready for payout)
+  // AND the linked Job is in a completed state.
+  //
+  // Legacy 'escrow' status is included for backward compat with pre-migration
+  // rows — we treat it the same as 'paid_held'.
+  let heldTxns: Array<{
     id: string;
     tenantId: string | null;
     jobId: string | null;
@@ -75,11 +80,16 @@ export async function GET(request: NextRequest) {
     retryCount: number;
     metadataJson: string;
     createdAt: Date;
+    paymentProvider: string | null;
+    paymentProviderPaymentId: string | null;
+    paymentProviderTransferId: string | null;
   }> = [];
 
   try {
-    escrowTxns = await db.marketplaceTransaction.findMany({
-      where: { status: 'escrow' },
+    heldTxns = await db.marketplaceTransaction.findMany({
+      where: {
+        status: { in: ['paid_held', 'settlement_eligible', 'escrow'] },
+      },
       select: {
         id: true,
         tenantId: true,
@@ -89,18 +99,21 @@ export async function GET(request: NextRequest) {
         retryCount: true,
         metadataJson: true,
         createdAt: true,
+        paymentProvider: true,
+        paymentProviderPaymentId: true,
+        paymentProviderTransferId: true,
       },
     });
   } catch (err) {
-    log.error({ err, component }, 'Failed to fetch escrow transactions');
+    log.error({ err, component }, 'Failed to fetch held transactions');
     return NextResponse.json(
-      { error: 'Database error fetching escrow transactions' },
+      { error: 'Database error fetching held transactions' },
       { status: 500 },
     );
   }
 
   // Bulk-fetch the linked Jobs so we can filter by status.
-  const jobIds = escrowTxns
+  const jobIds = heldTxns
     .map((t) => t.jobId)
     .filter((id): id is string => !!id);
 
@@ -113,7 +126,7 @@ export async function GET(request: NextRequest) {
   const jobStatusById = new Map(jobs.map((j) => [j.id, j.status]));
 
   // Bulk-fetch tenant names for logging.
-  const tenantIds = escrowTxns
+  const tenantIds = heldTxns
     .map((t) => t.tenantId)
     .filter((id): id is string => !!id);
   const tenants: Array<{ id: string; name: string }> = tenantIds.length
@@ -125,7 +138,7 @@ export async function GET(request: NextRequest) {
   const tenantNameById = new Map(tenants.map((t) => [t.id, t.name]));
 
   const COMPLETED_JOB_STATES = ['completed', 'invoiced', 'closed'];
-  const releasable = escrowTxns.filter((t) => {
+  const releasable = heldTxns.filter((t) => {
     if (!t.jobId) return false;
     const jobStatus = jobStatusById.get(t.jobId);
     return !!jobStatus && COMPLETED_JOB_STATES.includes(jobStatus);
@@ -134,7 +147,7 @@ export async function GET(request: NextRequest) {
   log.info(
     {
       component,
-      escrowCount: escrowTxns.length,
+      heldCount: heldTxns.length,
       releasableCount: releasable.length,
     },
     'Marketplace settlement cron run starting',
@@ -148,7 +161,7 @@ export async function GET(request: NextRequest) {
   for (const txn of releasable) {
     try {
       if (!txn.tenantId) {
-        throw new StripePayoutError(
+        throw new Error(
           `Transaction ${txn.id} has no tenantId — cannot determine provider`,
         );
       }
@@ -157,20 +170,47 @@ export async function GET(request: NextRequest) {
       // avoid float drift (47.49 * 100 → 4748.99999…).
       const amountInCents = Math.round(txn.providerAmount * 100);
 
-      const result = await transferToProvider(
-        txn.tenantId,
-        amountInCents,
-        txn.id,
-      );
+      // Resolve the provider for this transaction (defaults to platform default).
+      const providerName: PaymentProviderName =
+        (txn.paymentProvider as PaymentProviderName | null) || DEFAULT_PAYMENT_PROVIDER;
 
-      // Merge the transfer details into the existing metadataJson.
+      // Look up the tenant's connected-account id (the payout destination).
+      const providerTenant = await db.tenant.findUnique({
+        where: { id: txn.tenantId },
+        select: { paymentProviderAccountId: true, payoutsEnabled: true, name: true },
+      });
+      if (!providerTenant?.paymentProviderAccountId) {
+        throw new PaymentError({
+          message: `Tenant ${txn.tenantId} has no paymentProviderAccountId — provider hasn't set up payments`,
+          provider: providerName,
+          retryable: false,
+        });
+      }
+      if (!providerTenant.payoutsEnabled) {
+        throw new PaymentError({
+          message: `Tenant ${txn.tenantId} payouts not enabled — complete verification first`,
+          provider: providerName,
+          retryable: false,
+        });
+      }
+
+      // Create the payout (instant intra-Airwallex transfer from platform wallet → seller wallet).
+      const payoutRequestId = `fieseros_payout_${txn.id}_${Date.now()}`;
+      const result = await payments.createPayout(providerName, {
+        destinationAccountId: providerTenant.paymentProviderAccountId,
+        amount: amountInCents,
+        currency: txn.currency || 'USD',
+        reference: `Fieseros payout — txn ${txn.id}`,
+        requestId: payoutRequestId,
+      });
+
+      // Merge the payout details into the existing metadataJson.
       const priorMeta = safeParseJson(txn.metadataJson, {});
       const updatedMetadata = {
         ...priorMeta,
         settlement: {
-          transferId: result.transferId,
+          payoutId: result.payoutId,
           status: result.status,
-          mock: result.mock,
           amountInCents,
           currency: txn.currency,
           releasedAt: new Date().toISOString(),
@@ -178,13 +218,42 @@ export async function GET(request: NextRequest) {
         },
       };
 
+      // Create a Payout row (closes the long-standing gap where Payout rows
+      // were never written — the provider dashboard can now show payout history).
+      const payoutRow = await db.payout.create({
+        data: {
+          tenantId: txn.tenantId,
+          paymentProviderTransferId: result.payoutId,
+          paymentProvider: providerName,
+          // Keep legacy column in sync during migration:
+          stripeTransferId: result.payoutId,
+          amount: txn.providerAmount,
+          currency: txn.currency || 'USD',
+          status: result.status === 'settled' ? 'paid' : 'pending',
+          method: 'provider_payout',
+          description: `Marketplace payout for transaction ${txn.id}`,
+          transactionsJson: JSON.stringify([txn.id]),
+          transactionCount: 1,
+          paidAt: result.status === 'settled' ? new Date() : null,
+        },
+      }).catch((err) => {
+        // Payout row creation is best-effort — the marketplace transaction
+        // update is the source of truth. Don't fail the cron if this fails.
+        console.warn(`[marketplace-settlement] Payout.create failed for txn ${txn.id}:`, err);
+        return null;
+      });
+
       await db.marketplaceTransaction.update({
         where: { id: txn.id },
         data: {
-          status: 'released',
+          status: 'payout_initiated', // provider-neutral lifecycle
           releasedAt: new Date(),
           escrowReleasedAt: new Date(), // legacy field kept in sync
-          transferId: result.transferId,
+          paymentProviderTransferId: result.payoutId,
+          // Keep legacy column in sync during migration:
+          transferId: result.payoutId,
+          payoutId: payoutRow?.id || null,
+          paymentProvider: providerName,
           retryCount: 0, // reset on success
           metadataJson: JSON.stringify(updatedMetadata),
         },
@@ -198,10 +267,10 @@ export async function GET(request: NextRequest) {
           tenantId: txn.tenantId,
           tenantName: txn.tenantId ? (tenantNameById.get(txn.tenantId) || null) : null,
           amountInCents,
-          transferId: result.transferId,
-          mock: result.mock,
+          payoutId: result.payoutId,
+          payoutStatus: result.status,
         },
-        'MarketplaceTransaction released (escrow → released)',
+        'MarketplaceTransaction payout initiated (paid_held → payout_initiated)',
       );
     } catch (err) {
       failed++;
@@ -247,10 +316,12 @@ export async function GET(request: NextRequest) {
             'MarketplaceTransaction escalated to disputed after max retries',
           );
         } else {
+          // Leave the transaction in its current held state for the next run.
+          // (Don't reset to 'escrow' — that's a legacy status. The transaction
+          // stays in 'paid_held' or 'settlement_eligible' and we just bump retryCount.)
           await db.marketplaceTransaction.update({
             where: { id: txn.id },
             data: {
-              status: 'escrow', // leave in escrow for next run
               retryCount: nextRetryCount,
               metadataJson: JSON.stringify(updatedMetadata),
             },
@@ -282,11 +353,11 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── 4. Orphaned-escrow sweep ───────────────────────────────────────────
+  // ── 4. Orphaned-held sweep ────────────────────────────────────────────
   // Edge case: instant bookings that never created a Job (e.g. race during
   // job creation, or a manual instant-book that bypassed the Job step).
-  // After 7 days in escrow with no Job, treat as releasable — the customer
-  // paid, the service was rendered, but there's no Job to gate the release.
+  // After 7 days held with no Job, treat as releasable — the customer paid,
+  // the service was rendered, but there's no Job to gate the release.
   let orphaned = 0;
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -300,7 +371,7 @@ export async function GET(request: NextRequest) {
   try {
     orphanedRows = await db.marketplaceTransaction.findMany({
       where: {
-        status: 'escrow',
+        status: { in: ['paid_held', 'settlement_eligible', 'escrow'] },
         jobId: null,
         createdAt: { lt: sevenDaysAgo },
       },
@@ -314,7 +385,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     log.error(
       { err, component },
-      'Failed to fetch orphaned escrow transactions — skipping orphan sweep',
+      'Failed to fetch orphaned held transactions — skipping orphan sweep',
     );
   }
 
@@ -324,7 +395,7 @@ export async function GET(request: NextRequest) {
       const updatedMetadata = {
         ...priorMeta,
         orphanedRelease: {
-          reason: 'No linked Job after 7 days in escrow — auto-released',
+          reason: 'No linked Job after 7 days held — auto-settlement-eligible',
           createdAt: txn.createdAt.toISOString(),
           releasedAt: new Date().toISOString(),
         },
@@ -333,7 +404,7 @@ export async function GET(request: NextRequest) {
       await db.marketplaceTransaction.update({
         where: { id: txn.id },
         data: {
-          status: 'released',
+          status: 'settlement_eligible', // ready for the next settlement pass
           releasedAt: new Date(),
           escrowReleasedAt: new Date(),
           retryCount: 0,

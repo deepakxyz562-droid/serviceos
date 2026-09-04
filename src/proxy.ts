@@ -51,6 +51,7 @@ const GLOBAL_LIMIT_EXEMPT = [
   '/api/webhook/',
   '/api/webhooks/',
   '/api/whatsapp/callback',
+  '/api/payments/webhook', // Airwallex → our webhook receiver (retries on 5xx)
 ];
 
 function isPublicPath(pathname: string): boolean {

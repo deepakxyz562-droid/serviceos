@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logger, withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
-import {
-  createPaymentIntent,
-  isStripeConfigured,
-  StripeConfigError,
-} from '@/lib/stripe';
 import { notifyOwner } from '@/lib/owner-notifications';
 import { sendEmail } from '@/lib/email-send';
 import { issueCustomerMagicLink } from '@/lib/customer-magic-link';
@@ -408,46 +403,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 8. Stripe PaymentIntent (if payment method provided) ────────────
-  let paymentIntent:
-    | { clientSecret: string; paymentIntentId: string }
-    | null = null;
-
-  if (paymentMethodId && grossAmount > 0 && isStripeConfigured()) {
-    try {
-      const stripeAmount = Math.round(grossAmount * 100); // cents
-      const pi = await createPaymentIntent(stripeAmount, currency, {
-        transactionId: transactionId ?? '',
-        providerTenantId: provider.id,
-        bookingType: 'instant',
-        serviceDescription: serviceName || title,
-      });
-
-      // Persist the paymentIntentId on the transaction
-      if (transactionId) {
-        await db.marketplaceTransaction.update({
-          where: { id: transactionId },
-          data: { paymentIntentId: pi.paymentIntentId },
-        });
-      }
-
-      paymentIntent = pi;
-      log.info(
-        { paymentIntentId: pi.paymentIntentId, transactionId, amount: grossAmount },
-        'marketplace/book/instant: PaymentIntent created',
-      );
-    } catch (err) {
-      if (err instanceof StripeConfigError) {
-        log.warn({ err: err.message }, 'marketplace/book/instant: Stripe not configured');
-      } else {
-        log.error(
-          { err: err instanceof Error ? err.message : String(err), transactionId },
-          'marketplace/book/instant: PaymentIntent failed',
-        );
-      }
-      // Booking still succeeds — payment can be retried separately
-    }
-  }
+  // ── 8. Payment intent — created SEPARATELY by the frontend ────────────
+  // The booking is created in `pending` status. The frontend then calls
+  // POST /api/payments/intent with the transactionId to create the payment
+  // intent (via the provider-neutral payments service). The customer pays
+  // via Airwallex hosted payment page → webhook `payment_intent.succeeded`
+  // → transaction flips to `paid_held`.
+  //
+  // This closes the previous gap where the booking "succeeded" without
+  // actually collecting payment — confirmation is now server/webhook-driven,
+  // not frontend-driven. See src/lib/payments/ for the architecture.
+  const paymentIntent: { clientSecret: string; paymentIntentId: string } | null = null;
+  // (Legacy `paymentIntent` field kept in the response for backward compat
+  // with any frontend code that reads it — will be null now. The frontend
+  // should call /api/payments/intent after the booking is created.)
 
   // ── 9. Notify the provider (best-effort, fire-and-forget) ───────────
   notifyOwner(provider.id, {

@@ -252,7 +252,11 @@ export async function checkMarketplaceEligibility(tenantId: string): Promise<Eli
       identityVerified: !!tenant.identityVerified,
       businessVerified: !!tenant.businessVerified,
       insuranceVerified: !!tenant.insuranceVerified,
-      stripeConnected: !!tenant.stripeConnected,
+      // Provider-neutral: prefer the new `paymentsConnected` column, fall
+      // back to legacy `stripeConnected` for tenants connected before the
+      // Airwallex migration. Both signal "marketplace payout account linked".
+      stripeConnected: !!(tenant as { paymentsConnected?: boolean; stripeConnected?: boolean }).paymentsConnected
+        || !!tenant.stripeConnected,
       profileComplete: profileCompletionPct >= PROFILE_COMPLETION_THRESHOLD,
       marketplaceOptIn: !!tenant.marketplaceOptIn,
       termsAccepted: !!tenant.marketplaceTermsAcceptedAt,
@@ -264,7 +268,7 @@ export async function checkMarketplaceEligibility(tenantId: string): Promise<Eli
     if (!checks.identityVerified) missingRequirements.push('Identity verification (KYC) pending');
     if (!checks.businessVerified) missingRequirements.push('Business verification pending');
     if (!checks.insuranceVerified) missingRequirements.push('Proof of insurance required');
-    if (!checks.stripeConnected) missingRequirements.push('Stripe Connect account must be linked');
+    if (!checks.stripeConnected) missingRequirements.push('Payment setup must be completed');
     if (!checks.profileComplete) missingRequirements.push(`Profile completion ≥ ${PROFILE_COMPLETION_THRESHOLD}% (currently ${profileCompletionPct}%)`);
     if (!checks.marketplaceOptIn) missingRequirements.push('Marketplace opt-in not enabled');
     if (!checks.termsAccepted) missingRequirements.push('Marketplace terms & conditions not accepted');

@@ -66,6 +66,14 @@ interface TenantData {
   stripeConnected?: boolean;
   stripeAccountId?: string | null;
   stripePayoutsEnabled?: boolean;
+  // ── Provider-neutral marketplace payments (replaces Stripe-specific fields) ──
+  // These are populated by GET /api/payments/status. The UI shows them as
+  // "Payments" (white-label) — the underlying provider (Airwallex) is an
+  // implementation detail and never appears in the user-facing copy.
+  paymentsConnected?: boolean;
+  payoutsEnabled?: boolean;
+  paymentStatus?: 'not_connected' | 'created' | 'submitted' | 'action_required' | 'active' | 'suspended' | 'unknown' | string;
+  pendingRequirements?: string[];
   representativeDeclaration?: boolean;
   currency?: string;
 }
@@ -192,28 +200,66 @@ export function VerificationComplianceSection({ tenantId }: VerificationComplian
     }
   }
 
-  // Stripe Connect — wire up the existing API
-  async function handleStripeConnect() {
+  // "Set up payments" — white-label entry point for marketplace payment setup.
+  // Calls POST /api/payments/setup which creates the provider connected
+  // account + returns the hosted onboarding URL. The provider (Airwallex)
+  // is an implementation detail — the user sees "Set up payments", not
+  // "Connect Airwallex".
+  async function handleSetUpPayments() {
     setConnectingStripe(true);
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const returnUrl = `${origin}/?stripe_connect=return`;
-      const refreshUrl = `${origin}/?stripe_connect=refresh`;
-      const res = await fetch(
-        `/api/billing/stripe/connect?returnUrl=${encodeURIComponent(returnUrl)}&refreshUrl=${encodeURIComponent(refreshUrl)}`,
-        { method: 'POST' },
-      );
+      const returnUrl = `${origin}/?payments=return`;
+      const res = await fetch('/api/payments/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnUrl }),
+      });
       const result = await res.json();
-      if (res.ok && result.url) {
-        // Redirect to Stripe onboarding
-        window.location.href = result.url;
+      if (res.ok && result.onboardingUrl) {
+        // Redirect to the provider's hosted onboarding (KYC/KYB).
+        // The provider's logo WILL appear on the onboarding form (legal
+        // compliance requirement) — this is expected + matches how Stripe
+        // Connect onboarding worked previously. Fieseros owns the
+        // surrounding experience; Airwallex provides the infrastructure.
+        window.location.href = result.onboardingUrl;
+      } else if (res.ok && result.status === 'active') {
+        // Already verified — refresh the status.
+        toast.success('Payments are already active.');
+        refreshPaymentStatus();
+      } else if (res.ok && result.demo) {
+        toast.info('Demo mode', {
+          description: 'Payment provider not configured — running in demo mode.',
+        });
       } else {
-        toast.error(result.error || 'Failed to start Stripe Connect.');
+        toast.error(result.error || 'Failed to start payment setup.');
       }
     } catch {
       toast.error('Network error. Please try again.');
     } finally {
       setConnectingStripe(false);
+    }
+  }
+
+  // Poll the payment setup status so the UI updates when the seller
+  // completes hosted KYC onboarding (redirects back to the app).
+  async function refreshPaymentStatus() {
+    try {
+      const res = await fetch('/api/payments/status');
+      if (res.ok) {
+        const status = await res.json();
+        setData((prev) => prev ? { ...prev,
+          paymentsConnected: status.paymentsConnected,
+          payoutsEnabled: status.payoutsEnabled,
+          paymentStatus: status.status,
+          pendingRequirements: status.pendingRequirements || [],
+          // Keep legacy fields in sync for any code that still reads them:
+          stripeConnected: status.paymentsConnected,
+          stripePayoutsEnabled: status.payoutsEnabled,
+        } : prev);
+      }
+    } catch {
+      // best-effort — silent failure
     }
   }
 
@@ -404,47 +450,75 @@ export function VerificationComplianceSection({ tenantId }: VerificationComplian
         </CardContent>
       </Card>
 
-      {/* ── Stripe Connect ─────────────────────────────────────────────── */}
+      {/* ── Payments (white-label) ──────────────────────────────────────── */}
+      {/* The user sees "Payments" — never "Airwallex" or "Stripe". The
+          underlying provider is an implementation detail. Hosted KYC
+          onboarding (where the provider's logo does appear for legal
+          compliance) is reached via the "Set up payments" button. */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-emerald-600" />
-            Stripe Connect
+            Payments
           </CardTitle>
           <CardDescription>
-            Connect your Stripe account to receive marketplace payouts.
+            Add your business and payout details to receive payments from customers.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {data.stripeConnected ? (
+          {data.paymentsConnected || data.stripeConnected ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium">
                 <CheckCircle2 className="h-4 w-4" />
-                Stripe connected
-                {data.stripeAccountId && (
-                  <span className="text-xs text-muted-foreground ml-2">
-                    Account: {data.stripeAccountId.slice(0, 12)}...
-                  </span>
-                )}
+                Payments connected
               </div>
-              {data.stripePayoutsEnabled ? (
-                <Badge className="bg-emerald-100 text-emerald-700">Payouts enabled</Badge>
+              {data.payoutsEnabled || data.stripePayoutsEnabled ? (
+                <Badge className="bg-emerald-100 text-emerald-700">Payments active</Badge>
               ) : (
                 <Badge variant="outline" className="text-amber-600">
-                  Complete Stripe requirements to enable payouts
+                  {data.paymentStatus === 'action_required'
+                    ? 'Action needed — complete verification'
+                    : 'Verification in progress'}
                 </Badge>
+              )}
+              {data.pendingRequirements && data.pendingRequirements.length > 0 && (
+                <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/30">
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">
+                    Outstanding requirements:
+                  </p>
+                  <ul className="text-xs text-amber-700 dark:text-amber-400 list-disc list-inside space-y-0.5">
+                    {data.pendingRequirements.map((req, i) => (
+                      <li key={i}>{req}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!(data.payoutsEnabled || data.stripePayoutsEnabled) && (
+                <Button
+                  onClick={handleSetUpPayments}
+                  disabled={connectingStripe}
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                >
+                  {connectingStripe ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Loading...</>
+                  ) : (
+                    'Resume verification'
+                  )}
+                </Button>
               )}
             </div>
           ) : (
             <Button
-              onClick={handleStripeConnect}
+              onClick={handleSetUpPayments}
               disabled={connectingStripe}
               className="gap-1.5"
             >
               {connectingStripe ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Connecting...</>
+                <><Loader2 className="h-4 w-4 animate-spin" /> Setting up...</>
               ) : (
-                <><CreditCard className="h-4 w-4" /> Connect Stripe</>
+                <><CreditCard className="h-4 w-4" /> Set up payments</>
               )}
             </Button>
           )}
