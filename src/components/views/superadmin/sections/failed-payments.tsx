@@ -373,7 +373,6 @@ export function FailedPaymentsSection() {
                 <SelectItem value="all">All providers</SelectItem>
                 <SelectItem value="paypal">PayPal</SelectItem>
                 <SelectItem value="creem">Creem</SelectItem>
-                <SelectItem value="stripe">Stripe</SelectItem>
                 <SelectItem value="manual">Manual</SelectItem>
               </SelectContent>
             </Select>
