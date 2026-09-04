@@ -12,7 +12,7 @@ import { verifyCronAuth } from '@/lib/cron-auth'
  *
  * WHAT IT RUNS:
  *   Daily (every time it fires):
- *     1. marketplace-settlement   — release escrow → provider Stripe payout
+ *     1. marketplace-settlement   — release held funds → provider Airwallex payout
  *     2. archive-old-won-deals    — archive won deals >14 days old
  *     3. recurring-jobs           — generate jobs from recurring schedules
  *     4. overdue-detector         — mark overdue invoices + enqueue reminders
@@ -32,7 +32,9 @@ import { verifyCronAuth } from '@/lib/cron-auth'
  *     - scheduled-messages        → every 5 min
  *     - scheduled-executions      → every 5 min
  *     - campaigns                 → every 15 min
+ *     - ai-cleanup                → every 15 min (stale AI call reservations + billing reconciliation)
  *     - appointment-reminders     → every hour
+ *     - featured-location        → every hour
  *   See README-cron-setup.md for the cron-job.org import guide.
  *
  * AUTH: shared secret via `x-cron-secret` header, `Authorization: Bearer`,

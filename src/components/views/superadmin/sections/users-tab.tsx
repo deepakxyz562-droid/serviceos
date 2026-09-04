@@ -114,11 +114,32 @@ export function UsersTab({ users, usersLoading }: UsersTabProps) {
       ),
     },
     {
-      key: 'status', header: 'Status', render: (u) => (
-        <Badge variant="outline" className={cn('text-[10px]', u.isActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20')}>
-          {u.isActive ? 'Active' : 'Inactive'}
-        </Badge>
-      ),
+      key: 'status', header: 'Status', render: (u) => {
+        // 3-way status: Inactive (red) / Pending Verification (amber) / Active (green)
+        // Previously only checked `isActive` — which defaulted to true on registration,
+        // so unverified users showed a green "Active" badge. Now we also check
+        // `emailVerified` so users who haven't clicked the verify link show
+        // an amber "Pending Verification" badge instead.
+        if (!u.isActive) {
+          return (
+            <Badge variant="outline" className={cn('text-[10px]', 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20')}>
+              Inactive
+            </Badge>
+          );
+        }
+        if (!u.emailVerified) {
+          return (
+            <Badge variant="outline" className={cn('text-[10px]', 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20')}>
+              Pending Verification
+            </Badge>
+          );
+        }
+        return (
+          <Badge variant="outline" className={cn('text-[10px]', 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20')}>
+            Active
+          </Badge>
+        );
+      },
     },
     { key: 'tenant', header: 'Tenant', render: (u) => <span className="text-muted-foreground text-sm">{u.tenantName || '—'}</span> },
     {

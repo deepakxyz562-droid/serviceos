@@ -58,9 +58,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find current active subscription
+    // Find current subscription that's eligible for downgrade.
+    // A user can downgrade from ANY billing state where they have a plan
+    // (active, trial, trialing, pending_payment, past_due) — not just 'active'.
+    // The previous filter `status: 'active'` excluded trial users, who are the
+    // most common case for "I picked a plan during signup but want a cheaper one".
+    // See https://github.com/fieseros/issues/downgrade-bug for the original report.
     const currentSub = await db.subscription.findFirst({
-      where: { tenantId, status: 'active' },
+      where: {
+        tenantId,
+        status: { in: ['active', 'trial', 'trialing', 'pending_payment', 'past_due'] },
+      },
       orderBy: { createdAt: 'desc' },
     });
 

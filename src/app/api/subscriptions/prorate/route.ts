@@ -48,8 +48,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Find current subscription eligible for proration preview.
+    // Accepts the same statuses as the downgrade route — see
+    // src/app/api/subscriptions/downgrade/route.ts for the rationale.
+    // (Previously filtered on `status: 'active'` only, which 404'd for trial users.)
     const currentSub = await db.subscription.findFirst({
-      where: { tenantId, status: 'active' },
+      where: {
+        tenantId,
+        status: { in: ['active', 'trial', 'trialing', 'pending_payment', 'past_due'] },
+      },
       orderBy: { createdAt: 'desc' },
     });
 

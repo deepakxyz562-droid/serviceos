@@ -83,6 +83,28 @@ export async function GET(request: NextRequest) {
     };
     const sessionToken = generateToken(authUser);
 
+    // ── Send the welcome email NOW (after verification, not on registration) ──
+    // Previously the welcome email was sent in the register route immediately
+    // alongside the verification email — which meant the user got two emails
+    // at once BEFORE they'd even verified. Now it fires here, only after
+    // emailVerified is confirmed true. Best-effort: never fails the verification.
+    try {
+      const { sendWelcomeEmailTo } = await import('@/lib/emails/welcome-email');
+      const appUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.APP_URL ||
+        new URL(request.url).origin;
+      await sendWelcomeEmailTo(user.email, {
+        ownerName: user.name,
+        businessName: user.tenant?.name || user.name,
+        appUrl,
+        tenantSlug: user.tenant?.slug || '',
+        marketplaceOptIn: user.tenant?.marketplaceOptIn || false,
+      });
+    } catch (welcomeErr) {
+      console.warn('[verify-email] Failed to send welcome email:', welcomeErr);
+    }
+
     const response = NextResponse.json({
       ok: true,
       message: 'Your email has been verified.',

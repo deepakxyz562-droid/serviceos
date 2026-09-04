@@ -2,12 +2,13 @@
  * welcome-email.ts
  * ================
  *
- * Welcome email sent to a new business owner immediately after they register.
+ * Welcome email sent to a new business owner AFTER they verify their email.
  *
- * Sent in parallel with the verification email (this welcome email doesn't
- * contain a verification link — that's the verification-email.ts job). The
- * welcome email's purpose is onboarding guidance: getting-started checklist,
- * dashboard link, support contact.
+ * Previously sent in parallel with the verification email on registration —
+ * but that was wrong UX (two emails at once before the user had verified).
+ * Now the welcome email fires from the verify-email route, only after
+ * emailVerified is confirmed true. The welcome email's purpose is onboarding
+ * guidance: getting-started checklist, dashboard link, support contact.
  *
  * Mirrors the claim-emails.ts pattern: transactional usageType, no tenantId
  * (bypasses per-tenant email quota — this is a platform-issued email for a

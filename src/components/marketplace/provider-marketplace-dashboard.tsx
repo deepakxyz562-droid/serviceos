@@ -541,7 +541,7 @@ const GATE_META: Array<{
   { key: 'identityVerified', label: 'Identity verified (KYC)', description: 'Owner identity verification passed.' },
   { key: 'businessVerified', label: 'Business verified', description: 'Business registration confirmed.' },
   { key: 'insuranceVerified', label: 'Insurance verified', description: 'Proof of liability insurance on file.' },
-  { key: 'stripeConnected', label: 'Stripe Connect linked', description: 'A capable Stripe Connect account for payouts.', cta: { label: 'Connect Stripe', view: 'integrations' } },
+  { key: 'stripeConnected', label: 'Payments set up', description: 'A payment account for receiving marketplace payouts.', cta: { label: 'Set up payments', view: 'integrations' } },
   { key: 'profileComplete', label: 'Profile ≥ 80% complete', description: 'Fill out your public hub profile.', cta: { label: 'Edit profile', view: 'settings' } },
   { key: 'marketplaceOptIn', label: 'Marketplace opt-in', description: 'Explicitly opted in to receive marketplace leads.' },
   { key: 'termsAccepted', label: 'Terms & conditions accepted', description: 'Accept the marketplace T&Cs.' },

@@ -3,19 +3,19 @@
 /**
  * Payment Integrations settings section.
  *
- * Three cards:
- *   1. Stripe     — Connect via Stripe OAuth (placeholder), status from the
- *                   canonical `Tenant.stripeConnected` / `stripeAccountId` /
- *                   `stripePayoutsEnabled` columns. Disconnect clears them.
- *   2. PayPal     — Client ID + Client Secret + Sandbox toggle. Save &
+ * Two cards:
+ *   1. PayPal     — Client ID + Client Secret + Sandbox toggle. Save &
  *                   Test Connection. Secrets masked in API response.
- *   3. Square     — Application ID + Access Token + Location ID. Save &
+ *   2. Square     — Application ID + Access Token + Location ID. Save &
  *                   Test Connection.
  *
  * Backed by `/api/settings/payment-integrations` (GET + PUT). All secrets
  * are stored under `Tenant.settingsJson.paymentIntegrations` (no new Prisma
- * models). Stripe status is the only exception — read/written through the
- * tenant's dedicated Stripe columns.
+ * models).
+ *
+ * NOTE: Marketplace payment setup (Airwallex) is NOT on this page — it's
+ * on Settings → Verification & Compliance → "Payments" card, which calls
+ * the white-label /api/payments/setup + /api/payments/status routes.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -56,11 +56,6 @@ import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-interface StripeSettings {
-  connected: boolean;
-  accountId: string;
-  payoutsEnabled: boolean;
-}
 interface PayPalSettings {
   clientId: string;
   clientSecret: string;
@@ -79,7 +74,6 @@ interface BankFeedsSettings {
   enabled: boolean;
 }
 interface PaymentIntegrationsSettings {
-  stripe: StripeSettings;
   paypal: PayPalSettings;
   square: SquareSettings;
   quickbooks: QuickBooksSettings;
@@ -87,7 +81,6 @@ interface PaymentIntegrationsSettings {
 }
 
 const DEFAULT_SETTINGS: PaymentIntegrationsSettings = {
-  stripe: { connected: false, accountId: '', payoutsEnabled: false },
   paypal: { clientId: '', clientSecret: '', sandbox: true },
   square: { applicationId: '', accessToken: '', locationId: '' },
   quickbooks: { connected: false, companyId: '' },
@@ -115,7 +108,7 @@ export function PaymentIntegrationsSettings() {
   const [loading, setLoading] = useState(true);
   const [savingProvider, setSavingProvider] = useState<null | 'paypal' | 'square'>(null);
   const [testingProvider, setTestingProvider] = useState<null | 'paypal' | 'square'>(null);
-  const [disconnectingProvider, setDisconnectingProvider] = useState<null | 'stripe'>(null);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<null | 'quickbooks'>(null);
 
   // Show/hide secret toggles
   const [showPayPalSecret, setShowPayPalSecret] = useState(false);
@@ -128,11 +121,6 @@ export function PaymentIntegrationsSettings() {
       if (res.ok) {
         const data = (await res.json()) as PaymentIntegrationsSettings;
         setSettings({
-          stripe: {
-            connected: !!data.stripe?.connected,
-            accountId: data.stripe?.accountId || '',
-            payoutsEnabled: !!data.stripe?.payoutsEnabled,
-          },
           paypal: {
             clientId: data.paypal?.clientId || '',
             clientSecret: data.paypal?.clientSecret || '',
@@ -250,9 +238,9 @@ export function PaymentIntegrationsSettings() {
     }
   };
 
-  // ─── Disconnect (Stripe or QuickBooks) ────────────────────────────────────
-  const handleDisconnect = async (provider: 'stripe' | 'quickbooks') => {
-    if (!confirm(`Disconnect ${provider === 'stripe' ? 'Stripe' : 'QuickBooks'}? You will need to reconnect to accept payments.`)) {
+  // ─── Disconnect (QuickBooks) ────────────────────────────────────────────
+  const handleDisconnect = async (provider: 'quickbooks') => {
+    if (!confirm(`Disconnect QuickBooks? You will need to reconnect to sync transactions.`)) {
       return;
     }
     setDisconnectingProvider(provider);
@@ -263,7 +251,7 @@ export function PaymentIntegrationsSettings() {
         body: JSON.stringify({ action: 'disconnect', provider }),
       });
       if (res.ok) {
-        toast.success(`${provider === 'stripe' ? 'Stripe' : 'QuickBooks'} disconnected`);
+        toast.success(`QuickBooks disconnected`);
         await fetchSettings();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -274,21 +262,6 @@ export function PaymentIntegrationsSettings() {
     } finally {
       setDisconnectingProvider(null);
     }
-  };
-
-  // ─── Stripe Connect (placeholder) ─────────────────────────────────────────
-  const handleStripeConnect = () => {
-    // The /api/stripe/connect OAuth route is not yet implemented. Open it in
-    // a new tab — if it returns 404 we show a friendly "coming soon" toast.
-    const url = '/api/stripe/connect?XTransformPort=3000';
-    const win = window.open(url, '_blank');
-    if (!win) {
-      toast.info('Stripe Connect onboarding is coming soon.');
-      return;
-    }
-    toast.info('Stripe Connect onboarding is coming soon.', {
-      description: 'The OAuth callback handler is not yet wired up.',
-    });
   };
 
   // ─── Loading state ────────────────────────────────────────────────────────
@@ -302,92 +275,22 @@ export function PaymentIntegrationsSettings() {
 
   return (
     <div className="space-y-6">
-      {/* ─── Stripe ─────────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center size-9 rounded-lg bg-violet-100 dark:bg-violet-900/30">
-                <CreditCard className="size-4 text-violet-600" />
-              </div>
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  Stripe
-                  <StatusBadge connected={settings.stripe.connected} />
-                </CardTitle>
-                <CardDescription>
-                  Accept card payments and enable marketplace payouts via Stripe Connect.
-                </CardDescription>
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {settings.stripe.connected ? (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Account ID</Label>
-                  <Input
-                    readOnly
-                    value={settings.stripe.accountId || '—'}
-                    className="font-mono text-sm bg-muted/50"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Stripe Connect account identifier (acct_...)
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Payouts</Label>
-                  <div className="flex h-9 items-center">
-                    <StatusBadge
-                      connected={settings.stripe.payoutsEnabled}
-                      label={settings.stripe.payoutsEnabled ? 'Payouts Enabled' : 'Payouts Disabled'}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Enabled once Stripe completes KYC and bank verification.
-                  </p>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  className="gap-1.5 text-destructive hover:text-destructive"
-                  onClick={() => handleDisconnect('stripe')}
-                  disabled={disconnectingProvider === 'stripe'}
-                >
-                  {disconnectingProvider === 'stripe' ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Unplug className="size-4" />
-                  )}
-                  Disconnect
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-start gap-3">
-              <div className="flex items-start gap-2 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
-                <Info className="size-4 mt-0.5 shrink-0" />
-                <span>
-                  Connect your Stripe account to accept online payments and receive marketplace
-                  payouts. Stripe Connect handles KYC, bank account verification, and tax forms.
-                </span>
-              </div>
-              <Button
-                className="gap-1.5 bg-violet-600 hover:bg-violet-700"
-                onClick={handleStripeConnect}
-              >
-                <PlugZap className="size-4" />
-                Connect with Stripe
-                <ExternalLink className="size-3.5 opacity-80" />
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* ─── Marketplace payments info banner ─────────────────────────────── */}
+      {/* Marketplace payment setup (Airwallex) is on the Verification & Compliance
+          page — not here. This banner points users there so they know where to
+          find the "Set up payments" flow. */}
+      <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+        <Info className="size-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+        <div className="flex-1 text-sm">
+          <p className="font-medium text-emerald-800 dark:text-emerald-300">
+            Marketplace payment setup
+          </p>
+          <p className="text-emerald-700 dark:text-emerald-400 mt-1">
+            To receive marketplace payouts, set up your payment account under
+            Settings → Verification &amp; Compliance → Payments.
+          </p>
+        </div>
+      </div>
 
       {/* ─── PayPal ─────────────────────────────────────────────────────────── */}
       <Card>

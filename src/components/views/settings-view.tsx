@@ -313,11 +313,10 @@ const PLACEHOLDER_CONFIGS: Record<string, {
   },
   'payment-integrations': {
     title: 'Payment Integrations',
-    description: 'Stripe, PayPal, Square, payment gateway config',
+    description: 'PayPal, Square, payment gateway config',
     icon: CreditCard,
     accent: 'emerald',
     items: [
-      { label: 'Stripe', hint: 'Credit card processing' },
       { label: 'PayPal', hint: 'PayPal payment integration' },
       { label: 'Square', hint: 'Point-of-sale payments' },
     ],

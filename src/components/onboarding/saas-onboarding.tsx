@@ -788,17 +788,17 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // Step 2 — Stripe Connect handler
   // -------------------------------------------------------------------------
 
-  // On mount: if the user is returning from Stripe Connect (URL has
-  // ?stripe_connect=return), pull the latest status so the toggle reflects
+  // On mount: if the user is returning from payment onboarding (URL has
+  // ?payments=return), pull the latest status so the toggle reflects
   // the freshly-completed onboarding. Runs once on mount — we intentionally
   // don't depend on `refreshStripeStatus` because it's a stable useCallback.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
-    const flag = url.searchParams.get('stripe_connect');
+    const flag = url.searchParams.get('payments');
     if (flag === 'return' || flag === 'refresh') {
       // Best-effort: clear the query param so a refresh doesn't re-trigger.
-      url.searchParams.delete('stripe_connect');
+      url.searchParams.delete('payments');
       window.history.replaceState({}, '', url.toString());
       refreshStripeStatus();
     }
@@ -807,27 +807,27 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   const refreshStripeStatus = useCallback(async () => {
     setStep2((s) => ({ ...s, stripeStatusLoading: true }));
     try {
-      const res = await fetch('/api/billing/stripe/connect/status');
+      const res = await fetch('/api/payments/status');
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
       const data = await res.json();
-      const connected = !!data?.connected;
+      const connected = !!data?.paymentsConnected;
       setStep2((s) => ({ ...s, stripeConnected: connected }));
       if (connected) {
-        toast.success('Stripe account connected!', {
+        toast.success('Payments set up!', {
           description: data?.payoutsEnabled
             ? 'Payouts enabled — you can receive marketplace payments.'
-            : 'Account linked — finish any pending Stripe requirements to enable payouts.',
+            : 'Account linked — finish any pending verification to enable payouts.',
         });
-      } else if (data?.requirements?.currently_due?.length) {
-        toast.warning('Stripe onboarding incomplete', {
-          description: `${data.requirements.currently_due.length} requirement(s) still pending.`,
+      } else if (data?.pendingRequirements?.length) {
+        toast.warning('Payment verification incomplete', {
+          description: `${data.pendingRequirements.length} requirement(s) still pending.`,
         });
       }
     } catch (err) {
-      console.error('Stripe status check failed:', err);
-      toast.error('Could not verify Stripe status. Try again later.');
+      console.error('Payment status check failed:', err);
+      toast.error('Could not verify payment status. Try again later.');
     } finally {
       setStep2((s) => ({ ...s, stripeStatusLoading: false }));
     }
@@ -837,30 +837,34 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     setStep2((s) => ({ ...s, stripeStatusLoading: true }));
     try {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const returnUrl = `${origin}/?stripe_connect=return`;
-      const refreshUrl = `${origin}/?stripe_connect=refresh`;
-      const res = await fetch(
-        `/api/billing/stripe/connect?returnUrl=${encodeURIComponent(returnUrl)}&refreshUrl=${encodeURIComponent(refreshUrl)}`,
-        { method: 'POST' },
-      );
+      const returnUrl = `${origin}/?payments=return`;
+      const res = await fetch('/api/payments/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnUrl }),
+      });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody?.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      if (data?.accountLinkUrl) {
+      if (data?.onboardingUrl) {
         // Open in a new tab so the onboarding wizard state survives the
-        // Stripe redirect roundtrip. The user closes the tab and clicks
+        // hosted KYC redirect roundtrip. The user closes the tab and clicks
         // "Refresh Status" here when done.
-        window.open(data.accountLinkUrl, '_blank', 'noopener,noreferrer');
-        toast.info('Stripe onboarding opened in a new tab', {
-          description: 'Complete the Stripe flow, then come back and click "Refresh Status".',
+        window.open(data.onboardingUrl, '_blank', 'noopener,noreferrer');
+        toast.info('Payment setup opened in a new tab', {
+          description: 'Complete the verification flow, then come back and click "Refresh Status".',
         });
+      } else if (data?.status === 'active') {
+        // Already verified — refresh the status to reflect it.
+        toast.success('Payments are already active!');
+        refreshStripeStatus();
       }
     } catch (err) {
-      console.error('Stripe connect failed:', err);
+      console.error('Payment setup failed:', err);
       toast.error(
-        err instanceof Error ? err.message : 'Failed to start Stripe Connect. Please try again.',
+        err instanceof Error ? err.message : 'Failed to start payment setup. Please try again.',
       );
     } finally {
       setStep2((s) => ({ ...s, stripeStatusLoading: false }));
@@ -1507,7 +1511,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                   List my business on the marketplace
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Eligibility checks still apply (subscription, KYC, insurance, Stripe).
+                  Eligibility checks still apply (subscription, KYC, insurance, payment setup).
                 </p>
               </div>
               <Switch

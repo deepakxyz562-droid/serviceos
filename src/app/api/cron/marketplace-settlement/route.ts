@@ -9,51 +9,51 @@ import { verifyCronAuth } from '@/lib/cron-auth';
 /**
  * GET /api/cron/marketplace-settlement
  *
- * Marketplace settlement worker — scans every `MarketplaceTransaction` in
- * `escrow` status and releases the provider's share into their Stripe
- * Connect balance once the linked Job reaches a completed-ish state.
+ * Marketplace settlement worker — scans every `MarketplaceTransaction` in a
+ * held state (`paid_held` / `settlement_eligible` / legacy `escrow`) and
+ * pays the provider their share via the active payment provider (Airwallex)
+ * once the linked Job reaches a completed-ish state.
  *
  * Trigger:
- *   - Vercel Cron:  once daily at 02:00 UTC (schedule "0 2 * * *") — see vercel.json
- *                   (Vercel Hobby plan is limited to daily crons; upgrade to Pro for
- *                   more frequent settlement runs, e.g. every 15 minutes)
+ *   - Daily master cron:  02:00 UTC (schedule "0 2 * * *") via /api/cron/master
  *   - On-demand:    call this route from app flows when a Job is marked complete
  *                   for near-real-time payout (the daily cron is a safety net)
- *   - External:     `curl -H "Authorization: Bearer $CRON_SECRET" \
+ *   - External:     `curl -H "x-cron-secret: $CRON_SECRET" \
  *                          https://your-app/api/cron/marketplace-settlement`
  *
  * Auth:
- *   - `Authorization: Bearer ${CRON_SECRET}` header (preferred)
- *   - OR ``x-cron-secret` header or `Authorization: Bearer` header${CRON_SECRET}` query param (fallback for cron services that
- *     can't set headers, e.g. GitHub Actions scheduled workflows)
+ *   - `x-cron-secret: ${CRON_SECRET}` header (preferred)
+ *   - OR `Authorization: Bearer ${CRON_SECRET}` header
  *   - If `CRON_SECRET` is not set in env:
  *       * In NODE_ENV=development → allow with a warning (local testing)
  *       * In production           → 401 (refuse to run unauthenticated)
  *
- * Logic:
- *   1. Find all `MarketplaceTransaction` rows where status='escrow' and the
+ * Logic (provider-neutral lifecycle — no "escrow" terminology):
+ *   1. Find all `MarketplaceTransaction` rows where status is in
+ *      ['paid_held', 'settlement_eligible', 'escrow' (legacy)] and the
  *      linked Job.status is in ['completed', 'invoiced', 'closed']. For each:
- *        - call `transferToProvider(tenantId, providerAmountCents, txnId)`
- *        - on success → status='released', releasedAt=now, transferId set,
- *          metadataJson stores the full transfer details
- *        - on failure → increment retryCount, leave status='escrow' so the
+ *        - call `payments.createPayout(providerName, { destinationAccountId, amount, ... })`
+ *        - on success → status='payout_initiated', releasedAt=now,
+ *          paymentProviderTransferId set, a Payout row is created,
+ *          metadataJson stores the full payout details
+ *        - on failure → increment retryCount, leave status unchanged so the
  *          next run retries. After 5 failed attempts → status='disputed'
  *          with the latest error in metadataJson
- *   2. Orphaned-escrow sweep: status='escrow' AND jobId is null AND
- *      createdAt > 7 days ago → mark as 'released' with a note in
+ *   2. Orphaned-held sweep: status held AND jobId is null AND
+ *      createdAt > 7 days ago → mark as 'settlement_eligible' with a note in
  *      metadataJson (edge case: instant bookings that never linked a Job)
  *   3. Return JSON summary: { processed, released, failed, disputed, orphaned }
  *
  * Idempotency + safety:
  *   - Each transaction is wrapped in its own try/catch — a single failure
  *     never crashes the whole cron run.
- *   - Re-running on the same transaction is safe: once status='released'
- *     the row no longer matches the `status='escrow'` filter, so the
- *     transfer is never issued twice.
- *   - Demo/dev mode: when STRIPE_SECRET_KEY is unset OR the tenant uses an
- *     `acct_demo_*` Connect account, `transferToProvider` returns a mock
- *     transfer — the cron still flips status to 'released' so end-to-end
- *     flow can be tested without real Stripe keys.
+ *   - Re-running on the same transaction is safe: once status='payout_initiated'
+ *     the row no longer matches the held-status filter, so the payout is
+ *     never issued twice.
+ *   - Demo/dev mode: when AIRWALLEX_* env vars are unset OR the tenant uses
+ *     a `acct_demo_*` connected account, `payments.createPayout` returns a
+ *     mock payout — the cron still flips status so end-to-end flow can be
+ *     tested without real Airwallex credentials.
  */
 export async function GET(request: NextRequest) {
   const log = withRequestId(request);

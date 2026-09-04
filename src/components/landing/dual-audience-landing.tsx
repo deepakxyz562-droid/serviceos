@@ -211,8 +211,8 @@ const providerBenefits = [
   },
   {
     icon: Wallet,
-    title: 'Get paid faster, with escrow',
-    description: 'Customer payments are held in escrow and released to your Stripe Connect account the moment the job is marked complete. No more chasing invoices.',
+    title: 'Get paid faster, with secure holding',
+    description: 'Customer payments are held securely and released to your payment account the moment the job is marked complete. No more chasing invoices.',
   },
   {
     icon: TrendingUp,

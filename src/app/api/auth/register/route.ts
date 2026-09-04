@@ -220,23 +220,17 @@ export async function POST(request: NextRequest) {
       console.warn('[Register] Failed to send verification email:', verifyErr);
     }
 
-    // ── Welcome email + superadmin notification + EventBus events ─────────
-    // All three are non-blocking — wrapped in try/catch so a failure here
-    // doesn't fail the registration (the account is already created).
-    try {
-      // 1. Send welcome email to the new owner (onboarding checklist).
-      const { sendWelcomeEmailTo } = await import('@/lib/emails/welcome-email');
-      await sendWelcomeEmailTo(email, {
-        ownerName: user.name,
-        businessName: tenant.name,
-        appUrl,
-        tenantSlug: tenant.slug,
-        marketplaceOptIn: tenant.marketplaceOptIn,
-      });
-    } catch (welcomeErr) {
-      console.warn('[Register] Failed to send welcome email:', welcomeErr);
-    }
-
+    // ── Superadmin notification + EventBus events ────────────────────────
+    // NOTE: the welcome email is NOT sent here — it's sent AFTER the user
+    // verifies their email (see src/app/api/auth/verify-email/route.ts).
+    // Sending the welcome email before verification was wrong UX: it could
+    // bounce (if the email is fake), confuse the user (they haven't completed
+    // anything yet), and looked spammy (two emails at once on registration).
+    // The verification email alone is sent on registration; the welcome
+    // email fires when the user clicks the verify link + emailVerified flips
+    // to true.
+    // All three below are non-blocking — wrapped in try/catch so a failure
+    // here doesn't fail the registration (the account is already created).
     try {
       // 2. Create in-app Notification rows for every superadmin so they see
       //    "New business registered" in their dashboard. We do NOT email

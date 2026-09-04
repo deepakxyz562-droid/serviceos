@@ -183,3 +183,10 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+// POST alias — the master cron multiplexer invokes sub-crons via POST.
+// Other cron providers (Vercel Cron, cron-job.org) may use either GET or POST;
+// supporting both means this route works regardless of the caller's method.
+export async function POST(request: NextRequest) {
+  return GET(request);
+}

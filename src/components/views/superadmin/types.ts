@@ -100,6 +100,8 @@ export interface UserRecord {
   phone?: string | null;
   role: string;
   isActive: boolean;
+  emailVerified?: boolean;
+  emailVerifiedAt?: string | null;
   avatar?: string | null;
   authProvider?: string | null;
   lastLoginAt?: string | null;

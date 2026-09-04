@@ -1,7 +1,7 @@
 {
   "_comment": "cron-job.org bulk import config for Coolify/Hostinger deployment. Import these jobs at https://cron-job.org. Set the URL to https://YOUR-DOMAIN.com/api/cron/{path} and add request header 'x-cron-secret: YOUR_CRON_SECRET'. All times are UTC.",
   "_setup": "1) Generate CRON_SECRET: openssl rand -hex 32. 2) Set CRON_SECRET env var in Coolify (Project → Environment Variables). 3) Sign up at cron-job.org (FREE). 4) Create each job below with the specified schedule + URL + header. 5) Method: POST (or GET — all routes accept both). 6) Replace YOUR-DOMAIN.com with your actual domain (e.g., fieseros.com). 7) Set timeout to 300 seconds for the daily master (it runs many sub-crons).",
-  "_architecture": "IMPORTANT: This file contains ALL 6 cron jobs needed for the Coolify deployment: 1 DAILY MASTER cron + 5 HIGH-FREQUENCY crons. The daily master cron (/api/cron/master) fans out to 9 daily sub-crons + sitemap regeneration internally. Do NOT create separate cron-job.org entries for the individual daily sub-crons (marketplace-settlement, recurring-jobs, etc.) — they are all triggered by the master. vercel.json crons do NOT work on Coolify — you MUST use cron-job.org for the daily master.",
+  "_architecture": "IMPORTANT: This file contains ALL 7 cron jobs needed for the Coolify deployment: 1 DAILY MASTER cron + 6 HIGH-FREQUENCY crons. The daily master cron (/api/cron/master) fans out to 10 daily sub-crons + sitemap regeneration internally. Do NOT create separate cron-job.org entries for the individual daily sub-crons (marketplace-settlement, recurring-jobs, etc.) — they are all triggered by the master. vercel.json crons do NOT work on Coolify — you MUST use cron-job.org for the daily master.",
   "_coolify_note": "This config replaces the Vercel Cron setup. On Coolify/Hostinger, vercel.json is ignored — ALL crons must be triggered externally via cron-job.org (or any external HTTP cron service).",
   "_domain_placeholder": "Replace YOUR-DOMAIN.com with your production domain (e.g., fieseros.com) before importing.",
   "jobs": [
@@ -13,7 +13,7 @@
       "method": "POST",
       "headers": { "x-cron-secret": "YOUR_CRON_SECRET" },
       "timeout": 300,
-      "_comment": "MASTER DAILY CRON — fans out to 9 daily sub-crons + sitemap regeneration. Sub-crons: marketplace-settlement, archive-old-won-deals, recurring-jobs, overdue-detector, trial-reminders, pre-charge-reminder, recurring-invoices, trial-expire, renewal. On the 1st of each month, also runs sms-quota-reset. Sitemap regeneration runs AFTER all sub-crons (incremental — only regenerates dirty files). 7-day safety net forces full sitemap regen if needed. CRITICAL: this must be set up on Coolify — vercel.json crons don't work."
+      "_comment": "MASTER DAILY CRON — fans out to 10 daily sub-crons + sitemap regeneration. Sub-crons: marketplace-settlement, archive-old-won-deals, recurring-jobs, overdue-detector, trial-reminders, pre-charge-reminder, recurring-invoices, trial-expire, renewal, past-due-escalation. On the 1st of each month, also runs sms-quota-reset. Sitemap regeneration runs AFTER all sub-crons (incremental — only regenerates dirty files). 7-day safety net forces full sitemap regen if needed. CRITICAL: this must be set up on Coolify — vercel.json crons don't work."
     },
     {
       "name": "scheduled-messages",
@@ -59,10 +59,19 @@
       "method": "POST",
       "headers": { "x-cron-secret": "YOUR_CRON_SECRET" },
       "_comment": "Standalone hourly cron (NOT wired into master). Picks a random European city (population-weighted) from DirectoryLocation and stores it as the current FeaturedLocation, which the homepage reads to render the 'Featured European location' hero."
+    },
+    {
+      "name": "ai-cleanup",
+      "url": "https://YOUR-DOMAIN.com/api/cron/ai-cleanup",
+      "schedule": "*/15 * * * *",
+      "scheduleHuman": "Every 15 minutes",
+      "method": "POST",
+      "headers": { "x-cron-secret": "YOUR_CRON_SECRET" },
+      "_comment": "Releases stale AI call reservations (older than 30 min) so they don't block concurrent-call slots. Also reconciles billing for ended calls whose finalizeUsage() failed (revenue recovery) + runs the phone-number release saga (resumable multi-step). 15-min cadence matches the 30-min staleness threshold — stale reservations are cleared within ~45 min worst case."
     }
   ],
   "_daily_subcrons_handled_by_master": [
-    "marketplace-settlement (releases escrow to providers)",
+    "marketplace-settlement (releases held funds to providers via Airwallex)",
     "archive-old-won-deals (Kanban cleanup)",
     "recurring-jobs (generates jobs from schedules)",
     "overdue-detector (marks overdue invoices)",
@@ -71,6 +80,7 @@
     "recurring-invoices (generate + send recurring invoices)",
     "trial-expire (expire trials past trialEndsAt)",
     "renewal (downgrades, PayPal sync, expired subs)",
+    "past-due-escalation (1d/3d/7d escalation + daily digest to platform owner)",
     "sitemap-regeneration (incremental — only dirty files)"
   ],
   "_monthly_subcrons_handled_by_master": [
