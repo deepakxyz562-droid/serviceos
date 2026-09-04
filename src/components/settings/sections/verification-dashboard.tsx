@@ -30,6 +30,7 @@ import {
   KeyRound,
   Award,
   ExternalLink,
+  AlertCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -98,6 +99,26 @@ export function VerificationDashboard({
   const [startingWebsite, setStartingWebsite] = useState(false);
   const [checkingWebsite, setCheckingWebsite] = useState(false);
   const [checkMethod, setCheckMethod] = useState<'meta' | 'file' | 'dns' | null>(null);
+
+  // Google Business Profile verification state (multi-step flow)
+  // Step 1: "Connect Google Business Profile" → OAuth
+  // Step 2: After OAuth returns → fetch locations → show selection UI
+  // Step 3: User selects location → server matches → show result
+  const [googleLocations, setGoogleLocations] = useState<Array<{
+    locationId: string;
+    title: string;
+    accountName: string;
+  }>>([]);
+  const [loadingGoogleLocations, setLoadingGoogleLocations] = useState(false);
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
+  const [matchingLocation, setMatchingLocation] = useState(false);
+  const [googleMatchResult, setGoogleMatchResult] = useState<{
+    verified: boolean;
+    status: string;
+    matchScore: number;
+    message: string;
+    locationTitle: string;
+  } | null>(null);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -239,10 +260,92 @@ export function VerificationDashboard({
     }
   }
 
-  // Google Business verification
+  // Google Business verification — multi-step flow
+  // Step 1: "Connect Google Business Profile" → starts OAuth
+  // After OAuth returns, the useEffect below detects ?google=connected + fetches locations
   function handleGoogleVerify() {
     // Redirect to the Google OAuth flow
     window.location.href = '/api/oauth/googlebusiness/connect';
+  }
+
+  // Step 2: After OAuth returns with ?google=connected, fetch the connected locations
+  // so the user can select which one matches their business.
+  const loadGoogleLocations = useCallback(async () => {
+    setLoadingGoogleLocations(true);
+    try {
+      const res = await authFetch('/api/verification/google/locations');
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleLocations(data.locations || []);
+      }
+    } catch {
+      // Non-blocking
+    } finally {
+      setLoadingGoogleLocations(false);
+    }
+  }, []);
+
+  // Detect ?google=connected URL param (set by the OAuth callback redirect)
+  // + auto-fetch locations for the selection UI.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const googleParam = params.get('google');
+    if (googleParam === 'connected') {
+      // Strip the param so it doesn't re-trigger on refresh
+      params.delete('google');
+      const remaining = params.toString();
+      const newUrl = remaining
+        ? `${window.location.pathname}?${remaining}`
+        : window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+      // Fetch the locations
+      loadGoogleLocations();
+      toast.success('Google connected!', {
+        description: 'Select the business location that matches your Fieseros business.',
+      });
+    }
+  }, [loadGoogleLocations]);
+
+  // Step 3: User selects a location → server matches → show result
+  async function handleMatchLocation() {
+    if (!selectedLocationId) {
+      toast.error('Please select a Google location first');
+      return;
+    }
+    setMatchingLocation(true);
+    setGoogleMatchResult(null);
+    try {
+      const res = await authFetch('/api/verification/google/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locationId: selectedLocationId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setGoogleMatchResult(data);
+        if (data.verified) {
+          toast.success('Google Business Profile verified!', {
+            description: `${Math.round(data.matchScore * 100)}% match with your business.`,
+          });
+          loadStatus(); // refresh the overall verification status
+        } else if (data.status === 'PENDING') {
+          toast.info('Verification submitted for review', {
+            description: data.message,
+          });
+        } else {
+          toast.error('Business mismatch', {
+            description: data.message,
+          });
+        }
+      } else {
+        toast.error(data.error || 'Failed to verify Google location');
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setMatchingLocation(false);
+    }
   }
 
   // ── Gate E: Website/domain verification ────────────────────────────
@@ -541,18 +644,94 @@ export function VerificationDashboard({
             <p className="text-sm text-emerald-600 flex items-center gap-1">
               <CheckCircle2 className="h-4 w-4" /> Google Business Profile verified
             </p>
+          ) : googleMatchResult?.status === 'VERIFIED' ? (
+            <div className="space-y-2">
+              <p className="text-sm text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 className="h-4 w-4" /> Google Business Profile verified
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {googleMatchResult.locationTitle} — {Math.round(googleMatchResult.matchScore * 100)}% match
+              </p>
+            </div>
+          ) : googleMatchResult?.status === 'PENDING' ? (
+            <div className="space-y-2">
+              <p className="text-sm text-amber-600 flex items-center gap-1">
+                <AlertCircle className="h-4 w-4" /> Verification under review
+              </p>
+              <p className="text-xs text-muted-foreground">{googleMatchResult.message}</p>
+            </div>
+          ) : googleMatchResult?.status === 'REJECTED' ? (
+            <div className="space-y-2">
+              <p className="text-sm text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-4 w-4" /> Business mismatch
+              </p>
+              <p className="text-xs text-muted-foreground">{googleMatchResult.message}</p>
+              <Button size="sm" variant="outline" onClick={() => { setGoogleMatchResult(null); setSelectedLocationId(null); }}>
+                Try another location
+              </Button>
+            </div>
+          ) : loadingGoogleLocations ? (
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading your Google Business Profile locations...
+            </p>
+          ) : googleLocations.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground mb-2">
+                We found {googleLocations.length === 1 ? 'a Google Business Profile' : `${googleLocations.length} Google Business Profiles`} you manage.
+                Select the one that matches your Fieseros business.
+              </p>
+              <div className="space-y-2">
+                {googleLocations.map((loc) => (
+                  <label
+                    key={loc.locationId}
+                    className={`flex items-start gap-2 rounded-lg border p-3 cursor-pointer transition-colors ${
+                      selectedLocationId === loc.locationId
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
+                        : 'border-border hover:bg-muted/50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="google-location"
+                      value={loc.locationId}
+                      checked={selectedLocationId === loc.locationId}
+                      onChange={(e) => setSelectedLocationId(e.target.value)}
+                      className="mt-1"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate">{loc.title}</p>
+                      {loc.accountName && (
+                        <p className="text-xs text-muted-foreground truncate">{loc.accountName}</p>
+                      )}
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                onClick={handleMatchLocation}
+                disabled={!selectedLocationId || matchingLocation}
+                className="gap-1.5"
+              >
+                {matchingLocation ? (
+                  <><Loader2 className="h-3 w-3 animate-spin" /> Matching...</>
+                ) : (
+                  <>Verify this business</>
+                )}
+              </Button>
+            </div>
           ) : (
             <>
               <p className="text-sm text-muted-foreground mb-2">
-                Connect your Google Business Profile to verify you manage this business.
-                This is the strongest verification method.
+                Connect the Google account that manages this business. We&apos;ll check
+                the businesses you manage and match one to your Fieseros business.
               </p>
               <Button
                 size="sm"
                 onClick={handleGoogleVerify}
                 className="gap-1.5"
               >
-                <Globe className="h-3 w-3" /> Verify with Google
+                <Globe className="h-3 w-3" /> Connect Google Business Profile
               </Button>
               {googleConnected && (
                 <p className="text-xs text-amber-600 mt-2">

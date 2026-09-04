@@ -97,7 +97,15 @@ function extractDomain(url: string): string {
  * Match a Google Business Profile location against a Fieseros tenant.
  *
  * @returns MatchResult with a composite score (name 70% + address 30%).
- *          A score ≥ 0.8 is considered a strong match.
+ * Phase 2: Updated to use weighted scoring (name 30%, address 30%, phone 20%, website 20%).
+ * When a signal is unavailable (e.g. Google's list API only returns name+title), the
+ * available signals are re-weighted proportionally. This prevents name-only matches
+ * from scoring 100% when other signals are missing.
+ *
+ * Thresholds:
+ *   ≥ 90% → strong match (VERIFIED)
+ *   75-89% → medium match (PENDING / admin review)
+ *   < 75% → weak match (REJECTED / mismatch)
  */
 export function matchGoogleLocation(
   location: GoogleLocation,
@@ -129,20 +137,34 @@ export function matchGoogleLocation(
       ? extractDomain(location.website) === extractDomain(tenant.website)
       : false;
 
-  // Composite score. Gate 1.8 fix: when address is unavailable (Google's
-  // list call only returns name+title, not address/phone/website), the
-  // addressScore is 0 and the old weighting (name 70% + address 30%) made
-  // it impossible to reach the 80% threshold. Now: if address is unavailable,
-  // weight name at 100% (since it's the only signal). If address IS
-  // available, use the original 70/30 split.
+  // ── Phase 2: Weighted scoring (30/30/20/20) ──────────────────────────
+  // When a signal is unavailable, redistribute its weight proportionally
+  // across the remaining signals. This prevents a name-only match from
+  // scoring 100% (which was the old behavior — too permissive).
+  //
+  // Base weights:
+  //   name: 0.30, address: 0.30, phone: 0.20, website: 0.20
+  //
+  // If address is missing: name gets 0.50, phone 0.25, website 0.25
+  // If phone is missing: name gets 0.375, address 0.375, website 0.25
+  // If only name is available: name gets 1.0 (but requires ≥90% for VERIFIED)
   const hasAddress = !!(location.address && location.address.trim());
-  const nameWeight = hasAddress ? 0.7 : 1.0;
-  const addressWeight = hasAddress ? 0.3 : 0.0;
+  const hasPhone = !!(location.phone && tenant.phone);
+  const hasWebsite = !!(location.website && tenant.website);
 
-  let matchScore = nameScore * nameWeight + addressScore * addressWeight;
-  // Boost by 0.05 each if phone or website matches (evidence, not score change)
-  if (phoneMatch) matchScore = Math.min(1, matchScore + 0.05);
-  if (websiteMatch) matchScore = Math.min(1, matchScore + 0.05);
+  // Available signals + their base weights
+  const signals: Array<{ weight: number; score: number }> = [];
+  signals.push({ weight: 0.30, score: nameScore });
+  if (hasAddress) signals.push({ weight: 0.30, score: addressScore });
+  if (hasPhone) signals.push({ weight: 0.20, score: phoneMatch ? 1.0 : 0.0 });
+  if (hasWebsite) signals.push({ weight: 0.20, score: websiteMatch ? 1.0 : 0.0 });
+
+  // Redistribute weights proportionally
+  const totalWeight = signals.reduce((sum, s) => sum + s.weight, 0);
+  const matchScore =
+    totalWeight > 0
+      ? signals.reduce((sum, s) => sum + (s.score * s.weight) / totalWeight, 0)
+      : 0;
 
   return {
     locationId: location.locationId,
