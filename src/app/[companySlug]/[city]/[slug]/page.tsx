@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { permanentRedirect, notFound } from 'next/navigation'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import {
   Star,
@@ -854,15 +855,24 @@ export default async function PublicBusinessHubPage({
                     Auth state is resolved client-side via the shared Zustand
                     store (hydrated by MarketplaceHeader on mount) — the banner
                     renders `null` until auth state is known, then shows itself
-                    for non-owners. */}
-                <ClaimBusinessBanner
-                  tenantId={business.id}
-                  tenantName={business.name}
-                  tenantEmail={business.email}
-                  tenantCity={business.city}
-                  tenantState={business.state}
-                  isClaimed={!!business.claimed}
-                />
+                    for non-owners.
+
+                    Wrapped in <Suspense> because ClaimBusinessBanner uses
+                    useSearchParams() (to auto-open the modal when ?claim=true
+                    is in the URL). Next.js 14+ requires useSearchParams to be
+                    inside a Suspense boundary when the page uses ISR
+                    (revalidate=60) — otherwise the page deopts to dynamic
+                    rendering or throws a build error. */}
+                <Suspense fallback={null}>
+                  <ClaimBusinessBanner
+                    tenantId={business.id}
+                    tenantName={business.name}
+                    tenantEmail={business.email}
+                    tenantCity={business.city}
+                    tenantState={business.state}
+                    isClaimed={!!business.claimed}
+                  />
+                </Suspense>
 
                 {/* Booking CTA — rendering modes, kept consistent with
                     the marketplace browse grid's computeCardType() output:

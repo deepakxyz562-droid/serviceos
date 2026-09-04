@@ -79,6 +79,42 @@ export function ClaimBusinessBanner({
   const currentTenantId: string | null =
     (auth?.tenant as { id?: string } | null)?.id ?? null;
 
+  // ── Auto-open the claim modal when ?claim=true is in the URL ──────────
+  // This is used by the registration-time business match flow: when the user
+  // clicks "This is my business" on a match, they're redirected to the
+  // listing page with ?claim=true. This effect auto-opens the modal so they
+  // don't have to find + click the banner manually.
+  //
+  // CRITICAL: useSearchParams + useEffect MUST be called BEFORE any early
+  // returns. React requires ALL hooks to be called in the same order on
+  // every render. Previously these hooks were AFTER `if (!authHydrated) return null;`
+  // which meant they were never called on the first render (when authHydrated
+  // is false) → the auto-open effect never fired.
+  const searchParams = useSearchParams();
+  React.useEffect(() => {
+    // Wait for auth to hydrate before deciding what to open.
+    if (!authHydrated) return;
+    // Don't auto-open for the owner of the business.
+    if (currentTenantId === tenantId) return;
+    // Don't auto-open if the business is already claimed.
+    if (isClaimed) return;
+
+    const shouldAutoOpen = searchParams?.get('claim') === 'true';
+    if (shouldAutoOpen) {
+      if (isAuthenticated) {
+        setClaimOpen(true);
+      } else {
+        setSignInGateOpen(true);
+      }
+    }
+    // We intentionally don't strip the ?claim=true param from the URL here
+    // (unlike the ?view= param stripping in home-page-client.tsx) because
+    // this component is not the right place to manage history. The user
+    // can close the modal + the param stays — if they re-open it, the modal
+    // won't re-trigger because the effect only runs once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authHydrated]); // only run once when auth hydrates
+
   // While the auth state is still being fetched (header hasn't resolved
   // /api/auth/me yet), render nothing. The banner will appear once we know
   // for sure whether the visitor is the owner (hidden) or not (shown).
@@ -89,26 +125,6 @@ export function ClaimBusinessBanner({
 
   // Hide if the current user is the owner of this business
   if (currentTenantId === tenantId) return null;
-
-  // ── Auto-open the claim modal when ?claim=true is in the URL ──────────
-  // This is used by the registration-time business match flow: when the user
-  // clicks "This is my business" on a match, they're redirected to the
-  // listing page with ?claim=true. This effect auto-opens the modal so they
-  // don't have to find + click the banner manually.
-  // Runs once on mount (after auth is hydrated). Wrapped in useEffect so it
-  // doesn't re-open if the user closes it manually.
-  const searchParams = useSearchParams();
-  React.useEffect(() => {
-    const shouldAutoOpen = searchParams?.get('claim') === 'true';
-    if (shouldAutoOpen && !isClaimed) {
-      if (isAuthenticated) {
-        setClaimOpen(true);
-      } else {
-        setSignInGateOpen(true);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authHydrated]); // only run once when auth hydrates
 
   function handleClick() {
     if (isAuthenticated) {
