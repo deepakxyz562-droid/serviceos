@@ -135,9 +135,20 @@ export async function GET(request: NextRequest) {
         tokenReq.status,
         errText,
       );
+      let details = '';
+      try {
+        const parsedErr = JSON.parse(errText);
+        if (parsedErr.error_description) {
+          details = ` (${parsedErr.error_description})`;
+        } else if (parsedErr.error) {
+          details = ` (${parsedErr.error})`;
+        }
+      } catch {
+        // ignore
+      }
       return renderErrorPage(
-        `Google rejected the authorization code (HTTP ${tokenReq.status}). ` +
-          `This usually means the code expired or was already used — please reconnect.`,
+        `Google rejected the authorization code (HTTP ${tokenReq.status})${details}. ` +
+          `This usually means the code expired, was already used, or the page was refreshed. Please click Reconnect from your dashboard.`,
       );
     }
     tokenResponse = (await tokenReq.json()) as typeof tokenResponse;
@@ -157,7 +168,7 @@ export async function GET(request: NextRequest) {
   const tokenExpiry = tokenResponse.expires_in
     ? new Date(Date.now() + tokenResponse.expires_in * 1000)
     : null;
-  const scopes = tokenResponse.scope || cred.scopes || meta.scopes;
+  const scopes = tokenResponse.scope || cred?.scopes || meta.scopes;
 
   // ── 5. List GBP accounts ───────────────────────────────────────────────
   // Account Management API returns the GBP "accounts" the user has access
