@@ -96,7 +96,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: `${BRAND.name} - ${BRAND.tagline}`,
-    description: 'Replace scattered texts, emails, and spreadsheets with one powerful platform',
+    description: 'Fieseros is the all-in-one operating system for field service and trade businesses. CRM, scheduling, dispatch, invoicing, payments, marketplace, and 24/7 AI Receptionist.',
     type: 'website',
     siteName: BRAND.name,
     url: '/',
@@ -108,7 +108,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: `${BRAND.name} - ${BRAND.tagline}`,
-    description: 'Replace scattered texts, emails, and spreadsheets with one powerful platform',
+    description: 'Fieseros is the all-in-one operating system for field service and trade businesses. CRM, scheduling, dispatch, invoicing, payments, marketplace, and 24/7 AI Receptionist.',
     // Twitter image also auto-injected from opengraph-image.tsx.
   },
 };

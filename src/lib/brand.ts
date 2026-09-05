@@ -37,7 +37,7 @@ export const BRAND = {
 
   /** Short description for meta tags. */
   description:
-    'Fieseros — The Operating System for service businesses. Replace scattered texts, emails, and spreadsheets. Leads, dispatch, invoicing, and automated Email, SMS & Push operations.',
+    'Fieseros is the all-in-one operating system for field service and trade businesses. The platform combines CRM, scheduling, dispatch, invoicing, payments, a verified service-provider marketplace, and a 24/7 AI Receptionist for HVAC, plumbing, electrical, cleaning, and landscaping contractors.',
 
   /** Super-admin subdomain label (prepended to root domain). */
   adminSubdomain: 'admin',

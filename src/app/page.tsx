@@ -43,8 +43,16 @@ const AUTH_COOKIE = 'fieseros_session';
  */
 export const metadata: Metadata = {
   title: 'Fieseros — Build it. Grow it. Run it. | The Operating System for Service Businesses',
+  // SEO FIX: Revised meta description to lead with what Fieseros IS and DOES,
+  // not what it replaces. The previous description ("Replace scattered texts,
+  // emails, and spreadsheets...") was a value proposition/positioning statement,
+  // not a feature list. Google's AI Overview was categorizing that phrase
+  // under "Core Features" — which was misleading. The new description lists
+  // actual features (CRM, scheduling, dispatch, invoicing, payments,
+  // marketplace, AI Receptionist) + target industries, so Google's AI Overview
+  // accurately represents the platform's capabilities.
   description:
-    'Fieseros is the all-in-one operating system for service businesses. Replace scattered texts, emails, and spreadsheets with one platform for leads, dispatch, invoicing, and automated Email, SMS & Push notifications. Start free today.',
+    'Fieseros is the all-in-one operating system for field service and trade businesses. The platform combines CRM, scheduling, dispatch, invoicing, payments, a verified service-provider marketplace, and a 24/7 AI Receptionist for HVAC, plumbing, electrical, cleaning, and landscaping contractors.',
   keywords: [
     'field service software',
     'service business software',
@@ -63,7 +71,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Fieseros — Build it. Grow it. Run it. | The Operating System for Service Businesses',
     description:
-      'Replace scattered texts, emails, and spreadsheets with one powerful platform for leads, dispatch, invoicing, and automated notifications.',
+      'Fieseros is the all-in-one operating system for field service and trade businesses. CRM, scheduling, dispatch, invoicing, payments, marketplace, and 24/7 AI Receptionist for HVAC, plumbing, electrical, cleaning, and landscaping contractors.',
     url: '/',
     siteName: 'Fieseros',
     type: 'website',
@@ -73,7 +81,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Fieseros — Build it. Grow it. Run it. | The Operating System for Service Businesses',
     description:
-      'Replace scattered texts, emails, and spreadsheets with one powerful platform for service businesses.',
+      'Fieseros is the all-in-one operating system for field service and trade businesses. CRM, scheduling, dispatch, invoicing, payments, marketplace, and 24/7 AI Receptionist.',
     // Twitter image auto-injected from opengraph-image.tsx.
   },
   robots: {
