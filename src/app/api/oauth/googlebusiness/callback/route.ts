@@ -17,41 +17,18 @@ import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
  */
 export const dynamic = 'force-dynamic';
 
-/**
- * In-memory lock to prevent double-exchange of the same auth code.
- *
- * Google auth codes are SINGLE-USE. If the browser prefetches the callback
- * URL (which `force-dynamic` prevents) OR the user double-clicks, two
- * requests with the same code arrive within milliseconds. The first exchange
- * succeeds; the second gets "invalid_grant: Bad Request".
- *
- * This Set stores code hashes for 30 seconds. If a second request arrives
- * with the same code, we short-circuit + redirect to the dashboard (the
- * first request is already processing).
- *
- * Note: This is per-process — in a multi-instance deployment, each instance
- * has its own Set. But the most common double-fetch scenario (browser prefetch
- * + real navigation) hits the SAME instance, so this catches it.
- */
-const processedCodes = new Map<string, number>(); // codeHash → expiry timestamp
-const CODE_LOCK_TTL_MS = 30_000; // 30 seconds
-
-function isCodeAlreadyProcessed(code: string): boolean {
-  const now = Date.now();
-  // Clean up expired entries (prevent memory leak).
-  for (const [hash, expiry] of processedCodes) {
-    if (expiry < now) processedCodes.delete(hash);
-  }
-  // Simple hash (not crypto-secure — just for dedup). The code itself is
-  // already a secret, so we don't need to protect the hash.
-  const hash = code.slice(0, 16) + code.length;
-  return processedCodes.has(hash);
-}
-
-function markCodeAsProcessed(code: string): void {
-  const hash = code.slice(0, 16) + code.length;
-  processedCodes.set(hash, Date.now() + CODE_LOCK_TTL_MS);
-}
+// NOTE: The in-memory code-lock (processedCodes Map + isCodeAlreadyProcessed +
+// markCodeAsProcessed) was REMOVED because it caused a false-positive
+// "duplicate" redirect. The lock marked the code BEFORE the token exchange,
+// then when the exchange failed (invalid_grant), the fallback handler found
+// the code in the Map and redirected to duplicate=true — even though no
+// duplicate request had actually occurred.
+//
+// force-dynamic + Cache-Control: no-store already prevent the browser
+// prefetch/caching that the code-lock was trying to solve. If the token
+// exchange fails with invalid_grant AND a SocialAccount already exists,
+// we redirect to success (the first exchange worked). Otherwise we show
+// the actual Google error.
 
 /**
  * GET /api/oauth/googlebusiness/callback
@@ -128,31 +105,14 @@ export async function GET(request: NextRequest) {
     return renderErrorPage('CSRF validation failed — please reconnect.');
   }
 
-  // ── 2.5. Code-lock check: prevent double-exchange ─────────────────────
-  // Google auth codes are SINGLE-USE. If a second request arrives with the
-  // same code within 30 seconds (browser prefetch, double-click, refresh),
-  // short-circuit + redirect to the dashboard. The first request is already
-  // processing (or finished) — exchanging the code again would fail with
-  // "invalid_grant: Bad Request".
-  if (isCodeAlreadyProcessed(code)) {
-    console.log('[oauth/googlebusiness/callback] Code already processed — redirecting to dashboard (duplicate request)');
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.APP_URL ||
-      getAppUrlFromRequest(request);
-    const redirectUrl = new URL(
-      '/?view=verification&google=connected&duplicate=true',
-      appUrl,
-    );
-    const res = NextResponse.redirect(redirectUrl.toString());
-    res.cookies.delete('gbp_oauth_csrf');
-    // no-store to prevent any caching of this redirect (OAuth codes are sensitive).
-    res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    return res;
-  }
-  // Mark the code as "in progress" immediately. If a second request arrives
-  // while we're still exchanging, it'll be caught by the check above.
-  markCodeAsProcessed(code);
+  // NOTE: The code-lock (isCodeAlreadyProcessed / markCodeAsProcessed) was
+  // REMOVED because it caused a false-positive "duplicate" redirect. The
+  // lock marked the code BEFORE the token exchange, then when the exchange
+  // failed (invalid_grant), the fallback handler found the code in the Map
+  // and redirected to duplicate=true — even though no duplicate request
+  // had actually occurred. force-dynamic + Cache-Control: no-store already
+  // prevent browser prefetch/caching, which was the original problem the
+  // code-lock was trying to solve.
 
   // ── 3. Look up Google OAuth app credentials ────────────────────────────
   const cred = await db.integrationCredential.findFirst({
@@ -236,15 +196,21 @@ export async function GET(request: NextRequest) {
         // not JSON — keep the raw text
       }
 
-      // ── Fix 2: Handle "code already used" gracefully ──
+      // ── Handle "code already used" gracefully ──
       // Google auth codes are single-use. If the user refreshed the callback
       // page or the browser auto-retried, the code was already consumed by
       // the first request. Check if a SocialAccount was already created from
-      // a previous successful exchange — if so, redirect to the dashboard
-      // with success instead of showing an error.
+      // a previous successful exchange — if so, redirect to the verification
+      // dashboard with success instead of showing an error.
+      //
+      // NOTE: The code-lock (isCodeAlreadyProcessed) check was REMOVED here
+      // because it created a false positive: markCodeAsProcessed ran before
+      // the exchange, so the fallback always found the code in the Map →
+      // always redirected to duplicate=true. Now we ONLY check if a
+      // SocialAccount exists (the real indicator that a prior exchange
+      // succeeded).
       if (errorCode === 'invalid_grant' && state.tenantId) {
         try {
-          // Check 1: Does a SocialAccount already exist? (first exchange completed)
           const existingAccount = await db.socialAccount.findFirst({
             where: {
               tenantId: state.tenantId,
@@ -255,27 +221,10 @@ export async function GET(request: NextRequest) {
           });
           if (existingAccount) {
             // The first exchange worked — this is just a duplicate retry.
-            // Redirect to the dashboard with a success indicator.
+            // Redirect to the verification dashboard with success.
             console.log('[oauth/googlebusiness/callback] Code already used but SocialAccount exists — redirecting to success');
             const redirectUrl = new URL(
-              '/?view=verification&google=connected&duplicate=true',
-              appUrl,
-            );
-            const res = NextResponse.redirect(redirectUrl.toString());
-            res.cookies.delete('gbp_oauth_csrf');
-            res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-            return res;
-          }
-
-          // Check 2: Was the code already processed in this process?
-          // (The in-memory lock at the top should have caught it, but this
-          // catches the case where the first request is STILL in-flight —
-          // the SocialAccount hasn't been created yet, but the code is
-          // already consumed at Google.)
-          if (isCodeAlreadyProcessed(code)) {
-            console.log('[oauth/googlebusiness/callback] Code already processed (in-flight) — redirecting to dashboard');
-            const redirectUrl = new URL(
-              '/?view=verification&google=connected&duplicate=true',
+              '/?view=verification&google=connected',
               appUrl,
             );
             const res = NextResponse.redirect(redirectUrl.toString());
