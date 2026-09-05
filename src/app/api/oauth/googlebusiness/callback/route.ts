@@ -359,11 +359,10 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    // Phase 3: Fetch the admin list for this account to capture the user's
-    // access role (OWNER / CO_OWNER / MANAGER / etc.). Best-effort — if the
-    // API call fails, we proceed without the role (the verification service
-    // treats a missing role as "unknown").
-    const admins = await listGbpAdmins(accessToken, account.name);
+    // NOTE: listGbpAdmins was REMOVED from the OAuth callback to reduce API
+    // calls (was causing 429 rate limit). The admin role is NOT needed during
+    // the initial OAuth connection — it can be fetched later during the
+    // verification step (google-business-service.ts) if needed.
 
     for (const location of locations) {
       allFoundLocationNames.push(location.title || location.name);
@@ -378,8 +377,6 @@ export async function GET(request: NextRequest) {
           refreshToken,
           tokenExpiry,
           scopes,
-          // Phase 3: pass the admin list so the access role can be stored
-          admins,
         });
         createdAccounts.push({
           accountName: account.name,
@@ -504,30 +501,24 @@ export async function GET(request: NextRequest) {
  * Returns an array of { name: "accounts/123", accountName: "...", ... }.
  * The `name` field is the account's resource name — used as the parent
  * path for listing locations.
+ *
+ * Includes retry with exponential backoff for 429 (rate limit) errors.
+ * The Google Business Profile API has a strict per-minute quota — if the
+ * user tried multiple OAuth attempts, the quota may be exhausted.
  */
 async function listGbpAccounts(
   accessToken: string,
 ): Promise<Array<{ name: string; accountName: string }>> {
-  const res = await fetch(
+  return fetchWithRetry(
     'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
-    {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-      },
-    },
-  );
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(
-      `List GBP accounts failed (HTTP ${res.status}): ${text.slice(0, 300)}`,
-    );
-  }
-  const body = (await res.json()) as {
-    accounts?: Array<{ name: string; accountName: string }>;
-  };
-  return Array.isArray(body.accounts) ? body.accounts : [];
+    accessToken,
+    'List GBP accounts',
+  ).then(async (res) => {
+    const body = (await res.json()) as {
+      accounts?: Array<{ name: string; accountName: string }>;
+    };
+    return Array.isArray(body.accounts) ? body.accounts : [];
+  });
 }
 
 /**
@@ -539,6 +530,8 @@ async function listGbpAccounts(
  * `readMask` is REQUIRED by the Business Information API — without it
  * the API returns a 400. We only need `name` (resource path) + `title`
  * (human-readable name).
+ *
+ * Includes retry with exponential backoff for 429 (rate limit) errors.
  */
 async function listGbpLocations(
   accessToken: string,
@@ -548,23 +541,75 @@ async function listGbpLocations(
     `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations`,
   );
   url.searchParams.set('readMask', 'name,title');
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-    },
+  return fetchWithRetry(
+    url.toString(),
+    accessToken,
+    `List GBP locations for ${accountName}`,
+  ).then(async (res) => {
+    const body = (await res.json()) as {
+      locations?: Array<{ name: string; title: string }>;
+    };
+    return Array.isArray(body.locations) ? body.locations : [];
   });
-  if (!res.ok) {
+}
+
+/**
+ * Fetch helper with retry + exponential backoff for 429 (rate limit) errors.
+ *
+ * Google's Business Profile API has a strict per-minute quota. If the user
+ * tried multiple OAuth attempts, the quota may be exhausted. This helper:
+ *   1. Makes the fetch request
+ *   2. If 429: waits 2s, then 4s, then 8s (3 retries max)
+ *   3. If still 429 after 3 retries: throws a user-friendly error
+ *   4. If any other non-ok status: throws immediately (no retry)
+ *   5. If ok: returns the response
+ */
+async function fetchWithRetry(
+  url: string,
+  accessToken: string,
+  label: string,
+  maxRetries = 3,
+): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (res.ok) {
+      return res;
+    }
+
+    // If 429 (rate limit) and we have retries left → wait + retry
+    if (res.status === 429 && attempt < maxRetries) {
+      const backoffMs = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+      const text = await res.text().catch(() => '');
+      console.warn(
+        `[oauth/googlebusiness/callback] ${label} got 429 (attempt ${attempt + 1}/${maxRetries}). ` +
+          `Waiting ${backoffMs}ms before retry...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      continue;
+    }
+
+    // Non-429 error OR out of retries → throw with the actual error
     const text = await res.text().catch(() => '');
-    throw new Error(
-      `List GBP locations for ${accountName} failed (HTTP ${res.status}): ${text.slice(0, 300)}`,
-    );
+    if (res.status === 429) {
+      // Out of retries — user-friendly message
+      throw new Error(
+        `Google's Business Profile API rate limit exceeded. Please wait 1 minute and try again. ` +
+          `(Last response: ${text.slice(0, 200)})`,
+      );
+    }
+    throw new Error(`${label} failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
   }
-  const body = (await res.json()) as {
-    locations?: Array<{ name: string; title: string }>;
-  };
-  return Array.isArray(body.locations) ? body.locations : [];
+
+  throw lastError || new Error(`${label} failed after ${maxRetries} retries`);
 }
 
 /**
