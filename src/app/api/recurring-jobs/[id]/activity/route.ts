@@ -71,13 +71,16 @@ export async function GET(
     //     AND the manual /generate-now endpoint log under action='create',
     //     entityType='job', so both surface here.
     //
-    // We intentionally exclude other job actions (assign, status_change,
-    // update, etc.) — those are individual-Job concerns, surfaced on the
-    // Job detail page's lifecycle timeline, not on the schedule's audit tab.
+    // We also include job lifecycle events (status_change, assign, update)
+    // for generated jobs — the user expects to see "Job completed", "Job
+    // assigned", etc. in the recurring schedule's activity tab, not just
+    // "Job generated".
     const orClause = [
       { entityType: 'recurringJobSchedule', entityId: id },
       ...(generatedJobIds.length
-        ? [{ entityType: 'job', entityId: { in: generatedJobIds }, action: 'create' }]
+        ? [
+            { entityType: 'job', entityId: { in: generatedJobIds } },
+          ]
         : []),
     ];
 
