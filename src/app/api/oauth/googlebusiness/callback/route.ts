@@ -414,10 +414,41 @@ export async function GET(request: NextRequest) {
     `/?view=verification&google=connected${claimContext}`,
     appUrl,
   );
-  const res = NextResponse.redirect(redirectUrl.toString());
+  // CRITICAL: Return an HTML page with a JavaScript redirect instead of a
+  // NextResponse.redirect(). A 307 redirect is intercepted by the Service
+  // Worker (which treats it as a navigation request). The SW's fetch handler
+  // runs the callback (consuming the Google auth code), receives the 307,
+  // then FAILS to follow the redirect (returning an "offline" error).
+  // The user then refreshes → the code is already consumed → "Bad Request".
+  //
+  // An HTML page with window.location.replace() does a REPLACE navigation
+  // that the SW can't intercept (it replaces the current document, not
+  // triggering a new fetch event). This breaks the SW interception cycle.
+  const safeUrl = redirectUrl.toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/"/g, '&quot;');
+  const res = new NextResponse(
+    `<!html>
+<html><head><title>Redirecting...</title>
+<meta http-equiv="refresh" content="0; url=${safeUrl}">
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4}</style>
+</head>
+<body>
+<div style="text-align:center">
+<p style="color:#16a34a;font-size:18px;font-weight:600">✓ Google Business Profile connected!</p>
+<p style="color:#6b7280;font-size:14px">Redirecting to verification...</p>
+</div>
+<script>window.location.replace("${redirectUrl.toString()}");</script>
+</body></html>`,
+    {
+      headers: {
+        'Content-Type': 'text/html',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    },
+  );
   res.cookies.delete('gbp_oauth_csrf');
-  // no-store to prevent any caching of this redirect (OAuth codes are sensitive).
-  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   return res;
 }
 
