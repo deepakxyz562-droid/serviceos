@@ -285,7 +285,7 @@ export async function GET(request: NextRequest) {
   const tokenExpiry = tokenResponse.expires_in
     ? new Date(Date.now() + tokenResponse.expires_in * 1000)
     : null;
-  const scopes = tokenResponse.scope || cred.scopes || meta.scopes;
+  const scopes = tokenResponse.scope || cred?.scopes || meta.scopes;
 
   // ── 5. List GBP accounts ───────────────────────────────────────────────
   // Account Management API returns the GBP "accounts" the user has access
