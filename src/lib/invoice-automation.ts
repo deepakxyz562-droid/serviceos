@@ -517,6 +517,29 @@ export async function autoCreateInvoiceFromJob(
       // → estimatedDuration × rate, instead of a hard-coded $50/hr.
       const { amount: resolvedAmount, source: amountSource } = await resolveJobAmount(job)
 
+      // ── Skip auto-invoice for $0 jobs (recurring job fix) ──────────────
+      // When a recurring-generated job has no quotedAmount, no amountCollected,
+      // no line items, and no linked Service with basePrice, resolveJobAmount
+      // returns 0. Previously, the fallback to Service.basePrice would
+      // pull a catalog default (e.g. $2,324.86) even though the job's actual
+      // price is $0. Now: if the resolved amount is 0 AND there are no valid
+      // line items, skip the invoice creation entirely. The user can manually
+      // create an invoice later if needed.
+      if (resolvedAmount === 0) {
+        // Check if the job has any line items with non-zero prices
+        const parsedItems = safeParse(job.lineItemsJson, []) as unknown
+        const jobItems: Array<{ unitPrice?: number | string | null }> = Array.isArray(parsedItems)
+          ? (parsedItems as Array<{ unitPrice?: number | string | null }>)
+          : []
+        const hasNonZeroLineItem = jobItems.some((it) => Number(it.unitPrice) > 0)
+        if (!hasNonZeroLineItem) {
+          console.log(
+            `[InvoiceAutomation] Skipping auto-invoice for job ${job.id}: resolved amount is $0 and no line items with non-zero prices.`,
+          )
+          return { invoice: null, skipped: true, reason: 'zero_amount' }
+        }
+      }
+
       // ── BILLING-C Step 1: prefer the Job's actual line items ─────────
       // Previously this built a SINGLE summary line item with rate=resolvedAmount
       // (the quotedAmount / lead value / etc.), discarding the detailed line
@@ -589,6 +612,10 @@ export async function autoCreateInvoiceFromJob(
           jobId,
           customerId: invoiceCustomerId,
           employeeId: job.assigneeId || null,
+          // Stamp the recurring schedule ID if the job was generated from a
+          // recurring schedule — this lets the recurring job detail page's
+          // invoices API filter by this column.
+          recurringScheduleId: (job as { recurringScheduleId?: string | null }).recurringScheduleId || null,
           amount: subtotal,
           tax,
           discount: 0,
@@ -2297,4 +2324,3 @@ export async function detectAndEmitOverdueInvoices(): Promise<{ processed: numbe
 
   return { processed }
 }
-

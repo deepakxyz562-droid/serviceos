@@ -19,7 +19,7 @@
 //
 // No API, Prisma schema, or backend changes required.
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { RecurringJobsListPage } from '@/components/recurring/recurring-jobs-list-page';
 import { RecurringJobDetailPage } from '@/components/recurring/recurring-job-detail-page';
@@ -69,7 +69,7 @@ export function RecurringJobsView() {
   const goToDetail = (id: string) => setScreen({ name: 'detail', scheduleId: id });
   const goToCreate = () => setScreen({ name: 'create' });
   const goToEdit = (id: string) => setScreen({ name: 'edit', scheduleId: id });
-  const goToList = () => setScreen({ name: 'list' });
+  const goToList = useCallback(() => setScreen({ name: 'list' }), []);
 
   // ── Detail navigation ────────────────────────────────────────────────────
   // When a save completes: if we have the saved id → go to detail, else list.

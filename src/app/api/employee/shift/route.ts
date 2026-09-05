@@ -41,9 +41,14 @@ export async function GET() {
 
 /**
  * POST /api/employee/shift
- * Body: { latitude?, longitude? }
- * Clocks in: creates a new EmployeeShift with status='active'.
- * Returns 409 if there's already an active shift.
+ * Body: { action?: 'clock_in' | 'clock_out' | 'break_start' | 'break_end', latitude?, longitude? }
+ *
+ * Default (no action or action='clock_in'): Clocks in — creates a new EmployeeShift with status='active'.
+ * action='clock_out': Clocks out — completes the active shift.
+ * action='break_start': Starts a break — sets status to 'on_break'.
+ * action='break_end': Ends a break — sets status back to 'active'.
+ *
+ * Returns 409 if clocking in while already clocked in.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -57,20 +62,119 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No employee record linked to your account' }, { status: 404 });
     }
 
-    // Prevent duplicate active shifts
+    const body = await request.json().catch(() => ({}));
+    const action = body.action || 'clock_in';
+    const latitude = typeof body.latitude === 'number' ? body.latitude : null;
+    const longitude = typeof body.longitude === 'number' ? body.longitude : null;
+
+    // Find the current active/on_break shift
     const existing = await db.employeeShift.findFirst({
       where: {
         employeeId: employee.id,
         status: { in: ['active', 'on_break'] },
       },
+      orderBy: { clockIn: 'desc' },
     });
+
+    // ── Clock out ──────────────────────────────────────────────────────
+    if (action === 'clock_out' || action === 'clockout') {
+      if (!existing) {
+        return NextResponse.json({ error: 'No active shift to clock out from' }, { status: 404 });
+      }
+
+      const now = new Date();
+      const breaks = parseBreaks(existing.breaksJson);
+      // Close any open break
+      const openBreakIdx = breaks.findIndex((b) => !b.end);
+      if (openBreakIdx >= 0) {
+        breaks[openBreakIdx].end = now.toISOString();
+        breaks[openBreakIdx].durationMinutes = Math.max(
+          1,
+          Math.round((now.getTime() - new Date(breaks[openBreakIdx].start).getTime()) / 60000),
+        );
+      }
+
+      const clockInDate = new Date(existing.clockIn as unknown as string);
+      const totalMinutes = Math.max(1, Math.round((now.getTime() - clockInDate.getTime()) / 60000));
+      const breakMinutes = breaks.reduce((sum, b) => sum + (b.durationMinutes || 0), 0);
+      const workingMinutes = Math.max(0, totalMinutes - breakMinutes);
+
+      const updated = await db.employeeShift.update({
+        where: { id: existing.id },
+        data: {
+          status: 'completed',
+          clockOut: now,
+          clockOutLat: latitude,
+          clockOutLng: longitude,
+          breaksJson: JSON.stringify(breaks),
+          totalMinutes,
+          workingMinutes,
+          breakMinutes,
+        },
+      });
+
+      return NextResponse.json({ shift: updated });
+    }
+
+    // ── Start break ───────────────────────────────────────────────────
+    if (action === 'break_start' || action === 'break') {
+      if (!existing) {
+        return NextResponse.json({ error: 'No active shift to start a break from' }, { status: 404 });
+      }
+      if (existing.status === 'on_break') {
+        return NextResponse.json({ error: 'Already on break' }, { status: 400 });
+      }
+
+      const now = new Date();
+      const breaks = parseBreaks(existing.breaksJson);
+      breaks.push({ start: now.toISOString(), end: null, durationMinutes: 0, reason: 'manual' });
+      const updated = await db.employeeShift.update({
+        where: { id: existing.id },
+        data: {
+          status: 'on_break',
+          breaksJson: JSON.stringify(breaks),
+        },
+      });
+
+      return NextResponse.json({ shift: updated });
+    }
+
+    // ── End break (resume) ───────────────────────────────────────────
+    if (action === 'break_end' || action === 'resume') {
+      if (!existing) {
+        return NextResponse.json({ error: 'No active shift to resume' }, { status: 404 });
+      }
+      if (existing.status !== 'on_break') {
+        return NextResponse.json({ error: 'Not on break' }, { status: 400 });
+      }
+
+      const now = new Date();
+      const breaks = parseBreaks(existing.breaksJson);
+      const openIdx = [...breaks].reverse().findIndex((b) => !b.end);
+      if (openIdx >= 0) {
+        const realIdx = breaks.length - 1 - openIdx;
+        breaks[realIdx].end = now.toISOString();
+        breaks[realIdx].durationMinutes = Math.max(
+          1,
+          Math.round((now.getTime() - new Date(breaks[realIdx].start).getTime()) / 60000),
+        );
+      }
+      const updated = await db.employeeShift.update({
+        where: { id: existing.id },
+        data: {
+          status: 'active',
+          breaksJson: JSON.stringify(breaks),
+        },
+      });
+
+      return NextResponse.json({ shift: updated });
+    }
+
+    // ── Default: Clock in ─────────────────────────────────────────────
+    // Prevent duplicate active shifts
     if (existing) {
       return NextResponse.json({ error: 'Already clocked in', shift: existing }, { status: 409 });
     }
-
-    const body = await request.json().catch(() => ({}));
-    const latitude = typeof body.latitude === 'number' ? body.latitude : null;
-    const longitude = typeof body.longitude === 'number' ? body.longitude : null;
 
     const shift = await db.employeeShift.create({
       data: {
@@ -87,7 +191,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ shift });
   } catch (error) {
     console.error('[employee/shift POST] error:', error);
-    return NextResponse.json({ error: 'Failed to clock in' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to process shift action' }, { status: 500 });
   }
 }
 
