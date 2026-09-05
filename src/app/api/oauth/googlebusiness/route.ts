@@ -48,6 +48,22 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // ── 1.5. Read claim context (if coming from Claim Business) ──────────
+  // When the user clicks "Connect Google Business Profile" from the claim
+  // modal, the claimTenantId is passed as a query param. We include it in
+  // the OAuth state blob so the callback knows to store SocialAccount rows
+  // against the CLAIM TARGET tenant (not the user's own tenant).
+  // This is critical for the claim flow: the user's own tenant (e.g. a
+  // trial account) is different from the marketplace listing they're
+  // claiming. The Google connection must be stored against the listing's
+  // tenant so the match can compare Google data against the listing's
+  // business details.
+  const { searchParams } = new URL(request.url);
+  const claimTenantId = searchParams.get('claimTenantId');
+  // If claimTenantId is provided, use it as the target tenant for the OAuth
+  // flow. Otherwise, use the user's own tenantId (settings flow).
+  const targetTenantId = claimTenantId || tenantId;
+
   // ── 2. Look up Google OAuth app credentials ────────────────────────────
   // The IntegrationCredential table (superadmin-managed) holds platform
   // OAuth app credentials. We wrap this in try/catch because:
@@ -114,10 +130,17 @@ export async function GET(request: NextRequest) {
   const expires = Date.now() + 10 * 60 * 1000; // 10 min
   const state = Buffer.from(
     JSON.stringify({
-      tenantId,
+      tenantId: targetTenantId, // the target tenant (user's own OR claim target)
       userId: authUser.id,
       csrf,
       expires,
+      // Claim context: if this OAuth flow was started from the claim modal,
+      // include the claimTenantId + a flag so the callback knows the context.
+      context: claimTenantId ? 'CLAIM_BUSINESS' : 'SETTINGS_VERIFICATION',
+      claimTenantId: claimTenantId || null,
+      // Also store the user's own tenantId (for the claim flow, the user's
+      // own tenant is different from the target listing's tenant).
+      userTenantId: tenantId,
     }),
   ).toString('base64url');
 

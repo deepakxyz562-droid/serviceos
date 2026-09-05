@@ -339,72 +339,103 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Determine verification method + status ────────────────────────────
-    let verificationMethod: 'google' | 'document' | 'email';
+    // Phase 1 architecture: the old paste-URL Google verification (gbpUrl +
+    // gbpName + gbpAddress → 80% string match → auto_approved) has been
+    // REMOVED. It was a security weakness — the browser could submit
+    // fabricated Google data.
+    //
+    // The new flow: Google verification happens via OAuth → server-side match
+    // → VerificationEvidence. The claim request accepts a `verificationEvidenceId`
+    // (from the new Google verification service) + verifies it belongs to the
+    // claimant + the target tenant before accepting it.
+    //
+    // Manual fallback (no Google): goes to pending (admin review). Never
+    // auto-approved.
+    let verificationMethod: 'google' | 'document' | 'email' | 'manual';
     let verificationData: Record<string, unknown> = {};
     let status: 'pending' | 'auto_approved' = 'pending';
 
-    if (hasGoogle) {
+    if (body.verificationEvidenceId) {
+      // ── New OAuth-based Google verification ──
+      // The user completed the Google OAuth flow + the server matched their
+      // Google location against the marketplace listing. The evidence was
+      // created by /api/verification/google/match. We verify it here.
       verificationMethod = 'google';
-      const gbpUrl = String(google!.gbpUrl);
-      const gbpName = String(google!.gbpName);
-      const gbpAddress = String(google!.gbpAddress ?? '');
-
-      const nameScore = similarity(gbpName, tenant.name);
-      // Build the FULL tenant address for comparison — previously this only
-      // used [city, state, country], which dropped the street address and
-      // made the score artificially low (e.g. "76 Barrette Street" vs
-      // "Ottawa, ON, Canada" scored 0%). Now we include tenant.address +
-      // city + state + country so legitimate matches score realistically.
-      const tenantFullAddress = [
-        tenant.address,
-        tenant.city,
-        tenant.state,
-        tenant.country,
-      ]
-        .filter(Boolean)
-        .join(', ');
-      // Use addressSimilarity (with abbreviation expansion) so "St" matches
-      // "Street", "Ave" matches "Avenue", "WA" matches "Washington", etc.
-      const addressScore = addressSimilarity(gbpAddress, tenantFullAddress);
-      const matchScore = nameScore * 0.7 + addressScore * 0.3;
-
-      // ── Domain-match signal (Improvement D) ────────────────────────────
-      // EVIDENCE ONLY — does NOT modify matchScore. Per review direction:
-      // 'domain matching isn't proof of ownership. A domain could be expired,
-      // controlled by someone else, or unrelated to the actual claimant.'
-      // The admin sees this as a green/amber indicator in the review UI.
-      const domainMatch = computeDomainMatch({
-        claimantEmail,
-        businessWebsite: tenant.website,
-        gbpUrl,
+      const evidence = await db.verificationEvidence.findUnique({
+        where: { id: body.verificationEvidenceId },
+        select: {
+          id: true,
+          tenantId: true,
+          type: true,
+          status: true,
+          target: true,
+          metadata: true,
+          verifiedById: true,
+          createdAt: true,
+        },
       });
 
-      verificationData = {
-        gbpUrl,
-        gbpName,
-        gbpAddress,
-        tenantFullAddress,  // ← expose for admin UI side-by-side comparison
-        matchScore: Math.round(matchScore * 100) / 100,
-        nameScore: Math.round(nameScore * 100) / 100,
-        addressScore: Math.round(addressScore * 100) / 100,
-        // Domain-match signal (Improvement D) — evidence only, no score change
-        domainMatch: {
-          claimantDomain: domainMatch.claimantDomain,
-          websiteDomain: domainMatch.websiteDomain,
-          matchesWebsite: domainMatch.matchesWebsite,
-          signal: domainMatch.signal,
-          label: domainMatch.label,
-        },
+      if (!evidence) {
+        return NextResponse.json(
+          { error: 'Verification evidence not found. Please complete the Google verification first.' },
+          { status: 400 },
+        );
+      }
+
+      // SECURITY: verify the evidence belongs to THIS tenant (the claim target)
+      // + was created by the authenticated user. This prevents cross-tenant
+      // evidence attacks.
+      if (evidence.tenantId !== tenantId) {
+        return NextResponse.json(
+          { error: 'Verification evidence does not belong to this business.' },
+          { status: 403 },
+        );
+      }
+      if (evidence.type !== 'GOOGLE_BUSINESS') {
+        return NextResponse.json(
+          { error: 'Invalid evidence type. Expected GOOGLE_BUSINESS.' },
+          { status: 400 },
+        );
+      }
+
+      const evidenceMeta = JSON.parse(evidence.metadata || '{}') as {
+        matchScore?: number;
+        accessRole?: string;
       };
 
-      // Auto-approve if Google's listing closely matches our tenant record.
-      // Threshold stays at 80% — false-positive ownership claims are much
-      // more damaging than false negatives, so we keep this strict.
-      // NOTE: domainMatch is NOT factored into this decision — it's evidence
-      // for the admin, not an automatic signal.
-      if (matchScore >= 0.8) {
+      verificationData = {
+        evidenceId: evidence.id,
+        matchScore: evidenceMeta.matchScore ?? 0,
+        accessRole: evidenceMeta.accessRole ?? 'UNKNOWN',
+        googleLocationTitle: evidence.target,
+        verifiedAt: evidence.verifiedAt || evidence.createdAt,
+      };
+
+      // Auto-approve ONLY if the evidence is VERIFIED (≥90% match)
+      // AND the evidence was created by the current user.
+      if (evidence.status === 'VERIFIED') {
         status = 'auto_approved';
+      } else if (evidence.status === 'PENDING') {
+        // Medium match — goes to admin review
+        status = 'pending';
+      } else {
+        // REJECTED or EXPIRED — can't auto-approve
+        return NextResponse.json(
+          { error: `Google verification was not successful (status: ${evidence.status}). Please try again or use document verification.` },
+          { status: 400 },
+        );
       }
+    } else if (hasGoogle) {
+      // ── Manual verification fallback (NOT paste-URL) ──
+      // The old code accepted gbpUrl + gbpName + gbpAddress and auto-approved
+      // at 80% match. This is REMOVED. Now, the "Google" section in the claim
+      // modal is a manual fallback that goes to admin review.
+      verificationMethod = 'manual';
+      verificationData = {
+        note: String(google?.gbpUrl || '').replace(/^MANUAL_VERIFICATION:\s*/, ''),
+        type: 'manual_google_fallback',
+      };
+      status = 'pending'; // Manual verification NEVER auto-approves
     } else if (hasDocuments) {
       verificationMethod = 'document';
       verificationData = {

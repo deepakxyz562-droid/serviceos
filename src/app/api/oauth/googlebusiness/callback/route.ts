@@ -83,7 +83,15 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 2. Validate state ──────────────────────────────────────────────────
-  let state: { tenantId?: string; userId?: string; csrf?: string; expires?: number };
+  let state: {
+    tenantId?: string;
+    userId?: string;
+    csrf?: string;
+    expires?: number;
+    context?: string; // 'SETTINGS_VERIFICATION' | 'CLAIM_BUSINESS'
+    claimTenantId?: string | null;
+    userTenantId?: string;
+  };
   try {
     state = JSON.parse(Buffer.from(stateParam, 'base64url').toString());
   } catch {
@@ -285,7 +293,7 @@ export async function GET(request: NextRequest) {
   const tokenExpiry = tokenResponse.expires_in
     ? new Date(Date.now() + tokenResponse.expires_in * 1000)
     : null;
-  const scopes = tokenResponse.scope || cred?.scopes || meta.scopes;
+  const scopes = tokenResponse.scope || cred.scopes || meta.scopes;
 
   // ── 5. List GBP accounts ───────────────────────────────────────────────
   // Account Management API returns the GBP "accounts" the user has access
@@ -393,10 +401,17 @@ export async function GET(request: NextRequest) {
   // ── 7. Clear the CSRF cookie + redirect to dashboard ───────────────────
   // Redirect to / (root) with ?view=social-accounts — NOT /dashboard (which
   // doesn't exist as a route). The root page is the SPA shell; HomePageClient
-  // reads ?view=social-accounts from window.location.search and switches to
-  // the social-accounts view client-side.
+  // reads ?view=verification from window.location.search and switches to
+  // the verification view client-side.
+  //
+  // For the claim flow (context='CLAIM_BUSINESS'), include the claimTenantId
+  // in the redirect URL so the verification dashboard can show the location
+  // selection for the claim target (not the user's own tenant).
+  const claimContext = state.context === 'CLAIM_BUSINESS' && state.claimTenantId
+    ? `&claimTenantId=${state.claimTenantId}`
+    : '';
   const redirectUrl = new URL(
-    '/?view=verification&google=connected',
+    `/?view=verification&google=connected${claimContext}`,
     appUrl,
   );
   const res = NextResponse.redirect(redirectUrl.toString());

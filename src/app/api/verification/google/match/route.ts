@@ -10,11 +10,17 @@ import { recomputeMarketplaceEligibility } from '@/lib/verification/verification
  * The server performs the authoritative match against the tenant's business
  * details + creates a VerificationEvidence row.
  *
+ * SECURITY: The tenantId is ALWAYS taken from the authenticated user's session
+ * (authUser.tenantId). The client CANNOT supply a tenantId — this prevents
+ * cross-tenant verification attacks.
+ *
+ * For the Claim Business flow, the claim context is handled separately via
+ * the OAuth state blob + the claim request API (which verifies the evidence
+ * belongs to the claimant + the target tenant).
+ *
  * Body:
  *   {
- *     locationId: string,    — the Google location ID the user selected
- *     tenantId?: string,     — optional target tenant (for claim flow)
- *     claimId?: string,      — optional: if this is for a claim, link evidence
+ *     locationId: string    — the Google location ID the user selected
  *   }
  *
  * Response:
@@ -34,22 +40,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { locationId, tenantId, claimId } = body as {
-      locationId?: string;
-      tenantId?: string;
-      claimId?: string;
-    };
+    const { locationId } = body as { locationId?: string };
 
     if (!locationId) {
       return NextResponse.json({ error: 'locationId is required' }, { status: 400 });
     }
 
-    // Resolve the target tenant:
-    // - If tenantId is provided (claim flow), use it.
-    // - Otherwise, use the auth user's tenantId (settings flow).
-    const targetTenantId = tenantId || authUser.tenantId;
+    // SECURITY: always use the authenticated user's tenantId.
+    // Do NOT accept tenantId from the request body — that would allow
+    // cross-tenant verification attacks.
+    const targetTenantId = authUser.tenantId;
     if (!targetTenantId) {
-      return NextResponse.json({ error: 'Could not resolve target tenant' }, { status: 400 });
+      return NextResponse.json({ error: 'Could not resolve tenant' }, { status: 400 });
     }
 
     // Perform the server-side match
@@ -57,7 +59,7 @@ export async function POST(request: NextRequest) {
       targetTenantId,
       locationId,
       authUser.id,
-      claimId || null,
+      null, // claimId — not used in the settings flow; claim flow has its own evidence binding
     );
 
     // If verified, recompute marketplace eligibility (the evidence may change the trust level)

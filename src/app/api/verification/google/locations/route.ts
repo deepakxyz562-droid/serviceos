@@ -10,8 +10,9 @@ import { getConnectedLocations } from '@/lib/verification/google-business-servic
  * the user sees this list + selects which Google location matches their
  * Fieseros business.
  *
- * Query params:
- *   - tenantId: optional (defaults to the auth user's tenantId)
+ * SECURITY: The tenantId is ALWAYS taken from the authenticated user's session
+ * (authUser.tenantId). The client CANNOT supply a tenantId via query params.
+ * This prevents cross-tenant data access.
  *
  * Response:
  *   {
@@ -26,8 +27,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId') || authUser.tenantId;
+    // SECURITY: always use the authenticated user's tenantId.
+    // Do NOT accept tenantId from query params — that would allow cross-tenant access.
+    const tenantId = authUser.tenantId;
 
     if (!tenantId) {
       return NextResponse.json({ error: 'Could not resolve tenant' }, { status: 400 });

@@ -193,16 +193,91 @@ export async function matchLocation(
     accessRole?: string;
     admins?: Array<{ adminName: string; role: string }>;
   };
-  const googleLocation: GoogleLocation = {
+
+  // Fetch FULL Google location details (address, phone, website) via the
+  // Business Information API. The OAuth callback only stored name+title
+  // (readMask=name,title in the list call). To get a proper multi-signal
+  // match (name 30% + address 30% + phone 20% + website 20%), we need the
+  // full location details.
+  //
+  // GET https://mybusinessbusinessinformation.googleapis.com/v1/{locationName}
+  //   ?readMask=name,title,phoneNumbers,websiteUri,storefrontAddress
+  //
+  // We use the access token stored in the SocialAccount (encrypted — decrypt it).
+  // Best-effort: if the API call fails, we fall back to name-only matching.
+  let googleLocation: GoogleLocation = {
     locationId: socialAccount.accountId,
     title: socialAccount.accountName || meta.locationTitle || meta.locationName || '',
-    // Google's list call only returns name+title (readMask=name,title).
-    // To get address/phone/website, we'd need a separate GET per location.
-    // For now, match on name only — the matcher handles this (name-only ≥90% required).
     address: undefined,
     phone: undefined,
     website: undefined,
   };
+
+  try {
+    const { decryptToken } = await import('@/lib/social/crypto');
+    const accessToken = decryptToken(socialAccount.accessToken);
+    const locationResourceName = meta.locationName || '';
+    if (accessToken && locationResourceName) {
+      const detailUrl = new URL(
+        `https://mybusinessbusinessinformation.googleapis.com/v1/${locationResourceName}`,
+      );
+      detailUrl.searchParams.set(
+        'readMask',
+        'name,title,phoneNumbers,websiteUri,storefrontAddress',
+      );
+      const detailRes = await fetch(detailUrl.toString(), {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      });
+      if (detailRes.ok) {
+        const detail = (await detailRes.json()) as {
+          title?: string;
+          phoneNumbers?: Array<{ phoneNumber?: string }>;
+          websiteUri?: string;
+          storefrontAddress?: {
+            addressLines?: string[];
+            locality?: string;
+            administrativeArea?: string;
+            country?: string;
+          };
+        };
+        // Build the address from storefrontAddress
+        const addrParts: string[] = [];
+        if (detail.storefrontAddress?.addressLines) {
+          addrParts.push(...detail.storefrontAddress.addressLines);
+        }
+        if (detail.storefrontAddress?.locality) {
+          addrParts.push(detail.storefrontAddress.locality);
+        }
+        if (detail.storefrontAddress?.administrativeArea) {
+          addrParts.push(detail.storefrontAddress.administrativeArea);
+        }
+        if (detail.storefrontAddress?.country) {
+          addrParts.push(detail.storefrontAddress.country);
+        }
+        googleLocation = {
+          locationId: socialAccount.accountId,
+          title: detail.title || googleLocation.title,
+          address: addrParts.join(', ') || undefined,
+          phone: detail.phoneNumbers?.[0]?.phoneNumber || undefined,
+          website: detail.websiteUri || undefined,
+        };
+        console.log('[google-business-service] Fetched full location details:', {
+          hasAddress: !!googleLocation.address,
+          hasPhone: !!googleLocation.phone,
+          hasWebsite: !!googleLocation.website,
+        });
+      } else {
+        console.warn(`[google-business-service] Could not fetch location details (HTTP ${detailRes.status}) — falling back to name-only match`);
+      }
+    }
+  } catch (err) {
+    // Non-blocking — fall back to name-only match
+    console.warn('[google-business-service] Failed to fetch location details:', err);
+  }
 
   // 4. Run the server-side match
   const tenantAnchor: TenantAnchor = {
