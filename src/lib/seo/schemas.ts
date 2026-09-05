@@ -12,12 +12,32 @@ const SITE_URL = "https://fieseros.com";
 const LOGO_URL = `${SITE_URL}/icon-512.png`;
 
 // ─── Organization schema (site-wide, injected in root layout) ────────────────
+//
+// Brand-entity signals (SEO fix for "Did you mean: fiesteros" spell-check):
+//   Google's spell-check was suggesting "fiesteros" (a real Spanish word for
+//   "partygoers") when users searched "Fieseros". This happens because:
+//     1. "fiesteros" has higher search volume than the brand "Fieseros"
+//     2. The brand is new (founded 2024) with low brand-name search volume
+//     3. Google's Knowledge Graph couldn't confidently verify the entity
+//
+//   Two fixes applied here to strengthen brand-entity recognition:
+//     A. `alternateName` — tells Google the brand is also known as "Fieseros
+//        CRM" / "Fieseros Software", reinforcing the exact spelling.
+//     B. Removed the WRONG GitHub `sameAs` link (was pointing to a personal
+//        profile `deepakxyz562-droid`, not a Fieseros org page). A wrong
+//        sameAs link actively HURTS entity verification — Google follows the
+//        link, sees a different name, and loses confidence in the brand.
+//        When a Fieseros GitHub org is created, add it back.
 
 export function getOrganizationSchema() {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "Fieseros",
+    // alternateName helps Google's Knowledge Graph understand the brand's
+    // aliases + reinforces the exact spelling. Prevents spell-check from
+    // suggesting "fiesteros" (the Spanish word).
+    alternateName: "Fieseros CRM",
     url: SITE_URL,
     logo: LOGO_URL,
     description:
@@ -25,10 +45,14 @@ export function getOrganizationSchema() {
     foundingDate: "2024",
     // P2-2 (SEO): sameAs links Google's Knowledge Graph to our social profiles.
     // This consolidates entity identity and enables knowledge panel features.
+    //
+    // IMPORTANT: every sameAs URL MUST point to a profile that uses the EXACT
+    // brand name "Fieseros". A mismatched profile (e.g. a personal GitHub)
+    // weakens entity verification. Removed the GitHub link until a proper
+    // github.com/fieseros org page exists.
     sameAs: [
       "https://twitter.com/fieseros",
       "https://www.linkedin.com/company/fieseros",
-      "https://github.com/deepakxyz562-droid",
       "https://www.youtube.com/@fieseros",
       "https://www.facebook.com/fieseros",
     ],
