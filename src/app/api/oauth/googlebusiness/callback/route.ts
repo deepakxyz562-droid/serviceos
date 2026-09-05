@@ -69,6 +69,12 @@ export const dynamic = 'force-dynamic';
  *     top-level Google→callback redirect.
  */
 export async function GET(request: NextRequest) {
+  // Top-level catch — any unhandled error in the callback MUST be caught
+  // and shown as an error page. If the callback crashes with HTTP 500,
+  // the Google auth code is consumed but the user sees a blank error page
+  // (or the SW intercepts the 500 response). This catch ensures the user
+  // always sees a meaningful error message.
+  try {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const stateParam = searchParams.get('state');
@@ -298,7 +304,27 @@ export async function GET(request: NextRequest) {
   // ── 5. List GBP accounts ───────────────────────────────────────────────
   // Account Management API returns the GBP "accounts" the user has access
   // to (one per business group / chain / individual business).
-  const accounts = await listGbpAccounts(accessToken);
+  //
+  // CRITICAL: This call can FAIL with 403 if the Google Business Profile API
+  // is not enabled for this OAuth client, or if the user's Google account
+  // doesn't have GBP access. We MUST catch this error and show a proper error
+  // page — otherwise the callback crashes with HTTP 500 (which consumes the
+  // auth code but doesn't show the user what went wrong).
+  let accounts: Array<{ name: string; accountName: string }> = [];
+  try {
+    accounts = await listGbpAccounts(accessToken);
+  } catch (apiErr) {
+    console.error('[oauth/googlebusiness/callback] listGbpAccounts failed:', apiErr);
+    const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
+    return renderErrorPage(
+      `We connected to your Google account but couldn't access your Google Business Profile accounts.\n\n` +
+      `This usually means the Google Business Profile API is not enabled for this OAuth client, ` +
+      `or your Google account doesn't have Business Profile access.\n\n` +
+      `Error: ${apiErr instanceof Error ? apiErr.message : String(apiErr)}\n\n` +
+      `Click "Try again" to reconnect, or contact support if the problem persists.`,
+      retryUrl,
+    );
+  }
   if (accounts.length === 0) {
     const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
     return renderErrorPage(
@@ -450,6 +476,22 @@ export async function GET(request: NextRequest) {
   );
   res.cookies.delete('gbp_oauth_csrf');
   return res;
+  } catch (topErr) {
+    // Top-level catch — any unhandled error in the callback.
+    // This prevents HTTP 500 (which consumes the auth code silently).
+    console.error('[oauth/googlebusiness/callback] FATAL unhandled error:', topErr);
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.APP_URL ||
+      getAppUrlFromRequest(request);
+    const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
+    return renderErrorPage(
+      `An unexpected error occurred during the Google Business Profile connection.\n\n` +
+      `Error: ${topErr instanceof Error ? topErr.message : String(topErr)}\n\n` +
+      `Click "Try again" to start a fresh connection.`,
+      retryUrl,
+    );
+  }
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
