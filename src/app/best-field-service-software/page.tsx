@@ -34,6 +34,7 @@ import { CtaSection } from "@/components/seo/cta-section";
 import {
   getSoftwareApplicationSchema,
   getItemListSchema,
+  getFaqSchema,
 } from "@/lib/seo/schemas";
 
 // ─── E-E-A-T: Author + last updated ─────────────────────────────────────────
@@ -638,6 +639,15 @@ export default function BestFieldServiceSoftwarePage() {
     })),
   });
 
+  // SEO: Inject FAQPage JSON-LD alongside SoftwareApplication + ItemList.
+  // Note: Google's March 2023 policy restricts FAQ rich results to
+  // "authoritative government and health websites" — commercial comparison
+  // pages won't get the rich accordion snippet. However, the FAQPage schema
+  // still helps Google understand the page's Q&A structure and can improve
+  // relevance matching. The `faqs` array is already rendered as a visible
+  // FAQ section (line ~1163) — this just mirrors it into structured data.
+  const faqSchema = getFaqSchema(faqs);
+
   return (
     <CornerstoneLayout
       activePath="/best-field-service-software"
@@ -646,7 +656,7 @@ export default function BestFieldServiceSoftwarePage() {
         { name: "Compare", url: "https://fieseros.com/jobber-alternatives" },
         { name: "Best Field Service Software", url: "https://fieseros.com/best-field-service-software" },
       ]}
-      additionalSchema={[appSchema, itemListSchema]}
+      additionalSchema={[appSchema, itemListSchema, faqSchema]}
     >
       <CornerstoneHero
         eyebrow="Best Of 2026"

@@ -499,7 +499,12 @@ export default async function PublicBusinessHubPage({
   const breadcrumbItems = [
     { name: 'Home', url: '/' },
     { name: 'Marketplace', url: marketplaceBackUrl },
-    { name: business.industry || 'Service', url: industryBrowseUrl },
+    // SEO FIX (casing): use getIndustryDisplayName() instead of the raw DB
+    // value (which is lowercase "hvac"). This produces "HVAC" / "Plumbing" /
+    // "Pest Control" — the correct Title Case form for breadcrumbs + keyword
+    // readability. Zero URL/canonical/title impact — only the visible
+    // breadcrumb text + BreadcrumbList JSON-LD `name` field change.
+    { name: getIndustryDisplayName(business.industry) || 'Service', url: industryBrowseUrl },
     { name: business.city || 'Area', url: cityBrowseUrl },
     { name: business.name, url: business.canonicalUrl },
   ]

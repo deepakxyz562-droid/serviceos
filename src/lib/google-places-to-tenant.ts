@@ -125,6 +125,19 @@ export function parseAddress(
 /** Slugify a business name for use in URLs. */
 function slugifyName(name: string): string {
   return name
+    // NFD decomposition + combining-mark stripping (see slugifyCity for details)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    // European ligatures that NFD doesn't decompose
+    .replace(/ß/g, 'ss')
+    .replace(/[ðÐĐđ]/g, 'd')
+    .replace(/[þÞ]/g, 'th')
+    .replace(/[æÆ]/g, 'ae')
+    .replace(/[œŒ]/g, 'oe')
+    .replace(/[øØ]/g, 'o')
+    .replace(/[åÅ]/g, 'a')
+    .replace(/[łŁ]/g, 'l')
+    .replace(/ı/g, 'i')
     .toLowerCase()
     .trim()
     .replace(/[''`]/g, '')

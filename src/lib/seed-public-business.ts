@@ -272,11 +272,26 @@ export async function seedPublicBusinessForTenant(
     const industry = options.industry || 'Plumbing'
     const city = options.city || 'Dallas'
     const state = options.state || 'TX'
-    let slug = businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    let slug = businessName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/ß/g, 'ss')
+      .replace(/[ðÐĐđ]/g, 'd')
+      .replace(/[þÞ]/g, 'th')
+      .replace(/[æÆ]/g, 'ae')
+      .replace(/[œŒ]/g, 'oe')
+      .replace(/[øØ]/g, 'o')
+      .replace(/[åÅ]/g, 'a')
+      .replace(/[łŁ]/g, 'l')
+      .replace(/ı/g, 'i')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
     // Ensure unique slug
+    const baseSlug = slug
     let counter = 1
     while (await db.tenant.findUnique({ where: { slug } })) {
-      slug = `${businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${counter}`
+      slug = `${baseSlug}-${counter}`
       counter++
     }
     tenant = await db.tenant.create({

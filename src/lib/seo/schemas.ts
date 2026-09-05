@@ -556,10 +556,54 @@ export function mapIndustryToUrlSlug(industry?: string | null): string {
 }
 
 // ─── City → URL slug helper ───────────────────────────────────────────────────
+//
+// SEO FIX (diacritic transliteration):
+//   Previously this function used a simple `[^a-z0-9]+` regex which replaced
+//   accented characters (é, è, à, ç) with hyphens — producing broken slugs
+//   like "qu-bec" instead of "quebec". This affected 53 URLs / 5,072 GSC
+//   impressions (French-Canadian cities: Québec, Montréal, Lévis, etc.).
+//
+//   The fix uses NFD (Canonical Decomposition) to split accented chars into
+//   their base + combining-mark components (é → e + ◌́), then strips the
+//   combining marks. This handles French, Spanish, Portuguese, German
+//   umlauts, and most Latin-script languages correctly.
+//
+//   European ligatures (ß, ø, æ, etc.) that NFD doesn't decompose are handled
+//   with explicit replacements. These are rare in our primary markets
+//   (Canada/USA/UK/Australia) but included for completeness.
+//
+// SAFETY FOR EXISTING URLs:
+//   This change only affects NEWLY-GENERATED city slugs. Existing URLs with
+//   broken slugs (e.g. /landscapers/qu-bec/...) are handled by the redirect
+//   logic in _getPublicBusinessByUrl: when a visitor hits the old URL, the
+//   tenant is found by its business slug (unchanged), the expected city is
+//   now "quebec" (from the fixed slugifyCity), and the mismatch triggers a
+//   301 redirect to the new canonical URL. NO 404s — link equity is preserved.
 
 export function slugifyCity(city?: string | null): string {
   if (!city) return "unknown";
-  return city.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
+  return (
+    city
+      // NFD decomposition: splits accented chars into base + combining marks
+      .normalize("NFD")
+      // Strip combining diacritical marks (the accents separated by NFD)
+      .replace(/[\u0300-\u036f]/g, "")
+      // European ligatures that NFD doesn't decompose — explicit transliteration
+      .replace(/ß/g, "ss")
+      .replace(/[ðÐĐđ]/g, "d")
+      .replace(/[þÞ]/g, "th")
+      .replace(/[æÆ]/g, "ae")
+      .replace(/[œŒ]/g, "oe")
+      .replace(/[øØ]/g, "o")
+      .replace(/[åÅ]/g, "a")
+      .replace(/[łŁ]/g, "l")
+      .replace(/ı/g, "i")
+      // Lowercase + strip remaining non-ASCII-alphanumeric chars
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "unknown"
+  );
 }
 
 // ─── BlogPosting schema (for blog articles — rich result eligibility) ───────

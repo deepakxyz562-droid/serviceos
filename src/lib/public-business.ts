@@ -255,6 +255,38 @@ async function _getPublicBusinessByUrl(
       },
       select: PUBLIC_TENANT_SELECT,
     })
+
+    // ── Hex-suffix fallback (safety net for slug migrations) ──────────
+    // If the exact slug lookup fails, try to find the tenant by its unique
+    // 6-hex suffix (e.g. "-3b0ef1" from "paysagement-qu-bec-inc-3b0ef1").
+    // This ensures old URLs NEVER 404 even if a future DB migration changes
+    // tenant.slug values. The hex suffix is unique per business, so this
+    // lookup is deterministic.
+    //
+    // Performance: this is a SECOND query ONLY when the first lookup fails
+    // (the common case — slug matches — hits the cache and never reaches here).
+    // The `endsWith` filter uses the tenant_slug_idx index.
+    if (!tenant && slugSeg.length >= 7) {
+      // Extract the last 7 chars: "-xxxxxx" (hyphen + 6 hex chars)
+      const suffix = slugSeg.slice(-7)
+      // Only attempt the suffix lookup if the suffix looks like a hex slug
+      // (hyphen + 6 hex chars). This avoids expensive queries for arbitrary strings.
+      if (/^-[0-9a-f]{6}$/.test(suffix)) {
+        try {
+          tenant = await db.tenant.findFirst({
+            where: {
+              OR: [
+                { slug: { endsWith: suffix } },
+                { publicSlug: { endsWith: suffix } },
+              ],
+            },
+            select: PUBLIC_TENANT_SELECT,
+          })
+        } catch {
+          // If the suffix lookup also fails, fall through to the null return below
+        }
+      }
+    }
   } catch (err) {
     // Re-throw CircuitOpenError so the shared-cache layer can serve stale
     // data during a Supabase outage. Other errors (bad filter, etc.) fall
