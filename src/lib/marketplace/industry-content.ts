@@ -1023,7 +1023,7 @@ function detectSubIndustry(
 
 const GENERIC_CONTENT: IndustryContent = {
   aboutParagraph: (city, _country) =>
-    `Hiring a trusted local service provider in ${city} is a decision worth doing carefully — the right contractor saves you time, money, and stress, while the wrong one can leave you with shoddy work, surprise charges, and property damage. Professional service businesses handle installation, repair, maintenance, and consultation work across their trade. When comparing providers, verify they hold any required state or local licences for their industry, carry liability insurance (and workers’ comp if they have employees), and provide a written estimate before any work begins. Watch for red flags: cash-only payments, refusal to provide a written quote, pressure to decide on the spot, or contractors who want to skip permits. Fieseros lists service businesses serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
+    `Hiring a local service provider in ${city} is a decision worth doing carefully — the right contractor saves you time, money, and stress, while the wrong one can leave you with shoddy work, surprise charges, and property damage. Professional service businesses handle installation, repair, maintenance, and consultation work across their trade. When comparing providers, verify they hold any required state or local licences for their industry, carry liability insurance (and workers’ comp if they have employees), and provide a written estimate before any work begins. Watch for red flags: cash-only payments, refusal to provide a written quote, pressure to decide on the spot, or contractors who want to skip permits. Fieseros lists service businesses serving ${city}, with verification status visible on each profile so you can quickly filter for providers whose identity, business, insurance, and licensing have been independently checked.`,
   hiringChecklist: [
     {
       title: 'Verify state / local licence',
@@ -1356,6 +1356,62 @@ export function isTemplatedDescription(description: string | null | undefined): 
   // Match any 2 of the 5 template signals → templated.
   const matches = TEMPLATE_SIGNALS.filter((re) => re.test(trimmed)).length
   return matches >= 2
+}
+
+// ── Render-time seoDescription normalization ─────────────────────────────────
+//
+// WHY THIS EXISTS (and why it's render-time, not a DB migration):
+//   The Google Places seed importer (src/lib/google-places-to-tenant.ts:297)
+//   previously generated seoDescription values containing the phrase
+//   "Book trusted local professionals for quality workmanship and transparent
+//   pricing." For an unclaimed/unverified business, the word "trusted" can
+//   imply Fieseros has independently verified that business — which is not
+//   the case until the owner claims + completes verification.
+//
+//   The generator has been updated to emit "Book local professionals" for
+//   NEW imports (see google-places-to-tenant.ts). But thousands of EXISTING
+//   businesses in the DB still have the old "trusted" wording in their
+//   seoDescription field.
+//
+//   Rather than running a bulk UPDATE across all those rows (which would
+//   simultaneously change the rendered meta description of thousands of
+//   already-indexed URLs — an unnecessary ranking variable), we normalize
+//   at render time. This:
+//     - Leaves the database untouched (zero migration risk)
+//     - Only affects the <meta name="description"> tag output
+//     - Is a pure string transform — no semantic change to the page
+//     - Can be removed later once a DB migration is deemed worthwhile
+//
+//   The normalization is deliberately NARROW: it only matches the exact
+//   boilerplate phrase "Book trusted local professionals" and replaces it
+//   with "Book local professionals". It does NOT blanket-replace every
+//   occurrence of "trusted" — if a business owner wrote "trusted" in their
+//   own authored description, that's their choice and we respect it.
+//   (Owner-authored descriptions are not run through this function —
+//   see the call site in [companySlug]/[city]/[slug]/page.tsx, which only
+//   normalizes business.seoDescription, not tagline/description.)
+//
+// SAFETY: This is a strict substring replacement. It cannot change the
+// meaning of the description — only remove one adjective from one
+// boilerplate phrase. Google's understanding of the page (HVAC + city +
+// business name) is unaffected.
+
+const TRUSTED_PROFESSIONALS_RE = /Book trusted local professionals/g
+
+/**
+ * Normalize an auto-generated seoDescription by removing the "trusted"
+ * adjective from the boilerplate "Book trusted local professionals" phrase.
+ *
+ * Safe to call on any string — returns the input unchanged if the phrase
+ * is not present. Returns null/empty unchanged.
+ *
+ * Only apply this to the `seoDescription` field (which may contain the
+ * auto-generated boilerplate). Do NOT apply to owner-authored `tagline`
+ * or `description` fields — those are the business owner's own words.
+ */
+export function normalizeSeoDescription(description: string | null | undefined): string | null | undefined {
+  if (!description) return description
+  return description.replace(TRUSTED_PROFESSIONALS_RE, 'Book local professionals')
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────

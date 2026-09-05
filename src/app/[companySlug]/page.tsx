@@ -101,7 +101,7 @@ export async function generateMetadata({
   const industrySingularName = getIndustryDisplayName(industryId);
 
   const title = `${industryPluralName} — Find Verified ${industrySingularName} Businesses | Fieseros`;
-  const description = `Browse verified ${industryPluralName.toLowerCase()} across all cities on the Fieseros Marketplace. Compare ratings, reviews, and service areas. Book instantly or request a quote from trusted ${industrySingularName.toLowerCase()} professionals.`;
+  const description = `Browse verified ${industryPluralName.toLowerCase()} across all cities on the Fieseros Marketplace. Compare ratings, reviews, and service areas. Book instantly or request a quote from local ${industrySingularName.toLowerCase()} professionals.`;
   const appUrl = getAppUrl();
   const canonicalPath = `/${companySlug}`;
   const canonicalUrl = `${appUrl}${canonicalPath}`;
@@ -361,7 +361,7 @@ export default async function IndustryHubPage({
             <p className="mt-3 text-base text-muted-foreground max-w-3xl leading-relaxed">
               Browse verified {industryPluralName.toLowerCase()} across all cities on the Fieseros
               Marketplace. Compare ratings, reviews, and service areas. Book instantly or request a
-              quote from trusted {industrySingularName.toLowerCase()} professionals.
+              quote from local {industrySingularName.toLowerCase()} professionals.
             </p>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">

@@ -264,6 +264,16 @@ export function getLocalBusinessSchema(opts: {
   openingHours?: LocalBusinessHours[];
   priceRange?: string;     // "$", "$$", "$$$"
   sameAs?: string[];       // social links
+  /**
+   * Business coordinates for the `geo` JSON-LD property (GeoCoordinates).
+   * MUST be a valid (latitude, longitude) pair — pass undefined if either
+   * coordinate is missing. Never emit partial coordinates (latitude without
+   * longitude, or vice versa) — that produces invalid structured data.
+   *
+   * Per the SEO review: do NOT fabricate coordinates from the address. Only
+   * emit geo when the business has real geocoded lat/long on the Tenant row.
+   */
+  geo?: { latitude: number; longitude: number };
 }) {
   // Map industry string → schema.org @type (falls back to LocalBusiness)
   const industryType = mapIndustryToSchemaType(opts.industry);
@@ -338,6 +348,25 @@ export function getLocalBusinessSchema(opts: {
     name: "Fieseros",
     url: SITE_URL,
   };
+
+  // Geo coordinates — only emit when BOTH latitude and longitude are valid
+  // numbers. Per the SEO review: do NOT emit partial coordinates (lat without
+  // lng or vice versa), and do NOT fabricate coordinates from the address.
+  // Businesses without geocoded coords simply have no `geo` property — that's
+  // fine; the rest of the schema (address, etc.) still describes the location.
+  if (
+    opts.geo &&
+    typeof opts.geo.latitude === 'number' &&
+    !Number.isNaN(opts.geo.latitude) &&
+    typeof opts.geo.longitude === 'number' &&
+    !Number.isNaN(opts.geo.longitude)
+  ) {
+    schema.geo = {
+      "@type": "GeoCoordinates",
+      latitude: opts.geo.latitude,
+      longitude: opts.geo.longitude,
+    };
+  }
 
   return schema;
 }

@@ -76,7 +76,7 @@ import {
   getIndustrySoftwareLabel,
   getIndustryDisplayName,
 } from '@/lib/seo/industry-software-pages'
-import { getIndustryPlatformFaqs, getResolvedIndustryDisplayName } from '@/lib/marketplace/industry-content'
+import { getIndustryPlatformFaqs, getResolvedIndustryDisplayName, normalizeSeoDescription } from '@/lib/marketplace/industry-content'
 import {
   QuickFacts,
   AboutIndustryInCity,
@@ -134,8 +134,15 @@ export async function generateMetadata({
   const title =
     business.seoTitle ||
     `${business.name} — ${business.industry || 'Service'} in ${business.city || 'Your Area'} | Fieseros`
+  // SEO-1 (review fix): Normalize the auto-generated seoDescription at render
+  // time to remove the "trusted" adjective from the boilerplate phrase
+  // "Book trusted local professionals". This is a render-time transform only
+  // — the DB value is left untouched (no bulk migration, no ranking variable).
+  // Only business.seoDescription is normalized; the tagline/description
+  // fallbacks are owner-authored and left as-is.
+  // See src/lib/marketplace/industry-content.ts → normalizeSeoDescription.
   const description =
-    business.seoDescription ||
+    (business.seoDescription ? normalizeSeoDescription(business.seoDescription) : null) ||
     business.tagline ||
     business.description?.slice(0, 155) ||
     `Book ${business.name} online. ${business.industry || 'Service'} business in ${business.city || 'your area'}.`
@@ -387,6 +394,15 @@ export default async function PublicBusinessHubPage({
     reviews: localBusinessReviews,
     openingHours: openingHours.length > 0 ? openingHours : undefined,
     sameAs: Object.values(socialLinks).filter(Boolean),
+    // SEO-3 (review fix): emit GeoCoordinates when the business has real
+    // geocoded lat/long. Only pass the object when BOTH coords are present
+    // — getLocalBusinessSchema itself guards against NaN/partial values,
+    // but we short-circuit here too so we don't construct a `{latitude: null}`
+    // object that would fail the type check. Never fabricated from address.
+    geo:
+      typeof business.latitude === 'number' && typeof business.longitude === 'number'
+        ? { latitude: business.latitude, longitude: business.longitude }
+        : undefined,
   })
 
   // ── FAQ schema (claimed listings only) ──────────────────────────────────

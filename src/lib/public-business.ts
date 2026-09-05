@@ -75,6 +75,14 @@ const PUBLIC_TENANT_SELECT = {
   emergencyServiceAvailable: true,
   googlePlaceId: true,
   website: true,
+  // SEO-3 (review fix): expose latitude/longitude so the business profile
+  // page can emit GeoCoordinates in the LocalBusiness JSON-LD. These fields
+  // are nullable on the Tenant model — businesses without coordinates
+  // (unclaimed seed listings without a geocoded address) simply don't get
+  // a `geo` block in the schema. See getLocalBusinessSchema in
+  // src/lib/seo/schemas.ts.
+  latitude: true,
+  longitude: true,
 } satisfies Prisma.TenantSelect
 
 /**
@@ -158,6 +166,15 @@ export interface PublicBusinessData {
   canonicalUrl: string
   googlePlaceId: string | null
   website: string | null
+  /**
+   * Business latitude/longitude (nullable — unclaimed seed listings may
+   * not have geocoded coordinates). Exposed publicly so the business profile
+   * page can emit GeoCoordinates in the LocalBusiness JSON-LD. Both fields
+   * must be present to emit a valid `geo` block — a single null coordinate
+   * means NO geo block is emitted (never partial coordinates).
+   */
+  latitude: number | null
+  longitude: number | null
 }
 
 /**
@@ -543,6 +560,8 @@ async function buildPublicBusinessData(
     canonicalUrl,
     googlePlaceId: tenant.googlePlaceId,
     website: tenant.website,
+    latitude: tenant.latitude,
+    longitude: tenant.longitude,
   }
 }
 

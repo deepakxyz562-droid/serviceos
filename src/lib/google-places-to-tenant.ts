@@ -198,7 +198,7 @@ export function generateDescription(
   const cityPart = city || 'your area';
   const statePart = state ? `, ${state}` : '';
 
-  const p1 = `Looking for reliable ${industryLabel} services in ${cityPart}? ${name} is a trusted ${industryLabel} business based in ${cityPart}${statePart}.`;
+  const p1 = `Looking for reliable ${industryLabel} services in ${cityPart}? ${name} is a ${industryLabel} business based in ${cityPart}${statePart}.`;
   const p2 = `Contact ${name} today for quality workmanship, transparent pricing, and professional service.`;
 
   return `<p>${p1}</p>\n<p>${p2}</p>`;
@@ -294,7 +294,7 @@ function generateSeoDescription(
   } else if (city) {
     locationLabel = city;
   }
-  return `${name} is a ${industryLabel} company in ${locationLabel}. Book trusted local professionals for quality workmanship and transparent pricing.`;
+  return `${name} is a ${industryLabel} company in ${locationLabel}. Book local professionals for quality workmanship and transparent pricing.`;
 }
 
 /**

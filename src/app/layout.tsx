@@ -59,7 +59,14 @@ export const metadata: Metadata = {
   title: `${BRAND.name} - ${BRAND.tagline}`,
   description: BRAND.description,
   applicationName: BRAND.name,
-  keywords: [BRAND.name, "field service", "SaaS", "job management", "email notifications", "SMS notifications", "push notifications", "invoicing", "workflow automation", "service business"],
+  // NOTE: The global `keywords` meta tag was removed here because it leaked
+  // SaaS-focused terms ("field service", "SaaS", "job management", etc.) onto
+  // every page — including 100K+ marketplace business pages where they are
+  // semantically wrong. Google ignores the meta keywords tag for ranking, so
+  // removing it is a cleanliness/quality fix with zero ranking risk.
+  // Individual SaaS/software pages (e.g. /hvac-software) that benefit from
+  // keyword metadata still set their own `keywords` field in their own
+  // generateMetadata — they are unaffected by this removal.
   authors: [{ name: `${BRAND.name} Team` }],
   creator: BRAND.name,
   publisher: BRAND.name,
