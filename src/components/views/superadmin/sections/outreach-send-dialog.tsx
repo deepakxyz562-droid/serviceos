@@ -40,6 +40,7 @@ import {
   AlertTriangle, ShieldAlert,
 } from 'lucide-react';
 import { authFetch } from '@/lib/client-auth';
+import { wrapInMasterOutreachLayout } from '@/lib/email-templates/outreach-templates';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -365,9 +366,16 @@ export function OutreachSendDialog({
 
   // ── Render ─────────────────────────────────────────────────────────────
 
-  const previewText = previewRender(
-    stripHtml(htmlBody),
-    { businessName: tenantName, recipientEmail: recipientEmail || tenantEmail || '', customLine: customLine.trim() },
+  const renderedPreviewHtml = wrapInMasterOutreachLayout(
+    previewRender(
+      htmlBody,
+      { businessName: tenantName, recipientEmail: recipientEmail || tenantEmail || '', customLine: customLine.trim() },
+    ),
+    {
+      businessName: tenantName,
+      customLine: customLine.trim(),
+      categoryBadge: tenantClaimed ? 'MARKETPLACE' : 'CLAIM PROFILE',
+    },
   );
 
   return (
@@ -516,8 +524,13 @@ export function OutreachSendDialog({
             Supports <code className="font-mono">{`{{businessName}}`}</code>, <code className="font-mono">{`{{marketplaceUrl}}`}</code>, <code className="font-mono">{`{{claimLink}}`}</code> variables. Auto-personalized on send.
           </p>
           {previewOpen && (
-            <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
-              {previewText || '(empty body)'}
+            <div className="rounded-xl border border-border bg-slate-100 dark:bg-slate-900/60 p-3 max-h-72 overflow-y-auto flex justify-center">
+              <div
+                className="w-full max-w-[560px] shadow-sm rounded-xl overflow-hidden bg-white text-slate-800 text-xs"
+                dangerouslySetInnerHTML={{
+                  __html: renderedPreviewHtml || '<div style="padding: 16px; text-align: center; color: #64748b;">(empty body)</div>',
+                }}
+              />
             </div>
           )}
         </div>

@@ -15,6 +15,7 @@ import {
   isEmailSuppressed,
   type OutreachStats,
 } from '@/lib/outreach';
+import { wrapInMasterOutreachLayout } from '@/lib/email-templates/outreach-templates';
 
 export const dynamic = 'force-dynamic';
 
@@ -373,7 +374,8 @@ export async function POST(request: NextRequest) {
 
     // c. Render per-tenant
     const renderedSubject = renderTemplate(template.subject, vars);
-    const renderedHtml = renderTemplate(template.htmlBody, vars);
+    const rawRenderedHtml = renderTemplate(template.htmlBody, vars);
+    const renderedHtml = wrapInMasterOutreachLayout(rawRenderedHtml, vars);
     const renderedText = template.textBody ? renderTemplate(template.textBody, vars) : null;
 
     // d. Send

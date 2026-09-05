@@ -52,6 +52,7 @@ import {
   SectionHeader, KpiCard, EmptyState, TableSkeleton,
   formatDate, formatDateTime, timeAgo, formatNumber,
 } from '@/components/views/superadmin/_shared';
+import { wrapInMasterOutreachLayout } from '@/lib/email-templates/outreach-templates';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -769,23 +770,40 @@ function ComposeTab() {
 
                 {/* Preview area */}
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Preview ({focusedTenant.name})
-                  </p>
-                  <div className="rounded-md border border-border bg-background overflow-hidden">
-                    <div className="px-3 py-2 border-b border-border bg-muted/30">
-                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">Subject</p>
-                      <p className="text-sm font-medium text-foreground break-words">
-                        {renderedSubject || '—'}
-                      </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Email Preview ({focusedTenant.name})
+                    </p>
+                    <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                      Standard Layout
+                    </Badge>
+                  </div>
+                  <div className="rounded-xl border border-border bg-slate-100 dark:bg-slate-900/60 overflow-hidden shadow-sm">
+                    {/* Email client header */}
+                    <div className="px-4 py-2.5 border-b border-border bg-background space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-foreground truncate">
+                          {renderedSubject || '—'}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground shrink-0">
+                          Fieseros Mail
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>From: <strong>Fieseros Team</strong> &lt;notifications@fieseros.com&gt;</span>
+                        <span>To: <strong>{focusedTenant.email || 'No email on file'}</strong></span>
+                      </div>
                     </div>
-                    <div
-                      className="px-3 py-3 text-sm text-foreground max-h-[400px] overflow-y-auto [&_a]:text-primary [&_a]:underline"
-                      dangerouslySetInnerHTML={{
-                        __html: renderedHtml
-                          || '<p class="text-muted-foreground">No template body.</p>',
-                      }}
-                    />
+                    {/* Rendered email canvas */}
+                    <div className="p-3 sm:p-4 max-h-[460px] overflow-y-auto flex justify-center">
+                      <div
+                        className="w-full max-w-[600px] shadow-sm rounded-xl overflow-hidden bg-white text-slate-800"
+                        dangerouslySetInnerHTML={{
+                          __html: renderedHtml
+                            || '<div style="padding: 24px; text-align: center; color: #64748b;">No template body.</div>',
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1056,8 +1074,7 @@ function extractSubCategory(tagsJson: string | null | undefined): 'claim' | 'out
   return 'outreach';
 }
 
-// Naive variable substitution for the Preview panel. The backend does the
-// real substitution on send; this is just a UI preview.
+// Variable substitution for the Preview panel with full layout rendering.
 function previewRenderText(
   text: string,
   tenant: EligibleTenant,
@@ -1065,22 +1082,19 @@ function previewRenderText(
 ): string {
   const marketplaceUrl = `https://fieseros.com/${tenant.slug}`;
   const claimLink = 'https://fieseros.com/claim?token=PREVIEW';
-  return text
-    .replace(/\{\{businessName\}\}/g, escapeHtml(tenant.name))
+  const substituted = text
+    .replace(/\{\{businessName\}\}/g, tenant.name)
     .replace(/\{\{marketplaceUrl\}\}/g, marketplaceUrl)
     .replace(/\{\{claimLink\}\}/g, claimLink)
-    .replace(/\{\{industry\}\}/g, escapeHtml(tenant.industry || ''))
-    .replace(/\{\{city\}\}/g, escapeHtml(tenant.city || ''))
-    .replace(/\{\{customLine\}\}/g, customLine ? escapeHtml(customLine) : '');
-}
+    .replace(/\{\{industry\}\}/g, tenant.industry || 'service')
+    .replace(/\{\{city\}\}/g, tenant.city || 'your area')
+    .replace(/\{\{customLine\}\}/g, customLine ? customLine : '');
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return wrapInMasterOutreachLayout(substituted, {
+    businessName: tenant.name,
+    customLine,
+    categoryBadge: tenant.claimed ? 'MARKETPLACE' : 'CLAIM PROFILE',
+  });
 }
 
 // ─── Tab 3: Sent (tenant selector + history table, no send button) ───────────

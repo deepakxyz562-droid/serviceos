@@ -17,6 +17,7 @@ import {
   type OutreachStats,
   type PreflightResult,
 } from '@/lib/outreach';
+import { wrapInMasterOutreachLayout } from '@/lib/email-templates/outreach-templates';
 
 export const dynamic = 'force-dynamic';
 
@@ -306,7 +307,8 @@ export async function POST(request: NextRequest) {
 
   // ── 9. Render subject / html / text ────────────────────────────────────
   const renderedSubject = renderTemplate(rawSubject, vars);
-  const renderedHtml = renderTemplate(rawHtmlBody, vars);
+  const rawRenderedHtml = renderTemplate(rawHtmlBody, vars);
+  const renderedHtml = wrapInMasterOutreachLayout(rawRenderedHtml, vars);
   const renderedText = rawTextBody ? renderTemplate(rawTextBody, vars) : null;
 
   // ── 10. Insert EmailCommunication (status='queued') ────────────────────
