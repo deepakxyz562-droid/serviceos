@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
   // The callback verifies they match — defends against login-CSRF /
   // OAuth-state-fixation attacks.
   const csrf = randomBytes(32).toString('hex');
-  const expires = Date.now() + 10 * 60 * 1000; // 10 min
+  const expires = Date.now() + 30 * 60 * 1000; // 30 min (was 10 min — too short for users who need to sign in + read consent)
   const state = Buffer.from(
     JSON.stringify({
       tenantId: targetTenantId, // the target tenant (user's own OR claim target)
@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 10 * 60, // 10 min — matches the state expiry
+    maxAge: 30 * 60, // 30 min — matches the state expiry
   });
   return res;
 }
