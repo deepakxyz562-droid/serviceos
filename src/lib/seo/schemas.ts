@@ -243,6 +243,42 @@ export interface LocalBusinessReview {
   url?: string;
 }
 
+// ─── Image URL absolutizer ──────────────────────────────────────────────────
+//
+// WHY THIS EXISTS (Phase 1 review fix):
+//   When a business has no owner-uploaded cover image, the data layer falls
+//   back to a per-industry default: `/images/industry/hvac.webp` (RELATIVE).
+//   Schema.org JSON-LD `image` and `logo` should be ABSOLUTE URLs — Google's
+//   structured-data validator warns on relative URLs, and some rich-result
+//   types require absolute URLs to be eligible.
+//
+//   This helper converts relative URLs to absolute using the SITE_URL constant.
+//   It preserves already-absolute URLs unchanged (http://, https://, //) and
+//   avoids the double-prefix bug (`https://fieseros.comhttps://...`).
+
+/**
+ * Convert a relative URL to an absolute one using SITE_URL.
+ * Already-absolute URLs (http://, https://, or protocol-relative //) are
+ * returned unchanged. Empty/null/undefined are returned unchanged.
+ *
+ *   absolutizeImageUrl('/images/industry/hvac.webp')
+ *     → 'https://fieseros.com/images/industry/hvac.webp'
+ *   absolutizeImageUrl('https://example.com/logo.png')
+ *     → 'https://example.com/logo.png'  (unchanged)
+ *   absolutizeImageUrl('//cdn.example.com/img.png')
+ *     → '//cdn.example.com/img.png'  (unchanged — protocol-relative is valid)
+ *   absolutizeImageUrl(null) → null
+ */
+function absolutizeImageUrl(url: string | null | undefined): string | null | undefined {
+  if (!url) return url;
+  // Already absolute (http://, https://, or protocol-relative //)
+  if (/^(https?:)?\/\//i.test(url)) return url;
+  // Relative path — ensure it starts with "/" so we don't produce
+  // "https://fieseros.comimages/..." when a caller passes "images/...".
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return `${SITE_URL}${path}`;
+}
+
 export function getLocalBusinessSchema(opts: {
   name: string;
   description: string;
@@ -287,8 +323,12 @@ export function getLocalBusinessSchema(opts: {
     url: opts.url,
     ...(opts.phone ? { telephone: opts.phone } : {}),
     ...(opts.email ? { email: opts.email } : {}),
-    ...(opts.logo ? { logo: opts.logo, image: opts.logo } : {}),
-    ...(opts.coverImage && !opts.logo ? { image: opts.coverImage } : {}),
+    // SEO-3 (review fix): absolutize image URLs. The `logo` and `coverImage`
+    // values may be relative (e.g. the industry-default fallback
+    // `/images/industry/hvac.webp`). Schema.org requires absolute URLs.
+    // Already-absolute URLs (https://...) are passed through unchanged.
+    ...(opts.logo ? { logo: absolutizeImageUrl(opts.logo), image: absolutizeImageUrl(opts.logo) } : {}),
+    ...(opts.coverImage && !opts.logo ? { image: absolutizeImageUrl(opts.coverImage) } : {}),
     ...(opts.priceRange ? { priceRange: opts.priceRange } : {}),
     ...(opts.sameAs && opts.sameAs.length > 0 ? { sameAs: opts.sameAs } : {}),
   };
@@ -342,12 +382,20 @@ export function getLocalBusinessSchema(opts: {
     }));
   }
 
-  // Parent organization (Fieseros) — makes this a node in the platform graph
-  schema.parentOrganization = {
-    "@type": "Organization",
-    name: "Fieseros",
-    url: SITE_URL,
-  };
+  // ── parentOrganization: REMOVED (Phase 1 review fix) ──────────────────────
+  // Previously this block emitted:
+  //   schema.parentOrganization = { "@type":"Organization", name:"Fieseros", url:SITE_URL }
+  // on EVERY business hub page. That was semantically wrong: Fieseros is the
+  // marketplace/directory platform listing these independent businesses, NOT
+  // their parent company. `parentOrganization` in schema.org implies an
+  // ownership/subsidiary relationship (e.g. Instagram → Meta), which would
+  // be false for the listed businesses.
+  //
+  // Removed per the SEO review. No replacement — the Organization schema
+  // (getOrganizationSchema) emitted in the root layout already establishes
+  // Fieseros as a separate entity, and the BreadcrumbList schema links the
+  // business page to the marketplace hierarchy. That's the correct way to
+  // express "this business is listed on Fieseros" without implying ownership.
 
   // Geo coordinates — only emit when BOTH latitude and longitude are valid
   // numbers. Per the SEO review: do NOT emit partial coordinates (lat without

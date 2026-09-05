@@ -41,6 +41,7 @@ import {
   type LocalBusinessReview,
   type LocalBusinessHours,
 } from '@/lib/seo/schemas'
+import { stripHtml } from '@/lib/seo/html-utils'
 import {
   mapIndustryToPluralSlug,
   resolveIndustryFromAnySlug,
@@ -376,7 +377,16 @@ export default async function PublicBusinessHubPage({
 
   const localBusinessSchema = getLocalBusinessSchema({
     name: business.name,
-    description: business.description || business.tagline || `${business.name} — ${business.industry || 'service business'} in ${business.city || 'your area'}.`,
+    // SEO-2 (review fix): strip HTML tags from the description before passing
+    // to the JSON-LD schema. Schema.org `description` must be plain text;
+    // HTML markup inside JSON-LD is invalid and can cause structured-data
+    // parsing issues. The VISIBLE page body still renders the original HTML
+    // (from business.description) — only the schema value is sanitized.
+    // The DB value is left untouched (render-time transform only).
+    // See src/lib/seo/html-utils.ts → stripHtml.
+    description:
+      stripHtml(business.description || business.tagline) ||
+      `${business.name} — ${business.industry || 'service business'} in ${business.city || 'your area'}.`,
     url: business.canonicalUrl,
     slug: business.slug,
     industry: business.industry,
