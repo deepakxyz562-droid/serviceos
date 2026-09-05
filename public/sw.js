@@ -119,6 +119,16 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/_next/') && url.pathname.includes('.hot-update')) return;
   if (url.pathname.startsWith('/__nextjs')) return;
 
+  // CRITICAL: Skip OAuth callback URLs. The OAuth callback is a top-level
+  // browser navigation (Google → our callback). If the Service Worker
+  // intercepts this navigation, it can:
+  //   - Cache the redirect response (breaking future OAuth attempts)
+  //   - Return an "offline" error if the network is slow
+  //   - Serve a stale cached response instead of the fresh redirect
+  // All of these break the OAuth flow. The callback MUST be handled by
+  // the browser directly (not the Service Worker).
+  if (url.pathname.includes('/api/oauth/')) return;
+
   // 1. Network-first for /api/ requests (fall back to cache ONLY when offline)
   //
   // v5 fix: previously the SW cached EVERY successful /api/ GET indefinitely,
