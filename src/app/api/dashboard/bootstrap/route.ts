@@ -41,6 +41,45 @@ import { cachedJson } from '@/lib/cache-headers';
 
 const CACHE_TTL = 60_000; // 60 seconds — matches saas-stats cache
 
+// Terminal job statuses — jobs in these states are no longer "active".
+// `invoice_generated` is treated as terminal because the Job's work is done
+// and an invoice has been issued (see src/lib/invoice-automation.ts: the
+// only transition into `invoice_generated` is `completed → invoice_generated`).
+// MUST be kept in sync with /api/saas-stats/route.ts.
+const TERMINAL_JOB_STATUSES = [
+  'completed',
+  'invoice_generated',
+  'invoiced',
+  'cancelled',
+  'canceled',
+  'rejected',
+  'paid',
+  'done',
+  'closed',
+];
+
+// Invoice statuses counted as "revenue" on the dashboard.
+// `paid`  = collected revenue (cash in bank)
+// `sent`  = billed but not yet collected (pending payment)
+// MUST be kept in sync with /api/saas-stats/route.ts.
+const REVENUE_INVOICE_STATUSES = ['paid', 'sent'];
+
+// Helper: returns the [startOfToday, startOfTomorrow) window in UTC.
+function getTodayRange() {
+  const now = new Date();
+  const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
+  return { startOfToday, startOfTomorrow };
+}
+
+// Helper: returns the [startOfMonth, startOfNextMonth) window for the current month (UTC).
+function getCurrentMonthRange() {
+  const now = new Date();
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const startOfNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  return { startOfMonth, startOfNextMonth };
+}
+
 export async function GET() {
   try {
     const authUser = await getAuthUser();
@@ -128,11 +167,16 @@ async function fetchSaasStats(
 
   const tenantFilter = isSuperAdmin && !tenantId ? {} : { tenantId };
 
+  // Date windows for the KPI cards.
+  const { startOfToday, startOfTomorrow } = getTodayRange();
+  const { startOfMonth, startOfNextMonth } = getCurrentMonthRange();
+
   const [
     totalLeadsCount,
     leadsByStatus,
     leadsBySource,
-    paidInvoices,
+    collectedInvoicesAgg,
+    pendingInvoicesAgg,
     lastMonthLeads,
     lastMonthRevenue,
     monthlyRevenueData,
@@ -158,10 +202,20 @@ async function fetchSaasStats(
       }),
       [] as { source: string; _count: { source: number } }[],
     ),
+    // Collected revenue = paid invoices issued this month.
     safeQuery(
       'invoice.aggregate.paid',
       db.invoice.aggregate({
-        where: { ...tenantFilter, status: 'paid' },
+        where: { ...tenantFilter, status: 'paid', createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+        _sum: { total: true },
+      }),
+      { _sum: { total: 0 } as { _sum: { total: number | null } } },
+    ),
+    // Pending revenue = sent (unpaid) invoices issued this month.
+    safeQuery(
+      'invoice.aggregate.sent',
+      db.invoice.aggregate({
+        where: { ...tenantFilter, status: 'sent', createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
         _sum: { total: true },
       }),
       { _sum: { total: 0 } as { _sum: { total: number | null } } },
@@ -193,7 +247,25 @@ async function fetchSaasStats(
   const hasWorkspaces = workspaceIds.length > 0;
   const workspaceFilter = hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' };
 
-  const [totalJobsCount, jobsByStatus, totalEmployees, recentJobs] = await Promise.all([
+  // Active Jobs = NOT in a terminal state. Exposed as `activeJobs.count` so
+  // the card finally matches its label. `totalJobs` is the unfiltered count
+  // (kept for any consumer that wants the raw total).
+  const activeJobsFilter = { ...workspaceFilter, status: { notIn: TERMINAL_JOB_STATUSES } };
+  // Today's-schedule filter: scheduledAt falls inside today (UTC-aligned).
+  const todaysJobsWhere = {
+    ...workspaceFilter,
+    scheduledAt: { gte: startOfToday, lt: startOfTomorrow },
+  };
+
+  const [
+    totalJobsCount,
+    jobsByStatus,
+    totalEmployees,
+    recentJobs,
+    activeJobsCount,
+    todaysBookingsCount,
+    todaysJobs,
+  ] = await Promise.all([
     safeQuery('job.count', db.job.count({ where: workspaceFilter }), 0),
     safeQuery(
       'job.groupBy.status',
@@ -207,6 +279,18 @@ async function fetchSaasStats(
         where: workspaceFilter,
         orderBy: { createdAt: 'desc' },
         take: 5,
+        select: { id: true, title: true, assigneeName: true, status: true, scheduledAt: true },
+      }),
+      [] as { id: string; title: string; assigneeName: string | null; status: string; scheduledAt: Date | string | null }[],
+    ),
+    safeQuery('job.count.active', db.job.count({ where: activeJobsFilter }), 0),
+    safeQuery('job.count.todays', db.job.count({ where: todaysJobsWhere }), 0),
+    safeQuery(
+      'job.findMany.todays',
+      db.job.findMany({
+        where: todaysJobsWhere,
+        orderBy: { scheduledAt: 'asc' },
+        take: 10,
         select: { id: true, title: true, assigneeName: true, status: true, scheduledAt: true },
       }),
       [] as { id: string; title: string; assigneeName: string | null; status: string; scheduledAt: Date | string | null }[],
@@ -231,8 +315,11 @@ async function fetchSaasStats(
     }),
   );
 
+  // Exclude terminal statuses from the byStatus map so the Active Jobs card
+  // badges only show genuinely-active states.
   const jobsByStatusMap: Record<string, number> = {};
   jobsByStatus.forEach((item: { status: string; _count: { status: number } }) => {
+    if (TERMINAL_JOB_STATUSES.includes(item.status)) return;
     jobsByStatusMap[item.status] = item._count.status;
   });
 
@@ -241,8 +328,11 @@ async function fetchSaasStats(
       ? Math.round(((totalLeadsCount - lastMonthLeads) / lastMonthLeads) * 100)
       : totalLeadsCount > 0 ? 100 : 0;
 
-  // Defensive access for the same reason as leadPipeline.
-  const currentRevenue = paidInvoices._sum?.total ?? 0;
+  // Monthly revenue = collected (paid) + pending (sent) for the current month.
+  // Split so the dashboard can show an "A$X collected · A$Y pending" breakdown.
+  const collectedRevenue = collectedInvoicesAgg._sum?.total ?? 0;
+  const pendingRevenue = pendingInvoicesAgg._sum?.total ?? 0;
+  const currentRevenue = collectedRevenue + pendingRevenue;
   const revenueTrend =
     lastMonthRevenue > 0
       ? Math.round(((currentRevenue - lastMonthRevenue) / lastMonthRevenue) * 100)
@@ -259,15 +349,15 @@ async function fetchSaasStats(
     }),
   );
 
-  const formattedRecentJobs = recentJobs.map(
-    (job: { id: string; title: string; assigneeName: string | null; status: string; scheduledAt: Date | string | null }) => ({
-      id: job.id,
-      title: job.title,
-      assignee: job.assigneeName || 'Unassigned',
-      status: job.status,
-      scheduledDate: job.scheduledAt ? toISOString(job.scheduledAt as Date | string | null) : new Date().toISOString(),
-    }),
-  );
+  const formatJob = (job: { id: string; title: string; assigneeName: string | null; status: string; scheduledAt: Date | string | null }) => ({
+    id: job.id,
+    title: job.title,
+    assignee: job.assigneeName || 'Unassigned',
+    status: job.status,
+    scheduledDate: job.scheduledAt ? toISOString(job.scheduledAt as Date | string | null) : new Date().toISOString(),
+  });
+  const formattedRecentJobs = recentJobs.map(formatJob);
+  const formattedTodaysJobs = todaysJobs.map(formatJob);
 
   const revenueTrendData = monthlyRevenueData
     .slice(-6)
@@ -278,8 +368,15 @@ async function fetchSaasStats(
 
   return {
     totalLeads: { count: totalLeadsCount, trend: leadsTrend },
-    activeJobs: { count: totalJobsCount, byStatus: jobsByStatusMap },
-    monthlyRevenue: { amount: currentRevenue, trend: revenueTrend },
+    activeJobs: { count: activeJobsCount, totalJobs: totalJobsCount, byStatus: jobsByStatusMap },
+    monthlyRevenue: {
+      amount: currentRevenue,
+      collected: collectedRevenue,
+      pending: pendingRevenue,
+      trend: revenueTrend,
+    },
+    todaysBookings: todaysBookingsCount,
+    todaysJobs: formattedTodaysJobs,
     teamPerformance: { avgRating: 0, completedJobs: 0 },
     leadPipeline,
     revenueTrend: revenueTrendData,
@@ -384,8 +481,13 @@ async function getLastMonthRevenue(tenantId: string) {
   lastMonth.setMonth(lastMonth.getMonth() - 1);
   const startOfLastMonth = new Date(lastMonth.getFullYear(), lastMonth.getMonth(), 1);
   const endOfLastMonth = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0, 23, 59, 59);
+  // Same definition as the current-month KPI: paid + sent, bucketed by createdAt.
   const result = await db.invoice.aggregate({
-    where: { tenantId, status: 'paid', paidAt: { gte: startOfLastMonth, lte: endOfLastMonth } },
+    where: {
+      tenantId,
+      status: { in: REVENUE_INVOICE_STATUSES },
+      createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
+    },
     _sum: { total: true },
   });
   // Defensive access — Supabase REST adapter may drop `_sum`.
@@ -395,17 +497,23 @@ async function getLastMonthRevenue(tenantId: string) {
 async function getMonthlyRevenue(tenantId: string) {
   const twelveMonthsAgo = new Date();
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
-  const paidInvoicesList = await db.invoice.findMany({
-    where: { tenantId, status: 'paid', paidAt: { gte: twelveMonthsAgo } },
-    select: { total: true, paidAt: true },
+  // Pull all invoices (paid OR sent) issued within the trailing 12 months,
+  // bucketed by createdAt (= when the invoice was issued). This matches the
+  // current-month KPI definition so the trend chart is consistent with the
+  // "Monthly Revenue" card number.
+  const invoicesList = await db.invoice.findMany({
+    where: {
+      tenantId,
+      status: { in: REVENUE_INVOICE_STATUSES },
+      createdAt: { gte: twelveMonthsAgo },
+    },
+    select: { total: true, createdAt: true },
   });
   const monthlyData: Record<string, number> = {};
-  paidInvoicesList.forEach((invoice: { total: number; paidAt: Date | string | null }) => {
-    if (invoice.paidAt) {
-      const date = invoice.paidAt instanceof Date ? invoice.paidAt : new Date(invoice.paidAt);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      monthlyData[monthKey] = (monthlyData[monthKey] || 0) + invoice.total;
-    }
+  invoicesList.forEach((invoice: { total: number; createdAt: Date | string }) => {
+    const date = invoice.createdAt instanceof Date ? invoice.createdAt : new Date(invoice.createdAt);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    monthlyData[monthKey] = (monthlyData[monthKey] || 0) + invoice.total;
   });
   const result: { month: string; label: string; revenue: number }[] = [];
   for (let i = 11; i >= 0; i--) {
@@ -421,8 +529,10 @@ async function getMonthlyRevenue(tenantId: string) {
 function getZeroStats() {
   return {
     totalLeads: { count: 0, trend: 0 },
-    activeJobs: { count: 0, byStatus: {} },
-    monthlyRevenue: { amount: 0, trend: 0 },
+    activeJobs: { count: 0, totalJobs: 0, byStatus: {} },
+    monthlyRevenue: { amount: 0, collected: 0, pending: 0, trend: 0 },
+    todaysBookings: 0,
+    todaysJobs: [],
     teamPerformance: { avgRating: 0, completedJobs: 0 },
     leadPipeline: [],
     revenueTrend: [],

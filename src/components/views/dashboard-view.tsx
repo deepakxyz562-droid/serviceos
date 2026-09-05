@@ -101,11 +101,17 @@ interface LeadTrend {
 
 interface ActiveJobs {
   count: number;
+  // Total jobs regardless of status (includes terminal). Exposed separately
+  // so views that want the raw total can still get it; the `count` field
+  // above is what the "Active Jobs" KPI card displays (= non-terminal only).
+  totalJobs?: number;
   byStatus: Record<string, number>;
 }
 
 interface MonthlyRevenue {
-  amount: number;
+  amount: number;       // total billed this month = collected + pending
+  collected: number;    // paid invoices only (cash in bank)
+  pending: number;      // sent invoices only (awaiting payment)
   trend: number;
 }
 
@@ -146,6 +152,12 @@ interface SaaSStats {
   totalLeads: LeadTrend;
   activeJobs: ActiveJobs;
   monthlyRevenue: MonthlyRevenue;
+  // Jobs scheduled for today — count powers the "Today's Bookings" KPI card,
+  // the list powers the "Today's Schedule" section. Both are filtered by the
+  // API to scheduledAt = today (UTC-aligned), so the UI finally matches its
+  // labels instead of showing "pending"-status count / recent-by-creation jobs.
+  todaysBookings?: number;
+  todaysJobs?: RecentJob[];
   leadPipeline: PipelineStage[];
   revenueTrend: RevenueDataPoint[];
   leadSources: LeadSourceData[];
@@ -686,14 +698,18 @@ export function DashboardView() {
       .filter((s) => s.count !== undefined);
   }, [stats?.leadPipeline]);
 
-  // Today's schedule from recent jobs
+  // Today's schedule: jobs whose scheduledAt falls inside today.
+  // Source = `stats.todaysJobs` (server-side date-filtered). Falls back to
+  // `stats.recentJobs` only if the API hasn't been updated yet (defensive —
+  // should not happen post-fix, but keeps the page rendering during a
+  // partial rollout).
   const todaySchedule = useMemo(() => {
-    if (!stats?.recentJobs) return [];
-    return stats.recentJobs.slice(0, 6).map((job) => ({
+    const source = stats?.todaysJobs ?? stats?.recentJobs ?? [];
+    return source.slice(0, 6).map((job) => ({
       ...job,
       time: formatTime(job.scheduledDate),
     }));
-  }, [stats?.recentJobs]);
+  }, [stats?.todaysJobs, stats?.recentJobs]);
 
   // Compute conversion rate
   const conversionRate = useMemo(() => {
@@ -758,16 +774,16 @@ export function DashboardView() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Today&apos;s Bookings</p>
                     <p className="text-2xl font-bold mt-1">
-                      {stats.activeJobs.byStatus?.pending ?? 0}
+                      {stats.todaysBookings ?? 0}
                     </p>
-                    {((stats.activeJobs.byStatus?.pending ?? 0) > 0) && (
                     <div className="flex items-center gap-1 mt-1">
-                      <TrendingUp className="size-3.5 text-emerald-500" />
-                      <span className="text-xs font-medium text-emerald-600">
-                        +{stats.monthlyRevenue.trend || 0}% from yesterday
+                      <CalendarCheck className="size-3.5 text-emerald-500" />
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {stats.todaysBookings && stats.todaysBookings > 0
+                          ? `${stats.todaysBookings} job${stats.todaysBookings === 1 ? '' : 's'} scheduled today`
+                          : 'No jobs scheduled today'}
                       </span>
                     </div>
-                    )}
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <div className="p-2.5 rounded-xl bg-emerald-50">
@@ -787,14 +803,19 @@ export function DashboardView() {
                     <p className="text-sm text-muted-foreground font-medium">Active Jobs</p>
                     <p className="text-2xl font-bold mt-1">{stats.activeJobs.count}</p>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {/* byStatus is already filtered to non-terminal statuses
+                          on the API side, so we can just render the top 3
+                          entries — no client-side status whitelist needed. */}
                       {Object.entries(stats.activeJobs.byStatus || {})
-                        .filter(([s]) => ['in_progress', 'pending', 'on_hold'].includes(s))
                         .slice(0, 3)
                         .map(([status, count]) => (
-                          <Badge key={status} variant="secondary" className="text-[10px] px-1.5 py-0">
-                            {status.replace('_', ' ')}: {count}
+                          <Badge key={status} variant="secondary" className="text-[10px] px-1.5 py-0 capitalize">
+                            {status.replace('_', ' ')}: {count as number}
                           </Badge>
                         ))}
+                      {Object.keys(stats.activeJobs.byStatus || {}).length === 0 && (
+                        <span className="text-[11px] text-muted-foreground">No active jobs</span>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
@@ -814,6 +835,21 @@ export function DashboardView() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Monthly Revenue</p>
                     <p className="text-2xl font-bold mt-1">{formatCompact(stats.monthlyRevenue.amount)}</p>
+                    {/* Transparent breakdown: collected (paid) vs pending (sent).
+                        Shown only when at least one of them is non-zero, so
+                        the dashboard doesn't show a confusing "A$0 · A$0"
+                        line for new/empty tenants. */}
+                    {((stats.monthlyRevenue.collected ?? 0) > 0 || (stats.monthlyRevenue.pending ?? 0) > 0) && (
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        <span className="text-emerald-600 font-medium">
+                          {format(stats.monthlyRevenue.collected ?? 0)} collected
+                        </span>
+                        {' · '}
+                        <span className="text-amber-600 font-medium">
+                          {format(stats.monthlyRevenue.pending ?? 0)} pending
+                        </span>
+                      </p>
+                    )}
                     <div className="flex items-center gap-1 mt-1">
                       {stats.monthlyRevenue.trend >= 0 ? (
                         <TrendingUp className="size-3.5 text-emerald-500" />
