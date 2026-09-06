@@ -43,8 +43,19 @@ export async function sendWelcomeEmailTo(
 ): Promise<void> {
   const { ownerName, businessName, appUrl, tenantSlug, marketplaceOptIn = true } = ctx;
   const displayName = ownerName || 'there';
-  const dashboardUrl = `${appUrl}/login`;
-  const marketplaceUrl = `${appUrl}/provider/${tenantSlug}`;
+  // BUG FIX: Previously `${appUrl}/login` — but /login is NOT a valid route
+  // in this SPA. The app uses client-side routing via HomePageClient, which
+  // auto-shows the login form for unauthenticated users + the dashboard for
+  // authenticated users. Using the root URL `${appUrl}` ensures:
+  //   1. No 404 on /login (route doesn't exist)
+  //   2. Authenticated users go straight to their dashboard
+  //   3. Unauthenticated users see the login form
+  const dashboardUrl = `${appUrl}`;
+  // BUG FIX: Previously `${appUrl}/provider/${tenantSlug}` — but /provider is
+  // NOT a valid page route (it's only used for /api/provider/* API routes).
+  // The correct short URL is /b/{slug} which 301-redirects to the canonical
+  // marketplace listing (/{industry}/{city}/{slug}). See src/app/b/[slug]/page.tsx.
+  const marketplaceUrl = `${appUrl}/b/${tenantSlug}`;
   const footer = renderPromotionalFooter({ appUrl, existingUser: true });
 
   const html = renderWelcomeEmailHtml({

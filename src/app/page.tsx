@@ -42,7 +42,12 @@ const AUTH_COOKIE = 'fieseros_session';
  * crawled anyway.
  */
 export const metadata: Metadata = {
-  title: 'Fieseros — Build it. Grow it. Run it. | The Operating System for Service Businesses',
+  // SEO FIX: Shortened from 85 chars to 47 chars. Google truncates titles
+  // at ~60 chars / 580px. The previous title ("Fieseros — Build it. Grow it.
+  // Run it. | The Operating System for Service Businesses") was being cut off
+  // in search results. The new title leads with the brand + the two highest-
+  // value keywords (Field Service Software + Marketplace).
+  title: 'Fieseros | Field Service Software & Marketplace',
   // SEO FIX: Revised meta description to lead with what Fieseros IS and DOES,
   // not what it replaces. The previous description ("Replace scattered texts,
   // emails, and spreadsheets...") was a value proposition/positioning statement,
@@ -69,7 +74,7 @@ export const metadata: Metadata = {
     canonical: '/',
   },
   openGraph: {
-    title: 'Fieseros — Build it. Grow it. Run it. | The Operating System for Service Businesses',
+    title: 'Fieseros | Field Service Software & Marketplace',
     description:
       'Fieseros is the all-in-one operating system for field service and trade businesses. CRM, scheduling, dispatch, invoicing, payments, marketplace, and 24/7 AI Receptionist for HVAC, plumbing, electrical, cleaning, and landscaping contractors.',
     url: '/',
@@ -79,7 +84,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Fieseros — Build it. Grow it. Run it. | The Operating System for Service Businesses',
+    title: 'Fieseros | Field Service Software & Marketplace',
     description:
       'Fieseros is the all-in-one operating system for field service and trade businesses. CRM, scheduling, dispatch, invoicing, payments, marketplace, and 24/7 AI Receptionist.',
     // Twitter image auto-injected from opengraph-image.tsx.

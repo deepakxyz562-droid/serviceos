@@ -104,7 +104,12 @@ export function renderPromotionalFooter(ctx: PromotionalFooterContext): Rendered
   const variantIdx = ctx.variantIndex ?? dayOfYear % FOOTER_VARIANTS.length;
   const variant = FOOTER_VARIANTS[variantIdx] ?? FOOTER_VARIANTS[0];
 
-  const ctaUrl = existingUser ? `${appUrl}/login` : `${appUrl}/`;
+  // BUG FIX: Previously `${appUrl}/login` for existing users — but /login is
+  // NOT a valid route in this SPA. The app uses client-side routing via
+  // HomePageClient, which auto-shows the login form for unauthenticated users
+  // + the dashboard for authenticated users. Using the root URL `${appUrl}/`
+  // ensures no 404 + correct auth-state-based routing.
+  const ctaUrl = `${appUrl}/`;
   const ctaLabel = existingUser
     ? 'Sign in to your dashboard'
     : 'Explore Fieseros';
@@ -126,7 +131,7 @@ ${variant.features}
 
 ${ctaLabel}: ${ctaUrl}
 
-${existingUser ? '' : 'Already using Fieseros? Sign in at ' + appUrl + '/login'}
+${existingUser ? '' : 'Already using Fieseros? Sign in at ' + appUrl + '/'}
 
 © ${new Date().getFullYear()} Fieseros · Service Business CRM
   `.trim();
