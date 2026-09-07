@@ -381,6 +381,54 @@ interface PlanDef {
 
 const PLAN_DEFS: PlanDef[] = [
   {
+    // ── LAUNCH SPECIAL — $5/month founding member offer ──────────────────
+    // Limited to first 100 customers. Monthly billing only (no annual).
+    // Price locked at $5/mo for 12 months, then auto-renews at $29/mo
+    // (standard Starter price). Full Starter features — no restrictions.
+    // This is a customer-acquisition play: get real paying users fast
+    // for product testing + validation, then upsell to Professional.
+    code: 'launch_special',
+    name: 'Launch Special — Founding Member',
+    description:
+      'Full Starter plan at $5/month. Limited to first 100 customers. Monthly billing — cancel anytime. Price locked for 12 months, then $29/month.',
+    monthlyPrice: 5,
+    yearlyPrice: 0, // Monthly only — no annual option for Launch Special
+    originalMonthlyPrice: 29,
+    discountBadge: 'Launch Special — $5/mo',
+    maxUsers: 1,
+    maxJobs: 200,
+    maxWorkflows: 10,
+    features: {
+      customerPortal: true,
+      estimates: true,
+      invoicing: true,
+      scheduling: true,
+      dispatchBoard: true,
+      gpsTracking: false,
+      customer360: true,
+      salesPipeline: false,
+      reviews: true,
+      knowledgeBase: true,
+      documentCenter: true,
+      timeTracking: true,
+      expenses: true,
+      digitalSignatures: true,
+      beforeAfterPhotos: true,
+      onlinePayments: true,
+    },
+    limits: {
+      maxEmployees: 1,
+      maxBranches: 1,
+      maxServiceAreas: 3,
+      maxUsers: 1,
+      maxJobs: 200,
+      maxWorkflows: 10,
+      storageQuotaMb: 5120, // 5GB
+    },
+    marketplaceAccess: 'receive_bookings',
+    sortOrder: 0, // Show first in pricing list
+  },
+  {
     code: 'starter',
     name: 'Starter',
     description:

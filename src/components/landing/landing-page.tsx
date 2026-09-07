@@ -376,6 +376,16 @@ interface PricingPlan {
 
 const pricingPlans: PricingPlan[] = [
   {
+    name: 'Launch Special',
+    monthlyPrice: 5,
+    yearlyPrice: null, // Monthly only
+    description: 'Founding member offer — first 100 only',
+    icon: Zap,
+    features: ['1 user', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Cancel anytime'],
+    popular: true,
+    cta: 'Claim Launch Special',
+  },
+  {
     name: 'Starter',
     monthlyPrice: 10,
     yearlyPrice: 60,
@@ -1595,22 +1605,22 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
               <div className="flex-shrink-0 text-center sm:text-left">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 border border-amber-200 mb-3">
                   <Clock className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Limited Time Offer</span>
+                  <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Launch Special · First 100 Only</span>
                 </div>
                 <h3 className="text-xl sm:text-2xl font-bold text-foreground leading-tight">
-                  Get started for <span className="text-primary">$5</span>
+                  Full Starter plan for <span className="text-primary">$5</span>/month
                 </h3>
-                <p className="text-sm text-muted-foreground mt-1">Starter plan · 1-year subscription</p>
+                <p className="text-sm text-muted-foreground mt-1">Monthly billing · Cancel anytime · Price locked 12 months</p>
               </div>
 
               <div className="flex-shrink-0 flex items-center gap-3 sm:gap-4">
                 <div className="text-center">
                   <div className="flex items-baseline gap-2 justify-center">
-                    <span className="text-2xl text-muted-foreground line-through font-medium">$120</span>
+                    <span className="text-2xl text-muted-foreground line-through font-medium">$29</span>
                   </div>
                   <div className="flex items-baseline gap-1 justify-center">
                     <span className="text-5xl sm:text-6xl font-extrabold text-primary tracking-tight">$5</span>
-                    <span className="text-sm font-medium text-muted-foreground">/year</span>
+                    <span className="text-sm font-medium text-muted-foreground">/month</span>
                   </div>
                 </div>
               </div>
@@ -1618,11 +1628,11 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
               <div className="flex-1 flex flex-col items-center sm:items-end gap-2 min-w-0">
                 <div className="flex items-center gap-1.5 text-xs text-foreground/80">
                   <Check className="w-3.5 h-3.5 text-primary" />
-                  <span>Full Starter features for 12 months</span>
+                  <span>Full Starter features — CRM, jobs, invoicing</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-foreground/80">
                   <Check className="w-3.5 h-3.5 text-primary" />
-                  <span>Email + SMS · 100 jobs/month · 1 user</span>
+                  <span>14-day free trial · Then $5/month · No credit card to start</span>
                 </div>
                 <Button
                   size="sm"

@@ -54,7 +54,8 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
       name: businessName,
       slug,
       email: userEmail,
-      plan: 'starter',
+      // LAUNCH SPECIAL: new Google signups also get the launch_special plan.
+      plan: 'launch_special',
       planStatus: 'trial',
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
       onboardingCompleted: false,
@@ -101,7 +102,8 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
     await db.subscription.create({
       data: {
         tenantId: tenant.id,
-        plan: 'starter',
+        // LAUNCH SPECIAL: new Google signups also get the launch_special plan.
+      plan: 'launch_special',
         status: 'trial',
         amount: 0,
         currency: 'USD',

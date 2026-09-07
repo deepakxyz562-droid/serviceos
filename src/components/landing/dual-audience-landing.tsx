@@ -126,7 +126,7 @@ const industryChips = [
 // Hero trust badges — conversion confidence
 const heroTrustBadges = [
   { icon: Clock, label: 'Live in under 10 minutes' },
-  { icon: Wallet, label: 'Get started for $5' },
+  { icon: Wallet, label: 'Get started for $5/month' },
   { icon: ShieldCheck, label: 'No credit card required' },
   { icon: Mail, label: 'Email & SMS work day one' },
 ];

@@ -47,6 +47,36 @@ export interface PricingPlan {
 
 export const FALLBACK_PRICING_PLANS: PricingPlan[] = [
   {
+    // LAUNCH SPECIAL — $5/mo founding member offer. Monthly billing only.
+    code: 'launch_special',
+    name: 'Launch Special',
+    monthlyPrice: 5,
+    yearlyPrice: 0, // Monthly only — no annual option
+    originalMonthlyPrice: 29,
+    description: 'Founding member offer — first 100 only',
+    icon: Zap,
+    features: [
+      '1 User',
+      'CRM & Customer Management',
+      'Quotes & Estimates',
+      'Jobs & Scheduling',
+      'Calendar',
+      'Invoices & Online Payments',
+      'Customer Portal',
+      'Employee Portal',
+      'Online Booking',
+      'Time Tracking & Expenses',
+      'Before & After Photos',
+      'Digital Signatures',
+      'Customer 360',
+      'Reviews Management',
+      'Basic Reports',
+      '5 GB Storage',
+    ],
+    cta: 'Claim Launch Special',
+    popular: true,
+  },
+  {
     code: 'starter',
     name: 'Starter',
     monthlyPrice: 29,

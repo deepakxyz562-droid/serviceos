@@ -169,6 +169,18 @@ interface OnboardingPlan {
 
 const FALLBACK_PLANS: OnboardingPlan[] = [
   {
+    // LAUNCH SPECIAL — $5/mo founding member offer. Monthly billing only.
+    // Same features as Starter but at $5/mo instead of $29/mo.
+    id: 'launch_special',
+    name: 'Launch Special',
+    monthlyPrice: 5,
+    yearlyPrice: 0, // Monthly only
+    originalMonthlyPrice: 29,
+    description: 'Founding member offer — first 100 only',
+    features: ['1 user', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Cancel anytime'],
+    icon: Zap,
+  },
+  {
     id: 'starter',
     name: 'Starter',
     monthlyPrice: 29,

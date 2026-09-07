@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate plan
-    const validPlans = ['starter', 'growth', 'business'];
+    const validPlans = ['launch_special', 'starter', 'growth', 'business'];
     if (!validPlans.includes(plan)) {
       return NextResponse.json(
         { error: `Invalid plan. Must be one of: ${validPlans.join(', ')}` },

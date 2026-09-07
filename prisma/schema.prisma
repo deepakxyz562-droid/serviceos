@@ -960,6 +960,8 @@ model Invoice {
   notes       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  // Soft-delete for archive feature. NULL = active, non-NULL = archived (archived timestamp).
+  deletedAt   DateTime?
 
   tenant    Tenant?          @relation(fields: [tenantId], references: [id])
   job       Job?             @relation(fields: [jobId], references: [id])

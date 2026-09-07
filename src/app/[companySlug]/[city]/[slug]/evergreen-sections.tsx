@@ -454,6 +454,7 @@ export function QuickFacts({ business }: EvergreenProps) {
       business.plan === 'enterprise' ? 'Enterprise'
       : business.plan === 'business' ? 'Business'
       : business.plan === 'growth' ? 'Growth'
+      : business.plan === 'launch_special' ? 'Launch Special'
       : business.plan === 'starter' ? 'Starter'
       : business.plan.charAt(0).toUpperCase() + business.plan.slice(1)
     facts.push({

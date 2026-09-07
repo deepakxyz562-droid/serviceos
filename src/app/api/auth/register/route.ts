@@ -67,7 +67,10 @@ export async function POST(request: NextRequest) {
         email,
         city: city || null,
         website: website || null,
-        plan: 'starter',
+        // LAUNCH SPECIAL: new signups get the launch_special plan ($5/mo)
+        // instead of the standard starter plan ($29/mo). The plan tier
+        // resolver treats launch_special as starter-level access.
+        plan: 'launch_special',
         planStatus: 'trial',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
         marketplaceOptIn: false,
@@ -133,7 +136,10 @@ export async function POST(request: NextRequest) {
       await db.subscription.create({
         data: {
           tenantId: tenant.id,
-          plan: 'starter',
+          // LAUNCH SPECIAL: new signups get the launch_special plan ($5/mo)
+        // instead of the standard starter plan ($29/mo). The plan tier
+        // resolver treats launch_special as starter-level access.
+        plan: 'launch_special',
           status: 'trial',
           amount: 0,
           currency: 'USD',
