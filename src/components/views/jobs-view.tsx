@@ -28,6 +28,7 @@ import {
   // Collect Signature, Email Job Costs CSV, Create Invoice already imported
   // as FileText/DollarSign/PenLine/Send).
   Copy, FileSpreadsheet,
+  ChevronLeft,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -457,6 +458,11 @@ export function JobsView() {
   // `search` stays immediately reactive for the input field; fetchJobs depends
   // on `debouncedSearch` so the request only fires after typing pauses (250ms).
   const debouncedSearch = useDebouncedValue(search, 250);
+  // PAGINATION-ARCHIVE-1: server-side pagination state.
+  // The API already supports `page` + `limit` params. We now pass them so the
+  // frontend fetches only one page at a time (was loading ALL non-terminal jobs).
+  const [currentPage, setCurrentPage] = useState(1);
+  const jobsPerPage = 20;
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   // Top-level view tab: 'active' = active jobs (pending → in_progress),
   // 'history' = completed/archived jobs (rendered via JobHistoryTab).
@@ -776,8 +782,20 @@ export function JobsView() {
   const { data: jobsData, isLoading: loading, error: rqError, refetch: fetchJobs } = useJobs({
     status: statusFilter !== 'all' && statusFilter !== 'overdue' ? statusFilter : undefined,
     search: debouncedSearch || undefined,
+    page: currentPage,
+    limit: jobsPerPage,
   });
   const error = rqError?.message ?? null;
+  // PAGINATION-ARCHIVE-1: read pagination metadata from the API response.
+  const jobsPagination = jobsData?.pagination ?? null;
+  const totalJobs = jobsPagination?.total ?? 0;
+  const totalPages = jobsPagination?.totalPages ?? 1;
+
+  // Reset to page 1 when the status filter or search changes — otherwise the
+  // user could be on page 5 of the old filter and see no results.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, debouncedSearch]);
 
   // ── Mutations (dependency-aware, auto-invalidate via getJobInvalidations) ──
   // create/update/delete/assign/status → jobs.all + dashboard.all + calendar + dispatch + detail + customer/employee detail
@@ -2750,6 +2768,38 @@ export function JobsView() {
         </>
       )}
         </>
+      )}
+
+      {/* PAGINATION-ARCHIVE-1: Server-side pagination controls for the jobs list.
+          Only shown when there are multiple pages. Matches the pattern used by
+          the Leads, Invoices, Quotes, and Bookings views. */}
+      {jobsTab === 'active' && totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 px-2">
+          <p className="text-sm text-muted-foreground">
+            Showing {((currentPage - 1) * jobsPerPage) + 1}–{Math.min(currentPage * jobsPerPage, totalJobs)} of {totalJobs} jobs
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+            >
+              <ChevronLeft className="size-4" /> Prev
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+            >
+              Next <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* ─── Smart Assign/Reassign Workspace (Phase 1) ─────────────────── */}
