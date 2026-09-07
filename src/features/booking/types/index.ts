@@ -47,6 +47,8 @@ export interface Booking {
   metadataJson: string;
   tenantId: string | null;
   workspaceId: string | null;
+  /** Soft-delete timestamp (PAGINATION-ARCHIVE-1). NULL = active, non-NULL = archived. */
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
   employee: EmployeeInfo | null;

@@ -149,17 +149,43 @@ export function useCustomers(params: CustomerListParams = {}) {
 
 import { parseApiInvoice, type Invoice } from '@/features/invoices/utils/invoice-helpers';
 
-export function useInvoices() {
-  return useQuery<Invoice[]>({
-    queryKey: qk.invoices.lists(),
+export interface InvoiceListParams {
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+  /**
+   * PAGINATION-ARCHIVE-1 — archive filter.
+   *   undefined | 'false' → only active invoices (deletedAt IS NULL) [default]
+   *   'true'               → only archived invoices (deletedAt IS NOT NULL)
+   *   'all'                → both active + archived (legacy / dashboard)
+   */
+  archived?: 'true' | 'false' | 'all';
+}
+
+export function useInvoices(params: InvoiceListParams = {}) {
+  return useQuery<{ invoices: Invoice[]; pagination: { page: number; limit: number; total: number; totalPages: number } | null }>({
+    queryKey: qk.invoices.list(params),
     queryFn: async () => {
-      const res = await authFetch('/api/invoices');
+      const searchParams = new URLSearchParams();
+      if (params.status && params.status !== 'all') searchParams.set('status', params.status);
+      if (params.search) searchParams.set('search', params.search);
+      if (params.page) searchParams.set('page', String(params.page));
+      if (params.limit) searchParams.set('limit', String(params.limit));
+      // PAGINATION-ARCHIVE-1: archived filter — defaults to active-only.
+      const archivedVal = params.archived ?? 'false';
+      searchParams.set('archived', archivedVal);
+
+      const res = await authFetch(`/api/invoices?${searchParams.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch invoices');
       const data = await res.json();
       const rawList: Record<string, unknown>[] = Array.isArray(data.invoices) ? data.invoices : [];
       // Apply the same parseApiInvoice transformation that invoices-view used
       // when it fetched manually — ensures consistent Invoice shape across the app.
-      return rawList.map(parseApiInvoice);
+      return {
+        invoices: rawList.map(parseApiInvoice),
+        pagination: data.pagination ?? null,
+      };
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM invoices
   });
@@ -173,6 +199,17 @@ export interface LeadListParams {
   search?: string;
   page?: number;
   limit?: number;
+  /**
+   * PAGINATION-ARCHIVE-1 — archive filter.
+   *   undefined | 'false' → only active leads (deletedAt IS NULL) [default]
+   *   'true'               → only archived leads (deletedAt IS NOT NULL)
+   *   'all'                → both active + archived (legacy / dashboard)
+   *
+   * The hook maps this to the `archived=` query param understood by
+   * /api/leads. The legacy `deleted=false` param is also sent for backward
+   * compat with older API deployments.
+   */
+  archived?: 'true' | 'false' | 'all';
 }
 
 export function useLeads(params: LeadListParams = {}) {
@@ -185,7 +222,11 @@ export function useLeads(params: LeadListParams = {}) {
       if (params.search) searchParams.set('search', params.search);
       if (params.page) searchParams.set('page', String(params.page));
       if (params.limit) searchParams.set('limit', String(params.limit));
-      searchParams.set('deleted', 'false');
+      // PAGINATION-ARCHIVE-1: archived filter — defaults to active-only.
+      const archivedVal = params.archived ?? 'false';
+      searchParams.set('archived', archivedVal);
+      // Legacy compat: older API deployments read `deleted` instead of `archived`.
+      searchParams.set('deleted', archivedVal);
 
       const res = await authFetch(`/api/leads?${searchParams.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch leads');
@@ -439,17 +480,40 @@ export function useCalendarEvents(params: { employeeId?: string; startDate?: str
 
 // ── Bookings ────────────────────────────────────────────────────────────────
 
-export function useBookings(params: { status?: string; search?: string } = {}) {
+export interface BookingListParams {
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+  /**
+   * PAGINATION-ARCHIVE-1 — archive filter.
+   *   undefined | 'false' → only active bookings (deletedAt IS NULL) [default]
+   *   'true'               → only archived bookings (deletedAt IS NOT NULL)
+   *   'all'                → both active + archived (legacy / dashboard)
+   */
+  archived?: 'true' | 'false' | 'all';
+}
+
+export function useBookings(params: BookingListParams = {}) {
   return useQuery({
     queryKey: qk.bookings.list(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.status && params.status !== 'all') sp.set('status', params.status);
       if (params.search) sp.set('search', params.search);
+      if (params.page) sp.set('page', String(params.page));
+      if (params.limit) sp.set('limit', String(params.limit));
+      // PAGINATION-ARCHIVE-1: archived filter — defaults to active-only.
+      sp.set('archived', params.archived ?? 'false');
       const res = await authFetch(`/api/bookings?${sp.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch bookings');
       const data = await res.json();
-      return data.bookings ?? (Array.isArray(data) ? data : []);
+      // Return BOTH the bookings array and the pagination envelope so the
+      // frontend can render pagination controls + know the total count.
+      return {
+        bookings: data.bookings ?? (Array.isArray(data) ? data : []),
+        pagination: data.pagination ?? null,
+      };
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM bookings
   });

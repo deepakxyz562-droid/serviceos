@@ -74,6 +74,12 @@ async function _GET(request: NextRequest) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
     const customerIdParam = searchParams.get('customerId');
+    // PAGINATION-ARCHIVE-1: archived=true → only soft-deleted invoices.
+    // Default (unset or 'false') → only active invoices (deletedAt IS NULL).
+    // archived='all' → both active + archived (legacy / dashboard aggregation).
+    const archivedParam = searchParams.get('archived');
+    const archivedOnly = archivedParam === 'true';
+    const includeArchived = archivedParam === 'all';
 
     // ── C-2B.3: Try the get_invoices RPC first (5 → 1 call) ──────────────
     // The SQL function (supabase-rpc-invoices.sql) consolidates the invoice
@@ -147,6 +153,13 @@ async function _GET(request: NextRequest) {
       if (status && status !== 'all') {
         where.status = status;
       }
+      // PAGINATION-ARCHIVE-1: filter on deletedAt to support the Active vs
+      // Archived tabs on the frontend.
+      if (archivedOnly) {
+        where.deletedAt = { not: null };
+      } else if (!includeArchived) {
+        where.deletedAt = null;
+      }
       if (search) {
         where.OR = [
           { number: { contains: search, ...CI } },
@@ -193,6 +206,13 @@ async function _GET(request: NextRequest) {
     }
     if (customerIdParam) {
       where.customerId = customerIdParam;
+    }
+    // PAGINATION-ARCHIVE-1: filter on deletedAt to support the Active vs
+    // Archived tabs on the frontend.
+    if (archivedOnly) {
+      where.deletedAt = { not: null };
+    } else if (!includeArchived) {
+      where.deletedAt = null;
     }
     if (search) {
       where.OR = [

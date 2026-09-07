@@ -23,6 +23,15 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const customerIdParam = searchParams.get('customerId');
     const dealIdParam = searchParams.get('dealId');
+    const search = searchParams.get('search');
+    const status = searchParams.get('status');
+    // Pagination (defaults: page 1, limit 20). Mirrors the pagination envelope
+    // shape used by /api/leads and /api/invoices: { page, limit, total, totalPages }.
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20), 200);
+    // archived=false (default) → only active quotes (deletedAt IS NULL)
+    // archived=true  → only archived quotes (deletedAt IS NOT NULL)
+    const archived = searchParams.get('archived') === 'true';
 
     const where: Record<string, unknown> = {};
     // SECURITY: non-super-admins MUST have a tenantId. If they don't (edge
@@ -52,14 +61,36 @@ export async function GET(req: NextRequest) {
       where.dealId = dealIdParam;
     }
 
+    if (status && status !== 'all') {
+      where.status = status;
+    }
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search } },
+        { description: { contains: search } },
+        { customer: { name: { contains: search } } },
+      ];
+    }
+
+    // ── Archive filter: filter on deletedAt presence/absence. ─────────
+    // The `archived` query param controls whether we show active (default)
+    // or archived quotes. NULL = active, non-NULL = archived (timestamp).
+    where.deletedAt = archived ? { not: null } : null;
+
     // C-2C: only name + phone are read from the linked customer (below), so
     // select just those instead of `customer: true` which pulled every column
     // — including passwordHash / activationToken — into server memory.
-    const quotes = await db.quote.findMany({
-      where,
-      include: { customer: { select: { name: true, phone: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [quotes, total] = await Promise.all([
+      db.quote.findMany({
+        where,
+        include: { customer: { select: { name: true, phone: true } } },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      db.quote.count({ where }),
+    ]);
 
     const formatted = quotes.map((q) => ({
       id: q.id,
@@ -86,10 +117,22 @@ export async function GET(req: NextRequest) {
       status: q.status,
       validUntil: q.validUntil ? toISOString(q.validUntil as Date | string | null)?.split('T')[0] ?? null : null,
       whatsappSent: q.whatsappSent,
+      emailSent: q.emailSent,
+      // ── Archive metadata: expose deletedAt so the frontend can show
+      // "archived on <date>" badges in the Archived tab. NULL = active.
+      deletedAt: q.deletedAt ? toISOString(q.deletedAt as Date | string)?.split('T')[0] ?? null : null,
       createdAt: toISOString(q.createdAt as Date | string)?.split('T')[0] ?? '',
     }));
 
-    return NextResponse.json(formatted);
+    return NextResponse.json({
+      quotes: formatted,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
     console.error('Failed to fetch quotes:', error);
     return NextResponse.json({ error: 'Failed to fetch quotes' }, { status: 500 });

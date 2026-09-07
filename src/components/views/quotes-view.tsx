@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   FileText, Plus, Search, Send, MoreHorizontal, DollarSign,
   Clock, CheckCircle2, XCircle, Eye, Trash2,
@@ -8,6 +8,7 @@ import {
   Calculator, Mail, Copy,
   Edit3, Loader2, Receipt,
   Sparkles, Lock,
+  Archive, RotateCcw, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -81,6 +82,11 @@ export function QuotesView() {
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  // PAGINATION-ARCHIVE-1: pagination + archive state
+  const [activeTab, setActiveTab] = useState<'list' | 'archived'>('list');
+  const [currentPage, setCurrentPage] = useState(1);
+  const quotesPerPage = 20;
+  const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -102,15 +108,37 @@ export function QuotesView() {
   // ── Currency from hook ───────────────────────────────────
   const { currency, format, formatCompact, symbol } = useCompanyCurrency();
 
-  // ── Fetch real customers + quotes on mount ────────────────
+  // PAGINATION-ARCHIVE-1: fetch quotes with pagination + archived filter.
+  // Re-fetches when currentPage or activeTab changes (switching between
+  // active/archived tabs resets page to 1).
+  const fetchQuotes = useCallback(async (customersList: Customer[]) => {
+    const params = new URLSearchParams();
+    params.set('page', String(currentPage));
+    params.set('limit', String(quotesPerPage));
+    params.set('archived', activeTab === 'archived' ? 'true' : 'false');
+
+    const res = await authFetch(`/api/quotes?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to load quotes');
+    const data = await res.json();
+    // API now returns { quotes, pagination } — not a bare array.
+    const rawQuotes = data.quotes ?? (Array.isArray(data) ? data : []);
+    setQuotes(rawQuotes.map((q: any) => normalizeQuote(q, customersList)));
+    setPagination(data.pagination ?? null);
+  }, [currentPage, activeTab]);
+
+  // Reset page when switching tabs
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+
+  // ── Fetch real customers + quotes on mount + when page/tab changes ────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const [customersRes, quotesRes, meRes] = await Promise.all([
+        const [customersRes, meRes] = await Promise.all([
           authFetch('/api/customers'),
-          authFetch('/api/quotes'),
           authFetch('/api/auth/me'),
         ]);
 
@@ -124,14 +152,7 @@ export function QuotesView() {
           toast.error('Failed to load customers');
         }
 
-        if (quotesRes.ok) {
-          const data = await quotesRes.json();
-          if (Array.isArray(data)) {
-            setQuotes(data.map((q: any) => normalizeQuote(q, customersList)));
-          }
-        } else {
-          toast.error('Failed to load quotes');
-        }
+        await fetchQuotes(customersList);
 
         if (meRes.ok) {
           const meData = await meRes.json();
@@ -146,7 +167,7 @@ export function QuotesView() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [fetchQuotes]);
 
   // ============================================================
   // Filtered & sorted quotes
@@ -528,6 +549,29 @@ export function QuotesView() {
     }
   };
 
+  // PAGINATION-ARCHIVE-1: Archive + restore handlers for soft-delete.
+  const handleArchiveQuote = async (quoteId: string) => {
+    try {
+      const res = await authFetch(`/api/quotes/${quoteId}/archive`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to archive quote');
+      toast.success('Quote archived');
+      setQuotes((prev) => prev.filter((q) => q.id !== quoteId));
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to archive quote');
+    }
+  };
+
+  const handleRestoreQuote = async (quoteId: string) => {
+    try {
+      const res = await authFetch(`/api/quotes/${quoteId}/restore`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to restore quote');
+      toast.success('Quote restored');
+      setQuotes((prev) => prev.filter((q) => q.id !== quoteId));
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to restore quote');
+    }
+  };
+
   const handleSendWhatsApp = async (quote: Quote) => {
     try {
       const res = await fetch(`/api/quotes/${quote.id}/send-whatsapp?XTransformPort=3000`, { method: 'POST' });
@@ -766,12 +810,13 @@ export function QuotesView() {
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
           <TabsList className="h-9">
-            <TabsTrigger value="all" className="text-xs px-3">All</TabsTrigger>
+            <TabsTrigger value="all" className="text-xs px-3" onClick={() => setActiveTab('list')}>All</TabsTrigger>
             <TabsTrigger value="draft" className="text-xs px-3">Draft</TabsTrigger>
             <TabsTrigger value="sent" className="text-xs px-3">Sent</TabsTrigger>
             <TabsTrigger value="accepted" className="text-xs px-3">Accepted</TabsTrigger>
             <TabsTrigger value="rejected" className="text-xs px-3">Rejected</TabsTrigger>
             <TabsTrigger value="expired" className="text-xs px-3">Expired</TabsTrigger>
+            <TabsTrigger value="archived" className="text-xs px-3 text-muted-foreground" onClick={() => setActiveTab('archived')}>Archived</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="relative flex-1 min-w-[200px]">
@@ -900,6 +945,16 @@ export function QuotesView() {
                             <DropdownMenuItem variant="destructive" onClick={() => handleDeleteQuote(quote.id)}>
                               <Trash2 className="size-3.5 mr-2" /> Delete
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {activeTab === 'list' ? (
+                              <DropdownMenuItem onClick={() => handleArchiveQuote(quote.id)}>
+                                <Archive className="size-3.5 mr-2" /> Archive
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => handleRestoreQuote(quote.id)}>
+                                <RotateCcw className="size-3.5 mr-2" /> Restore
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -908,6 +963,35 @@ export function QuotesView() {
                 </TableBody>
               </Table>
             </div>
+            {/* PAGINATION-ARCHIVE-1: Server-side pagination controls */}
+            {pagination && pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 px-4 pb-4">
+                <p className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * quotesPerPage) + 1}–{Math.min(currentPage * quotesPerPage, pagination.total)} of {pagination.total}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                  >
+                    <ChevronLeft className="size-4" /> Prev
+                  </Button>
+                  <span className="text-sm text-muted-foreground">
+                    Page {currentPage} of {pagination.totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(pagination!.totalPages, p + 1))}
+                    disabled={currentPage >= pagination.totalPages}
+                  >
+                    Next <ChevronRight className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

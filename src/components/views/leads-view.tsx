@@ -11,6 +11,7 @@ import {
   Briefcase,
   Loader2, ImagePlus,
   LayoutGrid, MessageSquare, UserCheck, XCircle,
+  Archive as ArchiveIcon, RotateCcw,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,8 @@ import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/api';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/query-keys';
 import {
   useLeads,
   useCreateLead,
@@ -1253,7 +1256,7 @@ export function LeadsView() {
   // Top-level tab switcher for the Leads page. The "Leads" tab contains both
   // the table view and the drag-and-drop Kanban board (toggle at the top of
   // the tab). The Analytics tab shows derived stats from the lead list.
-  const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'archived' | 'analytics'>('list');
 
   // Larger lead set fetched on-demand for the Analytics tab so the
   // breakdowns reflect the whole tenant (not just the current page of 10).
@@ -1302,14 +1305,71 @@ export function LeadsView() {
     search: debouncedSearchQuery || undefined,
     page,
     limit: pageSize,
+    // PAGINATION-ARCHIVE-1: when the user is on the Archived tab, request
+    // only soft-deleted leads. On all other tabs we explicitly request
+    // active-only leads (the default — but explicit is safer here so
+    // tab switches always re-fetch with the right filter).
+    archived: activeTab === 'archived' ? 'true' : 'false',
   });
   const error = rqError?.message ?? null;
   const leads = useMemo<Lead[]>(
-    () => (leadsData?.leads ?? []).filter((l: Lead) => !l.deletedAt),
-    [leadsData],
+    // When on the Archived tab, the API returns soft-deleted leads (deletedAt
+    // != null) — DON'T filter them out. On other tabs the API already filters
+    // them server-side; the local filter is a defensive double-filter.
+    () => activeTab === 'archived'
+      ? (leadsData?.leads ?? [])
+      : (leadsData?.leads ?? []).filter((l: Lead) => !l.deletedAt),
+    [leadsData, activeTab],
   );
   const totalLeads = leadsData?.pagination?.total ?? 0;
   const totalPages = leadsData?.pagination?.totalPages ?? 1;
+
+  // ── Archive / Restore handlers (PAGINATION-ARCHIVE-1) ──────────────────
+  // Both call the dedicated /api/leads/[id]/archive|restore endpoints and
+  // invalidate the React Query cache via the same pattern as the other
+  // mutations. After archive/restore, both the Active list AND the Archived
+  // list need to refresh (the lead moves between them).
+  const queryClient = useQueryClient();
+  const [archiveActionLoadingId, setArchiveActionLoadingId] = useState<string | null>(null);
+
+  const handleArchiveLead = useCallback(async (leadId: string) => {
+    setArchiveActionLoadingId(leadId);
+    try {
+      const res = await authFetch(`/api/leads/${leadId}/archive`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to archive lead');
+        return;
+      }
+      toast.success('Lead archived');
+      // Invalidate both active + archived lead lists + dashboard.
+      await queryClient.invalidateQueries({ queryKey: qk.leads.all });
+      await queryClient.invalidateQueries({ queryKey: qk.dashboard.all });
+    } catch {
+      toast.error('Network error archiving lead');
+    } finally {
+      setArchiveActionLoadingId(null);
+    }
+  }, [queryClient]);
+
+  const handleRestoreLead = useCallback(async (leadId: string) => {
+    setArchiveActionLoadingId(leadId);
+    try {
+      const res = await authFetch(`/api/leads/${leadId}/restore`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to restore lead');
+        return;
+      }
+      toast.success('Lead restored');
+      await queryClient.invalidateQueries({ queryKey: qk.leads.all });
+      await queryClient.invalidateQueries({ queryKey: qk.dashboard.all });
+    } catch {
+      toast.error('Network error restoring lead');
+    } finally {
+      setArchiveActionLoadingId(null);
+    }
+  }, [queryClient]);
 
   // ── Mutations (dependency-aware, auto-invalidate via getLeadInvalidations) ──
   // create/update/delete/status → leads.all + dashboard.all (+ detail)
@@ -1852,6 +1912,14 @@ export function LeadsView() {
                 <Pencil className="size-3.5 mr-2" /> Edit
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              {/* PAGINATION-ARCHIVE-1: Archive (soft-delete) action — sends the
+                  lead to the "Archived" tab. Reversible from the Archived tab. */}
+              <DropdownMenuItem
+                onClick={() => handleArchiveLead(lead.id)}
+                disabled={archiveActionLoadingId === lead.id}
+              >
+                <ArchiveIcon className="size-3.5 mr-2" /> Archive
+              </DropdownMenuItem>
               <DropdownMenuItem variant="destructive" onClick={() => openDeleteDialog(lead)}>
                 <Trash2 className="size-3.5 mr-2" /> Delete
               </DropdownMenuItem>
@@ -2067,10 +2135,10 @@ export function LeadsView() {
         </div>
       </div>
 
-      {/* ─── Tabs (List | Analytics) ───────────────────────────── */}
+      {/* ─── Tabs (List | Archived | Analytics) ───────────────────────── */}
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'list' | 'analytics')}
+        onValueChange={(v) => setActiveTab(v as 'list' | 'archived' | 'analytics')}
       >
         <div className="border-b border-border">
           <TabsList className="bg-transparent h-11 gap-0.5 p-0 overflow-x-auto w-full sm:w-fit justify-start rounded-none">
@@ -2078,7 +2146,14 @@ export function LeadsView() {
               value="list"
               className="data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-sm gap-1.5 transition-all duration-200"
             >
-              <List className="size-3.5" /> Leads
+              <List className="size-3.5" /> Active
+            </TabsTrigger>
+            {/* PAGINATION-ARCHIVE-1: Archived tab — soft-deleted leads with Restore action */}
+            <TabsTrigger
+              value="archived"
+              className="data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-sm gap-1.5 transition-all duration-200"
+            >
+              <ArchiveIcon className="size-3.5" /> Archived
             </TabsTrigger>
             <TabsTrigger
               value="analytics"
@@ -2191,6 +2266,127 @@ export function LeadsView() {
               formatCompact={formatCompact}
             />
           ) : renderTableView()}
+        </TabsContent>
+
+        {/* ─── Archived Tab (PAGINATION-ARCHIVE-1) ──────────────────────── */}
+        {/* Soft-deleted leads with Restore action. Reuses the same useLeads
+            query (with archived=true) and renders the same DataTable shape as
+            the Active tab, but each row's dropdown only shows "View" and
+            "Restore" (no Edit / Convert / Delete). */}
+        <TabsContent value="archived" className="mt-6 space-y-6 outline-none">
+          <Card className="border-amber-200 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/10">
+            <CardContent className="p-4 flex items-start gap-3">
+              <ArchiveIcon className="size-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold text-amber-900 dark:text-amber-300">Archived Leads</p>
+                <p className="text-amber-800/80 dark:text-amber-400/80 mt-0.5">
+                  Soft-deleted leads are kept here for audit. Restore a lead to move it back to the Active list. Archived leads are excluded from the dashboard totals.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Search bar (mirrors the Active tab; archived leads respect the
+              same status/source/search filters for parity) */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div className="relative flex-1 sm:max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search archived leads..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-10"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 text-xs"
+              onClick={() => fetchLeads()}
+            >
+              <RefreshCw className="size-3.5 mr-1" /> Refresh
+            </Button>
+          </div>
+
+          {loading ? (
+            <Card>
+              <CardContent className="flex items-center justify-center py-12">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">Loading archived leads...</span>
+              </CardContent>
+            </Card>
+          ) : error ? (
+            <ErrorState message={error} onRetry={fetchLeads} />
+          ) : sortedLeads.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <ArchiveIcon className="size-12 mb-3 opacity-20" />
+              <p className="font-medium">No archived leads</p>
+              <p className="text-sm mt-1">Archived leads will appear here for audit.</p>
+            </div>
+          ) : (
+            <DataTable
+              columns={[
+                ...leadColumns.slice(0, -1), // reuse all columns except the Actions column
+                {
+                  key: 'restore',
+                  header: 'Actions',
+                  headerClassName: 'w-[140px] text-right',
+                  render: (lead) => (
+                    <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-[11px] px-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => handleRestoreLead(lead.id)}
+                        disabled={archiveActionLoadingId === lead.id}
+                      >
+                        <RotateCcw className="size-3 mr-1" /> Restore
+                      </Button>
+                    </div>
+                  ),
+                },
+              ]}
+              data={sortedLeads}
+              rowKey={(lead) => lead.id}
+              loading={loading}
+              error={error}
+              onRetry={fetchLeads}
+              emptyMessage="No archived leads"
+              emptyIcon={ArchiveIcon}
+              onRowClick={(lead) => openLeadDetail(lead)}
+            />
+          )}
+
+          {/* Pagination — same as the Active tab (the archived list uses the
+              same page/limit state) */}
+          {sortedLeads.length > 0 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Showing {leads.length} of {totalLeads} archived leads
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  <ChevronLeft className="size-4" /> Previous
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* ─── Analytics Tab (stat cards + charts) ──────────────── */}

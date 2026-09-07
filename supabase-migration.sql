@@ -5521,6 +5521,14 @@ ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "verificationPin" TEXT;
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) DEFAULT now();
 ALTER TABLE "Job" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now();
 
+-- ── Pagination + Archive feature (PAGINATION-ARCHIVE-1) ────────────────
+-- Soft-delete column added to Quote / Invoice / Booking for the archive
+-- (soft-delete + restore) feature. Lead and Job already had deletedAt.
+-- NULL = active, non-NULL = archived (the timestamp the row was archived).
+ALTER TABLE "Quote"   ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
+ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
+ALTER TABLE "Booking" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3);
+
 ALTER TABLE "ContactList" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL DEFAULT gen_random_uuid();
 ALTER TABLE "ContactList" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT '';
 ALTER TABLE "ContactList" ADD COLUMN IF NOT EXISTS "description" TEXT;

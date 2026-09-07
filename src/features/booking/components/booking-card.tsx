@@ -21,6 +21,8 @@ import {
   User,
   Calendar,
   MapPin,
+  Archive as ArchiveIcon,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -48,6 +50,14 @@ export interface BookingCardHandlers {
   onDelete: (booking: Booking) => void;
   onStatusChange: (booking: Booking, newStatus: string) => void;
   onCreateJobFromBooking: (bookingId: string) => void;
+  /** PAGINATION-ARCHIVE-1: soft-delete (archive) handler. */
+  onArchive?: (bookingId: string) => void;
+  /** PAGINATION-ARCHIVE-1: restore handler (used when `archiveMode` is true). */
+  onRestore?: (bookingId: string) => void;
+  /** PAGINATION-ARCHIVE-1: render a Restore-only card (no Edit/Convert/Delete). */
+  archiveMode?: boolean;
+  /** PAGINATION-ARCHIVE-1: row id currently mid-action (disabled). */
+  archiveActionLoadingId?: string | null;
 }
 
 export interface BookingCardProps {
@@ -59,6 +69,8 @@ export function BookingCard({ booking, handlers }: BookingCardProps) {
   const statusCfg = STATUS_CONFIG[booking.status] || STATUS_CONFIG.pending;
   const transitions = getTransitionOptions(booking.status);
   const isClosed = ['completed', 'cancelled', 'no_show'].includes(booking.status);
+  const isArchiveMode = handlers.archiveMode === true;
+  const actionLoading = handlers.archiveActionLoadingId === booking.id;
 
   return (
     <Card
@@ -147,45 +159,69 @@ export function BookingCard({ booking, handlers }: BookingCardProps) {
         )}
 
         <div className="flex items-center gap-1.5 ml-auto">
-          {!isClosed && (
+          {/* PAGINATION-ARCHIVE-1: in archive mode, render ONLY a Restore button */}
+          {isArchiveMode ? (
             <Button
               size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-8 text-xs shadow-xs"
-              onClick={() => handlers.onCreateJobFromBooking(booking.id)}
+              variant="outline"
+              className="h-8 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+              onClick={() => handlers.onRestore?.(booking.id)}
+              disabled={actionLoading}
             >
-              <ArrowRight className="size-3.5 mr-1" /> Convert to Job
+              <RotateCcw className="size-3.5 mr-1" /> Restore
             </Button>
-          )}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handlers.onView(booking)}>
-                <Eye className="size-3.5 mr-2" /> View Details
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handlers.onEdit(booking)}>
-                <Pencil className="size-3.5 mr-2" /> Edit Booking
-              </DropdownMenuItem>
+          ) : (
+            <>
               {!isClosed && (
-                <DropdownMenuItem onClick={() => handlers.onCreateJobFromBooking(booking.id)}>
-                  <ArrowRight className="size-3.5 mr-2" /> Convert to Job
-                </DropdownMenuItem>
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-8 text-xs shadow-xs"
+                  onClick={() => handlers.onCreateJobFromBooking(booking.id)}
+                >
+                  <ArrowRight className="size-3.5 mr-1" /> Convert to Job
+                </Button>
               )}
-              {transitions.map((t) => (
-                <DropdownMenuItem key={t.to} onClick={() => handlers.onStatusChange(booking, t.to)}>
-                  <CheckCircle2 className="size-3.5 mr-2" /> Mark as {t.label}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => handlers.onDelete(booking)}>
-                <Trash2 className="size-3.5 mr-2" /> Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handlers.onView(booking)}>
+                    <Eye className="size-3.5 mr-2" /> View Details
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handlers.onEdit(booking)}>
+                    <Pencil className="size-3.5 mr-2" /> Edit Booking
+                  </DropdownMenuItem>
+                  {!isClosed && (
+                    <DropdownMenuItem onClick={() => handlers.onCreateJobFromBooking(booking.id)}>
+                      <ArrowRight className="size-3.5 mr-2" /> Convert to Job
+                    </DropdownMenuItem>
+                  )}
+                  {transitions.map((t) => (
+                    <DropdownMenuItem key={t.to} onClick={() => handlers.onStatusChange(booking, t.to)}>
+                      <CheckCircle2 className="size-3.5 mr-2" /> Mark as {t.label}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  {/* PAGINATION-ARCHIVE-1: soft-delete (archive) action */}
+                  {handlers.onArchive && (
+                    <DropdownMenuItem
+                      onClick={() => handlers.onArchive?.(booking.id)}
+                      disabled={actionLoading}
+                    >
+                      <ArchiveIcon className="size-3.5 mr-2" /> Archive
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem variant="destructive" onClick={() => handlers.onDelete(booking)}>
+                    <Trash2 className="size-3.5 mr-2" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
         </div>
       </div>
     </Card>

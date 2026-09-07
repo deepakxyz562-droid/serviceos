@@ -50,6 +50,16 @@ async function _GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const search = searchParams.get('search');
+    // PAGINATION-ARCHIVE-1: archived=true → only soft-deleted leads.
+    // Default (unset or 'false') → only active leads (deletedAt IS NULL).
+    // Legacy `deleted=false` query param (still sent by the useLeads hook)
+    // is treated identically to the default — only active leads are returned.
+    const archivedParam = searchParams.get('archived');
+    const deletedParam = searchParams.get('deleted');
+    const archivedOnly =
+      archivedParam === 'true' || deletedParam === 'true';
+    const includeArchived =
+      archivedParam === 'all' || deletedParam === 'all';
 
     // ─── Tenant scoping (mirrors /api/deals pattern) ──────────────────
     // The caller's tenantId is the source of truth — NEVER show all leads.
@@ -90,6 +100,16 @@ async function _GET(request: NextRequest) {
     }
     if (priority) {
       where.priority = priority;
+    }
+    // PAGINATION-ARCHIVE-1: filter on deletedAt to support the Active vs
+    // Archived tabs on the frontend.
+    //   archived=true (or deleted=true)   → only archived leads
+    //   archived=all  (or deleted=all)    → both active + archived (legacy)
+    //   default                          → only active leads (deletedAt IS NULL)
+    if (archivedOnly) {
+      where.deletedAt = { not: null };
+    } else if (!includeArchived) {
+      where.deletedAt = null;
     }
     if (search) {
       where.OR = [

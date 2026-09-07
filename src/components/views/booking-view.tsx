@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   CalendarCheck,
   AlertCircle,
@@ -10,6 +10,10 @@ import {
   LayoutGrid,
   List,
   RefreshCw,
+  Archive as ArchiveIcon,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   Card,
@@ -19,10 +23,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataTable } from '@/components/ui/data-table';
-import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { apiGet, apiPost, apiPut, apiDelete, authFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useBookings } from '@/hooks/use-crm-data';
+import { useQueryClient } from '@tanstack/react-query';
+import { qk } from '@/lib/query-keys';
 
 import {
   EMPTY_FORM,
@@ -71,10 +78,23 @@ export function BookingView() {
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
 
+  // ── PAGINATION-ARCHIVE-1: Active vs Archived tab ────────────────────────
+  // The "Archived" tab fetches bookings with `archived=true` (soft-deleted
+  // only). When the user switches tabs, the useBookings query re-runs with
+  // the new filter via the `archived` query param.
+  const [archiveTab, setArchiveTab] = useState<'active' | 'archived'>('active');
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+
+  // Reset page when tab/search/filter changes (mirrors leads-view pattern).
+  useEffect(() => {
+    setPage(1);
+  }, [archiveTab, statusFilter, searchQuery]);
+
   // Main list data — React Query replaces the manual fetchBookings
-  // useCallback + useEffect. RQ keys the query by `{ status, search }`, so
-  // rapid filter changes no longer race (the latest filter wins; stale
-  // responses are discarded).
+  // useCallback + useEffect. RQ keys the query by `{ status, search, archived,
+  // page, limit }`, so rapid filter changes no longer race (the latest filter
+  // wins; stale responses are discarded).
   const {
     data: bookingsData,
     isLoading: loading,
@@ -83,12 +103,67 @@ export function BookingView() {
   } = useBookings({
     status: statusFilter !== 'all' ? statusFilter : undefined,
     search: searchQuery || undefined,
+    page,
+    limit: pageSize,
+    archived: archiveTab === 'archived' ? 'true' : 'false',
   });
-  const bookings = (bookingsData ?? []) as Booking[];
+  const bookings = bookingsData?.bookings ?? [];
+  // Sync the local pagination state with the API response (so the
+  // pagination controls render the right page/total).
+  useEffect(() => {
+    if (bookingsData?.pagination) {
+      setPagination({
+        page: bookingsData.pagination.page ?? page,
+        limit: bookingsData.pagination.limit ?? pageSize,
+        total: bookingsData.pagination.total ?? 0,
+        totalPages: bookingsData.pagination.totalPages ?? 0,
+      });
+    }
+  }, [bookingsData?.pagination, page, pageSize]);
   // `error` mirrors the original string-error banner; derived from RQ's
   // Error object. Mutations no longer call setError(...) — they all use
   // toast.error for user-visible feedback, same as before.
   const error = rqError?.message ?? null;
+
+  // ── Archive / Restore handlers (PAGINATION-ARCHIVE-1) ──────────────────
+  const queryClient = useQueryClient();
+  const [archiveActionLoadingId, setArchiveActionLoadingId] = useState<string | null>(null);
+
+  const handleArchiveBooking = useCallback(async (bookingId: string) => {
+    setArchiveActionLoadingId(bookingId);
+    try {
+      const res = await authFetch(`/api/bookings/${bookingId}/archive`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to archive booking');
+        return;
+      }
+      toast.success('Booking archived');
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
+    } catch {
+      toast.error('Network error archiving booking');
+    } finally {
+      setArchiveActionLoadingId(null);
+    }
+  }, [queryClient]);
+
+  const handleRestoreBooking = useCallback(async (bookingId: string) => {
+    setArchiveActionLoadingId(bookingId);
+    try {
+      const res = await authFetch(`/api/bookings/${bookingId}/restore`, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to restore booking');
+        return;
+      }
+      toast.success('Booking restored');
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
+    } catch {
+      toast.error('Network error restoring booking');
+    } finally {
+      setArchiveActionLoadingId(null);
+    }
+  }, [queryClient]);
 
   useEffect(() => {
     apiGet<{ id: string; name: string; role: string; status: string }[]>(
@@ -452,6 +527,12 @@ export function BookingView() {
     onDelete: handleDelete,
     onStatusChange: handleStatusChange,
     onCreateJobFromBooking: handleCreateJobFromBooking,
+    // PAGINATION-ARCHIVE-1: pass archive handlers + current mode so the
+    // columns render the right actions (Restore-only in archive mode).
+    onArchive: handleArchiveBooking,
+    onRestore: handleRestoreBooking,
+    archiveMode: archiveTab === 'archived',
+    archiveActionLoadingId,
   });
 
   // -----------------------------------------------------------------------
@@ -501,167 +582,287 @@ export function BookingView() {
         </Card>
       )}
 
-      {/* Interactive Status Filter Chips */}
-      <BookingStatusChips
-        statusFilter={statusFilter}
-        onFilterChange={setStatusFilter}
-        pagination={pagination}
-        bookings={bookings}
-      />
+      {/* ── PAGINATION-ARCHIVE-1: Active vs Archived top-level tabs ────────── */}
+      <Tabs
+        value={archiveTab}
+        onValueChange={(v) => setArchiveTab(v as 'active' | 'archived')}
+        className="w-full"
+      >
+        <TabsList className="h-10">
+          <TabsTrigger value="active" className="text-xs px-4 gap-1.5">
+            <CalendarCheck className="size-3.5" /> Active
+          </TabsTrigger>
+          <TabsTrigger value="archived" className="text-xs px-4 gap-1.5">
+            <ArchiveIcon className="size-3.5" /> Archived
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Search & Filter Bar + Layout Switcher */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Search bookings by title, customer, phone..."
-            className="pl-9 h-10"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+        {/* Active tab content (existing list — same as before archive feature) */}
+        <TabsContent value="active" className="mt-4 space-y-4 outline-none">
+          {/* Interactive Status Filter Chips */}
+          <BookingStatusChips
+            statusFilter={statusFilter}
+            onFilterChange={setStatusFilter}
+            pagination={pagination}
+            bookings={bookings}
           />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-              onClick={() => setSearchQuery('')}
-            >
-              <X className="size-3" />
-            </Button>
-          )}
-        </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          <Button variant="outline" size="sm" className="h-10 text-xs" onClick={() => fetchBookings()}>
-            <RefreshCw className="size-3.5 mr-1" /> Refresh
-          </Button>
-
-          {/* View Switcher Toggle: Cards vs Table */}
-          <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border">
-            <button
-              type="button"
-              onClick={() => setViewLayout('grid')}
-              className={cn(
-                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
-                viewLayout === 'grid' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+          {/* Search & Filter Bar + Layout Switcher */}
+          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Search bookings by title, customer, phone..."
+                className="pl-9 h-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <X className="size-3" />
+                </Button>
               )}
-              title="Grid Cards View"
-            >
-              <LayoutGrid className="size-3.5" /> Cards
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewLayout('table')}
-              className={cn(
-                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
-                viewLayout === 'table' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
-              )}
-              title="Table View"
-            >
-              <List className="size-3.5" /> Table
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Bookings Content */}
-      {loading ? (
-        <Card className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="p-4 rounded-xl border space-y-3">
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-                <Skeleton className="h-8 w-full" />
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : bookings.length === 0 ? (
-        /* Empty state */
-        <Card>
-          <CardContent className="p-12">
-            <div className="flex flex-col items-center justify-center text-center gap-4">
-              <div className="size-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                <CalendarCheck className="size-8 text-emerald-600" />
-              </div>
-              <h3 className="text-lg font-semibold">No bookings found</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                Try adjusting your search filters or create a new booking request.
-              </p>
-              <Button
-                className="bg-emerald-600 hover:bg-emerald-700 font-semibold"
-                onClick={handleCreate}
-              >
-                <Plus className="size-4 mr-1.5" /> New Booking
-              </Button>
             </div>
-          </CardContent>
-        </Card>
-      ) : viewLayout === 'grid' ? (
-        /* ─── Grid Cards View ────────────────────────────────────────────── */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {bookings.map((booking) => (
-            <BookingCard
-              key={booking.id}
-              booking={booking}
-              handlers={{
-                onView: handleView,
-                onEdit: handleEdit,
-                onDelete: handleDelete,
-                onStatusChange: handleStatusChange,
-                onCreateJobFromBooking: handleCreateJobFromBooking,
-              }}
-            />
-          ))}
-        </div>
-      ) : (
-        /* ─── Table View ───────────────────────────────────────────────── */
-        <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
-          <div className="max-h-[650px] overflow-auto">
-            <DataTable
-              columns={bookingColumns}
-              data={bookings}
-              rowKey={(b) => b.id}
-              onRowClick={(b) => handleView(b)}
-            />
-          </div>
-        </Card>
-      )}
 
-      {/* Pagination info */}
-      {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Showing {bookings.length} of {pagination.total} bookings
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page <= 1}
-              onClick={() =>
-                setPagination((p) => ({ ...p, page: p.page - 1 }))
-              }
-            >
-              Previous
-            </Button>
-            <span className="flex items-center px-2">
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page >= pagination.totalPages}
-              onClick={() =>
-                setPagination((p) => ({ ...p, page: p.page + 1 }))
-              }
-            >
-              Next
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+              <Button variant="outline" size="sm" className="h-10 text-xs" onClick={() => fetchBookings()}>
+                <RefreshCw className="size-3.5 mr-1" /> Refresh
+              </Button>
+
+              {/* View Switcher Toggle: Cards vs Table */}
+              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border">
+                <button
+                  type="button"
+                  onClick={() => setViewLayout('grid')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
+                    viewLayout === 'grid' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Grid Cards View"
+                >
+                  <LayoutGrid className="size-3.5" /> Cards
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewLayout('table')}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer',
+                    viewLayout === 'table' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Table View"
+                >
+                  <List className="size-3.5" /> Table
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Bookings Content */}
+          {loading ? (
+            <Card className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="p-4 rounded-xl border space-y-3">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ) : bookings.length === 0 ? (
+            <Card>
+              <CardContent className="p-12">
+                <div className="flex flex-col items-center justify-center text-center gap-4">
+                  <div className="size-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                    <CalendarCheck className="size-8 text-emerald-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold">No bookings found</h3>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    Try adjusting your search filters or create a new booking request.
+                  </p>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 font-semibold"
+                    onClick={handleCreate}
+                  >
+                    <Plus className="size-4 mr-1.5" /> New Booking
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : viewLayout === 'grid' ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {bookings.map((booking) => (
+                <BookingCard
+                  key={booking.id}
+                  booking={booking}
+                  handlers={{
+                    onView: handleView,
+                    onEdit: handleEdit,
+                    onDelete: handleDelete,
+                    onStatusChange: handleStatusChange,
+                    onCreateJobFromBooking: handleCreateJobFromBooking,
+                    onArchive: handleArchiveBooking,
+                    archiveMode: false,
+                    archiveActionLoadingId,
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+              <div className="max-h-[650px] overflow-auto">
+                <DataTable
+                  columns={bookingColumns}
+                  data={bookings}
+                  rowKey={(b) => b.id}
+                  onRowClick={(b) => handleView(b)}
+                />
+              </div>
+            </Card>
+          )}
+
+          {/* Pagination info */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>
+                Showing {bookings.length} of {pagination.total} bookings
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  <ChevronLeft className="size-3.5" /> Previous
+                </Button>
+                <span className="flex items-center px-2">
+                  Page {pagination.page} of {pagination.totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= pagination.totalPages}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next <ChevronRight className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Archived tab content ──────────────────────────────────────── */}
+        <TabsContent value="archived" className="mt-4 space-y-4 outline-none">
+          <Card className="border-amber-200 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/10">
+            <CardContent className="p-4 flex items-start gap-3">
+              <ArchiveIcon className="size-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold text-amber-900 dark:text-amber-300">Archived Bookings</p>
+                <p className="text-amber-800/80 dark:text-amber-400/80 mt-0.5">
+                  Soft-deleted bookings are kept here for audit. Restore a booking to move it back to the Active list.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Search + Refresh */}
+          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Search archived bookings..."
+                className="pl-9 h-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <X className="size-3" />
+                </Button>
+              )}
+            </div>
+            <Button variant="outline" size="sm" className="h-10 text-xs" onClick={() => fetchBookings()}>
+              <RefreshCw className="size-3.5 mr-1" /> Refresh
             </Button>
           </div>
-        </div>
-      )}
+
+          {/* Archived bookings content (always table for archive mode) */}
+          {loading ? (
+            <Card>
+              <CardContent className="flex items-center justify-center py-12">
+                <Skeleton className="h-6 w-32" />
+              </CardContent>
+            </Card>
+          ) : bookings.length === 0 ? (
+            <Card>
+              <CardContent className="p-12">
+                <div className="flex flex-col items-center justify-center text-center gap-4">
+                  <div className="size-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                    <ArchiveIcon className="size-8 text-amber-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold">No archived bookings</h3>
+                  <p className="text-sm text-muted-foreground max-w-md">
+                    Archived bookings will appear here for audit.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+              <div className="max-h-[650px] overflow-auto">
+                <DataTable
+                  columns={bookingColumns}
+                  data={bookings}
+                  rowKey={(b) => b.id}
+                  onRowClick={(b) => handleView(b)}
+                />
+              </div>
+            </Card>
+          )}
+
+          {/* Pagination info (archived) */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <span>
+                Showing {bookings.length} of {pagination.total} archived bookings
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(page - 1)}
+                >
+                  <ChevronLeft className="size-3.5" /> Previous
+                </Button>
+                <span className="flex items-center px-2">
+                  Page {pagination.page} of {pagination.totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= pagination.totalPages}
+                  onClick={() => setPage(page + 1)}
+                >
+                  Next <ChevronRight className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* CREATE DIALOG */}
       <CreateBookingDialog

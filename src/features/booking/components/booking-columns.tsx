@@ -21,6 +21,8 @@ import {
   Calendar,
   Phone,
   MessageSquare,
+  Archive as ArchiveIcon,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -49,6 +51,21 @@ export interface BookingColumnHandlers {
   onDelete: (booking: Booking) => void;
   onStatusChange: (booking: Booking, newStatus: string) => void;
   onCreateJobFromBooking: (bookingId: string) => void;
+  /**
+   * PAGINATION-ARCHIVE-1: Archive (soft-delete) handler. When provided, an
+   * "Archive" item is added to the row dropdown. Used by the Active list.
+   */
+  onArchive?: (bookingId: string) => void;
+  /**
+   * PAGINATION-ARCHIVE-1: Restore handler. When provided AND `archiveMode`
+   * is true, the row renders a "Restore" button instead of the normal
+   * actions dropdown. Used by the Archived list.
+   */
+  onRestore?: (bookingId: string) => void;
+  /** PAGINATION-ARCHIVE-1: render an archived list (Restore-only actions). */
+  archiveMode?: boolean;
+  /** PAGINATION-ARCHIVE-1: shows which row is currently mid-action (disabled). */
+  archiveActionLoadingId?: string | null;
 }
 
 /**
@@ -56,7 +73,17 @@ export interface BookingColumnHandlers {
  * the action handlers so the columns don't need a context/prop-drill layer.
  */
 export function buildBookingColumns(handlers: BookingColumnHandlers): Column<Booking>[] {
-  const { onView, onEdit, onDelete, onStatusChange, onCreateJobFromBooking } = handlers;
+  const {
+    onView,
+    onEdit,
+    onDelete,
+    onStatusChange,
+    onCreateJobFromBooking,
+    onArchive,
+    onRestore,
+    archiveMode = false,
+    archiveActionLoadingId = null,
+  } = handlers;
 
   return [
     {
@@ -192,6 +219,25 @@ export function buildBookingColumns(handlers: BookingColumnHandlers): Column<Boo
       key: 'actions',
       header: 'Actions',
       render: (b) => {
+        // PAGINATION-ARCHIVE-1: in archive mode, render ONLY a Restore button.
+        if (archiveMode) {
+          return (
+            <div
+              className="flex items-center justify-end gap-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px] px-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => onRestore?.(b.id)}
+                disabled={archiveActionLoadingId === b.id}
+              >
+                <RotateCcw className="size-3 mr-1" /> Restore
+              </Button>
+            </div>
+          );
+        }
         const transitions = getTransitionOptions(b.status);
         const isClosed = ['completed', 'cancelled', 'no_show'].includes(
           b.status
@@ -232,6 +278,15 @@ export function buildBookingColumns(handlers: BookingColumnHandlers): Column<Boo
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
+                {/* PAGINATION-ARCHIVE-1: Archive (soft-delete) action */}
+                {onArchive && (
+                  <DropdownMenuItem
+                    onClick={() => onArchive(b.id)}
+                    disabled={archiveActionLoadingId === b.id}
+                  >
+                    <ArchiveIcon className="size-3.5 mr-2" /> Archive
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   variant="destructive"
                   onClick={() => onDelete(b)}

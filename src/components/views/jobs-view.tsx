@@ -690,10 +690,13 @@ export function JobsView() {
     }
     let cancelled = false;
     fetch(`/api/quotes?customerId=${encodeURIComponent(jobForm.customerId)}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : []))
+      .then((r) => (r.ok ? r.json() : { quotes: [] }))
       .then((data) => {
         if (!cancelled) {
-          const list = Array.isArray(data) ? data : [];
+          // The /api/quotes endpoint returns { quotes, pagination } (since
+          // PAGINATION-ARCHIVE-1). Tolerate the legacy bare-array shape for
+          // backward compatibility with cached clients.
+          const list = Array.isArray(data) ? data : (data?.quotes ?? []);
           // Only show linkable quotes (draft + sent); exclude already-accepted/rejected/expired.
           const linkable = list.filter(
             (q: QuoteOption) => q.status === 'draft' || q.status === 'sent'

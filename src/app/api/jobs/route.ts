@@ -114,6 +114,14 @@ async function _GET(request: NextRequest) {
     // compat — most callers client-side filter them anyway).
     const excludeDeleted = searchParams.get('includeDeleted') === 'false'
 
+    // PAGINATION-ARCHIVE-1: archived=true → only soft-deleted jobs.
+    // archived='all' → both active + soft-deleted (overrides excludeDeleted).
+    // The legacy `includeDeleted=false` param is preserved (useJobs hook sends
+    // it) — when archived is unset, excludeDeleted takes effect.
+    const archivedParam = searchParams.get('archived');
+    const archivedOnly = archivedParam === 'true';
+    const includeArchived = archivedParam === 'all';
+
     // ── C-2A: Server-side pagination ──────────────────────────────────
     // Default pageSize=50 for active mode, 200 for history mode (preserves
     // the previous `take: 200` behavior). `limit` is honored as an alias
@@ -135,7 +143,7 @@ async function _GET(request: NextRequest) {
     // different views (Active vs History vs Dispatch) and pages get separate
     // cache entries.
     if (!search && user.tenantId) {
-      const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${searchParams.get('tenantId') || ''}:p${page}:ps${pageSize}`;
+      const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${archivedParam || ''}:${searchParams.get('tenantId') || ''}:p${page}:ps${pageSize}`;
       const cached = cache.get<unknown>(cacheKey);
       if (cached !== undefined) {
         return cachedJson(cached);
@@ -222,8 +230,12 @@ async function _GET(request: NextRequest) {
     // `{ not: ... }` inside `OR` structure was incompatible with the Supabase
     // REST adapter (which silently drops `{ not: ... }` conditions inside OR
     // and can't handle nested OR), causing jobs to disappear in production.
-    if (excludeDeleted && !historyMode) {
+    if (excludeDeleted && !historyMode && !archivedOnly && !includeArchived) {
       where.deletedAt = null
+    }
+    // PAGINATION-ARCHIVE-1: archived=true → only soft-deleted jobs.
+    if (archivedOnly && !historyMode) {
+      where.deletedAt = { not: null }
     }
 
     if (search) {

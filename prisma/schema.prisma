@@ -945,6 +945,8 @@ model Invoice {
   // Paired with recurrenceId in a UNIQUE constraint so the same schedule cannot generate
   // two invoices for the same occurrence (cron double-fire protection).
   occurrenceDate DateTime?
+  // Soft-delete for archive feature. NULL = active, non-NULL = archived (archived timestamp).
+  deletedAt     DateTime?
   // ── Phase C (Phase 1 schema addition): direct FK to RecurringJobSchedule ──
   // When invoiceTiming='on_generation', the engine creates an Invoice linked directly to
   // the RecurringJobSchedule (NOT via the Job). Paired with occurrenceDate in a UNIQUE
@@ -958,6 +960,8 @@ model Invoice {
   notes       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  // Soft-delete for archive feature. NULL = active, non-NULL = archived (archived timestamp).
+  deletedAt   DateTime?
 
   tenant    Tenant?          @relation(fields: [tenantId], references: [id])
   job       Job?             @relation(fields: [jobId], references: [id])
@@ -1171,6 +1175,8 @@ model Quote {
   whatsappSentAt DateTime?
   emailSent     Boolean   @default(false)
   emailSentAt   DateTime?
+  // Soft-delete for archive feature. NULL = active, non-NULL = archived (archived timestamp).
+  deletedAt     DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -3950,6 +3956,8 @@ model Booking {
   metadataJson      String    @default("{}")
   tenantId          String?
   workspaceId       String?
+  // Soft-delete for archive feature. NULL = active, non-NULL = archived (archived timestamp).
+  deletedAt         DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

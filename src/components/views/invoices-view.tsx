@@ -25,6 +25,10 @@ import {
   ShieldCheck,
   Sparkles,
   Pencil,
+  Archive,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -113,12 +117,32 @@ export function InvoicesView() {
   // Data state
   const [customers, setCustomers] = useState<Customer[]>([]);
 
+  // PAGINATION-ARCHIVE-1: Invoice list now supports server-side pagination +
+  // archive filtering. The `activeTab` state controls whether we show active
+  // ('list') or archived ('archived') invoices. `currentPage` tracks the
+  // page offset. Both are passed to useInvoices() which builds the query
+  // params for /api/invoices?page=X&limit=Y&archived=Z.
+  const [activeTab, setActiveTab] = useState<'list' | 'archived'>('list');
+  const [currentPage, setCurrentPage] = useState(1);
+  const invoicesPerPage = 20;
+
   // Invoice list is now backed by React Query (useInvoices). The RQ cache
   // is invalidated by all invoice mutations via getInvoiceInvalidations, so
   // the list auto-refreshes without manual setInvoices() calls.
-  const { data: invoicesData, isLoading: loadingInvoices, error: invoicesRqError, refetch: refetchInvoices } = useInvoices();
-  const invoices: Invoice[] = invoicesData ?? [];
+  const { data: invoicesData, isLoading: loadingInvoices, error: invoicesRqError, refetch: refetchInvoices } = useInvoices({
+    page: currentPage,
+    limit: invoicesPerPage,
+    archived: activeTab === 'archived' ? 'true' : 'false',
+  });
+  const invoices: Invoice[] = invoicesData?.invoices ?? [];
+  const totalInvoices = invoicesData?.pagination?.total ?? 0;
+  const totalPages = invoicesData?.pagination?.totalPages ?? 1;
   const invoicesError = invoicesRqError?.message ?? null;
+
+  // Reset to page 1 when switching tabs
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
 
   // Local invoice state for optimistic UI in handleStatusChange ONLY.
   // All other mutations rely on RQ invalidation for list refresh.
@@ -506,6 +530,29 @@ export function InvoicesView() {
       toast.success('Invoice deleted');
     } catch (e: any) {
       toast.error(e instanceof Error ? e.message : 'Failed to delete invoice');
+    }
+  };
+
+  // PAGINATION-ARCHIVE-1: Archive + restore handlers for soft-delete.
+  const handleArchiveInvoice = async (invoiceId: string) => {
+    try {
+      const res = await authFetch(`/api/invoices/${invoiceId}/archive`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to archive invoice');
+      toast.success('Invoice archived');
+      refetchInvoices();
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to archive invoice');
+    }
+  };
+
+  const handleRestoreInvoice = async (invoiceId: string) => {
+    try {
+      const res = await authFetch(`/api/invoices/${invoiceId}/restore`, { method: 'POST' });
+      if (!res.ok) throw new Error('Failed to restore invoice');
+      toast.success('Invoice restored');
+      refetchInvoices();
+    } catch (e: any) {
+      toast.error(e instanceof Error ? e.message : 'Failed to restore invoice');
     }
   };
 
@@ -1261,6 +1308,16 @@ export function InvoicesView() {
               >
                 <Trash2 className="size-3.5 mr-2" /> Delete
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {activeTab === 'list' ? (
+                <DropdownMenuItem onClick={() => handleArchiveInvoice(inv.id)}>
+                  <Archive className="size-3.5 mr-2" /> Archive
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => handleRestoreInvoice(inv.id)}>
+                  <RotateCcw className="size-3.5 mr-2" /> Restore
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         );
@@ -1360,12 +1417,13 @@ export function InvoicesView() {
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
           <TabsList className="h-9">
-            <TabsTrigger value="all" className="text-xs px-3">All</TabsTrigger>
+            <TabsTrigger value="all" className="text-xs px-3" onClick={() => setActiveTab('list')}>All</TabsTrigger>
             <TabsTrigger value="draft" className="text-xs px-3">Draft</TabsTrigger>
             <TabsTrigger value="sent" className="text-xs px-3">Sent</TabsTrigger>
             <TabsTrigger value="paid" className="text-xs px-3">Paid</TabsTrigger>
             <TabsTrigger value="pending_approval" className="text-xs px-3 text-amber-700 data-[state=active]:bg-amber-50 data-[state=active]:text-amber-800">Pending Approval</TabsTrigger>
             <TabsTrigger value="overdue" className="text-xs px-3">Overdue</TabsTrigger>
+            <TabsTrigger value="archived" className="text-xs px-3 text-muted-foreground" onClick={() => setActiveTab('archived')}>Archived</TabsTrigger>
           </TabsList>
         </Tabs>
         <Button
@@ -1404,6 +1462,35 @@ export function InvoicesView() {
             emptyIcon={FileText}
             onRowClick={openInvoiceDetail}
           />
+          {/* PAGINATION-ARCHIVE-1: Server-side pagination controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 px-2">
+              <p className="text-sm text-muted-foreground">
+                Showing {((currentPage - 1) * invoicesPerPage) + 1}–{Math.min(currentPage * invoicesPerPage, totalInvoices)} of {totalInvoices}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  <ChevronLeft className="size-4" /> Prev
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

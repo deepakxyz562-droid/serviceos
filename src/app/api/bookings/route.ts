@@ -39,6 +39,12 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const sortBy = searchParams.get('sortBy') || 'scheduledAt';
     const sortOrder = searchParams.get('sortOrder') || 'asc';
+    // PAGINATION-ARCHIVE-1: archived=true → only soft-deleted bookings.
+    // Default (unset or 'false') → only active bookings (deletedAt IS NULL).
+    // archived='all' → both active + archived (e.g. for dashboard aggregates).
+    const archivedParam = searchParams.get('archived');
+    const archivedOnly = archivedParam === 'true';
+    const includeArchived = archivedParam === 'all';
 
     // Build where clause. Customers are scoped by customerId; admins/employees
     // are scoped by tenantId (+ optional customerId filter).
@@ -67,6 +73,14 @@ export async function GET(request: NextRequest) {
     if (employeeId) where.employeeId = employeeId;
     if (serviceId) where.serviceId = serviceId;
     if (source) where.source = source;
+
+    // PAGINATION-ARCHIVE-1: filter on deletedAt to support the Active vs
+    // Archived tabs on the frontend.
+    if (archivedOnly) {
+      where.deletedAt = { not: null };
+    } else if (!includeArchived) {
+      where.deletedAt = null;
+    }
 
     if (dateFrom || dateTo) {
       const scheduledAt: Record<string, unknown> = {};
