@@ -44,6 +44,10 @@ export async function POST() {
 
     // ── Create the products (calls Creem API) ─────────────────────────────
     // Failures are collected (not thrown) so we can persist the partial set.
+    // NOTE: createAllCreemProducts() now ALSO saves productHistory to the DB
+    // internally. This route handler re-reads the config AFTER that save
+    // so it picks up the updated productHistory. Then it saves the products
+    // mapping WITHOUT overwriting productHistory.
     const result = await createAllCreemProducts();
 
     // ── Persist successful IDs into RevenueFeatureToggle.configJson.products ──
@@ -52,6 +56,9 @@ export async function POST() {
     // failed (preserve the previous good ID).
     let savedCount = 0;
     if (result.created.length > 0) {
+      // Re-read the toggle AFTER createAllCreemProducts() has saved productHistory.
+      // This ensures we pick up the latest config (with the history) and don't
+      // overwrite it with a stale read.
       const toggle = await db.revenueFeatureToggle.findUnique({
         where: { featureKey: CREEM_FEATURE_KEY },
       });
@@ -116,6 +123,11 @@ export async function POST() {
         });
       }
       savedCount = result.created.length;
+    }
+
+    // Log failures for server-side debugging
+    if (result.failed.length > 0) {
+      console.warn('[creem/create-all] Failed products:', JSON.stringify(result.failed, null, 2));
     }
 
     return NextResponse.json({
