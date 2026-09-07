@@ -208,12 +208,59 @@ export async function createCreemCheckoutSession(
   // Creem requires a pre-created product for every checkout — there is NO
   // ad-hoc / inline-pricing mode. The superadmin must map each plan × cycle
   // to a Creem product_id in the admin panel (stored in config.products).
-  const productId = cfg.products?.[input.planCode]?.[cycle];
+  let productId = cfg.products?.[input.planCode]?.[cycle];
   if (!productId) {
     throw new Error(
       `No Creem product_id mapped for plan "${input.planCode}" (${cycle}). ` +
         `Ask the platform admin to map this plan in the Creem billing settings.`
     );
+  }
+
+  // ── VALIDATE: Check if the product still exists in Creem before checkout ──
+  // If the product was deleted (e.g. admin clicked "Delete All" but Creem
+  // didn't delete it, or it was manually deleted in the Creem dashboard),
+  // the checkout would fail with "Product is no longer available".
+  // We proactively check + give a CLEAR error message instead.
+  try {
+    const checkRes = await fetch(
+      `${getBaseUrl(cfg.apiKey)}/v1/products?product_id=${productId}`,
+      {
+        method: 'GET',
+        headers: { 'x-api-key': cfg.apiKey, Accept: 'application/json' },
+        signal: AbortSignal.timeout(10_000),
+      }
+    );
+    if (checkRes.status === 404) {
+      // Product was deleted in Creem — clear the stale mapping + throw clear error
+      console.warn(`[creem] Product "${productId}" for plan "${input.planCode}" (${cycle}) no longer exists in Creem. Clearing stale mapping.`);
+      try {
+        const toggle = await db.revenueFeatureToggle.findUnique({
+          where: { featureKey: 'creem_billing' },
+        });
+        if (toggle) {
+          const config = JSON.parse(toggle.configJson || '{}');
+          if (config.products?.[input.planCode]?.[cycle]) {
+            delete config.products[input.planCode][cycle];
+            await db.revenueFeatureToggle.update({
+              where: { featureKey: 'creem_billing' },
+              data: { configJson: JSON.stringify(config) },
+            });
+          }
+        }
+      } catch { /* non-fatal — just log */ }
+      throw new Error(
+        `The Creem product for plan "${input.planCode}" (${cycle}) no longer exists. ` +
+        `Please ask the platform admin to click "Create All in Creem" in the superadmin billing settings to recreate it.`
+      );
+    }
+  } catch (validationErr) {
+    // If the validation itself fails (network error, etc), don't block checkout
+    // — let Creem's checkout API handle it. Only throw if we KNOW the product
+    // doesn't exist (404 above).
+    if (validationErr instanceof Error && validationErr.message.includes('no longer exists')) {
+      throw validationErr;
+    }
+    console.warn('[creem] Product validation check failed (non-fatal, proceeding to checkout):', validationErr);
   }
 
   // ── Build the POST /v1/checkouts request body (verified against Creem docs) ──
