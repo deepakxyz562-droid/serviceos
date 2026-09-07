@@ -729,70 +729,131 @@ export function BookingView() {
                   data={bookings}
                   rowKey={(b) => b.id}
                   onRowClick={(b) => handleView(b)}
+                  className="border-0 rounded-none"
                 />
+              </div>
+              <div className="flex items-center justify-between flex-wrap gap-3 p-3 border-t border-slate-100 dark:border-slate-800 bg-muted/20">
+                <p className="text-sm text-muted-foreground">
+                  {pagination.total === 0
+                    ? 'No bookings'
+                    : `Showing ${Math.min((page - 1) * pageSize + 1, pagination.total)}–${Math.min(page * pageSize, pagination.total)} of ${pagination.total} bookings`}
+                </p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
+                    <Select
+                      value={String(pageSize)}
+                      onValueChange={(val) => {
+                        setPageSize(Number(val));
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-[110px] h-8 text-xs bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[
+                          { value: 10, label: '10 / page' },
+                          { value: 20, label: '20 / page' },
+                          { value: 50, label: '50 / page' },
+                          { value: 100, label: '100 / page' },
+                        ].map((opt) => (
+                          <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => setPage(page - 1)}
+                      className="h-8 text-xs bg-background"
+                    >
+                      <ChevronLeft className="size-3.5 mr-1" /> Previous
+                    </Button>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      Page {pagination.page || 1} of {pagination.totalPages || 1}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= (pagination.totalPages || 1)}
+                      onClick={() => setPage(page + 1)}
+                      className="h-8 text-xs bg-background"
+                    >
+                      Next <ChevronRight className="size-3.5 ml-1" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             </Card>
           )}
 
-          {/* Pagination + Rows per page selector — always visible */}
-          <div className="flex items-center justify-between flex-wrap gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <p className="text-sm text-muted-foreground">
-              {pagination.total === 0
-                ? 'No bookings'
-                : `Showing ${Math.min((page - 1) * pageSize + 1, pagination.total)}–${Math.min(page * pageSize, pagination.total)} of ${pagination.total} bookings`}
-            </p>
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
-                <Select
-                  value={String(pageSize)}
-                  onValueChange={(val) => {
-                    setPageSize(Number(val));
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="w-[110px] h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[
-                      { value: 10, label: '10 / page' },
-                      { value: 20, label: '20 / page' },
-                      { value: 50, label: '50 / page' },
-                      { value: 100, label: '100 / page' },
-                    ].map((opt) => (
-                      <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                  className="h-8 text-xs"
-                >
-                  <ChevronLeft className="size-3.5 mr-1" /> Previous
-                </Button>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  Page {pagination.page || 1} of {pagination.totalPages || 1}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= pagination.totalPages}
-                  onClick={() => setPage(page + 1)}
-                  className="h-8 text-xs"
-                >
-                  Next <ChevronRight className="size-3.5 ml-1" />
-                </Button>
+          {/* Grid Layout Pagination */}
+          {viewLayout === 'grid' && (
+            <div className="flex items-center justify-between flex-wrap gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-sm text-muted-foreground">
+                {pagination.total === 0
+                  ? 'No bookings'
+                  : `Showing ${Math.min((page - 1) * pageSize + 1, pagination.total)}–${Math.min(page * pageSize, pagination.total)} of ${pagination.total} bookings`}
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(val) => {
+                      setPageSize(Number(val));
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[110px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        { value: 10, label: '10 / page' },
+                        { value: 20, label: '20 / page' },
+                        { value: 50, label: '50 / page' },
+                        { value: 100, label: '100 / page' },
+                      ].map((opt) => (
+                        <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage(page - 1)}
+                    className="h-8 text-xs"
+                  >
+                    <ChevronLeft className="size-3.5 mr-1" /> Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    Page {pagination.page || 1} of {pagination.totalPages || 1}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= (pagination.totalPages || 1)}
+                    onClick={() => setPage(page + 1)}
+                    className="h-8 text-xs"
+                  >
+                    Next <ChevronRight className="size-3.5 ml-1" />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </TabsContent>
 
         {/* ── Archived tab content ──────────────────────────────────────── */}
@@ -864,70 +925,69 @@ export function BookingView() {
                   data={bookings}
                   rowKey={(b) => b.id}
                   onRowClick={(b) => handleView(b)}
+                  className="border-0 rounded-none"
                 />
+              </div>
+              <div className="flex items-center justify-between flex-wrap gap-3 p-3 border-t border-slate-100 dark:border-slate-800 bg-muted/20">
+                <p className="text-sm text-muted-foreground">
+                  {pagination.total === 0
+                    ? 'No archived bookings'
+                    : `Showing ${Math.min((page - 1) * pageSize + 1, pagination.total)}–${Math.min(page * pageSize, pagination.total)} of ${pagination.total} archived bookings`}
+                </p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
+                    <Select
+                      value={String(pageSize)}
+                      onValueChange={(val) => {
+                        setPageSize(Number(val));
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-[110px] h-8 text-xs bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[
+                          { value: 10, label: '10 / page' },
+                          { value: 20, label: '20 / page' },
+                          { value: 50, label: '50 / page' },
+                          { value: 100, label: '100 / page' },
+                        ].map((opt) => (
+                          <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => setPage(page - 1)}
+                      className="h-8 text-xs bg-background"
+                    >
+                      <ChevronLeft className="size-3.5 mr-1" /> Previous
+                    </Button>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      Page {pagination.page || 1} of {pagination.totalPages || 1}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= (pagination.totalPages || 1)}
+                      onClick={() => setPage(page + 1)}
+                      className="h-8 text-xs bg-background"
+                    >
+                      Next <ChevronRight className="size-3.5 ml-1" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             </Card>
           )}
-
-          {/* Pagination + Rows per page selector (archived) — always visible */}
-          <div className="flex items-center justify-between flex-wrap gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <p className="text-sm text-muted-foreground">
-              {pagination.total === 0
-                ? 'No archived bookings'
-                : `Showing ${Math.min((page - 1) * pageSize + 1, pagination.total)}–${Math.min(page * pageSize, pagination.total)} of ${pagination.total} archived bookings`}
-            </p>
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
-                <Select
-                  value={String(pageSize)}
-                  onValueChange={(val) => {
-                    setPageSize(Number(val));
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="w-[110px] h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[
-                      { value: 10, label: '10 / page' },
-                      { value: 20, label: '20 / page' },
-                      { value: 50, label: '50 / page' },
-                      { value: 100, label: '100 / page' },
-                    ].map((opt) => (
-                      <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                  className="h-8 text-xs"
-                >
-                  <ChevronLeft className="size-3.5 mr-1" /> Previous
-                </Button>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  Page {pagination.page || 1} of {pagination.totalPages || 1}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= pagination.totalPages}
-                  onClick={() => setPage(page + 1)}
-                  className="h-8 text-xs"
-                >
-                  Next <ChevronRight className="size-3.5 ml-1" />
-                </Button>
-              </div>
-            </div>
-          </div>
         </TabsContent>
       </Tabs>
 

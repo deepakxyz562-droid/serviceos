@@ -35,8 +35,9 @@ import type { ReactNode } from 'react';
 import {
   Receipt, Pencil, Send, ShieldCheck, CheckCircle2, RotateCcw,
   Bell, MoreHorizontal, Loader2, User, FileText, Briefcase,
-  Phone, Mail, ScrollText, StickyNote, Eye, Plus,
+  Phone, Mail, ScrollText, StickyNote, Eye, Plus, AlertTriangle, Clock, CreditCard, Copy,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -291,6 +292,178 @@ export function InvoiceDetailPage({
             >
               <MoreHorizontal className="size-4" />
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Actionable Payment Status Banner ───────────────────── */}
+      {inv.status === 'draft' ? (
+        <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 shrink-0">
+              <FileText className="size-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-300">Draft Invoice — Not Yet Sent</h3>
+                <Badge variant="outline" className="text-[10px] bg-amber-100/80 text-amber-800 border-amber-300">Draft</Badge>
+              </div>
+              <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                Total: {format(inv.total)} · Outstanding Balance: {format(inv.total)}. Send to client or mark as paid to complete.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <button
+              type="button"
+              onClick={() => onInvoiceAction(inv.id, 'send')}
+              disabled={!!actionLoading[`${inv.id}-send`]}
+              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-xs"
+            >
+              <Send className="size-3.5 mr-1.5" /> Send to Client
+            </button>
+            <button
+              type="button"
+              onClick={() => onInvoiceAction(inv.id, 'mark_paid')}
+              disabled={!!actionLoading[`${inv.id}-mark_paid`]}
+              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 transition-colors"
+            >
+              <CheckCircle2 className="size-3.5 mr-1.5" /> Mark as Paid
+            </button>
+          </div>
+        </div>
+      ) : !isPaid ? (
+        <div className={`rounded-xl border p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+          inv.status === 'overdue'
+            ? 'border-rose-200 dark:border-rose-900/50 bg-rose-50/60 dark:bg-rose-950/20'
+            : 'border-blue-200 dark:border-blue-900/50 bg-blue-50/60 dark:bg-blue-950/20'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className={`p-2 rounded-lg shrink-0 ${
+              inv.status === 'overdue'
+                ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400'
+                : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400'
+            }`}>
+              <Receipt className="size-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className={`text-sm font-semibold ${
+                  inv.status === 'overdue' ? 'text-rose-900 dark:text-rose-300' : 'text-blue-900 dark:text-blue-300'
+                }`}>
+                  {inv.status === 'overdue' ? 'Payment Overdue' : 'Payment Pending'}
+                </h3>
+                <span className="text-xs font-mono font-bold text-foreground">
+                  Balance Due: {format(invoiceBalance)}
+                </span>
+              </div>
+              <p className={`text-xs mt-0.5 ${
+                inv.status === 'overdue' ? 'text-rose-700/80 dark:text-rose-400/80' : 'text-blue-700/80 dark:text-blue-400/80'
+              }`}>
+                {inv.dueDate ? `Due date: ${formatShortDate(inv.dueDate)}` : 'Due upon receipt'} · Issued {formatShortDate(inv.createdAt)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <button
+              type="button"
+              onClick={() => onInvoiceAction(inv.id, 'mark_paid')}
+              disabled={!!actionLoading[`${inv.id}-mark_paid`]}
+              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors shadow-xs"
+            >
+              <CheckCircle2 className="size-3.5 mr-1.5" /> Record Payment
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const url = typeof window !== 'undefined' ? `${window.location.origin}/invoices/${inv.id}` : '';
+                if (url) {
+                  navigator.clipboard.writeText(url);
+                  toast.success('Invoice link copied to clipboard');
+                }
+              }}
+              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-background hover:bg-muted text-foreground transition-colors"
+            >
+              Copy Pay Link
+            </button>
+            <button
+              type="button"
+              onClick={() => onInvoiceAction(inv.id, 'reminder')}
+              disabled={!!actionLoading[`${inv.id}-reminder`]}
+              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-background hover:bg-muted text-foreground transition-colors"
+            >
+              <Bell className="size-3.5 mr-1.5" /> Send Reminder
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-950/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 shrink-0">
+              <CheckCircle2 className="size-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-900 dark:text-emerald-300">Paid in Full</h3>
+              <p className="text-xs text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
+                Payment of {format(inv.total)} received {inv.paidAt ? `on ${formatShortDate(inv.paidAt)}` : ''} · Remaining Balance: {format(0)}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onReopen(inv)}
+            disabled={!!actionLoading[`${inv.id}-reopen`]}
+            className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium text-emerald-700 border border-emerald-200 bg-white hover:bg-emerald-50 transition-colors"
+          >
+            <RotateCcw className="size-3.5 mr-1.5" /> Re-open Invoice
+          </button>
+        </div>
+      )}
+
+      {/* ─── Visual Lifecycle Stepper ──────────────────────────── */}
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-card p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-left">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center size-7 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs shrink-0">
+              ✓
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">1. Created</p>
+              <p className="text-[10px] text-muted-foreground">{formatShortDate(inv.createdAt)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className={`flex items-center justify-center size-7 rounded-full font-bold text-xs shrink-0 ${
+              inv.status !== 'draft' ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'
+            }`}>
+              {inv.status !== 'draft' ? '✓' : '2'}
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">2. Sent to Client</p>
+              <p className="text-[10px] text-muted-foreground">{inv.sentAt ? formatShortDate(inv.sentAt) : (inv.status !== 'draft' ? 'Sent' : 'Pending')}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className={`flex items-center justify-center size-7 rounded-full font-bold text-xs shrink-0 ${
+              isPaid ? 'bg-emerald-100 text-emerald-700' : (inv.status === 'sent' || inv.status === 'overdue' ? 'bg-blue-100 text-blue-700' : 'bg-muted text-muted-foreground')
+            }`}>
+              {isPaid ? '✓' : '3'}
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">3. Payment Due</p>
+              <p className="text-[10px] text-muted-foreground">{inv.dueDate ? formatShortDate(inv.dueDate) : 'On Receipt'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div className={`flex items-center justify-center size-7 rounded-full font-bold text-xs shrink-0 ${
+              isPaid ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'
+            }`}>
+              {isPaid ? '✓' : '4'}
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">4. Completed / Paid</p>
+              <p className="text-[10px] text-muted-foreground">{inv.paidAt ? formatShortDate(inv.paidAt) : 'Unpaid'}</p>
+            </div>
           </div>
         </div>
       </div>

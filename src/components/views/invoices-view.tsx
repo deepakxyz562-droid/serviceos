@@ -1566,7 +1566,7 @@ export function InvoicesView() {
       </div>
 
       {/* ── Invoice Table ────────────────────────────────────────── */}
-      <Card>
+      <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
         <CardContent className="p-0">
           <DataTable
             columns={invoiceColumns}
@@ -1578,9 +1578,10 @@ export function InvoicesView() {
             emptyMessage="No invoices found"
             emptyIcon={FileText}
             onRowClick={openInvoiceDetail}
+            className="border-0 rounded-none"
           />
           {/* Pagination + Rows per page selector — always visible */}
-          <div className="flex items-center justify-between flex-wrap gap-3 p-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between flex-wrap gap-3 p-3 border-t border-slate-100 dark:border-slate-800 bg-muted/20">
             <p className="text-sm text-muted-foreground">
               {totalInvoices === 0
                 ? 'No invoices'

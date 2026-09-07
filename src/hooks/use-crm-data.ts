@@ -48,7 +48,7 @@
 
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { authFetch } from '@/lib/api';
 import { qk, type QueryKey } from '@/lib/query-keys';
 
@@ -81,6 +81,7 @@ export function useJobs(params: JobListParams = {}) {
       };
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM jobs
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -142,6 +143,7 @@ export function useCustomers(params: CustomerListParams = {}) {
       };
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM customers/contacts
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -188,6 +190,7 @@ export function useInvoices(params: InvoiceListParams = {}) {
       };
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM invoices
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -237,6 +240,7 @@ export function useLeads(params: LeadListParams = {}) {
       };
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM leads
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -516,6 +520,7 @@ export function useBookings(params: BookingListParams = {}) {
       };
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM bookings
+    placeholderData: keepPreviousData,
   });
 }
 

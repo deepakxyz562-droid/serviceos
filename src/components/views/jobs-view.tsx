@@ -778,7 +778,6 @@ export function JobsView() {
   // fetch ALL non-terminal jobs and filter client-side via the `jobs` useMemo
   // below. This avoids needing a server-side overdue query (which would
   // require comparing scheduledAt + estimatedDuration to NOW — not supported
-  // by the Supabase REST adapter).
   const { data: jobsData, isLoading: loading, error: rqError, refetch: fetchJobs } = useJobs({
     status: statusFilter !== 'all' && statusFilter !== 'overdue' ? statusFilter : undefined,
     search: debouncedSearch || undefined,
@@ -789,24 +788,8 @@ export function JobsView() {
     ...(statusFilter === 'overdue' ? {} : { page: currentPage, limit: jobsPerPage }),
   });
   const error = rqError?.message ?? null;
-  // PAGINATION-ARCHIVE-1: read pagination metadata from the API response.
-  // When using 'overdue' filter (no pagination), pagination will be null.
-  const jobsPagination = jobsData?.pagination ?? null;
-  const totalJobs = jobsPagination?.total ?? jobs.length;
-  const totalPages = jobsPagination?.totalPages ?? 1;
-
-  // Reset to page 1 when the status filter, search, or page size changes — otherwise the
-  // user could be on page 5 of the old filter and see no results.
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [statusFilter, debouncedSearch, jobsPerPage]);
 
   // ── Mutations (dependency-aware, auto-invalidate via getJobInvalidations) ──
-  // create/update/delete/assign/status → jobs.all + dashboard.all + calendar + dispatch + detail + customer/employee detail
-  // note → jobs.detail(id) ONLY (completionNotes not consumed by dashboard/list/etc.)
-  // pause/resume schedule → jobs.all ONLY (changes schedule, not job)
-  // generate invoice → invoices.all + jobs.detail(id) + customer detail (no dashboard)
-  // link operations → cross-domain targeted (leads/invoices/quotes)
   const createJob = useCreateJob();
   const updateJob = useUpdateJob();
   const deleteJob = useDeleteJob();
@@ -826,12 +809,6 @@ export function JobsView() {
   // A job completed TODAY stays in the Active list for the rest of the
   // calendar day (so the tenant can still review/edit it immediately) and
   // only moves to the History tab the next day.
-  //
-  // This is enforced client-side (not server-side) because the Supabase REST
-  // adapter cannot handle the nested OR / { not: ... } structure that a
-  // server-side filter would require. UTC is used for the day comparison so
-  // the grace window is consistent regardless of the user's local timezone
-  // (matching how the server stores timestamps).
   const jobs = useMemo<Job[]>(() => {
     const allJobs = jobsData?.jobs ?? [];
     const now = new Date();
@@ -844,7 +821,6 @@ export function JobsView() {
         if (!j.scheduledAt || j.status === 'completed' || j.status === 'cancelled') return false;
         const endMs = new Date(j.scheduledAt).getTime() + ((j.estimatedDuration || 60) * 60_000);
         if (endMs >= nowMs) return false;
-        // fall through to the same-day-grace check below
       }
       if (j.status !== 'completed') return true;
       // Completed job — keep only if completed today (UTC same-day).
@@ -858,6 +834,17 @@ export function JobsView() {
       );
     });
   }, [jobsData, statusFilter]);
+
+  // PAGINATION-ARCHIVE-1: read pagination metadata from the API response.
+  // When using 'overdue' filter (no pagination), pagination will be null.
+  const jobsPagination = jobsData?.pagination ?? null;
+  const totalJobs = jobsPagination?.total ?? jobs.length;
+  const totalPages = jobsPagination?.totalPages ?? 1;
+
+  // Reset to page 1 when the status filter, search, or page size changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, debouncedSearch, jobsPerPage]);
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -2765,6 +2752,66 @@ export function JobsView() {
             maxHeight={650}
             className="border-0 rounded-none"
           />
+          {jobsTab === 'active' && statusFilter !== 'overdue' && (
+            <div className="flex items-center justify-between flex-wrap gap-3 p-3 border-t border-slate-100 dark:border-slate-800 bg-muted/20">
+              <p className="text-sm text-muted-foreground">
+                {totalJobs === 0
+                  ? 'No jobs'
+                  : `Showing ${Math.min((currentPage - 1) * jobsPerPage + 1, totalJobs)}–${Math.min(currentPage * jobsPerPage, totalJobs)} of ${totalJobs} jobs`}
+              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
+                  <Select
+                    value={String(jobsPerPage)}
+                    onValueChange={(val) => {
+                      setJobsPerPage(Number(val));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[110px] h-8 text-xs bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        { value: 10, label: '10 / page' },
+                        { value: 20, label: '20 / page' },
+                        { value: 50, label: '50 / page' },
+                        { value: 100, label: '100 / page' },
+                      ].map((opt) => (
+                        <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    className="h-8 text-xs bg-background"
+                  >
+                    <ChevronLeft className="size-3.5 mr-1" /> Prev
+                  </Button>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    Page {currentPage} of {totalPages || 1}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="h-8 text-xs bg-background"
+                  >
+                    Next <ChevronRight className="size-3.5 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </Card>
       )}
         </>
@@ -2774,10 +2821,8 @@ export function JobsView() {
         </>
       )}
 
-      {/* PAGINATION-ARCHIVE-1: Server-side pagination controls for the jobs list.
-          Always visible (matches Leads view pattern) — buttons are disabled
-          when there's only 1 page or when using 'overdue' filter (no pagination). */}
-      {jobsTab === 'active' && statusFilter !== 'overdue' && (
+      {/* Cards View Pagination */}
+      {viewMode === 'cards' && jobsTab === 'active' && statusFilter !== 'overdue' && (
         <div className="flex items-center justify-between flex-wrap gap-3 mt-4 px-2 py-3 border-t border-slate-100 dark:border-slate-800">
           <p className="text-sm text-muted-foreground">
             {totalJobs === 0
