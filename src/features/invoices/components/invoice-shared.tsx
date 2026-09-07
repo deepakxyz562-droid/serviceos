@@ -11,21 +11,23 @@
  * Extracted from src/components/views/invoices-view.tsx (Phase 5A refactor).
  */
 
+import { Badge } from '@/components/ui/badge';
 import { getStatusConfig } from '@/features/invoices/utils/invoice-helpers';
 
 /**
- * Render a small inline status pill (dot + label) for an Invoice.status.
+ * Render a polished status pill (dot + label) for an Invoice.status.
  * Used by the data-table status column, the legacy detail dialog, and the
  * full-page detail view.
  */
 export function renderStatusBadge(status: string) {
   const config = getStatusConfig(status);
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-xs font-medium ${config.text}`}
+    <Badge
+      variant="outline"
+      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full border shadow-2xs transition-colors ${config.bg} ${config.text} ${config.border}`}
     >
-      <span className={`size-2 rounded-full ${config.dot}`} />
+      <span className={`size-1.5 rounded-full ${config.dot}`} />
       {config.label}
-    </span>
+    </Badge>
   );
 }

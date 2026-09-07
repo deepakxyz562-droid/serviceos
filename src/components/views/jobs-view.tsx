@@ -462,7 +462,7 @@ export function JobsView() {
   // The API already supports `page` + `limit` params. We now pass them so the
   // frontend fetches only one page at a time (was loading ALL non-terminal jobs).
   const [currentPage, setCurrentPage] = useState(1);
-  const jobsPerPage = 20;
+  const [jobsPerPage, setJobsPerPage] = useState(20);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   // Top-level view tab: 'active' = active jobs (pending → in_progress),
   // 'history' = completed/archived jobs (rendered via JobHistoryTab).
@@ -795,11 +795,11 @@ export function JobsView() {
   const totalJobs = jobsPagination?.total ?? jobs.length;
   const totalPages = jobsPagination?.totalPages ?? 1;
 
-  // Reset to page 1 when the status filter or search changes — otherwise the
+  // Reset to page 1 when the status filter, search, or page size changes — otherwise the
   // user could be on page 5 of the old filter and see no results.
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, debouncedSearch]);
+  }, [statusFilter, debouncedSearch, jobsPerPage]);
 
   // ── Mutations (dependency-aware, auto-invalidate via getJobInvalidations) ──
   // create/update/delete/assign/status → jobs.all + dashboard.all + calendar + dispatch + detail + customer/employee detail
@@ -2778,30 +2778,62 @@ export function JobsView() {
           Always visible (matches Leads view pattern) — buttons are disabled
           when there's only 1 page or when using 'overdue' filter (no pagination). */}
       {jobsTab === 'active' && statusFilter !== 'overdue' && (
-        <div className="flex items-center justify-between mt-4 px-2">
+        <div className="flex items-center justify-between flex-wrap gap-3 mt-4 px-2 py-3 border-t border-slate-100 dark:border-slate-800">
           <p className="text-sm text-muted-foreground">
-            Showing {jobs.length === 0 ? 0 : ((currentPage - 1) * jobsPerPage) + 1}–{Math.min(currentPage * jobsPerPage, totalJobs)} of {totalJobs} jobs
+            {totalJobs === 0
+              ? 'No jobs'
+              : `Showing ${Math.min((currentPage - 1) * jobsPerPage + 1, totalJobs)}–${Math.min(currentPage * jobsPerPage, totalJobs)} of ${totalJobs} jobs`}
           </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-            >
-              <ChevronLeft className="size-4" /> Prev
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages}
-            >
-              Next <ChevronRight className="size-4" />
-            </Button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
+              <Select
+                value={String(jobsPerPage)}
+                onValueChange={(val) => {
+                  setJobsPerPage(Number(val));
+                  setCurrentPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[110px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    { value: 10, label: '10 / page' },
+                    { value: 20, label: '20 / page' },
+                    { value: 50, label: '50 / page' },
+                    { value: 100, label: '100 / page' },
+                  ].map((opt) => (
+                    <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="h-8 text-xs"
+              >
+                <ChevronLeft className="size-3.5 mr-1" /> Prev
+              </Button>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                Page {currentPage} of {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="h-8 text-xs"
+              >
+                Next <ChevronRight className="size-3.5 ml-1" />
+              </Button>
+            </div>
           </div>
         </div>
       )}

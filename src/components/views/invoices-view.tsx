@@ -36,6 +36,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -46,6 +53,8 @@ import {
 import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   useInvoices,
   useCreateInvoice,
@@ -124,7 +133,11 @@ export function InvoicesView() {
   // params for /api/invoices?page=X&limit=Y&archived=Z.
   const [activeTab, setActiveTab] = useState<'list' | 'archived'>('list');
   const [currentPage, setCurrentPage] = useState(1);
-  const invoicesPerPage = 20;
+  const [invoicesPerPage, setInvoicesPerPage] = useState(20);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [autoFilter, setAutoFilter] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebouncedValue(searchQuery, 250);
 
   // Invoice list is now backed by React Query (useInvoices). The RQ cache
   // is invalidated by all invoice mutations via getInvoiceInvalidations, so
@@ -132,6 +145,8 @@ export function InvoicesView() {
   const { data: invoicesData, isLoading: loadingInvoices, error: invoicesRqError, refetch: refetchInvoices } = useInvoices({
     page: currentPage,
     limit: invoicesPerPage,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    search: debouncedSearch || undefined,
     archived: activeTab === 'archived' ? 'true' : 'false',
   });
   const invoices: Invoice[] = invoicesData?.invoices ?? [];
@@ -139,10 +154,10 @@ export function InvoicesView() {
   const totalPages = invoicesData?.pagination?.totalPages ?? 1;
   const invoicesError = invoicesRqError?.message ?? null;
 
-  // Reset to page 1 when switching tabs
+  // Reset to page 1 when filter, search, tab, or page size changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab]);
+  }, [statusFilter, debouncedSearch, activeTab, invoicesPerPage]);
 
   // Local invoice state for optimistic UI in handleStatusChange ONLY.
   // All other mutations rely on RQ invalidation for list refresh.
@@ -172,10 +187,6 @@ export function InvoicesView() {
   // instead of POSTing a new schedule to /api/recurring-invoices.
   const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null);
 
-  // Filter & search
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [autoFilter, setAutoFilter] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   // Sorting is now handled by the shared <DataTable> (client-side, per-column
   // via `sortField` on each column config). The previous parent-level
@@ -1111,25 +1122,68 @@ export function InvoicesView() {
   // createdAt desc by default, which serves as the initial order until the
   // user clicks a sortable header.
 
+  const PAGE_SIZE_OPTIONS = [
+    { value: 10, label: '10 / page' },
+    { value: 20, label: '20 / page' },
+    { value: 50, label: '50 / page' },
+    { value: 100, label: '100 / page' },
+  ];
+
   const invoiceColumns: Column<Invoice>[] = [
+    {
+      key: 'customer',
+      header: 'Client',
+      sortField: 'customer',
+      render: (inv) => {
+        const initials = inv.customer
+          ? inv.customer
+              .split(' ')
+              .map((n: string) => n[0])
+              .filter(Boolean)
+              .slice(0, 2)
+              .join('')
+              .toUpperCase()
+          : '?';
+        return (
+          <div className="flex items-center gap-2.5 py-0.5">
+            <div className="size-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs">
+              {initials}
+            </div>
+            <div className="min-w-0 max-w-[200px]">
+              <span className="font-semibold text-sm text-slate-900 dark:text-slate-100 block truncate">
+                {inv.customer || 'Unknown Client'}
+              </span>
+              {(inv.customerEmail || inv.customerPhone) && (
+                <span className="text-xs text-muted-foreground block truncate">
+                  {inv.customerEmail || inv.customerPhone}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
     {
       key: 'number',
       header: 'Invoice #',
       sortField: 'invoiceNumber',
       render: (inv) => (
-        <div className="flex items-center gap-2 flex-wrap font-medium text-sm">
-          <div className="flex items-center gap-2">
-            <FileText className="size-4 text-muted-foreground" />
-            {inv.number}
+        <div className="flex flex-col gap-1 py-0.5">
+          <div className="flex items-center gap-1.5 font-mono text-sm font-semibold text-slate-800 dark:text-slate-200">
+            <FileText className="size-3.5 text-muted-foreground shrink-0" />
+            <span>{inv.number?.startsWith('#') ? inv.number : `#${inv.number}`}</span>
           </div>
           {inv.invoiceType && inv.invoiceType !== 'standard' && (
-            <Badge variant="outline" className={`text-[9px] h-4 px-1.5 ${
-              inv.invoiceType === 'job_completion'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : inv.invoiceType === 'deposit'
-                ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                : 'bg-blue-50 text-blue-700 border-blue-200'
-            }`}>
+            <Badge
+              variant="outline"
+              className={`text-[9px] h-4 px-1.5 w-fit font-medium ${
+                inv.invoiceType === 'job_completion'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800'
+                  : inv.invoiceType === 'deposit'
+                  ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/40 dark:text-yellow-400 dark:border-yellow-800'
+                  : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800'
+              }`}
+            >
               {inv.invoiceType === 'job_completion'
                 ? 'Auto · Job'
                 : inv.invoiceType === 'deposit'
@@ -1141,32 +1195,56 @@ export function InvoicesView() {
       ),
     },
     {
-      key: 'customer',
-      header: 'Customer',
-      sortField: 'customer',
-      render: (inv) => <span className="text-sm">{inv.customer}</span>,
+      key: 'subject',
+      header: 'Subject',
+      className: 'max-w-[220px]',
+      render: (inv) => {
+        const subjectText = inv.notes?.trim() || (inv.jobTitle ? `Job: ${inv.jobTitle}` : 'For Services Rendered');
+        return (
+          <div className="text-sm py-0.5">
+            <span className="text-slate-700 dark:text-slate-300 block truncate font-medium" title={subjectText}>
+              {subjectText}
+            </span>
+            {inv.jobTitle && inv.notes && inv.notes !== inv.jobTitle && (
+              <span className="text-[11px] text-muted-foreground block truncate">
+                Linked: {inv.jobTitle}
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
-      key: 'amount',
-      header: 'Amount',
-      sortField: 'amount',
-      className: 'text-right',
-      headerClassName: 'text-right',
-      render: (inv) => <span className="block text-right text-sm font-medium">{format(inv.subtotal)}</span>,
-    },
-    {
-      key: 'tax',
-      header: 'Tax',
-      className: 'text-right hidden md:table-cell',
-      headerClassName: 'text-right hidden md:table-cell',
-      render: (inv) => <span className="block text-right text-sm text-muted-foreground">{Math.round(inv.taxPercent)}%</span>,
-    },
-    {
-      key: 'total',
-      header: 'Total',
-      className: 'text-right hidden lg:table-cell',
-      headerClassName: 'text-right hidden lg:table-cell',
-      render: (inv) => <span className="block text-right text-sm font-semibold">{format(inv.total)}</span>,
+      key: 'dueDate',
+      header: 'Due Date',
+      sortField: 'dueDate',
+      render: (inv) => {
+        const isPaid = inv.status === 'paid';
+        const isPastDue =
+          !isPaid &&
+          inv.status !== 'cancelled' &&
+          inv.dueDate &&
+          new Date(inv.dueDate) < new Date(new Date().setHours(0, 0, 0, 0));
+        return (
+          <div className="text-sm py-0.5">
+            <span
+              className={`block font-medium ${
+                isPastDue
+                  ? 'text-rose-600 dark:text-rose-400 font-semibold'
+                  : 'text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              {formatShortDate(inv.dueDate)}
+            </span>
+            {isPastDue && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                <span className="size-1.5 rounded-full bg-rose-500 animate-pulse" />
+                Past due
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'status',
@@ -1175,12 +1253,51 @@ export function InvoicesView() {
       render: (inv) => renderStatusBadge(inv.status),
     },
     {
-      key: 'dueDate',
-      header: 'Due Date',
-      sortField: 'dueDate',
-      className: 'hidden sm:table-cell',
-      headerClassName: 'hidden sm:table-cell',
-      render: (inv) => <span className="text-sm text-muted-foreground">{formatShortDate(inv.dueDate)}</span>,
+      key: 'total',
+      header: 'Total',
+      sortField: 'total',
+      className: 'text-right',
+      headerClassName: 'text-right',
+      render: (inv) => (
+        <span className="block text-right text-sm font-bold text-slate-900 dark:text-slate-100">
+          {format(inv.total)}
+        </span>
+      ),
+    },
+    {
+      key: 'balance',
+      header: 'Balance',
+      className: 'text-right',
+      headerClassName: 'text-right',
+      render: (inv) => {
+        const isPaid = inv.status === 'paid';
+        const balance = isPaid ? 0 : inv.total;
+        const isPastDue =
+          !isPaid &&
+          inv.status !== 'cancelled' &&
+          inv.dueDate &&
+          new Date(inv.dueDate) < new Date(new Date().setHours(0, 0, 0, 0));
+        return (
+          <div className="text-right py-0.5">
+            <span
+              className={`block text-sm font-semibold ${
+                isPaid
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : isPastDue
+                  ? 'text-rose-600 dark:text-rose-400 font-bold'
+                  : 'text-amber-700 dark:text-amber-400 font-semibold'
+              }`}
+            >
+              {format(balance)}
+            </span>
+            {isPaid && (
+              <span className="text-[10px] text-muted-foreground block">
+                Paid in full
+              </span>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: 'actions',
@@ -1462,33 +1579,58 @@ export function InvoicesView() {
             emptyIcon={FileText}
             onRowClick={openInvoiceDetail}
           />
-          {/* PAGINATION-ARCHIVE-1: Server-side pagination controls.
-              Always visible (matches Leads view pattern) — buttons are
-              disabled when there's only 1 page. */}
-          <div className="flex items-center justify-between mt-4 px-2">
+          {/* Pagination + Rows per page selector — always visible */}
+          <div className="flex items-center justify-between flex-wrap gap-3 p-4 border-t border-slate-100 dark:border-slate-800">
             <p className="text-sm text-muted-foreground">
-              Showing {invoices.length === 0 ? 0 : ((currentPage - 1) * invoicesPerPage) + 1}–{Math.min(currentPage * invoicesPerPage, totalInvoices)} of {totalInvoices}
+              {totalInvoices === 0
+                ? 'No invoices'
+                : `Showing ${Math.min((currentPage - 1) * invoicesPerPage + 1, totalInvoices)}–${Math.min(currentPage * invoicesPerPage, totalInvoices)} of ${totalInvoices} invoices`}
             </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage <= 1}
-              >
-                <ChevronLeft className="size-4" /> Prev
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage >= totalPages}
-              >
-                Next <ChevronRight className="size-4" />
-              </Button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
+                <Select
+                  value={String(invoicesPerPage)}
+                  onValueChange={(val) => {
+                    setInvoicesPerPage(Number(val));
+                    setCurrentPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[110px] h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAGE_SIZE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="h-8 text-xs"
+                >
+                  <ChevronLeft className="size-3.5 mr-1" /> Prev
+                </Button>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  Page {currentPage} of {totalPages || 1}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="h-8 text-xs"
+                >
+                  Next <ChevronRight className="size-3.5 ml-1" />
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>

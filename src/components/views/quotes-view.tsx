@@ -20,6 +20,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -85,7 +92,7 @@ export function QuotesView() {
   // PAGINATION-ARCHIVE-1: pagination + archive state
   const [activeTab, setActiveTab] = useState<'list' | 'archived'>('list');
   const [currentPage, setCurrentPage] = useState(1);
-  const quotesPerPage = 20;
+  const [quotesPerPage, setQuotesPerPage] = useState(20);
   const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<string>('createdAt');
@@ -124,12 +131,12 @@ export function QuotesView() {
     const rawQuotes = data.quotes ?? (Array.isArray(data) ? data : []);
     setQuotes(rawQuotes.map((q: any) => normalizeQuote(q, customersList)));
     setPagination(data.pagination ?? null);
-  }, [currentPage, activeTab]);
+  }, [currentPage, activeTab, quotesPerPage]);
 
-  // Reset page when switching tabs
+  // Reset page when switching tabs or changing page size
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab]);
+  }, [activeTab, quotesPerPage]);
 
   // ── Fetch real customers + quotes on mount + when page/tab changes ────────
   useEffect(() => {
@@ -963,33 +970,63 @@ export function QuotesView() {
                 </TableBody>
               </Table>
             </div>
-            {/* PAGINATION-ARCHIVE-1: Server-side pagination controls.
-                Always visible (matches Leads view pattern) — buttons are
-                disabled when there's only 1 page. */}
-            <div className="flex items-center justify-between mt-4 px-4 pb-4">
+            {/* Pagination + Rows per page selector — always visible */}
+            <div className="flex items-center justify-between flex-wrap gap-3 mt-4 px-4 pb-4 pt-3 border-t border-slate-100 dark:border-slate-800">
               <p className="text-sm text-muted-foreground">
-                Showing {quotes.length === 0 ? 0 : ((currentPage - 1) * quotesPerPage) + 1}–{Math.min(currentPage * quotesPerPage, pagination?.total ?? 0)} of {pagination?.total ?? 0}
+                {(pagination?.total ?? quotes.length) === 0
+                  ? 'No quotes'
+                  : `Showing ${Math.min((currentPage - 1) * quotesPerPage + 1, pagination?.total ?? quotes.length)}–${Math.min(currentPage * quotesPerPage, pagination?.total ?? quotes.length)} of ${pagination?.total ?? quotes.length} quotes`}
               </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                >
-                  <ChevronLeft className="size-4" /> Prev
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  Page {currentPage} of {pagination?.totalPages ?? 1}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.min(pagination?.totalPages ?? 1, p + 1))}
-                  disabled={currentPage >= (pagination?.totalPages ?? 1)}
-                >
-                  Next <ChevronRight className="size-4" />
-                </Button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
+                  <Select
+                    value={String(quotesPerPage)}
+                    onValueChange={(val) => {
+                      setQuotesPerPage(Number(val));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[110px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        { value: 10, label: '10 / page' },
+                        { value: 20, label: '20 / page' },
+                        { value: 50, label: '50 / page' },
+                        { value: 100, label: '100 / page' },
+                      ].map((opt) => (
+                        <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    className="h-8 text-xs"
+                  >
+                    <ChevronLeft className="size-3.5 mr-1" /> Prev
+                  </Button>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    Page {currentPage} of {pagination?.totalPages || 1}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(pagination?.totalPages || 1, p + 1))}
+                    disabled={currentPage >= (pagination?.totalPages || 1)}
+                    className="h-8 text-xs"
+                  >
+                    Next <ChevronRight className="size-3.5 ml-1" />
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
