@@ -112,7 +112,6 @@ export function ClaimBusinessBanner({
     // this component is not the right place to manage history. The user
     // can close the modal + the param stays — if they re-open it, the modal
     // won't re-trigger because the effect only runs once per mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authHydrated]); // only run once when auth hydrates
 
   // While the auth state is still being fetched (header hasn't resolved

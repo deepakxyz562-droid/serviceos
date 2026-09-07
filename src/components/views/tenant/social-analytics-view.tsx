@@ -451,7 +451,6 @@ export function SocialAnalyticsView() {
                   </div>
                   {tp.post.mediaUrls[0] && (
                     <div className="size-12 rounded border overflow-hidden bg-muted shrink-0">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={tp.post.mediaUrls[0]}
                         alt=""

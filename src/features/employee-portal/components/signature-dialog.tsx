@@ -53,7 +53,6 @@ export function SignatureDialog({
       const t = setTimeout(initSignatureCanvas, 100);
       return () => clearTimeout(t);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialSignatoryName]);
 
   const initSignatureCanvas = useCallback(() => {

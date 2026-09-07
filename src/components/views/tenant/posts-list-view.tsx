@@ -350,7 +350,6 @@ export function PostsListView() {
                                 key={url}
                                 className="size-8 rounded border overflow-hidden bg-muted"
                               >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={url} alt="" className="size-full object-cover" />
                               </div>
                             ))}
@@ -499,7 +498,6 @@ export function PostsListView() {
                         key={url}
                         className="size-12 rounded border overflow-hidden bg-muted"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={url} alt="" className="size-full object-cover" />
                       </div>
                     ))}
@@ -579,7 +577,6 @@ export function PostsListView() {
                       key={url}
                       className="aspect-square rounded-md overflow-hidden border bg-muted"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={url} alt="" className="size-full object-cover" />
                     </div>
                   ))}

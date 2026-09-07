@@ -75,8 +75,15 @@ export async function deleteAllCreemProducts(): Promise<{
 
   const results: Array<{ productId: string; ok: boolean; message?: string }> = [];
 
-  // Collect ALL product IDs from the config
+  // FIX 2: Collect ALL product IDs — both from the current mapping AND
+  // from the productHistory array. The history tracks every product ID
+  // ever created by createAllCreemProducts(), including orphans from
+  // previous runs that are no longer in the current products mapping.
+  // This ensures "Delete All" can clean up ALL 45 products (or however
+  // many were created across multiple runs).
   const allProductIds: string[] = [];
+
+  // 1. From current products mapping
   if (cfg.products) {
     for (const [planCode, cycles] of Object.entries(cfg.products)) {
       if (cycles.monthly) allProductIds.push(cycles.monthly);
@@ -84,25 +91,39 @@ export async function deleteAllCreemProducts(): Promise<{
     }
   }
 
-  // Delete each product
-  for (const productId of allProductIds) {
-    const result = await deleteCreemProduct(productId);
-    results.push({ productId, ok: result.ok, message: result.message });
-  }
-
-  // Clear ALL product mappings from the config
+  // 2. From productHistory (includes ALL previously-created IDs)
+  // Read the raw config to get productHistory (not exposed in CreemConfig type)
   const toggle = await db.revenueFeatureToggle.findUnique({
     where: { featureKey: 'creem_billing' },
   });
 
+  let historyIds: string[] = [];
+  if (toggle) {
+    try {
+      const rawConfig = JSON.parse(toggle.configJson || '{}');
+      historyIds = Array.isArray(rawConfig.productHistory) ? rawConfig.productHistory : [];
+    } catch { /* empty config */ }
+  }
+
+  // Merge + deduplicate all IDs
+  const allIds = Array.from(new Set([...allProductIds, ...historyIds]));
+
+  // Delete each product
+  for (const productId of allIds) {
+    const result = await deleteCreemProduct(productId);
+    results.push({ productId, ok: result.ok, message: result.message });
+  }
+
+  // Clear ALL product mappings AND productHistory from the config
   if (toggle) {
     let config: Record<string, unknown> = {};
     try {
       config = JSON.parse(toggle.configJson || '{}');
     } catch { /* empty config */ }
 
-    // Clear the products map
+    // Clear both the products map AND the history
     config.products = {};
+    config.productHistory = [];
 
     await db.revenueFeatureToggle.update({
       where: { featureKey: 'creem_billing' },
@@ -112,6 +133,6 @@ export async function deleteAllCreemProducts(): Promise<{
 
   return {
     deleted: results,
-    clearedCount: allProductIds.length,
+    clearedCount: allIds.length,
   };
 }

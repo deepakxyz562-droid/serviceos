@@ -79,6 +79,14 @@ export async function POST() {
 
       const nextConfig = { ...prevConfig, products: nextProducts };
 
+      // PRESERVE productHistory — it's saved by createAllCreemProducts() above
+      // and must NOT be overwritten by this route's save. The history tracks
+      // ALL product IDs ever created (including orphans from previous runs)
+      // so "Delete All" can clean them up.
+      if (prevConfig.productHistory) {
+        nextConfig.productHistory = prevConfig.productHistory;
+      }
+
       if (toggle) {
         await db.revenueFeatureToggle.update({
           where: { featureKey: CREEM_FEATURE_KEY },

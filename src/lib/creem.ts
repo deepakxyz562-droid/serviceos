@@ -60,7 +60,7 @@
  */
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { db } from '@/lib/db';
-import { getPlanByCode } from '@/lib/billing-seed';
+import { getPlanByCode, seedPlans } from '@/lib/billing-seed';
 import { logger } from '@/lib/logger';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ export async function isCreemConfigured(): Promise<boolean> {
  * with api.creem.io. Select the host from the key prefix so the superadmin
  * never has to pick a host manually.
  */
-export function getBaseUrl(apiKey?: string): string {
+function getBaseUrl(apiKey?: string): string {
   if (apiKey && apiKey.startsWith('creem_test_')) {
     return CREEM_TEST_BASE_URL;
   }
@@ -595,10 +595,19 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
   const created: CreateAllProductsResult['created'] = [];
   const failed: CreateAllProductsResult['failed'] = [];
 
-  // Load the plan catalog. Filter `isAddon: false` so we ONLY sync the 4 main
-  // plans (starter, growth/"Professional", business, enterprise), NOT the
-  // 3 add-on plans (ai_pro_addon, marketplace_featured, marketplace_premium)
-  // which are billed via a separate manual confirmation flow.
+  // FIX 1: Auto-seed plans before loading from DB. This ensures new plan
+  // definitions (like launch_special) are in the Plan table before we try
+  // to create Creem products for them. Without this, the plan won't exist
+  // in the DB until someone manually visits a subscription page.
+  try {
+    await seedPlans();
+  } catch (err) {
+    console.warn('[creem] seedPlans failed (non-fatal — plans may be stale):', err);
+  }
+
+  // Load the plan catalog. Filter `isAddon: false` so we ONLY sync the main
+  // plans (launch_special, starter, growth/"Professional", business, enterprise),
+  // NOT the add-on plans which are billed via a separate flow.
   const plans = await db.plan.findMany({
     where: { isActive: true, isAddon: false },
     orderBy: { sortOrder: 'asc' },
@@ -734,6 +743,49 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  // FIX 2: Save ALL created product IDs to productHistory in the config.
+  // This ensures that when "Delete All" runs, it can delete EVERY product
+  // ever created — including orphans from previous runs that are no longer
+  // in the current products mapping.
+  try {
+    const toggle = await db.revenueFeatureToggle.findUnique({
+      where: { featureKey: 'creem_billing' },
+    });
+    if (toggle) {
+      let config: Record<string, unknown> = {};
+      try {
+        config = JSON.parse(toggle.configJson || '{}');
+      } catch { /* empty config */ }
+
+      // Get existing product history (if any)
+      const existingHistory: string[] = Array.isArray(config.productHistory) ? config.productHistory : [];
+
+      // Get ALL product IDs from the current products mapping
+      const currentMappingIds: string[] = [];
+      if (config.products) {
+        const products = config.products as Record<string, { monthly?: string; yearly?: string }>;
+        for (const cycles of Object.values(products)) {
+          if (cycles.monthly) currentMappingIds.push(cycles.monthly);
+          if (cycles.yearly) currentMappingIds.push(cycles.yearly);
+        }
+      }
+
+      // Merge: existing history + newly created IDs + current mapping IDs
+      // (deduplicated)
+      const newIds = created.map(c => c.productId);
+      const allIds = Array.from(new Set([...existingHistory, ...newIds, ...currentMappingIds]));
+
+      config.productHistory = allIds;
+
+      await db.revenueFeatureToggle.update({
+        where: { featureKey: 'creem_billing' },
+        data: { configJson: JSON.stringify(config) },
+      });
+    }
+  } catch (err) {
+    console.warn('[creem] Failed to save productHistory (non-fatal):', err);
   }
 
   return { created, failed };

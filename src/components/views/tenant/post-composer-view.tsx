@@ -529,7 +529,6 @@ export function PostComposerView() {
                         key={url}
                         className="relative aspect-square rounded-md overflow-hidden border bg-muted"
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={url}
                           alt="Upload preview"
