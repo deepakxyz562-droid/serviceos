@@ -145,7 +145,7 @@ export async function isCreemConfigured(): Promise<boolean> {
  * with api.creem.io. Select the host from the key prefix so the superadmin
  * never has to pick a host manually.
  */
-function getBaseUrl(apiKey?: string): string {
+export function getBaseUrl(apiKey?: string): string {
   if (apiKey && apiKey.startsWith('creem_test_')) {
     return CREEM_TEST_BASE_URL;
   }
