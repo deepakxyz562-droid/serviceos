@@ -1462,35 +1462,35 @@ export function InvoicesView() {
             emptyIcon={FileText}
             onRowClick={openInvoiceDetail}
           />
-          {/* PAGINATION-ARCHIVE-1: Server-side pagination controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 px-2">
-              <p className="text-sm text-muted-foreground">
-                Showing {((currentPage - 1) * invoicesPerPage) + 1}–{Math.min(currentPage * invoicesPerPage, totalInvoices)} of {totalInvoices}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                >
-                  <ChevronLeft className="size-4" /> Prev
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage >= totalPages}
-                >
-                  Next <ChevronRight className="size-4" />
-                </Button>
-              </div>
+          {/* PAGINATION-ARCHIVE-1: Server-side pagination controls.
+              Always visible (matches Leads view pattern) — buttons are
+              disabled when there's only 1 page. */}
+          <div className="flex items-center justify-between mt-4 px-2">
+            <p className="text-sm text-muted-foreground">
+              Showing {invoices.length === 0 ? 0 : ((currentPage - 1) * invoicesPerPage) + 1}–{Math.min(currentPage * invoicesPerPage, totalInvoices)} of {totalInvoices}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+              >
+                <ChevronLeft className="size-4" /> Prev
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                Next <ChevronRight className="size-4" />
+              </Button>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 

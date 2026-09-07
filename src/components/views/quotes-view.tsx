@@ -963,35 +963,35 @@ export function QuotesView() {
                 </TableBody>
               </Table>
             </div>
-            {/* PAGINATION-ARCHIVE-1: Server-side pagination controls */}
-            {pagination && pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 px-4 pb-4">
-                <p className="text-sm text-muted-foreground">
-                  Showing {((currentPage - 1) * quotesPerPage) + 1}–{Math.min(currentPage * quotesPerPage, pagination.total)} of {pagination.total}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage <= 1}
-                  >
-                    <ChevronLeft className="size-4" /> Prev
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    Page {currentPage} of {pagination.totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage((p) => Math.min(pagination!.totalPages, p + 1))}
-                    disabled={currentPage >= pagination.totalPages}
-                  >
-                    Next <ChevronRight className="size-4" />
-                  </Button>
-                </div>
+            {/* PAGINATION-ARCHIVE-1: Server-side pagination controls.
+                Always visible (matches Leads view pattern) — buttons are
+                disabled when there's only 1 page. */}
+            <div className="flex items-center justify-between mt-4 px-4 pb-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {quotes.length === 0 ? 0 : ((currentPage - 1) * quotesPerPage) + 1}–{Math.min(currentPage * quotesPerPage, pagination?.total ?? 0)} of {pagination?.total ?? 0}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  <ChevronLeft className="size-4" /> Prev
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {currentPage} of {pagination?.totalPages ?? 1}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(pagination?.totalPages ?? 1, p + 1))}
+                  disabled={currentPage >= (pagination?.totalPages ?? 1)}
+                >
+                  Next <ChevronRight className="size-4" />
+                </Button>
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
       )}

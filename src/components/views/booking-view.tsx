@@ -727,9 +727,8 @@ export function BookingView() {
             </Card>
           )}
 
-          {/* Pagination info */}
-          {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
+          {/* Pagination info — always visible (matches Leads pattern) */}
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>
                 Showing {bookings.length} of {pagination.total} bookings
               </span>
@@ -755,7 +754,6 @@ export function BookingView() {
                 </Button>
               </div>
             </div>
-          )}
         </TabsContent>
 
         {/* ── Archived tab content ──────────────────────────────────────── */}
@@ -832,9 +830,8 @@ export function BookingView() {
             </Card>
           )}
 
-          {/* Pagination info (archived) */}
-          {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
+          {/* Pagination info (archived) — always visible */}
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>
                 Showing {bookings.length} of {pagination.total} archived bookings
               </span>
@@ -860,7 +857,6 @@ export function BookingView() {
                 </Button>
               </div>
             </div>
-          )}
         </TabsContent>
       </Tabs>
 

@@ -782,13 +782,17 @@ export function JobsView() {
   const { data: jobsData, isLoading: loading, error: rqError, refetch: fetchJobs } = useJobs({
     status: statusFilter !== 'all' && statusFilter !== 'overdue' ? statusFilter : undefined,
     search: debouncedSearch || undefined,
-    page: currentPage,
-    limit: jobsPerPage,
+    // PAGINATION-ARCHIVE-1: Only paginate when NOT using the 'overdue' filter.
+    // The 'overdue' filter is client-side (needs ALL non-terminal jobs to
+    // compare scheduledAt + estimatedDuration to NOW). When 'overdue' is
+    // selected, we don't pass page/limit so the API returns all jobs.
+    ...(statusFilter === 'overdue' ? {} : { page: currentPage, limit: jobsPerPage }),
   });
   const error = rqError?.message ?? null;
   // PAGINATION-ARCHIVE-1: read pagination metadata from the API response.
+  // When using 'overdue' filter (no pagination), pagination will be null.
   const jobsPagination = jobsData?.pagination ?? null;
-  const totalJobs = jobsPagination?.total ?? 0;
+  const totalJobs = jobsPagination?.total ?? jobs.length;
   const totalPages = jobsPagination?.totalPages ?? 1;
 
   // Reset to page 1 when the status filter or search changes — otherwise the
@@ -2771,12 +2775,12 @@ export function JobsView() {
       )}
 
       {/* PAGINATION-ARCHIVE-1: Server-side pagination controls for the jobs list.
-          Only shown when there are multiple pages. Matches the pattern used by
-          the Leads, Invoices, Quotes, and Bookings views. */}
-      {jobsTab === 'active' && totalPages > 1 && (
+          Always visible (matches Leads view pattern) — buttons are disabled
+          when there's only 1 page or when using 'overdue' filter (no pagination). */}
+      {jobsTab === 'active' && statusFilter !== 'overdue' && (
         <div className="flex items-center justify-between mt-4 px-2">
           <p className="text-sm text-muted-foreground">
-            Showing {((currentPage - 1) * jobsPerPage) + 1}–{Math.min(currentPage * jobsPerPage, totalJobs)} of {totalJobs} jobs
+            Showing {jobs.length === 0 ? 0 : ((currentPage - 1) * jobsPerPage) + 1}–{Math.min(currentPage * jobsPerPage, totalJobs)} of {totalJobs} jobs
           </p>
           <div className="flex items-center gap-2">
             <Button
