@@ -21,7 +21,7 @@ export async function deleteCreemProduct(productId: string): Promise<{ ok: boole
 
   try {
     const res = await fetch(
-      `${getBaseUrl(cfg.apiKey)}/v1/products/${productId}`,
+      `${getBaseUrl(cfg.apiKey, cfg.testMode)}/v1/products/${productId}`,
       {
         method: 'DELETE',
         headers: {

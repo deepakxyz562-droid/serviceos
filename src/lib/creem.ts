@@ -145,8 +145,20 @@ export async function isCreemConfigured(): Promise<boolean> {
  * with api.creem.io. Select the host from the key prefix so the superadmin
  * never has to pick a host manually.
  */
-export function getBaseUrl(apiKey?: string): string {
-  if (apiKey && apiKey.startsWith('creem_test_')) {
+/**
+ * Select the Creem base URL.
+ *
+ * The host is determined by BOTH:
+ *   1. The `testMode` config flag (set by the superadmin switch)
+ *   2. The API key prefix (`creem_test_*`)
+ *
+ * If EITHER signal indicates test mode, we use `test-api.creem.io`.
+ * This ensures the testMode switch in the superadmin UI actually controls
+ * which Creem API host is used — previously it was ONLY the key prefix,
+ * which caused products to be created on the wrong dashboard.
+ */
+export function getBaseUrl(apiKey?: string, testMode?: boolean): string {
+  if (testMode || (apiKey && apiKey.startsWith('creem_test_'))) {
     return CREEM_TEST_BASE_URL;
   }
   return CREEM_BASE_URL;
@@ -223,7 +235,7 @@ export async function createCreemCheckoutSession(
   // We proactively check + give a CLEAR error message instead.
   try {
     const checkRes = await fetch(
-      `${getBaseUrl(cfg.apiKey)}/v1/products?product_id=${productId}`,
+      `${getBaseUrl(cfg.apiKey, cfg.testMode)}/v1/products?product_id=${productId}`,
       {
         method: 'GET',
         headers: { 'x-api-key': cfg.apiKey, Accept: 'application/json' },
@@ -291,7 +303,7 @@ export async function createCreemCheckoutSession(
   // NOTE: input.cancelUrl is intentionally NOT sent — Creem has no cancel_url
   // field. Sending it would trigger a 400 "property cancel_url should not exist".
 
-  const res = await fetch(`${getBaseUrl(cfg.apiKey)}/v1/checkouts`, {
+  const res = await fetch(`${getBaseUrl(cfg.apiKey, cfg.testMode)}/v1/checkouts`, {
     method: 'POST',
     headers: {
       'x-api-key': cfg.apiKey,
@@ -529,7 +541,7 @@ export async function createCreemProduct(
   // creating duplicate products. Default to a per-call UUID.
   const idempotencyKey = input.idempotencyKey || randomUUID();
 
-  const res = await fetch(`${getBaseUrl(cfg.apiKey)}/v1/products`, {
+  const res = await fetch(`${getBaseUrl(cfg.apiKey, cfg.testMode)}/v1/products`, {
     method: 'POST',
     headers: {
       'x-api-key': cfg.apiKey,
@@ -687,9 +699,12 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
           billingPeriod,
           priceInDollars: price,
           currency: plan.currency || 'USD',
-          // Stable idempotency key per plan×cycle so retrying "Create All"
-          // doesn't create duplicate products in the Creem dashboard.
-          idempotencyKey: `${plan.code}-${cycle}`,
+          // Unique idempotency key per attempt — appending Date.now() ensures
+          // Creem creates a NEW product every time (instead of returning a
+          // cached response pointing to an archived/deleted product from a
+          // previous run). This is the fix for the "Product is no longer
+          // available" checkout error.
+          idempotencyKey: `${plan.code}-${cycle}-${Date.now()}`,
         });
         created.push({
           key: `${plan.code}_${cycle}`,
@@ -723,7 +738,7 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
       billingPeriod: 'every-month',
       priceInDollars: 5,
       currency: 'USD',
-      idempotencyKey: 'sms_number-monthly',
+      idempotencyKey: `sms_number-monthly-${Date.now()}`,
     });
     created.push({
       key: 'sms_number_monthly',
@@ -773,7 +788,7 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
         billingPeriod,
         priceInDollars: addon.price,
         currency: addon.currency || 'USD',
-        idempotencyKey: `${addon.code}-${cycle}`,
+        idempotencyKey: `${addon.code}-${cycle}-${Date.now()}`,
       });
       created.push({
         key: `${addon.code}_${cycle}`,
@@ -863,7 +878,7 @@ export async function testCreemConnection(
     // found" as SUCCESS — Creem only returns 404 AFTER auth passes, so a 404
     // proves the key was accepted. (A bad key returns 401 "API Key is missing".)
     const res = await fetch(
-      `${getBaseUrl(cfg.apiKey)}/v1/products?product_id=__connection_test__`,
+      `${getBaseUrl(cfg.apiKey, cfg.testMode)}/v1/products?product_id=__connection_test__`,
       {
         method: 'GET',
         headers: {
