@@ -40,6 +40,8 @@ import {
   Repeat,
   Search,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -219,20 +221,29 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // PAGINATION: server-side pagination — API now supports page + limit params.
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+  const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
+
   // ─── Fetch ──────────────────────────────────────────────────────────────
   const fetchSchedules = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await apiGet<ApiResponse>('/api/recurring-jobs');
+      const params = new URLSearchParams();
+      params.set('page', String(currentPage));
+      params.set('limit', String(itemsPerPage));
+      const data = await apiGet<ApiResponse>(`/api/recurring-jobs?${params.toString()}`);
       setSchedules(data.schedules ?? []);
+      setPagination(data.pagination ?? null);
     } catch (err) {
       console.error('[RecurringJobsListPage] fetch failed:', err);
       setError('Failed to load recurring job schedules. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage]);
 
   useEffect(() => {
     fetchSchedules();
@@ -272,6 +283,14 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         }
       });
   }, [schedules, filter, search]);
+
+  // PAGINATION: Reset to page 1 when filter/search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, search]);
+
+  // Total pages comes from the server (pagination.totalPages)
+  const totalPages = pagination?.totalPages ?? 1;
 
   // ─── Actions ────────────────────────────────────────────────────────────
   const handlePause = useCallback(
@@ -630,6 +649,36 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {/* PAGINATION: Server-side pagination controls */}
+      {filtered.length > 0 && (
+        <div className="flex items-center justify-between mt-4 px-2">
+          <p className="text-sm text-muted-foreground">
+            Showing {pagination ? Math.min((currentPage - 1) * itemsPerPage + 1, pagination.total) : 0}–{Math.min(currentPage * itemsPerPage, pagination?.total ?? 0)} of {pagination?.total ?? 0} schedules
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+            >
+              <ChevronLeft className="size-4" /> Prev
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+            >
+              Next <ChevronRight className="size-4" />
+            </Button>
+          </div>
         </div>
       )}
 

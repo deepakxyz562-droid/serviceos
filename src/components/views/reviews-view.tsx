@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Star, ThumbsUp, MessageSquare, TrendingUp, Filter,
   Search, Pencil, Trash2, Plus, RefreshCw, X,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -133,6 +134,11 @@ export function ReviewsView() {
   // Delete confirm state
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // PAGINATION: server-side pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const reviewsPerPage = 20;
+  const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
+
   // ─── Fetch reviews ──────────────────────────────────────────────────────
   const fetchReviews = useCallback(async () => {
     setLoading(true);
@@ -141,7 +147,8 @@ export function ReviewsView() {
       if (search) params.set('search', search);
       if (ratingFilter !== 'all') params.set('minRating', ratingFilter);
       if (statusFilter !== 'all') params.set('status', statusFilter);
-      params.set('limit', '100');
+      params.set('page', String(currentPage));
+      params.set('limit', String(reviewsPerPage));
 
       const res = await authFetch(`/api/reviews?${params.toString()}`, { method: 'GET' });
       if (!res.ok) {
@@ -150,16 +157,22 @@ export function ReviewsView() {
       }
       const data: ReviewListResponse = await res.json();
       setReviews(data.reviews || []);
+      setPagination(data.pagination ?? null);
     } catch {
       toast.error('Network error loading reviews');
     } finally {
       setLoading(false);
     }
-  }, [search, ratingFilter, statusFilter]);
+  }, [search, ratingFilter, statusFilter, currentPage]);
 
   useEffect(() => {
     fetchReviews();
   }, [fetchReviews]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, ratingFilter, statusFilter]);
 
   // ─── Computed stats ─────────────────────────────────────────────────────
   const total = reviews.length;
@@ -477,6 +490,34 @@ export function ReviewsView() {
           })}
         </div>
       )}
+
+      {/* PAGINATION: Server-side pagination controls */}
+      <div className="flex items-center justify-between mt-4 px-2">
+        <p className="text-sm text-muted-foreground">
+          {reviews.length === 0 ? 'Showing 0' : `Showing ${(currentPage - 1) * reviewsPerPage + 1}–${Math.min(currentPage * reviewsPerPage, pagination?.total ?? 0)}`} of {pagination?.total ?? 0} reviews
+        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage <= 1}
+          >
+            <ChevronLeft className="size-4" /> Prev
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {currentPage} of {pagination?.totalPages ?? 1}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage((p) => Math.min(pagination?.totalPages ?? 1, p + 1))}
+            disabled={currentPage >= (pagination?.totalPages ?? 1)}
+          >
+            Next <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      </div>
 
       {/* ─── Edit / Create Dialog ─────────────────────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) closeDialog(); }}>

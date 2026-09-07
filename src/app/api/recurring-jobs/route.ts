@@ -26,6 +26,11 @@ export async function GET(request: NextRequest) {
     const activeFilter = searchParams.get('active'); // 'true' | 'false' | null
     const customerId = searchParams.get('customerId');
 
+    // PAGINATION: server-side pagination params (default: page 1, limit 20)
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20), 100);
+    const skip = (page - 1) * limit;
+
     const where: Record<string, unknown> = { tenantId: user.tenantId };
     if (activeFilter === 'true') where.active = true;
     if (activeFilter === 'false') where.active = false;
@@ -61,13 +66,18 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const schedules = await db.recurringJobSchedule.findMany({
-      where,
-      include: {
-        customer: { select: { id: true, name: true, phone: true, email: true } },
-      },
-      orderBy: [{ active: 'desc' }, { nextRunAt: 'asc' }],
-    });
+    const [schedules, totalCount] = await Promise.all([
+      db.recurringJobSchedule.findMany({
+        where,
+        include: {
+          customer: { select: { id: true, name: true, phone: true, email: true } },
+        },
+        orderBy: [{ active: 'desc' }, { nextRunAt: 'asc' }],
+        skip,
+        take: limit,
+      }),
+      db.recurringJobSchedule.count({ where }),
+    ]);
 
     // For each schedule, look up its last-generated job (best-effort) so the
     // UI can render the "Last Run" column without an extra round-trip per row.
@@ -165,7 +175,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ schedules: enriched });
+    return NextResponse.json({
+      schedules: enriched,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+      },
+    });
   } catch (error) {
     console.error('List recurring jobs error:', error);
     return NextResponse.json({ error: 'Failed to fetch recurring job schedules' }, { status: 500 });

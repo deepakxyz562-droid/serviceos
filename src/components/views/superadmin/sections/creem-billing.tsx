@@ -39,6 +39,7 @@ import {
   Plus,
   Sparkles,
   AlertTriangle,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -100,6 +101,8 @@ const PRODUCT_INPUT_DEFS: Array<{
   cycle: 'monthly' | 'yearly';
   cycleLabel: string;
 }> = [
+  // Launch Special — monthly only ($5/mo founding member offer)
+  { planCode: 'launch_special', planName: 'Launch Special', cycle: 'monthly', cycleLabel: 'Monthly' },
   { planCode: 'starter', planName: 'Starter', cycle: 'monthly', cycleLabel: 'Monthly' },
   { planCode: 'starter', planName: 'Starter', cycle: 'yearly', cycleLabel: 'Yearly' },
   // planCode `growth` is the internal DB code; the user-facing plan name is
@@ -185,6 +188,9 @@ export function CreemBillingSection() {
   // key format: "<planCode_or_addonKey>_<cycle>" — used to disable the
   // per-slot button while its request is in flight.
   const [creatingSingleKey, setCreatingSingleKey] = useState<string | null>(null);
+  // "Delete All + Recreate" state — used when admin has duplicate products
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   // ─── Load current config ──────────────────────────────────────────────────
   const loadConfig = useCallback(async () => {
@@ -361,6 +367,47 @@ export function CreemBillingSection() {
       });
     } finally {
       setCreatingAll(false);
+    }
+  }
+
+  // ─── Delete All + Recreate — clean slate when admin has duplicate products ──
+  // Calls DELETE /api/superadmin/creem/delete-all-products which:
+  //   1. Deletes all mapped products from Creem
+  //   2. Clears all product IDs from the config
+  // Then the admin can click "Create All in Creem" to start fresh.
+  async function handleDeleteAllProducts() {
+    setDeletingAll(true);
+    try {
+      const res = await authFetch('/api/superadmin/creem/delete-all-products', {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete products');
+      }
+      const deletedCount = data.deleted?.filter((d: any) => d.ok)?.length || 0;
+      const failedCount = data.deleted?.filter((d: any) => !d.ok)?.length || 0;
+      const clearedCount = data.clearedCount || 0;
+
+      if (clearedCount > 0) {
+        toast.success(`Cleared ${clearedCount} product mappings`, {
+          description:
+            deletedCount > 0
+              ? `${deletedCount} products deleted from Creem. ${failedCount > 0 ? `${failedCount} could not be deleted via API (delete them manually in the Creem dashboard).` : ''} Product ID inputs are now empty — click "Create All in Creem" to create fresh products.`
+              : `No products were deleted via API (Creem may not support deletion). Product ID inputs are now empty — delete the duplicates manually in your Creem dashboard, then click "Create All in Creem".`,
+        });
+      } else {
+        toast.info('No product mappings found to clear');
+      }
+
+      setDeleteAllDialogOpen(false);
+      await loadConfig();
+    } catch (err) {
+      toast.error('Failed to delete products', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    } finally {
+      setDeletingAll(false);
     }
   }
 
@@ -754,6 +801,66 @@ export function CreemBillingSection() {
                       </>
                     ) : (
                       'Continue'
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {/* ── Delete All + Recreate — for when admin has duplicate products ── */}
+            <AlertDialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDeleteAllDialogOpen(true)}
+                disabled={deletingAll || loading || !isConfigured}
+                className="shrink-0 border-rose-300 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+              >
+                {deletingAll ? (
+                  <>
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                    Cleaning…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="size-4 mr-2" />
+                    Delete All + Reset
+                  </>
+                )}
+              </Button>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete all Creem products + reset mappings?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will attempt to delete ALL mapped products from your
+                    Creem account and clear all product ID inputs. Use this
+                    when you have duplicate products in Creem and want a clean
+                    slate. After this, click <strong>Create All in Creem</strong>
+                    to create fresh products without duplicates.
+                    <br /><br />
+                    <strong>Note:</strong> If Creem doesn&apos;t support product
+                    deletion via API, the products will remain in your Creem
+                    dashboard (you&apos;ll need to delete them manually there),
+                    but the product ID mappings here will still be cleared.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={deletingAll}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={deletingAll}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDeleteAllProducts();
+                    }}
+                    className="bg-rose-600 hover:bg-rose-700 text-white"
+                  >
+                    {deletingAll ? (
+                      <>
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                        Cleaning…
+                      </>
+                    ) : (
+                      'Delete All + Reset'
                     )}
                   </AlertDialogAction>
                 </AlertDialogFooter>
