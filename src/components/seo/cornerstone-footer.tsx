@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Bolt, Twitter, Linkedin, Github, ShieldCheck, Mail, MapPin } from "lucide-react";
+import { Twitter, Linkedin, Github, ShieldCheck, Mail, MapPin } from "lucide-react";
+import { BrandMark } from "@/components/brand/brand-mark";
 
 /**
  * Shared rich footer for all SEO cornerstone, marketplace, and public marketing pages.
@@ -75,9 +76,7 @@ export function CornerstoneFooter() {
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="space-y-2 max-w-xl">
               <Link href="/" className="flex items-center gap-2.5 group">
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm transition-transform group-hover:scale-105">
-                  <Bolt className="h-5 w-5 text-white" />
-                </span>
+                <BrandMark size={36} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
                 <span className="text-xl font-extrabold tracking-tight text-foreground">
                   Fieseros
                 </span>

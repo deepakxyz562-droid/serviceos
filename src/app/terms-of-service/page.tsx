@@ -1,6 +1,7 @@
-import { Bolt } from "lucide-react";
+import { BrandMark } from "@/components/brand/brand-mark";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { CornerstoneFooter } from "@/components/seo/cornerstone-footer";
 
 export const metadata: Metadata = {
   title: "Terms of Service — Fieseros CRM",
@@ -44,9 +45,7 @@ export default function TermsOfServicePage() {
       <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm">
-              <Bolt className="h-5 w-5 text-white" />
-            </span>
+            <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
             <span className="text-xl font-bold tracking-tight text-foreground">
               Fieseros
             </span>
@@ -862,42 +861,8 @@ export default function TermsOfServicePage() {
         </div>
       </main>
 
-      {/* ───── Footer ───── */}
-      <footer className="mt-auto border-t bg-muted/30">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              &copy; 2026 Fieseros, Inc. All rights reserved.
-            </p>
-            <nav className="flex items-center gap-6 text-sm text-muted-foreground">
-              <a
-                href="/privacy-policy"
-                className="hover:text-foreground transition-colors"
-              >
-                Privacy Policy
-              </a>
-              <a
-                href="/terms-of-service"
-                className="hover:text-foreground transition-colors font-medium text-foreground"
-              >
-                Terms of Service
-              </a>
-              <a
-                href="/data-deletion"
-                className="hover:text-foreground transition-colors"
-              >
-                Data Deletion
-              </a>
-              <a
-                href="/contact-us"
-                className="hover:text-foreground transition-colors"
-              >
-                Contact Us
-              </a>
-            </nav>
-          </div>
-        </div>
-      </footer>
+      {/* ───── Rich Footer ───── */}
+      <CornerstoneFooter />
 
       {/* ── Intersection Observer for TOC highlighting ── */}
       <script

@@ -43,6 +43,7 @@ import {
 } from './types';
 import { ProviderCard } from './provider-card';
 import { ProviderProfile as ProviderProfileView } from './provider-profile';
+import { CornerstoneFooter } from '@/components/seo/cornerstone-footer';
 import { InstantBookingDialog } from './instant-booking-dialog';
 import { QuoteRequestDialog } from './quote-request-dialog';
 import { EmergencyDialog } from './emergency-dialog';
@@ -899,32 +900,7 @@ function MarketplaceHeader({
 // ── Footer ────────────────────────────────────────────────────────────────
 
 function MarketplaceFooter() {
-  return (
-    <footer className="mt-auto border-t bg-background py-8">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
-          <div className="flex items-center gap-2">
-            <BrandMark size={28} />
-            <div>
-              <p className="text-sm font-semibold text-foreground">Fieseros</p>
-              <p className="text-xs text-muted-foreground">
-                AI Marketplace & Operating System for Local Service Businesses
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span>© {new Date().getFullYear()} Fieseros</span>
-            <span className="hidden sm:inline">·</span>
-            <span>25 industries · 9 verticals · 150+ services</span>
-            <span className="hidden sm:inline">·</span>
-            <span className="flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3 text-emerald-600" /> Verified providers
-            </span>
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
+  return <CornerstoneFooter />;
 }
 
 // ── Small UI helpers ──────────────────────────────────────────────────────

@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { InvoiceGeneratorClient } from "./invoice-generator-client";
 import { AiReceptionistSection } from "@/components/seo/ai-receptionist-section";
+import { CornerstoneFooter } from "@/components/seo/cornerstone-footer";
+import { BrandMark } from "@/components/brand/brand-mark";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://fieseros.com"),
@@ -187,9 +189,7 @@ export default function InvoiceGeneratorPage() {
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 no-print">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm">
-              <Bolt className="h-5 w-5 text-white" />
-            </span>
+            <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
             <span className="text-xl font-bold tracking-tight text-foreground">
               Fieseros
             </span>
@@ -416,36 +416,10 @@ export default function InvoiceGeneratorPage() {
 
       <AiReceptionistSection />
 
-      {/* ───── Footer ───── */}
-      <footer className="mt-auto border-t bg-muted/30 no-print">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              &copy; 2026 Fieseros, Inc. All rights reserved.
-            </p>
-            <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-              <a href="/privacy-policy" className="hover:text-foreground transition-colors">
-                Privacy Policy
-              </a>
-              <a href="/terms-of-service" className="hover:text-foreground transition-colors">
-                Terms of Service
-              </a>
-              <a href="/data-deletion" className="hover:text-foreground transition-colors">
-                Data Deletion
-              </a>
-              <a href="/contact-us" className="hover:text-foreground transition-colors">
-                Contact Us
-              </a>
-              <Link
-                href="/invoice-generator"
-                className="font-medium text-foreground hover:text-primary transition-colors"
-              >
-                Invoice Generator
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </footer>
+      {/* ───── Rich Footer ───── */}
+      <div className="no-print mt-auto">
+        <CornerstoneFooter />
+      </div>
 
       {/* JSON-LD structured data for Google rich results */}
       <script

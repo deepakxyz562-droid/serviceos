@@ -1,4 +1,4 @@
-import { Bolt, Mail, MapPin, Clock, Send, HelpCircle, Shield, Sparkles, MessageSquare, ArrowRight, CheckCircle2, PhoneCall } from "lucide-react";
+import { Mail, MapPin, Clock, Send, HelpCircle, Shield, Sparkles, MessageSquare, ArrowRight, CheckCircle2, PhoneCall } from "lucide-react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import {
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BrandMark } from "@/components/brand/brand-mark";
 import ContactForm from "./contact-form";
 import ContactMap from "./contact-map";
 import ContactChannels from "./contact-channels";
@@ -148,9 +149,7 @@ export default function ContactUsPage() {
       <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm transition-transform group-hover:scale-105">
-              <Bolt className="h-5 w-5 text-white" />
-            </span>
+            <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
             <span className="text-xl font-bold tracking-tight text-foreground">
               Fieseros
             </span>
@@ -229,12 +228,51 @@ export default function ContactUsPage() {
                 <ContactForm />
               </div>
 
-              {/* Right Column (5 cols): Direct Inboxes, Operating Hours & Interactive Map */}
+              {/* Right Column (5 cols): Direct Inboxes & Live Operating Hours */}
               <div className="lg:col-span-5 space-y-6">
                 <ContactChannels />
-                <ContactMap />
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* ── 100% Full-Width Interactive Location & Map Section ── */}
+        <section className="py-12 sm:py-16 border-t border-border/60 bg-muted/10">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+              <div>
+                <Badge variant="outline" className="mb-2.5 bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-medium text-xs">
+                  Global Office
+                </Badge>
+                <h2 className="text-3xl font-bold tracking-tight text-foreground">
+                  Our Location &amp; Headquarters
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1.5 max-w-2xl">
+                  Located in Wilmington, Delaware. Reach out to schedule an in-person demo or enterprise consultation with our trade solutions team.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="text-xs h-9 gap-1.5 shadow-2xs"
+                >
+                  <a
+                    href="https://www.google.com/maps/search/?api=1&query=123+Innovation+Drive+Suite+400+Wilmington+DE+19801+United+States"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Open in Google Maps</span>
+                  </a>
+                </Button>
+              </div>
+            </div>
+
+            {/* 100% Width Interactive Google Map */}
+            <ContactMap />
           </div>
         </section>
 

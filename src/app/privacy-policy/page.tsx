@@ -1,5 +1,7 @@
-import { Bolt } from "lucide-react";
+import Link from "next/link";
+import { BrandMark } from "@/components/brand/brand-mark";
 import type { Metadata } from "next";
+import { CornerstoneFooter } from "@/components/seo/cornerstone-footer";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Fieseros CRM",
@@ -35,20 +37,18 @@ export default function PrivacyPolicyPage() {
       {/* ───── Header ───── */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <a href="/" className="flex items-center gap-2.5 group">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-sm">
-              <Bolt className="h-5 w-5 text-white" />
-            </span>
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
             <span className="text-xl font-bold tracking-tight text-foreground">
               Fieseros
             </span>
-          </a>
-          <a
+          </Link>
+          <Link
             href="/"
             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
-            ← Back to Home
-          </a>
+            &larr; Back to Home
+          </Link>
         </div>
       </header>
 
@@ -729,43 +729,8 @@ export default function PrivacyPolicyPage() {
         </div>
       </main>
 
-      {/* ───── Footer ───── */}
-      <footer className="mt-auto border-t bg-card">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} Fieseros, Inc. All rights
-              reserved.
-            </p>
-            <nav className="flex items-center gap-6 text-sm text-muted-foreground">
-              <a
-                href="/privacy-policy"
-                className="hover:text-foreground transition-colors font-medium text-foreground"
-              >
-                Privacy Policy
-              </a>
-              <a
-                href="/terms-of-service"
-                className="hover:text-foreground transition-colors"
-              >
-                Terms of Service
-              </a>
-              <a
-                href="/cookie-policy"
-                className="hover:text-foreground transition-colors"
-              >
-                Cookie Policy
-              </a>
-              <a
-                href="/acceptable-use"
-                className="hover:text-foreground transition-colors"
-              >
-                Acceptable Use
-              </a>
-            </nav>
-          </div>
-        </div>
-      </footer>
+      {/* ───── Rich Footer ───── */}
+      <CornerstoneFooter />
 
       {/* ── Intersection Observer for TOC highlighting ── */}
       <script
