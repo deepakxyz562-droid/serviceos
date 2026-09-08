@@ -209,7 +209,21 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
         // list) so a missing/inactive DB row falls back to its hardcoded
         // entry instead of disappearing. This guarantees all 4 cards
         // (Starter, Professional/growth, Business, Enterprise) always render.
-        const mapped: PricingPlan[] = FALLBACK_PRICING_PLANS.map((curated) => {
+        //
+        // EXCEPTION: launch_special is a time-limited promo. When the
+        // superadmin deactivates it (isActive=false → /api/plans/public
+        // omits it), the hardcoded fallback card must ALSO be hidden so the
+        // promo disappears from the pricing grid. Other plans keep the
+        // resilient fallback behaviour (a missing DB row is treated as a
+        // transient failure, not an intentional hide).
+        const mapped: PricingPlan[] = FALLBACK_PRICING_PLANS
+          .filter((curated) => {
+            if (curated.code !== 'launch_special') return true;
+            // Only render launch_special when the DB explicitly returned it
+            // (i.e. it's active in the Plan catalog). Otherwise drop it.
+            return dbByCode.has('launch_special');
+          })
+          .map((curated) => {
           const dbPlan = dbByCode.get(curated.code);
           if (!dbPlan) return curated; // keep hardcoded fallback for this tier
           return {

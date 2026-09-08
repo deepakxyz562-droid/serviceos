@@ -121,6 +121,16 @@ export async function POST(request: NextRequest) {
     if (!planRow || !planConfig) {
       return NextResponse.json({ error: `Invalid plan: ${plan}` }, { status: 400 });
     }
+    // Reject NEW subscriptions for deactivated plans (e.g. launch_special promo
+    // turned off by superadmin). Existing subscribers keep their plan — this
+    // gate only blocks new activations. This keeps PayPal pricing consistent
+    // with the public plan catalog (/api/plans/public filters isActive=true).
+    if (planRow.isActive === false) {
+      return NextResponse.json(
+        { error: `This plan (${plan}) is no longer available for new subscriptions.` },
+        { status: 400 },
+      );
+    }
     const price = cycle === 'yearly' ? planConfig.yearlyPrice : planConfig.monthlyPrice;
 
     let planFeatures: Record<string, boolean> = {};

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { hashPassword, generateSlug, getAppUrl } from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { issueVerificationToken, sendVerificationEmail } from '@/lib/emails/verification-email';
+import { resolveSignupDefaultPlan } from '@/lib/billing-seed';
 
 export async function POST(request: NextRequest) {
   const rateLimited = applyRateLimit(authLimiter, request);
@@ -58,6 +59,13 @@ export async function POST(request: NextRequest) {
     // signupMode='crm_trial' distinguishes this from a marketplace-only claim
     // (signupMode='listing_only', listingTier='claimed_free'). CRM tenants get
     // the full sidebar; listing-only tenants get a minimal sidebar.
+    //
+    // Default plan: 'launch_special' when active, otherwise 'starter'. The
+    // superadmin can deactivate the Launch Special promo from Plan Catalog —
+    // new signups then fall back to the standard Starter plan so registration
+    // never breaks. Existing launch_special subscribers keep their plan.
+    const signupPlan = await resolveSignupDefaultPlan();
+
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -67,10 +75,8 @@ export async function POST(request: NextRequest) {
         email,
         city: city || null,
         website: website || null,
-        // LAUNCH SPECIAL: new signups get the launch_special plan ($5/mo)
-        // instead of the standard starter plan ($29/mo). The plan tier
-        // resolver treats launch_special as starter-level access.
-        plan: 'launch_special',
+        // Default plan resolved above (launch_special when active, else starter).
+        plan: signupPlan,
         planStatus: 'trial',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
         marketplaceOptIn: false,
@@ -136,10 +142,8 @@ export async function POST(request: NextRequest) {
       await db.subscription.create({
         data: {
           tenantId: tenant.id,
-          // LAUNCH SPECIAL: new signups get the launch_special plan ($5/mo)
-        // instead of the standard starter plan ($29/mo). The plan tier
-        // resolver treats launch_special as starter-level access.
-        plan: 'launch_special',
+          // Default plan resolved above (launch_special when active, else starter).
+        plan: signupPlan,
           status: 'trial',
           amount: 0,
           currency: 'USD',

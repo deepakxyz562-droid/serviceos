@@ -38,6 +38,9 @@ import {
   Cloud,
   // O1.5 Channel Catalog
   RadioTower,
+  // Plan Catalog (Business group) — manage plan rows incl. the launch_special
+  // isActive toggle that gates the $5/mo promo across landing/onboarding/auth.
+  Tags,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -109,6 +112,7 @@ const BackupSection = lazy(() => import('@/components/views/superadmin/sections/
 const SocialPublishingConfigSection = lazy(() => import('@/components/views/superadmin/sections/social-publishing-config').then(m => ({ default: m.SocialPublishingConfigSection })));
 const ChannelCatalogSection = lazy(() => import('@/components/views/superadmin/sections/channel-catalog').then(m => ({ default: m.ChannelCatalogSection })));
 const CreemBillingSection = lazy(() => import('@/components/views/superadmin/sections/creem-billing').then(m => ({ default: m.CreemBillingSection })));
+const PlanCatalogSection = lazy(() => import('@/components/views/superadmin/sections/plan-catalog').then(m => ({ default: m.PlanCatalogSection })));
 const FailedPaymentsSection = lazy(() => import('@/components/views/superadmin/sections/failed-payments').then(m => ({ default: m.FailedPaymentsSection })));
 const OutreachSection = lazy(() => import('@/components/views/superadmin/sections/outreach').then(m => ({ default: m.OutreachSection })));
 
@@ -411,6 +415,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
       { key: 'failed-payments', label: 'Failed Payments', icon: AlertCircle },
       { key: 'creem-billing', label: 'Creem Billing', icon: CreditCard },
+      { key: 'plan-catalog', label: 'Plan Catalog', icon: Tags },
       { key: 'users', label: 'Users', icon: Users },
       { key: 'credits', label: 'Credits', icon: Wallet },
       { key: 'industry-templates', label: 'Industry Templates', icon: LayoutGrid },
@@ -1339,6 +1344,7 @@ export function SuperAdminView() {
         {activeTab === 'ai-center' && <AICenterSection />}
         {activeTab === 'ai-platform' && <AiPlatformSection />}
         {activeTab === 'creem-billing' && <CreemBillingSection />}
+        {activeTab === 'plan-catalog' && <PlanCatalogSection />}
         {activeTab === 'failed-payments' && <FailedPaymentsSection />}
         {activeTab === 'menu-management' && <MenuManagementSection />}
         {activeTab === 'email-services' && <EmailServicesSection />}

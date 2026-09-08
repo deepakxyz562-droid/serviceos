@@ -1252,35 +1252,38 @@ export async function markInvoicePaid(
       })
     }
 
-    // ─── Send WhatsApp payment confirmation to customer ──────────
+    // ─── Send SMS payment confirmation to customer (SMS ONLY) ─────
+    // Per product decision: the customer receives ONLY an SMS payment
+    // confirmation when an invoice is marked paid. WhatsApp, email, in-app
+    // and push channels are intentionally disabled for this notification.
+    // Owner notifications (in-app bell + device push) are handled separately
+    // by the lifecycle-push-dispatcher on the 'invoice.paid' /
+    // 'payment.received' events and remain unaffected.
     try {
       const customerPhone = invoice.customer?.phone
       if (customerPhone) {
         const { sendJobNotification } = await import('@/lib/whatsapp-notifications')
         const invoiceNumber = invoice.number
         const total = `${invoice.currency || 'USD'} ${Number(invoice.total).toFixed(2)}`
-        const message = [
-          '✅ Payment Confirmed',
-          '',
-          `Thank you, ${invoice.customer?.name || 'Customer'}!`,
-          `We've received your payment of ${total} for invoice #${invoiceNumber}.`,
-          '',
-          '🎉 Payment confirmed!',
-        ].join('\n')
+        // `channels: ['sms']` restricts the multi-channel cascade to SMS only,
+        // skipping in-app/push, WhatsApp and email regardless of priority or
+        // recipient resolution.
+        const smsMessage = `Payment confirmed: ${total} for invoice #${invoiceNumber}. Thank you, ${invoice.customer?.name || 'Customer'}!`
 
         await sendJobNotification({
           to: customerPhone,
-          message,
+          message: smsMessage,
           recipientName: invoice.customer?.name,
           recipientRole: 'customer',
           subject: `Payment Confirmed: #${invoiceNumber}`,
           tenantId: invoice.tenantId || undefined,
           eventType: 'invoice.paid',
-          smsMessage: `Payment confirmed: ${total} for invoice #${invoiceNumber}. Thank you!`,
+          smsMessage,
+          channels: ['sms'],
         })
       }
     } catch (notifyErr) {
-      console.error('[InvoiceAutomation] Payment confirmation WhatsApp failed:', notifyErr)
+      console.error('[InvoiceAutomation] Payment confirmation SMS failed:', notifyErr)
     }
 
     // ─── Emit payment.received event ─────────────────────────────

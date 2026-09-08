@@ -1571,6 +1571,41 @@ function BuiltForSection() {
 
 function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
   const [yearly, setYearly] = useState(false);
+  // Whether the launch_special promo is still active in the Plan catalog.
+  // Defaults to true so the promo renders immediately on first paint (the
+  // /api/plans/public check resolves in ~100ms). When the superadmin
+  // deactivates the promo, the fetch omits launch_special and this flips to
+  // false, hiding the promo banner + pricing card without a deploy.
+  const [launchSpecialActive, setLaunchSpecialActive] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/plans/public');
+        if (!res.ok) return;
+        const data = await res.json();
+        const codes: string[] = Array.isArray(data?.plans)
+          ? data.plans.map((p: { code?: string }) => p.code)
+          : [];
+        // Only hide when the DB explicitly omits launch_special (isActive=false).
+        // On fetch failure or empty response, leave the default (true) so the
+        // promo doesn't vanish on a transient API hiccup.
+        if (codes.length > 0 && !cancelled) {
+          setLaunchSpecialActive(codes.includes('launch_special'));
+        }
+      } catch {
+        // Network error — leave launchSpecialActive at its default (true).
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Filter out the Launch Special card when the promo is deactivated. Other
+  // plans always render.
+  const visiblePricingPlans = launchSpecialActive
+    ? pricingPlans
+    : pricingPlans.filter((p) => p.name !== 'Launch Special');
 
   return (
     <section className="relative py-24 bg-background" id="pricing">
@@ -1594,7 +1629,8 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
             </div>
           </motion.div>
 
-          {/* Limited-time launch promo */}
+          {/* Limited-time launch promo — hidden when superadmin deactivates launch_special */}
+          {launchSpecialActive && (
           <motion.div
             variants={staggerItem}
             className="relative mb-8 rounded-2xl overflow-hidden border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 via-white to-teal-50 shadow-lg shadow-emerald-100"
@@ -1644,9 +1680,10 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
               </div>
             </div>
           </motion.div>
+          )}
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {pricingPlans.map((plan) => {
+            {visiblePricingPlans.map((plan) => {
               const Icon = plan.icon;
               return (
                 <motion.div key={plan.name} variants={staggerItem}>

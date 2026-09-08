@@ -21,6 +21,11 @@ const SHOW_DELAY_MS = 5000; // 5 seconds
  */
 export function LaunchSpecialModal() {
   const [visible, setVisible] = useState(false);
+  // Whether the launch_special plan is still active in the catalog. The
+  // superadmin can deactivate the promo from Plan Catalog — when off, the
+  // popup must not render at all (no error, no fallback). Defaults to false
+  // so the modal never flashes before the /api/plans/public check resolves.
+  const [launchSpecialActive, setLaunchSpecialActive] = useState(false);
 
   // Check if user is authenticated (don't show to logged-in users)
   const isAuthenticated = useCallback(() => {
@@ -43,8 +48,33 @@ export function LaunchSpecialModal() {
     document.cookie = `${COOKIE_KEY}=1; path=/; expires=${expiry.toUTCString()}; SameSite=Lax`;
   }, []);
 
-  // Show the modal after a delay (only for unauthenticated + not-dismissed users)
+  // Fetch the public plan catalog once to determine whether the launch_special
+  // promo is still active. The /api/plans/public endpoint filters by
+  // isActive=true, so launch_special disappears from the response when the
+  // superadmin deactivates it.
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/plans/public');
+        if (!res.ok) return;
+        const data = await res.json();
+        const codes: string[] = Array.isArray(data?.plans)
+          ? data.plans.map((p: { code?: string }) => p.code)
+          : [];
+        if (!cancelled) setLaunchSpecialActive(codes.includes('launch_special'));
+      } catch {
+        // On fetch failure, leave launchSpecialActive=false so the popup
+        // doesn't render a stale promo. This is the safe default.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Show the modal after a delay (only for unauthenticated + not-dismissed
+  // users + only when the launch_special promo is still active).
+  useEffect(() => {
+    if (!launchSpecialActive) return;
     if (isAuthenticated() || wasDismissed()) return;
 
     const timer = setTimeout(() => {
@@ -52,7 +82,7 @@ export function LaunchSpecialModal() {
     }, SHOW_DELAY_MS);
 
     return () => clearTimeout(timer);
-  }, [isAuthenticated, wasDismissed]);
+  }, [launchSpecialActive, isAuthenticated, wasDismissed]);
 
   const handleClaim = () => {
     // Redirect to the signup flow. The SPA's HomePageClient reads ?auth=register

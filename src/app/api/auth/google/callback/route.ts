@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { generateToken, generateSlug, COOKIE_OPTIONS, getAppUrl } from '@/lib/auth';
 import { BRAND } from '@/lib/brand';
+import { resolveSignupDefaultPlan } from '@/lib/billing-seed';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -49,13 +50,18 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
   //
   // signupMode='crm_trial' distinguishes this from a marketplace-only claim
   // (signupMode='listing_only', listingTier='claimed_free').
+  //
+  // Default plan: 'launch_special' when active, otherwise 'starter' (the
+  // superadmin can deactivate the promo from Plan Catalog without breaking
+  // new signups).
+  const signupPlan = await resolveSignupDefaultPlan();
+
   const tenant = await db.tenant.create({
     data: {
       name: businessName,
       slug,
       email: userEmail,
-      // LAUNCH SPECIAL: new Google signups also get the launch_special plan.
-      plan: 'launch_special',
+      plan: signupPlan,
       planStatus: 'trial',
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
       onboardingCompleted: false,
@@ -102,8 +108,8 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
     await db.subscription.create({
       data: {
         tenantId: tenant.id,
-        // LAUNCH SPECIAL: new Google signups also get the launch_special plan.
-      plan: 'launch_special',
+        // Default plan resolved above (launch_special when active, else starter).
+      plan: signupPlan,
         status: 'trial',
         amount: 0,
         currency: 'USD',

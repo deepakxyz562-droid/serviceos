@@ -839,4 +839,28 @@ export async function getPlanByCode(code: string) {
   return db.plan.findUnique({ where: { code } });
 }
 
+/**
+ * Resolve the default plan code for NEW signups.
+ *
+ * Returns `'launch_special'` when that plan exists AND `isActive=true` in the
+ * Plan table (the superadmin can deactivate the promo from the Plan Catalog
+ * section). When the promo is deactivated, falls back to `'starter'` so new
+ * registrations still get a valid, billable plan.
+ *
+ * Used by the email + Google OAuth signup routes so the default plan assigned
+ * to new tenants respects the superadmin toggle without a deploy.
+ *
+ * NOTE: this only affects NEW signups. Existing tenants on `launch_special`
+ * keep their plan + billing — deactivation hides the promo, it does NOT
+ * cancel existing subscribers.
+ */
+export async function resolveSignupDefaultPlan(): Promise<string> {
+  const launchSpecial = await db.plan.findUnique({
+    where: { code: 'launch_special' },
+    select: { isActive: true },
+  });
+  if (launchSpecial?.isActive) return 'launch_special';
+  return 'starter';
+}
+
 export { PLAN_DEFS };
