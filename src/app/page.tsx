@@ -3,7 +3,6 @@ import { cookies } from 'next/headers';
 import HomePageClient from '@/components/home/home-page-client';
 import { FeaturedEuropeanLocation } from '@/components/home/featured-european-location';
 import { HomeSeoContent } from '@/components/seo/home-seo-content';
-import { LaunchSpecialModal } from '@/components/landing/launch-special-modal';
 
 /**
  * The HTTP-only auth cookie name. Mirrors `TOKEN_NAME` in `src/lib/auth.ts`.
@@ -160,9 +159,6 @@ export default async function HomePage() {
       {/* Interactive client app — auth routing + landing page.
           Renders first so users see the visual hero immediately. */}
       <HomePageClient />
-      {/* Launch Special marketing popup — shows for unauthenticated users
-          after 5 seconds. Dismissible with 7-day cookie. */}
-      <LaunchSpecialModal />
       {/* Server-rendered SEO content — VISIBLE rich text with internal links.
           Positioned below the interactive landing so users see the visual
           hero first, then supplementary content below. For Googlebot, this

@@ -8,6 +8,7 @@ import { CookieConsentBanner } from "@/components/legal/cookie-consent-banner";
 import { StructuredData } from "@/components/seo/structured-data";
 import { WebVitalsReporter } from "@/components/seo/web-vitals-reporter";
 import { Analytics } from "@/components/analytics/analytics";
+import { LaunchSpecialModal } from "@/components/landing/launch-special-modal";
 import { getOrganizationSchema, getWebsiteSchema } from "@/lib/seo/schemas";
 import { BRAND } from "@/lib/brand";
 
@@ -208,6 +209,10 @@ export default function RootLayout({
           {children}
           <Toaster position="top-center" />
           <PwaProvider />
+          {/* Launch Special marketing popup — shows on EVERY page for
+              unauthenticated users (after 5s delay). Dismissible with 7-day
+              cookie. Rendered in root layout so it works on all routes. */}
+          <LaunchSpecialModal />
           <CookieConsentBanner />
           {/* P3-1 (SEO): Core Web Vitals RUM — reports field CLS/INP/LCP/FCP/TTFB
               to /api/vitals for production performance monitoring. */}

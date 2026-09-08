@@ -55,8 +55,9 @@ export function LaunchSpecialModal() {
   }, [isAuthenticated, wasDismissed]);
 
   const handleClaim = () => {
-    // Redirect to the signup / get-started flow
-    window.location.href = '/?auth=signup';
+    // Redirect to the signup flow. The SPA's HomePageClient reads ?auth=register
+    // to show the auth form directly. Must use 'register' (not 'signup').
+    window.location.href = '/?auth=register';
   };
 
   return (
