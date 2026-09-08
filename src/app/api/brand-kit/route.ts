@@ -16,16 +16,45 @@ export async function GET() {
     }
     const tenantId = user.tenantId || 'default'
 
-    let kit = await db.brandKit.findUnique({ where: { tenantId } })
+    let kit = null
+    try {
+      kit = await db.brandKit.findUnique({ where: { tenantId } })
+      if (!kit) {
+        kit = await db.brandKit.create({
+          data: {
+            tenantId,
+            primaryColor: '#0f766e',
+            secondaryColor: '#1f2937',
+            accentColor: '#f59e0b',
+          },
+        })
+      }
+    } catch (dbErr) {
+      console.warn('[BrandKit] GET database lookup/create fallback:', dbErr)
+      try {
+        kit = await db.brandKit.findUnique({ where: { tenantId } })
+      } catch {}
+    }
+
     if (!kit) {
-      kit = await db.brandKit.create({
-        data: {
-          tenantId,
-          primaryColor: '#0f766e',
-          secondaryColor: '#1f2937',
-          accentColor: '#f59e0b',
-        },
-      })
+      kit = {
+        id: 'default',
+        tenantId,
+        logoUrl: null,
+        primaryColor: '#0f766e',
+        secondaryColor: '#1f2937',
+        accentColor: '#f59e0b',
+        fontFamily: 'Inter, sans-serif',
+        footerHtml: null,
+        companyName: null,
+        address: null,
+        website: null,
+        email: null,
+        phone: null,
+        socialLinksJson: '[]',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any
     }
 
     return NextResponse.json({ data: kit })

@@ -120,8 +120,8 @@ export function BrandingSettings() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const storeTenant = useAppStore.getState().currentTenant;
-      const storeUser = useAppStore.getState().user;
+      const storeTenant = useAppStore.getState().auth?.tenant;
+      const storeUser = useAppStore.getState().auth?.user;
       if (storeTenant?.id) {
         setTenantId(storeTenant.id);
         setBusinessName(storeTenant.name || 'Your Business Name');
@@ -130,46 +130,54 @@ export function BrandingSettings() {
         setTenantId(storeUser.tenantId);
       }
 
-      const authRes = await authFetch('/api/auth/me');
-      if (authRes.ok) {
-        const authData = await authRes.json();
-        const t = authData?.tenant;
-        if (t?.id) {
-          setTenantId(t.id);
-          setBusinessName(t.name || 'Your Business Name');
-          setLogoUrl(t.logo || null);
+      try {
+        const authRes = await authFetch('/api/auth/me');
+        if (authRes.ok) {
+          const authData = await authRes.json();
+          const t = authData?.tenant;
+          if (t?.id) {
+            setTenantId(t.id);
+            setBusinessName(t.name || 'Your Business Name');
+            setLogoUrl(t.logo || null);
 
-          const planSupported = t.planStatus !== 'trial' && t.plan === 'enterprise';
-          let hideFieseros = false;
-          try {
-            const parsed = JSON.parse(t.whiteLabelJson || '{}');
-            hideFieseros = Boolean(parsed.hideFieserosBranding);
-          } catch {}
+            const planSupported = t.planStatus !== 'trial' && t.plan === 'enterprise';
+            let hideFieseros = false;
+            try {
+              const parsed = JSON.parse(t.whiteLabelJson || '{}');
+              hideFieseros = Boolean(parsed.hideFieserosBranding);
+            } catch {}
 
-          setWhiteLabel({
-            planSupported,
-            hideFieserosBranding: hideFieseros,
-            saving: false,
-          });
+            setWhiteLabel({
+              planSupported,
+              hideFieserosBranding: hideFieseros,
+              saving: false,
+            });
+          }
         }
+      } catch (authErr) {
+        console.warn('[BrandingSettings] /api/auth/me non-fatal:', authErr);
       }
 
-      const kitRes = await authFetch('/api/brand-kit');
-      if (kitRes.ok) {
-        const kitData = await kitRes.json();
-        const kit = kitData?.data;
-        if (kit) {
-          const font = kit.fontFamily || DEFAULT_FORM.fontFamily;
-          const isStandard = STANDARD_FONTS.some((f) => f.value === font);
-          setCustomFontMode(!isStandard);
-          setForm({
-            primaryColor: kit.primaryColor || DEFAULT_FORM.primaryColor,
-            secondaryColor: kit.secondaryColor || DEFAULT_FORM.secondaryColor,
-            accentColor: kit.accentColor || DEFAULT_FORM.accentColor,
-            fontFamily: font,
-            footerHtml: kit.footerHtml || '',
-          });
+      try {
+        const kitRes = await authFetch('/api/brand-kit');
+        if (kitRes.ok) {
+          const kitData = await kitRes.json();
+          const kit = kitData?.data;
+          if (kit) {
+            const font = kit.fontFamily || DEFAULT_FORM.fontFamily;
+            const isStandard = STANDARD_FONTS.some((f) => f.value === font);
+            setCustomFontMode(!isStandard);
+            setForm({
+              primaryColor: kit.primaryColor || DEFAULT_FORM.primaryColor,
+              secondaryColor: kit.secondaryColor || DEFAULT_FORM.secondaryColor,
+              accentColor: kit.accentColor || DEFAULT_FORM.accentColor,
+              fontFamily: font,
+              footerHtml: kit.footerHtml || '',
+            });
+          }
         }
+      } catch (kitErr) {
+        console.warn('[BrandingSettings] /api/brand-kit non-fatal:', kitErr);
       }
     } catch (err) {
       console.error('[BrandingSettings] Failed to load:', err);
