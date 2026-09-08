@@ -120,12 +120,36 @@ export function FieserosPromoCard({
             {promo.features}
           </p>
           <Link
-            href="/"
+            href="/best-field-service-software"
             className="mt-2.5 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300"
           >
             Run your business with Fieseros
             <span aria-hidden="true">→</span>
           </Link>
+          {/* Internal links to high-value SaaS comparison pages.
+              These pass PageRank from the high-traffic marketplace business
+              pages (97% of traffic) to the commercial SaaS pages that are
+              ranking at position 60-85. This helps push them to page 1-2. */}
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+            <Link
+              href="/best-field-service-software"
+              className="text-[11px] text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
+            >
+              Best Field Service Software
+            </Link>
+            <Link
+              href="/jobber-alternatives"
+              className="text-[11px] text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
+            >
+              Jobber Alternative
+            </Link>
+            <Link
+              href="/servicetitan-alternatives"
+              className="text-[11px] text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
+            >
+              ServiceTitan Alternative
+            </Link>
+          </div>
           {/* Marketplace → Services cross-sell (Phase 4).
               Subtle secondary link — only shown for claimed businesses
               (showServicesCta=true). Per review direction: "Subtle for Phase 4
