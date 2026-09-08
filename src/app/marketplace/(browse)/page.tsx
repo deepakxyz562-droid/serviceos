@@ -11,6 +11,7 @@ import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import { getAppUrl } from '@/lib/brand';
 import { CornerstoneFooter } from '@/components/seo/cornerstone-footer';
+import { LaunchSpecialModal } from '@/components/landing/launch-special-modal';
 import {
   MARKETPLACE_PAGE_SIZE,
   fetchFeaturedTenantIds,
@@ -686,6 +687,9 @@ export default async function MarketplaceBrowsePage({
 
       {/* Mobile bottom tab bar — Home / Browse / Search / Saved / Bookings */}
       <MarketplaceMobileNav />
+
+      {/* Launch Special marketing popup — shows for unauthenticated users */}
+      <LaunchSpecialModal />
     </div>
   );
 }

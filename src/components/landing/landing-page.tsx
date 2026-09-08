@@ -387,27 +387,27 @@ const pricingPlans: PricingPlan[] = [
   },
   {
     name: 'Starter',
-    monthlyPrice: 10,
-    yearlyPrice: 60,
+    monthlyPrice: 29,
+    yearlyPrice: 290,
     description: 'For solo entrepreneurs',
     icon: Zap,
-    features: ['1 user', '100 jobs/month', 'Email & SMS notifications', 'Basic CRM & leads', 'Invoice generation', 'Email support'],
+    features: ['1 user', '200 jobs/month', 'Email & SMS notifications', 'Basic CRM & leads', 'Invoice generation', 'Email support'],
     cta: 'Start Free Trial',
   },
   {
-    name: 'Growth',
-    monthlyPrice: 25,
-    yearlyPrice: 150,
+    name: 'Professional',
+    monthlyPrice: 79,
+    yearlyPrice: 790,
     description: 'For growing teams',
     icon: Building2,
-    features: ['5 users', '1,000 jobs/month', 'Email + SMS included', 'Push notifications', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'AI Receptionist (BYOK)', 'Priority support'],
+    features: ['5 users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'AI Receptionist (BYOK)', 'Priority support'],
     popular: true,
     cta: 'Start Free Trial',
   },
   {
-    name: 'Pro',
-    monthlyPrice: 50,
-    yearlyPrice: 300,
+    name: 'Business',
+    monthlyPrice: 149,
+    yearlyPrice: 1490,
     description: 'For scaling businesses',
     icon: Shield,
     features: ['Unlimited users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'No-code automation builder', 'Custom workflows', 'AI Receptionist (BYOK)', 'API access', 'Dedicated support'],
@@ -1656,9 +1656,9 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
                         <Badge className="bg-primary text-primary-foreground font-semibold border-0 px-3 shadow-md">Popular</Badge>
                       </div>
                     )}
-                    {plan.name === 'Starter' && (
+                    {plan.name === 'Launch Special' && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-amber-500 text-white font-semibold border-0 px-3 shadow-md whitespace-nowrap">$5 first year</Badge>
+                        <Badge className="bg-amber-500 text-white font-semibold border-0 px-3 shadow-md whitespace-nowrap">First 100 Only</Badge>
                       </div>
                     )}
                     <CardHeader className="pb-2">
@@ -1670,17 +1670,17 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
                     </CardHeader>
                     <CardContent className="flex-1">
                       <div className="mb-6">
-                        {plan.name === 'Starter' ? (
+                        {plan.name === 'Launch Special' ? (
                           <>
                             <div className="flex items-baseline gap-2">
                               <span className="text-4xl font-extrabold text-primary">$5</span>
-                              <span className="text-muted-foreground text-sm">/year</span>
+                              <span className="text-muted-foreground text-sm">/mo</span>
                             </div>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-sm text-muted-foreground line-through">${yearly ? plan.yearlyPrice : plan.monthlyPrice}{yearly ? '/year' : '/mo'}</span>
-                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs font-semibold">98% off</Badge>
+                              <span className="text-sm text-muted-foreground line-through">$29/mo</span>
+                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs font-semibold">83% off</Badge>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">First year only · then ${plan.monthlyPrice}/mo</p>
+                            <p className="text-xs text-muted-foreground mt-1">Monthly billing · Cancel anytime</p>
                           </>
                         ) : plan.monthlyPrice !== null ? (
                           <div className="flex items-baseline gap-1">
@@ -1690,7 +1690,7 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
                         ) : (
                           <div className="text-4xl font-bold text-foreground">Custom</div>
                         )}
-                        {plan.name !== 'Starter' && yearly && plan.yearlyPrice !== null && <p className="text-xs text-muted-foreground mt-1">${plan.yearlyPrice}/year billed annually</p>}
+                        {plan.name !== 'Launch Special' && yearly && plan.yearlyPrice !== null && <p className="text-xs text-muted-foreground mt-1">${plan.yearlyPrice}/year billed annually</p>}
                       </div>
                       <ul className="space-y-3">
                         {plan.features.map((feature) => (

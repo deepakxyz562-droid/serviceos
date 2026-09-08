@@ -61,6 +61,12 @@ export const INDUSTRY_TO_PLURAL_SLUG: Record<string, string> = {
   'pet-services': 'pet-services-contractors',
   'snow-removal': 'snow-removal-contractors',
   'tree-care': 'tree-care-contractors',
+  // ── Added 2026-09-07: appliance-repair was missing from the map ──────
+  // Google was discovering /appliance-repairs/{city} URLs (probably from
+  // old sitemaps or internal links) but getting 404 because the slug
+  // wasn't in the reverse map. Adding it here makes the catch-all
+  // [companySlug]/[city] route resolve correctly.
+  'appliance-repair': 'appliance-repairs',
 };
 
 // Reverse map: plural URL slug → canonical industry ID
