@@ -710,7 +710,17 @@ export async function findAllEmployeesForDispatch(
     where.workspaceId = workspaceId
   }
 
-  return await db.employee.findMany({ where }) as EmployeeRecord[]
+  // PERF-P2: Cap at 50 candidates. Previously this was unbounded — for a
+  // tenant with 100+ employees, findBestMatch fanned out into 2 queries per
+  // candidate (200 concurrent queries), saturating the DB pool. 50 is a
+  // generous upper bound for dispatch candidates (the scorer ranks them;
+  // the top N are surfaced to the UI). If a tenant has more, only the 50
+  // most recently created are considered (rare edge case).
+  return await db.employee.findMany({
+    where,
+    take: 50,
+    orderBy: { createdAt: 'desc' },
+  }) as EmployeeRecord[]
 }
 
 // ─── Score Employee ────────────────────────────────────────────────────────────

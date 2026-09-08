@@ -913,6 +913,11 @@ model Lead {
   @@index([customerId])
   @@index([assignedToId])
   @@index([serviceId])
+  // PERF-P1: composite index for the leads list query —
+  // `WHERE tenantId=? ORDER BY createdAt DESC`. Previously the two
+  // single-col indexes meant Postgres couldn't serve the sort from the
+  // index, forcing an in-memory sort on every page.
+  @@index([tenantId, createdAt(sort: Desc)])
 }
 
 // ==========================================
@@ -1080,6 +1085,9 @@ model Expense {
   @@index([jobId])
   @@index([category])
   @@index([expenseDate])
+  // PERF-P1: composite index for the expenses list + date-range filter —
+  // `WHERE tenantId=? ORDER BY expenseDate DESC`.
+  @@index([tenantId, expenseDate(sort: Desc)])
 }
 
 // ==========================================
@@ -1945,6 +1953,13 @@ model Job {
   @@index([resourceId])
   @@index([serviceId])
   @@index([collectedById])
+  // PERF-P1: composite indexes for the most common dispatch-board + calendar
+  // query patterns — `WHERE workspaceId=? AND status=?` (kanban / list
+  // filters) and `WHERE workspaceId=? AND scheduledAt BETWEEN ? AND ?`
+  // (calendar date-range). Previously only single-col indexes existed, so
+  // Postgres did a full scan + in-memory sort on every calendar render.
+  @@index([workspaceId, status])
+  @@index([workspaceId, scheduledAt])
 }
 
 model ContactList {
@@ -2620,6 +2635,11 @@ model InboxMessage {
   // the database level. Postgres treats NULL externalId as distinct, so
   // internal/system messages (no external ID) are exempt.
   @@unique([tenantId, channel, externalId])
+  // PERF-P1: composite index for the inbox message-list query —
+  // `WHERE conversationId=? ORDER BY createdAt ASC`. Previously only
+  // separate single-col indexes existed, forcing a sort on every message
+  // thread render.
+  @@index([conversationId, createdAt])
 }
 
 model ChatLabel {
@@ -3290,6 +3310,11 @@ model Deal {
   @@index([tenantId])
   @@index([convertedJobId])
   @@index([archivedAt])
+  // PERF-P1: composite index for the pipeline board's primary query —
+  // `WHERE tenantId=? AND stage=? AND archivedAt IS NULL` (active deals by
+  // stage). Previously three separate single-col indexes forced a full scan
+  // + sort on every board render.
+  @@index([tenantId, stage, archivedAt])
 }
 
 // --- Pipeline configuration (customizable stages per tenant) ---
@@ -3564,6 +3589,9 @@ model Contact {
   @@index([source])
   @@index([country])
   @@index([city])
+  // PERF-P1: composite index for the contacts list query —
+  // `WHERE tenantId=? ORDER BY createdAt DESC`.
+  @@index([tenantId, createdAt(sort: Desc)])
 }
 
 // ==========================================
@@ -3967,6 +3995,11 @@ model Booking {
   @@index([employeeId])
   @@index([scheduledAt])
   @@index([customerId])
+  // PERF-P1: composite indexes for the two dominant booking queries —
+  // `WHERE tenantId=? AND status=?` (filtered lists / dispatch) and
+  // `WHERE tenantId=? AND scheduledAt BETWEEN ? AND ?` (calendar).
+  @@index([tenantId, status])
+  @@index([tenantId, scheduledAt])
 }
 
 // ==========================================
@@ -6424,6 +6457,11 @@ model EmergencyDispatch {
   @@index([status])
   @@index([industry])
   @@index([createdAt])
+  // PERF-P1: EmergencyDispatch had NO tenantId index despite having the
+  // column — every tenant-scoped lookup was a full scan. Add the base
+  // tenant index + a composite for the broadcasting-status query.
+  @@index([tenantId])
+  @@index([status, createdAt])
 }
 
 // ─── Provider Profile Enrichment ────────────────────────────────────────────

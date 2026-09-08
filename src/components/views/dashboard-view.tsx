@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   CalendarCheck,
   Briefcase,
@@ -428,6 +428,26 @@ export function DashboardView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // PERF-P2: Track whether this view is actually visible (not display:none
+  // inside the ViewCache). The existing polling effects check
+  // `document.hidden` (browser tab visibility), but when the dashboard is
+  // hidden inside the SPA via display:none, `document.hidden` is still
+  // false — so polling continued silently in the background. This ref +
+  // IntersectionObserver detects the REAL visibility so we can pause
+  // polling when the view is hidden.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(true);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   // New data states
   const [employees, setEmployees] = useState<EmployeePresence[]>([]);
   const [journeyStages, setJourneyStages] = useState<JourneyStage[]>([]);
@@ -537,21 +557,23 @@ export function DashboardView() {
     }
     // Don't fetch immediately on mount — bootstrap already did it.
     // Only set up the polling interval for subsequent refreshes.
+    // PERF-P2: pause polling when the view is hidden (display:none in
+    // ViewCache) — not just when the browser tab is hidden.
 
     let id: ReturnType<typeof setInterval> | null = null;
     const start = () => { if (!id) id = setInterval(fetchEmployees, 60_000); };
     const stop = () => { if (id) { clearInterval(id); id = null; } };
     const onVisibility = () => {
-      if (document.hidden) stop();
+      if (document.hidden || !inView) stop();
       else { fetchEmployees(); start(); }
     };
-    start();
+    if (inView) start();
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
+  }, [inView]);
 
   // Fetch journey data for customer journey overview
   useEffect(() => {
@@ -613,20 +635,22 @@ export function DashboardView() {
     fetchConversations();
 
     // PERFORMANCE: 60s poll (was 30s) + pause when tab hidden.
+    // PERF-P2: also pause when the view is hidden (display:none in
+    // ViewCache) — not just when the browser tab is hidden.
     let id: ReturnType<typeof setInterval> | null = null;
     const start = () => { if (!id) id = setInterval(fetchConversations, 60_000); };
     const stop = () => { if (id) { clearInterval(id); id = null; } };
     const onVisibility = () => {
-      if (document.hidden) stop();
+      if (document.hidden || !inView) stop();
       else { fetchConversations(); start(); }
     };
-    start();
+    if (inView) start();
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       stop();
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, []);
+  }, [inView]);
 
   // Fetch e-commerce stats and recent orders
   useEffect(() => {
@@ -745,7 +769,7 @@ export function DashboardView() {
   }
 
   return (
-    <div className="space-y-6 w-full">
+    <div ref={rootRef} className="space-y-6 w-full">
       {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Star, ThumbsUp, MessageSquare, TrendingUp, Filter,
   Search, Pencil, Trash2, Plus, RefreshCw, X,
@@ -122,6 +122,22 @@ export function ReviewsView() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Debounced search: avoids firing a network request on every keystroke.
+  // Previously `fetchReviews` had `search` in its deps, so each keystroke
+  // triggered an immediate API call. Now `debouncedSearch` updates 300ms
+  // after the user stops typing, and `fetchReviews` depends on it instead.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [search]);
   const [ratingFilter, setRatingFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -144,7 +160,7 @@ export function ReviewsView() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
       if (ratingFilter !== 'all') params.set('minRating', ratingFilter);
       if (statusFilter !== 'all') params.set('status', statusFilter);
       params.set('page', String(currentPage));
@@ -163,7 +179,7 @@ export function ReviewsView() {
     } finally {
       setLoading(false);
     }
-  }, [search, ratingFilter, statusFilter, currentPage]);
+  }, [debouncedSearch, ratingFilter, statusFilter, currentPage]);
 
   useEffect(() => {
     fetchReviews();
@@ -172,7 +188,7 @@ export function ReviewsView() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, ratingFilter, statusFilter]);
+  }, [debouncedSearch, ratingFilter, statusFilter]);
 
   // ─── Computed stats ─────────────────────────────────────────────────────
   const total = reviews.length;

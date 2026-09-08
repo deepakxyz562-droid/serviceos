@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   TrendingUp, Plus, Briefcase,
   RefreshCw, Loader2, Briefcase as JobIcon,
@@ -87,6 +88,7 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [lostReasons, setLostReasons] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
@@ -173,54 +175,44 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // ─── Load deals (with closed deals from last 30 days for summary) ──────
-  const loadDeals = useCallback(async () => {
-    try {
-      setLoading(true);
+  // ─── React Query data layer (Phase 3 perf migration) ─────────────────────
+  // PERF-P3: Previously these 4 endpoints were fetched via raw
+  // useState+useEffect on every mount. Now they use React Query so:
+  //   • Data is cached across tab switches (ViewCache keeps the view
+  //     mounted; RQ serves cached data instantly + refetches in background)
+  //   • keepPreviousData prevents loading flashes when filters change
+  //   • Mutations invalidate via queryClient.invalidateQueries (background
+  //     refetch) instead of manual loadDeals() calls
+  // Local state is synced from query results for backward compatibility
+  // with the many optimistic setDeals() handlers in mutation callbacks.
+
+  const dealsQuery = useQuery({
+    queryKey: ['pipeline', 'deals', { closedSinceDays: 30 }],
+    queryFn: async () => {
       const res = await authFetch('/api/deals?limit=200&closedSinceDays=30&XTransformPort=3000');
-      if (!res.ok) {
-        toast.error('Failed to load deals');
-        return;
-      }
+      if (!res.ok) throw new Error('Failed to load deals');
       const json = await res.json();
-      const list: Deal[] = Array.isArray(json) ? json : (json?.data ?? []);
-      setDeals(list);
-    } catch {
-      toast.error('Network error loading deals');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return Array.isArray(json) ? json : (json?.data ?? []);
+    },
+    staleTime: 30_000,
+  });
 
-  // ─── Load DB-driven pipeline stages ────────────────────────────────────
-  const loadStages = useCallback(async () => {
-    try {
+  const stagesQuery = useQuery({
+    queryKey: ['pipeline', 'stages'],
+    queryFn: async () => {
       const res = await authFetch('/api/pipeline/stages?XTransformPort=3000');
-      if (!res.ok) return;
+      if (!res.ok) return [];
       const json = await res.json();
-      const list: PipelineStage[] = json?.stages ?? [];
-      setStages(list);
-    } catch {
-      // Silent — Kanban will fall back to legacy stage labels.
-    }
-  }, []);
+      return json?.stages ?? [];
+    },
+    staleTime: 60_000, // stages rarely change — 60s cache
+  });
 
-  const loadAssignees = useCallback(async () => {
-    try {
-      // NOTE: Deal.assigneeId is documented in the Prisma schema as the
-      // `userId of agent` (see `assigneeId String? // userId of agent` on
-      // the Deal model). Previously this dropdown fetched /api/employees
-      // and stored Employee.id as the assignee — which didn't match the
-      // schema, so the resolver in `assigneeName()` failed for any deal
-      // saved through this UI.
-      //
-      // Fix: keep the /api/employees call (the Employee endpoint returns
-      // role + name + the linked `userId`), but use `employee.userId` as
-      // the assignee id. Employees without a linked user account are
-      // skipped — they can't be Deal assignees since Deal.assigneeId is a
-      // User.id.
+  const assigneesQuery = useQuery({
+    queryKey: ['pipeline', 'assignees'],
+    queryFn: async () => {
       const res = await authFetch('/api/employees?XTransformPort=3000');
-      if (!res.ok) return;
+      if (!res.ok) return [];
       const data = await res.json();
       const list: Assignee[] = Array.isArray(data)
         ? data
@@ -233,37 +225,52 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
               name: e.name,
             }))
         : [];
-      // De-dupe by id (a user shouldn't appear twice even if they have
-      // multiple Employee rows — defensive against stale seed data).
       const seen = new Set<string>();
-      const deduped = list.filter((a) =>
+      return list.filter((a) =>
         seen.has(a.id) ? false : (seen.add(a.id), true),
       );
-      setAssignees(deduped);
-    } catch {
-      // Silent — assignees are best-effort. UI falls back to typing.
-    }
-  }, []);
+    },
+    staleTime: 60_000, // assignees rarely change — 60s cache
+  });
 
-  // ─── Load CRM settings (for lost reasons) ──────────────────────────────
-  const loadCrmSettings = useCallback(async () => {
-    try {
+  const crmSettingsQuery = useQuery({
+    queryKey: ['pipeline', 'crm-settings'],
+    queryFn: async () => {
       const res = await authFetch('/api/settings/crm?XTransformPort=3000');
-      if (!res.ok) return;
+      if (!res.ok) return [];
       const json = await res.json();
-      const reasons: string[] = json?.settings?.lostReasons ?? [];
-      setLostReasons(reasons);
-    } catch {
-      // Silent — lost reasons are best-effort.
-    }
-  }, []);
+      return json?.lostReasons ?? [];
+    },
+    staleTime: 60_000,
+  });
+
+  // Sync query results → local state (backward compat with mutation handlers)
+  useEffect(() => {
+    if (dealsQuery.data) setDeals(dealsQuery.data as Deal[]);
+    setLoading(dealsQuery.isLoading);
+  }, [dealsQuery.data, dealsQuery.isLoading]);
 
   useEffect(() => {
-    loadDeals();
-    loadStages();
-    loadAssignees();
-    loadCrmSettings();
-  }, [loadDeals, loadStages, loadAssignees, loadCrmSettings]);
+    if (stagesQuery.data) setStages(stagesQuery.data as PipelineStage[]);
+  }, [stagesQuery.data]);
+
+  useEffect(() => {
+    if (assigneesQuery.data) setAssignees(assigneesQuery.data as Assignee[]);
+  }, [assigneesQuery.data]);
+
+  useEffect(() => {
+    if (crmSettingsQuery.data) setLostReasons(crmSettingsQuery.data as string[]);
+  }, [crmSettingsQuery.data]);
+
+  // Show error toast on fetch failure (non-blocking)
+  useEffect(() => {
+    if (dealsQuery.error) toast.error('Failed to load deals');
+  }, [dealsQuery.error]);
+
+  // Helper: invalidate deals cache after mutations (replaces loadDeals() calls)
+  const invalidateDeals = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['pipeline', 'deals'] });
+  }, [queryClient]);
 
   // ─── Helpers ───────────────────────────────────────────────────────────
   const stageLabel = useCallback(
@@ -1086,7 +1093,7 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
               ? { ...cur, archivedAt: deal.archivedAt ? null : new Date().toISOString() }
               : cur,
           );
-          loadDeals();
+          invalidateDeals();
         } else {
           toast.error('Failed to update archive status');
         }
@@ -1714,7 +1721,7 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
         onArchiveChange={() => {
           // Refresh the Kanban deals list so archived deals disappear from
           // the active board and the Won/Lost widget counts update.
-          loadDeals();
+          invalidateDeals();
         }}
       />
 

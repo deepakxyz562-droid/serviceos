@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { cache } from '@/lib/cache'
 
 // GET /api/analytics - Get analytics data
 export async function GET(request: NextRequest) {
@@ -77,24 +78,60 @@ export async function GET(request: NextRequest) {
         ? { workspaceId: { in: workspaceIds } }
         : { id: '__NO_WORKSPACE__' }
 
+    // PERF-P3: Server-side in-memory cache (60s TTL). The reports view fires
+    // 6-7 analytics queries on mount, and each handler runs multiple Prisma
+    // aggregates. Without caching, every tab switch or date-range change
+    // triggers a full re-computation. The cache key is scoped by tenant +
+    // metric + date params so different tenants/users never share cached data.
+    // 60s is the right balance: the frontend staleTime is 30s, so by the time
+    // React Query refetches, the server cache may still be warm (saving the
+    // DB round-trip) but isn't stale enough to show outdated dashboards.
+    const cacheKey = `analytics:${tenantIdForLookup || 'none'}:${metric}:${range}:${startDate || ''}:${endDate || ''}:${groupBy}`
+    const cached = cache.get<unknown>(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached)
+    }
+
     // Route to different metric handlers
+    let result: unknown
     switch (metric) {
       case 'revenue_trends':
-        return await handleRevenueTrends(dateFilter, tenantFilter, workspaceFilter, groupBy)
+        result = await handleRevenueTrends(dateFilter, tenantFilter, workspaceFilter, groupBy)
+        break
       case 'job_stats':
-        return await handleJobStats(dateFilter, tenantFilter, workspaceFilter)
+        result = await handleJobStats(dateFilter, tenantFilter, workspaceFilter)
+        break
       case 'employee_productivity':
-        return await handleEmployeeProductivity(dateFilter, tenantFilter, workspaceFilter)
+        result = await handleEmployeeProductivity(dateFilter, tenantFilter, workspaceFilter)
+        break
       case 'lead_conversion':
-        return await handleLeadConversion(dateFilter, tenantFilter)
+        result = await handleLeadConversion(dateFilter, tenantFilter)
+        break
       case 'whatsapp_analytics':
-        return await handleWhatsAppAnalytics(dateFilter, tenantFilter)
+        result = await handleWhatsAppAnalytics(dateFilter, tenantFilter)
+        break
       case 'journey_analytics':
-        return await handleJourneyAnalytics(dateFilter, tenantFilter)
+        result = await handleJourneyAnalytics(dateFilter, tenantFilter)
+        break
       case 'overview':
       default:
-        return await handleOverview(dateFilter, tenantFilter, workspaceFilter)
+        result = await handleOverview(dateFilter, tenantFilter, workspaceFilter)
+        break
     }
+
+    // Cache the response for 60 seconds. The handlers return NextResponse
+    // objects — we cache the JSON body so the cache is transport-agnostic.
+    // Extract the JSON body before caching.
+    if (result instanceof NextResponse) {
+      try {
+        const body = await result.clone().json()
+        cache.set(cacheKey, body, 60_000)
+      } catch {
+        // If we can't extract the body (e.g. it's a stream), skip caching.
+      }
+    }
+
+    return result
   } catch (error) {
     console.error('Error fetching analytics:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

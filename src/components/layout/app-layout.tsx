@@ -1,6 +1,7 @@
 'use client';
 
-import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState } from 'react';
+import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AppSidebar } from '@/components/layout/sidebar';
@@ -8,6 +9,7 @@ import { AppHeader } from '@/components/layout/header';
 import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
 import { TrialBanner } from '@/components/layout/trial-banner';
 import { UpgradeModal } from '@/components/layout/upgrade-modal';
+import { qk } from '@/lib/query-keys';
 // A7: Reusable ViewCache component extracted from this file. The view-history
 // logic + display:none toggling now lives in view-cache.tsx and can be shared
 // with the employee + customer portal layouts.
@@ -365,6 +367,47 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const { currentView, darkMode, setCurrentView, auth } = useAppStore();
   const isMobile = useIsMobile();
   const trialStatus = useTrialStatus();
+  const queryClient = useQueryClient();
+
+  // PERF-P2: ViewCache invalidation key-prefix fix.
+  // The ViewCache's DEFAULT invalidation uses `queryKey: [currentView]`,
+  // but canonical query keys use ENTITY names (e.g. ['jobs','calendar',...],
+  // ['customers',...]) — NOT the view ID. So for views like `calendar` and
+  // `customer360`, the default invalidation was a silent NO-OP: stale data
+  // persisted longer than intended (only refreshed at staleTime expiry).
+  //
+  // This callback maps view IDs to their canonical `qk.*` key prefixes so
+  // returning to a cached view triggers a proper background refetch
+  // (stale-while-revalidate). Views not in the map fall through to the
+  // default `[viewId]` prefix match (which works for views whose query
+  // keys DO start with the view ID, e.g. `['reports', ...]`).
+  const handleViewActivate = useCallback((viewId: string) => {
+    const keyMap: Record<string, ReadonlyArray<readonly (string | number | object | undefined)[]>> = {
+      calendar: [qk.jobs.calendar.all(), qk.bookings.all],
+      customer360: [qk.customers.all, qk.bookings.all],
+      customers: [qk.customers.all],
+      jobs: [qk.jobs.all],
+      leads: [qk.leads.all],
+      invoices: [qk.invoices.all],
+      quotes: [qk.quotes.all],
+      bookings: [qk.bookings.all],
+      employees: [qk.employees.all],
+      expenses: [qk.expenses.all],
+      reports: [qk.reports.all],
+      conversations: [qk.conversations.all],
+      dashboard: [qk.dashboard.all],
+    };
+    const keys = keyMap[viewId];
+    if (keys) {
+      for (const key of keys) {
+        queryClient.invalidateQueries({ queryKey: key, exact: false, refetchType: 'active' });
+      }
+    } else {
+      // Fallback: default prefix match (works for views whose query keys
+      // start with the view ID, e.g. 'reports' → ['reports', ...]).
+      queryClient.invalidateQueries({ queryKey: [viewId], exact: false, refetchType: 'active' });
+    }
+  }, [queryClient]);
 
   // ─── Listing-only guard ──────────────────────────────────────────────────
   // Tenants with signupMode='listing_only' (or listingTier='claimed_free')
@@ -496,6 +539,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
           <ViewCache
             currentView={currentView}
             isViewFullHeight={isViewFullHeight}
+            onViewActivate={handleViewActivate}
             renderView={(viewId, isActive) => (
               <ViewErrorBoundary>
                 <Suspense fallback={isActive ? <ViewLoader /> : null}>

@@ -79,7 +79,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // List calls — no nested includes (use flat fields from AiCall)
+    // List calls — no nested includes (use flat fields from AiCall).
+    // PERF-P1: Added `select` to drop the heavy JSON blobs (transcriptJson,
+    // analysisJson, functionCallsJson, tagsJson, costBreakdownJson) from the
+    // list response. The list view only needs scalar fields + status; the
+    // detail view (single callId above) loads the full record with transcripts.
+    // This cuts payload size ~5-10x for 50-100 calls.
     const where: Record<string, unknown> = { tenantId: auth.tenantId };
     if (status) where.status = status;
     if (assistantId) where.assistantId = assistantId;
@@ -88,6 +93,32 @@ export async function GET(request: NextRequest) {
       where,
       orderBy: { createdAt: 'desc' },
       take: limit,
+      select: {
+        id: true,
+        vapiCallId: true,
+        assistantId: true,
+        callType: true,        // inbound | outbound
+        status: true,
+        fromNumber: true,
+        toNumber: true,
+        customerPhone: true,
+        startedAt: true,
+        endedAt: true,
+        durationSec: true,
+        billableSeconds: true,
+        costUsd: true,
+        revenueUsd: true,
+        summary: true,
+        outcomeType: true,
+        endedReason: true,
+        recordingUrl: true,
+        createdAt: true,
+        updatedAt: true,
+        // Heavy JSON blobs intentionally NOT selected for the list view:
+        // transcriptJson, analysisJson, functionCallsJson, tagsJson,
+        // costBreakdownJson. The detail view (single callId above) loads
+        // the full record including transcripts.
+      },
     });
 
     // ── Phase C: Only compute stats when the caller needs them ──────────

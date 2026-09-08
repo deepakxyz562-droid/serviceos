@@ -95,6 +95,20 @@ export function CalendarView() {
   // ─── Data Fetching ──────────────────────────────────────────────────────
 
   // Jobs → calendar events via React Query.
+  // Compute the visible date range for the calendar so we only fetch jobs
+  // within the visible window (±1 month buffer to cover week-view spillover).
+  // Previously `useCalendarEvents` was called with NO date bounds, so the
+  // API fetched all jobs for the tenant — unbounded and slow for tenants
+  // with long job histories.
+  const calendarDateRange = useMemo(() => {
+    const start = new Date(currentYear, currentMonth - 1, 1); // 1st of prev month
+    const end = new Date(currentYear, currentMonth + 2, 0);    // last of next month
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0],
+    };
+  }, [currentYear, currentMonth]);
+
   const {
     data: eventsData,
     isLoading: eventsLoading,
@@ -102,6 +116,8 @@ export function CalendarView() {
     refetch: refetchJobs,
   } = useCalendarEvents({
     employeeId: employeeFilter !== 'all' ? employeeFilter : undefined,
+    startDate: calendarDateRange.startDate,
+    endDate: calendarDateRange.endDate,
   });
 
   // Bookings → calendar events via React Query. The original `fetchEvents`

@@ -91,13 +91,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get all messages for these conversations (limited to recent 50 per conversation for performance)
+    // Get messages for these conversations. PERF-P1: added `take` cap so a
+    // conversation with thousands of messages doesn't pull the entire history
+    // into the list response. The inbox detail view lazy-loads older messages
+    // on scroll, so the list only needs the most recent batch.
+    // We fetch the latest 50 per conversation by ordering desc + take, then
+    // reverse in JS so the thread still reads oldest→newest.
+    const MESSAGES_PER_CONV = 50;
     const allMessages = conversationIds.length > 0
       ? await db.inboxMessage.findMany({
           where: {
             conversationId: { in: conversationIds },
           },
-          orderBy: { createdAt: 'asc' },
+          orderBy: { createdAt: 'desc' },
+          take: conversationIds.length * MESSAGES_PER_CONV,
           select: {
             id: true,
             conversationId: true,
@@ -111,6 +118,8 @@ export async function GET(request: NextRequest) {
           },
         })
       : []
+    // Reverse to oldest→newest for display (we fetched desc for the LIMIT).
+    allMessages.reverse()
 
     // Group messages by conversationId
     const messagesByConvId = new Map<string, typeof allMessages>()

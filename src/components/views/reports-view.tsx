@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { BarChart3, Download, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -92,6 +92,7 @@ export function ReportsView() {
       if (!res.ok) throw new Error('Failed to fetch overview');
       return res.json() as Promise<OverviewResponse>;
     },
+    placeholderData: keepPreviousData,
   });
 
   const revenueQuery = useQuery<RevenueTrendsResponse>({
@@ -103,6 +104,7 @@ export function ReportsView() {
       if (!res.ok) throw new Error('Failed to fetch revenue trends');
       return res.json() as Promise<RevenueTrendsResponse>;
     },
+    placeholderData: keepPreviousData,
   });
 
   const jobStatsQuery = useQuery<JobStatsResponse>({
@@ -112,6 +114,7 @@ export function ReportsView() {
       if (!res.ok) throw new Error('Failed to fetch job stats');
       return res.json() as Promise<JobStatsResponse>;
     },
+    placeholderData: keepPreviousData,
   });
 
   const employeeQuery = useQuery<EmployeeProductivityResponse>({
@@ -121,6 +124,7 @@ export function ReportsView() {
       if (!res.ok) throw new Error('Failed to fetch employee productivity');
       return res.json() as Promise<EmployeeProductivityResponse>;
     },
+    placeholderData: keepPreviousData,
   });
 
   const leadConvQuery = useQuery<LeadConversionResponse>({
@@ -130,6 +134,7 @@ export function ReportsView() {
       if (!res.ok) throw new Error('Failed to fetch lead conversion');
       return res.json() as Promise<LeadConversionResponse>;
     },
+    placeholderData: keepPreviousData,
   });
 
   const whatsappQuery = useQuery<WhatsAppAnalyticsResponse>({
@@ -139,6 +144,7 @@ export function ReportsView() {
       if (!res.ok) throw new Error('Failed to fetch WhatsApp analytics');
       return res.json() as Promise<WhatsAppAnalyticsResponse>;
     },
+    placeholderData: keepPreviousData,
   });
 
   const journeyQuery = useQuery<JourneyAnalyticsResponse>({
@@ -148,6 +154,7 @@ export function ReportsView() {
       if (!res.ok) throw new Error('Failed to fetch journey analytics');
       return res.json() as Promise<JourneyAnalyticsResponse>;
     },
+    placeholderData: keepPreviousData,
   });
 
   // ─── Sales Outcomes (Phase 6) — fetched on tab open ───────────────
@@ -176,6 +183,7 @@ export function ReportsView() {
       return res.json() as Promise<SalesOutcomesResponse>;
     },
     enabled: activeTab === 'salesPipeline',
+    placeholderData: keepPreviousData,
   });
 
   // Shared loading flag — the Overview + Revenue cards share the same

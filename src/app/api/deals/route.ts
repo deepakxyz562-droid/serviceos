@@ -80,14 +80,18 @@ export async function GET(request: NextRequest) {
     // two on the first call after deploy, but subsequent calls are
     // near-instant (all Leads already have Deals → just two findMany
     // round-trips + zero writes).
+    // PERF-P1: Previously `await ensureDealsForTenant(...)` blocked the GET
+    // response. For most tenants it's a few ms, but cold-start (first call
+    // after deploy, or a tenant with 10k+ orphan leads) can take 1-2s.
+    // Now fire-and-forget: the sync runs in the background and the pipeline
+    // renders immediately with whatever Deals already exist. The next GET
+    // call (or a manual refresh) picks up the newly-synced Deals.
     if (effectiveTenantId) {
-      try {
-        await ensureDealsForTenant(effectiveTenantId)
-      } catch (syncErr) {
-        // Non-fatal — log and continue. The pipeline will render with
-        // whatever Deals exist; the next GET call retries the sync.
+      ensureDealsForTenant(effectiveTenantId).catch((syncErr) => {
+        // Non-fatal — log and continue. The pipeline renders with whatever
+        // Deals exist; the next GET call retries the sync.
         console.error('[DealsList] Lazy safety net ensureDealsForTenant failed:', syncErr)
-      }
+      })
     }
 
     if (stage) {
