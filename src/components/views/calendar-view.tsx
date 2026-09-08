@@ -112,7 +112,7 @@ export function CalendarView() {
   const {
     data: bookingsData,
     refetch: refetchBookings,
-  } = useBookings();
+  } = useBookings({ limit: 200, archived: 'false' });
 
   // `fetchEvents` is still called by every booking-action handler
   // (create / assign / auto-assign / mark-completed / cancel / reschedule)
@@ -148,9 +148,12 @@ export function CalendarView() {
   const events = useMemo<CalendarEvent[]>(() => {
     const calendarEvents: CalendarEvent[] = [];
 
-    const bookings = (bookingsData ?? []) as Booking[];
+    const rawBookings = Array.isArray(bookingsData)
+      ? bookingsData
+      : (bookingsData?.bookings ?? []);
+    const bookings = (rawBookings ?? []) as Booking[];
     for (const b of bookings) {
-      if (b.scheduledAt) {
+      if (b && b.scheduledAt) {
         calendarEvents.push({
           id: `booking-${b.id}`,
           title: b.title,
@@ -168,9 +171,12 @@ export function CalendarView() {
       }
     }
 
-    const jobs = (eventsData ?? []) as Job[];
+    const rawJobs = Array.isArray(eventsData)
+      ? eventsData
+      : (eventsData?.jobs ?? []);
+    const jobs = (rawJobs ?? []) as Job[];
     for (const j of jobs) {
-      if (j.scheduledAt) {
+      if (j && j.scheduledAt) {
         calendarEvents.push({
           id: `job-${j.id}`,
           title: j.title,
