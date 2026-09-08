@@ -272,6 +272,8 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
     queryClient.invalidateQueries({ queryKey: ['pipeline', 'deals'] });
   }, [queryClient]);
 
+  const loadDeals = invalidateDeals;
+
   // ─── Helpers ───────────────────────────────────────────────────────────
   const stageLabel = useCallback(
     (key: string): string => {
