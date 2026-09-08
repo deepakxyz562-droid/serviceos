@@ -15,14 +15,13 @@ import { seedTrialEmailTemplates, seedPlans } from '@/lib/billing-seed'
  *   Daily (every time it fires):
  *     1. marketplace-settlement   — release held funds → provider Airwallex payout
  *     2. archive-old-won-deals    — archive won deals >14 days old
- *     3. recurring-jobs           — generate jobs from recurring schedules
- *     4. overdue-detector         — mark overdue invoices + enqueue reminders
- *     5. trial-reminders          — send 3-day trial-ending emails
- *     6. pre-charge-reminder      — send "card charged tomorrow" email
- *     7. recurring-invoices       — generate + send recurring invoices
- *     8. trial-expire             — expire trials past trialEndsAt
- *     9. renewal                  — apply downgrades, PayPal sync, mark expired
- *    10. past-due-escalation      — escalate past-due tenants + daily digest
+ *     3. overdue-detector         — mark overdue invoices + enqueue reminders
+ *     4. trial-reminders          — send 3-day trial-ending emails
+ *     5. pre-charge-reminder      — send "card charged tomorrow" email
+ *     6. recurring-invoices       — generate + send recurring invoices
+ *     7. trial-expire             — expire trials past trialEndsAt
+ *     8. renewal                  — apply downgrades, PayPal sync, mark expired
+ *     9. past-due-escalation      — escalate past-due tenants + daily digest
  *
  *   Monthly (ONLY on the 1st of each month, via date guard):
  *    10. sms-quota-reset          — zero smsUsageCount + emailUsageCount
@@ -30,6 +29,8 @@ import { seedTrialEmailTemplates, seedPlans } from '@/lib/billing-seed'
  * HIGH-FREQUENCY CRONS (NOT run by this master):
  *   These need 5-min / 15-min / hourly cadence and CANNOT be served by a
  *   daily Vercel cron. Configure them separately on cron-job.org (FREE):
+ *     - recurring-jobs            → every hour (48h lookahead — creates next
+ *                                   week's jobs before the week starts)
  *     - scheduled-messages        → every 5 min
  *     - scheduled-executions      → every 5 min
  *     - campaigns                 → every 15 min
@@ -57,6 +58,12 @@ import { seedTrialEmailTemplates, seedPlans } from '@/lib/billing-seed'
  */
 
 // ── Daily cron endpoints (run every time the master fires) ──────────────
+// NOTE: recurring-jobs was REMOVED from this list. It now runs as a
+// standalone HOURLY cron (see cron-configs/cron-job-org-import.json) with a
+// 48-hour lookahead window. The daily master was too infrequent — jobs
+// scheduled for Monday 09:00 weren't created until Tuesday 02:00 (1 day
+// late). The hourly cadence + 48h lookahead ensures next week's jobs exist
+// before the week starts, for dispatch planning.
 const DAILY_CRONS: Array<{ name: string; path: string; description: string }> = [
   {
     name: 'marketplace-settlement',
@@ -67,11 +74,6 @@ const DAILY_CRONS: Array<{ name: string; path: string; description: string }> = 
     name: 'archive-old-won-deals',
     path: '/api/cron/archive-old-won-deals',
     description: 'Archives won deals older than 14 days (Kanban cleanup)',
-  },
-  {
-    name: 'recurring-jobs',
-    path: '/api/cron/recurring-jobs',
-    description: 'Generates jobs from due RecurringJobSchedule rows',
   },
   {
     name: 'overdue-detector',

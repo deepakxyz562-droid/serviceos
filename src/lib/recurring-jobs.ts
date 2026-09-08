@@ -363,9 +363,19 @@ export async function processDueRecurringJobSchedules(): Promise<{
   processed: number;
   errors: number;
 }> {
+  // PERF/SCHED: 48-hour lookahead window. Previously this used `nextRunAt <= now`,
+  // which meant a job scheduled for Monday 09:00 wasn't created until Tuesday
+  // 02:00 (the daily cron time) — 1 day late. With a 48h lookahead + hourly
+  // cron, Monday 09:00's job is created by Saturday 09:00 at the latest,
+  // giving dispatchers time to plan the week.
+  //
+  // The unique constraint @@unique([recurringScheduleId, scheduledAt]) prevents
+  // duplicates if the cron runs multiple times within the window.
   const now = new Date();
+  const LOOKAHEAD_HOURS = 48;
+  const cutoff = new Date(now.getTime() + LOOKAHEAD_HOURS * 60 * 60 * 1000);
   const due = await db.recurringJobSchedule.findMany({
-    where: { active: true, nextRunAt: { lte: now } },
+    where: { active: true, nextRunAt: { lte: cutoff } },
     select: { id: true },
   });
 
@@ -468,7 +478,33 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
   // ── Create Job + JobVisit + update Schedule (sequential, no transaction) ──
   // Fix: Use db directly instead of db.$transaction (Supabase adapter doesn't support it)
   const result = await (async () => {
-    // 0. Phase A1 — Idempotency pre-check.
+    // 0. Enforce endAfterOccurrences cap BEFORE creating the job.
+    // executionCount = "number of jobs already generated for this schedule".
+    // If we've already generated endAfterOccurrences jobs, the schedule is
+    // complete — deactivate it + advance nextRunAt (for audit) WITHOUT
+    // creating another job. This makes "After 10 visits" actually stop at 10.
+    //
+    // NOTE: this check runs on EVERY processor invocation, so the cap is
+    // enforced centrally regardless of whether the trigger is the hourly cron,
+    // the daily master, or a manual "generate now" call.
+    if (schedule.endAfterOccurrences && schedule.executionCount >= schedule.endAfterOccurrences) {
+      const nextRunAt = computeNextOccurrence(schedule, schedule.nextRunAt);
+      await db.recurringJobSchedule.update({
+        where: { id: schedule.id },
+        data: {
+          active: false,
+          pausedAt: new Date(),
+          nextRunAt: nextRunAt ?? schedule.nextRunAt,
+        },
+      });
+      console.log(
+        `[RecurringJobs] Schedule ${schedule.id} reached endAfterOccurrences cap ` +
+        `(${schedule.executionCount}/${schedule.endAfterOccurrences}) — deactivated, no job created.`,
+      );
+      return { skipped: true as const, capped: true as const };
+    }
+
+    // 0b. Phase A1 — Idempotency pre-check.
     const existingJob = await db.job.findFirst({
       where: {
         recurringScheduleId: schedule.id,
@@ -477,7 +513,10 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
       select: { id: true },
     });
     if (existingJob) {
-      // Already generated for this occurrence — just advance nextRunAt
+      // Already generated for this occurrence — just advance nextRunAt.
+      // NOTE: do NOT increment executionCount here. The job was already
+      // counted when it was first created. Incrementing again would
+      // double-count and cause endAfterOccurrences to trigger early.
       const nextRunAt = computeNextOccurrence(schedule, schedule.nextRunAt);
       const willDeactivate = nextRunAt === null;
       await db.recurringJobSchedule.update({
@@ -485,7 +524,6 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
         data: {
           lastRunAt: new Date(),
           lastJobId: existingJob.id,
-          executionCount: { increment: 1 },
           nextRunAt: nextRunAt ?? schedule.nextRunAt,
           active: willDeactivate ? false : true,
           pausedAt: willDeactivate ? new Date() : schedule.pausedAt,
