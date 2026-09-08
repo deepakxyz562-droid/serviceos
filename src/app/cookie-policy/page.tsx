@@ -506,10 +506,10 @@ export default function CookiePolicyPage() {
                   <p className="text-muted-foreground leading-relaxed mb-1">
                     <span className="font-medium text-foreground">Email: </span>
                     <a
-                      href="mailto:privacy@fieseros.com"
+                      href="mailto:admin@fieseros.com"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@fieseros.com
+                      admin@fieseros.com
                     </a>
                   </p>
                   <p className="text-muted-foreground leading-relaxed mb-1">

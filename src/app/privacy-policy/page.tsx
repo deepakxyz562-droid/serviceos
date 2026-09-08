@@ -577,10 +577,10 @@ export default function PrivacyPolicyPage() {
                 <p className="text-muted-foreground leading-relaxed">
                   To exercise any of these rights, please contact us at{" "}
                   <a
-                    href="mailto:privacy@fieseros.com"
+                    href="mailto:admin@fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@fieseros.com
+                    admin@fieseros.com
                   </a>
                   . We will respond to your request within 30 days (or within the
                   timeframe required by applicable law).
@@ -641,10 +641,10 @@ export default function PrivacyPolicyPage() {
                   you believe that a child under 16 has provided us with personal
                   data, please contact us at{" "}
                   <a
-                    href="mailto:privacy@fieseros.com"
+                    href="mailto:admin@fieseros.com"
                     className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                   >
-                    privacy@fieseros.com
+                    admin@fieseros.com
                   </a>
                   .
                 </p>
@@ -697,10 +697,10 @@ export default function PrivacyPolicyPage() {
                   <p className="text-muted-foreground leading-relaxed">
                     <span className="font-medium text-foreground">Email: </span>
                     <a
-                      href="mailto:privacy@fieseros.com"
+                      href="mailto:admin@fieseros.com"
                       className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      privacy@fieseros.com
+                      admin@fieseros.com
                     </a>
                   </p>
                   <p className="text-muted-foreground leading-relaxed">

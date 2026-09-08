@@ -110,13 +110,13 @@ export default function ContactUsPage() {
                 <CardContent className="space-y-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      General Inquiries
+                      Sales &amp; Pricing
                     </p>
                     <a
-                      href="mailto:hello@fieseros.com"
+                      href="mailto:sales@fieseros.com"
                       className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
                     >
-                      hello@fieseros.com
+                      sales@fieseros.com
                     </a>
                   </div>
                   <div>
@@ -132,13 +132,13 @@ export default function ContactUsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      Privacy & Data Requests
+                      General &amp; Admin
                     </p>
                     <a
-                      href="mailto:privacy@fieseros.com"
+                      href="mailto:admin@fieseros.com"
                       className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
                     >
-                      privacy@fieseros.com
+                      admin@fieseros.com
                     </a>
                   </div>
                 </CardContent>

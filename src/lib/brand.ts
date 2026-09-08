@@ -48,20 +48,20 @@ export const BRAND = {
   /**
    * Official email addresses. All inboxes should be created on the
    * fieseros.com mail provider (see infrastructure setup guide).
+   *
+   * NOTE: the contact form routes to these three addresses based on the
+   * selected subject. `general`/`replyToEmail` are kept for backwards-
+   * compatibility with existing transactional-email callers, but the
+   * public contact-us page only advertises sales/support/admin.
    */
   emails: {
-    general: 'hello@fieseros.com',
     sales: 'sales@fieseros.com',
     support: 'support@fieseros.com',
-    help: 'help@fieseros.com',
     admin: 'admin@fieseros.com',
-    legal: 'legal@fieseros.com',
-    privacy: 'privacy@fieseros.com',
-    dpo: 'dpo@fieseros.com',
-    security: 'security@fieseros.com',
-    abuse: 'abuse@fieseros.com',
+    // Kept for backwards-compat with existing sendEmail callers (welcome
+    // emails, invoice emails, etc.). Not advertised on the public site.
+    general: 'hello@fieseros.com',
     notifications: 'notifications@fieseros.com',
-    demo: 'demo@fieseros.com',
   },
 
   /** Default from-email for transactional emails sent by the platform. */

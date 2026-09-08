@@ -830,10 +830,10 @@ export default function TermsOfServicePage() {
                   <div className="flex items-start gap-3">
                     <span className="text-sm font-semibold text-foreground">Email:</span>
                     <a
-                      href="mailto:legal@fieseros.com"
+                      href="mailto:admin@fieseros.com"
                       className="text-sm text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
                     >
-                      legal@fieseros.com
+                      admin@fieseros.com
                     </a>
                   </div>
                   <div className="flex items-start gap-3">

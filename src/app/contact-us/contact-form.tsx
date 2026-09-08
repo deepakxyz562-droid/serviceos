@@ -51,20 +51,40 @@ export default function ContactForm() {
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const res = await fetch("/api/contact-us", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, company, subject, message }),
+      });
 
-    setIsSubmitting(false);
-    toast.success("Message sent successfully! We'll get back to you soon.", {
-      description: "Our team typically responds within 24 hours.",
-    });
+      const data = await res.json().catch(() => ({}));
 
-    // Reset form
-    setName("");
-    setEmail("");
-    setCompany("");
-    setSubject("");
-    setMessage("");
+      if (!res.ok) {
+        // 429 = rate-limited; 400 = validation; 500 = send failure.
+        if (res.status === 429) {
+          toast.error("Too many submissions. Please try again in a few minutes.");
+        } else {
+          toast.error(data?.error || "Failed to send message. Please try again.");
+        }
+        return;
+      }
+
+      toast.success("Message sent successfully! We'll get back to you soon.", {
+        description: "A confirmation email is on its way to your inbox.",
+      });
+
+      // Reset form
+      setName("");
+      setEmail("");
+      setCompany("");
+      setSubject("");
+      setMessage("");
+    } catch {
+      toast.error("Network error. Please check your connection and try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

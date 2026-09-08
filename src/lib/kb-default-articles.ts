@@ -1870,7 +1870,7 @@ Yes. Fieseros takes data security very seriously. Here's how we protect your bus
 
 ## Reporting Security Issues
 If you discover a security vulnerability:
-- Email: security@fieseros.com
+- Email: admin@fieseros.com
 - We acknowledge reports within 24 hours
 - Critical issues are addressed within 48 hours
 - We offer bug bounties for confirmed vulnerabilities`,
@@ -1942,8 +1942,8 @@ Data is processed in the region you select during signup. Cross-region transfers
 We use essential cookies for authentication and session management. Analytics cookies are optional and can be disabled.
 
 ## 10. Contact
-For privacy inquiries: privacy@fieseros.com
-Data Protection Officer: dpo@fieseros.com
+For privacy inquiries: admin@fieseros.com
+Data Protection Officer: admin@fieseros.com
 
 ## 11. Changes to This Policy
 We may update this policy periodically. Material changes will be notified via email and in-app notification.`,
@@ -2017,7 +2017,7 @@ This SLA does not cover:
 - Force majeure events
 
 ## 9. Contact
-- Support: help@fieseros.com
+- Support: support@fieseros.com
 - Emergency: +1-800-FIESEROS
 - Status Page: status.fieseros.com`,
     category: 'policies',
@@ -2089,7 +2089,7 @@ Violations may result in:
 - Legal action if warranted
 
 ## 8. Reporting Violations
-Report suspected violations to: abuse@fieseros.com
+Report suspected violations to: admin@fieseros.com
 
 ## 9. Changes
 We may update this policy. Continued use after changes constitutes acceptance.`,
