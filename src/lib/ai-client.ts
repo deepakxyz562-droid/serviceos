@@ -86,9 +86,12 @@ const GEMINI_BASE_URL =
  * array if a model returns 404 ("No endpoints found") or persistent 429s.
  */
 const OPENROUTER_MODELS = [
-  'google/gemma-4-26b-a4b-it:free',
-  'tencent/hy3:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
+  'nex-agi/nex-n2.5-mini:free',
+  'nex-agi/nex-n2.5-pro:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'dots-studio/dots-3-note-preview:free',
+  'inclusionai/ling-3.0-flash-sante:free',
+  'cohere/north-mini-code:free',
 ]
 
 /** Per-attempt timeout. Free models can be slow on cold starts. */
@@ -282,10 +285,10 @@ interface AiProviderAdapter {
 /**
  * Classify an HTTP error into a `ProviderResult` failure variant.
  *
- *   429 → rate-limited, try next key (same provider).
+ *   429 → rate-limited, try next key / next model.
  *   401/403 → bad key, try next key (same provider).
+ *   404/400 → model not found / bad model ID, try NEXT MODEL (do not abandon provider).
  *   5xx / 529 (Anthropic overloaded) → provider down, switch provider.
- *   Other 4xx (402, 404, 400, etc.) → model/provider-specific, switch provider.
  */
 function classifyHttpError(
   provider: ProviderName,
@@ -293,12 +296,22 @@ function classifyHttpError(
   body: string,
 ): Extract<ProviderResult, { ok: false }> {
   const error = `${provider} HTTP ${status}: ${body.slice(0, 250)}`
-  if (status === 429 || status === 401 || status === 403) {
+  if (status === 401 || status === 403) {
     return {
       ok: false,
       status,
       error,
       shouldRotateKey: true,
+      shouldSwitchProvider: false,
+    }
+  }
+  if (status === 429 || status === 404 || status === 400) {
+    // Rate limit or model-specific failure — try next model or next key
+    return {
+      ok: false,
+      status,
+      error,
+      shouldRotateKey: false,
       shouldSwitchProvider: false,
     }
   }
@@ -316,7 +329,7 @@ function classifyHttpError(
     status,
     error,
     shouldRotateKey: false,
-    shouldSwitchProvider: true,
+    shouldSwitchProvider: false,
   }
 }
 
@@ -368,7 +381,7 @@ const openRouterAdapter: AiProviderAdapter = {
           status: res.status,
           error: `OpenRouter: ${data.error.message}`,
           shouldRotateKey: false,
-          shouldSwitchProvider: true,
+          shouldSwitchProvider: false,
         }
       }
 
@@ -380,7 +393,7 @@ const openRouterAdapter: AiProviderAdapter = {
           status: res.status,
           error: `Empty content (finish_reason=${fr || 'unknown'})`,
           shouldRotateKey: false,
-          shouldSwitchProvider: true,
+          shouldSwitchProvider: false,
         }
       }
       return { ok: true, content }
@@ -948,7 +961,9 @@ export async function callAI(options: {
 // ─── callOpenRouter (back-compat wrapper) ───────────────────────────────────
 
 export interface CallOpenRouterOptions {
-  messages: ChatMessage[]
+  messages?: ChatMessage[]
+  system?: string
+  user?: string
   temperature?: number
   maxTokens?: number
   /** When true, sets response_format: { type: 'json_object' } where supported. */
@@ -957,26 +972,43 @@ export interface CallOpenRouterOptions {
   model?: string
 }
 
+export type CallOpenRouterResult = string & {
+  content: string
+  model: string
+  provider: string
+}
+
 /**
  * Back-compat wrapper around `callAI()`. Preserves the original
- * `{ messages, temperature?, maxTokens?, json?, model? }` → `Promise<string>`
+ * `{ messages, temperature?, maxTokens?, json?, model? }` or `{ system, user, ... }`
  * contract so existing consumer routes work without changes.
  *
  * NOTE: Despite the name, this no longer only calls OpenRouter — it walks the
- * full fallback chain (OpenRouter → OpenAI → Anthropic → Gemini). The name is
- * kept for back-compat with the 6 consumer routes that import it.
+ * full fallback chain (OpenRouter → OpenAI → Anthropic → Gemini).
  */
 export async function callOpenRouter(
   options: CallOpenRouterOptions,
-): Promise<string> {
+): Promise<CallOpenRouterResult> {
+  const messages: ChatMessage[] = options.messages ?? [
+    ...(options.system ? [{ role: 'system' as const, content: options.system }] : []),
+    ...(options.user ? [{ role: 'user' as const, content: options.user }] : []),
+  ]
+
   const result = await callAI({
-    messages: options.messages,
+    messages,
     temperature: options.temperature,
     maxTokens: options.maxTokens,
     json: options.json,
     preferredModel: options.model,
   })
-  return result.content
+
+  const resStr = Object.assign(new String(result.content), {
+    content: result.content,
+    model: result.model,
+    provider: result.provider,
+  })
+
+  return resStr as unknown as CallOpenRouterResult
 }
 
 // ─── isAiConfigured helpers ─────────────────────────────────────────────────
