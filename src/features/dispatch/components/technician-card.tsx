@@ -56,13 +56,13 @@ export function TechnicianCard({
   let activitySnippet: React.ReactNode = null;
   if (currentJob) {
     activitySnippet = (
-      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 px-2 py-1 rounded-md mt-1.5">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 px-2 py-1 rounded-md mt-1.5 min-w-0">
         <Briefcase className="size-3 text-teal-600 shrink-0" />
-        <span className="truncate font-medium text-foreground">
+        <span className="truncate font-medium text-foreground flex-1 min-w-0">
           {currentJob.title}
         </span>
         {currentJob.scheduledAt && (
-          <span className="text-[10px] text-muted-foreground shrink-0 ml-auto">
+          <span className="text-[10px] text-muted-foreground shrink-0 ml-auto font-mono">
             {formatTime(currentJob.scheduledAt)}
           </span>
         )}
@@ -73,7 +73,7 @@ export function TechnicianCard({
   return (
     <div
       className={cn(
-        'w-full text-left rounded-xl border p-3 transition-all hover:shadow-sm cursor-pointer group',
+        'w-full text-left rounded-xl border p-3 transition-all hover:shadow-sm cursor-pointer group bg-card',
         isSelected
           ? 'border-teal-500 bg-teal-50/60 ring-2 ring-teal-500/20 dark:bg-teal-950/30 dark:border-teal-600'
           : 'border-border bg-card hover:border-teal-300 dark:hover:border-teal-800'
@@ -81,7 +81,7 @@ export function TechnicianCard({
       onClick={() => onSelect(e.id)}
     >
       {/* Top row: Avatar + Name + Status Badges */}
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-start gap-2.5 min-w-0">
         <div className="relative shrink-0 mt-0.5">
           <Avatar className="size-9 rounded-lg">
             <AvatarFallback className="bg-teal-100 text-teal-800 font-semibold text-xs rounded-lg dark:bg-teal-900/60 dark:text-teal-200">
@@ -104,8 +104,8 @@ export function TechnicianCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-1.5">
-            <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center justify-between gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <span className="font-semibold text-xs text-foreground truncate">
                 {e.name || 'Unnamed Technician'}
               </span>
@@ -122,7 +122,7 @@ export function TechnicianCard({
             <Badge
               variant="outline"
               className={cn(
-                'text-[9px] h-4.5 px-1.5 font-medium shrink-0',
+                'text-[9px] h-4.5 px-1.5 font-medium shrink-0 capitalize',
                 getEmployeeStatusBg(e.status)
               )}
             >
@@ -131,13 +131,13 @@ export function TechnicianCard({
           </div>
 
           {/* Sub-row: GPS Telemetry + Workload */}
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[10px] min-w-0">
             {/* Standardized GPS status */}
             <span
               className={cn('flex items-center gap-1 text-[10px] font-medium', gpsInfo.color)}
               title={gpsInfo.detail}
             >
-              <span className="relative flex size-1.5">
+              <span className="relative flex size-1.5 shrink-0">
                 {gpsInfo.level === 'live' && (
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 )}
@@ -152,12 +152,12 @@ export function TechnicianCard({
             {/* Active Jobs Counter */}
             <span className="text-muted-foreground/30">·</span>
             {activeCount > 0 ? (
-              <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+              <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 flex items-center gap-0.5 shrink-0">
                 <Activity className="size-2.5" />
                 {activeCount} job{activeCount > 1 ? 's' : ''}
               </span>
             ) : (
-              <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+              <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 shrink-0">
                 <CheckCircle2 className="size-2.5" />
                 Free
               </span>
@@ -167,7 +167,7 @@ export function TechnicianCard({
             {hasRating && (
               <>
                 <span className="text-muted-foreground/30">·</span>
-                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground shrink-0">
                   <Star className="size-2.5 text-amber-400 fill-amber-400" />
                   {e.rating.toFixed(1)}
                 </span>
@@ -181,8 +181,8 @@ export function TechnicianCard({
       {activitySnippet}
 
       {/* Action Footer */}
-      <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/60 text-xs">
-        <span className="text-[10px] text-muted-foreground truncate">
+      <div className="flex items-center justify-between gap-2 pt-2 mt-2 border-t border-border/60 text-xs min-w-0">
+        <span className="text-[10px] text-muted-foreground truncate min-w-0 flex-1">
           {e.role || 'Technician'}
           {typeof e.completedJobs === 'number' && e.completedJobs > 0 ? ` · ${e.completedJobs} completed` : ''}
         </span>
@@ -192,10 +192,10 @@ export function TechnicianCard({
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 text-[10px] px-2 text-teal-700 hover:text-teal-800 hover:bg-teal-100/60 dark:text-teal-300 dark:hover:bg-teal-950/60"
+              className="h-6 text-[10px] px-2 text-teal-700 hover:text-teal-800 hover:bg-teal-100/60 dark:text-teal-300 dark:hover:bg-teal-950/60 font-medium"
               onClick={() => onAssignJob(e.id)}
             >
-              <UserCheck className="size-3 mr-1" /> Assign
+              <UserCheck className="size-3 mr-1 shrink-0" /> Assign
             </Button>
           )}
         </div>

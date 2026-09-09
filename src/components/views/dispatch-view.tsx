@@ -28,12 +28,14 @@ import {
   AlertTriangle,
   CircleDot,
   Layers,
+  Briefcase,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { useRealtime } from '@/hooks/use-realtime';
-import type { LiveTechnicianMapController } from '@/components/dispatch/live-dispatch-map';
+import type { LiveTechnicianMapController, MapTechnician, MapJob } from '@/components/dispatch/live-dispatch-map';
 import { apiUrl } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
@@ -79,6 +81,7 @@ export function DispatchView() {
   const [activeSidebarTab, setActiveSidebarTab] = useState<'queue' | 'roster'>('queue');
   const [activeKpiFilter, setActiveKpiFilter] = useState<string>('all');
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | null>(null);
+  const [mobileView, setMobileView] = useState<'sidebar' | 'map'>('sidebar');
 
   // ─── Drawers & Modals ─────────────────────────────────────────────
   const [inspectTarget, setInspectTarget] = useState<
@@ -141,7 +144,7 @@ export function DispatchView() {
                 employeeId: emp.id,
                 latitude: emp.latitude!,
                 longitude: emp.longitude!,
-                capturedAt: emp.lastGpsAt,
+                capturedAt: emp.lastGpsAt || undefined,
               });
               movedCount++;
             } else {
@@ -161,7 +164,7 @@ export function DispatchView() {
                   employeeId: emp.id,
                   latitude: emp.latitude!,
                   longitude: emp.longitude!,
-                  capturedAt: emp.lastGpsAt,
+                  capturedAt: emp.lastGpsAt || undefined,
                 });
                 movedCount++;
               }
@@ -191,11 +194,9 @@ export function DispatchView() {
   }, []);
 
   // ─── Realtime Hook ────────────────────────────────────────────────
-  const { isConnected: realtimeConnected } = useRealtime({
-    channel: 'dispatch',
-    events: ['gps_ping', 'job_created', 'job_updated', 'job_assigned'],
-    onEvent: (event, payload) => {
-      if (event === 'gps_ping' && payload) {
+  const { connected: realtimeConnected } = useRealtime({
+    onGpsPing: (payload) => {
+      if (payload) {
         const p = payload as {
           employeeId: string;
           latitude: number;
@@ -208,9 +209,10 @@ export function DispatchView() {
           lastGpsAt: p.capturedAt,
         });
         mapControllerRef.current?.handleGpsPing(p);
-      } else if (event.startsWith('job_')) {
-        fetchJobs();
       }
+    },
+    onJobUpdate: () => {
+      fetchJobs();
     },
   });
 
@@ -260,15 +262,19 @@ export function DispatchView() {
 
   // ─── Map Data ─────────────────────────────────────────────────────
   const mapTechnicians = useMemo(() => {
-    return employees.filter(hasGps);
+    return employees.filter(hasGps) as unknown as MapTechnician[];
   }, [employees]);
 
   const activeJobsForMap = useMemo(() => {
-    return jobs.filter((j) => hasGps(j) && ['assigned', 'accepted', 'travelling', 'arrived', 'working', 'pending'].includes(j.status));
+    return jobs.filter((j) => hasGps(j) && ['assigned', 'accepted', 'travelling', 'arrived', 'working', 'pending'].includes(j.status)) as unknown as MapJob[];
   }, [jobs]);
 
   // ─── Inspector Handlers ───────────────────────────────────────────
-  const handleInspectTechnician = useCallback((techId: string) => {
+  const handleInspectTechnician = useCallback((techId: string | null) => {
+    if (!techId) {
+      setSelectedTechnicianId(null);
+      return;
+    }
     const tech = employees.find((e) => e.id === techId);
     if (tech) {
       setSelectedTechnicianId(techId);
@@ -387,27 +393,55 @@ export function DispatchView() {
         onToggleAttention={() => setShowAttention((v) => !v)}
       />
 
+      {/* ─── Mobile View Switcher (Screens < md) ──────────────────────── */}
+      <div className="flex md:hidden items-center justify-center p-1 bg-muted rounded-xl mb-2 shrink-0">
+        <button
+          type="button"
+          onClick={() => setMobileView('sidebar')}
+          className={cn(
+            'flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all',
+            mobileView === 'sidebar' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground'
+          )}
+        >
+          <Briefcase className="size-3.5 text-teal-600" />
+          Queue & Roster ({pendingJobs.length + employees.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileView('map')}
+          className={cn(
+            'flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all',
+            mobileView === 'map' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground'
+          )}
+        >
+          <MapPin className="size-3.5 text-teal-600" />
+          Live Map ({mapTechnicians.length})
+        </button>
+      </div>
+
       {/* ─── 3. Dominant Command Center Workspace ─────────────────────── */}
       <div className="flex-1 flex gap-3 min-h-0 relative rounded-2xl overflow-hidden border border-border bg-card shadow-xs">
         {/* Left Operational Sidebar */}
-        <DispatchSidebar
-          activeTab={activeSidebarTab}
-          onTabChange={setActiveSidebarTab}
-          unassignedJobs={pendingJobs}
-          allJobs={jobs}
-          employees={employees}
-          teams={teams}
-          activeJobsByEmployee={activeJobsByEmployee}
-          selectedTechnicianId={selectedTechnicianId}
-          onSelectTechnician={handleInspectTechnician}
-          onSelectJob={handleInspectJob}
-          onAssignJob={handleOpenAssignDrawer}
-          onAssignToTech={handleAssignToTechFromSidebar}
-          onStartJob={handleStartJob}
-        />
+        <div className={cn('h-full min-h-0', mobileView === 'sidebar' ? 'flex w-full md:w-auto' : 'hidden md:flex')}>
+          <DispatchSidebar
+            activeTab={activeSidebarTab}
+            onTabChange={setActiveSidebarTab}
+            unassignedJobs={pendingJobs}
+            allJobs={jobs}
+            employees={employees}
+            teams={teams}
+            activeJobsByEmployee={activeJobsByEmployee}
+            selectedTechnicianId={selectedTechnicianId}
+            onSelectTechnician={handleInspectTechnician}
+            onSelectJob={handleInspectJob}
+            onAssignJob={handleOpenAssignDrawer}
+            onAssignToTech={handleAssignToTechFromSidebar}
+            onStartJob={handleStartJob}
+          />
+        </div>
 
         {/* Center: Dominant Map Canvas */}
-        <main className="flex-1 relative h-full w-full bg-muted/20 overflow-hidden flex flex-col">
+        <main className={cn('flex-1 relative h-full w-full bg-muted/20 overflow-hidden flex flex-col min-h-0', mobileView === 'map' ? 'flex' : 'hidden md:flex')}>
           <LiveDispatchMap
             employees={mapTechnicians}
             jobs={activeJobsForMap}

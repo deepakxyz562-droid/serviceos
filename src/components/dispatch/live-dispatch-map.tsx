@@ -139,7 +139,7 @@ interface LiveDispatchMapProps {
   jobs?: MapJob[];
   selectedTechnicianId?: string | null;
   onTechnicianSelect?: (techId: string | null) => void;
-  controllerRef?: React.MutableRefObject<LiveTechnicianMapController | null>;
+  controllerRef?: React.RefObject<LiveTechnicianMapController | null> | React.MutableRefObject<LiveTechnicianMapController | null>;
   className?: string;
 }
 
