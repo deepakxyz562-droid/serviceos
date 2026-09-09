@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { maskEncryptedKey } from '@/lib/ai-key-crypto';
+import { invalidateAiKeyChainCache } from '@/lib/ai-client';
 
 /**
  * PATCH/DELETE /api/superadmin/ai-keys/[id]
@@ -121,6 +122,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       data: update,
     });
 
+    // Invalidate the in-memory key-chain cache so the next callAI() sees
+    // the updated isActive/priority immediately.
+    invalidateAiKeyChainCache();
+
     return NextResponse.json({ key: projectRow(updated) });
   } catch (error) {
     console.error('[SuperAdmin AI Keys PATCH] Error:', error);
@@ -153,6 +158,10 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     }
 
     await db.aiProviderKey.delete({ where: { id } });
+
+    // Invalidate the in-memory key-chain cache so the next callAI() no longer
+    // tries the deleted key.
+    invalidateAiKeyChainCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {

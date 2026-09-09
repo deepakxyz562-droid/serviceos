@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
+import { invalidateAiKeyChainCache } from '@/lib/ai-client';
 
 /**
  * POST /api/superadmin/ai-keys/reorder
@@ -85,6 +86,10 @@ export async function POST(request: NextRequest) {
         }),
       ),
     );
+
+    // Invalidate the in-memory key-chain cache so the next callAI() respects
+    // the new priority order immediately.
+    invalidateAiKeyChainCache();
 
     return NextResponse.json({ success: true });
   } catch (error) {

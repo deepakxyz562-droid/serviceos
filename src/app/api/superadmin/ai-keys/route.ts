@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { encryptKey, maskEncryptedKey } from '@/lib/ai-key-crypto';
+import { invalidateAiKeyChainCache } from '@/lib/ai-client';
 
 /**
  * Superadmin route for managing AiProviderKey rows (the multi-key fallback
@@ -134,6 +135,10 @@ export async function POST(request: NextRequest) {
         isActive,
       },
     });
+
+    // Invalidate the in-memory key-chain cache so the next callAI() sees
+    // the new key immediately (otherwise it stays stale for up to 60s).
+    invalidateAiKeyChainCache();
 
     return NextResponse.json({ key: projectRow(created) }, { status: 201 });
   } catch (error) {
