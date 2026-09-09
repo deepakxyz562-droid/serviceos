@@ -50,16 +50,16 @@ export const metadata: Metadata = {
 
 // ─── Fieseros vs Jobber comparison rows ────────────────────────────────────
 const comparisonRows: { feature: string; fieseros: boolean; competitor: boolean }[] = [
+  { feature: "24/7 AI Voice Receptionist & phone lead booking", fieseros: true, competitor: false },
   { feature: "Email & SMS customer messaging included", fieseros: true, competitor: false },
-  { feature: "Transparent, public pricing", fieseros: true, competitor: false },
+  { feature: "Transparent, public pricing (no hidden seat fees)", fieseros: true, competitor: false },
   { feature: "Offline-capable technician app (PWA)", fieseros: true, competitor: true },
   { feature: "Free invoice generator (no signup)", fieseros: true, competitor: false },
   { feature: "Setup time under 30 minutes", fieseros: true, competitor: false },
-  { feature: "Built for India / LATAM / SEA markets", fieseros: true, competitor: false },
-  { feature: "Multi-currency & multi-language", fieseros: true, competitor: true },
-  { feature: "Mobile-first PWA (no app store install)", fieseros: true, competitor: false },
-  { feature: "Free plan for solo operators", fieseros: true, competitor: false },
-  { feature: "No-code automation builder", fieseros: true, competitor: false },
+  { feature: "Multi-currency & global payments (Stripe/UPI/Card)", fieseros: true, competitor: true },
+  { feature: "Mobile-first PWA (no app store install required)", fieseros: true, competitor: false },
+  { feature: "Free plan & trial for trade businesses", fieseros: true, competitor: false },
+  { feature: "Workflow automations (SMS/Email triggers)", fieseros: true, competitor: false },
 ];
 
 // ─── Top 10 Jobber alternatives ─────────────────────────────────────────────

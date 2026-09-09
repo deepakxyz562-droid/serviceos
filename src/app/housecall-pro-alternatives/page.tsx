@@ -49,17 +49,16 @@ export const metadata: Metadata = {
 };
 
 const comparisonRows: { feature: string; fieseros: boolean; competitor: boolean }[] = [
+  { feature: "24/7 AI Voice Receptionist & phone lead booking", fieseros: true, competitor: false },
   { feature: "Email & SMS customer messaging included", fieseros: true, competitor: false },
-  { feature: "Public, transparent pricing", fieseros: true, competitor: false },
+  { feature: "Public, transparent pricing (no hidden addons)", fieseros: true, competitor: false },
   { feature: "Free trial, no credit card required", fieseros: true, competitor: false },
-  { feature: "PWA technician app (no app store)", fieseros: true, competitor: false },
+  { feature: "Offline-capable PWA technician app (no app store)", fieseros: true, competitor: false },
   { feature: "Native iOS & Android apps", fieseros: true, competitor: true },
-  { feature: "Built for non-US markets (India, LATAM, SEA)", fieseros: true, competitor: false },
-  { feature: "Multi-currency invoicing", fieseros: true, competitor: true },
-  { feature: "Customizable workflows & forms", fieseros: true, competitor: true },
+  { feature: "Multi-currency invoicing & payment methods", fieseros: true, competitor: true },
+  { feature: "Customizable workflows & digital checklists", fieseros: true, competitor: true },
   { feature: "Setup in under 30 minutes", fieseros: true, competitor: false },
-  { feature: "No-code automation builder", fieseros: true, competitor: false },
-  { feature: "Pay-as-you-go messaging credits", fieseros: true, competitor: false },
+  { feature: "Workflow automations (SMS/Email triggers)", fieseros: true, competitor: false },
 ];
 
 const alternatives: {

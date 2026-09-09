@@ -13,12 +13,12 @@ export const metadata: Metadata = {
   title: 'Fieseros Services — Build it. Grow it. Run it. | Websites, SEO & CRM for Service Businesses',
   description:
     'One partner for your service business. Build a lead-generating website, grow with SEO and Google Ads, and run your entire operation with Fieseros CRM. Built for plumbers, HVAC, electricians, landscapers, and 20+ industries.',
-  alternates: { canonical: '/services' },
+  alternates: { canonical: 'https://fieseros.com/services' },
   openGraph: {
     title: 'Fieseros Services — Build it. Grow it. Run it.',
     description:
       'Websites, SEO, Google Ads, and the Fieseros CRM — all from one partner built for service businesses.',
-    url: '/services',
+    url: 'https://fieseros.com/services',
   },
 }
 

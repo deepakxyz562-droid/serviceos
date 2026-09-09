@@ -14,12 +14,12 @@ export const metadata: Metadata = {
   title: 'Website Development for Service Businesses | Fieseros',
   description:
     'Get a lead-generating website built for your service business. Mobile-first, SEO-ready, with booking and quote forms integrated directly into Fieseros CRM. Starting at $999.',
-  alternates: { canonical: '/services/website-development' },
+  alternates: { canonical: 'https://fieseros.com/services/website-development' },
   openGraph: {
     title: 'Website Development for Service Businesses | Fieseros',
     description:
       'Lead-generating websites for plumbers, HVAC, electricians, cleaners, landscapers, and 20+ service industries. Starting at $999.',
-    url: '/services/website-development',
+    url: 'https://fieseros.com/services/website-development',
   },
 }
 

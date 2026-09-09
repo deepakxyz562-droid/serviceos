@@ -48,16 +48,16 @@ export const metadata: Metadata = {
 };
 
 const comparisonRows: { feature: string; fieseros: string; competitor: string }[] = [
-  { feature: "Starting price", fieseros: "Free trial, from $29/mo", competitor: "Custom pricing (contact for quote)" },
-  { feature: "Setup time", fieseros: "Under 30 minutes", competitor: "Typically longer implementation" },
-  { feature: "Best for business size", fieseros: "Solo → 50 techs", competitor: "20+ techs, large ops" },
-  { feature: "Email & SMS messaging", fieseros: "Native, first-class", competitor: "Not native" },
-  { feature: "Mobile app", fieseros: "PWA (offline)", competitor: "Native iOS/Android" },
-  { feature: "Software complexity", fieseros: "Simple, guided", competitor: "Enterprise, complex" },
-  { feature: "Onboarding", fieseros: "Self-serve wizard", competitor: "Dedicated implementation" },
+  { feature: "24/7 AI Voice Receptionist", fieseros: "Native, 24/7 phone lead booking", competitor: "Optional third-party add-on" },
+  { feature: "Starting price", fieseros: "Free trial, from $29/mo", competitor: "Custom pricing ($1,000s/mo)" },
+  { feature: "Setup time", fieseros: "Under 30 minutes self-serve", competitor: "3–6 month implementation" },
+  { feature: "Best for business size", fieseros: "Solo → 50 technicians", competitor: "25+ techs, large enterprises" },
+  { feature: "Email & SMS messaging", fieseros: "Native, first-class", competitor: "Requires configuration" },
+  { feature: "Mobile app", fieseros: "PWA (offline-capable)", competitor: "Native iOS/Android" },
+  { feature: "Software complexity", fieseros: "Fast, modern, lightweight", competitor: "Enterprise, complex training" },
+  { feature: "Onboarding", fieseros: "Self-serve wizard", competitor: "Mandatory implementation fee" },
   { feature: "Free trial", fieseros: "Yes, no credit card", competitor: "Limited demo only" },
-  { feature: "Multi-currency", fieseros: "Yes, built in", competitor: "USD-centric" },
-  { feature: "Best-fit market", fieseros: "Global, multi-channel", competitor: "US large contractors" },
+  { feature: "Multi-currency", fieseros: "Yes, 20+ currencies", competitor: "USD-centric" },
 ];
 
 const alternatives: {

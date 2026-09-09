@@ -13,12 +13,12 @@ export const metadata: Metadata = {
   title: 'SEO & Local Search for Service Businesses | Fieseros',
   description:
     'Rank higher on Google and turn local searches into booked jobs. Local SEO, Google Business Profile optimization, review management, and content — built for service businesses.',
-  alternates: { canonical: '/services/seo' },
+  alternates: { canonical: 'https://fieseros.com/services/seo' },
   openGraph: {
     title: 'SEO & Local Search for Service Businesses | Fieseros',
     description:
       'Local SEO, Google Business Profile optimization, and reputation management for plumbers, HVAC, electricians, and 20+ service industries.',
-    url: '/services/seo',
+    url: 'https://fieseros.com/services/seo',
   },
 }
 

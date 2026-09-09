@@ -13,12 +13,12 @@ export const metadata: Metadata = {
   title: 'Google Ads Management for Service Businesses | Fieseros',
   description:
     'Get qualified leads fast with Google Ads management. Campaign setup, keyword targeting, ad copy, landing pages, and ROI tracking — built for service businesses.',
-  alternates: { canonical: '/services/google-ads' },
+  alternates: { canonical: 'https://fieseros.com/services/google-ads' },
   openGraph: {
     title: 'Google Ads Management for Service Businesses | Fieseros',
     description:
       'Turn Google searches into booked jobs with Google Ads management built for service businesses. Campaign setup, optimization, and ROI tracking.',
-    url: '/services/google-ads',
+    url: 'https://fieseros.com/services/google-ads',
   },
 }
 
