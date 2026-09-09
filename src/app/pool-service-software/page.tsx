@@ -2,22 +2,27 @@ import type { Metadata } from "next";
 import {
   Waves,
   ClipboardCheck,
-  Repeat,
-  Smartphone,
+  CalendarClock,
+  Camera,
+  Receipt,
+  FileText,
+  MessageSquare,
   Droplets,
   Wrench,
-  CheckCircle2,
   Sparkles,
   Sun,
   PawPrint,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -33,9 +38,9 @@ export const metadata: Metadata = {
   description: cfg.metaDescription,
   keywords: [
     "pool service software",
-    "pool service CRM",
     "pool cleaning software",
     "pool maintenance software",
+    "pool service CRM",
     "pool route software",
   ],
   alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
@@ -51,28 +56,46 @@ export const metadata: Metadata = {
 
 const features: Feature[] = [
   {
-    icon: Waves,
-    title: "Weekly Smart Auto-Dispatch",
+    icon: CalendarClock,
+    badge: "Recurring Routes",
+    title: "Weekly Route & Maintenance Automation",
     description:
-      "Fieseros orders your pool techs' stops by drive time and zip code density, not by memory. A 22-pool Tuesday route gets done in fewer hours, and the tech sees turn-by-turn navigation to every stop on their phone.",
+      "Automate recurring weekly routes. Cluster stops by neighborhood to reduce windshield time and fit 20+ pools into a single technician day.",
   },
   {
     icon: ClipboardCheck,
-    title: "Equipment Inspection Checklists",
+    badge: "Water Chemistry",
+    title: "Chemical Readings & Service Checklists",
     description:
-      "Techs run through a pump, filter, and heater inspection on every visit — skimmer basket, pump pressure, filter psi, heater firing. Findings are timestamped, photo-supported, and turn into repair quotes with one tap when something is worn.",
+      "Techs log chemical readings (pH, chlorine, alkalinity) and equipment checks on mobile. Auto-generate service summary reports for homeowners.",
   },
   {
-    icon: Repeat,
-    title: "Recurring Service Contract Billing",
+    icon: Camera,
+    badge: "Photo Proof",
+    title: "Water Clarity Before & After Photos",
     description:
-      "Set up weekly, bi-weekly, or monthly service contracts once, and Fieseros sends automatic payment reminders after each completed visit. No more end-of-month invoice runs, no more chasing customers who are six weeks behind.",
+      "Snap timestamped photos of crystal clear water, empty skimmer baskets, and clean pool surfaces on every visit to prove service quality.",
   },
   {
-    icon: Smartphone,
-    title: "Customer Portal for Service History",
+    icon: FileText,
+    badge: "Equipment Quotes",
+    title: "Equipment Repair Quotes (Pumps & Filters)",
     description:
-      "Customers log in to see every visit, every inspection finding, every photo, and every invoice. The portal eliminates the 6 p.m. \"did you service my pool today?\" call and gives new homeowners a clean handover record when they buy the house.",
+      "Spot a leaking pump or worn filter? Build a quote on mobile with photos attached and send via SMS for instant 1-tap customer approval.",
+  },
+  {
+    icon: Receipt,
+    badge: "Auto Billing",
+    title: "Recurring Monthly Billing & Auto-Pay",
+    description:
+      "Set up recurring monthly service invoices once. Collect payments automatically by credit card or bank transfer with automated receipts.",
+  },
+  {
+    icon: MessageSquare,
+    badge: "Automations",
+    title: "Automated Service Summary Emails & SMS",
+    description:
+      "Send automatic post-visit service logs and visit reminders so homeowners never have to ask “Did you clean my pool today?”",
   },
 ];
 
@@ -123,126 +146,115 @@ export default function PoolServiceSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Droplets className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Pool & Spa Service Software"
+        title="Pool Service Software for Weekly Routes, Chemical Logs & Billing"
+        subtitle="Manage recurring weekly pool routes, record chemical reading checklists, quote pump and filter repairs on-site, and automate monthly customer billing with Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Pool Service"
+        heroIcon={Waves}
+        sampleJobTitle="Weekly Chemical Balancing & Skimmer Service"
+        sampleCustomerName="Samantha Cole"
+        sampleTechName="Cody R. (Route Lead)"
+        sampleAsset="Equipment: Hayward Super Pump #SP2610X"
+        sampleAmount="$180.00"
+      />
+
+      <IndustryMetricsBar industryName="Pool Service" />
 
       <FeatureGrid
-        title="Built for the way pool service companies actually work"
-        subtitle="From the first route of the season to the last pool closing in October — every pool service workflow in one platform."
+        title="Built for the high-volume weekly rhythm of pool maintenance"
+        subtitle="From weekly chemical balancing routes to pump repairs and seasonal openings — manage your entire pool business in one platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Pool Service" contractorNoun="pool techs" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a pool service business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most pool service companies still juggle paper route sheets, service notes in a notebook, and invoices sent at the end of the month. Here&apos;s what that costs you — and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Routes planned in the tech's head — routes drag on longer than they need to",
-                  "No record of what was done on the last visit when a customer complains about a green pool",
-                  "Pump repairs diagnosed in the field but never billed because they're forgotten",
-                  "End-of-month invoice run eats two full days of office time",
-                  "Customers six weeks behind on payment, but you keep servicing the pool",
-                  "Seasonal openings and closings booked on sticky notes, half of them lost",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Routes auto-ordered by drive time — fewer hours on the road",
-                  "Every equipment inspection logged with photos, visible in the customer portal",
-                  "Equipment inspections turn into repair quotes with one tap from the field",
-                  "Recurring contracts auto-send invoices with reminders after every visit — no end-of-month invoice run",
-                  "Failed payments flagged instantly — stop service before the customer owes 8 weeks",
-                  "Openings and closings pre-scheduled in March, dispatched in the right order in May",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Pool Service"
+        withoutPoints={[
+          "Routes planned in the tech's head, wasting hours zig-zagging across town between stops",
+          "Customer calls at 6 PM asking \"did you clean my pool today?\" because no visit log was sent",
+          "Worn pump seals and high filter pressure noticed in the field but never quoted or billed",
+          "Non-paying customers receiving 6+ weeks of service because overdue balances aren't tracked",
+          "End-of-month invoicing eats 2 full office days matching paper route sheets to customer cards",
+        ]}
+        withPoints={[
+          "Clustered neighborhood routes maximize stops and fit 20+ pools into a single technician day",
+          "Automated post-service SMS reports with chemical readings and clean water photos sent instantly",
+          "1-tap equipment repair quotes with photos sent via SMS for instant customer approval on-site",
+          "Overdue contract balances flagged immediately on the dispatch board to prevent unpaid visits",
+          "Automated recurring monthly billing charges cards and delivers receipts on autopilot",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why pool service companies choose Fieseros">
         <p>
-          Pool service is a recurring-revenue business with a daily operational grind. A typical tech visits 18 to 25 pools a day, inspects equipment at every stop, makes small adjustments, and tries to finish before dark. Multiply that across a team of three or four techs and you have hundreds of customer interactions every week, each one generating data — equipment condition, repair recommendations, time on site — that almost never gets captured without dedicated pool service software. Fieseros is built to capture all of it, in seconds, from the technician&apos;s phone, and turn it into better{" "}
+          Pool service is a recurring-revenue business with a daily operational
+          grind. A typical tech visits 18 to 25 pools a day, inspects equipment at
+          every stop, makes small adjustments, and tries to finish before dark.
+          Multiply that across a team of three or four techs and you have
+          hundreds of customer interactions every week, each one generating data
+          — equipment condition, repair recommendations, time on site — that
+          almost never gets captured without dedicated pool service software.
+          Fieseros is built to capture all of it, in seconds, from the
+          technician&apos;s phone, and turn it into better{" "}
           <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
             scheduling and dispatch
           </Link>
           , faster billing, and fewer customer disputes.
         </p>
         <p>
-          The recurring billing side of pool service is where most shops lose money quietly. Pool companies typically bill weekly or monthly in arrears, which means a customer who stops paying in May can still be on the route in July before anyone notices. Fieseros fixes this by generating a branded invoice after every completed visit (or on a fixed monthly cycle), sending it via Email & SMS with a secure payment link, and immediately flagging overdue balances on the dispatch board so you can follow up before the situation escalates. You see exactly who owes what, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. Fieseros automates invoicing and payment reminders so unpaid balances are flagged on the dashboard immediately.
+          The recurring billing side of pool service is where most shops lose
+          money quietly. Pool companies typically bill weekly or monthly in
+          arrears, which means a customer who stops paying in May can still be on
+          the route in July before anyone notices. Fieseros fixes this by
+          generating a branded invoice after every completed visit (or on a fixed
+          monthly cycle), sending it via Email & SMS with a secure payment link,
+          and immediately flagging overdue balances on the dispatch board so you
+          can follow up before the situation escalates. You see exactly who owes
+          what, and you can pause service on a non-paying customer before they
+          rack up eight weeks of unpaid cleanings. Fieseros automates invoicing
+          and payment reminders so unpaid balances are flagged on the dashboard
+          immediately.
         </p>
         <p>
-          Then there is the dispute problem, which becomes critical the moment a customer calls to complain about a green pool. Without a record of what was done on each visit, the customer&apos;s word stands against yours, and you end up crediting service calls you shouldn&apos;t have to. Fieseros solves this by capturing visit notes and photos on every visit, timestamped and attached to the customer&apos;s{" "}
+          Then there is the dispute problem, which becomes critical the moment a
+          customer calls to complain about a green pool. Without a record of what
+          was done on each visit, the customer&apos;s word stands against yours,
+          and you end up crediting service calls you shouldn&apos;t have to.
+          Fieseros solves this by capturing visit notes and photos on every visit,
+          timestamped and attached to the customer&apos;s{" "}
           <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
             customer CRM
           </Link>{" "}
-          record. When the complaint call comes in, you pull the visit history, walk the customer through what was done, and the dispute usually ends in your favor. The same data also helps you spot pools that need more frequent service before they turn green in the first place.
+          record. When the complaint call comes in, you pull the visit history,
+          walk the customer through what was done, and the dispute usually ends
+          in your favor. The same data also helps you spot pools that need more
+          frequent service before they turn green in the first place.
         </p>
         <p>
-          Finally, there is the equipment repair revenue that pool service companies routinely leave on the table. A tech notices a pump making noise or a filter pressure reading 30 psi during a routine visit, mentions it to the customer in passing, and nothing ever happens — until the pump fails two months later and the customer blames you for not telling them. Fieseros turns every equipment observation into a tracked item. The tech logs the finding with a photo, generates a repair quote on the spot, and sends it to the customer via Email & SMS, with{" "}
+          Finally, there is the equipment repair revenue that pool service
+          companies routinely leave on the table. A tech notices a pump making
+          noise or a filter pressure reading 30 psi during a routine visit,
+          mentions it to the customer in passing, and nothing ever happens —
+          until the pump fails two months later and the customer blames you for
+          not telling them. Fieseros turns every equipment observation into a
+          tracked item. The tech logs the finding with a photo, generates a repair
+          quote on the spot, and sends it to the customer via Email & SMS, with{" "}
           <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
             invoicing
           </Link>{" "}
-          that follows up automatically. Whether they approve it now or in three months, the recommendation is on record, and the eventual repair revenue goes to you instead of the first company they call when the pump finally dies.
+          that follows up automatically.
         </p>
       </ContentSection>
 
@@ -255,8 +267,6 @@ export default function PoolServiceSoftwarePage() {
         subtitle="Everything pool service owners ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

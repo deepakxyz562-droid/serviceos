@@ -2,20 +2,25 @@ import type { Metadata } from "next";
 import {
   Sun,
   CalendarClock,
-  TrendingUp,
+  Camera,
+  Receipt,
+  FileText,
+  MessageSquare,
   Wrench,
-  CheckCircle2,
   Home,
   Plug,
   Thermometer,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -30,11 +35,11 @@ export const metadata: Metadata = {
   title: cfg.titleTag,
   description: cfg.metaDescription,
   keywords: [
-    "solar software",
+    "solar contractor software",
+    "solar installer software",
+    "solar maintenance software",
     "solar CRM",
-    "solar installation software",
-    "solar project management",
-    "solar O&M software",
+    "solar job management",
   ],
   alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
@@ -49,22 +54,46 @@ export const metadata: Metadata = {
 
 const features: Feature[] = [
   {
-    icon: Sun,
-    title: "Site-Survey Photo & Shading Documentation",
+    icon: Camera,
+    badge: "Site Survey",
+    title: "Site-Survey & Roof Photo Documentation",
     description:
-      "Site surveyors capture roof pitch, azimuth, obstructions, and shade-producing trees with timestamped photos and a horizon shading sketch. The complete survey becomes the foundation for system design — and your defense if production ever underperforms the proposal.",
+      "Site surveyors photograph roof pitch, electrical panel capacity, and shading conditions. All photos attach to the job record for engineer and permitting review.",
   },
   {
     icon: CalendarClock,
-    title: "Multi-Week Install Project Management",
+    badge: "Project Stages",
+    title: "Multi-Stage Installation Project Tracking",
     description:
-      "A residential solar install is a 2 to 4 week project, not a single-day job. Fieseros phases the project — permit approval, material delivery, install day, inspection, PTO — and shows you exactly which project is at which stage on a single board.",
+      "Track every milestone: permit approval, equipment delivery, racking install, electrical tie-in, utility inspection, and PTO on one central board.",
   },
   {
-    icon: TrendingUp,
-    title: "Recurring O&M Contracts & Lease Billing",
+    icon: FileText,
+    badge: "Asset Records",
+    title: "Equipment Asset & Warranty Tracking",
     description:
-      "Fieseros queues recurring invoices automatically, sends them via Email & SMS, and follows up with payment reminders for unpaid balances.",
+      "Track solar panel models, inverter serial numbers, and battery storage specs per property. Pull full warranty and install history in seconds.",
+  },
+  {
+    icon: Wrench,
+    badge: "O&M Routes",
+    title: "Recurring O&M & Panel Cleaning Routes",
+    description:
+      "Auto-schedule annual panel cleanings, inverter health inspections, and warranty check-ups. Keep solar arrays operating at peak kilowatt output.",
+  },
+  {
+    icon: Receipt,
+    badge: "Progress Billing",
+    title: "Milestone & Progress Invoicing",
+    description:
+      "Bill multi-phase solar installs by milestone: deposit, permit approval, mechanical completion, and PTO sign-off. Accept card, UPI, or bank transfer.",
+  },
+  {
+    icon: MessageSquare,
+    badge: "Customer Alerts",
+    title: "Automated Inspection & PTO SMS Updates",
+    description:
+      "Keep homeowners updated with automated SMS alerts as their project moves through permitting, inspection, and grid interconnection.",
   },
 ];
 
@@ -72,12 +101,22 @@ const faqs = [
   {
     question: "How does Fieseros handle solar site surveys and shading documentation?",
     answer:
-      "Every solar project starts with a site survey, and the quality of that survey determines whether the system produces what you promised. Fieseros gives site surveyors a structured workflow — roof pitch, azimuth, obstruction photos, attic access, electrical panel capacity, and a horizon shading sketch. Every photo is timestamped and geotagged, and the complete survey becomes the foundation for system design. If the system ever underperforms the proposal, you can pull the original shading documentation and show the customer that the design accounted for the conditions present at the time of survey. Fieseros structures the site survey so photos, sketches, and panel data are captured in one record and ready to feed the proposal.",
+      "Every solar project starts with a site survey, and the quality of that survey determines whether the system produces what you promised. Fieseros gives site surveyors a structured workflow — roof pitch, azimuth, obstruction photos, attic access, electrical panel capacity, and a horizon shading sketch. Every photo is timestamped and geotagged, and the complete survey becomes the foundation for system design. If the system ever underperforms the proposal, you can pull the original shading documentation and show the customer that the design accounted for the conditions present at the time of survey.",
   },
   {
-    question: "How do recurring O&M contracts and lease billing work?",
+    question: "How does multi-stage solar project tracking work in Fieseros?",
     answer:
-      "Fieseros queues recurring invoices automatically on the schedule you define, sends them via Email & SMS, and follows up with payment reminders for unpaid balances.",
+      "Solar installations require coordinated steps across weeks: site survey, engineering review, municipal permitting, equipment staging, mechanical racking, electrical tie-in, city inspection, and final utility PTO (Permission to Operate). Fieseros visualizes each install on a project pipeline board, notifying team members when their stage begins and sending automated SMS updates to the customer as milestones are approved.",
+  },
+  {
+    question: "How do milestone invoicing and deposits protect cash flow?",
+    answer:
+      "Solar installations involve high front-loaded hardware costs (panels, inverters, racking, batteries). In Fieseros, you can configure milestone billing: 20% deposit upon contract signature, 40% upon permit approval/equipment delivery, 30% upon mechanical completion, and 10% upon final PTO inspection sign-off. Invoices and payment links are delivered automatically at each milestone.",
+  },
+  {
+    question: "How do recurring O&M contracts and annual panel cleanings work?",
+    answer:
+      "Post-installation Operations & Maintenance (O&M) is high-margin recurring revenue. In Fieseros, you can set up annual or bi-annual service agreements for solar panel cleaning, inverter diagnostics, and electrical connection checks. The system automatically creates recurring visits on your route board and bills customers with automated card-on-file payments.",
   },
 ];
 
@@ -100,27 +139,21 @@ export default function SolarSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Sun className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Solar Contractor Software"
+        title="Solar Software for Site Surveys, Project Tracking & Billing"
+        subtitle="Track solar installations from site survey to grid interconnection, manage equipment assets and warranties, bill by milestone, and schedule recurring O&M routes with Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Solar Installer"
+        heroIcon={Sun}
+        sampleJobTitle="Residential Solar Array & Enphase Battery Install"
+        sampleCustomerName="Dr. Bradley Turner"
+        sampleTechName="Carlos E. (Master Electrician)"
+        sampleAsset="System: 8.4 kW Solar Array + Enphase IQ8 (24 Panels)"
+        sampleAmount="$12,400.00"
+      />
+
+      <IndustryMetricsBar industryName="Solar" />
 
       <FeatureGrid
         title="Built for the way solar installation companies actually work"
@@ -128,70 +161,34 @@ export default function SolarSoftwarePage() {
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Solar Installer" contractorNoun="solar installers" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a solar installation business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most solar companies still juggle permitting spreadsheets, project folders in Google Drive, and scattered email and text threads for every install. Here&apos;s what that costs you — and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "No project board — installs stall at inspection or activation with nobody noticing",
-                  "Site-survey photos live on the surveyor's phone, lost when they quit",
-                  "No visibility into which installs are stuck at inspection versus activation",
-                  "O&M contracts sold verbally and forgotten — zero recurring revenue tracked",
-                  "Recurring lease and O&M payments tracked manually — invoices slip for months",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Site-survey photos attached to the project record permanently",
-                  "Project board shows every install's stage at a glance",
-                  "O&M contracts auto-scheduled with Email & SMS reminders",
-                  "Recurring invoices queued automatically with payment reminders for unpaid balances",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Solar"
+        withoutPoints={[
+          "Multi-week projects stall at permitting or inspection with zero dashboard visibility",
+          "Site-survey photos and roof pitch data trapped on personal phones and lost over time",
+          "Solar panel serial numbers and inverter warranty specs lost in paper binders",
+          "Carrying tens of thousands in equipment costs while waiting for final project completion",
+          "Annual panel cleanings and inverter maintenance checkups sold once and never scheduled",
+        ]}
+        withPoints={[
+          "Centralized project board tracks every milestone from survey to utility inspection and PTO",
+          "Timestamped roof pitch, panel layout, and shading survey photos permanently linked to the job",
+          "Complete equipment asset records with serial numbers and warranty dates stored per property",
+          "Milestone invoicing collects deposits, mechanical completion payments, and PTO balances automatically",
+          "Recurring O&M routes and annual panel cleaning contracts auto-scheduled with recurring billing",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why solar installation companies choose Fieseros">
         <p>
@@ -229,8 +226,6 @@ export default function SolarSoftwarePage() {
         subtitle="Everything solar installation companies ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

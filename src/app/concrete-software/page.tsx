@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
 import {
   HardHat,
-  CloudRain,
   Clock,
-  DollarSign,
-  Truck,
-  Wrench,
-  CheckCircle2,
+  CalendarClock,
+  Camera,
+  Receipt,
+  FileText,
+  MessageSquare,
   Paintbrush,
   Hammer,
   DoorOpen,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -32,11 +35,11 @@ export const metadata: Metadata = {
   title: cfg.titleTag,
   description: cfg.metaDescription,
   keywords: [
-    "concrete software",
     "concrete contractor software",
+    "concrete software",
+    "concrete bidding software",
+    "concrete job management",
     "concrete CRM",
-    "concrete estimating software",
-    "concrete project management",
   ],
   alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
@@ -51,28 +54,46 @@ export const metadata: Metadata = {
 
 const features: Feature[] = [
   {
-    icon: HardHat,
-    title: "Site-Prep Photo Documentation",
+    icon: Camera,
+    badge: "Site-Prep Proof",
+    title: "Site-Prep & Rebar Photo Documentation",
     description:
-      "Capture excavation depth, subgrade compaction, form placement, and rebar layout with timestamped photos before the ready-mix truck ever arrives. The photo set becomes your proof of base condition if a warranty claim or a final-payment dispute ever comes up.",
+      "Capture excavation depth, subgrade compaction, form placement, and rebar layout with timestamped photos before the ready-mix truck arrives. Defend your work against disputes.",
   },
   {
-    icon: CloudRain,
-    title: "Multi-Day Pour Scheduling",
+    icon: CalendarClock,
+    badge: "Multi-Phase Schedule",
+    title: "Multi-Phase Pour & Cure Scheduling",
     description:
-      "Schedule pours and dependent steps on the Fieseros calendar. Drag-and-drop to reschedule when the forecast changes, and Fieseros sends automated SMS/Email updates to the crew and customer.",
+      "Schedule multi-day phases — prep, pour, finish, and seal. Drag-and-drop to adjust when rain strikes, with automatic SMS notifications to your crew and client.",
+  },
+  {
+    icon: FileText,
+    badge: "Itemized Bids",
+    title: "Detailed Estimates & Material Line Items",
+    description:
+      "Build itemized quotes with yardage, pump fees, and labor. Send via SMS/Email for instant client approval and digital signature contract sign-off.",
   },
   {
     icon: Clock,
-    title: "Crew Time-Tracking vs Estimate",
+    badge: "Labor Tracking",
+    title: "Mobile Crew Time Tracking",
     description:
-      "Crew members clock in and out on the job site through Fieseros, and the hours roll up against the original estimate. You see immediately when a driveway pour is running 2 hours over the budgeted labor, instead of finding out at the end of the month.",
+      "Crew members clock in and out on the job site via mobile PWA. Track actual labor hours against your original estimate in real time.",
   },
   {
-    icon: DollarSign,
-    title: "Milestone Invoicing (Prep / Pour / Finish)",
+    icon: Receipt,
+    badge: "Milestone Billing",
+    title: "Milestone Deposit & Final Invoicing",
     description:
-      "Bill a concrete project the way it actually progresses — deposit on contract, second payment on subgrade and form completion, balance on final finish and cure. Fieseros triggers each invoice automatically when the corresponding milestone is marked complete.",
+      "Bill concrete projects by milestone: upfront deposit, second payment on form completion, and balance upon final finish. Accept online card or bank transfer.",
+  },
+  {
+    icon: MessageSquare,
+    badge: "Weather Alerts",
+    title: "Automated Weather Alerts & Reminders",
+    description:
+      "Send automated appointment confirmations and weather reschedule alerts directly to property owners via SMS and Email.",
   },
 ];
 
@@ -118,27 +139,21 @@ export default function ConcreteSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Truck className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Concrete Contractor Software"
+        title="Concrete Software for Multi-Phase Scheduling, Estimates & Billing"
+        subtitle="Coordinate prep, pour, and seal phases, capture timestamped site-prep photos, send itemized yardage estimates, and automate milestone billing with Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Concrete Contractor"
+        heroIcon={HardHat}
+        sampleJobTitle="Stamped Concrete Patio Prep, Pour & Seal"
+        sampleCustomerName="Marcus Vance"
+        sampleTechName="Diego G. (Finishing Lead)"
+        sampleAsset="Pour: 450 sq ft Stamped Patio • 4000 PSI + Fibers"
+        sampleAmount="$4,200.00"
+      />
+
+      <IndustryMetricsBar industryName="Concrete" />
 
       <FeatureGrid
         title="Built for the way concrete crews actually work"
@@ -146,69 +161,34 @@ export default function ConcreteSoftwarePage() {
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Concrete Contractor" contractorNoun="concrete contractors" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a concrete business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most concrete contractors still juggle paper work orders, weather watched on a phone app, and invoices sent at the end of the project. Here&apos;s what that costs you — and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Pours scheduled without a calendar — rescheduling means calling every crew member individually",
-                  "No photos of subgrade or rebar before the pour — warranty disputes are he-said-she-said",
-                  "Crew hours tracked on paper — a driveway runs 2 hours over budget and nobody knows",
-                  "Final payment held up because the homeowner says the finish wasn't what they expected",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Pours and dependent steps on one calendar — drag-and-drop to reschedule when the forecast shifts",
-                  "Subgrade and rebar photos timestamped before every pour — disputes resolved instantly",
-                  "Crew hours tracked against the estimate — overruns visible the day they happen",
-                  "Milestone invoicing — deposit, prep, and finish each billed on completion",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Concrete"
+        withoutPoints={[
+          "Pours scheduled on paper — weather delays require calling every crew member and supplier manually",
+          "No photos of subgrade or rebar before the pour — leaving you defenseless in warranty disputes",
+          "Crew hours tracked on paper cards, hiding labor overruns until the project is already unprofitable",
+          "Material costs paid upfront out of pocket while waiting weeks for a single lump-sum final invoice",
+          "Missed phone calls from general contractors and homeowners when crews are in the middle of a pour",
+        ]}
+        withPoints={[
+          "Pours and dependent cure steps coordinated on one visual calendar with drag-and-drop weather rescheduling",
+          "Timestamped photos of subgrade, compaction, and rebar captured and attached to the work order before every pour",
+          "Mobile crew clock-in tracks labor hours against original estimates in real time from the job site",
+          "Milestone invoicing automatically collects upfront deposits, prep-stage payments, and final balances",
+          "24/7 AI Voice Receptionist answers bids and emergency calls immediately without interrupting pours",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why concrete contractors choose Fieseros">
         <p>
@@ -219,7 +199,7 @@ export default function ConcreteSoftwarePage() {
           built around pour days.
         </p>
         <p>
-          The scheduling problem is the single most expensive operational risk in concrete contracting. A pour scheduled for Thursday that gets rained out costs you a ready-mix restocking fee if you cancel too late, burns a full day of crew time you can't get back, and pushes the whole project schedule back by a week or more. Fieseros puts every pour and its dependent steps — finishing crew, curing blankets, saw-cutting — on one calendar. When the forecast shifts, drag-and-drop rescheduling moves the pour and updates the crew and customer through automated SMS/Email reminders. Fieseros automates reschedule notifications so crews and customers are kept in sync when the forecast shifts.
+          The scheduling problem is the single most expensive operational risk in concrete contracting. A pour scheduled for Thursday that gets rained out costs you a ready-mix restocking fee if you cancel too late, burns a full day of crew time you can&apos;t get back, and pushes the whole project schedule back by a week or more. Fieseros puts every pour and its dependent steps — finishing crew, curing blankets, saw-cutting — on one calendar. When the forecast shifts, drag-and-drop rescheduling moves the pour and updates the crew and customer through automated SMS/Email reminders. Fieseros automates reschedule notifications so crews and customers are kept in sync when the forecast shifts.
         </p>
         <p>
           The documentation problem is the second silent killer. Concrete warranty disputes almost always come down to one question — what was the subgrade condition before the pour? Without photos of excavation depth, compaction, form placement, and rebar layout, you have no defense when a homeowner claims the cracks in their driveway are your fault. Fieseros makes that documentation automatic. Crews capture photos at every step of site prep, all timestamped and attached to the work order in the same{" "}
@@ -246,8 +226,6 @@ export default function ConcreteSoftwarePage() {
         subtitle="Everything concrete contractors ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

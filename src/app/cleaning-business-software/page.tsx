@@ -7,19 +7,20 @@ import {
   ListChecks,
   Receipt,
   Sparkles,
-  Wrench,
-  CheckCircle2,
   Building2,
   Hammer,
   Sun,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -54,39 +55,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: CalendarClock,
-    title: "Recurring Schedule Automation",
+    badge: "Recurring Schedules",
+    title: "Recurring Cleaning Schedules",
     description:
-      "Set up a customer once — \"every Tuesday at 10 a.m.\" — and Fieseros auto-generates every future visit, assigns the right cleaner, sends reminders, and queues the recurring invoice. Change one visit without breaking the series.",
+      "Set up weekly, bi-weekly, or monthly recurring visits once. Fieseros auto-generates future appointments, assigns cleaners, and sends customer arrival reminders.",
   },
   {
     icon: MapPin,
-    title: "Cleaner Dispatch & GPS Tracking",
+    badge: "Crew Dispatch",
+    title: "Cleaner Dispatch & Team Scheduling",
     description:
-      "See every cleaner's live location on a single map. Know who is at which job, who is running late, and who is finished and free for a last-minute add-on. Optimized routes between jobs save hours every week.",
+      "Visual drag-and-drop calendar lets you organize cleaner teams, adjust routes, and handle last-minute customer reschedules without breaking the recurring series.",
   },
   {
     icon: KeyRound,
-    title: "Customer Property Notes",
+    badge: "Customer CRM",
+    title: "Property Access Notes & Alarm Codes",
     description:
-      "Store access details per property — key location, alarm codes, gate codes, pet info, parking instructions. Cleaners see exactly what they need on their phone before they arrive. Stored per customer, visible to your team.",
+      "Securely store key lockboxes, gate codes, pet instructions, and client preferences in the customer record — instantly accessible to cleaners on mobile.",
   },
   {
     icon: MessageSquare,
-    title: "Email & SMS Appointment Reminders",
+    badge: "Automations",
+    title: "Automated SMS Arrival Reminders",
     description:
-      "Automated Email & SMS reminders before every clean — \"Your cleaner Maria arrives at 10 a.m. tomorrow.\" Customers confirm or reschedule with one tap. No-shows and locked-door surprises drop to near zero.",
+      "Eliminate locked doors and no-shows with automated 24-hour reminder texts. Clients confirm appointments with one tap, reducing wasted drive time.",
   },
   {
     icon: ListChecks,
-    title: "Checklist Completion Tracking",
+    badge: "Mobile Field PWA",
+    title: "Quality Checklists & Photo Proof",
     description:
-      "Build custom checklists per service type — deep clean, recurring weekly, move-out. Cleaners tick items off on their phone, with photo proof for problem areas. Quality stays consistent across every cleaner, every job.",
+      "Equip cleaners with room-by-room digital checklists (deep clean, move-out, standard) and before/after photo attachments to maintain consistent 5-star quality.",
   },
   {
     icon: Receipt,
-    title: "Recurring Invoicing",
+    badge: "1-Click Invoicing",
+    title: "Automated Invoicing & Card Billing",
     description:
-      "Set up recurring billing once and Fieseros generates and sends invoices automatically — weekly, bi-weekly, monthly. Customers pay by card or bank transfer through a secure online payment link. You track paid, pending, and overdue at a glance.",
+      "Auto-generate invoices for completed cleans and accept instant payments via credit card, Apple Pay, Google Pay, or recurring online payment links.",
   },
 ];
 
@@ -142,105 +149,56 @@ export default function CleaningBusinessSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Business Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Sparkles className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Cleaning & Maid Service Software"
+        title="Cleaning Business Software for Recurring Schedules & Crew Dispatch"
+        subtitle="Manage weekly residential and commercial cleans on autopilot. Automate recurring visits, store property lockbox codes, enforce room checklists, and get paid effortlessly."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Cleaning"
+        heroIcon={Sparkles}
+        sampleJobTitle="Bi-Weekly Deep Clean & Sanitization"
+        sampleCustomerName="Rachel Green"
+        sampleTechName="Maria S. (Crew Lead)"
+        sampleAsset="Access: Lockbox Code #4812"
+        sampleAmount="$240.00"
+      />
+
+      <IndustryMetricsBar industryName="Cleaning" />
 
       <FeatureGrid
-        title="Everything a cleaning business needs to grow recurring revenue"
-        subtitle="Recurring schedules, reliable cleaner dispatch, customer property notes, quality control, and recurring billing — all in one Email, SMS & Push platform."
+        title="Everything your cleaning company needs to scale recurring revenue"
+        subtitle="Recurring visit automation, cleaner scheduling, property access notes, quality control checklists, and recurring billing in one platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Cleaning" contractorNoun="cleaners" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The daily chaos of running a cleaning business
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Cleaning businesses live and die by recurring revenue — but
-              managing dozens of weekly customers, multiple cleaners, and access
-              details without software is a recipe for churn. Here&apos;s what
-              changes when you switch.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Cleaner no-shows — you find out when the angry customer calls",
-                  "Lost keys, forgotten alarm codes, locked-out cleaners every week",
-                  "Customers not home because no one reminded them of the appointment",
-                  "Recurring billing chaos — who paid, who didn't, who to chase?",
-                  "Quality varies wildly from cleaner to cleaner, no way to track it",
-                  "Schedule changes blow up the whole spreadsheet — again",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "GPS check-in alerts you the moment a cleaner doesn't arrive on time",
-                  "Customer property notes — access details available in the mobile app",
-                  "Automated Email & SMS reminders before every clean — no more surprises",
-                  "Recurring invoices generated and sent automatically, payments tracked",
-                  "Quality checklists with photo proof — consistent results every time",
-                  "Drag-and-drop scheduling — change one visit without breaking the series",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Cleaning"
+        withoutPoints={[
+          "Cleaner no-shows and locked doors because customers forgot their appointment date",
+          "Lost gate codes and lockbox keys scribbled on loose paper notes",
+          "Quality varies widely across cleaners with no standardized room checklists",
+          "End-of-month invoicing nightmare trying to match completed jobs with customer payments",
+          "Recurring clients slipping away silently when schedule changes break spreadsheet formulas",
+        ]}
+        withPoints={[
+          "Automated 24h SMS arrival reminders prevent locked-out cleaners and missed appointments",
+          "Secure customer property notes with alarm codes and pet preferences stored in mobile CRM",
+          "Digital room checklists with mandatory before/after photo proof ensure 5-star quality",
+          "1-click invoice generation with instant card payment links and automated receipt delivery",
+          "Bulletproof recurring visit auto-generation protects predictable weekly & bi-weekly revenue",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why cleaning businesses love Fieseros">
         <p>
@@ -319,8 +277,6 @@ export default function CleaningBusinessSoftwarePage() {
         subtitle="Everything cleaning business owners ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

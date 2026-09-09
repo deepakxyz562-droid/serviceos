@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
 import {
   Camera,
-  BadgeCheck,
   CalendarClock,
   ShieldCheck,
   RefreshCw,
+  Receipt,
+  MessageSquare,
   Trees,
   Wrench,
-  CheckCircle2,
   Sun,
   Home,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -52,33 +55,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: Camera,
-    title: "Dangerous-Tree Photo Logs",
+    badge: "Risk Documentation",
+    title: "Dangerous-Tree Photo Logs & Proof",
     description:
-      "Photograph hazardous trees from every angle, tag the hazard (split trunk, lean, decay), and attach the assessment to the customer's record. When a tree comes down in the next storm, you have dated documentation of the condition you flagged.",
-  },
-  {
-    icon: BadgeCheck,
-    title: "ISA Certification Tracking",
-    description:
-      "Store ISA Certified Arborist, TRAQ, and climbing certifications per technician with renewal alerts. Skills appear on the dispatch board so you can match techs to jobs manually.",
+      "Photograph hazardous trees from every angle, tag specific risk zones (split trunks, power lines, root decay), and attach timestamped assessments directly to the work order.",
   },
   {
     icon: CalendarClock,
-    title: "Stump-Grinding Follow-Up Scheduling",
+    badge: "Crew & Rig Dispatch",
+    title: "Climber & Bucket Truck Scheduling",
     description:
-      "Set up a recurring or follow-up schedule for stump grinding visits so no follow-up falls through the cracks.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Insurance-Ready Job Documentation",
-    description:
-      "Every job has timestamped photos, crew assignments, and notes attached to the work order.",
+      "Drag-and-drop calendar matches certified climbers and specialized equipment (bucket trucks, chippers) to jobs with live technician GPS tracking.",
   },
   {
     icon: RefreshCw,
-    title: "Recurring Tree-Health Inspections",
+    badge: "Recurring Contracts",
+    title: "Pruning & Tree-Health Schedules",
     description:
-      "Annual tree-health inspections are the recurring revenue engine of a tree care business. Set up inspection contracts once and Fieseros auto-schedules each visit, sends the customer a reminder, dispatches the arborist, and bills the inspection.",
+      "Auto-schedule recurring seasonal pruning and annual arborist health inspections for HOAs and commercial campuses with automated client reminders.",
+  },
+  {
+    icon: ShieldCheck,
+    badge: "On-Site Quoting",
+    title: "Tree Trimming Estimates & E-Signs",
+    description:
+      "Build itemized tree removal, trimming, and crane service quotes on mobile. Send via SMS/Email for instant client approval and deposit collection.",
+  },
+  {
+    icon: Receipt,
+    badge: "1-Click Invoicing",
+    title: "1-Click Invoicing & Mobile Card Pay",
+    description:
+      "Turn completed work orders into clean, professional invoices in seconds and collect payment on-site or via secure online card/UPI links.",
+  },
+  {
+    icon: MessageSquare,
+    badge: "Automated Alerts",
+    title: "Automated Client Notifications & ETAs",
+    description:
+      "Keep homeowners and property managers informed with automated SMS appointment confirmations, &ldquo;Crew En Route&rdquo; alerts, and review requests.",
   },
 ];
 
@@ -129,105 +144,56 @@ export default function TreeCareSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Trees className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Arborist & Tree Service Software"
+        title="Tree Care Software for Crew Dispatch, Hazard Logs & Invoicing"
+        subtitle="Manage hazardous tree removals, bucket truck crew dispatch, arborist inspections, and client invoicing with defensible photo documentation in Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Tree Care"
+        heroIcon={Trees}
+        sampleJobTitle="Hazardous Oak Tree Removal & Stump Grinding"
+        sampleCustomerName="Gregory Scott"
+        sampleTechName="Crew 1 &bull; Certified Climber + Rig"
+        sampleAsset="Specimen: 60ft White Oak &bull; Power Line Zone"
+        sampleAmount="$1,850.00"
+      />
+
+      <IndustryMetricsBar industryName="Tree Care" />
 
       <FeatureGrid
-        title="Built for the way arborists and tree crews actually work"
-        subtitle="From the hazardous-tree assessment to the annual inspection contract — every tree care workflow in one platform."
+        title="Built for the high-risk, high-precision demands of tree care"
+        subtitle="From storm-emergency tree removals to recurring commercial arborist health contracts — every tree care workflow in one platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Tree Care" contractorNoun="arborists" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a tree care business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most tree care businesses still document hazardous-tree
-              assessments on paper, dispatch crews by phone, and lose track
-              of stump follow-ups and inspection renewals. Here&apos;s what
-              that costs you — and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Insurance disputes over property damage with no documentation to defend yourself",
-                  "Crew assignments tracked on paper — wrong tech on the wrong job",
-                  "Stump-grinding follow-ups forgotten after the removal is done",
-                  "Recurring inspection contracts lapsing because no one tracks renewal dates",
-                  "Certifications buried in spreadsheets — no alerts when a TRAQ is about to lapse",
-                  "No photo record of the tree's condition before it came down",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Photo-documented condition assessments on every hazardous tree",
-                  "Crew assignments and skills visible on the dispatch board",
-                  "Stump grinding scheduled as a follow-up so no removal leaves a stump behind",
-                  "Inspection contracts auto-renewed — recurring revenue never silently lapses",
-                  "Certifications stored per technician with renewal alerts",
-                  "Photo documentation with timestamps on every job",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Tree Care"
+        withoutPoints={[
+          "Insurance disputes over property damage with zero timestamped photo logs to defend your crew",
+          "Sending expensive bucket trucks and climbers to jobs with incomplete site access notes",
+          "Stump grinding follow-ups forgotten after removals, leaving revenue uncollected",
+          "Commercial tree-health inspection contracts silently lapsing without automated renewal tracking",
+          "Paper quote proposals lost in truck cabs while homeowners hire the next available competitor",
+        ]}
+        withPoints={[
+          "Timestamped condition photos and hazard tags attached permanently to work orders for insurance proof",
+          "Drag-and-drop team calendar coordinates certified climbers, bucket rigs, and chippers seamlessly",
+          "Auto-scheduled stump grinding follow-up visits bundled into unified job workflows",
+          "Multi-year inspection agreements auto-renew with automated client reminders to protect revenue",
+          "Line-item proposals sent via SMS with 1-tap e-signatures close high-value removal contracts on-site",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why tree care businesses choose Fieseros">
         <p>
@@ -302,8 +268,6 @@ export default function TreeCareSoftwarePage() {
         subtitle="Everything tree care operators ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

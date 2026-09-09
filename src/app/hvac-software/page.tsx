@@ -8,17 +8,19 @@ import {
   BadgeCheck,
   Flame,
   Wrench,
-  CheckCircle2,
   Home,
   Award,
   Plug,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -53,39 +55,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: ThermometerSun,
+    badge: "Surge Dispatch",
     title: "Seasonal Demand Scheduling",
     description:
-      "When the first heatwave hits, your phone rings off the hook. Fieseros handles the surge — prioritized emergency queue, automated triage, and dynamic dispatch so no AC breakdown slips through the cracks.",
+      "When the first heatwave hits, prioritize urgent calls with an emergency triage queue and dynamic technician dispatch so no AC breakdown slips through the cracks.",
   },
   {
     icon: Fan,
-    title: "Equipment Asset Tracking",
+    badge: "Equipment History",
+    title: "HVAC Equipment & Asset Records",
     description:
-      "Every AC unit, furnace, heat pump, and mini-split is an asset record — model, serial, install date, warranty info, and full service history. When a customer calls, you know the unit before they finish describing the problem.",
+      "Log model, serial number, install date, warranty status, and complete service histories for every central AC, furnace, and heat pump across customer properties.",
   },
   {
     icon: ShieldCheck,
-    title: "Preventive Maintenance Contracts",
+    badge: "Recurring Plans",
+    title: "Preventive Maintenance Agreements",
     description:
-      "Sell more maintenance agreements by making them effortless to deliver. Fieseros auto-schedules seasonal tune-ups, sends SMS reminders, dispatches the right tech, and renews the contract — automatically, every year.",
+      "Sell and deliver profitable annual maintenance contracts. Fieseros auto-schedules spring AC tune-ups and fall furnace checks with automated renewal alerts.",
   },
   {
     icon: MessageSquare,
-    title: "Automated SMS Reminders",
+    badge: "On-Site Quoting",
+    title: "Tiered Proposals & E-Signatures",
     description:
-      "Filter changes, seasonal start-ups, and tune-up reminders sent automatically via Email & SMS — the channels customers actually read. Customers tap to confirm, you tap to schedule.",
+      "Build multi-option HVAC replacement proposals (Good / Better / Best) right from the field. Homeowners review specs and approve contracts on their phone.",
   },
   {
     icon: Camera,
-    title: "Photo Documentation of Repairs",
+    badge: "Mobile Field PWA",
+    title: "Diagnostic Checklists & Photo Proof",
     description:
-      "Before-and-after photos of every repair — the frozen coil, the cracked heat exchanger, the new capacitor installed. Photos attach to the work order, support warranty claims, and protect you in disputes.",
+      "Technicians work through digital multi-point inspection checklists, attach photos of frozen coils or cracked heat exchangers, and capture sign-offs offline or online.",
   },
   {
     icon: BadgeCheck,
-    title: "Technician Skill-Based Dispatch",
+    badge: "1-Click Invoicing",
+    title: "Line-Item Invoicing & Instant Payments",
     description:
-      "Tag each technician with skills and view them on the dispatch board so you can match the right tech to the right job manually.",
+      "Convert completed service calls into professional invoices instantly with marked-up parts (capacitors, motors, filters) and accept card payments on-site.",
   },
 ];
 
@@ -141,104 +149,56 @@ export default function HvacSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Flame className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="HVAC Contractor Software"
+        title="The HVAC Software Built for Seasonal Demand & Maintenance Contracts"
+        subtitle="Manage summer heatwaves and winter surges without the chaos. Track furnace & AC asset history, automate maintenance tune-ups, and get paid 4x faster with Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="HVAC"
+        heroIcon={Flame}
+        sampleJobTitle="AC Compressor Diagnostics & Seasonal Tune-Up"
+        sampleCustomerName="Sarah Jenkins"
+        sampleTechName="Dave K. (EPA Certified Lead)"
+        sampleAsset="Carrier Infinity 16 SEER #CAR-4910"
+        sampleAmount="$520.00"
+      />
+
+      <IndustryMetricsBar industryName="HVAC" />
 
       <FeatureGrid
-        title="HVAC software built for the realities of the trade"
-        subtitle="Seasonal chaos, maintenance contracts, equipment history — every HVAC workflow in one platform."
+        title="Built for the seasonal realities of the HVAC trade"
+        subtitle="From emergency 2 AM heatwave calls to profitable recurring maintenance contracts — every HVAC workflow in one platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="HVAC" contractorNoun="HVAC contractors" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The seasonal chaos HVAC businesses know all too well
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              When the first heatwave hits, every HVAC business feels the same
-              pain. Here&apos;s what changes when you replace spreadsheets and
-              text messages and scattered apps with software designed for HVAC.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Summer rush hits — emergency calls pile up with no triage system",
-                  "No record of what was repaired on that AC unit last summer",
-                  "Maintenance contract renewals missed — customers drift to competitors",
-                  "Tech dispatched to a job they aren't certified for — compliance risk",
-                  "Equipment service history scattered across paper notebooks and Excel files",
-                  "Customers call every 20 minutes asking \"when will the tech arrive?\"",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Emergency queue auto-triages by urgency — most critical jobs first",
-                  "Complete equipment history pulled up the moment a customer calls",
-                  "Maintenance contracts auto-renewed — never lose another one",
-                  "Skill tags shown on dispatch board — match the right tech to the right job",
-                  "Complete equipment service history per customer asset — model, serial, warranty, and every prior visit",
-                  "Customers get automated SMS and Push updates — they stop calling you",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="HVAC"
+        withoutPoints={[
+          "Summer heatwave strikes — dozens of urgent calls missed while techs are in the field",
+          "No record of what was repaired on that AC unit last summer or its warranty expiration",
+          "Preventive maintenance contracts forgotten, losing thousands in predictable revenue",
+          "Techs dispatched to complex heat pump jobs without knowing if they have proper certifications",
+          "Paper diagnostic checklists lost in the van and never delivered to the customer",
+        ]}
+        withPoints={[
+          "24/7 AI Voice Receptionist answers emergency calls, triages urgency, and logs leads in CRM",
+          "Complete asset records with model numbers, serials, and past repair logs for every customer unit",
+          "Auto-scheduled spring tune-ups and fall furnace checks with automatic renewal reminders",
+          "Skill tags visible on dispatch board to assign the right technician to every job",
+          "Digital multi-point inspection checklists and photo proof sent automatically with invoices",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="How Fieseros transforms HVAC operations">
         <p>
@@ -313,8 +273,6 @@ export default function HvacSoftwarePage() {
         subtitle="Everything HVAC business owners ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

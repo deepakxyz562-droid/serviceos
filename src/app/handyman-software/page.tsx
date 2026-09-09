@@ -8,17 +8,19 @@ import {
   History,
   HardHat,
   Wrench,
-  CheckCircle2,
   Paintbrush,
   DoorOpen,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -53,39 +55,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: Clock,
+    badge: "Same-Day Dispatch",
     title: "Same-Day Job Scheduling",
     description:
-      "A customer calls at 9 a.m. with a leaky faucet; you slot them in at 2 p.m. the same day. Fieseros shows your live availability, sends the customer an Email & SMS confirmation with ETA, and pushes job details to your phone.",
+      "Slot emergency fixes into your daily schedule in seconds. Fieseros sends customers automatic arrival notifications with real-time ETAs via SMS.",
   },
   {
     icon: Hammer,
-    title: "Flat-Rate vs Time-and-Materials Quoting",
+    badge: "Flexible Quoting",
+    title: "Flat-Rate & Time-and-Materials Quotes",
     description:
-      "Quote a fixed price for a hang-a-ceiling-fan job, or bill T&M for a figure-out-why-the-door-sticks diagnostic. Fieseros supports both — flat-rate quotes approved via Email & SMS, or timer-based T&M invoicing that starts when you arrive.",
+      "Quote fixed prices for standard jobs (ceiling fans, faucet replacements) or track time & materials on-site for custom repairs, approved with 1-tap e-signatures.",
   },
   {
     icon: ClipboardCheck,
-    title: "Photo Checklist for Scope Verification",
+    badge: "Scope Control",
+    title: "Photo Scope Checklists",
     description:
-      "Snap a photo of the scope before you start: the broken hinge, the dripping valve, the damaged drywall. The photos attach to the work order and lock in the agreed scope — so a while-you're-here doesn't turn into free work.",
+      "Snap photos of pre-existing conditions and punch list tasks before starting work to prevent unpaid scope creep from eating your profit margins.",
   },
   {
     icon: CreditCard,
-    title: "On-Site Card Payment",
+    badge: "Instant Pay",
+    title: "1-Click Invoicing & On-Site Payments",
     description:
-      "The moment you mark the job done, Fieseros sends a payment link to the customer's phone. They tap, pay by card or bank transfer, and you walk out with payment confirmed — no invoicing, no chasing, no waiting 30 days.",
+      "Convert completed punch lists into professional invoices and collect payment immediately via card, Apple Pay, Google Pay, or payment links before leaving.",
   },
   {
     icon: RefreshCw,
-    title: "Recurring Maintenance Subscriptions",
+    badge: "Recurring Revenue",
+    title: "Quarterly Home Checkup Subscriptions",
     description:
-      "Offer quarterly home checkup subscriptions: HVAC filter changes, gutter cleans, smoke-alarm tests, small fixes caught early. Fieseros auto-schedules each visit, sends the customer an Email & SMS reminder, and queues an invoice after the visit.",
+      "Auto-schedule recurring seasonal home tune-ups (filter changes, smoke alarm battery tests, gutter clearing) to build predictable recurring income.",
   },
   {
     icon: History,
-    title: "Customer History of Small Fixes",
+    badge: "Customer CRM",
+    title: "Complete Property Repair History",
     description:
-      "Every door you fixed, every faucet you replaced, every ceiling fan you hung — stored against the customer forever. When they call back six months later, you know exactly what you did last time, what you charged, and what to watch for.",
+      "Keep every fixture replaced, door adjusted, and repair note saved against the customer profile so you have full context on repeat calls.",
   },
 ];
 
@@ -141,105 +149,56 @@ export default function HandymanSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <HardHat className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Handyman Business Software"
+        title="The All-In-One Handyman Software for Scheduling & Fast Payments"
+        subtitle="Manage same-day repairs, punch lists, and home maintenance subscriptions from your phone. Eliminate unpaid scope creep, capture photo proof, and get paid 4x faster."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Handyman"
+        heroIcon={HardHat}
+        sampleJobTitle="Drywall Patching & Ceiling Fan Installation"
+        sampleCustomerName="Karen Miller"
+        sampleTechName="Brian S. (Handyman Pro)"
+        sampleAsset="Punchlist: 3 Tasks &bull; 100% Completed"
+        sampleAmount="$320.00"
+      />
+
+      <IndustryMetricsBar industryName="Handyman" />
 
       <FeatureGrid
         title="Built for the way solo and small-team handymen actually work"
-        subtitle="From the 9 a.m. emergency call to the quarterly home checkup subscription — every handyman workflow in one lightweight platform."
+        subtitle="From same-day morning repair calls to quarterly home checkup plans — manage your entire handyman business right from your phone."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Handyman" contractorNoun="handymen" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a handyman business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most handymen still run their business on a paper calendar, a
-              pocket full of receipts, and a stack of unpaid invoices.
-              Here&apos;s what that costs you — and what changes when you
-              switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Scope creep on fixed-price jobs — while you're here turns into free work",
-                  "Chasing payment for days after you've already left the site",
-                  "Forgetting what you fixed last time the customer calls back",
-                  "Same-day scheduling scribbled on a paper calendar",
-                  "No system for offering recurring maintenance subscriptions",
-                  "Time-and-materials jobs invoiced from memory at the end of the day",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Photo checklists lock in the agreed scope before you start",
-                  "On-site card payment collected before you walk out the door",
-                  "Full customer history of every fix — pulled up in seconds",
-                  "Same-day scheduling on your phone with Email & SMS ETA to the customer",
-                  "Quarterly home checkup subscriptions set up once with auto-scheduled visits and reminders",
-                  "T&M timer started on arrival, invoice built from actual time and materials",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Handyman"
+        withoutPoints={[
+          "Unpaid scope creep: \"while you're here\" favors turn into 2 hours of unbilled work",
+          "Leaving the customer's house without collecting payment and chasing checks for weeks",
+          "Customer history scribbled on loose paper receipts and forgotten within a month",
+          "Same-day emergencies missed while busy on-site with tools in hand",
+          "Inconsistent revenue because no recurring home maintenance checkups are offered",
+        ]}
+        withPoints={[
+          "Photo scope checklists lock in agreed tasks and allow 1-tap quote add-ons for extra work",
+          "1-click mobile invoicing sends payment links via SMS before leaving the customer's driveway",
+          "Complete repair history, fixture notes, and photos organized permanently in customer CRM",
+          "24/7 AI Voice Receptionist answers inquiries, captures job scopes, and slots leads in CRM",
+          "Automated quarterly home maintenance subscriptions generate predictable recurring revenue",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why handyman businesses choose Fieseros">
         <p>
@@ -313,8 +272,6 @@ export default function HandymanSoftwarePage() {
         subtitle="Everything handymen ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

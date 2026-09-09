@@ -6,19 +6,21 @@ import {
   ShieldCheck,
   Repeat,
   DoorOpen,
-  Wrench,
   CheckCircle2,
   Hammer,
   HardHat,
   Plug,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -52,34 +54,46 @@ export const metadata: Metadata = {
 
 const features: Feature[] = [
   {
-    icon: Library,
-    title: "Service & Parts Catalog",
+    icon: Zap,
+    badge: "Fast Dispatch",
+    title: "Same-Day Emergency Repair Dispatch",
     description:
-      "Maintain a service catalog with your negotiated pricing. The tech selects the service or part on the work order and the correct price flows straight to the invoice.",
+      "When a homeowner calls with a broken spring or off-track door, Fieseros helps you dispatch the nearest tech with real-time GPS, sending instant ETA alerts to the customer via SMS.",
   },
   {
-    icon: Zap,
-    title: "Same-Day Repair Dispatch",
+    icon: Library,
+    badge: "Parts Pricing",
+    title: "Service & Parts Catalog",
     description:
-      "When a homeowner calls with a broken spring, Fieseros shows every tech's live location and which springs are stocked in their van. You dispatch the closest tech with the right part, the customer gets an ETA via SMS, and the repair gets done the same day.",
+      "Maintain a pre-priced catalog of torsion springs, rollers, cables, openers, and panels. Technicians easily add parts to work orders and invoices with accurate markup and pricing.",
   },
   {
     icon: Camera,
-    title: "Photo Proof of Worn Parts",
+    badge: "Photo Quoting",
+    title: "On-Site Quotes & Worn Part Proof",
     description:
-      "Techs snap photos of worn rollers, frayed cables, and cracked springs before they replace them, all attached to the work order. The photo evidence supports the upsell conversation and protects you if the customer later disputes what was replaced.",
+      "Technicians snap photos of worn cables and cracked hinges right from their phone, generating instant line-item quote options for on-the-spot customer approval.",
   },
   {
     icon: ShieldCheck,
-    title: "Safety Inspection Checklist",
+    badge: "Safety Checks",
+    title: "Mobile Field App & Safety Checklists",
     description:
-      "Build a custom safety inspection checklist per service type. Techs complete it on their phone, with photos for any flagged items.",
+      "Run standard 25-point garage door safety inspections with photo attachments and customer sign-off directly within the mobile PWA app.",
   },
   {
     icon: Repeat,
-    title: "Recurring Maintenance Tune-Ups",
+    badge: "Maintenance Plans",
+    title: "Recurring Tune-Up & Maintenance Plans",
     description:
-      "Sell annual tune-up contracts — lubrication, spring tension check, roller inspection, opener adjustment — and Fieseros auto-schedules each visit, sends the customer an SMS reminder, and queues the invoice. Recurring revenue that runs on autopilot.",
+      "Auto-schedule annual garage door lubrication, balance checks, and safety inspections with automated SMS reminders and hassle-free recurring billing.",
+  },
+  {
+    icon: CheckCircle2,
+    badge: "1-Tap Invoicing",
+    title: "1-Click Invoicing & On-Site Payments",
+    description:
+      "Convert completed work orders into clean invoices with one tap and accept credit cards, debit cards, or payment links on-site for immediate settlement.",
   },
 ];
 
@@ -125,27 +139,21 @@ export default function GarageDoorSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <DoorOpen className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Garage Door Software"
+        title="Garage Door Software for Same-Day Repair Dispatch & Invoicing"
+        subtitle="Dispatch technicians faster with live GPS routing, build pre-priced parts quotes on mobile, capture photo proof of worn springs, and manage maintenance tune-ups with Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Garage Door Contractor"
+        heroIcon={DoorOpen}
+        sampleJobTitle="Emergency Torsion Spring & Cable Replacement"
+        sampleCustomerName="Gregory Hayes"
+        sampleTechName="Justin M. (Senior Tech)"
+        sampleAsset="Torsion Springs • LiftMaster 8550W Opener"
+        sampleAmount="$385.00"
+      />
+
+      <IndustryMetricsBar industryName="Garage Door" />
 
       <FeatureGrid
         title="Built for the way garage door companies actually work"
@@ -153,71 +161,34 @@ export default function GarageDoorSoftwarePage() {
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Garage Door Contractor" contractorNoun="garage door technicians" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a garage door business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most garage door companies still juggle text messages and scattered apps, paper work orders, and parts catalogs memorized by senior techs. Here&apos;s what that costs you — and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Tech arrives at a broken-spring call without the right wire size in the van",
-                  "Worn rollers noticed but never quoted — upsell revenue lost every single call",
-                  "No photo proof when a customer later disputes what was actually replaced",
-                  "Safety inspection done from memory — no documented record if a spring fails later",
-                  "Annual tune-ups sold verbally and forgotten — zero recurring revenue",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Dispatch shows tech locations in real time — right tech, same day",
-                  "Worn parts photographed and quoted from the field — upsell captured every call",
-                  "Photo proof on every replacement — disputes resolved in seconds",
-                  "Custom safety checklist documented and sent to the customer via Email",
-                  "Annual tune-up contracts auto-scheduled — real recurring revenue on autopilot",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Garage Door"
+        withoutPoints={[
+          "Tech arrives at a broken-spring emergency call without knowing spring specs or opener type",
+          "Worn rollers and frayed cables noticed during repairs but never quoted to the homeowner",
+          "Zero photo proof when customers dispute replaced springs or opener sensor alignment",
+          "25-point safety inspections done from memory without a documented digital report",
+          "Annual tune-ups sold verbally and forgotten, losing recurring maintenance revenue",
+        ]}
+        withPoints={[
+          "Real-time dispatch board shows tech locations, job history, and door assets before arrival",
+          "Worn parts photographed and converted into 1-tap quote options right from the technician's phone",
+          "Timestamped photos of broken vs replaced springs attached directly to the digital invoice",
+          "Standardized digital safety inspection checklists automatically emailed to the homeowner",
+          "Annual tune-up maintenance contracts auto-scheduled with recurring billing on autopilot",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why garage door companies choose Fieseros">
         <p>
@@ -228,7 +199,7 @@ export default function GarageDoorSoftwarePage() {
           built around same-day calls.
         </p>
         <p>
-          The same-day repair side of the business is where most garage door companies win or lose market share. A homeowner with a broken spring is not shopping around — they are calling the first three numbers on Google and going with whoever can be there fastest. Fieseros shows you a live map of every tech's location and what jobs they are currently on. You dispatch the closest tech, the customer gets a real ETA through SMS, and the tech gets full job details on their phone. Fieseros helps you dispatch the closest tech and send a real ETA via SMS instead of a vague arrival window.
+          The same-day repair side of the business is where most garage door companies win or lose market share. A homeowner with a broken spring is not shopping around — they are calling the first three numbers on Google and going with whoever can be there fastest. Fieseros shows you a live map of every tech&apos;s location and what jobs they are currently on. You dispatch the closest tech, the customer gets a real ETA through SMS, and the tech gets full job details on their phone. Fieseros helps you dispatch the closest tech and send a real ETA via SMS instead of a vague arrival window.
         </p>
         <p>
           The upsell side of the business is the silent revenue leak in every garage door company. A tech goes out on a broken spring call, notices that the rollers are worn, the cables are frayed, and the opener auto-reverse is failing — and mentions none of it, because there is no easy way to quote the additional work on the spot. Fieseros fixes this by making the upsell part of the workflow. Every service call ends with a custom safety inspection checklist. Findings get logged with photos, and any flagged item turns into a one-tap quote sent to the customer through Email & SMS in the same{" "}
@@ -241,7 +212,7 @@ export default function GarageDoorSoftwarePage() {
           Finally, there is the install side of the business, which is where the real revenue lives. A new garage door install runs 1,500 to 5,000 dollars, and the project needs structured quoting, scheduling, and invoicing to close cleanly. Fieseros treats each install as a project — site measurement, door and panel selection from the service catalog, material ordering from the manufacturer, scheduling the install crew, milestone{" "}
           <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
             invoicing
-          </Link>{" "}
+          </Link>
           , and final invoicing on completion. The same platform that handles your same-day repair dispatch handles your install pipeline, so you see both revenue streams on one dashboard. Many garage door companies use Fieseros specifically to grow their install book because the project workflow makes it far easier to quote, schedule, and bill larger jobs.
         </p>
       </ContentSection>
@@ -255,8 +226,6 @@ export default function GarageDoorSoftwarePage() {
         subtitle="Everything garage door business owners ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

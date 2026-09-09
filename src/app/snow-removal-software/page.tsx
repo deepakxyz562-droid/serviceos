@@ -1,23 +1,27 @@
 import type { Metadata } from "next";
 import {
-  CloudSnow,
   Thermometer,
-  Clock,
   MapPin,
   Wind,
   Wrench,
-  CheckCircle2,
   Sun,
   Trees,
   Home,
   Award,
+  Receipt,
+  Camera,
+  CalendarClock,
+  MessageSquare,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -33,10 +37,10 @@ export const metadata: Metadata = {
   description: cfg.metaDescription,
   keywords: [
     "snow removal software",
-    "snow plow software",
-    "snow and ice management software",
+    "snow plowing software",
+    "winter maintenance software",
+    "snow removal dispatch",
     "snow removal CRM",
-    "snow contract billing software",
   ],
   alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
@@ -51,28 +55,46 @@ export const metadata: Metadata = {
 
 const features: Feature[] = [
   {
-    icon: CloudSnow,
-    title: "Pre-Storm Customer SMS Notifications",
+    icon: CalendarClock,
+    badge: "Storm Dispatch",
+    title: "Storm Event Dispatching & Routes",
     description:
-      "When a storm is forecast, Fieseros sends every affected customer an SMS and Push notification: storm expected tonight, your plow service will trigger automatically. Customers know what to expect, and your phone stops ringing at 4 a.m.",
-  },
-  {
-    icon: Thermometer,
-    title: "Seasonal Contract & Per-Event Billing",
-    description:
-      "Track seasonal contracts (flat-fee for the whole winter) and per-event pricing. Fieseros queues invoices automatically after each completed visit.",
-  },
-  {
-    icon: Clock,
-    title: "24-Hour Proof-of-Service Logs",
-    description:
-      "Techs check in and out of every property with GPS verification, so you have a timestamped record of when each lot was serviced.",
+      "When a blizzard hits, dispatch entire plow routes with one click. Assign commercial lots and driveways by zone, track live clearing status, and prevent missed properties.",
   },
   {
     icon: MapPin,
-    title: "Crew GPS Tracking in Storms",
+    badge: "Live Fleet View",
+    title: "Plow & Salt Spreader GPS Tracking",
     description:
-      "See every truck's live location during a storm on the dispatch board.",
+      "View every plow truck and crew on a live map. Monitor route completion in real time to dispatch backup units whenever a truck falls behind schedule.",
+  },
+  {
+    icon: Camera,
+    badge: "Liability Proof",
+    title: "Photo Proof of Cleared Lots",
+    description:
+      "Drivers snap timestamped before/after photos of cleared parking lots, loading docks, and sidewalks to protect your business permanently from slip-and-fall claims.",
+  },
+  {
+    icon: Thermometer,
+    badge: "Flexible Billing",
+    title: "Per-Push & Seasonal Contract Billing",
+    description:
+      "Seamlessly manage fixed seasonal contracts or per-push event pricing. Invoices are queued automatically after each snow event.",
+  },
+  {
+    icon: Receipt,
+    badge: "1-Click Invoicing",
+    title: "Batch Invoicing & Card Processing",
+    description:
+      "Send itemized invoices with online payment links right after a storm. Collect payments faster with automated overdue reminders.",
+  },
+  {
+    icon: MessageSquare,
+    badge: "Automations",
+    title: "Pre-Storm & Service Completion SMS",
+    description:
+      "Send automated pre-storm alerts and instant “Your lot has been cleared” SMS texts to property managers with zero phone tag.",
   },
 ];
 
@@ -113,103 +135,56 @@ export default function SnowRemovalSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Wind className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Snow & Ice Management Software"
+        title="Snow Removal Software for Storm Dispatch, Photo Logs & Billing"
+        subtitle="Manage 3 AM blizzard dispatches with live crew tracking, protect against slip-and-fall claims with timestamped photo logs, and bill seasonal contracts effortlessly."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Snow Removal"
+        heroIcon={Wind}
+        sampleJobTitle="Commercial Lot Plowing & Salt De-Icing"
+        sampleCustomerName="Metro Plaza Commercial"
+        sampleTechName="Truck 4 &bull; Dan (Plow Lead)"
+        sampleAsset="Site: North Parking Lot + Sidewalks"
+        sampleAmount="$450.00"
+      />
+
+      <IndustryMetricsBar industryName="Snow Removal" />
 
       <FeatureGrid
-        title="Built for the way snow operators actually work"
-        subtitle="From the 3 a.m. dispatch to the spring slip-and-fall defense — every snow removal workflow in one platform."
+        title="Built for the high-intensity reality of winter storm operations"
+        subtitle="From 3 AM storm dispatching to defensible slip-and-fall photo logs — run your entire winter operation with Fieseros."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Snow Removal" contractorNoun="plow operators" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a snow removal business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most snow operators still dispatch at 3 a.m. with a clipboard
-              and a phone tree, defend slip-and-fall claims with no proof,
-              and lose track of which properties have actually been serviced.
-              Here&apos;s what that costs you — and what changes when you
-              switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Dispatching at 3 a.m. with a clipboard and a phone tree — chaos in every storm",
-                  "Slip-and-fall claims with no proof you serviced the lot",
-                  "Seasonal contract revenue unbillable because nobody tracks completed visits",
-                  "No visibility into which properties have been serviced and which are still pending",
-                  "Customers calling at 4 a.m. asking are you coming?",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Seasonal contracts and per-event pricing queued automatically after each visit",
-                  "Tech check-in/check-out with GPS verification on every property",
-                  "Crew GPS tracking shows live location on the dispatch board",
-                  "Pre-storm SMS notifications tell customers what to expect — phone stops ringing",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Snow Removal"
+        withoutPoints={[
+          "Dispatching crews at 3 AM with a clipboard and phone tree during blizzard chaos",
+          "Facing costly slip-and-fall lawsuits with zero timestamped proof that a lot was salted",
+          "Losing track of per-push visits and forgetting to bill property managers for completed events",
+          "Property managers calling frantically at 4 AM asking if their commercial lots will be cleared",
+          "No GPS visibility into which plow trucks are stuck or falling behind on their routes",
+        ]}
+        withPoints={[
+          "1-click storm event dispatching deploys entire pre-set routes instantly to driver phones",
+          "GPS-verified check-in logs and timestamped before/after photos protect against liability claims",
+          "Per-push and seasonal contracts queued automatically for fast 1-click batch invoicing",
+          "Automated SMS alerts notify property managers the moment their lot is cleared and salted",
+          "Live team dispatch board shows exact truck status and lot clearing progress in real time",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why snow removal businesses choose Fieseros">
         <p>
@@ -278,8 +253,6 @@ export default function SnowRemovalSoftwarePage() {
         subtitle="Everything snow removal operators ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

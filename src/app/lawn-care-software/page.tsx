@@ -2,22 +2,25 @@ import type { Metadata } from "next";
 import {
   CalendarClock,
   Users,
-  CloudRain,
   FileText,
-  Droplets,
-  Wrench,
-  CheckCircle2,
+  Receipt,
+  MessageSquare,
+  Camera,
   Trees,
   TreePine,
   Snowflake,
   Award,
+  Sun,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -52,27 +55,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: CalendarClock,
-    title: "Recurring Route Optimization",
+    badge: "Recurring Mowing",
+    title: "Recurring Route & Schedule Automation",
     description:
-      "Weekly, biweekly, every-six-weeks — Fieseros clusters customers by neighborhood and service day, optimizes the driving order, and pushes the route to each technician's phone every morning.",
+      "Weekly mowing, bi-weekly edging, or 6-week fertilization cycles — Fieseros auto-generates recurring visits, clusters jobs by neighborhood, and assigns crews with zero double-booking.",
   },
   {
     icon: Users,
-    title: "Customer Self-Serve Portal",
+    badge: "Customer CRM",
+    title: "Client CRM & Property History",
     description:
-      "Customers log in to see their service schedule, treatment history, invoices, and quotes. They can request extra visits, update card info, and reschedule — all without calling your office and tying up the phone.",
-  },
-  {
-    icon: CloudRain,
-    title: "Weather-Aware Rescheduling",
-    description:
-      "Manually reschedule affected visits and Fieseros sends the customer an automated SMS/Email notification — no phone calls required.",
+      "Store property lot sizes, gate codes, pet alerts, turf type, and full treatment history. Crews see property notes directly on mobile before starting work.",
   },
   {
     icon: FileText,
-    title: "Auto-Invoicing After Each Visit",
+    badge: "Fast Quotes",
+    title: "On-the-Spot Estimates & Quotes",
     description:
-      "The moment a technician marks a visit complete, Fieseros generates the invoice and sends it via Email & SMS with a payment link. Recurring invoices with automatic reminders — reduce missed payments.",
+      "Build itemized quotes for aeration, overseeding, or mulch delivery and send via SMS/Email with 1-click digital e-signature approval.",
+  },
+  {
+    icon: Camera,
+    badge: "Mobile Field PWA",
+    title: "Mobile Crew App & Photo Proof",
+    description:
+      "Crews clock in, check off property maintenance checklists, and snap before/after mowing photos on mobile — even offline in low-coverage zones.",
+  },
+  {
+    icon: Receipt,
+    badge: "1-Click Invoicing",
+    title: "1-Click Invoicing & Card-on-File Billing",
+    description:
+      "Automatically generate and send branded invoices the moment a lawn visit is complete. Accept online card, UPI, or bank payments with automatic overdue reminders.",
+  },
+  {
+    icon: MessageSquare,
+    badge: "Automations",
+    title: "Automated SMS Weather & Visit Alerts",
+    description:
+      "Send automated 24h visit reminders and rain-delay reschedule alerts via SMS. Customers stay informed without tying up your office phone lines.",
   },
 ];
 
@@ -123,104 +144,56 @@ export default function LawnCareSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Droplets className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Lawn Care & Maintenance Software"
+        title="Lawn Care Software for Recurring Routes, Dispatch & Fast Billing"
+        subtitle="Automate weekly mowing routes, track treatment histories, send weather delay texts, and collect customer payments seamlessly with Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Lawn Care"
+        heroIcon={Sun}
+        sampleJobTitle="Weekly Mow, Edge & Trimming Service"
+        sampleCustomerName="James Peterson"
+        sampleTechName="Crew B &bull; Liam &amp; Jake"
+        sampleAsset="Lot #502 &bull; 0.5 Acre Residential Lawn"
+        sampleAmount="$65.00"
+      />
+
+      <IndustryMetricsBar industryName="Lawn Care" />
 
       <FeatureGrid
-        title="Built for the way lawn care businesses actually run"
-        subtitle="From the six-week fertilization cycle to the daily mow route — every lawn care workflow in one platform."
+        title="Built for the fast-paced rhythm of lawn care operations"
+        subtitle="From weekly mowing routes to multi-step fertilization treatment programs — every lawn care workflow in one platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Lawn Care" contractorNoun="lawn care pros" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a lawn care business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most lawn care businesses still build routes by hand, track
-              service visits on paper, and chase payments weeks after
-              the visit. Here&apos;s what that costs you — and what changes
-              when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Missed applications — a customer's sixth treatment never got scheduled and nobody noticed",
-                  "No record of what was sprayed when — a state inspector asks and you're guessing",
-                  "Driving back across town because the route was built by hand",
-                  "Customer calls about rescheduling rain-outs tie up the office all day",
-                  "Invoices forgotten or sent weeks after the visit",
-                  "No idea which neighborhoods are profitable and which are draining fuel and time",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Every treatment auto-scheduled — no missed applications, no lapses in the program",
-                  "Per-customer visit history with notes and photos",
-                  "Routes optimized by neighborhood and day — less drive time",
-                  "Weather reschedules handled with drag-and-drop — customers notified automatically",
-                  "Invoices sent via Email & SMS the moment the technician marks the visit done",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Lawn Care"
+        withoutPoints={[
+          "Rebuilding route sheets manually each morning, losing hours of daylight to travel time",
+          "Rain storms hitting and spending all evening texting 40 customers individually to reschedule",
+          "No record of gate codes or pet warnings, resulting in skipped lawns and frustrated clients",
+          "Collecting paper checks weeks late while burning cash on mower fuel and crew payroll",
+          "Recurring mowing contracts slipping through the cracks when seasons transition",
+        ]}
+        withPoints={[
+          "Clustered neighborhood routes reduce drive time and maximize daily mow count",
+          "One-click weather rescheduling with automated SMS alerts sent instantly to affected clients",
+          "Mobile crew app displays gate access codes, dog warnings, and specific customer preferences",
+          "1-click card billing sends receipts the moment the crew marks the property complete",
+          "Automated recurring visit scheduling ensures predictable, compounding seasonal revenue",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why lawn care businesses choose Fieseros">
         <p>
@@ -291,8 +264,6 @@ export default function LawnCareSoftwarePage() {
         subtitle="Everything lawn care operators ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

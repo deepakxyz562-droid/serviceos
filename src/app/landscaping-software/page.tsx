@@ -8,16 +8,18 @@ import {
   Truck,
   TreePine,
   Wrench,
-  CheckCircle2,
   Hammer,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -52,39 +54,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: Trees,
-    title: "Design-Build Project Proposals",
+    badge: "Visual Proposals",
+    title: "Design-Build Estimates & E-Signatures",
     description:
-      "Turn site visits into visual proposals with before photos, line-item scopes, and material lists. Customers approve the design-build quote online, and the approved proposal converts straight into a job and deposit invoice — no re-keying.",
+      "Transform site walkthroughs into line-item proposals with paver, planting, and mulch breakdowns. Homeowners approve on their phone to generate instant deposit invoices.",
   },
   {
     icon: Truck,
-    title: "Multi-Stop Crew Route Planning",
+    badge: "Crew Dispatch",
+    title: "Multi-Crew Scheduling & Dispatch",
     description:
-      "Optimize daily routes for crews hitting 8–12 lawns across town. Fieseros clusters jobs by neighborhood, calculates drive time, and pushes the ordered route to each crew's phone so nobody's zig-zagging across the city.",
+      "Organize daily crew routes, manage neighborhood clusters, and adjust schedules on a drag-and-drop team calendar without double-booking equipment.",
   },
   {
     icon: Leaf,
+    badge: "Material Markup",
     title: "Material Line-Item Billing",
     description:
-      "Add materials as line items on the work order and they roll onto the customer invoice at your marked-up price.",
+      "Track mulch yardage, sod pallets, irrigation parts, and plants on mobile work orders so every material rolls onto customer invoices at your exact marked-up price.",
   },
   {
     icon: Sprout,
-    title: "Seasonal Scheduling Packages",
+    badge: "Recurring Contracts",
+    title: "Seasonal Maintenance Packages",
     description:
-      "Spring cleanups, summer mows, fall aeration, winter prep — set up seasonal service packages once and Fieseros auto-schedules the right crew, sends customer reminders, and queues invoices for each turn of the season.",
+      "Auto-schedule recurring spring cleanups, weekly summer mowing, fall aeration, and winterization programs with automated customer arrival reminders.",
   },
   {
     icon: Sun,
-    title: "Before & After Photo Documentation",
+    badge: "Mobile Field PWA",
+    title: "Before & After Photo Proof",
     description:
-      "Crews snap before and after photos on every design-build and hardscape job. Photos attach to the work order, build a portfolio for future sales calls, and protect you when a customer disputes what was actually done.",
+      "Crews snap high-res before/after photos of hardscapes, flowerbeds, and cleanups directly in the mobile app to document quality and build sales portfolios.",
   },
   {
     icon: Droplets,
-    title: "Quote-to-Invoice Flow",
+    badge: "1-Click Invoicing",
+    title: "Progress Billing & Online Payments",
     description:
-      "Build a quote from your price book, send it via Email & SMS, and on approval it converts to a scheduled job, a work order, and a final invoice. Irrigation, planting, hardscaping — all the same clean flow, no double entry.",
+      "Invoice maintenance visits instantly or set up progress milestone billing for large patio builds, accepting credit cards, Apple Pay, and online payment links.",
   },
 ];
 
@@ -140,105 +148,56 @@ export default function LandscapingSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <TreePine className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Landscaping Business Software"
+        title="Landscaping Software for Crew Dispatch, Quoting & Maintenance"
+        subtitle="Scale your landscape business without the administrative headache. Manage recurring maintenance routes, build design-build proposals, and collect payments 4x faster."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Landscaping"
+        heroIcon={TreePine}
+        sampleJobTitle="Patio Hardscaping & Landscape Design Install"
+        sampleCustomerName="Thomas Wright"
+        sampleTechName="Carlos M. (Crew Lead)"
+        sampleAsset="Property #9402 &bull; 0.75 Acre Lot"
+        sampleAmount="$3,450.00"
+      />
+
+      <IndustryMetricsBar industryName="Landscaping" />
 
       <FeatureGrid
-        title="Built for the way landscaping crews actually work"
-        subtitle="From the Monday-morning mow route to the multi-week hardscape install — every landscaping workflow in one platform."
+        title="Built for the way modern landscaping crews actually operate"
+        subtitle="From Monday-morning mowing routes to multi-day design-build installs — run your entire landscaping business in one platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Landscaping" contractorNoun="landscapers" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a landscaping business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most landscaping businesses still juggle text messages and
-              scattered apps, paper work orders, and a mental inventory of
-              mulch. Here&apos;s what
-              that costs you — and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Crews dispatched to the wrong address or showing up on the wrong day",
-                  "Design-build proposals stuck in email threads, no idea if the customer ever saw them",
-                  "Mulch, pavers, and plant costs eating margin because nobody bills them out accurately",
-                  "Weekly mow routes rebuilt by hand every Monday morning",
-                  "No photo record of site conditions when a customer disputes the scope",
-                  "Invoices forgotten in the rush to the next job",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Routes optimized automatically — crews hit 8–12 jobs in the right order, every day",
-                  "Proposals sent via Email & SMS, customers approve with a tap, no more lost email threads",
-                  "Materials added as line items on the work order — auto-flow to invoice at marked-up price",
-                  "Recurring mow contracts set once — auto-scheduled for the whole season",
-                  "Before/after photos on every job, attached to the work order and ready for disputes",
-                  "Invoices generated and sent via Email & SMS the moment the crew marks the job done",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Landscaping"
+        withoutPoints={[
+          "Rebuilding weekly mowing routes by hand on paper maps every Monday morning",
+          "Design-build proposals trapped in slow email threads while clients shop competitors",
+          "Paver, sod, and mulch material costs unbilled or forgotten in the field",
+          "Endless customer phone calls asking when the landscaping crew will arrive",
+          "Cash flow drying up in winter because recurring seasonal contracts weren't locked in",
+        ]}
+        withPoints={[
+          "Recurring seasonal mow schedules auto-generate on a visual team calendar",
+          "Visual line-item proposals with e-signatures turn walkthroughs into approved jobs in minutes",
+          "Materials added directly to work orders on mobile with automated markup calculation",
+          "Automated SMS arrival updates with real ETAs keep property owners in the loop",
+          "Multi-season service agreements protect predictable, year-round recurring revenue",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why landscaping businesses choose Fieseros">
         <p>
@@ -309,8 +268,6 @@ export default function LandscapingSoftwarePage() {
         subtitle="Everything landscapers ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

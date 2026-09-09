@@ -7,19 +7,20 @@ import {
   CalendarClock,
   Package,
   Droplets,
-  Wrench,
-  CheckCircle2,
   Thermometer,
   Plug,
   Sparkles,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -54,39 +55,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: Siren,
-    title: "Emergency Dispatch Routing",
+    badge: "Live Dispatch",
+    title: "Emergency Dispatch & Routing",
     description:
-      "When a burst pipe call comes in, see every plumber's live location and dispatch the closest qualified technician in seconds. ETAs auto-shared with the customer through Email & SMS.",
+      "When a burst pipe or leak call comes in, see every plumber's live status and dispatch the closest qualified technician in seconds with automatic customer arrival alerts.",
   },
   {
     icon: History,
+    badge: "Equipment History",
     title: "Job History per Customer Asset",
     description:
-      "Track every repair, install, and inspection per asset — water heaters, boilers, pipes, fixtures. When a customer calls about a leaky water heater, you see its full service history instantly.",
+      "Track every repair, install, and model specification per asset — water heaters, boilers, sump pumps, and fixtures. View full service histories instantly on phone or desktop.",
   },
   {
     icon: MessageSquare,
-    title: "Email & SMS Quotes",
+    badge: "On-Site Quoting",
+    title: "Line-Item Estimates & E-Signatures",
     description:
-      "Build a quote in Fieseros and send it straight to the customer's inbox or phone via SMS. They approve with a single tap. No more chasing approvals over phone calls or waiting days for a reply.",
+      "Build tiered plumbing quotes in minutes and deliver them via Email & SMS. Homeowners approve and sign with a single tap, eliminating phone tag and delay.",
   },
   {
     icon: Camera,
-    title: "Photo Proof of Work",
+    badge: "Mobile Field PWA",
+    title: "Inspection Photos & Quality Checklists",
     description:
-      "Technicians capture before and after photos on every job — the corroded pipe they replaced, the new water heater installed. Photos attach to the work order and protect you in disputes.",
+      "Technicians capture before/after photos on every call — corroded valves, completed pipe fittings, and new water heaters — attaching photo proof to the work order.",
   },
   {
     icon: CalendarClock,
-    title: "Recurring Maintenance Scheduling",
+    badge: "Recurring Plans",
+    title: "Recurring Maintenance Contracts",
     description:
-      "Annual water heater flushes, bi-annual boiler service, backflow testing — set it once and Fieseros auto-schedules every visit, sends the customer an SMS reminder, and queues the invoice.",
+      "Annual water heater flushes, backflow testing, and boiler check-ups: schedule once and Fieseros auto-generates recurring visits and queues invoices automatically.",
   },
   {
     icon: Package,
-    title: "Line-Item Billing on Work Orders",
+    badge: "1-Click Invoicing",
+    title: "Line-Item Invoicing & Instant Payments",
     description:
-      "Add parts as line items directly to the work order from your phone. They flow onto the customer's invoice at your marked-up price when the job is marked complete.",
+      "Convert completed work orders into professional invoices with marked-up parts and labor in 1 click. Collect payment on-site or via secure online card/UPI links.",
   },
 ];
 
@@ -142,104 +149,56 @@ export default function PlumbingSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Droplets className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Plumbing Contractor Software"
+        title="The All-In-One Plumbing Software to Schedule, Dispatch & Get Paid"
+        subtitle="Eliminate paper work orders, dispatch emergency calls in seconds, track water heater asset histories, and collect payments 4x faster with Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Plumbing"
+        heroIcon={Droplets}
+        sampleJobTitle="Emergency Water Heater Repair & Diagnostics"
+        sampleCustomerName="David Miller"
+        sampleTechName="Alex R. (Master Plumber)"
+        sampleAsset="Bradford White 50-Gal #WH-8290"
+        sampleAmount="$485.00"
+      />
+
+      <IndustryMetricsBar industryName="Plumbing" />
 
       <FeatureGrid
-        title="Built for the way plumbers actually work"
-        subtitle="From the 2 a.m. burst pipe call to the annual water heater service contract — every plumbing workflow in one platform."
+        title="Built for the way modern plumbing businesses actually operate"
+        subtitle="From midnight burst-pipe emergencies to annual service contracts — run your entire plumbing operation on one unified platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Plumbing" contractorNoun="plumbers" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a plumbing business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most plumbing businesses still juggle text messages and scattered
-              apps, paper work orders, and mental inventory. Here&apos;s what that costs you —
-              and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Emergency calls lost in text messages and scattered apps, no idea which plumber is closest",
-                  "No history of previous repairs when a customer calls about a leaky water heater",
-                  "Parts used on a job forgotten in the rush — never make it onto the invoice",
-                  "Invoices forgotten in the rush to the next emergency call",
-                  "Maintenance contract renewals missed because no one tracks them",
-                  "Customers call back asking for status — you have no idea which job is where",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Live map shows every plumber — dispatch the closest qualified tech in seconds",
-                  "Full asset history per customer — see every repair on that water heater instantly",
-                  "Parts added as line items on the work order — auto-flow to the invoice at marked-up price",
-                  "Invoices generated and sent by Email & SMS the moment the job is marked done",
-                  "Maintenance contracts auto-scheduled — never miss a renewal again",
-                  "Customer sees ETA, status, and invoice — no more \"where is my plumber?\" calls",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Plumbing"
+        withoutPoints={[
+          "Emergency burst-pipe calls lost in scattered text messages and missed voicemails",
+          "No record of past water heater repairs or warranties when a customer calls back",
+          "Plumbing fittings, valves, and parts used on-site forgotten and never billed",
+          "Invoices delayed for weeks because plumbers forget paper work orders in their vans",
+          "Annual backflow testing and water heater maintenance contracts silently lapsing",
+        ]}
+        withPoints={[
+          "24/7 AI Voice Receptionist captures emergency plumbing calls and alerts on-call techs",
+          "Full 360° asset history tracks water heater model, serial number, and previous repairs",
+          "Parts added as line items directly to work orders on mobile — automatically marked up",
+          "1-click invoice generation with instant online card & UPI links sent before leaving the job",
+          "Automated recurring maintenance schedules protect predictable recurring revenue",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why plumbing businesses choose Fieseros">
         <p>
@@ -310,8 +269,6 @@ export default function PlumbingSoftwarePage() {
         subtitle="Everything plumbers ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

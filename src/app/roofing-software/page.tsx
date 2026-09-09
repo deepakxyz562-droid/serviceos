@@ -6,18 +6,21 @@ import {
   Camera,
   DollarSign,
   Wrench,
-  CheckCircle2,
   Sun,
   Paintbrush,
   TreePine,
   Award,
+  CheckCircle2,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -52,27 +55,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: CloudRain,
-    title: "Multi-Day Project Phasing with Weather Watch",
+    badge: "Crew Scheduling",
+    title: "Multi-Day Project Phasing & Crew Scheduling",
     description:
-      "Break a re-roof into tear-off, dry-in, and final install phases, each on its own day with its own crew. Fieseros watches the forecast and flags days with rain risk so you can reschedule before materials get soaked and the deck sits exposed overnight.",
+      "Break full re-roofs and tear-offs into multi-day milestones with dedicated crew assignments. Drag-and-drop scheduling keeps your installers and estimators aligned across active job sites.",
   },
   {
     icon: ShieldCheck,
-    title: "Storm Damage Photo Documentation",
+    badge: "Tiered Proposals",
+    title: "On-Site Estimates & Proposal E-Signatures",
     description:
-      "Photo documentation of storm damage — capture, timestamp, and attach photos to the work order for adjuster communication.",
+      "Build detailed, branded roofing quotes with material options and tiered pricing from your digital catalog. Homeowners review and approve proposals instantly from any device.",
   },
   {
     icon: Camera,
-    title: "Tear-Off to Final Photo Proof",
+    badge: "Photo Documentation",
+    title: "Storm Damage & Progress Photo Proof",
     description:
-      "Capture photos at every milestone — existing roof condition, exposed deck after tear-off, underlayment, and final shingle install. The photo timeline lives on the work order and protects you when a homeowner later claims the crew damaged their decking or skylights.",
+      "Capture timestamped before, during, and after photos of decking, flashing, underlayment, and completed shingles to document storm damage and safeguard against dispute claims.",
+  },
+  {
+    icon: Home,
+    badge: "Mobile Field PWA",
+    title: "Mobile Field App & Job Checklists",
+    description:
+      "Equip roofing crews and project managers with job specs, safety checklists, material notes, and customer details directly on their mobile phones with offline support.",
   },
   {
     icon: DollarSign,
-    title: "Milestone Invoicing",
+    badge: "Milestone Billing",
+    title: "Milestone & Progress Invoicing",
     description:
-      "Bill a residential re-roof the way the job actually progresses — deposit on signature, second payment on tear-off completion, balance on final inspection. Fieseros schedules each invoice automatically and tracks what's collected versus what's still outstanding.",
+      "Invoice residential and commercial roofing projects the way work actually happens — deposit upon signing, progress billing after tear-off, and final payment upon inspection.",
+  },
+  {
+    icon: CheckCircle2,
+    badge: "Customer CRM",
+    title: "Client CRM & Automated Job Updates",
+    description:
+      "Keep all property records, contracts, warranties, and communication history in one place while sending automated SMS updates to keep homeowners informed at every phase.",
   },
 ];
 
@@ -118,124 +139,114 @@ export default function RoofingSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Home className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Roofing Contractor Software"
+        title="Roofing Software for Estimating, Project Phasing & Milestone Billing"
+        subtitle="Manage multi-day tear-offs and installs with structured crew dispatch, capture storm damage photo proof for adjusters, and protect cash flow with milestone billing."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Roofing"
+        heroIcon={Home}
+        sampleJobTitle="Architectural Shingle Tear-Off & Replacement"
+        sampleCustomerName="Anthony Rivera"
+        sampleTechName="Crew 3 &bull; Victor (Lead Foreman)"
+        sampleAsset="Roof: 32 Squares &bull; GAF Timberline HDZ"
+        sampleAmount="$8,750.00"
+      />
+
+      <IndustryMetricsBar industryName="Roofing" />
 
       <FeatureGrid
-        title="Built for the way roofing crews actually work"
-        subtitle="From the first walkthrough estimate to the final inspection sign-off — every roofing workflow in one platform."
+        title="Built for the multi-day realities of roofing contractors"
+        subtitle="From the first roof inspection walkthrough to the final milestone payment — run your entire roofing contracting business with Fieseros."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Roofing" contractorNoun="roofers" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a roofing business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most roofing contractors still juggle paper work orders, spreadsheet estimates, and text messages and scattered apps. Here&apos;s what that costs you — and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Estimates built by hand in spreadsheets — 45 minutes per roof, errors everywhere",
-                  "Multi-day re-roofs scheduled on a paper calendar — no weather contingency plan",
-                  "Storm damage photos scattered across inspector phones, no clean record for adjusters",
-                  "Materials on backorder but the crew already tore off the old roof",
-                  "Invoiced in one lump sum at the end — homeowner drags feet, you carry the cost",
-                  "No photo timeline when a homeowner claims the crew damaged their deck",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Phased schedule with weather watch — at-risk days flagged before materials get soaked",
-                  "Storm damage photos timestamped and attached to the work order",
-                  "Milestone invoicing — deposit, tear-off, and final each billed on completion",
-                  "Photo proof at every milestone protects you in scope disputes with the homeowner",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Roofing"
+        withoutPoints={[
+          "Building estimates by hand on paper or spreadsheets, taking 45 minutes per roof and leaking margin",
+          "Storm damage inspection photos scattered across inspector phones, delaying insurance approvals",
+          "Carrying $15,000+ in labor and materials on credit lines while waiting for a final payment check",
+          "Homeowners claiming the crew damaged their decking or gutters with no photo proof to defend yourself",
+          "Multi-day re-roof schedules slipping when weather disruptions break paper calendars",
+        ]}
+        withPoints={[
+          "Pre-built quote templates with material calculators create tiered, branded proposals in minutes",
+          "Timestamped storm damage and inspection photos attached permanently to work orders for adjusters",
+          "Milestone progress invoicing collects deposits upon signing and progress payments upon tear-off",
+          "Milestone photo timeline (existing roof, exposed decking, dry-in, finish) eliminates homeowner disputes",
+          "Phased project scheduling coordinates tear-off, installation, and inspection crews seamlessly",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why roofing contractors choose Fieseros">
         <p>
-          Roofing is one of the most operationally complex trades in residential contracting. A single re-roof involves a multi-day project schedule with weather contingencies, a crew of four to eight people, milestone-based billing, and — increasingly — photo documentation of storm damage for adjuster communication. Roofing contractor software that only handles one of these pieces just shifts the chaos elsewhere. Fieseros is built to run the entire workflow, from the first walkthrough to the final inspection sign-off, in a single platform your team actually uses — with{" "}
+          Roofing is one of the most operationally complex trades in residential
+          contracting. A single re-roof involves a multi-day project schedule, a
+          crew of four to eight people, milestone-based billing, and —
+          increasingly — photo documentation of storm damage for adjuster
+          communication. Roofing contractor software that only handles one of
+          these pieces just shifts the chaos elsewhere. Fieseros is built to run
+          the entire workflow, from the first walkthrough to the final
+          inspection sign-off, in a single platform your team actually uses —
+          with{" "}
           <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
             scheduling and dispatch
           </Link>{" "}
           built for multi-day projects.
         </p>
         <p>
-          The estimating side of roofing is where most shops bleed time. A typical residential roof takes 30 to 45 minutes to measure and quote by hand — counting squares, factoring waste, calculating underlayment rolls, drip edge, ice and water shield, vents, and flashing. Then the estimate has to be turned into a clean, branded document the homeowner will actually sign. With Fieseros, you build a line-item estimate from your price book and the customer approves with a tap. Saved quote templates turn hours of bid preparation into minutes, and every estimate looks consistent.
+          The estimating side of roofing is where most shops bleed time. A
+          typical residential roof takes 30 to 45 minutes to measure and quote
+          by hand — counting squares, factoring waste, calculating underlayment
+          rolls, drip edge, ice and water shield, vents, and flashing. Then the
+          estimate has to be turned into a clean, branded document the homeowner
+          will actually sign. With Fieseros, you build a line-item estimate from
+          your price book and the customer approves with a tap. Saved quote
+          templates turn hours of bid preparation into minutes, and every
+          estimate looks consistent.
         </p>
         <p>
-          Storm season is where roofing CRM software earns its keep. After a hailstorm, a roofing contractor might inspect 40 homes in a week, each one requiring photos, a scope of work, and documentation sent to the insurance adjuster. Without a proper system, that documentation lives across inspector phones, gets lost, and ends up delaying claim approvals by weeks. Fieseros captures every photo in-app with timestamps, attaches them to the work order, and lets you email the package to the adjuster — all tied to a single{" "}
+          Storm season is where roofing CRM software earns its keep. After a
+          hailstorm, a roofing contractor might inspect 40 homes in a week, each
+          one requiring photos, a scope of work, and documentation sent to the
+          insurance adjuster. Without a proper system, that documentation lives
+          across inspector phones, gets lost, and ends up delaying claim
+          approvals by weeks. Fieseros captures every photo in-app with
+          timestamps, attaches them to the work order, and lets you email the
+          package to the adjuster — all tied to a single{" "}
           <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
             customer CRM
           </Link>{" "}
-          record. Claims move through faster, and your inspectors stop being document handlers.
+          record. Claims move through faster, and your inspectors stop being
+          document handlers.
         </p>
         <p>
-          Finally, there is the cash flow problem unique to roofing. A residential re-roof can run 8,000 to 25,000 dollars in materials and labor — money the contractor typically front-ends before seeing a dime. Invoicing the entire balance at the end means carrying the homeowner&apos;s project on your supplier credit line for weeks. Fieseros milestone{" "}
+          Finally, there is the cash flow problem unique to roofing. A
+          residential re-roof can run 8,000 to 25,000 dollars in materials and
+          labor — money the contractor typically front-ends before seeing a dime.
+          Invoicing the entire balance at the end means carrying the
+          homeowner&apos;s project on your supplier credit line for weeks.
+          Fieseros milestone{" "}
           <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
             invoicing
           </Link>{" "}
-          fixes this: deposit on signature, second payment when tear-off completes, balance on final inspection. Each milestone triggers automatically when the crew marks the phase complete, the customer pays through a secure online payment link, and you see real-time status on every outstanding dollar. Fieseros automates the milestone billing workflow so you stop carrying the homeowner&apos;s project on your supplier credit line for weeks at a time.
+          fixes this: deposit on signature, second payment when tear-off
+          completes, balance on final inspection. Each milestone triggers
+          automatically when the crew marks the phase complete, the customer pays
+          through a secure online payment link, and you see real-time status on
+          every outstanding dollar.
         </p>
       </ContentSection>
 
@@ -248,8 +259,6 @@ export default function RoofingSoftwarePage() {
         subtitle="Everything roofing contractors ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

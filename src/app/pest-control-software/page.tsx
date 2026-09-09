@@ -3,19 +3,25 @@ import {
   RefreshCw,
   Bell,
   Bug,
-  Wrench,
-  CheckCircle2,
   Sparkles,
   Sun,
   PawPrint,
   Award,
+  Wrench,
+  CheckCircle2,
+  CalendarClock,
+  Receipt,
+  Users,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -50,15 +56,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: RefreshCw,
-    title: "Recurring Quarterly Treatments & Auto-Renew",
+    badge: "Recurring Plans",
+    title: "Recurring Treatment Schedules & Auto-Billing",
     description:
-      "Set up quarterly treatment programs once and Fieseros auto-schedules each visit, sends the customer an Email & SMS reminder, dispatches the technician, and charges the stored card — every quarter, on time, with auto-renewing subscriptions.",
+      "Set up recurring quarterly or bi-monthly pest maintenance programs once. Fieseros auto-generates upcoming visits, sends arrival reminders, dispatches technicians, and processes recurring payments effortlessly.",
+  },
+  {
+    icon: Bug,
+    badge: "Technician Dispatch",
+    title: "GPS Scheduling & Route Optimization",
+    description:
+      "Visual calendar and live technician dispatch reduce windshield time across accounts. Easily assign urgent extermination calls to the closest field tech with real-time ETA updates.",
+  },
+  {
+    icon: Sparkles,
+    badge: "On-Site Quoting",
+    title: "On-Site Estimates & Instant E-Signatures",
+    description:
+      "Generate clean inspection quotes and tiered treatment proposals directly on mobile or desktop. Customers review options and approve contracts with a quick digital signature.",
+  },
+  {
+    icon: Wrench,
+    badge: "Mobile Field PWA",
+    title: "Mobile Field App & Inspection Checklists",
+    description:
+      "Give exterminators access to customer notes, property entry instructions, treatment checklists, and before/after photo capture in an offline-ready mobile PWA.",
   },
   {
     icon: Bell,
-    title: "Customer Pre-Treatment Prep Reminders",
+    badge: "Automations",
+    title: "Automated Prep & Appointment Reminders",
     description:
-      "Some treatments require customer prep — vacate for 4 hours, cover fish tanks, remove food from counters. Fieseros sends automated Email & SMS prep reminders 24 hours before the appointment, so the technician doesn't show up to an unprepared house.",
+      "Send automated SMS and email reminders with specific pre-treatment instructions (vacating premises, securing pets) 24 hours before arrival to ensure smooth service visits.",
+  },
+  {
+    icon: CheckCircle2,
+    badge: "Customer CRM",
+    title: "Client CRM & Property History",
+    description:
+      "Maintain a centralized client record with past treatment logs, identified pest activity, target zones, and billing history so any technician arrives fully informed.",
   },
 ];
 
@@ -94,163 +130,100 @@ export default function PestControlSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Bug className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Exterminator & Pest Control Software"
+        title="Pest Control Software for Recurring Treatments & Route Dispatch"
+        subtitle="Manage quarterly pest prevention programs on autopilot. Automate customer prep SMS reminders, dispatch extermination technicians, and collect recurring payments effortlessly."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Pest Control"
+        heroIcon={Bug}
+        sampleJobTitle="Quarterly Perimeter & Interior Pest Defense"
+        sampleCustomerName="Marcus Hall"
+        sampleTechName="Ryan T. (Lead Exterminator)"
+        sampleAsset="Site: Perimeter Barrier + Crawl Space"
+        sampleAmount="$145.00"
+      />
+
+      <IndustryMetricsBar industryName="Pest Control" />
 
       <FeatureGrid
-        title="Built for the way pest control businesses actually operate"
-        subtitle="From the quarterly treatment cycle to the state inspector's visit — every pest control workflow in one platform."
+        title="Built for the recurring lifecycle of pest control operations"
+        subtitle="From quarterly perimeter treatments to emergency termite inspections — manage your entire extermination company in one platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Pest Control" contractorNoun="exterminators" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a pest control business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most pest control businesses still track service visits
-              on paper, miss quarterly renewals, and lose recurring contracts to
-              silent attrition. Here&apos;s what that costs you — and what
-              changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Missed quarterly renewals — recurring revenue silently lapsing every month",
-                  "No record of what was treated on a customer's property last visit",
-                  "Recurring treatment contracts forgotten, lapsed, customers lost",
-                  "Technicians showing up to unprepared houses — wasted visits",
-                  "New technicians picking up a route cold with no idea what was done last visit",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Recurring quarterly visits auto-scheduled — recurring revenue protected",
-                  "Visit history with notes and photos per property",
-                  "Automated prep reminders sent 24 hours before each appointment",
-                  "Complete property service history — new techs pick up routes cold",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Pest Control"
+        withoutPoints={[
+          "Missed quarterly renewals: customers lapse silently every month, costing thousands in lost recurring revenue",
+          "Technicians arriving at properties only to find homeowners unprepared or pets uncontained",
+          "No record of past target pests or specific property entry instructions across technician routes",
+          "Extermination calls lost during peak spring and summer insect breeding spikes",
+          "Billing paper invoices manually weeks after quarterly treatments have been performed",
+        ]}
+        withPoints={[
+          "Auto-scheduled quarterly maintenance visits with automatic renewal tracking protect recurring revenue",
+          "Automated 24h prep reminders send specific pre-treatment instructions (cover aquariums, vacate rooms)",
+          "Centralized property history logs past pest sightings, entry codes, and chemical treatment zones",
+          "24/7 AI Voice Receptionist captures emergency pest calls, qualifies infestations, and logs CRM leads",
+          "1-click invoice generation with instant online card processing and automated receipt delivery",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why pest control businesses choose Fieseros">
         <p>
-          Pest control is a regulated, subscription-driven, high-volume
-          field service business. The profitable pest control company runs
-          hundreds or thousands of recurring quarterly customers, each
-          generating predictable revenue four to six times a year — but only
-          if those renewals are tracked, scheduled, and billed without fail.
-          On top of that, every treatment is regulated: state pesticide
-          rules require detailed application records, technician licensure,
-          and product-specific documentation. Pest control software that
-          can&apos;t handle both the recurring revenue engine and the
-          regulatory documentation burden will sink a growing company
-          inside a single season, with{" "}
+          Pest control is a subscription-driven, high-volume field service
+          business. The profitable pest control company runs hundreds or
+          thousands of recurring quarterly customers, each generating predictable
+          revenue four to six times a year — but only if those renewals are
+          tracked, scheduled, and billed without fail. Pest control software that
+          can&apos;t handle the recurring revenue engine will sink a growing
+          company inside a single season, with{" "}
           <Link href="/scheduling-and-dispatch" className="text-emerald-700 underline-offset-2 hover:underline">
             scheduling and dispatch
           </Link>{" "}
           that struggles to keep up.
         </p>
         <p>
-          The recurring revenue side is where pest control businesses build
-          real value — and where they leak the most money. A typical pest
-          control company loses a meaningful share of its quarterly customers every year
-          to silent attrition: a customer&apos;s annual program expires,
-          nobody notices, and the customer drifts to a competitor. Without
-          a proper pest control CRM, there&apos;s no system tracking renewal
-          dates, no automated reminders, and no auto-renewal flow. Fieseros
-          automates the entire quarterly program lifecycle — scheduling,
-          reminders, dispatch, application records, invoicing, and renewal
-          — so a customer who would have silently lapsed gets renewed on
-          time, every time.
+          The recurring revenue side is where pest control businesses build real
+          value — and where they leak the most money. A typical pest control
+          company loses a meaningful share of its quarterly customers every year
+          to silent attrition: a customer&apos;s annual program expires, nobody
+          notices, and the customer drifts to a competitor. Without a proper pest
+          control CRM, there&apos;s no system tracking renewal dates, no automated
+          reminders, and no auto-renewal flow. Fieseros automates the entire
+          quarterly program lifecycle — scheduling, reminders, dispatch,
+          invoicing, and renewal — so a customer who would have silently lapsed
+          gets renewed on time, every time.
         </p>
         <p>
-          Then there&apos;s the regulatory side, which is non-negotiable.
-          State pesticide regulations require pest control businesses to
-          maintain detailed application records — product, EPA registration
-          number, dilution rate, area treated, amount applied, weather
-          conditions, technician license number — and produce them on demand
-          for inspection. Without proper pest control software, these
-          records live on paper work orders that get lost, filed in boxes,
-          or never completed in the first place. When a state inspector
-          shows up — or a customer alleges misapplication — you&apos;re
-          exposed.
-        </p>
-        <p>
-          Finally, there&apos;s the operational side — visit history,
-          customer prep, and route handovers. Fieseros captures visit notes,
-          photos, and service history per customer property in a single{" "}
+          Finally, there&apos;s the operational side — visit history, customer
+          prep, and route handovers. Fieseros captures visit notes, photos, and
+          service history per customer property in a single{" "}
           <Link href="/customer-crm" className="text-emerald-700 underline-offset-2 hover:underline">
             customer CRM
           </Link>{" "}
           record, sends automated Email &amp; SMS prep reminders before
-          appointments, and auto-schedules recurring quarterly visits
-          through recurring job schedules with{" "}
+          appointments, and auto-schedules recurring quarterly visits through
+          recurring job schedules with{" "}
           <Link href="/invoicing-and-payments" className="text-emerald-700 underline-offset-2 hover:underline">
             invoicing
           </Link>{" "}
-          that runs after every visit. New technicians can pick up a route
-          cold because the full property history is on their phone. The
-          result: fewer wasted visits and a single platform built for the
-          way pest control businesses actually operate.
+          that runs after every visit. New technicians can pick up a route cold
+          because the full property history is on their phone. The result: fewer
+          wasted visits and a single platform built for the way pest control
+          businesses actually operate.
         </p>
       </ContentSection>
 
@@ -263,8 +236,6 @@ export default function PestControlSoftwarePage() {
         subtitle="Everything pest control operators ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

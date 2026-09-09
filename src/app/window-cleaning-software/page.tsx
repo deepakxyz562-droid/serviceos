@@ -1,22 +1,25 @@
 import type { Metadata } from "next";
 import {
-  Route,
+  Building2,
   HardHat,
   Camera,
-  Building2,
   Sparkles,
-  Wrench,
-  CheckCircle2,
+  Receipt,
+  MessageSquare,
+  CalendarClock,
   Paintbrush,
   Hammer,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -32,10 +35,10 @@ export const metadata: Metadata = {
   description: cfg.metaDescription,
   keywords: [
     "window cleaning software",
+    "window washing software",
+    "commercial window cleaning software",
     "window cleaning CRM",
-    "window cleaning business software",
-    "window cleaner scheduling",
-    "storefront cleaning software",
+    "window cleaning route software",
   ],
   alternates: { canonical: `https://fieseros.com/${cfg.softwareSlug}` },
   openGraph: {
@@ -50,34 +53,46 @@ export const metadata: Metadata = {
 
 const features: Feature[] = [
   {
-    icon: Route,
-    title: "Route Density Optimization",
+    icon: CalendarClock,
+    badge: "Route Optimization",
+    title: "Recurring Route & Schedule Automation",
     description:
-      "Fieseros clusters recurring residential customers by neighborhood and orders stops to minimize drive time between them. A Tuesday route that used to zigzag across town now stays inside two zip codes, and the tech gets home meaningfully earlier.",
+      "Cluster residential and commercial window cleaning stops by neighborhood or commercial zone to eliminate zigzag driving and finish earlier.",
   },
   {
     icon: HardHat,
+    badge: "Safety Checklists",
     title: "Height & Access Safety Checklists",
     description:
-      "Build custom safety checklists per job type. Techs complete them on their phone, with photos for any flagged items, and the completed checklist is timestamped and stored on the work order.",
+      "Build custom safety checklists for high-rise or ladder jobs. Techs check them off on mobile with photo proof for safety compliance.",
   },
   {
     icon: Camera,
-    title: "Before & After Photo Proof",
+    badge: "Photo Proof",
+    title: "Before & After Photo Proof of Clean Panes",
     description:
-      "Techs snap before photos of every dirty pane and after photos of every clean one, all attached to the work order. When a storefront manager disputes whether the second-floor windows were done, you have timestamped proof they were.",
-  },
-  {
-    icon: Building2,
-    title: "Storefront Contract Billing",
-    description:
-      "Set up weekly, bi-weekly, or monthly storefront contracts once, and Fieseros sends the property manager a branded invoice with a payment link after each completed visit, plus automatic reminders for unpaid balances. Recurring commercial revenue stops slipping through the cracks without a monthly invoice run or a follow-up phone call.",
+      "Techs snap before and after photos of dirty vs sparkling clean glass. Attached directly to the work order to prevent customer disputes.",
   },
   {
     icon: Sparkles,
-    title: "Hard-Water Stain Surcharge Quoting",
+    badge: "Add-On Quoting",
+    title: "On-Site Quoting & Add-On Surcharges",
     description:
-      "When a tech spots hard-water stains or oxidized frames during a routine clean, they add a quote line item with photos attached, sent to the customer via Email & SMS. Upsells that used to be a shoulder-shrug conversation now generate real revenue.",
+      "Quote extra panes, screen cleanings, or hard-water stain removals on-site. Send via SMS with instant 1-tap customer approval.",
+  },
+  {
+    icon: Receipt,
+    badge: "Auto Invoicing",
+    title: "1-Click Invoicing & Card-on-File Billing",
+    description:
+      "Set up recurring commercial storefront billing or send 1-click mobile invoices immediately after cleaning residential homes.",
+  },
+  {
+    icon: MessageSquare,
+    badge: "Smart Alerts",
+    title: "Rain Reschedule & Appointment SMS",
+    description:
+      "Send automated 24h appointment reminders and instant rain delay reschedule texts to customers with zero phone tag.",
   },
 ];
 
@@ -128,27 +143,21 @@ export default function WindowCleaningSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Sparkles className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Window Cleaning Software"
+        title="Window Cleaning Software for Routes, Job Photo Proof & Billing"
+        subtitle="Optimize residential and commercial window cleaning routes, log ladder safety checklists, capture pane photo proof, and automate storefront billing with Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Window Cleaning"
+        heroIcon={Building2}
+        sampleJobTitle="Commercial Storefront Window Cleaning & Sills"
+        sampleCustomerName="Lakeside Retail Center"
+        sampleTechName="Travis K. (Route Specialist)"
+        sampleAsset="Storefront Route #W-104 • 32 Ground & 2nd-Floor Panes"
+        sampleAmount="$160.00"
+      />
+
+      <IndustryMetricsBar industryName="Window Cleaning" />
 
       <FeatureGrid
         title="Built for the way window cleaning crews actually work"
@@ -156,73 +165,34 @@ export default function WindowCleaningSoftwarePage() {
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Window Cleaning" contractorNoun="window cleaners" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a window cleaning business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most window cleaning companies still juggle paper route sheets, ladder safety in their head, and invoices emailed at the end of the month. Here&apos;s what that costs you — and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Routes zigzag across town — routes drag on longer than they need to",
-                  "No photo proof when a storefront manager says the second-floor panes weren't done",
-                  "Ladder safety done by memory, no checklist to prove compliance if OSHA asks",
-                  "Squeegee tech sent to a job that needed a 40-foot water-fed pole — wasted trip",
-                  "Storefront contracts billed at end of month — property manager slow to pay",
-                  "Hard-water stains noticed but never quoted — upsell revenue lost every week",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Routes clustered by neighborhood — same jobs done meaningfully faster",
-                  "Before and after photos on every pane — disputes resolved in seconds",
-                  "Height-access checklist completed and timestamped on every work order",
-                  "Job details and tags visible at a glance on the dispatch board",
-                  "Storefront contracts auto-send invoices with payment links after every visit — no monthly invoice run",
-                  "Surcharge quotes sent from the field — upsell revenue captured every week",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Window Cleaning"
+        withoutPoints={[
+          "Routes zigzag across town — technicians spend more time driving than cleaning glass",
+          "No photo proof when a storefront manager claims second-floor panes were missed",
+          "Ladder and harness safety done by memory with no timestamped compliance logs",
+          "Hard-water stains and damaged screens noticed on-site but never quoted or monetized",
+          "Storefront commercial contracts billed manually at end of month, delaying cash collection",
+        ]}
+        withPoints={[
+          "Neighborhood route clustering minimizes drive time and fits more properties into each day",
+          "Timestamped before-and-after photos of every clean pane resolve disputes in seconds",
+          "Digital height and ladder safety checklists completed on mobile before work begins",
+          "Instant add-on quotes for screen cleaning and stain removal sent via SMS for 1-tap approval",
+          "Storefront contracts automatically generate invoices and charge cards on file after each visit",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why window cleaning companies choose Fieseros">
         <p>
@@ -260,8 +230,6 @@ export default function WindowCleaningSoftwarePage() {
         subtitle="Everything window cleaning business owners ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

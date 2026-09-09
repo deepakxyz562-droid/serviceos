@@ -8,18 +8,20 @@ import {
   FileText,
   Brush,
   Wrench,
-  CheckCircle2,
   Hammer,
   HardHat,
   Home,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -54,39 +56,45 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: PaintRoller,
-    title: "Estimate-to-Quote Workflow",
+    badge: "Line-Item Estimates",
+    title: "On-Site Quoting & Visual Proposals",
     description:
-      "Build a line-item quote with labor, materials, and your price — sent to the customer via Email & SMS in minutes.",
+      "Build detailed, room-by-room painting estimates with primer, coat count, and paint brand options. Clients approve with instant digital signatures on their phone.",
   },
   {
     icon: Layers,
-    title: "Multi-Room Project Phasing",
+    badge: "Project Phasing",
+    title: "Multi-Room & Exterior Phasing",
     description:
-      "Break a whole-home repaint into phases — living room week one, bedrooms week two, trim week three — with crew assignments, material reservations, and per-phase invoicing that keeps the project on schedule.",
+      "Break whole-home or commercial repaints into structured milestones (prep, prime, main walls, trim) with dedicated crew assignments on a team calendar.",
   },
   {
     icon: Camera,
-    title: "Prep & Coat Photo Documentation",
+    badge: "Photo Proof",
+    title: "Prep & Multi-Coat Photo Documentation",
     description:
-      "Crews photograph every stage: bare drywall, primed, first coat, second coat, final. Photos attach to the work order and protect you when a customer disputes whether prep was done or how many coats went on.",
+      "Capture timestamped photos of wall patching, primer application, and finish coats to prove thorough surface preparation and eliminate customer disputes.",
   },
   {
     icon: Palette,
-    title: "Color & SKU Tracking per Customer",
+    badge: "Customer CRM",
+    title: "Paint Color & Sheen Records",
     description:
-      "Store each customer's paint colors and product details as notes on their record, so touch-ups are a quick lookup.",
+      "Store paint formulas, color codes, manufacturer SKUs, and sheen notes per room on the customer profile for effortless future touch-up lookups.",
   },
   {
     icon: Clock,
-    title: "Crew Time Tracking Against Estimate",
+    badge: "Mobile Field PWA",
+    title: "Crew Time Tracking & Daily Logs",
     description:
-      "Crews clock in and out of each job from their phone, with timesheets exportable for payroll.",
+      "Painters clock in, review room scopes, and log paint gallons used on their phones, with automated labor tracking against your original project estimate.",
   },
   {
     icon: FileText,
-    title: "Progress Invoicing & Milestone Billing",
+    badge: "Progress Billing",
+    title: "Milestone & Progress Invoicing",
     description:
-      "Bill by milestone — deposit on start, progress at phase completion, final on walk-through.",
+      "Collect upfront deposits upon contract signing, bill progress payments after prep/primer completion, and collect final balances via online card links.",
   },
 ];
 
@@ -94,7 +102,7 @@ const faqs = [
   {
     question: "How does Fieseros help with painting estimates and quotes?",
     answer:
-      "You build a line-item quote in Fieseros with paint, materials, labor hours, and your price.",
+      "You build a line-item quote in Fieseros with paint, materials, labor hours, and your price. Customers receive the branded estimate via Email & SMS and can sign electronically in seconds.",
   },
   {
     question: "Can I manage multi-room and multi-phase painting projects?",
@@ -142,105 +150,56 @@ export default function PaintingSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Brush className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Painting Contractor Software"
+        title="Painting Business Software for Estimating, Phasing & Invoicing"
+        subtitle="Win more residential and commercial painting bids. Build visual line-item quotes, document prep and primer photos, track paint color codes, and bill progress milestones with Fieseros."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Painting"
+        heroIcon={Brush}
+        sampleJobTitle="Interior Whole-Home Repaint & Trim"
+        sampleCustomerName="Eleanor Ross"
+        sampleTechName="Marco V. (Lead Painter)"
+        sampleAsset="Colors: SW #7005 Pure White &bull; SW #6204 Sea Salt"
+        sampleAmount="$2,150.00"
+      />
+
+      <IndustryMetricsBar industryName="Painting" />
 
       <FeatureGrid
-        title="Built for the way painting contractors actually work"
-        subtitle="From the first walkthrough estimate to the final walk-through invoice — every painting workflow in one platform."
+        title="Built for the way professional painting contractors operate"
+        subtitle="From the first room walkthrough estimate to the final walk-through invoice — every painting workflow in one unified platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Painting" contractorNoun="painters" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The chaos of running a painting business without software
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most painting contractors still build estimates on a notepad,
-              track crew hours on paper timesheets, and send the final
-              invoice weeks after the last brush stroke. Here&apos;s what
-              that costs you — and what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Underestimating paint and materials — running out mid-job and sending someone to the supplier",
-                  "No proof of prep work when a customer disputes the coat count",
-                  "Final invoice sent weeks after the last brush stroke",
-                  "Crew time tracked on paper timesheets that don't match what actually happened",
-                  "Customer's paint color forgotten by the time they call for touch-ups",
-                  "Multi-room projects drifting into overtime with no warning",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Line-item quotes turn site visits into professional estimates in minutes",
-                  "Prep and coat photos on every job — disputes closed with timestamped proof",
-                  "Progress invoicing keeps cash flowing through multi-week projects",
-                  "Crew clock-in/clock-out from each job, with timesheets exportable for payroll",
-                  "Paint colors stored per customer as notes — touch-ups are a quick lookup",
-                  "Phase-by-phase progress visible before a project slips into overtime",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Painting"
+        withoutPoints={[
+          "Underestimating paint gallons on handwritten quotes and eating the cost of extra trips",
+          "Customer disputes claiming lack of surface prep or questioning how many coats were applied",
+          "Carrying weeks of labor and material costs while waiting for a single lump-sum final check",
+          "Lost color codes and paint brands when customers call back a year later for touch-ups",
+          "Whole-home painting projects drifting into overtime with zero phase-by-phase tracking",
+        ]}
+        withPoints={[
+          "Line-item quote templates factor paint coverage and labor accurately in minutes",
+          "Timestamped prep, prime, and multi-coat photos attached to work orders protect your margin",
+          "Milestone progress invoicing keeps positive cash flow flowing throughout large projects",
+          "Paint formulas, color names, and sheen codes stored permanently in customer CRM profiles",
+          "Phase-by-phase project schedules keep crews aligned and prevent costly job delays",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Why painting contractors choose Fieseros">
         <p>
@@ -311,8 +270,6 @@ export default function PaintingSoftwarePage() {
         subtitle="Everything painting contractors ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">

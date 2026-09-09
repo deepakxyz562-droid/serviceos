@@ -7,17 +7,19 @@ import {
   Users,
   Zap,
   Wrench,
-  CheckCircle2,
   Thermometer,
   Sun,
   Award,
 } from "lucide-react";
-import { CornerstoneLayout, CornerstoneHero, ContentSection } from "@/components/seo/cornerstone-layout";
+import { CornerstoneLayout, ContentSection } from "@/components/seo/cornerstone-layout";
+import { IndustryHero } from "@/components/seo/industry-hero";
+import { IndustryMetricsBar } from "@/components/seo/industry-metrics-bar";
 import { FeatureGrid, type Feature } from "@/components/seo/feature-grid";
+import { InteractiveWorkflowTabs } from "@/components/seo/interactive-workflow-tabs";
+import { PainPointsComparison } from "@/components/seo/pain-points-comparison";
 import { FaqSection } from "@/components/seo/faq-section";
 import { CtaSection } from "@/components/seo/cta-section";
 import { FeatureMatrix } from "@/components/seo/feature-matrix";
-import { WorkflowDiagram } from "@/components/seo/workflow-diagram";
 import { AudienceGrid } from "@/components/seo/audience-grid";
 import { InlinePricingCards } from "@/components/seo/inline-pricing-cards";
 import { AiReceptionistIndustryBlock } from "@/components/seo/ai-receptionist-industry-block";
@@ -50,34 +52,46 @@ export const metadata: Metadata = {
 
 const features: Feature[] = [
   {
-    icon: ShieldCheck,
-    title: "Compliance & Certification Tracking",
+    icon: Users,
+    badge: "Electrician Dispatch",
+    title: "Multi-Electrician Team Dispatch",
     description:
-      "Store every electrician's license, certification, and CEU credits in their profile with renewal alerts 90, 60, and 30 days before they expire.",
+      "Visual drag-and-drop calendar matches technicians to panel upgrades, commercial fit-outs, and emergency power calls based on live availability and skills.",
   },
   {
-    icon: Camera,
-    title: "Job Site Photo Documentation",
+    icon: ShieldCheck,
+    badge: "Compliance",
+    title: "License & Certification Profiles",
     description:
-      "Before, during, and after photos of every panel upgrade, rewiring job, and fixture install. Photos attach to the work order and protect you in warranty and liability disputes.",
+      "Store master, journeyman, and safety certifications directly in employee profiles with automated alerts before expiration dates.",
   },
   {
     icon: MessageSquare,
-    title: "Email & SMS Quotes & Invoices",
+    badge: "Estimates & Proposals",
+    title: "Detailed Electrical Quotes & E-Signs",
     description:
-      "Send detailed quotes for residential and commercial work directly through Email & SMS. Customers approve with a tap. Invoices generated from completed jobs and paid through secure online payment links.",
+      "Generate comprehensive proposals for residential rewiring and commercial lighting retrofits with material line items and instant client signature approval.",
+  },
+  {
+    icon: Camera,
+    badge: "Mobile Field PWA",
+    title: "Photo Proof & Safety Checklists",
+    description:
+      "Snap timestamped photos of breaker panels, conduit runs, and grounding wires to document code compliance and protect against dispute claims.",
   },
   {
     icon: Package,
-    title: "Parts & Materials Tracking",
+    badge: "Material Tracking",
+    title: "Line-Item Parts & Wire Billing",
     description:
-      "Track every reel of wire, every breaker, every conduit fitting, every junction box. Add materials as line items on the work order and they roll onto the invoice at your marked-up price. No more unbilled materials.",
+      "Add breakers, wire reels, conduit, and EV chargers as line items directly to work orders with proper markup so no material goes unbilled.",
   },
   {
-    icon: Users,
-    title: "Multi-Electrician Dispatch",
+    icon: Zap,
+    badge: "1-Click Invoicing",
+    title: "1-Click Invoicing & Instant Payments",
     description:
-      "Coordinate a team of electricians across multiple active job sites. See who is where, what they're certified for, and what they have on their van. Dispatch the right electrician to the right job, every time.",
+      "Convert completed electrical work orders into polished invoices and collect on-site payments via credit card, Apple Pay, or online payment links.",
   },
 ];
 
@@ -128,103 +142,56 @@ export default function ElectricalContractorSoftwarePage() {
       ]}
       additionalSchema={[appSchema]}
     >
-      <CornerstoneHero
-        eyebrow={`${cfg.name} Contractor Software`}
-        title={cfg.h1}
-        subtitle={cfg.subtitle}
-      >
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link
-            href="/#signup"
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
-          >
-            <Zap className="h-4 w-4" />
-            {cfg.primaryCta}
-          </Link>
-          <Link
-            href="/contact-us"
-            className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Book a Demo
-          </Link>
-        </div>
-      </CornerstoneHero>
+      <IndustryHero
+        eyebrow="Electrical Contractor Software"
+        title="Electrical Business Software for Dispatch, Quoting & Job Tracking"
+        subtitle="Manage panel upgrades, emergency service calls, and commercial electrical projects in one place. Dispatch qualified electricians, capture photo proof, and get paid 4x faster."
+        primaryCtaText={cfg.primaryCta}
+        industryName="Electrical"
+        heroIcon={Zap}
+        sampleJobTitle="200A Main Breaker Panel Upgrade"
+        sampleCustomerName="Robert Vance"
+        sampleTechName="Chris M. (Master Electrician)"
+        sampleAsset="Main Service Panel #SquareD-200"
+        sampleAmount="$2,850.00"
+      />
+
+      <IndustryMetricsBar industryName="Electrical" />
 
       <FeatureGrid
         title="Built for the realities of running an electrical contracting business"
-        subtitle="Compliance, materials, multi-crew dispatch, quoting — every electrical workflow in one platform built for licensed pros."
+        subtitle="Compliance, material markups, multi-electrician dispatch, and line-item quoting — all in one unified platform."
         features={features}
       />
 
-      <FeatureMatrix industryName={cfg.name} />
+      <InteractiveWorkflowTabs industryName="Electrical" contractorNoun="electricians" />
 
       <AiReceptionistIndustryBlock
         industryName={cfg.name}
         emergencyExample={cfg.emergencyExample}
       />
 
-      {/* Pain points section */}
-      <section className="border-t bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3">
-              The hidden chaos of running an electrical contracting business
-            </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Electrical work moves fast — but the paperwork, permits, and
-              compliance behind it can sink a business that isn&apos;t
-              organized. Here&apos;s what changes when you switch to Fieseros.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-destructive" />
-                Without Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "Electrician license renewals sneak up — you find out when they lapse",
-                  "Job documents and photos scattered across trucks, inboxes, and paper notebooks",
-                  "Materials used on jobs never make it onto the invoice — lost revenue",
-                  "Quotes take days to build — customers go with the faster competitor",
-                  "Multi-site commercial jobs tracked across spreadsheets that don't talk to each other",
-                  "No photo record when a customer disputes what was actually installed",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <span className="text-destructive mt-0.5">✗</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border bg-card p-6 shadow-sm">
-              <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                With Fieseros
-              </h3>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                {[
-                  "License and CEU renewal alerts — never let a license lapse again",
-                  "Materials added as line items — auto-flow to invoice at marked-up price",
-                  "Quote templates turn hours of work into minutes — win more bids",
-                  "Multi-site projects in one dashboard with consolidated progress and billing",
-                  "Before, during, and after photos on every job — protection in any dispute",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
+      <PainPointsComparison
+        industryName="Electrical"
+        withoutPoints={[
+          "Emergency power outage calls missed after-hours, sending homeowners to competitors",
+          "Conduit, wire rolls, and breakers used on-site forgotten and never billed on invoices",
+          "Building quotes from scratch takes hours, delaying commercial bids and losing jobs",
+          "No photo proof when a client later claims existing wiring damage was caused by your team",
+          "Electrician licenses and CEU deadlines sneaking up and lapsing unnoticed",
+        ]}
+        withPoints={[
+          "24/7 AI Voice Receptionist captures emergency electrical calls and pages on-call staff",
+          "Materials added as line items directly to work orders on mobile with automated markups",
+          "Pre-built quote templates turn commercial and residential bids from hours into minutes",
+          "Before, during, and after photos timestamped on the work order safeguard against disputes",
+          "Electrician profiles store license types and trigger automated renewal alerts in advance",
+        ]}
+      />
 
       <WhyFieserosCards industryName={cfg.name} demandLabel={cfg.demandLabel} />
 
-      <WorkflowDiagram industryName={cfg.name} />
+      <FeatureMatrix industryName={cfg.name} />
 
       <ContentSection title="Electrical contractor software that handles compliance">
         <p>
@@ -304,8 +271,6 @@ export default function ElectricalContractorSoftwarePage() {
         subtitle="Everything electrical contractors ask before switching to Fieseros."
       />
 
-      {/* P2-1 (SEO): Hub-and-spoke internal linking — connects sibling cornerstone
-          pages to distribute PageRank and help Google understand topical relationships. */}
       <section className="border-t bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
