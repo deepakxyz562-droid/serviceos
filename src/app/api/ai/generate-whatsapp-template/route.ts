@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import ZAI from 'z-ai-web-dev-sdk';
 import { getAuthUser } from '@/lib/auth';
 import { getBrandContext } from '@/lib/brand-context';
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker';
 
 // ─── AI WhatsApp Template Generator ──────────────────────────────────────
 // Generates professional WhatsApp message templates for lead notifications
@@ -45,6 +46,14 @@ export async function POST(request: NextRequest) {
     // auth call is non-fatal — if no session, we fall back to the generic
     // brand context (still produces a usable template).
     const authUser = await getAuthUser();
+
+    // AI quota check — conditional (respects super-admin / tenant-agnostic design)
+    const __aiTenantId = authUser?.tenantId;
+    if (__aiTenantId) {
+      const quotaCheck = await checkAiQuota(__aiTenantId);
+      if (!quotaCheck.ok) return quotaCheck.response;
+    }
+
     const brandContext = await getBrandContext(authUser?.tenantId);
 
     const zai = await ZAI.create();
@@ -68,6 +77,9 @@ export async function POST(request: NextRequest) {
     if (!template) {
       return NextResponse.json({ error: 'Failed to generate template' }, { status: 500 });
     }
+
+    // Track AI usage (conditional — only for authenticated tenants)
+    if (authUser?.tenantId) await trackAiUsage(authUser.tenantId);
 
     return NextResponse.json({
       success: true,

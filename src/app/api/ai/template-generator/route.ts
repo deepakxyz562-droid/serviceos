@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { getBrandContext } from '@/lib/brand-context'
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker'
 
 /**
  * POST /api/ai/template-generator
@@ -15,6 +16,13 @@ export async function POST(request: NextRequest) {
     const user = await getAuthUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // AI quota check — conditional (respects super-admin / tenant-agnostic design)
+    const __aiTenantId = user?.tenantId
+    if (__aiTenantId) {
+      const quotaCheck = await checkAiQuota(__aiTenantId)
+      if (!quotaCheck.ok) return quotaCheck.response
     }
 
     const body = await request.json()
@@ -85,6 +93,9 @@ export async function POST(request: NextRequest) {
         },
       })
     }
+
+    // Track AI usage (conditional — only for authenticated tenants)
+    if (user?.tenantId) await trackAiUsage(user.tenantId)
 
     return NextResponse.json({ data: parsed })
   } catch (error) {

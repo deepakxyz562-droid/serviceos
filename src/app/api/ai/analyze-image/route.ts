@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { logActivity } from '@/lib/activity-log';
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker';
 
 /**
  * AI Image Analysis endpoint (Fieseros — Dynamic Forms Engine)
@@ -128,6 +129,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
     const tenantId = user.tenantId;
+
+    // AI quota check — conditional (respects super-admin / tenant-agnostic design)
+    if (tenantId) {
+      const quotaCheck = await checkAiQuota(tenantId);
+      if (!quotaCheck.ok) return quotaCheck.response;
+    }
 
     // ─── Body parse + validate ──────────────────────────────────────────
     let body: RequestBody;
@@ -279,6 +286,9 @@ export async function POST(request: NextRequest) {
     } catch (logErr) {
       console.error('[ai/analyze-image] logActivity failed:', logErr);
     }
+
+    // Track AI usage (conditional — only for authenticated tenants)
+    if (tenantId) await trackAiUsage(tenantId);
 
     return NextResponse.json(analysis);
   } catch (error: unknown) {

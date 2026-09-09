@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker';
 
 /**
  * AI Quote Draft (Fieseros V1.5)
@@ -187,6 +188,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // AI quota check — refuse if tenant is over their plan's AI call limit
+    const quotaCheck = await checkAiQuota(tenantId);
+    if (!quotaCheck.ok) return quotaCheck.response;
+
     const body = (await request.json()) as RequestBody;
     if (!body || !body.customerNeed || !body.customerNeed.trim()) {
       return NextResponse.json(
@@ -340,6 +345,9 @@ Build a quote draft as a single JSON object. Double-check every total before res
     } catch (logErr) {
       console.error('[ai/quote-draft] logActivity failed:', logErr);
     }
+
+    // Track AI usage (best-effort, non-blocking)
+    await trackAiUsage(tenantId);
 
     return NextResponse.json(draft);
   } catch (error: unknown) {

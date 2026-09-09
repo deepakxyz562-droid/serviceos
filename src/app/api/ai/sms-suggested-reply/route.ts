@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { callOpenRouter, extractJson } from '@/lib/ai-client'
 import { getBrandContext } from '@/lib/brand-context'
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker'
 
 /**
  * AI Suggested Reply for SMS conversations (InboxView → SMS channel).
@@ -65,6 +66,13 @@ export async function POST(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 },
       )
+    }
+
+    // AI quota check — conditional (respects super-admin / tenant-agnostic design)
+    const __aiTenantId = user?.tenantId
+    if (__aiTenantId) {
+      const quotaCheck = await checkAiQuota(__aiTenantId)
+      if (!quotaCheck.ok) return quotaCheck.response
     }
 
     // ── 2. Parse + validate body ─────────────────────────────────────────
@@ -232,6 +240,9 @@ export async function POST(request: NextRequest) {
         { status: 502 },
       )
     }
+
+    // Track AI usage (conditional — only for authenticated tenants)
+    if (user?.tenantId) await trackAiUsage(user.tenantId)
 
     return NextResponse.json({ replies })
   } catch (error: unknown) {

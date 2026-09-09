@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { callOpenRouter, extractJson } from '@/lib/ai-client';
 import { formatCurrency } from '@/lib/currency';
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker';
 
 /**
  * POST /api/ai/compose-message
@@ -440,6 +441,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // AI quota check — conditional (respects super-admin / tenant-agnostic design)
+    const __aiTenantId = user?.tenantId;
+    if (__aiTenantId) {
+      const quotaCheck = await checkAiQuota(__aiTenantId);
+      if (!quotaCheck.ok) return quotaCheck.response;
+    }
+
     // 2. Parse + validate body
     const body = (await request.json().catch(() => null)) as ComposeRequest | null;
     if (!body || typeof body !== 'object') {
@@ -562,6 +570,9 @@ export async function POST(request: NextRequest) {
       ...(channel === 'email' && generatedSubject ? { subject: generatedSubject } : {}),
       model,
     };
+    // Track AI usage (conditional — only for authenticated tenants)
+    if (user?.tenantId) await trackAiUsage(user.tenantId);
+
     return NextResponse.json(response);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to compose message';

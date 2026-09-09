@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker';
 
 /**
  * AI Field Assistant (Fieseros V1.5)
@@ -628,6 +629,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // AI quota check — refuse if tenant is over their plan's AI call limit
+    const quotaCheck = await checkAiQuota(tenantId);
+    if (!quotaCheck.ok) return quotaCheck.response;
+
     const body = (await request.json()) as RequestBody;
     if (!body || !body.jobId || !body.action) {
       return NextResponse.json(
@@ -726,6 +731,9 @@ export async function POST(request: NextRequest) {
         { status: result.status ?? 502 },
       );
     }
+
+    // Track AI usage (best-effort, non-blocking)
+    await trackAiUsage(tenantId);
 
     return NextResponse.json({
       action: body.action,

@@ -11,6 +11,7 @@ import {
   type AppliedQuote,
   type QuoteTemplate,
 } from '@/lib/quote-templates';
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker';
 
 /**
  * AI Smart Quote Builder (Fieseros V1.5 — P6-quotes)
@@ -459,6 +460,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // AI quota check — refuse if tenant is over their plan's AI call limit
+    const quotaCheck = await checkAiQuota(tenantId);
+    if (!quotaCheck.ok) return quotaCheck.response;
+
     // ── 2. Parse + validate body ──────────────────────────────────────────
     const body = (await request.json().catch(() => null)) as RequestBody | null;
     if (!body || !body.problemDescription || !body.problemDescription.trim()) {
@@ -816,6 +821,9 @@ export async function POST(request: NextRequest) {
       },
       '[ai/smart-quote] quote created',
     );
+
+    // Track AI usage (best-effort, non-blocking)
+    await trackAiUsage(tenantId);
 
     return NextResponse.json(response, { status: 201 });
   } catch (error: unknown) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker';
 
 /**
  * AI Dashboard Suggestions (Fieseros — Signature Feature)
@@ -222,6 +223,13 @@ export async function GET() {
         { status: 400 },
       );
     }
+
+    // AI quota check — refuse if tenant is over their plan's AI call limit.
+    // NOTE: this runs BEFORE the cache check. A cached response still consumes
+    // a quota slot on the request that originally populated the cache, but the
+    // 5-min cache window prevents most refresh-polling from re-burning quota.
+    const quotaCheck = await checkAiQuota(tenantId);
+    if (!quotaCheck.ok) return quotaCheck.response;
 
     // ── 1. Cache check ────────────────────────────────────────────────────
     const cacheKey = `ai-dash-suggestions:${tenantId}`;
@@ -741,6 +749,11 @@ Based on the data above, return 5-8 prioritized actionable suggestions as JSON: 
       data: payload,
       expiresAt: Date.now() + CACHE_TTL_MS,
     });
+
+    // Track AI usage (best-effort, non-blocking). Only the non-cached path
+    // reaches this point — the cached path returns early above. This is where
+    // the LLM was actually called (even if it subsequently fell back to rules).
+    await trackAiUsage(tenantId);
 
     return NextResponse.json(payload);
   } catch (error: unknown) {

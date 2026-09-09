@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { callOpenRouter, extractJson } from '@/lib/ai-client'
+import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker'
 
 /**
  * AI Suggested Reply / Summarize for the Live Chat admin view.
@@ -64,6 +65,13 @@ export async function POST(request: NextRequest) {
         { error: 'Authentication required' },
         { status: 401 },
       )
+    }
+
+    // AI quota check — conditional (respects super-admin / tenant-agnostic design)
+    const __aiTenantId = user?.tenantId
+    if (__aiTenantId) {
+      const quotaCheck = await checkAiQuota(__aiTenantId)
+      if (!quotaCheck.ok) return quotaCheck.response
     }
 
     // 2. Parse + validate body
@@ -141,9 +149,15 @@ export async function POST(request: NextRequest) {
 
     // 6. Branch on messageType
     if (messageType === 'summary') {
-      return await handleSummary(conversationText)
+      const __aiResult = await handleSummary(conversationText)
+      // Track AI usage (conditional — only for authenticated tenants on success)
+      if (user?.tenantId && __aiResult.status === 200) await trackAiUsage(user.tenantId)
+      return __aiResult
     }
-    return await handleReply(conversationText)
+    const __aiResult = await handleReply(conversationText)
+    // Track AI usage (conditional — only for authenticated tenants on success)
+    if (user?.tenantId && __aiResult.status === 200) await trackAiUsage(user.tenantId)
+    return __aiResult
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : 'Failed to process AI request'

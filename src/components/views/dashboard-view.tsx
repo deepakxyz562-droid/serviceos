@@ -67,6 +67,7 @@ import { useCompanyCurrency } from '@/hooks/use-company-currency';
 // The `loading` fallback reserves the chart's space (fixed height) so the
 // lazy swap doesn't cause CLS.
 import dynamic from 'next/dynamic';
+import { AISuggestionsPanel } from '@/components/dashboard/ai-suggestions-panel';
 
 const LazyKPISparkline = dynamic(
   () => import('./dashboard-charts').then(m => m.KPISparkline),
@@ -1080,6 +1081,13 @@ export function DashboardView() {
           </Card>
         )}
       </div>
+
+      {/* ─── AI Suggestions ────────────────────────────────────── */}
+      {/* Signature feature: AI-generated prioritized business suggestions.
+          Backend (/api/ai/dashboard-suggestions) was built but this panel
+          was orphaned — never imported. Now mounted on the dashboard.
+          Caches 5min server-side; user can click Refresh to bypass. */}
+      <AISuggestionsPanel />
 
       {/* ─── Today's Schedule + Quick Actions ────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
