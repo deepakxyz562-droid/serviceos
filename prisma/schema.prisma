@@ -5535,6 +5535,55 @@ model AiProviderKey {
 }
 
 // ==========================================
+// AI KNOWLEDGE BASE (RAG — Tier 3)
+// ==========================================
+// Per-tenant document store powering retrieval-augmented generation for the
+// AI Assistant (/api/ai/chat) and the voice AI Receptionist. Documents are
+// split into chunks; each chunk carries an embedding vector serialized as a
+// JSON float array (`embeddingJson`) plus the name of the embedding model.
+//
+// Cosine similarity is computed in-app (src/lib/ai-knowledge.ts) — comfortable
+// for per-tenant chunk counts in the hundreds. A pgvector migration is the
+// documented next step beyond that.
+
+model AiKnowledgeDocument {
+  id         String   @id @default(cuid())
+  tenantId   String
+  title      String
+  sourceType String   @default("manual") // manual | file
+  mimeType   String?
+  byteSize   Int?
+  content    String   // full normalized text (post-extraction)
+  charCount  Int      @default(0)
+  chunkCount Int      @default(0)
+  status     String   @default("ready") // processing | ready | failed
+  error      String?
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  chunks AiKnowledgeChunk[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
+model AiKnowledgeChunk {
+  id             String              @id @default(cuid())
+  tenantId       String
+  documentId     String
+  document       AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  idx            Int
+  content        String
+  embeddingJson  String
+  embeddingModel String              @default("local-hash-v1")
+  createdAt      DateTime            @default(now())
+
+  @@unique([documentId, idx])
+  @@index([tenantId])
+}
+
+// ==========================================
 // ENTERPRISE SCHEMA FOUNDATION (Phase 2)
 // ==========================================
 // These models unlock multi-branch operations, tax compliance, configurable
@@ -7388,36 +7437,47 @@ model UsageReservation {
 model UsageLedger {
   id              String   @id @default(cuid())
   tenantId        String
-  entitlementId   String
+  // entitlementId is nullable for TEXT_LLM rows: text-LLM usage is tracked
+  // per tenant (and per Subscription quota), not against an AddonEntitlement.
+  entitlementId   String?
   // aiCallId is nullable until Phase 4 (AiCall model). For now, the link
   // to the call is via idempotencyKey (which encodes the external call ID).
   aiCallId        String?
   // ── Idempotency (CRITICAL) ──
   // Unique per (tenantId, usageType, externalCallId). Prevents duplicate
   // ledger entries when Vapi redelivers the end-of-call webhook.
-  // Format: `${externalCallId}:${usageType}` (e.g. "call_abc123:VOICE_MINUTE")
+  // Format (voice): `${externalCallId}:${usageType}` (e.g. "call_abc123:VOICE_MINUTE")
+  // Format (text):  `text:${uuid}:${feature}` — one row per successful LLM call.
   idempotencyKey  String   @unique
   // ── Usage type ──
-  usageType       String   // 'VOICE_MINUTE' | 'PHONE_NUMBER_MONTHLY' | 'OVERAGE'
+  usageType       String   // 'VOICE_MINUTE' | 'PHONE_NUMBER_MONTHLY' | 'OVERAGE' | 'TEXT_LLM'
   // ── Quantity ──
-  quantitySeconds Int      // 183 (actual billable seconds for VOICE_MINUTE)
+  quantitySeconds Int      // 183 (billable seconds for VOICE_MINUTE; 0 for TEXT_LLM)
+  // ── Text-LLM attribution (TEXT_LLM rows only) ──
+  aiFeature       String?  // 'assistant_chat', 'suggested_reply', 'smart_quote', …
+  aiModel         String?  // 'glm-4-plus', 'gpt-4o-mini', …
+  promptTokens    Int?
+  completionTokens Int?
+  totalTokens     Int?
   // ── Cost breakdown (optional — populated when Vapi reports costs) ──
-  providerCostUsd Float?   // 0.42 (Vapi + telephony cost)
+  providerCostUsd Float?   // 0.42 (Vapi + telephony cost) — for TEXT_LLM: estimated token cost
   revenueUsd     Float?   // 0.60 (what we charged the customer)
   costBreakdownJson String? // {vapi: 0.05, telephony: 0.02, llm: 0.03, stt: 0.01, tts: 0.01}
-  // ── Billing period (matches the entitlement's period) ──
+  // ── Billing period (matches the entitlement's period; calendar month for TEXT_LLM) ──
   periodStart     DateTime
   periodEnd       DateTime
   // ── When the usage happened (vs when the ledger row was written) ──
   occurredAt      DateTime
   createdAt       DateTime @default(now())
 
-  entitlement AddonEntitlement @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+  entitlement AddonEntitlement? @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([entitlementId])
   @@index([usageType])
   @@index([occurredAt])
+  @@index([tenantId, occurredAt])
+  @@index([usageType, occurredAt])
   @@index([periodStart, periodEnd])
 }
 

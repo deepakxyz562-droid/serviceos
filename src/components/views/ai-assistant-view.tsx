@@ -19,6 +19,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { AiChatPanel } from '@/components/dashboard/ai-chat-panel';
+import { KnowledgeBasePanel } from '@/components/dashboard/knowledge-base-panel';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -102,7 +104,7 @@ const SENTIMENT_COLORS: Record<string, string> = {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function AiAssistantView() {
-  const [activeTab, setActiveTab] = useState('suggestions');
+  const [activeTab, setActiveTab] = useState('chat');
   const [suggestedReplies, setSuggestedReplies] = useState<SuggestedReply[]>([]);
   const [summaries, setSummaries] = useState<ConversationSummary[]>([]);
   const [intents, setIntents] = useState<DetectedIntent[]>([]);
@@ -156,14 +158,28 @@ export function AiAssistantView() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
         <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="chat" className="text-xs">Chat Assistant</TabsTrigger>
+          <TabsTrigger value="knowledge" className="text-xs">Knowledge Base</TabsTrigger>
           <TabsTrigger value="suggestions" className="text-xs">Suggested Replies</TabsTrigger>
           <TabsTrigger value="summaries" className="text-xs">Summaries</TabsTrigger>
           <TabsTrigger value="intents" className="text-xs">Intent Detection</TabsTrigger>
           <TabsTrigger value="leads" className="text-xs">Lead Scoring</TabsTrigger>
           <TabsTrigger value="tags" className="text-xs">Auto Tags</TabsTrigger>
         </TabsList>
+
+        {/* Chat Assistant (Tier 2) */}
+        <TabsContent value="chat" className="mt-0">
+          <div className="h-[calc(100vh-260px)] min-h-[480px]">
+            <AiChatPanel />
+          </div>
+        </TabsContent>
+
+        {/* Knowledge Base (Tier 3 — RAG) */}
+        <TabsContent value="knowledge" className="mt-0">
+          <KnowledgeBasePanel />
+        </TabsContent>
 
         {/* Suggested Replies */}
         <TabsContent value="suggestions">

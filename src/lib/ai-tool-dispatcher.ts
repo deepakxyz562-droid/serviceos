@@ -60,6 +60,7 @@ export const AI_TOOL_CAPABILITIES: Record<string, string> = {
   get_business_hours: 'READ_SCHEDULE',
   get_service_options: 'READ_CATALOG',
   check_availability: 'READ_SCHEDULE',
+  search_knowledge_base: 'READ_KNOWLEDGE',
 
   // Action tools
   create_lead: 'CREATE_LEAD',
@@ -93,6 +94,7 @@ export const TOOL_ACTION_TYPES: Record<string, ToolActionType> = {
   get_business_hours: 'READ',
   get_service_options: 'READ',
   check_availability: 'READ',
+  search_knowledge_base: 'READ',
 
   // Reversible write tools
   create_lead: 'WRITE_REVERSIBLE',

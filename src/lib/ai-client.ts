@@ -28,6 +28,7 @@
 
 import { db } from '@/lib/db'
 import { decryptKey } from '@/lib/ai-key-crypto'
+import { trackAiUsage } from '@/lib/ai-usage-tracker'
 
 // ─── Shared types ───────────────────────────────────────────────────────────
 
@@ -94,12 +95,16 @@ const OPENROUTER_MODELS = [
 const REQUEST_TIMEOUT_MS = 60_000
 
 /** Provider order — OpenRouter is preferred (cheapest + free pool), then
- *  paid providers in increasing cost-per-call order. */
-const PROVIDER_ORDER = ['openrouter', 'openai', 'anthropic', 'gemini'] as const
+ *  paid providers in increasing cost-per-call order. ZAI (z-ai-web-dev-sdk)
+ *  is the LAST resort: it auto-configures from the SDK's built-in sandbox key
+ *  and is only reached when the superadmin has configured zero provider keys.
+ *  In production, superadmin-managed AiProviderKey rows (OpenRouter/OpenAI/
+ *  Anthropic/Gemini) are always tried first. */
+const PROVIDER_ORDER = ['openrouter', 'openai', 'anthropic', 'gemini', 'zai'] as const
 type ProviderName = (typeof PROVIDER_ORDER)[number]
 
 function isProviderName(s: string): s is ProviderName {
-  return s === 'openrouter' || s === 'openai' || s === 'anthropic' || s === 'gemini'
+  return s === 'openrouter' || s === 'openai' || s === 'anthropic' || s === 'gemini' || s === 'zai'
 }
 
 const DEFAULT_MODELS: Record<ProviderName, string[]> = {
@@ -107,6 +112,7 @@ const DEFAULT_MODELS: Record<ProviderName, string[]> = {
   openai: ['gpt-4o-mini'],
   anthropic: ['claude-3-5-haiku-20241022'],
   gemini: ['gemini-1.5-flash'],
+  zai: ['glm-4-plus'],
 }
 
 const ENV_VAR_FOR_PROVIDER: Record<ProviderName, string> = {
@@ -114,6 +120,7 @@ const ENV_VAR_FOR_PROVIDER: Record<ProviderName, string> = {
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   gemini: 'GEMINI_API_KEY',
+  zai: 'ZAI_API_KEY',
 }
 
 // ─── Key chain loader ───────────────────────────────────────────────────────
@@ -124,8 +131,9 @@ interface LoadedKey {
   provider: ProviderName
   plaintext: string
   priority: number
-  /** 'db' = decrypted from AiProviderKey row, 'env' = from process.env. */
-  source: 'db' | 'env'
+  /** 'db' = decrypted from AiProviderKey row, 'env' = from process.env,
+   *  'sdk' = ZAI SDK auto-configured (no key needed, adapter uses SDK). */
+  source: 'db' | 'env' | 'sdk'
 }
 
 type KeyChain = Record<ProviderName, LoadedKey[]>
@@ -151,6 +159,7 @@ export async function loadAiKeyChain(): Promise<KeyChain> {
     openai: [],
     anthropic: [],
     gemini: [],
+    zai: [],
   }
 
   try {
@@ -205,6 +214,21 @@ export async function loadAiKeyChain(): Promise<KeyChain> {
         source: 'env',
       })
     }
+  }
+
+  // ZAI SDK fallback: the z-ai-web-dev-sdk auto-configures from a built-in
+  // sandbox key, so it always provides one "key" entry even when no env var
+  // or DB key is set. This is the last-resort provider for dev/sandbox — in
+  // production, superadmin-managed keys are tried first and ZAI is never
+  // reached.
+  if (chain.zai.length === 0) {
+    chain.zai.push({
+      id: 'sdk:zai',
+      provider: 'zai',
+      plaintext: '',
+      priority: 999,
+      source: 'sdk',
+    })
   }
 
   keyChainCache = {
@@ -630,11 +654,95 @@ const geminiAdapter: AiProviderAdapter = {
   },
 }
 
+// ── ZAI SDK adapter (last-resort fallback) ──────────────────────────────────
+// Uses z-ai-web-dev-sdk which auto-configures from a built-in sandbox key.
+// The `apiKey` param is ignored — the SDK handles auth internally.
+// Only reached when all superadmin-managed providers + env vars are exhausted.
+
+let zaiSdkInstance: unknown | null = null
+async function getZaiSdk() {
+  if (zaiSdkInstance) return zaiSdkInstance
+  try {
+    const ZAI = (await import('z-ai-web-dev-sdk')).default
+    zaiSdkInstance = await ZAI.create()
+    return zaiSdkInstance
+  } catch (err) {
+    console.warn('[ai-client] ZAI SDK init failed:', err instanceof Error ? err.message : String(err))
+    return null
+  }
+}
+
+const zaiAdapter: AiProviderAdapter = {
+  name: 'zai',
+  async request({ messages, temperature, maxTokens, json, signal }) {
+    try {
+      const zai = await getZaiSdk()
+      if (!zai) {
+        return {
+          ok: false,
+          status: 503,
+          error: 'ZAI SDK not available',
+          shouldRotateKey: false,
+          shouldSwitchProvider: true,
+        }
+      }
+      // The ZAI SDK respects an AbortSignal via a timeout, not a signal param.
+      // We rely on the outer AbortController (60s) + the SDK's own timeout.
+      const zaiInstance = zai as {
+        chat: {
+          completions: {
+            create: (body: Record<string, unknown>) => Promise<{
+              choices?: Array<{ message?: { content?: string } }>
+              usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+              model?: string
+            }>
+          }
+        }
+      }
+      const response = await zaiInstance.chat.completions.create({
+        messages,
+        temperature,
+        maxTokens,
+        ...(json ? { response_format: { type: 'json_object' } } : {}),
+      })
+      const content = response.choices?.[0]?.message?.content || ''
+      if (!content || content.trim().length < 1) {
+        return {
+          ok: false,
+          status: 200,
+          error: 'Empty content from ZAI SDK',
+          shouldRotateKey: false,
+          shouldSwitchProvider: true,
+        }
+      }
+      return {
+        ok: true,
+        content,
+        usage: {
+          promptTokens: response.usage?.prompt_tokens,
+          completionTokens: response.usage?.completion_tokens,
+        },
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // If the SDK is unavailable (e.g. not installed), don't retry — switch.
+      return {
+        ok: false,
+        status: 0,
+        error: msg,
+        shouldRotateKey: false,
+        shouldSwitchProvider: true,
+      }
+    }
+  },
+}
+
 const ADAPTERS: Record<ProviderName, AiProviderAdapter> = {
   openrouter: openRouterAdapter,
   openai: openAiAdapter,
   anthropic: anthropicAdapter,
   gemini: geminiAdapter,
+  zai: zaiAdapter,
 }
 
 // ─── DB update helpers (fire-and-forget) ────────────────────────────────────
@@ -726,8 +834,12 @@ export async function callAI(options: {
   maxTokens?: number
   json?: boolean
   preferredModel?: string
+  /** When set, the successful call is written to the UsageLedger (TEXT_LLM row
+   *  with tokens + estimated cost) and the tenant counter is incremented.
+   *  Pass this instead of manually calling trackAiUsage to avoid double counting. */
+  usageContext?: { tenantId: string; feature: string }
 }): Promise<CallAIResult> {
-  const { messages, temperature, maxTokens, json, preferredModel } = options
+  const { messages, temperature, maxTokens, json, preferredModel, usageContext } = options
 
   const chain = await loadAiKeyChain()
 
@@ -782,6 +894,17 @@ export async function callAI(options: {
 
         if (result.ok) {
           recordKeySuccess(key)
+          // Tier 4: write UsageLedger TEXT_LLM row + increment tenant counter.
+          if (usageContext) {
+            await trackAiUsage(usageContext.tenantId, {
+              feature: usageContext.feature,
+              model,
+              promptTokens: result.usage?.promptTokens,
+              completionTokens: result.usage?.completionTokens,
+              totalTokens:
+                (result.usage?.promptTokens ?? 0) + (result.usage?.completionTokens ?? 0) || undefined,
+            }).catch(() => undefined)
+          }
           return {
             content: result.content,
             provider,
@@ -868,7 +991,8 @@ export function isAiConfigured(): boolean {
     process.env.OPENROUTER_API_KEY ||
     process.env.OPENAI_API_KEY ||
     process.env.ANTHROPIC_API_KEY ||
-    process.env.GEMINI_API_KEY
+    process.env.GEMINI_API_KEY ||
+    process.env.ZAI_API_KEY
   ) {
     return true
   }
@@ -878,22 +1002,23 @@ export function isAiConfigured(): boolean {
 
 /**
  * Async check — returns true if either (a) any AI provider env var is set,
- * or (b) the DB has at least one active AiProviderKey row. DB errors are
- * caught + logged; the function returns false only if BOTH env and DB are
- * empty/unavailable.
+ * (b) the DB has at least one active AiProviderKey row, or (c) the ZAI SDK
+ * is available (it auto-configures from a built-in sandbox key, so it always
+ * provides a last-resort fallback). DB errors are caught + logged.
  */
 export async function isAiConfiguredAsync(): Promise<boolean> {
   if (isAiConfigured()) return true
   try {
     const count = await db.aiProviderKey.count({ where: { isActive: true } })
-    return count > 0
+    if (count > 0) return true
   } catch (err) {
     console.warn(
       '[ai-client] DB count failed in isAiConfiguredAsync: ' +
         (err instanceof Error ? err.message : String(err)),
     )
-    return false
   }
+  // ZAI SDK auto-configures — always available as a fallback.
+  return true
 }
 
 // ─── Prompt builder (unchanged) ─────────────────────────────────────────────

@@ -635,6 +635,24 @@ registerToolHandler('transfer_to_human', async (ctx, params) => {
   };
 });
 
+// ─── Read tools: knowledge base (Tier 3 RAG) ────────────────────────────────
+registerToolHandler('search_knowledge_base', async (ctx, params) => {
+  const query = typeof params.query === 'string' ? params.query.trim() : '';
+  if (!query) return { error: 'query is required' };
+  try {
+    const { searchKnowledgeBase } = await import('@/lib/ai-knowledge');
+    const snippets = await searchKnowledgeBase(ctx.tenantId, query, 3);
+    if (snippets.length === 0) return { found: false, answer: 'No matching information in the knowledge base.' };
+    return {
+      found: true,
+      snippets: snippets.map((s) => ({ source: s.documentTitle, relevance: Math.round(s.score * 100) / 100, content: s.content })),
+    };
+  } catch (err) {
+    console.error('[AiToolHandlers] search_knowledge_base failed:', err);
+    return { error: 'Knowledge base lookup failed' };
+  }
+});
+
 // ─── Initialize: log available tools ───────────────────────────────────────
 
 console.log('[AiToolHandlers] registered handlers for:', Object.keys({
@@ -644,6 +662,7 @@ console.log('[AiToolHandlers] registered handlers for:', Object.keys({
   get_business_hours: true,
   get_service_options: true,
   check_availability: true,
+  search_knowledge_base: true,
   create_lead: true,
   create_customer: true,
   create_job_request: true,

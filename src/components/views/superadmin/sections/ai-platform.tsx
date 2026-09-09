@@ -50,6 +50,7 @@ import {
   PhoneOff,
   RotateCcw,
   Ban,
+  MessageSquareText,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,6 +59,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { TextSpendSubTab } from '@/components/views/superadmin/sections/ai-text-spend';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -130,7 +132,7 @@ interface PhoneNumberRecord {
 
 // ─── Main component ────────────────────────────────────────────────────────
 
-type SubTab = 'overview' | 'providers' | 'kill-switch' | 'calls' | 'reconciliation' | 'health';
+type SubTab = 'overview' | 'text-spend' | 'providers' | 'kill-switch' | 'calls' | 'reconciliation' | 'health';
 
 export function AiPlatformSection() {
   const [tab, setTab] = useState<SubTab>('overview');
@@ -152,6 +154,10 @@ export function AiPlatformSection() {
           <TabsTrigger value="overview" className="gap-1.5">
             <TrendingUp className="size-3.5" />
             Overview
+          </TabsTrigger>
+          <TabsTrigger value="text-spend" className="gap-1.5">
+            <MessageSquareText className="size-3.5" />
+            Text Spend
           </TabsTrigger>
           <TabsTrigger value="providers" className="gap-1.5">
             <Key className="size-3.5" />
@@ -177,6 +183,9 @@ export function AiPlatformSection() {
 
         <TabsContent value="overview" className="mt-4">
           <OverviewSubTab />
+        </TabsContent>
+        <TabsContent value="text-spend" className="mt-4">
+          <TextSpendSubTab />
         </TabsContent>
         <TabsContent value="providers" className="mt-4">
           <ProvidersSubTab />

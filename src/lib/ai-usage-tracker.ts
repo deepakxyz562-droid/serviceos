@@ -1,60 +1,21 @@
 /**
- * AI Usage Tracker — shared quota + usage-count helper for text-LLM calls.
- * =====================================================================
+ * AI Usage Tracker — quota enforcement + token-cost ledger for LLM calls.
+ * ===========================================================================
  *
- * PROBLEM: `Tenant.aiQuota` (default 100) + `Tenant.aiUsageCount` (default 0)
- * exist in the Prisma schema but were NEVER decremented or checked by any
- * text-LLM AI route (suggested-reply, smart-quote, field-assistant, etc.).
- * The quota fields were dead code — tenants could make unlimited LLM calls
- * with zero tracking.
+ * CRITICAL FIX: aiQuota/aiUsageCount live on Subscription (latest row per
+ * tenant), NOT on Tenant — the previous code queried Tenant.aiQuota which
+ * always threw PrismaClientValidationError and silently fail-opened.
  *
- * FIX: This module provides two helpers that every text-LLM AI route SHOULD
- * call:
- *
- *   1. `checkAiQuota(tenantId)` — call BEFORE the LLM call (admission control).
- *      Returns `{ ok: true }` or `{ ok: false, response }` (a 429 NextResponse).
- *
- *   2. `trackAiUsage(tenantId)` — call AFTER a successful LLM call (usage
- *      tracking). Increments `aiUsageCount` by 1. Best-effort: never throws.
- *
- * DESIGN DECISIONS:
- *   - Best-effort: a DB failure in the tracker never blocks the AI call.
- *     The LLM response is the user-facing value; usage tracking is ops-only.
- *   - Only count SUCCESSFUL calls: if the LLM call fails / throws / returns
- *     an error, the caller should NOT call `trackAiUsage` — so failed
- *     retries don't burn the tenant's quota.
- *   - The check is a simple `>=` comparison (not atomic increment-then-check).
- *     This means a race condition could let 2 concurrent calls through when
- *     only 1 slot remains. This is acceptable for a soft quota — the
- *     alternative (a Postgres atomic UPDATE...RETURNING) is overkill for a
- *     counter that resets monthly via cron.
- *
- * USAGE:
- *   ```ts
- *   import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker';
- *
- *   export async function POST(request: NextRequest) {
- *     const user = await getAuthUser();
- *     const tenantId = user?.tenantId;
- *     if (!tenantId) return NextResponse.json({ error: '...' }, { status: 400 });
- *
- *     // 1. Check quota BEFORE the LLM call
- *     const quota = await checkAiQuota(tenantId);
- *     if (!quota.ok) return quota.response;
- *
- *     // 2. Make the LLM call...
- *     const result = await callLLM();
- *     if (!result.success) return NextResponse.json({ error: '...' }, { status: 503 });
- *
- *     // 3. Track usage AFTER success
- *     await trackAiUsage(tenantId);
- *
- *     return NextResponse.json({ data: result.data });
- *   }
- *   ```
+ * TWO DATA MODELS:
+ *   1. Subscription.aiQuota / aiUsageCount — the tenant-facing soft quota
+ *      ("100 AI calls / month"). Admission control + a fast counter.
+ *   2. UsageLedger rows with usageType 'TEXT_LLM' — the money view: one row
+ *      per successful LLM call with the feature, model, token counts and an
+ *      estimated provider cost. Feeds the superadmin AI-spend dashboard.
  */
 
 import { NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 
 export interface QuotaCheckResult {
@@ -62,33 +23,60 @@ export interface QuotaCheckResult {
   response?: NextResponse;
 }
 
-/**
- * Check whether the tenant has remaining AI quota.
- * Call BEFORE the LLM call (admission control).
- *
- * Returns `{ ok: true }` if the tenant can proceed, or
- * `{ ok: false, response }` with a 429 if over quota.
- *
- * Best-effort: if the DB lookup fails, we ALLOW the call (fail-open) so a
- * transient DB hiccup doesn't block the user. The quota is a soft limit,
- * not a hard security boundary.
- */
+/** Token/model metadata captured from a successful text-LLM call. */
+export interface AiTextUsageMeta {
+  feature: string;
+  model?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
+// ─── Cost estimation ────────────────────────────────────────────────────────
+
+const MODEL_PRICES_PER_1M: Record<string, { prompt: number; completion: number }> = {
+  'gpt-4o-mini': { prompt: 0.15, completion: 0.6 },
+  'gpt-4o': { prompt: 2.5, completion: 10 },
+  'gpt-4.1-mini': { prompt: 0.4, completion: 1.6 },
+  'gpt-4.1': { prompt: 2, completion: 8 },
+  'glm-4-plus': { prompt: 0.5, completion: 0.5 },
+  'glm-4-flash': { prompt: 0.05, completion: 0.05 },
+  'glm-4.5-flash': { prompt: 0.05, completion: 0.05 },
+  'claude-3-5-sonnet': { prompt: 3, completion: 15 },
+  'claude-3-5-haiku': { prompt: 0.8, completion: 4 },
+  'gemini-2.0-flash': { prompt: 0.1, completion: 0.4 },
+  'gemini-1.5-flash': { prompt: 0.075, completion: 0.3 },
+  'text-embedding-3-small': { prompt: 0.02, completion: 0 },
+};
+
+const DEFAULT_PRICE = { prompt: 0.5, completion: 1.5 };
+
+export function estimateTextLlmCostUsd(meta: AiTextUsageMeta): number | null {
+  const prompt = meta.promptTokens ?? 0;
+  const completion = meta.completionTokens ?? 0;
+  if (prompt === 0 && completion === 0) return null;
+
+  const key = Object.keys(MODEL_PRICES_PER_1M).find((k) => (meta.model ?? '').toLowerCase().includes(k));
+  const price = key ? MODEL_PRICES_PER_1M[key] : DEFAULT_PRICE;
+
+  return Number(
+    ((prompt / 1_000_000) * price.prompt + (completion / 1_000_000) * price.completion).toFixed(6),
+  );
+}
+
+// ─── Quota check ────────────────────────────────────────────────────────────
+
 export async function checkAiQuota(tenantId: string): Promise<QuotaCheckResult> {
   try {
-    const tenant = await db.tenant.findUnique({
-      where: { id: tenantId },
+    const subscription = await db.subscription.findFirst({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
       select: { aiQuota: true, aiUsageCount: true },
     });
+    if (!subscription) return { ok: true };
 
-    // Tenant not found → let the caller's own auth check handle it.
-    if (!tenant) return { ok: true };
-
-    // Super-admins bypass the quota (they're testing / supporting).
-    // We can't check role here without a DB join, so we rely on the caller
-    // to skip the check for super-admins if desired.
-
-    const quota = tenant.aiQuota ?? 100;
-    const used = tenant.aiUsageCount ?? 0;
+    const quota = subscription.aiQuota ?? 100;
+    const used = subscription.aiUsageCount ?? 0;
 
     if (used >= quota) {
       return {
@@ -96,38 +84,77 @@ export async function checkAiQuota(tenantId: string): Promise<QuotaCheckResult> 
         response: NextResponse.json(
           {
             error: 'AI usage quota exceeded for this billing period.',
-            used,
-            quota,
+            used, quota,
             hint: 'Quota resets monthly. Upgrade your plan for more AI calls.',
           },
           { status: 429 },
         ),
       };
     }
-
     return { ok: true };
   } catch (err) {
-    // Fail-open: DB error shouldn't block the AI call.
     console.warn('[ai-usage-tracker] checkAiQuota failed (allowing call):', err);
     return { ok: true };
   }
 }
 
+// ─── Usage tracking ─────────────────────────────────────────────────────────
+
+function monthBounds(now = new Date()): { periodStart: Date; periodEnd: Date } {
+  return {
+    periodStart: new Date(now.getFullYear(), now.getMonth(), 1),
+    periodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
+  };
+}
+
 /**
- * Increment the tenant's AI usage counter by 1.
- * Call AFTER a successful LLM call (usage tracking).
- *
- * Best-effort: never throws. If the DB update fails, the LLM response still
- * goes through to the user — usage tracking is ops-only.
+ * Record a successful text-LLM call.
+ *   1. Increments Subscription.aiUsageCount (the tenant-facing counter).
+ *   2. When `meta` is provided, writes a UsageLedger TEXT_LLM row with tokens
+ *      + estimated cost (best-effort — a ledger failure never throws).
  */
-export async function trackAiUsage(tenantId: string): Promise<void> {
+export async function trackAiUsage(tenantId: string, meta?: AiTextUsageMeta): Promise<void> {
+  // 1. Quota counter
   try {
-    await db.tenant.update({
-      where: { id: tenantId },
-      data: { aiUsageCount: { increment: 1 } },
+    const subscription = await db.subscription.findFirst({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (subscription) {
+      await db.subscription.update({
+        where: { id: subscription.id },
+        data: { aiUsageCount: { increment: 1 } },
+      });
+    }
+  } catch (err) {
+    console.warn('[ai-usage-tracker] counter increment failed (non-blocking):', err);
+  }
+
+  // 2. Ledger row with token attribution
+  if (!meta?.feature) return;
+  try {
+    const cost = estimateTextLlmCostUsd(meta);
+    const { periodStart, periodEnd } = monthBounds();
+    await db.usageLedger.create({
+      data: {
+        tenantId,
+        entitlementId: null,
+        idempotencyKey: `text:${randomUUID()}:${meta.feature}`,
+        usageType: 'TEXT_LLM',
+        quantitySeconds: 0,
+        aiFeature: meta.feature.slice(0, 100),
+        aiModel: meta.model?.slice(0, 100) ?? null,
+        promptTokens: meta.promptTokens ?? null,
+        completionTokens: meta.completionTokens ?? null,
+        totalTokens: meta.totalTokens ?? null,
+        providerCostUsd: cost,
+        periodStart,
+        periodEnd,
+        occurredAt: new Date(),
+      },
     });
   } catch (err) {
-    // Non-fatal — the AI response already succeeded. Log + move on.
-    console.warn('[ai-usage-tracker] trackAiUsage failed (non-blocking):', err);
+    console.warn('[ai-usage-tracker] TEXT_LLM ledger write failed (non-blocking):', err);
   }
 }
