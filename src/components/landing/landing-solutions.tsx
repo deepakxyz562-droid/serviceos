@@ -54,6 +54,12 @@ export const solutionsLinks = {
     { label: 'Download Mobile App', href: 'https://play.google.com/store/apps/details?id=com.fieseros.app' },
     { label: 'Automations', href: '/automations' },
   ],
+  services: [
+    { label: 'Contractor Website Development', href: '/services/website-development' },
+    { label: 'Local SEO & Google Business Profile', href: '/services/seo' },
+    { label: 'Google Search & Local Ads', href: '/services/google-ads' },
+    { label: 'All Growth Services', href: '/services' },
+  ],
   compare: [
     { label: 'Jobber Alternatives', href: '/jobber-alternatives' },
     { label: 'Housecall Pro Alternatives', href: '/housecall-pro-alternatives' },
@@ -77,8 +83,8 @@ export const footerLinks = {
   ],
   company: [
     { label: 'About', href: '/contact-us' },
-    { label: 'Blog', href: '/contact-us' },
-    { label: 'Careers', href: '/contact-us' },
+    { label: 'Blog', href: '/blog' },
+    { label: 'Notification Setup', href: '/docs/notifications-setup' },
     { label: 'Contact', href: '/contact-us' },
   ],
   legal: [
@@ -126,14 +132,14 @@ export function SolutionsMegaMenu() {
 
       {open ? (
         <div className="absolute left-0 top-full z-50 pt-2">
-          <div className="w-[min(44rem,calc(100vw-2rem))] rounded-xl border bg-background shadow-xl overflow-hidden">
+          <div className="w-[min(56rem,calc(100vw-2rem))] rounded-xl border bg-background shadow-xl overflow-hidden">
             <div className="grid grid-cols-12">
-              {/* Industries — 6/12 cols, split into two sub-columns */}
-              <div className="col-span-6 p-5 border-r">
+              {/* Industries — 5/12 cols, split into two sub-columns */}
+              <div className="col-span-5 p-5 border-r">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Industries</h4>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                   {solutionsLinks.industries.map((link) => (
-                    <a key={link.href} href={link.href} className="text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors">
+                    <a key={link.href} href={link.href} className="text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors truncate">
                       {link.label}
                     </a>
                   ))}
@@ -145,26 +151,37 @@ export function SolutionsMegaMenu() {
                 <ul className="space-y-0.5">
                   {solutionsLinks.features.map((link) => (
                     <li key={link.href}>
-                      <a href={link.href} {...externalProps(link.href)} className="text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors block">{link.label}</a>
+                      <a href={link.href} {...externalProps(link.href)} className="text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors block">{link.label}</a>
                     </li>
                   ))}
                 </ul>
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 mt-4">Free Tools</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 mt-3">Free Tools</h4>
                 <ul className="space-y-0.5">
                   {solutionsLinks.freeTools.map((link) => (
                     <li key={link.href}>
-                      <a href={link.href} className="text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors block">{link.label}</a>
+                      <a href={link.href} className="text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors block">{link.label}</a>
                     </li>
                   ))}
                 </ul>
               </div>
-              {/* Compare — 3/12 cols */}
-              <div className="col-span-3 p-5">
+              {/* Growth Services — 2/12 cols */}
+              <div className="col-span-2 p-5 border-r">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Services</h4>
+                <ul className="space-y-0.5">
+                  {solutionsLinks.services.map((link) => (
+                    <li key={link.href}>
+                      <a href={link.href} className="text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors block">{link.label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {/* Compare — 2/12 cols */}
+              <div className="col-span-2 p-5">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Compare</h4>
                 <ul className="space-y-0.5">
                   {solutionsLinks.compare.map((link) => (
                     <li key={link.href}>
-                      <a href={link.href} className="text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors block">{link.label}</a>
+                      <a href={link.href} className="text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors block">{link.label}</a>
                     </li>
                   ))}
                 </ul>
@@ -243,7 +260,7 @@ export function LandingFooter() {
           </div>
 
           {/* Product */}
-          <div className="col-span-2 md:col-span-2">
+          <div className="col-span-1 md:col-span-2">
             <h4 className="text-background font-semibold text-sm mb-4">Product</h4>
             <ul className="space-y-2.5">
               {footerLinks.product.map((link) => (
@@ -254,21 +271,33 @@ export function LandingFooter() {
             </ul>
           </div>
 
+          {/* Growth Services */}
+          <div className="col-span-1 md:col-span-2">
+            <h4 className="text-background font-semibold text-sm mb-4">Services</h4>
+            <ul className="space-y-2.5">
+              {solutionsLinks.services.map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
           {/* Industries — split into two sub-columns */}
-          <div className="col-span-2 md:col-span-4">
+          <div className="col-span-2 md:col-span-3">
             <h4 className="text-background font-semibold text-sm mb-4">Industries</h4>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+            <div className="grid grid-cols-2 gap-x-2 gap-y-2.5">
               <ul className="space-y-2.5">
                 {industriesA.map((link) => (
                   <li key={link.href}>
-                    <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
+                    <a href={link.href} className="text-background/60 text-xs hover:text-background transition-colors truncate block">{link.label}</a>
                   </li>
                 ))}
               </ul>
               <ul className="space-y-2.5">
                 {industriesB.map((link) => (
                   <li key={link.href}>
-                    <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
+                    <a href={link.href} className="text-background/60 text-xs hover:text-background transition-colors truncate block">{link.label}</a>
                   </li>
                 ))}
               </ul>
@@ -276,7 +305,7 @@ export function LandingFooter() {
           </div>
 
           {/* Compare + Features + Free Tools (stacked) */}
-          <div className="col-span-2 md:col-span-3">
+          <div className="col-span-2 md:col-span-2">
             <h4 className="text-background font-semibold text-sm mb-4">Compare</h4>
             <ul className="space-y-2.5">
               {solutionsLinks.compare.map((link) => (

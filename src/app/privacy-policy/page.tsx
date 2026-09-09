@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BrandMark } from "@/components/brand/brand-mark";
 import type { Metadata } from "next";
 import { CornerstoneFooter } from "@/components/seo/cornerstone-footer";
+import { CornerstoneHeader } from "@/components/seo/cornerstone-header";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Fieseros CRM",
@@ -35,22 +36,7 @@ export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* ───── Header ───── */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
-            <span className="text-xl font-bold tracking-tight text-foreground">
-              Fieseros
-            </span>
-          </Link>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-          >
-            &larr; Back to Home
-          </Link>
-        </div>
-      </header>
+      <CornerstoneHeader activePath="/privacy-policy" />
 
       {/* ───── Body ───── */}
       <main className="flex-1">

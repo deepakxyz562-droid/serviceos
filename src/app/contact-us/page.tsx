@@ -14,6 +14,7 @@ import ContactForm from "./contact-form";
 import ContactMap from "./contact-map";
 import ContactChannels from "./contact-channels";
 import { CornerstoneFooter } from "@/components/seo/cornerstone-footer";
+import { CornerstoneHeader } from "@/components/seo/cornerstone-header";
 
 export const metadata: Metadata = {
   title: "Contact Us — Fieseros | Sales, Support & Inquiries",
@@ -146,34 +147,7 @@ export default function ContactUsPage() {
       />
 
       {/* ───── Header ───── */}
-      <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
-            <span className="text-xl font-bold tracking-tight text-foreground">
-              Fieseros
-            </span>
-          </Link>
-
-          <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border/80 bg-card px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:bg-accent hover:text-accent-foreground shadow-sm"
-            >
-              &larr; Back to Home
-            </Link>
-            <Button
-              asChild
-              size="sm"
-              className="hidden sm:inline-flex bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 shadow-sm"
-            >
-              <Link href="/auth/login">
-                Sign In
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </header>
+      <CornerstoneHeader activePath="/contact-us" />
 
       {/* ───── Body ───── */}
       <main className="flex-1">

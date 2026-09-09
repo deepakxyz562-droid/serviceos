@@ -6,7 +6,7 @@ import { StructuredData } from "./structured-data";
 import { AiReceptionistSection } from "./ai-receptionist-section";
 
 /**
- * Master layout for all SEO cornerstone pages.
+ * Master layout for all SEO cornerstone, marketing, and standalone pages.
  *
  * - Renders the shared header + footer (internal linking mesh)
  * - Injects Organization + WebSite schema site-wide
@@ -19,6 +19,7 @@ import { AiReceptionistSection } from "./ai-receptionist-section";
  *     description="..."
  *     breadcrumbs={[...]}
  *     additionalSchema={[...]}
+ *     activePath="/field-service-software"
  *   >
  *     {page content}
  *   </CornerstoneLayout>
@@ -28,11 +29,15 @@ export function CornerstoneLayout({
   breadcrumbs = [],
   additionalSchema = [],
   activePath,
+  showAiReceptionist = true,
+  showFooter = true,
 }: {
   children: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
   additionalSchema?: object[];
   activePath?: string;
+  showAiReceptionist?: boolean;
+  showFooter?: boolean;
 }) {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -55,10 +60,10 @@ export function CornerstoneLayout({
       </main>
 
       {/* Shared AI Receptionist showcase — surfaces the voice-agent feature on
-          every cornerstone marketing page and drives clicks to /#ai-receptionist. */}
-      <AiReceptionistSection />
+          cornerstone marketing pages and drives clicks to /#ai-receptionist. */}
+      {showAiReceptionist && <AiReceptionistSection />}
 
-      <CornerstoneFooter />
+      {showFooter && <CornerstoneFooter />}
     </div>
   );
 }

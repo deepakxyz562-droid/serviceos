@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { Twitter, Linkedin, Github, ShieldCheck, Mail, MapPin } from "lucide-react";
 import { BrandMark } from "@/components/brand/brand-mark";
+import { GooglePlayBadge } from "@/components/brand/google-play-badge";
 
 /**
- * Shared rich footer for all SEO cornerstone, marketplace, and public marketing pages.
+ * Shared rich footer for all SEO cornerstone, marketing, and public pages.
  * Includes comprehensive internal linking mesh between cornerstone pages for SEO,
- * brand signals, and compliance links.
+ * brand trust signals, Google Play badge, and compliance links.
  * Server component — zero client JS.
  */
 export function CornerstoneFooter() {
@@ -17,7 +18,7 @@ export function CornerstoneFooter() {
     { href: "/technician-app", label: "Technician App" },
     { href: "/automations", label: "Automations" },
     { href: "/#ai-receptionist", label: "AI Receptionist" },
-    { href: "/marketplace", label: "Provider Marketplace" },
+    { href: "/features", label: "All Features" },
   ];
 
   const servicesLinks = [
@@ -57,10 +58,12 @@ export function CornerstoneFooter() {
 
   const resourceLinks = [
     { href: "/invoice-generator", label: "Free Invoice Generator" },
+    { href: "/blog", label: "Contractor Blog" },
     { href: "/docs/notifications-setup", label: "Notification Setup Guide" },
     { href: "/contact-us", label: "Contact Us" },
     { href: "/privacy-policy", label: "Privacy Policy" },
     { href: "/terms-of-service", label: "Terms of Service" },
+    { href: "/cookie-policy", label: "Cookie Policy" },
     { href: "/data-deletion", label: "Data Deletion Request" },
   ];
 
@@ -87,6 +90,9 @@ export function CornerstoneFooter() {
             </div>
 
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+              <div className="flex items-center">
+                <GooglePlayBadge size="sm" />
+              </div>
               <a
                 href="mailto:support@fieseros.com"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-card px-3 py-2 hover:border-emerald-500/50 hover:text-emerald-600 transition-colors shadow-2xs"
