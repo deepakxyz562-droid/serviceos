@@ -253,7 +253,8 @@ export default function NotificationSetupGuidePage() {
       <CtaSection
         title="Ready to automate your customer communication?"
         subtitle="Start your free trial today. Set up SMS reminders, technician dispatch alerts, and 1-click invoices in under 30 minutes."
-        primaryCta="Start Free Trial"
+        primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
+        secondaryCta={{ label: "Contact Sales", href: "/contact-us" }}
       />
     </CornerstoneLayout>
   );

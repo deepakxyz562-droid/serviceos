@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 
+export type CtaButtonProp = string | { label: string; href: string };
+
 /**
  * Call-to-action section used at the bottom of cornerstone pages.
  * Designed to convert organic traffic into sign-ups.
+ * Fully resilient to both string and object CTA props.
  */
 export function CtaSection({
   title = "Ready to modernize your service business?",
@@ -18,10 +21,26 @@ export function CtaSection({
 }: {
   title?: string;
   subtitle?: string;
-  primaryCta?: { label: string; href: string };
-  secondaryCta?: { label: string; href: string };
+  primaryCta?: CtaButtonProp;
+  secondaryCta?: CtaButtonProp;
   bullets?: string[];
 }) {
+  const normalizedPrimary =
+    typeof primaryCta === "string"
+      ? { label: primaryCta, href: "/#signup" }
+      : {
+          label: primaryCta?.label || "Start Free",
+          href: primaryCta?.href || "/#signup",
+        };
+
+  const normalizedSecondary =
+    typeof secondaryCta === "string"
+      ? { label: secondaryCta, href: "/contact-us" }
+      : {
+          label: secondaryCta?.label || "Contact Sales",
+          href: secondaryCta?.href || "/contact-us",
+        };
+
   return (
     <section className="border-t bg-gradient-to-b from-emerald-50/50 to-background dark:from-emerald-950/20">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20 text-center">
@@ -48,17 +67,17 @@ export function CtaSection({
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
-            href={primaryCta.href}
+            href={normalizedPrimary.href}
             className="inline-flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
           >
-            {primaryCta.label}
+            {normalizedPrimary.label}
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            href={secondaryCta.href}
+            href={normalizedSecondary.href}
             className="inline-flex w-full sm:w-auto items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
           >
-            {secondaryCta.label}
+            {normalizedSecondary.label}
           </Link>
         </div>
       </div>
