@@ -68,7 +68,6 @@ export interface HubContent {
 // ─── Provider config ────────────────────────────────────────────────────────
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
-const BAZAARLINK_URL = 'https://api.bazaarlink.ai/v1/chat/completions'
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const GEMINI_BASE_URL =
@@ -95,33 +94,24 @@ const OPENROUTER_MODELS = [
   'cohere/north-mini-code:free',
 ]
 
-const BAZAARLINK_MODELS = [
-  'auto:free',
-  'qwen/qwen3.7-flash:free',
-  'gemini-2.5-flash-lite',
-  'deepseek-v4-flash',
-  'gpt-4o-mini',
-]
-
 /** Per-attempt timeout. Free models can be slow on cold starts. */
 const REQUEST_TIMEOUT_MS = 60_000
 
-/** Provider order — OpenRouter and BazaarLink are tried first (multi-model + free pool), then
+/** Provider order — OpenRouter is preferred (cheapest + free pool), then
  *  paid providers in increasing cost-per-call order. ZAI (z-ai-web-dev-sdk)
  *  is the LAST resort: it auto-configures from the SDK's built-in sandbox key
  *  and is only reached when the superadmin has configured zero provider keys.
- *  In production, superadmin-managed AiProviderKey rows (OpenRouter/BazaarLink/OpenAI/
+ *  In production, superadmin-managed AiProviderKey rows (OpenRouter/OpenAI/
  *  Anthropic/Gemini) are always tried first. */
-const PROVIDER_ORDER = ['openrouter', 'bazaarlink', 'openai', 'anthropic', 'gemini', 'zai'] as const
+const PROVIDER_ORDER = ['openrouter', 'openai', 'anthropic', 'gemini', 'zai'] as const
 type ProviderName = (typeof PROVIDER_ORDER)[number]
 
 function isProviderName(s: string): s is ProviderName {
-  return s === 'openrouter' || s === 'bazaarlink' || s === 'openai' || s === 'anthropic' || s === 'gemini' || s === 'zai'
+  return s === 'openrouter' || s === 'openai' || s === 'anthropic' || s === 'gemini' || s === 'zai'
 }
 
 const DEFAULT_MODELS: Record<ProviderName, string[]> = {
   openrouter: OPENROUTER_MODELS,
-  bazaarlink: BAZAARLINK_MODELS,
   openai: ['gpt-4o-mini'],
   anthropic: ['claude-3-5-haiku-20241022'],
   gemini: ['gemini-1.5-flash'],
@@ -130,7 +120,6 @@ const DEFAULT_MODELS: Record<ProviderName, string[]> = {
 
 const ENV_VAR_FOR_PROVIDER: Record<ProviderName, string> = {
   openrouter: 'OPENROUTER_API_KEY',
-  bazaarlink: 'BAZAARLINK_API_KEY',
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   gemini: 'GEMINI_API_KEY',
@@ -170,7 +159,6 @@ export async function loadAiKeyChain(): Promise<KeyChain> {
 
   const chain: KeyChain = {
     openrouter: [],
-    bazaarlink: [],
     openai: [],
     anthropic: [],
     gemini: [],
@@ -421,82 +409,6 @@ const openRouterAdapter: AiProviderAdapter = {
       return { ok: true, content }
     } catch (err) {
       // Network error / abort → switch provider.
-      const msg = err instanceof Error ? err.message : String(err)
-      return {
-        ok: false,
-        status: 0,
-        error: msg,
-        shouldRotateKey: false,
-        shouldSwitchProvider: true,
-      }
-    }
-  },
-}
-
-// ── BazaarLink adapter ──────────────────────────────────────────────────────
-
-const bazaarLinkAdapter: AiProviderAdapter = {
-  name: 'bazaarlink',
-  async request({
-    apiKey,
-    model,
-    messages,
-    temperature,
-    maxTokens,
-    json,
-    signal,
-  }): Promise<ProviderResult> {
-    try {
-      const res = await fetch(BAZAARLINK_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: temperature ?? 0.7,
-          max_tokens: maxTokens ?? 4096,
-          ...(json ? { response_format: { type: 'json_object' } } : {}),
-        }),
-        signal,
-      })
-
-      const text = await res.text().catch(() => '')
-      if (!res.ok) return classifyHttpError('bazaarlink', res.status, text)
-
-      const data = JSON.parse(text) as {
-        choices?: { message?: { content?: string; reasoning?: string }; finish_reason?: string }[]
-        error?: { message?: string }
-      }
-
-      if (data.error?.message) {
-        return {
-          ok: false,
-          status: res.status,
-          error: `BazaarLink: ${data.error.message}`,
-          shouldRotateKey: false,
-          shouldSwitchProvider: false,
-        }
-      }
-
-      const content =
-        data.choices?.[0]?.message?.content ||
-        data.choices?.[0]?.message?.reasoning ||
-        ''
-      if (!content || content.trim().length < 1) {
-        const fr = data.choices?.[0]?.finish_reason
-        return {
-          ok: false,
-          status: res.status,
-          error: `Empty content (finish_reason=${fr || 'unknown'})`,
-          shouldRotateKey: false,
-          shouldSwitchProvider: false,
-        }
-      }
-      return { ok: true, content }
-    } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       return {
         ok: false,
@@ -850,7 +762,6 @@ const zaiAdapter: AiProviderAdapter = {
 
 const ADAPTERS: Record<ProviderName, AiProviderAdapter> = {
   openrouter: openRouterAdapter,
-  bazaarlink: bazaarLinkAdapter,
   openai: openAiAdapter,
   anthropic: anthropicAdapter,
   gemini: geminiAdapter,
@@ -1122,7 +1033,6 @@ export async function callOpenRouter(
 export function isAiConfigured(): boolean {
   if (
     process.env.OPENROUTER_API_KEY ||
-    process.env.BAZAARLINK_API_KEY ||
     process.env.OPENAI_API_KEY ||
     process.env.ANTHROPIC_API_KEY ||
     process.env.GEMINI_API_KEY ||

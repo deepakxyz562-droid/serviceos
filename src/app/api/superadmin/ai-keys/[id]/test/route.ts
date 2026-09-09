@@ -80,14 +80,6 @@ async function testProviderKey(provider: string, plaintextKey: string): Promise<
       if (!res.ok) throw new Error(await extractUpstreamError(res));
       return;
     }
-    case 'bazaarlink': {
-      const res = await fetchWithTimeout('https://api.bazaarlink.ai/v1/models', {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${plaintextKey}` },
-      });
-      if (!res.ok) throw new Error(await extractUpstreamError(res));
-      return;
-    }
     case 'openai': {
       const res = await fetchWithTimeout('https://api.openai.com/v1/models', {
         method: 'GET',
