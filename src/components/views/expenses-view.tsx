@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Wallet,
   Plus,
@@ -55,6 +55,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -182,6 +183,28 @@ export function ExpensesView() {
   const [statusFilter, setStatusFilter] = useState<ExpenseStatus | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [expensesPerPage, setExpensesPerPage] = useState(10);
+
+  // Debounce the search input so typing doesn't fire a network request +
+  // page-reset on every keystroke. 300ms is the canonical delay.
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+      setCurrentPage(1);
+    }, 300);
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [search]);
+
+  // Reset to page 1 when status/category filters change — handled in the
+  // onChange handlers of those filters (not a useEffect, which the React
+  // Compiler flags for cascading renders). The debounced search reset is
+  // handled by the debounce timer effect above.
 
   // Main list data — React Query replaces the manual fetchExpenses
   // useCallback + useEffect. RQ keys the query by
@@ -189,15 +212,20 @@ export function ExpensesView() {
   // search box while a status filter change is still in-flight) no longer
   // race — the latest filter wins and stale responses are discarded.
   const {
-    data: expenses = [],
+    data: expensesData,
     isLoading: loading,
     error: rqError,
     refetch: fetchExpenses,
   } = useExpensesFiltered({
     status: statusFilter !== 'all' ? statusFilter : undefined,
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
+    page: currentPage,
+    limit: expensesPerPage,
   });
+  const expenses = (expensesData?.expenses ?? []) as Expense[];
+  const totalExpenses = expensesData?.pagination?.total ?? 0;
+  const totalPages = expensesData?.pagination?.totalPages ?? 1;
   // `error` mirrors the original string-error state used by the DataTable's
   // `error` prop; derived from RQ's Error object.
   const error = rqError?.message ?? null;
@@ -262,7 +290,11 @@ export function ExpensesView() {
       key: 'description', header: 'Description', render: (exp) => (
         <div className="flex items-center gap-2">
           <span className="text-sm truncate" title={exp.description}>{exp.description}</span>
-          {exp.receiptUrl && <Paperclip className="size-3.5 text-muted-foreground shrink-0" title="Has receipt" />}
+          {exp.receiptUrl && (
+            <span title="Has receipt">
+              <Paperclip className="size-3.5 text-muted-foreground shrink-0" />
+            </span>
+          )}
         </div>
       ),
     },
@@ -432,7 +464,7 @@ export function ExpensesView() {
               <button
                 key={tab.value}
                 type="button"
-                onClick={() => setStatusFilter(tab.value)}
+                onClick={() => { setStatusFilter(tab.value as ExpenseStatus | 'all'); setCurrentPage(1); }}
                 className={`inline-flex items-center h-8 px-3 rounded-full text-xs font-medium transition-colors border ${
                   statusFilter === tab.value
                     ? 'bg-emerald-600 text-white border-emerald-600'
@@ -455,7 +487,7 @@ export function ExpensesView() {
                 className="pl-9"
               />
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <Select value={categoryFilter} onValueChange={(val) => { setCategoryFilter(val); setCurrentPage(1); }}>
               <SelectTrigger className="w-full sm:w-48">
                 <Filter className="size-4 mr-1.5 text-muted-foreground" />
                 <SelectValue placeholder="All categories" />
@@ -484,6 +516,15 @@ export function ExpensesView() {
               emptyMessage="No expenses found"
               emptyIcon={Wallet}
             />
+          <PaginationBar
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalExpenses}
+            pageSize={expensesPerPage}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => { setExpensesPerPage(size); setCurrentPage(1); }}
+            itemName="expenses"
+          />
         </CardContent>
       </Card>
 

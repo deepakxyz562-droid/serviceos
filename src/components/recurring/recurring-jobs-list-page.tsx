@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Calendar as CalendarIcon,
   Eye,
+  LayoutGrid,
   Loader2,
   MoreVertical,
   Pause,
@@ -39,17 +40,26 @@ import {
   Plus,
   Repeat,
   Search,
+  Table as TableIcon,
   Trash2,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,7 +78,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-import { apiDelete, apiGet, apiPost } from '@/lib/api';
+import { apiDelete, apiPost } from '@/lib/api';
+import { useRecurringJobs } from '@/hooks/use-crm-data';
 import { formatScheduleSummary, type RecurrenceInput } from '@/lib/recurrence-engine';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -212,42 +223,48 @@ export interface RecurringJobsListPageProps {
 
 export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: RecurringJobsListPageProps) {
 
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // PAGINATION: server-side pagination — API now supports page + limit params.
+  // PAGINATION: server-side pagination — API supports page + limit params.
+  // Default page size = 10 (matches PaginationBar default).
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
-  const [pagination, setPagination] = useState<{ page: number; limit: number; total: number; totalPages: number } | null>(null);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // ─── Fetch ──────────────────────────────────────────────────────────────
-  const fetchSchedules = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams();
-      params.set('page', String(currentPage));
-      params.set('limit', String(itemsPerPage));
-      const data = await apiGet<ApiResponse>(`/api/recurring-jobs?${params.toString()}`);
-      setSchedules(data.schedules ?? []);
-      setPagination(data.pagination ?? null);
-    } catch (err) {
-      console.error('[RecurringJobsListPage] fetch failed:', err);
-      setError('Failed to load recurring job schedules. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [currentPage]);
+  // VIEW LAYOUT: cards (default) or table.
+  const [viewLayout, setViewLayout] = useState<'cards' | 'table'>('cards');
 
-  useEffect(() => {
-    fetchSchedules();
-  }, [fetchSchedules]);
+  // ─── Fetch via React Query ─────────────────────────────────────────────
+  // Status filtering (active/paused/stopped) and search are intentionally
+  // kept client-side — deriveStatus maps active+pausedAt+endDate → 'active'
+  // | 'paused' | 'stopped', which doesn't map cleanly to the API's boolean
+  // `active` param. Only page+limit are sent to the server.
+  const {
+    data: recurringData,
+    isLoading: loading,
+    isError,
+    refetch,
+  } = useRecurringJobs({
+    page: currentPage,
+    limit: itemsPerPage,
+  });
+  const schedules = recurringData?.schedules ?? [];
+  const pagination = recurringData?.pagination ?? null;
+  const totalPages = pagination?.totalPages ?? 1;
+  const totalItems = pagination?.total ?? 0;
+  const error = isError
+    ? 'Failed to load recurring job schedules. Please try again.'
+    : null;
+
+  // Helper used by mutation handlers to refresh the list cache.
+  const refreshSchedules = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['recurringJobs'] });
+  }, [queryClient]);
 
   // ─── Filtering ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -289,9 +306,6 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
     setCurrentPage(1);
   }, [filter, search]);
 
-  // Total pages comes from the server (pagination.totalPages)
-  const totalPages = pagination?.totalPages ?? 1;
-
   // ─── Actions ────────────────────────────────────────────────────────────
   const handlePause = useCallback(
     async (s: Schedule) => {
@@ -299,7 +313,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         setActioningId(s.id);
         await apiPost(`/api/recurring-jobs/${s.id}/pause`);
         toast.success('Schedule paused');
-        await fetchSchedules();
+        await refreshSchedules();
       } catch (err) {
         console.error('[RecurringJobsListPage] pause failed:', err);
         toast.error('Failed to pause schedule');
@@ -307,7 +321,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         setActioningId(null);
       }
     },
-    [fetchSchedules],
+    [refreshSchedules],
   );
 
   const handleResume = useCallback(
@@ -316,7 +330,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         setActioningId(s.id);
         await apiPost(`/api/recurring-jobs/${s.id}/resume`);
         toast.success('Schedule resumed');
-        await fetchSchedules();
+        await refreshSchedules();
       } catch (err) {
         console.error('[RecurringJobsListPage] resume failed:', err);
         // 400 from resume usually means the schedule's end date has passed
@@ -338,7 +352,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         setActioningId(null);
       }
     },
-    [fetchSchedules],
+    [refreshSchedules],
   );
 
   const handleGenerateNow = useCallback(
@@ -347,7 +361,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         setActioningId(s.id);
         await apiPost(`/api/recurring-jobs/${s.id}/generate-now`);
         toast.success('Job generated');
-        await fetchSchedules();
+        await refreshSchedules();
       } catch (err) {
         console.error('[RecurringJobsListPage] generate-now failed:', err);
         toast.error('Failed to generate job now');
@@ -355,7 +369,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         setActioningId(null);
       }
     },
-    [fetchSchedules],
+    [refreshSchedules],
   );
 
   const handleConfirmDelete = useCallback(async () => {
@@ -365,14 +379,14 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
       await apiDelete(`/api/recurring-jobs/${deleteTarget.id}`);
       toast.success('Schedule deleted');
       setDeleteTarget(null);
-      await fetchSchedules();
+      await refreshSchedules();
     } catch (err) {
       console.error('[RecurringJobsListPage] delete failed:', err);
       toast.error('Failed to delete schedule');
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, fetchSchedules]);
+  }, [deleteTarget, refreshSchedules]);
 
   // ─── Loading state ─────────────────────────────────────────────────────
   if (loading) {
@@ -410,7 +424,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
               <Repeat className="size-6 text-rose-600" />
             </div>
             <h2 className="text-lg font-semibold">{error}</h2>
-            <Button onClick={fetchSchedules} variant="outline">
+            <Button onClick={() => void refetch()} variant="outline">
               Retry
             </Button>
           </CardContent>
@@ -496,7 +510,29 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         </div>
       </div>
 
-      {/* ─── Schedule cards ─────────────────────────────────────────────── */}
+      {/* ─── View toggle: Cards | Table ──────────────────────────────── */}
+      <div className="flex items-center justify-end gap-1">
+        <Button
+          variant={viewLayout === 'cards' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setViewLayout('cards')}
+          aria-pressed={viewLayout === 'cards'}
+          className="h-8"
+        >
+          <LayoutGrid className="size-4 mr-1.5" /> Cards
+        </Button>
+        <Button
+          variant={viewLayout === 'table' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setViewLayout('table')}
+          aria-pressed={viewLayout === 'table'}
+          className="h-8"
+        >
+          <TableIcon className="size-4 mr-1.5" /> Table
+        </Button>
+      </div>
+
+      {/* ─── Schedule cards / table ─────────────────────────────────── */}
       {filtered.length === 0 ? (
         <Card>
           <CardContent className="p-12 flex flex-col items-center justify-center text-center gap-3">
@@ -523,6 +559,111 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
             )}
           </CardContent>
         </Card>
+      ) : viewLayout === 'table' ? (
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Frequency</TableHead>
+                <TableHead>Next Run</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((s) => {
+                const status = deriveStatus(s);
+                const summary = buildSummary(s);
+                const isActioning = actioningId === s.id;
+                return (
+                  <TableRow
+                    key={s.id}
+                    className="cursor-pointer hover:bg-emerald-50/40 dark:hover:bg-emerald-900/10"
+                    onClick={() => onViewDetail(s.id)}
+                  >
+                    <TableCell className="font-medium">{s.title}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {s.customer?.name ?? 'No customer'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{summary}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {status === 'active' && s.nextRunAt
+                        ? formatNextRun(s.nextRunAt)
+                        : status === 'paused'
+                          ? 'Paused'
+                          : status === 'stopped'
+                            ? 'Stopped'
+                            : 'No upcoming run'}
+                    </TableCell>
+                    <TableCell><StatusBadge status={status} /></TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="size-8 p-0"
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Actions for ${s.title}`}
+                            disabled={isActioning}
+                          >
+                            {isActioning ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <MoreVertical className="size-4" />
+                            )}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <DropdownMenuItem onClick={() => onViewDetail(s.id)}>
+                            <Eye className="size-4 mr-2" /> View
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onEdit(s.id)}>
+                            <Pencil className="size-4 mr-2" /> Edit
+                          </DropdownMenuItem>
+                          {status === 'active' ? (
+                            <DropdownMenuItem
+                              disabled={isActioning}
+                              onClick={() => handlePause(s)}
+                            >
+                              <Pause className="size-4 mr-2" /> Pause
+                            </DropdownMenuItem>
+                          ) : status === 'paused' ? (
+                            <DropdownMenuItem
+                              disabled={isActioning}
+                              onClick={() => handleResume(s)}
+                            >
+                              <Play className="size-4 mr-2" /> Resume
+                            </DropdownMenuItem>
+                          ) : null}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            disabled={isActioning || status === 'stopped'}
+                            onClick={() => handleGenerateNow(s)}
+                          >
+                            <Play className="size-4 mr-2" /> Generate Now
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/20"
+                            onClick={() => setDeleteTarget(s)}
+                          >
+                            <Trash2 className="size-4 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map((s) => {
@@ -652,34 +793,17 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         </div>
       )}
 
-      {/* PAGINATION: Server-side pagination controls */}
+      {/* PAGINATION: Server-side pagination controls (shared by cards + table views) */}
       {filtered.length > 0 && (
-        <div className="flex items-center justify-between mt-4 px-2">
-          <p className="text-sm text-muted-foreground">
-            Showing {pagination ? Math.min((currentPage - 1) * itemsPerPage + 1, pagination.total) : 0}–{Math.min(currentPage * itemsPerPage, pagination?.total ?? 0)} of {pagination?.total ?? 0} schedules
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-            >
-              <ChevronLeft className="size-4" /> Prev
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages}
-            >
-              Next <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        </div>
+        <PaginationBar
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
+          itemName="schedules"
+        />
       )}
 
       {/* ─── Delete confirmation dialog (inline, no dependency on other agents' files) ─── */}

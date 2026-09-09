@@ -6,8 +6,8 @@ import {
   MoreHorizontal, Pencil, Trash2, Eye,
   ArrowRight, Clock,
   BarChart3,
-  List, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft,
-  ChevronRight, CheckCircle2, X,
+  List, ArrowUpDown, ChevronUp, ChevronDown,
+  CheckCircle2, X,
   Briefcase,
   Loader2, ImagePlus,
   LayoutGrid, MessageSquare, UserCheck, XCircle,
@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
@@ -1152,7 +1153,10 @@ export function LeadsView() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  // pageSize is stateful so the PaginationBar's rows-per-page selector can
+  // change it (and reset back to page 1 on change). Defaults to 10 — the
+  // canonical page size used across invoices-view / jobs-view / etc.
+  const [pageSize, setPageSize] = useState(10);
 
   // Sort state (table view)
   const [sortField, setSortField] = useState<string>('createdAt');
@@ -1482,9 +1486,9 @@ export function LeadsView() {
       toast.error('Name and phone are required');
       return;
     }
+    const isEditing = !!editingLead;
     setSaving(true);
     try {
-      const isEditing = !!editingLead;
       const url = isEditing ? `/api/leads/${editingLead.id}` : '/api/leads';
       const method = isEditing ? 'PUT' : 'POST';
 
@@ -1496,7 +1500,7 @@ export function LeadsView() {
       // (create: seed the first note; edit: append to existing notes).
       let notesJsonToSend: string | undefined;
       if (leadForm.notes.trim()) {
-        const existing = isEditing ? parseNotes(editingLead.notesJson) : [];
+        const existing = isEditing && editingLead ? parseNotes(editingLead.notesJson) : [];
         notesJsonToSend = JSON.stringify([
           ...existing,
           { text: leadForm.notes.trim(), createdAt: new Date().toISOString() },
@@ -1509,7 +1513,7 @@ export function LeadsView() {
         phone: leadForm.phone.trim(),
         email: leadForm.email.trim() || null,
         source: leadForm.source,
-        status: isEditing ? editingLead.status : 'new',
+        status: isEditing && editingLead ? editingLead.status : 'new',
         priority: leadForm.priority,
         value: computedValue,
         description: leadForm.serviceDetails.trim() || null,
@@ -1527,7 +1531,7 @@ export function LeadsView() {
 
       // useCreateLead/useUpdateLead auto-invalidate qk.leads.all + qk.dashboard.all
       // (+ qk.leads.detail(id) for update). NO fetchLeads() needed.
-      if (isEditing) {
+      if (isEditing && editingLead) {
         await updateLead.mutateAsync({ id: editingLead.id, ...body } as any);
       } else {
         await createLead.mutateAsync(body as any);
@@ -1982,32 +1986,15 @@ export function LeadsView() {
         />
 
         {/* Pagination */}
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Showing {leads.length} of {totalLeads} leads
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage(page - 1)}
-            >
-              <ChevronLeft className="size-4" /> Previous
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {page} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage(page + 1)}
-            >
-              Next <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        </div>
+        <PaginationBar
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalLeads}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+          itemName="leads"
+        />
       </div>
     );
   };
@@ -2255,16 +2242,28 @@ export function LeadsView() {
 
           {/* View Content — Grid Cards or Table View */}
           {viewLayout === 'grid' ? (
-            <LeadGridView
-              leads={sortedLeads}
-              loading={loading}
-              error={error}
-              onRetry={fetchLeads}
-              onAddLead={openAddLead}
-              onLeadClick={openLeadDetail}
-              onConvert={openConvertDialog}
-              formatCompact={formatCompact}
-            />
+            <>
+              <LeadGridView
+                leads={sortedLeads}
+                loading={loading}
+                error={error}
+                onRetry={fetchLeads}
+                onAddLead={openAddLead}
+                onLeadClick={openLeadDetail}
+                onConvert={openConvertDialog}
+                formatCompact={formatCompact}
+              />
+              {/* Pagination — same control as the table view for parity */}
+              <PaginationBar
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalLeads}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+                itemName="leads"
+              />
+            </>
           ) : renderTableView()}
         </TabsContent>
 
@@ -2360,32 +2359,15 @@ export function LeadsView() {
           {/* Pagination — same as the Active tab (the archived list uses the
               same page/limit state) */}
           {sortedLeads.length > 0 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Showing {leads.length} of {totalLeads} archived leads
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage(page - 1)}
-                >
-                  <ChevronLeft className="size-4" /> Previous
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  Page {page} of {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage(page + 1)}
-                >
-                  Next <ChevronRight className="size-4" />
-                </Button>
-              </div>
-            </div>
+            <PaginationBar
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={totalLeads}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+              itemName="archived leads"
+            />
           )}
         </TabsContent>
 

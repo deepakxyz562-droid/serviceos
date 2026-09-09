@@ -56,6 +56,12 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')?.trim();
     const limitRaw = Number(searchParams.get('limit') || '100');
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 100;
+    // Pagination: when ?page= is provided, switch to paginated response
+    // shape { items, pagination, count }. Without ?page=, returns the
+    // legacy { items, count } shape for backward compat.
+    const pageRaw = parseInt(searchParams.get('page') || '0', 10);
+    const hasPagination = pageRaw > 0;
+    const page = hasPagination ? pageRaw : 1;
 
     const where: Record<string, unknown> = tenantScope(authUser);
     if (category) where.category = category;
@@ -76,6 +82,7 @@ export async function GET(request: NextRequest) {
     }
 
     let items: Awaited<ReturnType<typeof db.inventoryItem.findMany>> = [];
+    let total = 0;
     if (lowStock === '1' || lowStock === 'true') {
       // totalStock <= reorderLevel AND reorderLevel > 0 — fetch candidates then
       // filter in-app because Prisma can't express a column-to-column compare.
@@ -85,24 +92,51 @@ export async function GET(request: NextRequest) {
         take: limit * 5,
         include: { supplier: { select: { id: true, name: true } } },
       });
-      items = candidates.filter((it) => it.totalStock <= it.reorderLevel).slice(0, limit);
+      const filtered = candidates.filter((it) => it.totalStock <= it.reorderLevel);
+      total = filtered.length;
+      items = hasPagination
+        ? filtered.slice((page - 1) * limit, page * limit)
+        : filtered.slice(0, limit);
     } else {
-      items = await db.inventoryItem.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        include: { supplier: { select: { id: true, name: true } } },
-      });
+      const [rows, count] = await Promise.all([
+        db.inventoryItem.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          ...(hasPagination ? { skip: (page - 1) * limit } : {}),
+          include: { supplier: { select: { id: true, name: true } } },
+        }),
+        hasPagination ? db.inventoryItem.count({ where }) : Promise.resolve(0),
+      ]);
+      items = rows;
+      total = count;
     }
 
     log.info(
       {
         userId: authUser.id,
         count: items.length,
+        total,
+        page,
+        limit,
         filters: { category, branchId, supplierId, lowStock },
       },
       'Inventory items listed',
     );
+
+    // Paginated response: full envelope. Legacy: keep `count` for old consumers.
+    if (hasPagination) {
+      return NextResponse.json({
+        items,
+        count: items.length,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      });
+    }
 
     return NextResponse.json({ items, count: items.length });
   } catch (error) {

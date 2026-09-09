@@ -55,7 +55,7 @@
 
 // ─── Helper type ─────────────────────────────────────────────────────────────
 /** Loose filter type — tightened per-hook where needed. */
-type Filters = Record<string, unknown>;
+type Filters = Record<string, unknown> | object;
 
 // ─── CRM Entities ────────────────────────────────────────────────────────────
 
@@ -162,6 +162,15 @@ export const qk = {
     list: (filters?: Filters) => [...qk.bookings.lists(), filters ?? {}] as const,
     details: () => [...qk.bookings.all, 'detail'] as const,
     detail: (id: string) => [...qk.bookings.details(), id] as const,
+  },
+
+  // ── Recurring Jobs ──────────────────────────────────────────────────────────
+  recurringJobs: {
+    all: ['recurringJobs'] as const,
+    lists: () => [...qk.recurringJobs.all, 'list'] as const,
+    list: (filters?: Filters) => [...qk.recurringJobs.lists(), filters ?? {}] as const,
+    details: () => [...qk.recurringJobs.all, 'detail'] as const,
+    detail: (id: string) => [...qk.recurringJobs.details(), id] as const,
   },
 
   // ── Employees ─────────────────────────────────────────────────────────────

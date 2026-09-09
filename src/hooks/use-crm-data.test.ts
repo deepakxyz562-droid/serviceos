@@ -125,7 +125,7 @@ describe('useInvoices', () => {
     const { result } = renderHook(() => useInvoices(), { wrapper: createWrapper() })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data).toHaveLength(1)
+    expect(result.current.data?.invoices).toHaveLength(1)
   })
 })
 

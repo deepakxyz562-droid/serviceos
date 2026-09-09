@@ -149,7 +149,8 @@ export function useCustomers(params: CustomerListParams = {}) {
 
 // ── Invoices ─────────────────────────────────────────────────────────────────
 
-import { parseApiInvoice, type Invoice } from '@/features/invoices/utils/invoice-helpers';
+import { parseApiInvoice } from '@/features/invoices/utils/invoice-helpers';
+import type { Invoice } from '@/features/invoices/types';
 
 export interface InvoiceListParams {
   status?: string;
@@ -526,7 +527,7 @@ export function useBookings(params: BookingListParams = {}) {
 
 // ── Expenses with filters ───────────────────────────────────────────────────
 
-export function useExpensesFiltered(params: { status?: string; category?: string; search?: string } = {}) {
+export function useExpensesFiltered(params: { status?: string; category?: string; search?: string; page?: number; limit?: number } = {}) {
   return useQuery({
     queryKey: qk.expenses.list(params),
     queryFn: async () => {
@@ -534,12 +535,18 @@ export function useExpensesFiltered(params: { status?: string; category?: string
       if (params.status && params.status !== 'all') sp.set('status', params.status);
       if (params.category && params.category !== 'all') sp.set('category', params.category);
       if (params.search) sp.set('search', params.search);
+      if (params.page) sp.set('page', String(params.page));
+      if (params.limit) sp.set('limit', String(params.limit));
       const res = await authFetch(`/api/expenses?${sp.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch expenses');
       const data = await res.json();
-      return data.expenses ?? (Array.isArray(data) ? data : []);
+      return {
+        expenses: data.expenses ?? (Array.isArray(data) ? data : []),
+        pagination: data.pagination ?? null,
+      };
     },
-    staleTime: 10_000, // 10s — Freshness Contract: CRM expenses (filtered)
+    staleTime: 10_000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -585,20 +592,27 @@ export function useCampaigns(params: { status?: string; type?: string; limit?: n
 
 // ── Inventory Items ─────────────────────────────────────────────────────────
 
-export function useInventoryItems(params: { search?: string; category?: string } = {}) {
+export function useInventoryItems(params: { search?: string; category?: string; page?: number; limit?: number } = {}) {
   return useQuery({
     queryKey: qk.inventory.items(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.search) sp.set('search', params.search);
       if (params.category && params.category !== 'all') sp.set('category', params.category);
-      sp.set('limit', '200');
+      if (params.page) sp.set('page', String(params.page));
+      if (params.limit) sp.set('limit', String(params.limit));
+      else if (!params.page) sp.set('limit', '200'); // legacy default when not paginating
       const res = await authFetch(`/api/inventory/items?${sp.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch inventory items');
       const data = await res.json();
-      return data.items ?? (Array.isArray(data) ? data : []);
+      // Paginated response has { items, pagination }; legacy has { items, count }
+      return {
+        items: data.items ?? (Array.isArray(data) ? data : []),
+        pagination: data.pagination ?? null,
+      };
     },
-    staleTime: 60_000,
+    staleTime: params.page ? 10_000 : 60_000, // shorter cache when paginating
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -641,19 +655,80 @@ export function usePurchaseOrders(params: { status?: string; search?: string } =
 
 // ── CRM Customers (for crm-view.tsx) ────────────────────────────────────────
 
-export function useCrmCustomers(params: { search?: string } = {}) {
+export function useCrmCustomers(params: { search?: string; page?: number; limit?: number } = {}) {
   return useQuery({
     queryKey: qk.customers.list(params),
     queryFn: async () => {
       const sp = new URLSearchParams();
       if (params.search) sp.set('search', params.search);
-      sp.set('limit', '50');
+      if (params.page) sp.set('page', String(params.page));
+      if (params.limit) sp.set('limit', String(params.limit));
+      else sp.set('limit', '50'); // legacy default
       const res = await authFetch(`/api/customers?${sp.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch customers');
       const data = await res.json();
-      return data.customers ?? (Array.isArray(data) ? data : []);
+      return {
+        customers: data.customers ?? (Array.isArray(data) ? data : []),
+        pagination: data.pagination ?? null,
+      };
     },
-    staleTime: 10_000, // 10s — Freshness Contract: CRM customers
+    staleTime: 10_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+// ── Employees (paginated list — for employees-view.tsx) ──────────────────────
+// Named useEmployeesList to avoid clashing with the legacy useEmployees in
+// use-supabase-queries.ts (which returns a bare array, no pagination).
+
+export function useEmployeesList(params: { search?: string; status?: string; role?: string; page?: number; limit?: number } = {}) {
+  return useQuery({
+    queryKey: qk.employees.list(params),
+    queryFn: async () => {
+      const sp = new URLSearchParams();
+      if (params.search) sp.set('search', params.search);
+      if (params.status && params.status !== 'all') sp.set('status', params.status);
+      if (params.role && params.role !== 'all') sp.set('role', params.role);
+      if (params.page) sp.set('page', String(params.page));
+      if (params.limit) sp.set('limit', String(params.limit));
+      else sp.set('limit', '10');
+      const res = await authFetch(`/api/employees?${sp.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch employees');
+      const data = await res.json();
+      // Paginated response: { employees, pagination }. Legacy: bare array.
+      return {
+        employees: data.employees ?? (Array.isArray(data) ? data : []),
+        pagination: data.pagination ?? null,
+      };
+    },
+    staleTime: 10_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+// ── Recurring Jobs (paginated list — for recurring-jobs-list-page.tsx) ────────
+
+export function useRecurringJobs(params: { active?: boolean | string; customerId?: string; search?: string; page?: number; limit?: number } = {}) {
+  return useQuery({
+    queryKey: qk.recurringJobs.list(params),
+    queryFn: async () => {
+      const sp = new URLSearchParams();
+      if (params.active !== undefined && params.active !== 'all') sp.set('active', String(params.active));
+      if (params.customerId) sp.set('customerId', params.customerId);
+      if (params.search) sp.set('search', params.search);
+      if (params.page) sp.set('page', String(params.page));
+      if (params.limit) sp.set('limit', String(params.limit));
+      else sp.set('limit', '10');
+      const res = await authFetch(`/api/recurring-jobs?${sp.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch recurring jobs');
+      const data = await res.json();
+      return {
+        schedules: data.schedules ?? data.data ?? (Array.isArray(data) ? data : []),
+        pagination: data.pagination ?? null,
+      };
+    },
+    staleTime: 10_000,
+    placeholderData: keepPreviousData,
   });
 }
 

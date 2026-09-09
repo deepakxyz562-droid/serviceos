@@ -91,6 +91,10 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
     const jobIdParam = searchParams.get('jobId');
     const employeeIdParam = searchParams.get('employeeId');
+    // Pagination params (default page=1, limit=10).
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '10', 10) || 10, 1), 500);
+    const skip = (page - 1) * limit;
 
     const isEmployee = authUser?.role === 'employee';
 
@@ -123,19 +127,23 @@ export async function GET(request: NextRequest) {
         db.expense.findMany({
           where,
           orderBy: { createdAt: 'desc' },
-          take: 500,
+          take: limit,
+          skip,
         }),
         db.expense.count({ where }),
       ]);
 
-      return NextResponse.json({ expenses, pagination: { total } });
+      return NextResponse.json({
+        expenses,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      });
     }
 
     // ── Owner / admin ───────────────────────────────────────────────────────
     const tenantId = await resolveFallbackTenantId(authUser);
 
     if (!tenantId) {
-      return NextResponse.json({ expenses: [], pagination: { total: 0 } });
+      return NextResponse.json({ expenses: [], pagination: { page, limit, total: 0, totalPages: 0 } });
     }
 
     const where: Record<string, unknown> = { tenantId };
@@ -157,12 +165,16 @@ export async function GET(request: NextRequest) {
       db.expense.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        take: 500,
+        take: limit,
+        skip,
       }),
       db.expense.count({ where }),
     ]);
 
-    return NextResponse.json({ expenses, pagination: { total } });
+    return NextResponse.json({
+      expenses,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   } catch (error) {
     console.error('Error fetching expenses:', error);
     return NextResponse.json({ error: 'Failed to fetch expenses' }, { status: 500 });

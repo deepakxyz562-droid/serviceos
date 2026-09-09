@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
+import { qk } from '@/lib/query-keys';
 import {
   Users, UserPlus, Shield, Clock, CheckCircle2, UserCheck, UserCog,
   Search, Phone, MapPin, Star, Briefcase, Loader2,
@@ -25,9 +27,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import { authFetch } from '@/lib/client-auth';
 import { getInitials } from '@/lib/format-utils';
 import { usePermissions } from '@/hooks/use-permissions';
+import { useEmployeesList } from '@/hooks/use-crm-data';
 import { SECONDARY_EMPLOYEE_TABS, type EmployeeDetailTab } from '@/lib/auth/permissions';
 import { TimesheetView } from '@/components/views/timesheet-view';
 
@@ -57,9 +61,12 @@ import { ActivityTab } from '@/features/employees/components/tabs/activity-tab';
 
 export function EmployeesView() {
   const { currentWorkspaceId, auth } = useAppStore();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  // Pagination state (server-side). Default page size = 10.
+  const [currentPage, setCurrentPage] = useState(1);
+  const [employeesPerPage, setEmployeesPerPage] = useState(10);
+
   const [search, setSearch] = useState('');
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'working' | 'offline'>('all');
@@ -89,35 +96,48 @@ export function EmployeesView() {
   const [formWhatsappId, setFormWhatsappId] = useState('');
   const [formSkills, setFormSkills] = useState('');
 
-  // ─── Fetch ──────────────────────────────────────────────────────────────
+  // ─── Data fetching (React Query) ───────────────────────────────────────
+  // Replaces the manual `useEffect + authFetch('/api/employees')` pattern.
+  // RQ keys the query by `{ search, status, page, limit }`, so rapid filter
+  // changes no longer race — the latest filter wins and stale responses are
+  // discarded. `placeholderData: keepPreviousData` (set in the hook) keeps
+  // the previous page visible while the new one loads.
+  //
+  // NOTE: the backend `/api/employees` filters `status` literally, so the
+  // grouped values 'working' (on_job/busy/en_route) and 'offline'
+  // (on_leave/offline) only fully match when the backend is taught those
+  // mappings. 'available' works directly. The unpaginated stats query below
+  // is unaffected and continues to compute grouped counts client-side.
+  const { data: employeesData, isLoading: loading, error: rqError } = useEmployeesList({
+    search: search || undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    page: currentPage,
+    limit: employeesPerPage,
+  });
+  const employees = employeesData?.employees ?? [];
+  const totalEmployees = employeesData?.pagination?.total ?? 0;
+  const totalPages = employeesData?.pagination?.totalPages ?? 1;
+  const error = rqError ? (rqError instanceof Error ? rqError.message : 'Failed to load employees') : null;
 
+  // Unpaginated snapshot (no `page` → backend returns the legacy bare-array
+  // shape; hook normalizes to { employees, pagination: null }). Used for the
+  // stats cards (per-status counts) and the "Teams" grouping, which need to
+  // see every employee — not just the current page of 10.
+  const { data: allEmployeesData } = useEmployeesList({ limit: 200 });
+  const allEmployees = allEmployeesData?.employees ?? [];
+
+  // `fetchEmployees` is called by the existing mutation success handlers
+  // (handleAdd / handleEdit / handleDelete / handleSendInvite /
+  // handleSuspendToggle) and by the error-retry button. We invalidate the
+  // entire `employees` query namespace so both the paginated list query AND
+  // the unpaginated stats query above refresh in the background.
   const fetchEmployees = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Use authFetch so the Bearer token is sent. Plain fetch() relied on
-      // the session cookie alone, which fails on cross-origin/cookieless
-      // contexts (e.g. Vercel preview deploys, Safari ITP).
-      const res = await authFetch(apiUrl('/api/employees'));
-      if (res.ok) {
-        const data = await res.json();
-        setEmployees(Array.isArray(data) ? data : []);
-      } else {
-        setError('Failed to load employees');
-        toast.error('Failed to load employees');
-      }
-    } catch {
-      setError('Network error. Please check your connection.');
-      toast.error('Network error loading employees');
-      setEmployees([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    await queryClient.invalidateQueries({ queryKey: qk.employees.all });
+  }, [queryClient]);
 
-  useEffect(() => {
-    fetchEmployees();
-  }, [fetchEmployees]);
+  // Reset to page 1 whenever the search/status filters change so the user
+  // doesn't land on a now-empty page after tightening the filter.
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter]);
 
   // ─── Invitation / Portal Management Handlers ────────────────────────────
 
@@ -204,51 +224,36 @@ export function EmployeesView() {
 
   // ─── Computed ───────────────────────────────────────────────────────────
 
-  const filteredEmployees = useMemo(() => {
-    let result = employees;
+  // NOTE: `filteredEmployees` was removed — the backend `/api/employees` now
+  // applies the `search` and `status` filters server-side, and the paginated
+  // `employees` array above is already the filtered result for the current
+  // page. The render branches below use `employees` directly.
 
-    if (statusFilter === 'available') {
-      result = result.filter((e) => e.status === 'available');
-    } else if (statusFilter === 'working') {
-      result = result.filter((e) => e.status === 'on_job' || e.status === 'busy' || e.status === 'en_route');
-    } else if (statusFilter === 'offline') {
-      result = result.filter((e) => e.status === 'on_leave' || e.status === 'offline');
-    }
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter((e) => {
-        const name = (e.name || '').toLowerCase();
-        const role = (e.role || '').toLowerCase();
-        const phone = (e.phone || '').toLowerCase();
-        const skills = (e.skills || '').toLowerCase();
-        return name.includes(q) || role.includes(q) || phone.includes(q) || skills.includes(q);
-      });
-    }
-
-    return result;
-  }, [employees, search, statusFilter]);
-
+  // Stats are computed across ALL employees (not just the current page) so
+  // the "Total Staff / Available / Working / Offline" cards + status filter
+  // chips keep showing tenant-wide counts after pagination. `allEmployees`
+  // is the unpaginated snapshot fetched above (capped at 200 by the backend,
+  // matching the pre-migration behavior).
   const stats = useMemo(() => ({
-    total: employees.length,
-    available: employees.filter((e) => e.status === 'available').length,
-    working: employees.filter((e) => e.status === 'on_job' || e.status === 'busy' || e.status === 'en_route').length,
-    offline: employees.filter((e) => e.status === 'on_leave' || e.status === 'offline').length,
-  }), [employees]);
+    total: allEmployees.length,
+    available: allEmployees.filter((e) => e.status === 'available').length,
+    working: allEmployees.filter((e) => e.status === 'on_job' || e.status === 'busy' || e.status === 'en_route').length,
+    offline: allEmployees.filter((e) => e.status === 'on_leave' || e.status === 'offline').length,
+  }), [allEmployees]);
 
   // Teams: derive a simple grouping by role (no dedicated team model exists).
   const teams = useMemo(() => {
     const map = new Map<string, { role: string; count: number; available: number; members: Employee[] }>();
-    for (const e of employees) {
+    for (const e of allEmployees) {
       const key = e.role || 'other';
-      const entry = map.get(key) ?? { role: key, count: 0, available: 0, members: [] };
+      const entry = map.get(key) ?? { role: key, count: 0, available: 0, members: [] as Employee[] };
       entry.count += 1;
       if (e.status === 'available') entry.available += 1;
       entry.members.push(e);
       map.set(key, entry);
     }
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [employees]);
+  }, [allEmployees]);
 
   // ─── Form helpers ───────────────────────────────────────────────────────
 
@@ -683,7 +688,7 @@ export function EmployeesView() {
             <Loader2 className="size-4 mr-1.5" /> Retry
           </Button>
         </div>
-      ) : filteredEmployees.length === 0 ? (
+      ) : employees.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Users className="size-14 mb-4 opacity-30" />
@@ -702,8 +707,9 @@ export function EmployeesView() {
         </Card>
       ) : viewLayout === 'grid' ? (
         /* ─── Grid Cards View ────────────────────────────────────────────── */
+        <>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredEmployees.map((emp) => {
+          {employees.map((emp) => {
             let skills: string[] = [];
             try {
               const parsed = JSON.parse(emp.skills || '[]');
@@ -856,8 +862,19 @@ export function EmployeesView() {
             );
           })}
         </div>
+        <PaginationBar
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalEmployees}
+          pageSize={employeesPerPage}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => { setEmployeesPerPage(size); setCurrentPage(1); }}
+          itemName="employees"
+        />
+        </>
       ) : (
         /* ─── Table View ───────────────────────────────────────────────── */
+        <>
         <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
           <div className="max-h-[600px] overflow-auto">
             <Table>
@@ -872,7 +889,7 @@ export function EmployeesView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredEmployees.map((emp) => (
+                {employees.map((emp) => (
                   <TableRow
                     key={emp.id}
                     className="cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-900/50 transition-colors"
@@ -954,6 +971,16 @@ export function EmployeesView() {
             </Table>
           </div>
         </Card>
+        <PaginationBar
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalEmployees}
+          pageSize={employeesPerPage}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => { setEmployeesPerPage(size); setCurrentPage(1); }}
+          itemName="employees"
+        />
+        </>
       )}
 
       {/* Add Employee Dialog */}

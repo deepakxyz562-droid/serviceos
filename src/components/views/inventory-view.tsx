@@ -58,6 +58,7 @@ import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
 import { useInventoryItems, useInventoryTransactions } from '@/hooks/use-crm-data';
 import { StatCard } from '@/components/shared/stat-card';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 
 import { ItemsTab } from '@/features/inventory/components/tabs/items-tab';
 import { AssetsTab } from '@/features/inventory/components/tabs/assets-tab';
@@ -90,6 +91,8 @@ export function InventoryView() {
   // state (itemSearch, itemCategory) and dialog/form state live here.
   const [itemSearch, setItemSearch] = useState('');
   const [itemCategory, setItemCategory] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
@@ -142,9 +145,17 @@ export function InventoryView() {
   } = useInventoryItems({
     search: itemSearch || undefined,
     category: itemCategory !== 'all' ? itemCategory : undefined,
+    page: currentPage,
+    limit: itemsPerPage,
   });
-  const items = (itemsData ?? []) as InventoryItem[];
+  const items = (itemsData?.items ?? []) as InventoryItem[];
+  const totalItems = itemsData?.pagination?.total ?? 0;
+  const totalPages = itemsData?.pagination?.totalPages ?? 1;
   const itemsError = rqItemsError?.message ?? null;
+
+  // Reset to page 1 whenever the items filters change so the user doesn't
+  // land on a now-empty page after tightening the search/category filter.
+  useEffect(() => { setCurrentPage(1); }, [itemSearch, itemCategory]);
 
   const fetchSuppliers = useCallback(async () => {
     setSuppliersLoading(true);
@@ -451,6 +462,15 @@ export function InventoryView() {
             onDeleteItem={(item) => setDeleteTarget(item)}
             format={format}
             currency={currency}
+          />
+          <PaginationBar
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
+            itemName="items"
           />
         </TabsContent>
 

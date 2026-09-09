@@ -42,6 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { PaginationBar } from '@/components/ui/pagination-bar';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { CustomerFormSheet } from '@/components/customer/customer-form-sheet';
@@ -156,6 +157,15 @@ export function CrmView() {
   const [customerSort, setCustomerSort] = useState<'name' | 'createdAt'>('name');
   const [customerSortDir, setCustomerSortDir] = useState<'asc' | 'desc'>('asc');
 
+  // ─── Pagination State (server-side) ────────────────────────────────────
+  // useCrmCustomers now accepts { page, limit } and returns
+  // { customers, pagination: { total, totalPages, page, limit } }.
+  // `currentPage` / `customersPerPage` are the page-level controls; the
+  // PaginationBar below binds to them. Default page size = 10 (matches
+  // the canonical pattern used by invoices-view / jobs-view).
+  const [currentPage, setCurrentPage] = useState(1);
+  const [customersPerPage, setCustomersPerPage] = useState(10);
+
   // ─── Customer Portal Invitation State ──────────────────────────────────
   const [inviteCustomer, setInviteCustomer] = useState<Customer | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -186,8 +196,12 @@ export function CrmView() {
   // transfer. Now fetches with server-side ILIKE search via useCrmCustomers.
   const { data: customersData, isLoading: customersLoading, error: rqError, refetch: fetchCustomers } = useCrmCustomers({
     search: debouncedCustomerSearch || undefined,
+    page: currentPage,
+    limit: customersPerPage,
   });
-  const customers: Customer[] = customersData ?? [];
+  const customers: Customer[] = customersData?.customers ?? [];
+  const totalCustomers = customersData?.pagination?.total ?? 0;
+  const totalPages = customersData?.pagination?.totalPages ?? 1;
   void rqError;
 
   // ── Mutations (dependency-aware, auto-invalidate via getCustomerInvalidations) ──
@@ -205,6 +219,11 @@ export function CrmView() {
     const t = setTimeout(() => setDebouncedCustomerSearch(customerSearch), 350);
     return () => clearTimeout(t);
   }, [customerSearch]);
+
+  // Reset to page 1 whenever the server-side search query changes —
+  // otherwise the user could land on a page that no longer exists after
+  // the result set shrinks (e.g. page 5 of "a" → typing "ab" leaves 0 hits).
+  useEffect(() => { setCurrentPage(1); }, [debouncedCustomerSearch]);
 
   // ─── Customer CRUD ──────────────────────────────────────────────────────
   // ISSUE-3: customer create/edit is now handled by <CustomerFormSheet />.
@@ -674,7 +693,7 @@ export function CrmView() {
               <p className="text-xs mt-1">Add your first customer to get started</p>
             </div>
           ) : viewLayout === 'grid' ? (
-            /* ─── Grid Cards View ────────────────────────────────────────────── */
+            <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredCustomers.map(customer => (
                 <Card
@@ -743,8 +762,19 @@ export function CrmView() {
                 </Card>
               ))}
             </div>
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalCustomers}
+              pageSize={customersPerPage}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => { setCustomersPerPage(size); setCurrentPage(1); }}
+              itemName="customers"
+            />
+            </>
           ) : (
-            /* ─── Table View ───────────────────────────────────────────────── */
+            <>
+            {/* ─── Table View ───────────────────────────────────────────────── */}
             <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
               <div className="max-h-[600px] overflow-auto">
                 <Table>
@@ -870,6 +900,16 @@ export function CrmView() {
                 </Table>
               </div>
             </Card>
+            <PaginationBar
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalCustomers}
+              pageSize={customersPerPage}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => { setCustomersPerPage(size); setCurrentPage(1); }}
+              itemName="customers"
+            />
+            </>
           )}
         </TabsContent>
 

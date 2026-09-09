@@ -19,6 +19,15 @@ async function _GET(request: NextRequest) {
     const workspaceIdParam = searchParams.get('workspaceId')
     const userId = searchParams.get('userId')
     const teamId = searchParams.get('teamId')
+    // Pagination params (default page=1, limit=10). When page is provided,
+    // the response switches from a bare array to { employees, pagination }.
+    const pageRaw = parseInt(searchParams.get('page') || '0', 10)
+    const limitRaw = parseInt(searchParams.get('limit') || '0', 10)
+    const hasPagination = pageRaw > 0
+    const page = hasPagination ? pageRaw : 1
+    const limit = hasPagination
+      ? Math.min(Math.max(limitRaw || 10, 1), 200)
+      : 200
 
     const authUser = await getAuthUser()
 
@@ -49,11 +58,11 @@ async function _GET(request: NextRequest) {
         if (workspaceIds.length > 0) {
           where.workspaceId = { in: workspaceIds }
         } else {
-          return NextResponse.json([])
+          return hasPagination ? cachedJson({ employees: [], pagination: { page, limit, total: 0, totalPages: 0 } }) : cachedJson([])
         }
       } else {
         // No tenantId and no workspaceId — no data access
-        return NextResponse.json([])
+        return hasPagination ? cachedJson({ employees: [], pagination: { page, limit, total: 0, totalPages: 0 } }) : cachedJson([])
       }
     } else if (workspaceIdParam) {
       // Super admin with explicit workspace filter
@@ -103,10 +112,10 @@ async function _GET(request: NextRequest) {
       updatedAt: true,
     }
 
-    // Only use cache for the "default" fetch (no search, no userId filter)
-    // — those are the high-frequency polls from the dashboard.
-    const isCacheable = !search && !userId && !teamId
-    const cacheKey = `employees:${authUser.id}:${authUser.tenantId || 'sa'}:${workspaceIdParam || ''}:${role || ''}:${status || ''}:${teamId || ''}`
+    // Only use cache for the "default" fetch (no search, no userId filter,
+    // no pagination) — those are the high-frequency polls from the dashboard.
+    const isCacheable = !search && !userId && !teamId && !hasPagination
+    const cacheKey = `employees:${authUser.id}:${authUser.tenantId || 'sa'}:${workspaceIdParam || ''}:${role || ''}:${status || ''}:${teamId || ''}:${page}:${limit}`
 
     if (isCacheable) {
       const cached = cache.get<unknown[]>(cacheKey)
@@ -115,15 +124,35 @@ async function _GET(request: NextRequest) {
       }
     }
 
-    const employees = await db.employee.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      select: selectFields,
-      take: 200,
-    })
+    const [employees, total] = await Promise.all([
+      db.employee.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        select: selectFields,
+        take: limit,
+        ...(hasPagination ? { skip: (page - 1) * limit } : {}),
+      }),
+      // Only run the count query when paginating (dashboard polls don't need it)
+      hasPagination ? db.employee.count({ where }) : Promise.resolve(0),
+    ])
 
     if (isCacheable) {
       cache.set(cacheKey, employees, EMPLOYEE_LIST_CACHE_TTL)
+    }
+
+    // Paginated callers get the envelope; legacy callers (dashboard) get the
+    // bare array so existing `authFetch('/api/employees').then(r => r.json())`
+    // callers don't break.
+    if (hasPagination) {
+      return cachedJson({
+        employees,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      })
     }
 
     return cachedJson(employees)
