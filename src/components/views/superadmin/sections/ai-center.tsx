@@ -109,6 +109,13 @@ const PROVIDERS = [
     docsUrl: 'https://openrouter.ai/keys',
   },
   {
+    value: 'bazaarlink',
+    label: 'BazaarLink',
+    description: 'Multi-model AI gateway (auto:free + top models)',
+    color: 'indigo',
+    docsUrl: 'https://bazaarlink.ai',
+  },
+  {
     value: 'openai',
     label: 'OpenAI',
     description: 'GPT-4o, GPT-4o-mini',
@@ -136,6 +143,7 @@ type ProviderColor = (typeof PROVIDERS)[number]['color'];
 
 const PROVIDER_COLOR_CLASSES: Record<ProviderColor, string> = {
   emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+  indigo: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
   sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
   amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
   violet: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',

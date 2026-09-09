@@ -15,7 +15,7 @@ import { invalidateAiKeyChainCache } from '@/lib/ai-client';
  *   - All handlers are superadmin-only.
  */
 
-const VALID_PROVIDERS = ['openrouter', 'openai', 'anthropic', 'gemini'] as const;
+const VALID_PROVIDERS = ['openrouter', 'bazaarlink', 'openai', 'anthropic', 'gemini'] as const;
 type Provider = (typeof VALID_PROVIDERS)[number];
 
 function isProvider(value: unknown): value is Provider {
