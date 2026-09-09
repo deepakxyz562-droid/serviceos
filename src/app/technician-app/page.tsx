@@ -28,7 +28,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Technician Mobile App — Offline-Capable Field Service App | Fieseros",
   description:
-    "A mobile app for field technicians with job details, navigation, digital checklists, photo and signature capture, and time tracking. Works offline. Syncs when reconnected. No app store required.",
+    "A mobile app for field technicians with job details, navigation, digital checklists, photo and signature capture, and time tracking. Available on Google Play. Works offline. Syncs when reconnected.",
   keywords: [
     "technician app",
     "field service app",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Technician Mobile App — Offline-Capable Field Service App | Fieseros",
     description:
-      "Give technicians a mobile app with job details, navigation, checklists, photo and signature capture, and time tracking. Works offline in basements and remote areas — syncs when reconnected.",
+      "Give technicians a mobile app with job details, navigation, checklists, photo and signature capture, and time tracking. Available on Google Play. Works offline in basements and remote areas — syncs when reconnected.",
     url: "https://fieseros.com/technician-app",
     siteName: "Fieseros",
     type: "website",
@@ -129,12 +129,12 @@ const faqs = [
   {
     question: "Do technicians need to download an app?",
     answer:
-      "No app store visit required. Fieseros is a progressive web app (PWA) — technicians open a link in their phone's browser (Chrome, Safari, Samsung Internet), tap 'Add to Home Screen', and it installs like a native app with its own icon, splash screen, and full-screen experience. This means zero friction on day one: no App Store account, no Google Play login, no waiting for downloads. It also means updates are instant — when we ship a new feature, every technician gets it the next time they open the app, no update prompts required. Most service businesses get their entire field team set up in under 10 minutes by sending a single SMS or email link.",
+      "Yes — the Fieseros mobile app is available on Google Play. Technicians search 'Fieseros' on the Play Store, install it in under a minute, and log in with the same credentials they use on the web dashboard. The native app delivers the best experience: push notifications for new job assignments, offline access in basements and remote areas, camera integration for before/after photos, and GPS for the live dispatch map. No Play Store account? Fieseros is also installable as a progressive web app (PWA) — technicians open a link in their phone's browser (Chrome, Safari, Samsung Internet), tap 'Add to Home Screen', and it installs like a native app with its own icon, splash screen, and full-screen experience. Most service businesses get their entire field team set up in under 10 minutes.",
   },
   {
     question: "Does it work on iPhone and Android?",
     answer:
-      "Yes — Fieseros works on any modern smartphone, including iPhone (iOS 12.4+), Android (8.0+), and tablets of any size. Because it's a progressive web app, the experience is consistent across platforms — your Android technicians and iPhone technicians see the same interface, the same features, and the same updates. There's no 'Android got the new feature, iOS is still waiting' problem that plagues native apps. The app also adapts to phone size — technicians on small phones see a streamlined mobile interface, while those on tablets or large phones get a more spacious layout. Whatever phone your technicians already own, Fieseros runs on it.",
+      "Yes — the Fieseros app is available on Google Play for Android (8.0+). iPhone (iOS 12.4+) technicians can use the progressive web app (PWA) version by opening the link in Safari and tapping 'Add to Home Screen' — it installs like a native app with its own icon, splash screen, and full-screen experience. Because the PWA shares the same codebase as the Android app, the experience is consistent across platforms — your Android technicians and iPhone technicians see the same interface, the same features, and the same updates. There's no 'Android got the new feature, iOS is still waiting' problem that plagues separate native apps. The app also adapts to phone size — technicians on small phones see a streamlined mobile interface, while those on tablets or large phones get a more spacious layout.",
   },
   {
     question: "What happens offline?",
@@ -191,6 +191,20 @@ export default function TechnicianAppPage() {
             <Smartphone className="h-4 w-4" />
             Start Free Trial
           </Link>
+          <a
+            href="https://play.google.com/store/apps/details?id=com.fieseros.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-black px-6 py-3 text-base font-semibold text-white shadow-sm transition-all hover:bg-neutral-900 hover:scale-[1.02]"
+          >
+            <svg viewBox="0 0 512 512" className="h-4 w-4" aria-hidden="true">
+              <path fill="#00D3FF" d="M48 32.5C38.6 38.2 32 48.6 32 61v390c0 12.4 6.6 22.8 16 28.5l247-219.5L48 32.5z" />
+              <path fill="#00EE6F" d="M351.5 263.7l-81.5-72.5L48 495.5c3.6 2.1 7.7 3.5 12 3.5 3.7 0 7.2-1 10.4-2.7l281.1-158.1-0.0-74.5z" />
+              <path fill="#FFCE00" d="M462 231.4l-110.5-62.7-81.5 72.5 81.5 72.5 110.5-62.7c12-6.8 12-25.1 0-29.6z" />
+              <path fill="#FF3A44" d="M60.4 18.2C57.2 16.5 53.7 15.5 50 15.5c-4.3 0-8.4 1.4-12 3.5l222 222 81.5-72.5L60.4 18.2z" />
+            </svg>
+            Download the App
+          </a>
           <Link
             href="/contact-us"
             className="inline-flex items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"

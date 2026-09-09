@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { ChevronDown, type LucideIcon } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
+import { GooglePlayBadge } from '@/components/brand/google-play-badge';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -10,6 +11,18 @@ import { cn } from '@/lib/utils';
 // ─── Solutions link catalog ─────────────────────────────────────────────────
 // Single source of truth for every marketing page. Shared by the navbar
 // mega-menu, the mobile menu, and the footer so no page is ever orphaned.
+
+/** Detect external URLs (http/https) so they open in a new tab safely. */
+function isExternal(href: string): boolean {
+  return /^https?:\/\//i.test(href);
+}
+
+/** Spread target/rel for external links, empty object for internal. */
+function externalProps(href: string): { target?: string; rel?: string } {
+  return isExternal(href) ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+}
+
+// Single source of truth for marketing links.
 // 19 industries + 5 features + 4 comparisons + 1 free tool = 29 indexable pages.
 export const solutionsLinks = {
   industries: [
@@ -38,6 +51,7 @@ export const solutionsLinks = {
     { label: 'Invoicing & Payments', href: '/invoicing-and-payments' },
     { label: 'Customer CRM', href: '/customer-crm' },
     { label: 'Technician App', href: '/technician-app' },
+    { label: 'Download Mobile App', href: 'https://play.google.com/store/apps/details?id=com.fieseros.app' },
     { label: 'Automations', href: '/automations' },
   ],
   compare: [
@@ -131,7 +145,7 @@ export function SolutionsMegaMenu() {
                 <ul className="space-y-0.5">
                   {solutionsLinks.features.map((link) => (
                     <li key={link.href}>
-                      <a href={link.href} className="text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors block">{link.label}</a>
+                      <a href={link.href} {...externalProps(link.href)} className="text-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded px-1.5 py-1 transition-colors block">{link.label}</a>
                     </li>
                   ))}
                 </ul>
@@ -193,6 +207,15 @@ export function LandingFooter() {
               <Badge variant="outline" className="border-background/20 text-background/80">25 industries</Badge>
               <Badge variant="outline" className="border-background/20 text-background/80">9 verticals</Badge>
               <Badge variant="outline" className="border-background/20 text-background/80">150+ services</Badge>
+            </div>
+            {/* Mobile app download badge — visible on every page (footer is
+                global). The single app serves both technicians and customers;
+                role routing happens at first launch. */}
+            <div className="mt-5">
+              <p className="text-background/60 text-xs mb-2 font-medium">
+                For technicians &amp; customers
+              </p>
+              <GooglePlayBadge size="sm" />
             </div>
             {/* Company + Legal under the brand block on desktop */}
             <div className="hidden md:grid grid-cols-2 gap-4 mt-6">
@@ -266,7 +289,7 @@ export function LandingFooter() {
             <ul className="space-y-2.5">
               {solutionsLinks.features.map((link) => (
                 <li key={link.href}>
-                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
+                  <a href={link.href} {...externalProps(link.href)} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
                 </li>
               ))}
             </ul>

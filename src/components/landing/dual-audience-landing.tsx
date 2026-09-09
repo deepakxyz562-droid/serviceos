@@ -51,6 +51,7 @@ import {
   Key,
   PawPrint,
   Loader2,
+  Smartphone,
   type LucideIcon,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -84,6 +85,7 @@ import {
 } from '@/components/marketplace/types';
 import { ProviderCard } from '@/components/marketplace/provider-card';
 import { solutionsLinks, SolutionsMegaMenu, LandingFooter } from '@/components/landing/landing-solutions';
+import { GooglePlayBadge } from '@/components/brand/google-play-badge';
 // PERF-5 (code-splitting): CrmPricing and MarketplaceCompact are extracted to
 // separate files so the bundler can tree-shake and split chunks. Previously
 // these ~500 lines were inline in this 2290-line component, forcing the entire
@@ -540,9 +542,12 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-3 mb-1">Features</p>
                     <div className="space-y-0.5">
-                      {solutionsLinks.features.map((link) => (
-                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground min-h-11 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={() => setMobileOpen(false)}>{link.label}</a>
-                      ))}
+                      {solutionsLinks.features.map((link) => {
+                        const ext = /^https?:\/\//i.test(link.href) ? { target: '_blank', rel: 'noopener noreferrer' } : {};
+                        return (
+                          <a key={link.href} href={link.href} {...ext} className="block text-sm text-muted-foreground hover:text-foreground min-h-11 flex items-center px-3 rounded-lg hover:bg-muted/60 active:bg-muted" onClick={() => setMobileOpen(false)}>{link.label}</a>
+                        );
+                      })}
                     </div>
                   </div>
                   <div>
@@ -773,6 +778,16 @@ function HeroFork({
             <span className="text-muted-foreground hidden sm:inline" aria-hidden>·</span>
             <a href="/marketplace" className="inline-flex items-center justify-center min-h-11 gap-1.5 text-amber-700 hover:text-amber-800 dark:text-amber-300 font-medium px-2">
               Browse the marketplace <ArrowRight className="h-3.5 w-3.5" />
+            </a>
+            <span className="text-muted-foreground hidden sm:inline" aria-hidden>·</span>
+            <a
+              href="https://play.google.com/store/apps/details?id=com.fieseros.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center min-h-11 gap-1.5 text-foreground/80 hover:text-foreground dark:text-background/80 dark:hover:text-background font-medium px-2"
+            >
+              <Smartphone className="h-3.5 w-3.5" /> Get the mobile app
+              <ArrowRight className="h-3.5 w-3.5" />
             </a>
           </div>
         </div>
