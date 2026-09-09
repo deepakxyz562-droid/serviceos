@@ -207,12 +207,16 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[ai/chat] callAI failed:', msg);
+
+    let errorDetail = 'All configured AI providers are unavailable. Please try again in a moment.';
+    if (msg.includes('429') || msg.includes('Rate limit') || msg.includes('free-models-per-day')) {
+      errorDetail = 'Daily rate limit reached on OpenRouter free tier. Please add credits to your OpenRouter account or add a Gemini/OpenAI API key in Superadmin AI Center.';
+    } else if (msg.includes('exhausted') || msg.includes('All AI')) {
+      errorDetail = 'All configured AI providers are currently unavailable or exhausted. Please check your provider keys in Superadmin AI Center.';
+    }
+
     return NextResponse.json(
-      {
-        error: msg.includes('exhausted') || msg.includes('All AI')
-          ? 'All configured AI providers are unavailable. Please try again in a moment.'
-          : `The AI service could not be reached. (${msg.slice(0, 80)})`,
-      },
+      { error: errorDetail },
       { status: 502 },
     );
   }

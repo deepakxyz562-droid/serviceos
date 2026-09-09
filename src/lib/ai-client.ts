@@ -305,8 +305,18 @@ function classifyHttpError(
       shouldSwitchProvider: false,
     }
   }
-  if (status === 429 || status === 404 || status === 400) {
-    // Rate limit or model-specific failure — try next model or next key
+  if (status === 429) {
+    // Rate limit on this key / quota exceeded — rotate to next key for this provider
+    return {
+      ok: false,
+      status,
+      error,
+      shouldRotateKey: true,
+      shouldSwitchProvider: false,
+    }
+  }
+  if (status === 404 || status === 400) {
+    // Model not found or bad model parameters — try next model with same key
     return {
       ok: false,
       status,
@@ -855,6 +865,7 @@ export async function callAI(options: {
   const { messages, temperature, maxTokens, json, preferredModel, usageContext } = options
 
   const chain = await loadAiKeyChain()
+  let lastErrorMsg = ''
 
   for (const provider of PROVIDER_ORDER) {
     const keys = chain[provider]
@@ -927,6 +938,7 @@ export async function callAI(options: {
         }
 
         // Failure — record + decide what to do next.
+        lastErrorMsg = result.error
         recordKeyError(key, result.error)
 
         if (result.shouldSwitchProvider) {
@@ -955,7 +967,7 @@ export async function callAI(options: {
     }
   }
 
-  throw new Error('All AI providers exhausted')
+  throw new Error(`All AI providers exhausted${lastErrorMsg ? ` (${lastErrorMsg})` : ''}`)
 }
 
 // ─── callOpenRouter (back-compat wrapper) ───────────────────────────────────
