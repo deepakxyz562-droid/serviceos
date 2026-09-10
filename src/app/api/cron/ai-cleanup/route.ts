@@ -163,6 +163,30 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // ── 3. Retention Cleanup: Prune logs and telemetry older than 90 days ──
+    let prunedActivity = 0;
+    let prunedNotifications = 0;
+    let prunedGps = 0;
+    try {
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const [actResult, notifResult, gpsResult] = await Promise.all([
+        db.activityLog.deleteMany({
+          where: { createdAt: { lt: ninetyDaysAgo } },
+        }).catch((err) => { console.warn('[cron] activityLog prune:', err); return { count: 0 }; }),
+        db.notificationLog.deleteMany({
+          where: { createdAt: { lt: ninetyDaysAgo } },
+        }).catch((err) => { console.warn('[cron] notificationLog prune:', err); return { count: 0 }; }),
+        db.gPSLocation.deleteMany({
+          where: { capturedAt: { lt: ninetyDaysAgo } },
+        }).catch((err) => { console.warn('[cron] gPSLocation prune:', err); return { count: 0 }; }),
+      ]);
+      prunedActivity = actResult.count;
+      prunedNotifications = notifResult.count;
+      prunedGps = gpsResult.count;
+    } catch (err) {
+      console.warn('[cron] retention prune error:', err);
+    }
+
     return NextResponse.json({
       ok: true,
       releasedReservations,
@@ -172,6 +196,11 @@ export async function GET(request: NextRequest) {
         vapiDeleteCount,
         twilioReleaseCount,
         failedReleases,
+      },
+      retentionPruned: {
+        activityLogs: prunedActivity,
+        notificationLogs: prunedNotifications,
+        gpsLocations: prunedGps,
       },
       timestamp: now.toISOString(),
     });

@@ -70,7 +70,7 @@ export const db = useSupabase
   ? supabaseDb as unknown as PrismaClient
   : (globalForPrisma.prisma ?? createPrismaClient())
 
-if (!useSupabase && process.env.NODE_ENV !== 'production') {
+if (!useSupabase) {
   globalForPrisma.prisma = db as PrismaClient
   globalForPrisma.__prismaSchemaVersion = PRISMA_SCHEMA_VERSION
 }

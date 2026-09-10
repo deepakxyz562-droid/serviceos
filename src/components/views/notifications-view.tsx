@@ -822,6 +822,7 @@ export function NotificationsView() {
   // Lightweight endpoint, just for the badge + stat refresh.
   useEffect(() => {
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       refetch();
     }, 30000);
     return () => clearInterval(interval);

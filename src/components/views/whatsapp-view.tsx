@@ -320,6 +320,7 @@ export function WhatsAppView() {
   // Auto-refresh every 30s
   useEffect(() => {
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchConversations();
       fetchLeads();
       fetchNotificationLogs();

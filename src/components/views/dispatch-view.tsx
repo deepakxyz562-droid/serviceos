@@ -226,18 +226,30 @@ export function DispatchView() {
     fetchTeams();
 
     const jobsInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchJobs();
       markSync();
-    }, 20000);
+    }, 25000);
 
     const empInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchEmployees();
       markSync();
-    }, 5000);
+    }, 12000);
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchJobs();
+        fetchEmployees();
+        markSync();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       clearInterval(jobsInterval);
       clearInterval(empInterval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [fetchJobs, fetchEmployees, fetchTeams, markSync]);
 

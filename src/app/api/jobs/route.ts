@@ -17,8 +17,8 @@ import { generateVerificationPin } from '@/lib/pin'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// Set JOBS_TTL = 0 to ensure live CRM data refresh returns instant fresh database rows
-const JOBS_TTL = 0;
+// Set JOBS_TTL = 5000 to enable 5s in-memory SWR caching for read queries (invalidated on create/update)
+const JOBS_TTL = 5000;
 
 // Note: `setDefaultResultOrder('ipv4first')` is now called as a module side
 // effect inside `src/lib/geocode.ts`, so every importer gets IPv4-first DNS

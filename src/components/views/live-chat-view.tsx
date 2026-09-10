@@ -75,8 +75,21 @@ export function LiveChatView() {
   useEffect(() => {
     setLoading(true)
     fetchSessions()
-    const interval = setInterval(fetchSessions, 5000)  // refresh session list every 5s
-    return () => clearInterval(interval)
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      fetchSessions()
+    }, 8000)  // refresh session list every 8s when tab is active
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchSessions()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }, [fetchSessions])
 
   // Fetch messages for selected session
@@ -116,18 +129,27 @@ export function LiveChatView() {
     setLoadingMessages(true)
     fetchMessages(selectedSessionId).finally(() => setLoadingMessages(false))
 
-    // Poll for new messages every 3s
+    // Poll for new messages every 5s when tab is visible
     const lastMsgTime = () => {
       const last = messages[messages.length - 1]
       return last ? last.createdAt : undefined
     }
 
     pollRef.current = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return
       fetchMessages(selectedSessionId, lastMsgTime())
-    }, 3000)
+    }, 5000)
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        fetchMessages(selectedSessionId, lastMsgTime())
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [selectedSessionId, fetchMessages])
 

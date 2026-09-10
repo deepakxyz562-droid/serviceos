@@ -336,6 +336,8 @@ function LiveJobTracker({ booking, portalToken, onSwitchBooking, otherActiveBook
     let cancelled = false;
 
     const pollBooking = async () => {
+      if (cancelled) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const res = await fetch(`/api/customer-portal/${portalToken}?XTransformPort=3000`);
         if (!res.ok || cancelled) return;
@@ -351,13 +353,21 @@ function LiveJobTracker({ booking, portalToken, onSwitchBooking, otherActiveBook
       }
     };
 
-    // Initial poll immediately, then every 15s.
+    // Initial poll immediately, then every 25s when tab is active.
     pollBooking();
-    const interval = setInterval(pollBooking, 15000);
+    const interval = setInterval(pollBooking, 25000);
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        pollBooking();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [portalToken, booking.id]);
 
@@ -379,6 +389,7 @@ function LiveJobTracker({ booking, portalToken, onSwitchBooking, otherActiveBook
 
     const pollGps = async () => {
       if (cancelled) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
       setIsPolling(true);
       try {
         const res = await authFetch(`/api/gps/track?employeeId=${encodeURIComponent(employeeId)}&XTransformPort=3000`);
@@ -402,13 +413,21 @@ function LiveJobTracker({ booking, portalToken, onSwitchBooking, otherActiveBook
       }
     };
 
-    // Poll more frequently while travelling (every 15s), otherwise every 30s.
+    // Poll when travelling (every 20s), otherwise every 45s when tab is active.
     pollGps();
-    const interval = setInterval(pollGps, isTravelling ? 15000 : 30000);
+    const interval = setInterval(pollGps, isTravelling ? 20000 : 45000);
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        pollGps();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [employeeId, isTravelling]);
 

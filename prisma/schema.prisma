@@ -683,6 +683,8 @@ model RecurringJobSchedule {
   @@index([active])
   @@index([nextRunAt])
   @@index([customerId])
+  @@index([active, nextRunAt])
+  @@index([tenantId, active, nextRunAt])
 }
 
 // ── Scheduled Messages (automated reminders + follow-ups) ───────────────────
@@ -724,6 +726,7 @@ model ScheduledMessage {
   @@index([jobId])
   @@index([invoiceId])
   @@index([quoteId])
+  @@index([status, dueAt])
 }
 
 // ── Scheduled Executions (delayed workflow automations) ─────────────────────
@@ -1001,6 +1004,8 @@ model Invoice {
   // seek the tenant AND read rows in already-sorted order (no sort step).
   // Covers: E1 (list), E2 (count — Index Only Scan via the same index).
   @@index([tenantId, createdAt(sort: Desc)], map: "idx_invoice_tenant_createdat_desc")
+  @@index([tenantId, status, dueDate])
+  @@index([tenantId, customerId])
 }
 
 // Recurring invoice schedule (AMC / subscriptions / monthly maintenance contracts)
@@ -1147,6 +1152,8 @@ model Notification {
   @@index([userId])
   @@index([tenantId])
   @@index([read])
+  @@index([tenantId, read, createdAt(sort: Desc)])
+  @@index([userId, read, createdAt(sort: Desc)])
 }
 
 // ==========================================
@@ -1960,6 +1967,9 @@ model Job {
   // Postgres did a full scan + in-memory sort on every calendar render.
   @@index([workspaceId, status])
   @@index([workspaceId, scheduledAt])
+  @@index([workspaceId, status, deletedAt])
+  @@index([customerId, workspaceId])
+  @@index([assigneeId, status])
 }
 
 model ContactList {
@@ -4914,6 +4924,8 @@ model GPSLocation {
   @@index([tenantId, employeeId, capturedAt])
   @@index([tenantId, jobId, capturedAt])
   @@index([tenantId, syncStatus])
+  @@index([capturedAt(sort: Desc)])
+  @@index([employeeId, capturedAt(sort: Desc)])
 }
 
 // 13. RouteHistory — a summary of a technician's route for a job/day.
