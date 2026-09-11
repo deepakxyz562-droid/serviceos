@@ -310,12 +310,22 @@ export async function POST(request: NextRequest) {
 
     // ── Single transaction: customer → additionalContacts → properties(+contacts) ──
     const customer = await db.$transaction(async (tx) => {
+      let resolvedAddress = address || null
+      if (!resolvedAddress && cleanedProperties.length > 0) {
+        const primary = cleanedProperties.find((p) => p.isPrimary) || cleanedProperties[0]
+        if (primary) {
+          resolvedAddress = [primary.street1, primary.city, primary.province, primary.postalCode]
+            .filter(Boolean)
+            .join(', ')
+        }
+      }
+
       const created = await tx.customer.create({
         data: {
           name: derivedName,
           phone,
           email: email || null,
-          address: address || null,
+          address: resolvedAddress || null,
           whatsappId: whatsappId || null,
           workspaceId,
           tenantId: resolvedTenantId,

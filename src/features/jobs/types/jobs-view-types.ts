@@ -232,15 +232,23 @@ export interface QuoteOption {
   status: string;
 }
 
-// ── Customer search-result shape (server-side search returns this) ──────────
-// Matches the inline type used by CustomerPicker in leads-view.tsx. Both the
-// JobsView state (selectedCustomer / customers) and the JobFormPage prop
-// (customers / selectedCustomer) share this shape so we can pass them through
-// without conversion.
+export interface CustomerPropertyOption {
+  id: string;
+  label?: string | null;
+  street1: string;
+  street2?: string | null;
+  city?: string | null;
+  province?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+  isPrimary?: boolean;
+}
+
 export interface CustomerOption {
   id: string;
   name: string;
   phone: string;
   email?: string | null;
   address?: string | null;
+  properties?: CustomerPropertyOption[];
 }

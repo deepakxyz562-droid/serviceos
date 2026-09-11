@@ -131,7 +131,7 @@ export interface CustomerDetailPageProps {
   showAddCustomer: boolean;
   onShowAddCustomerChange: (open: boolean) => void;
   editingCustomer: CrmCustomer | null;
-  onCustomerSaved: () => void;
+  onCustomerSaved: (saved?: any) => void;
 }
 
 /**
@@ -334,6 +334,74 @@ export function CustomerDetailPage({
                   <p className="font-medium">{formatDateTime(c.updatedAt)}</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Service Addresses / Properties Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <MapPin className="size-4 text-emerald-600" />
+                  Service Addresses & Properties
+                </CardTitle>
+                <CardDescription>
+                  Physical service locations configured for this customer
+                </CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => onEdit(c)} className="gap-1 text-xs">
+                <Pencil className="size-3.5" /> Manage Addresses
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {Array.isArray(c.properties) && c.properties.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {c.properties.map((prop, pIdx) => {
+                    const formatted = [prop.street1, prop.street2, prop.city, prop.province, prop.postalCode, prop.country]
+                      .filter(Boolean)
+                      .join(', ');
+                    return (
+                      <div key={prop.id || pIdx} className="rounded-lg border bg-muted/20 p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-sm text-foreground flex items-center gap-1.5">
+                            <span className="size-5 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center text-xs">
+                              {pIdx + 1}
+                            </span>
+                            {prop.label || `Address ${pIdx + 1}`}
+                          </span>
+                          {prop.isPrimary && (
+                            <Badge className="bg-emerald-100 text-emerald-800 text-[10px] hover:bg-emerald-100">
+                              Primary
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{formatted}</p>
+                        {Array.isArray(prop.contacts) && prop.contacts.length > 0 && (
+                          <div className="pt-2 border-t text-[11px] text-muted-foreground space-y-1">
+                            <span className="font-medium text-foreground">On-site Contacts:</span>
+                            {prop.contacts.map((pc, pcIdx) => (
+                              <div key={pc.id || pcIdx} className="flex items-center gap-2">
+                                <span>{pc.name} {pc.role ? `(${pc.role})` : ''}</span>
+                                {pc.phone && <span>• {pc.phone}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-4 rounded-lg bg-muted/20 text-xs text-muted-foreground flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-foreground">Primary Address: {c.address || 'None'}</p>
+                    <p className="text-[11px]">No multi-property addresses configured yet.</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => onEdit(c)} className="text-xs">
+                    + Add Properties
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

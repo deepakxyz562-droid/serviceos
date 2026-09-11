@@ -28,6 +28,31 @@ export interface CrmCustomer {
   portalEnabled?: boolean;
   invitationStatus?: string;
   activatedAt?: string | null;
+  properties?: Array<{
+    id: string;
+    label?: string | null;
+    street1: string;
+    street2?: string | null;
+    city?: string | null;
+    province?: string | null;
+    postalCode?: string | null;
+    country?: string | null;
+    isPrimary?: boolean;
+    contacts?: Array<{
+      id: string;
+      name: string;
+      phone?: string | null;
+      email?: string | null;
+      role?: string | null;
+    }>;
+  }>;
+  additionalContacts?: Array<{
+    id: string;
+    name: string;
+    phone?: string | null;
+    email?: string | null;
+    role?: string | null;
+  }>;
 }
 
 export interface TimelineEntry {

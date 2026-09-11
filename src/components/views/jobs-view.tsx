@@ -135,7 +135,7 @@ import { JobDetailPage } from '@/features/jobs/components/job-detail-page';
 import { RouteMapDialog } from '@/features/jobs/components/route-map-dialog';
 import { DeleteJobDialog } from '@/features/jobs/components/delete-job-dialog';
 import { BulkDeleteDialog } from '@/features/jobs/components/bulk-delete-dialog';
-import type { LifecycleDataShape } from '@/features/jobs/types/jobs-view-types';
+import type { LifecycleDataShape, CustomerOption } from '@/features/jobs/types/jobs-view-types';
 
 // Line-item + customer-picker building blocks (extracted to the line-items
 // feature folder in Phase 1 — no longer imported from a sibling view).
@@ -449,9 +449,7 @@ export function JobsView() {
 
   // State
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [customers, setCustomers] = useState<
-    { id: string; name: string; phone: string; email?: string | null; address?: string | null }[]
-  >([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   // Debounce search input so we don't fire an HTTP request on every keystroke.
@@ -718,6 +716,25 @@ export function JobsView() {
     };
   }, [jobForm.customerId]);
 
+  // When a job is edited, fetch the customer profile if properties are not loaded yet
+  // so that the location property chips can be rendered in the job form.
+  useEffect(() => {
+    if (!jobForm.customerId) return;
+    if (selectedCustomer?.properties && selectedCustomer.properties.length > 0) return;
+    let cancelled = false;
+    fetch(`/api/customers/${jobForm.customerId}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && Array.isArray(data.properties)) {
+          setSelectedCustomer((prev) => (prev ? { ...prev, properties: data.properties } : data));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [jobForm.customerId, selectedCustomer?.properties]);
+
   // V1.5: When a job detail page is opened, fetch the linked asset (if any)
   // so we can show its name + type in the detail sidebar.
   useEffect(() => {
@@ -877,7 +894,7 @@ export function JobsView() {
   const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Preserve the selected customer separately so it shows as a chip even
   // when the search results don't contain it (e.g. when editing an existing job).
-  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string; phone: string; email?: string | null; address?: string | null } | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
 
   // Server-side customer search — replaces the old limit=500 fetch.
   // Debounced 300ms, requires 2+ characters, returns max 10 results.
@@ -1105,8 +1122,15 @@ export function JobsView() {
 
   // ─── Customer picker helpers ───────────────────────────────────────────
 
-  const handlePickCustomer = (c: { id: string; name: string; phone: string; email?: string | null; address?: string | null }) => {
+  const handlePickCustomer = (c: CustomerOption) => {
     setSelectedCustomer(c);
+    const primaryProp = c.properties?.find((p) => p.isPrimary) || c.properties?.[0];
+    const propertyAddress = primaryProp
+      ? [primaryProp.street1, primaryProp.street2, primaryProp.city, primaryProp.province, primaryProp.postalCode, primaryProp.country]
+          .filter(Boolean)
+          .join(', ')
+      : c.address || '';
+
     setJobForm((prev) => ({
       ...prev,
       customerId: c.id,
@@ -1114,11 +1138,11 @@ export function JobsView() {
       customerName: prev.customerName || c.name,
       customerPhone: prev.customerPhone || c.phone,
       customerEmail: prev.customerEmail || (c.email || ''),
-      address: prev.address || (c.address || ''),
+      address: prev.address || propertyAddress,
     }));
   };
 
-  const addCustomerToList = (c: { id: string; name: string; phone: string; email?: string | null; address?: string | null }) => {
+  const addCustomerToList = (c: CustomerOption) => {
     setSelectedCustomer(c);
     handlePickCustomer(c);
     setCustomerPickerOpen(false);

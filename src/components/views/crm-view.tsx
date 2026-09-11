@@ -296,10 +296,7 @@ export function CrmView() {
   };
 
   const openEditCustomer = (customer: Customer) => {
-    // ISSUE-3: edit support for the new multi-section CustomerFormSheet is
-    // not wired up yet — for now we just open the sheet in create mode
-    // and toast that edit is coming. The full customer object is preserved
-    // in `editingCustomer` for when edit support is added.
+    // Opens the dedicated CustomerFormSheet in edit mode with all properties and contacts
     setEditingCustomer(customer);
     setShowAddCustomer(true);
   };
@@ -378,6 +375,9 @@ export function CrmView() {
       // Quotes + Invoices (from the customer profile fetch)
       if (customerRes.status === 'fulfilled') {
         const data = customerRes.value || {};
+        if (data && data.id) {
+          setSelectedCustomer((prev) => ({ ...(prev || {}), ...data }));
+        }
         setQuotes(Array.isArray(data.quotes) ? data.quotes : []);
         setInvoices(Array.isArray(data.invoices) ? data.invoices : []);
       } else {
@@ -560,12 +560,12 @@ export function CrmView() {
           if (!open) setEditingCustomer(null);
         }}
         editingCustomer={editingCustomer}
-        onCustomerSaved={() => {
-          // No fetchCustomers() needed — CustomerFormSheet now auto-invalidates
-          // qk.customers.all via getCustomerInvalidations (Phase 2 migration).
-          // Keep openCustomerDetail for the manual detail panel refresh.
-          if (selectedCustomer && editingCustomer?.id === selectedCustomer.id) {
-            openCustomerDetail(selectedCustomer);
+        onCustomerSaved={(updatedCustomer) => {
+          fetchCustomers();
+          const target = updatedCustomer || selectedCustomer;
+          if (target) {
+            setSelectedCustomer(target);
+            openCustomerDetail(target);
           }
         }}
       />
@@ -1030,9 +1030,11 @@ export function CrmView() {
           if (!open) setEditingCustomer(null);
         }}
         initialCustomer={editingCustomer}
-        onSaved={() => {
-          // No fetchCustomers() needed — CustomerFormSheet now auto-invalidates
-          // qk.customers.all via getCustomerInvalidations (Phase 2 migration).
+        onSaved={(savedCustomer) => {
+          fetchCustomers();
+          if (savedCustomer?.id && selectedCustomer?.id === savedCustomer.id) {
+            setSelectedCustomer(savedCustomer);
+          }
         }}
       />
 

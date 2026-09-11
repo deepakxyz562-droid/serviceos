@@ -568,8 +568,47 @@ export function JobFormPage({
       {/* ─── Address & Priority ───────────────────────────────── */}
       <FormSectionCard icon={MapPin} title="Location">
         <div className="space-y-4">
+          {/* Saved customer properties picker if available */}
+          {selectedCustomer?.properties && selectedCustomer.properties.length > 0 && (
+            <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
+              <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <MapPin className="size-3.5 text-emerald-600" />
+                Select from Customer's Saved Properties:
+              </Label>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {selectedCustomer.properties.map((prop, pIdx) => {
+                  const propAddr = [prop.street1, prop.street2, prop.city, prop.province, prop.postalCode, prop.country]
+                    .filter(Boolean)
+                    .join(', ');
+                  const isSelected = jobForm.address === propAddr || jobForm.address === prop.street1;
+                  return (
+                    <Button
+                      key={prop.id || pIdx}
+                      type="button"
+                      variant={isSelected ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn(
+                        'text-xs h-8 gap-1.5',
+                        isSelected && 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                      )}
+                      onClick={() => setJobForm((prev) => ({ ...prev, address: propAddr }))}
+                    >
+                      <span className="font-semibold">{prop.label || `Address ${pIdx + 1}`}:</span>
+                      <span className="truncate max-w-[200px]">{prop.street1}</span>
+                      {prop.isPrimary && (
+                        <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-0.5">
+                          Primary
+                        </Badge>
+                      )}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-2">
-            <Label htmlFor="job-address">Address</Label>
+            <Label htmlFor="job-address">Service Location Address</Label>
             <Input
               id="job-address"
               className="form-input h-10"
