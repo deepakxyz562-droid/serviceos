@@ -3,7 +3,7 @@
 import * as React from 'react';
 import {
   Briefcase, Clock, User, Activity, CheckCircle2, AlertCircle, XCircle,
-  Search, RefreshCw,
+  Search, RefreshCw, CircleDashed,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,11 @@ export interface JobStats {
   completed: number;
   cancelled: number;
   overdue: number;
+  // JOBS-COUNTS-1: jobs whose status has no dedicated chip (scheduled,
+  // invoiced, paid, quality_check, ... — Job.status has 15 state-machine
+  // values). Without this bucket these jobs were invisible: counted in
+  // "All" but present on NO chip, so All ≠ sum of chips.
+  other: number;
 }
 
 export type JobStatusFilter =
@@ -28,7 +33,8 @@ export type JobStatusFilter =
   | 'in_progress'
   | 'completed'
   | 'overdue'
-  | 'cancelled';
+  | 'cancelled'
+  | 'other';
 
 export interface JobFiltersProps {
   statusFilter: JobStatusFilter;
@@ -51,6 +57,7 @@ const CHIPS = [
   { key: 'completed', label: 'Completed', color: 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-300 dark:border-green-900/50', activeColor: 'bg-green-600 text-white border-green-600', icon: CheckCircle2 },
   { key: 'overdue', label: 'Overdue', color: 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 dark:border-red-900/50', activeColor: 'bg-red-600 text-white border-red-600', icon: AlertCircle },
   { key: 'cancelled', label: 'Cancelled', color: 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100 dark:bg-zinc-900/40 dark:text-zinc-400 dark:border-zinc-800', activeColor: 'bg-zinc-700 text-white border-zinc-700', icon: XCircle },
+  { key: 'other', label: 'Other', color: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-900/50', activeColor: 'bg-purple-600 text-white border-purple-600', icon: CircleDashed },
 ] as const;
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -80,6 +87,7 @@ export function JobFilters({
     completed: stats.completed,
     overdue: stats.overdue,
     cancelled: stats.cancelled,
+    other: stats.other,
   };
 
   return (

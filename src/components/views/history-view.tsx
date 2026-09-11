@@ -22,6 +22,8 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -90,6 +92,7 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
   const [jobs, setJobs] = useState<HistoryJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
@@ -98,22 +101,73 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkRunning, setBulkRunning] = useState(false);
 
+  // ── HISTORY-PAGE-1: server-side pagination ────────────────────────────
+  // Mirrors the Active tab's PAGINATION-ARCHIVE-1 pattern. The API has
+  // always returned a pagination envelope in history mode — the tab just
+  // never used it (it fetched up to 200 rows and rendered everything).
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [pagination, setPagination] = useState<{
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  } | null>(null);
+  const total = pagination?.total ?? 0;
+  const totalPages = pagination?.totalPages ?? 1;
+
+  // Debounce the search box (300ms) — it is a server-side filter now.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset to page 1 whenever any filter or the page size changes.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, paymentFilter, statusFilter, startDate, endDate, pageSize]);
+
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch ALL jobs (including soft-deleted + completed) with the lighter
-      // `select` (history=true). The same-day grace filter is applied
-      // client-side using UTC comparison so completed-today jobs stay in the
-      // Active list and only move to History the next day. This is enforced
-      // client-side because the Supabase REST adapter cannot handle the
-      // nested OR structure a server-side filter would require.
-      const res = await fetch('/api/jobs?includeDeleted=true&history=true');
+      // HISTORY-PAGE-1: search / status / payment / date filters are now
+      // applied SERVER-SIDE so pagination totals stay exact while filtered.
+      // Param mapping:
+      //   status 'all'       → includeDeleted=true  (completed + archived)
+      //   status 'completed' → includeDeleted=false (excludes archived)
+      //   status 'deleted'   → archived=true        (only soft-deleted)
+      const params = new URLSearchParams();
+      params.set('history', 'true');
+      params.set('page', String(page));
+      params.set('limit', String(pageSize));
+      if (statusFilter === 'deleted') {
+        params.set('archived', 'true');
+      } else if (statusFilter === 'completed') {
+        // HISTORY-PAGE-1: "Completed" = status completed AND not archived —
+        // both filters server-side so the pagination total is exact.
+        params.set('status', 'completed');
+        params.set('includeDeleted', 'false');
+      } else {
+        params.set('includeDeleted', 'true');
+      }
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
+      if (paymentFilter !== 'all') params.set('paymentStatus', paymentFilter);
+      if (startDate) params.set('dateFrom', startDate);
+      if (endDate) params.set('dateTo', endDate);
+
+      const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         const all = data.jobs ?? (Array.isArray(data) ? data : []);
+        setPagination(data.pagination ?? null);
         const now = new Date();
-        // SAME-DAY GRACE: show soft-deleted jobs OR completed jobs that were
-        // NOT completed today (UTC). Completed-today jobs stay in Active.
+        // SAME-DAY GRACE (client-side, unchanged): show soft-deleted jobs OR
+        // completed jobs that were NOT completed today (UTC). Completed-today
+        // jobs stay in the Active list and only move to History the next day.
+        // This filter remains client-side because the Supabase REST adapter
+        // cannot express the nested OR structure server-side — as a result
+        // page totals may over-count by the number of completed-today jobs
+        // (accepted; usually zero or one).
         setJobs(
           all.filter((j) => {
             if (j.deletedAt) return true; // soft-deleted → always in history
@@ -134,43 +188,11 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize, debouncedSearch, paymentFilter, statusFilter, startDate, endDate]);
 
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
-
-  const filtered = jobs.filter((j) => {
-    if (search) {
-      const q = search.toLowerCase();
-      if (
-        !j.title.toLowerCase().includes(q) &&
-        !(j.customerName || '').toLowerCase().includes(q) &&
-        !(j.jobNumber || '').toLowerCase().includes(q)
-      )
-        return false;
-    }
-    if (paymentFilter !== 'all') {
-      const isPaid = j.paymentStatus === 'paid' || j.amountCollected != null;
-      if (paymentFilter === 'paid' && !isPaid) return false;
-      if (paymentFilter === 'pending' && isPaid) return false;
-    }
-    if (statusFilter !== 'all') {
-      if (statusFilter === 'deleted' && !j.deletedAt) return false;
-      if (statusFilter === 'completed' && (j.deletedAt || j.status !== 'completed')) return false;
-    }
-    if (startDate) {
-      const jobDate = new Date(j.completedAt || j.updatedAt);
-      if (jobDate < new Date(startDate)) return false;
-    }
-    if (endDate) {
-      const jobDate = new Date(j.completedAt || j.updatedAt);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59);
-      if (jobDate > end) return false;
-    }
-    return true;
-  });
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -264,7 +286,7 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
       {/* Job list */}
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">Loading job history...</div>
-      ) : filtered.length === 0 ? (
+      ) : jobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <Briefcase className="size-12 mb-4 opacity-20" />
           <p className="text-lg font-medium">No job history found</p>
@@ -272,7 +294,7 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((job) => (
+          {jobs.map((job) => (
             <Card key={job.id} className={`hover:shadow-sm transition-shadow ${onSelectJob && !job.deletedAt ? 'cursor-pointer' : ''}`}>
               <CardContent className="p-4 flex items-center gap-4">
                 <input
@@ -364,6 +386,65 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── HISTORY-PAGE-1: pagination (mirrors the Active tab cards view) ── */}
+      {!loading && (
+        <div className="flex items-center justify-between flex-wrap gap-3 mt-4 px-2 py-3 border-t border-slate-100 dark:border-slate-800">
+          <p className="text-sm text-muted-foreground">
+            {total === 0
+              ? 'No jobs'
+              : `Showing ${Math.min((page - 1) * pageSize + 1, total)}–${Math.min(page * pageSize, total)} of ${total} jobs`}
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(val) => setPageSize(Number(val))}
+              >
+                <SelectTrigger className="w-[110px] h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[
+                    { value: 20, label: '20 / page' },
+                    { value: 50, label: '50 / page' },
+                    { value: 100, label: '100 / page' },
+                    { value: 200, label: '200 / page' },
+                  ].map((opt) => (
+                    <SelectItem key={opt.value} value={String(opt.value)} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="h-8 text-xs"
+              >
+                <ChevronLeft className="size-3.5 mr-1" /> Prev
+              </Button>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                Page {page} of {totalPages || 1}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="h-8 text-xs"
+              >
+                Next <ChevronRight className="size-3.5 ml-1" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

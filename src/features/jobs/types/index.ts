@@ -42,6 +42,19 @@ export interface Job {
   updatedAt?: string
 }
 
+// JOBS-COUNTS-1: tenant-wide status counts computed server-side by
+// GET /api/jobs?includeCounts=true (groupBy over status + JS-side overdue).
+export interface JobStatusCounts {
+  all: number
+  pending: number
+  assigned: number
+  in_progress: number
+  completed: number
+  cancelled: number
+  other: number
+  overdue: number
+}
+
 export interface JobListResponse {
   jobs: Job[]
   pagination?: {
@@ -50,6 +63,7 @@ export interface JobListResponse {
     total: number
     totalPages: number
   } | null
+  counts?: JobStatusCounts
 }
 
 export interface CreateJobInput {

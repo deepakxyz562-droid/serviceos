@@ -779,13 +779,23 @@ export function JobsView() {
   // below. This avoids needing a server-side overdue query (which would
   // require comparing scheduledAt + estimatedDuration to NOW — not supported
   const { data: jobsData, isLoading: loading, error: rqError, refetch: fetchJobs } = useJobs({
-    status: statusFilter !== 'all' && statusFilter !== 'overdue' ? statusFilter : undefined,
+    status: statusFilter !== 'all' && statusFilter !== 'overdue' && statusFilter !== 'other' ? statusFilter : undefined,
     search: debouncedSearch || undefined,
     // PAGINATION-ARCHIVE-1: Only paginate when NOT using the 'overdue' filter.
     // The 'overdue' filter is client-side (needs ALL non-terminal jobs to
     // compare scheduledAt + estimatedDuration to NOW). When 'overdue' is
     // selected, we don't pass page/limit so the API returns all jobs.
     ...(statusFilter === 'overdue' ? {} : { page: currentPage, limit: jobsPerPage }),
+    // JOBS-COUNTS-1: 'Other' chip — fetch everything OUTSIDE the five chip
+    // statuses (scheduled, invoiced, paid, quality_check, ...). Server-side
+    // notIn keeps pagination exact; no client-side status filtering needed.
+    ...(statusFilter === 'other'
+      ? { excludeStatus: 'pending,assigned,in_progress,completed,cancelled' }
+      : {}),
+    // JOBS-COUNTS-1: server-side same-day grace — the Active list no longer
+    // receives completed-before-today rows, so its pages and the "Showing
+    // X–Y of Z" footer match the status chips exactly.
+    activeGrace: true,
   });
   const error = rqError?.message ?? null;
 
@@ -1056,23 +1066,41 @@ export function JobsView() {
       .catch((err) => console.error('[jobs-view] pendingOpenEntity fetch failed:', err));
   }, [pendingOpenEntity]);
 
-  // ─── Stats ──────────────────────────────────────────────────────────────
+  // ─── Stats ──────────────────────────────────────────────────────────
+
+  // JOBS-COUNTS-1: the chips previously counted the CURRENT PAGE (≤ pageSize
+  // rows) client-side, so after server-side pagination landed every chip was
+  // wrong — "All" showed 20 (the page-size cap), chips summed to less than
+  // All (statuses without chips were invisible), and the numbers shifted
+  // with search/filter/page. Counts now come from the DB via a dedicated
+  // stable React Query key ({ page:1, limit:1, includeCounts:true }) —
+  // cached for 10s, refreshed by the same qk.jobs.all invalidation that
+  // fires after every job mutation. The client-side fallback below keeps
+  // the view correct if the counts query hasn't resolved yet.
+  const { data: countsData } = useJobs({ page: 1, limit: 1, includeCounts: true, activeGrace: true });
+  const serverCounts = countsData?.counts ?? null;
 
   const stats = {
-    total: jobs.length,
-    pending: jobs.filter(j => j.status === 'pending').length,
-    assigned: jobs.filter(j => j.status === 'assigned').length,
-    inProgress: jobs.filter(j => j.status === 'in_progress').length,
-    completed: jobs.filter(j => j.status === 'completed').length,
-    cancelled: jobs.filter(j => j.status === 'cancelled').length,
+    total: serverCounts ? serverCounts.all : jobs.length,
+    pending: serverCounts ? serverCounts.pending : jobs.filter(j => j.status === 'pending').length,
+    assigned: serverCounts ? serverCounts.assigned : jobs.filter(j => j.status === 'assigned').length,
+    inProgress: serverCounts ? serverCounts.in_progress : jobs.filter(j => j.status === 'in_progress').length,
+    completed: serverCounts ? serverCounts.completed : jobs.filter(j => j.status === 'completed').length,
+    cancelled: serverCounts ? serverCounts.cancelled : jobs.filter(j => j.status === 'cancelled').length,
+    // JOBS-COUNTS-1: statuses without a dedicated chip (scheduled, invoiced,
+    // paid, quality_check, ...). Server-computed; client fallback is 0.
+    other: serverCounts ? serverCounts.other : 0,
     // Phase 2: Overdue = job past its scheduled end time AND not in a
     // terminal state (completed/cancelled). Uses scheduledAt +
-    // estimatedDuration (default 60 min if unknown).
-    overdue: jobs.filter(j => {
-      if (!j.scheduledAt || j.status === 'completed' || j.status === 'cancelled') return false;
-      const end = new Date(j.scheduledAt).getTime() + ((j.estimatedDuration || 60) * 60_000);
-      return end < Date.now();
-    }).length,
+    // estimatedDuration (default 60 min if unknown). Server-computed when
+    // available (exact over the whole tenant, not just the current page).
+    overdue: serverCounts
+      ? serverCounts.overdue
+      : jobs.filter(j => {
+          if (!j.scheduledAt || j.status === 'completed' || j.status === 'cancelled') return false;
+          const end = new Date(j.scheduledAt).getTime() + ((j.estimatedDuration || 60) * 60_000);
+          return end < Date.now();
+        }).length,
   };
 
   // ─── Customer picker helpers ───────────────────────────────────────────

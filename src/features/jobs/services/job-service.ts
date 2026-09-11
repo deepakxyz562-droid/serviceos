@@ -29,6 +29,10 @@ export interface JobListParams {
   page?: number
   limit?: number
   includeDeleted?: boolean
+  // JOBS-COUNTS-1: 'Other' chip — comma list of statuses to exclude
+  excludeStatus?: string
+  // JOBS-COUNTS-1: request tenant-wide server-side status counts
+  includeCounts?: boolean
 }
 
 async function parseResponse<T>(res: Response): Promise<T> {
@@ -49,6 +53,8 @@ export const jobService = {
     if (params.search) searchParams.set('search', params.search)
     if (params.page) searchParams.set('page', String(params.page))
     if (params.limit) searchParams.set('limit', String(params.limit))
+    if (params.excludeStatus) searchParams.set('excludeStatus', params.excludeStatus)
+    if (params.includeCounts) searchParams.set('includeCounts', 'true')
     searchParams.set('includeDeleted', String(params.includeDeleted ?? false))
 
     const res = await authFetch(`/api/jobs?${searchParams.toString()}`)

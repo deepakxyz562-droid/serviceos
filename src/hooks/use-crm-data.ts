@@ -59,6 +59,14 @@ export interface JobListParams {
   search?: string;
   page?: number;
   limit?: number;
+  // JOBS-COUNTS-1: comma list of statuses to exclude ('Other' chip)
+  excludeStatus?: string;
+  // JOBS-COUNTS-1: request tenant-wide server-side status counts
+  includeCounts?: boolean;
+  // JOBS-COUNTS-1: opt-in server-side same-day-grace filter — exclude
+  // completed-before-today jobs from the ACTIVE list so its pages and
+  // pagination total match the status chips.
+  activeGrace?: boolean;
 }
 
 export function useJobs(params: JobListParams = {}) {
@@ -70,6 +78,10 @@ export function useJobs(params: JobListParams = {}) {
       if (params.search) searchParams.set('search', params.search);
       if (params.page) searchParams.set('page', String(params.page));
       if (params.limit) searchParams.set('limit', String(params.limit));
+      // JOBS-COUNTS-1: 'Other' chip + tenant-wide status counts
+      if (params.excludeStatus) searchParams.set('excludeStatus', params.excludeStatus);
+      if (params.includeCounts) searchParams.set('includeCounts', 'true');
+      if (params.activeGrace) searchParams.set('activeGrace', 'true');
       searchParams.set('includeDeleted', 'false');
 
       const res = await authFetch(`/api/jobs?${searchParams.toString()}`);
@@ -78,6 +90,7 @@ export function useJobs(params: JobListParams = {}) {
       return {
         jobs: data.jobs ?? (Array.isArray(data) ? data : []),
         pagination: data.pagination ?? null,
+        counts: data.counts ?? null,
       };
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM jobs

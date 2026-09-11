@@ -122,6 +122,30 @@ async function _GET(request: NextRequest) {
     const archivedOnly = archivedParam === 'true';
     const includeArchived = archivedParam === 'all';
 
+    // ── JOBS-COUNTS-1: server-side status counts for the Jobs view chips ──
+    // Opt-in (?includeCounts=true) so polling consumers (dispatch, calendar)
+    // don't pay for the extra aggregation queries.
+    const includeCounts = searchParams.get('includeCounts') === 'true';
+    // JOBS-COUNTS-1: 'Other' chip — jobs whose status is NOT one of the five
+    // chip statuses (scheduled, invoiced, paid, ... — Job.status is a free
+    // string with 15 state-machine values, only 5 have chips).
+    const excludeStatusParam = searchParams.get('excludeStatus');
+    // ── HISTORY-PAGE-1: Job History tab server-side filters ──────────────
+    // Moving these server-side keeps pagination totals EXACT while filtered
+    // (previously the tab filtered client-side over one fetched page).
+    const paymentStatusParam = searchParams.get('paymentStatus'); // 'paid' | 'pending'
+    const dateFromParam = searchParams.get('dateFrom');           // YYYY-MM-DD
+    const dateToParam = searchParams.get('dateTo');               // YYYY-MM-DD
+    // JOBS-COUNTS-1: opt-in server-side same-day-grace filter (Jobs view
+    // only). Active mode normally returns completed jobs too — the client
+    // filters them out via the same-day grace rule, which used to pollute
+    // the Active list pages AND its pagination total ("Showing 1–20 of 69"
+    // while the All chip said 7). Opt-in so other consumers (calendar,
+    // dispatch, dashboard) that DO want completed rows are unaffected.
+    // Structure is a single top-level OR of two simple leaves — Supabase
+    // adapter-safe (notIn + gte are both translated inside OR).
+    const activeGrace = searchParams.get('activeGrace') === 'true';
+
     // ── C-2A: Server-side pagination ──────────────────────────────────
     // Default pageSize=50 for active mode, 200 for history mode (preserves
     // the previous `take: 200` behavior). `limit` is honored as an alias
@@ -143,7 +167,7 @@ async function _GET(request: NextRequest) {
     // different views (Active vs History vs Dispatch) and pages get separate
     // cache entries.
     if (!search && user.tenantId) {
-      const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${archivedParam || ''}:${searchParams.get('tenantId') || ''}:p${page}:ps${pageSize}`;
+      const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${archivedParam || ''}:${excludeStatusParam || ''}:${paymentStatusParam || ''}:${dateFromParam || ''}:${dateToParam || ''}:${includeCounts ? 'c' : ''}:${activeGrace ? 'g' : ''}:${searchParams.get('tenantId') || ''}:p${page}:ps${pageSize}`;
       const cached = cache.get<unknown>(cacheKey);
       if (cached !== undefined) {
         return cachedJson(cached);
@@ -183,6 +207,11 @@ async function _GET(request: NextRequest) {
       }
     }
 
+    // ── JOBS-COUNTS-1: snapshot the tenant/workspace scope BEFORE filter ──
+    // params (status/search/etc.) are applied — the chip counts must be
+    // tenant-wide, not narrowed by whatever filter the view is using.
+    const tenantScope: Record<string, unknown> = { ...where }
+
     // ── Multi-value filters ───────────────────────────────────────────
     // Several callers (notably the Smart Dispatch Center in
     // dispatch-view.tsx) pass a comma-separated list, e.g.
@@ -203,6 +232,13 @@ async function _GET(request: NextRequest) {
     const statusList = splitList(status)
     if (statusList.length === 1) where.status = statusList[0]
     else if (statusList.length > 1) where.status = { in: statusList }
+    // JOBS-COUNTS-1: 'Other' chip — everything outside the five chip
+    // statuses. Only honored when no explicit status filter is present.
+    // notIn is supported by Prisma AND the Supabase REST adapter.
+    if (statusList.length === 0 && excludeStatusParam) {
+      const excludeList = splitList(excludeStatusParam)
+      if (excludeList.length > 0) where.status = { notIn: excludeList }
+    }
 
     const typeList = splitList(type)
     if (typeList.length === 1) where.type = typeList[0]
@@ -230,23 +266,95 @@ async function _GET(request: NextRequest) {
     // `{ not: ... }` inside `OR` structure was incompatible with the Supabase
     // REST adapter (which silently drops `{ not: ... }` conditions inside OR
     // and can't handle nested OR), causing jobs to disappear in production.
-    if (excludeDeleted && !historyMode && !archivedOnly && !includeArchived) {
+    // HISTORY-PAGE-1: archived / excludeDeleted now apply in history mode
+    // too — the History tab's "Completed" chip sends includeDeleted=false
+    // (completed + NOT archived) and "Archived" sends archived=true. The
+    // legacy includeDeleted=true default (deleted included) is unchanged.
+    if (archivedOnly) {
+      where.deletedAt = { not: null }
+    } else if (excludeDeleted && !includeArchived) {
       where.deletedAt = null
     }
-    // PAGINATION-ARCHIVE-1: archived=true → only soft-deleted jobs.
-    if (archivedOnly && !historyMode) {
-      where.deletedAt = { not: null }
-    }
+
+    // ── HISTORY-PAGE-1: search + payment + date filters ─────────────
+    // Multiple OR-shaped filters must AND together, so they're collected as
+    // AND-ed groups: where.AND = [{ OR: [...] }, { OR: [...] }]. Prisma
+    // supports this natively; the Supabase REST adapter supports top-level
+    // AND arrays and nested OR/AND groups (see buildOrConditionPart).
+    const andGroups: Record<string, unknown>[] = []
 
     if (search) {
-      where.OR = [
-        { title: { contains: search } },
-        { description: { contains: search } },
-        { customerName: { contains: search } },
-        { assigneeName: { contains: search } },
-        { address: { contains: search } },
-      ]
+      andGroups.push({
+        OR: [
+          { title: { contains: search } },
+          { description: { contains: search } },
+          { customerName: { contains: search } },
+          { assigneeName: { contains: search } },
+          { address: { contains: search } },
+          // HISTORY-PAGE-1: the History tab searches by job # as well.
+          { jobNumber: { contains: search } },
+        ],
+      })
     }
+
+    if (paymentStatusParam === 'paid') {
+      // paid = paymentStatus='paid' OR amountCollected is set.
+      // NOTE: `amountCollected gte 0` instead of `{ not: null }` because the
+      // Supabase OR-part builder doesn't translate `not` operators — gte 0
+      // also excludes NULL in SQL. Negative collected amounts are treated as
+      // unpaid (documented trade-off; negative collections are data errors).
+      andGroups.push({
+        OR: [{ paymentStatus: 'paid' }, { amountCollected: { gte: 0 } }],
+      })
+    } else if (paymentStatusParam === 'pending') {
+      // pending = NOT(paymentStatus='paid' OR amountCollected set)
+      //         = paymentStatus != 'paid' AND amountCollected IS NULL.
+      // The NOT wrapper is NULL-safe in the adapter (emits is.null OR neq).
+      andGroups.push({ NOT: { paymentStatus: 'paid' } })
+      where.amountCollected = null
+    }
+
+    // Date range on the job's "history date" (completedAt ?? updatedAt).
+    // COALESCE isn't portable across Prisma + the Supabase adapter, so
+    // emulate: completedAt in range OR (completedAt IS NULL AND updatedAt
+    // in range). Nested AND inside OR is supported by both.
+    if (dateFromParam) {
+      const from = new Date(`${dateFromParam}T00:00:00`)
+      if (!isNaN(from.getTime())) {
+        andGroups.push({
+          OR: [
+            { completedAt: { gte: from } },
+            { AND: [{ completedAt: null }, { updatedAt: { gte: from } }] },
+          ],
+        })
+      }
+    }
+    if (dateToParam) {
+      const to = new Date(`${dateToParam}T23:59:59.999`)
+      if (!isNaN(to.getTime())) {
+        andGroups.push({
+          OR: [
+            { completedAt: { lte: to } },
+            { AND: [{ completedAt: null }, { updatedAt: { lte: to } }] },
+          ],
+        })
+      }
+    }
+    // JOBS-COUNTS-1: server-side same-day grace for the Jobs view —
+    // status != 'completed' OR completed today (UTC). notIn is used instead
+    // of `not` because the Supabase OR-part builder translates notIn but
+    // not `not` (NULL semantics are irrelevant here: status is NOT NULL).
+    if (activeGrace && !historyMode && statusList.length === 0 && !excludeStatusParam && !archivedOnly && !includeArchived) {
+      const graceTodayStart = new Date();
+      graceTodayStart.setUTCHours(0, 0, 0, 0);
+      andGroups.push({
+        OR: [
+          { status: { notIn: ['completed'] } },
+          { completedAt: { gte: graceTodayStart } },
+        ],
+      });
+    }
+    if (andGroups.length > 0) where.AND = andGroups
 
     // ── C-2A: Explicit field selection + pagination envelope ────────
     //
@@ -370,6 +478,72 @@ async function _GET(request: NextRequest) {
 
     const hasNextPage = page * pageSize < total;
     const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+
+    // ── JOBS-COUNTS-1: server-side status counts for the Jobs view chips ──
+    // The chips used to count the CURRENT PAGE client-side (≤ pageSize rows),
+    // which made every chip wrong once pagination landed (PAGINATION-
+    // ARCHIVE-1) — e.g. "All" showed 20 (the page size cap), not the real
+    // total. These counts are tenant-wide (they ignore search/status/page)
+    // so each chip always answers "how many jobs does this tenant have in
+    // this state?". groupBy is supported by both Prisma and the Supabase
+    // adapter (native aggregate + PGRST123 fallback).
+    let counts: Record<string, number> | undefined;
+    if (includeCounts && !historyMode) {
+      const utcTodayStart = new Date();
+      utcTodayStart.setUTCHours(0, 0, 0, 0);
+      const chipStatuses = ['pending', 'assigned', 'in_progress', 'completed', 'cancelled'];
+      const [statusGroups, totalNonDeleted, completedToday, overdueRows] = await Promise.all([
+        db.job.groupBy({
+          by: ['status'],
+          where: { ...tenantScope, deletedAt: null },
+          _count: { id: true },
+        }),
+        db.job.count({ where: { ...tenantScope, deletedAt: null } }),
+        // Completed TODAY (UTC) — matches the client-side same-day grace
+        // filter that keeps today's completions in the Active list.
+        db.job.count({
+          where: { ...tenantScope, deletedAt: null, status: 'completed', completedAt: { gte: utcTodayStart } },
+        }),
+        // Overdue = scheduledAt + estimatedDuration < now. Not expressible
+        // as a single portable where-clause, so fetch minimal scalar fields
+        // for non-terminal jobs and compute in JS (same formula as the
+        // client-side overdue filter; scalar-only select keeps it cheap).
+        db.job.findMany({
+          where: { ...tenantScope, deletedAt: null, status: { notIn: ['completed', 'cancelled'] } },
+          select: { scheduledAt: true, estimatedDuration: true },
+        }),
+      ]);
+      const byStatus: Record<string, number> = {};
+      for (const g of statusGroups as unknown as Array<{ status: string | null; _count: { id: number } }>) {
+        if (g?.status) byStatus[g.status] = Number(g._count?.id ?? 0);
+      }
+      const completedTotal = byStatus['completed'] ?? 0;
+      const other = Object.entries(byStatus)
+        .filter(([s]) => !chipStatuses.includes(s))
+        .reduce((acc, [, n]) => acc + n, 0);
+      const nowMs = Date.now();
+      const overdue = overdueRows.filter((j: { scheduledAt: Date | string | null; estimatedDuration: number | null }) => {
+        if (!j.scheduledAt) return false;
+        const endMs = new Date(j.scheduledAt).getTime() + ((j.estimatedDuration || 60) * 60_000);
+        return endMs < nowMs;
+      }).length;
+      counts = {
+        // Active-tab universe = all non-deleted jobs minus completions from
+        // PREVIOUS days (those live in the History tab by design). NOTE:
+        // legacy completed rows with no timestamps still count toward 'all'
+        // — accepted approximation (same-day grace is client-side because
+        // the Supabase adapter can't express the nested OR server-side).
+        all: totalNonDeleted - (completedTotal - completedToday),
+        pending: byStatus['pending'] ?? 0,
+        assigned: byStatus['assigned'] ?? 0,
+        in_progress: byStatus['in_progress'] ?? 0,
+        completed: completedToday,
+        cancelled: byStatus['cancelled'] ?? 0,
+        other,
+        overdue,
+      };
+    }
+
     const result = {
       jobs,
       pagination: {
@@ -379,6 +553,7 @@ async function _GET(request: NextRequest) {
         totalPages,
         hasNextPage,
       },
+      ...(counts ? { counts } : {}),
     };
 
     const cacheKey = (request as unknown as { _jobsCacheKey?: string })._jobsCacheKey;
