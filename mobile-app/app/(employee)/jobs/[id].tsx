@@ -74,6 +74,7 @@ import { captureGps } from '@/lib/gps';
 import { getStatusVariant } from '@/lib/status-colors';
 import { trackingManager } from '@/lib/tracking-manager';
 import { useAuthStore } from '@/stores/auth-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Job } from '@/types';
 import { format, parseISO } from 'date-fns';
 
@@ -424,20 +425,18 @@ export default function JobDetailScreen() {
         });
         return;
       }
-      // V1.6: 'start_travel' must show a prominent in-app disclosure
-      // BEFORE the OS location permission prompt. The disclosure explains
-      // that we collect background location for live travel tracking. The
-      // user must tap "Continue" before we call `requestLocationPermissions`
-      // (which fires the OS prompt). If they tap "Cancel", travel is not
-      // started. See Mobile-Fix-Tracking-Offline.
+      // Seamless travel start (Ola/Uber UX): If location permission is already
+      // granted or disclosure was already accepted, start travel immediately
+      // without interrupting the technician with a modal on every job.
       if (action === 'start_travel') {
         const proceedWithStartTravel = async () => {
-          // Request location permissions AFTER the disclosure is accepted.
-          // Best-effort: if the user denies, we still start travel so they
-          // can complete the job — they'll just see the red "Location
-          // permission denied" banner instead of live tracking.
           try {
-            await liveTracking.requestLocationPermissions();
+            await AsyncStorage.setItem('fieseros_location_disclosure_accepted', 'true');
+          } catch {}
+          try {
+            if (!liveTracking.hasForegroundPermission) {
+              await liveTracking.requestLocationPermissions();
+            }
           } catch (err) {
             console.warn('[job-detail] location permission request failed:', err);
           }
@@ -447,8 +446,26 @@ export default function JobDetailScreen() {
           const coords = await captureGps();
           runLifecycle(action, label, undefined, coords);
         };
-        setDisclosureContinue(() => proceedWithStartTravel);
-        setShowLocationDisclosure(true);
+
+        // If permission is already granted, proceed immediately with zero friction
+        if (liveTracking.hasForegroundPermission) {
+          proceedWithStartTravel();
+          return;
+        }
+
+        // Otherwise check if disclosure was already acknowledged on a previous job
+        AsyncStorage.getItem('fieseros_location_disclosure_accepted')
+          .then((accepted) => {
+            if (accepted === 'true') {
+              proceedWithStartTravel();
+            } else {
+              setDisclosureContinue(() => proceedWithStartTravel);
+              setShowLocationDisclosure(true);
+            }
+          })
+          .catch(() => {
+            proceedWithStartTravel();
+          });
         return;
       }
       // start_work requires a PIN when the job has a verificationPin

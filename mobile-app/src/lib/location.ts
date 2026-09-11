@@ -36,6 +36,10 @@ export async function requestLocationPermission(): Promise<boolean> {
     return true;
   }
   try {
+    const existing = await Location.getForegroundPermissionsAsync();
+    if (existing.status === 'granted') {
+      return true;
+    }
     const { status } = await Location.requestForegroundPermissionsAsync();
     return status === 'granted';
   } catch {

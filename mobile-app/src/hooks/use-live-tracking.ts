@@ -297,8 +297,14 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
     }
 
     try {
-      const fg = await Location.requestForegroundPermissionsAsync();
-      if (!fg.granted) {
+      const existingFg = await Location.getForegroundPermissionsAsync();
+      let fgGranted = existingFg.status === 'granted';
+      if (!fgGranted) {
+        const fg = await Location.requestForegroundPermissionsAsync();
+        fgGranted = fg.granted;
+      }
+
+      if (!fgGranted) {
         setState((s) => ({
           ...s,
           hasForegroundPermission: false,
@@ -309,12 +315,16 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
         return false;
       }
 
-      // Foreground granted → now ask for background. Best-effort: some
-      // emulators throw when the background permission isn't implemented.
+      // Foreground granted → check background.
       let bgGranted = false;
       try {
-        const bg = await Location.requestBackgroundPermissionsAsync();
-        bgGranted = bg.status === 'granted';
+        const existingBg = await Location.getBackgroundPermissionsAsync();
+        if (existingBg.status === 'granted') {
+          bgGranted = true;
+        } else {
+          const bg = await Location.requestBackgroundPermissionsAsync();
+          bgGranted = bg.status === 'granted';
+        }
       } catch (bgErr) {
         console.warn('[live-tracking] background permission request failed:', bgErr);
       }

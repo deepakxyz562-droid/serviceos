@@ -43,6 +43,11 @@ export async function ensureLocationPermission(): Promise<boolean> {
         typeof navigator !== 'undefined' && !!navigator.geolocation;
       return cachedPermissionGranted;
     }
+    const existing = await Location.getForegroundPermissionsAsync();
+    if (existing.status === 'granted') {
+      cachedPermissionGranted = true;
+      return true;
+    }
     const { status } = await Location.requestForegroundPermissionsAsync();
     cachedPermissionGranted = status === 'granted';
     return cachedPermissionGranted;
