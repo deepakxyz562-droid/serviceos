@@ -308,6 +308,18 @@ export default function JobDetailScreen() {
   // both the LifecycleBadge and the sticky footer's stage-aware buttons.
   const currentState = resolveLifecycleStage(job).toLowerCase();
 
+  // ── Track global active travel state for UI banner ──────────────────
+  const [isTravellingGlobally, setIsTravellingGlobally] = useState<boolean>(() => {
+    const st = trackingManager.getState();
+    return !!st && st.jobId === job?.id;
+  });
+
+  useEffect(() => {
+    return trackingManager.subscribe((st) => {
+      setIsTravellingGlobally(!!st && st.jobId === job?.id);
+    });
+  }, [job?.id]);
+
   // ── Synchronize with trackingManager ────────────────────────────────
   // Ensures global background GPS tracking stays synchronized with the
   // job's lifecycle status.
@@ -617,7 +629,7 @@ export default function JobDetailScreen() {
                 Enable location in Settings to share your ETA.
               </Text>
             </View>
-          ) : liveTracking.isTracking ? (
+          ) : isTravellingGlobally ? (
             <View
               style={{
                 backgroundColor: '#ECFDF5',
@@ -635,9 +647,6 @@ export default function JobDetailScreen() {
               <Navigation size={16} color="#059669" />
               <Text style={{ fontSize: 13, color: '#065F46', flex: 1 }}>
                 Live tracking active — dispatch can see your position
-                {liveTracking.lastPingAt
-                  ? ` · last ping ${formatDistanceToNowShort(liveTracking.lastPingAt)}`
-                  : ''}
               </Text>
             </View>
           ) : null)}
