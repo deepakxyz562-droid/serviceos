@@ -143,9 +143,10 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
       if (statusFilter === 'deleted') {
         params.set('archived', 'true');
       } else if (statusFilter === 'completed') {
-        // HISTORY-PAGE-1: "Completed" = status completed AND not archived —
-        // both filters server-side so the pagination total is exact.
         params.set('status', 'completed');
+        params.set('includeDeleted', 'false');
+      } else if (statusFilter === 'cancelled') {
+        params.set('status', 'cancelled');
         params.set('includeDeleted', 'false');
       } else {
         params.set('includeDeleted', 'true');
@@ -158,30 +159,9 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        const all = data.jobs ?? (Array.isArray(data) ? data : []);
+        const all: HistoryJob[] = data.jobs ?? (Array.isArray(data) ? data : []);
         setPagination(data.pagination ?? null);
-        const now = new Date();
-        // SAME-DAY GRACE (client-side, unchanged): show soft-deleted jobs OR
-        // completed jobs that were NOT completed today (UTC). Completed-today
-        // jobs stay in the Active list and only move to History the next day.
-        // This filter remains client-side because the Supabase REST adapter
-        // cannot express the nested OR structure server-side — as a result
-        // page totals may over-count by the number of completed-today jobs
-        // (accepted; usually zero or one).
-        setJobs(
-          all.filter((j) => {
-            if (j.deletedAt) return true; // soft-deleted → always in history
-            if (j.status !== 'completed') return false; // active job → not in history
-            const completedAt = j.completedAt || j.actualEndTime;
-            if (!completedAt) return true; // legacy completed job with no timestamp
-            const cd = new Date(completedAt);
-            const isToday =
-              cd.getUTCFullYear() === now.getUTCFullYear() &&
-              cd.getUTCMonth() === now.getUTCMonth() &&
-              cd.getUTCDate() === now.getUTCDate();
-            return !isToday; // completed before today → show in history
-          })
-        );
+        setJobs(all);
       }
     } catch {
       setJobs([]);
@@ -246,6 +226,7 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
           <SelectContent>
             <SelectItem value="all">All History</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
             <SelectItem value="deleted">Archived</SelectItem>
           </SelectContent>
         </Select>
@@ -314,6 +295,12 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
                     <span className="text-xs font-mono text-muted-foreground">{job.jobNumber || job.id.slice(0, 8).toUpperCase()}</span>
                     {job.deletedAt ? (
                       <Badge variant="outline" className="text-[10px] bg-gray-100 text-gray-600 border-gray-200">Archived</Badge>
+                    ) : job.status === 'cancelled' ? (
+                      <Badge variant="outline" className="text-[10px] bg-red-100 text-red-700 border-red-200">Cancelled</Badge>
+                    ) : job.status === 'invoice_generated' ? (
+                      <Badge variant="outline" className="text-[10px] bg-blue-100 text-blue-700 border-blue-200">
+                        <CheckCircle2 className="size-3 mr-0.5" /> Invoiced
+                      </Badge>
                     ) : (
                       <Badge variant="outline" className="text-[10px] bg-green-100 text-green-700 border-green-200">
                         <CheckCircle2 className="size-3 mr-0.5" /> Completed

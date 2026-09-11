@@ -230,8 +230,15 @@ async function _GET(request: NextRequest) {
       v ? v.split(',').map(s => s.trim()).filter(Boolean) : []
 
     const statusList = splitList(status)
-    if (statusList.length === 1) where.status = statusList[0]
-    else if (statusList.length > 1) where.status = { in: statusList }
+    if (statusList.length === 1) {
+      if (historyMode && statusList[0] === 'completed') {
+        where.status = { in: ['completed', 'invoice_generated'] }
+      } else {
+        where.status = statusList[0]
+      }
+    } else if (statusList.length > 1) {
+      where.status = { in: statusList }
+    }
     // JOBS-COUNTS-1: 'Other' chip — everything outside the five chip
     // statuses. Only honored when no explicit status filter is present.
     // notIn is supported by Prisma AND the Supabase REST adapter.
@@ -252,36 +259,34 @@ async function _GET(request: NextRequest) {
     if (customerId) where.customerId = customerId
 
     // ── History vs Active filtering ───────────────────────────────────
-    // history=true  → lighter `select` (no relations) + take limit for the
-    //                 History tab. Returns ALL jobs (including soft-deleted +
-    //                 completed) — the client applies the same-day grace filter
-    //                 so completed-today jobs stay in the Active list.
-    // includeDeleted=false → exclude soft-deleted jobs (simple `deletedAt: null`
-    //                 filter that works in both Prisma SQLite AND the Supabase
-    //                 REST adapter).
-    //
-    // NOTE: The same-day grace filter (completed-today jobs stay in Active,
-    // move to History tomorrow) is enforced CLIENT-SIDE using UTC comparison.
-    // It was previously server-side, but the nested `OR` inside `OR` +
-    // `{ not: ... }` inside `OR` structure was incompatible with the Supabase
-    // REST adapter (which silently drops `{ not: ... }` conditions inside OR
-    // and can't handle nested OR), causing jobs to disappear in production.
-    // HISTORY-PAGE-1: archived / excludeDeleted now apply in history mode
-    // too — the History tab's "Completed" chip sends includeDeleted=false
-    // (completed + NOT archived) and "Archived" sends archived=true. The
-    // legacy includeDeleted=true default (deleted included) is unchanged.
-    if (archivedOnly) {
-      where.deletedAt = { not: null }
-    } else if (excludeDeleted && !includeArchived) {
-      where.deletedAt = null
-    }
-
-    // ── HISTORY-PAGE-1: search + payment + date filters ─────────────
-    // Multiple OR-shaped filters must AND together, so they're collected as
-    // AND-ed groups: where.AND = [{ OR: [...] }, { OR: [...] }]. Prisma
-    // supports this natively; the Supabase REST adapter supports top-level
-    // AND arrays and nested OR/AND groups (see buildOrConditionPart).
     const andGroups: Record<string, unknown>[] = []
+
+    if (historyMode) {
+      if (archivedOnly) {
+        where.deletedAt = { not: null }
+      } else if (statusList.length === 0 && !excludeStatusParam) {
+        if (excludeDeleted && !includeArchived) {
+          where.deletedAt = null
+          where.status = { in: ['completed', 'invoice_generated', 'cancelled'] }
+        } else {
+          // All History: completed / invoice_generated / cancelled OR soft-deleted
+          andGroups.push({
+            OR: [
+              { status: { in: ['completed', 'invoice_generated', 'cancelled'] } },
+              { deletedAt: { not: null } },
+            ],
+          })
+        }
+      } else if (excludeDeleted && !includeArchived) {
+        where.deletedAt = null
+      }
+    } else {
+      if (archivedOnly) {
+        where.deletedAt = { not: null }
+      } else if (excludeDeleted && !includeArchived) {
+        where.deletedAt = null
+      }
+    }
 
     if (search) {
       andGroups.push({
