@@ -326,9 +326,12 @@ export default function JobDetailScreen() {
     }
   }, [job?.id, currentState, employeeId]);
 
-  // ── Local live GPS tracking hook (provides UI status & permissions) ─
+  // ── Local live GPS tracking hook (provides permission queries & requests) ─
+  // Note: enabled is false because global continuous live tracking is already
+  // managed by _layout.tsx via trackingManager subscription. Keeping enabled: false
+  // here prevents duplicate watchPositionAsync watchers and duplicate heartbeats.
   const liveTracking = useLiveTracking({
-    enabled: currentState === 'travelling',
+    enabled: false,
     employeeId,
     jobId: job?.id ?? null,
     apiBaseUrl: API_BASE_URL,
@@ -430,15 +433,19 @@ export default function JobDetailScreen() {
       // without interrupting the technician with a modal on every job.
       if (action === 'start_travel') {
         const proceedWithStartTravel = async () => {
+          let granted = liveTracking.hasForegroundPermission;
           try {
-            await AsyncStorage.setItem('fieseros_location_disclosure_accepted', 'true');
-          } catch {}
-          try {
-            if (!liveTracking.hasForegroundPermission) {
-              await liveTracking.requestLocationPermissions();
+            if (!granted) {
+              granted = await liveTracking.requestLocationPermissions();
             }
           } catch (err) {
             console.warn('[job-detail] location permission request failed:', err);
+          }
+          // Persist disclosure acceptance only if permission was actually granted
+          if (granted) {
+            try {
+              await AsyncStorage.setItem('fieseros_location_disclosure_accepted', 'true');
+            } catch {}
           }
           // V1.5 GPS capture: attach best-effort lat/long to the lifecycle
           // POST for start_travel. GPS is best-effort — failure doesn't

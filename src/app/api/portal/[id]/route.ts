@@ -30,6 +30,18 @@ function estimateEtaMinutes(distKm: number): number {
   return Math.max(1, minutes);
 }
 
+function toIso(val: unknown): string | null {
+  if (!val) return null;
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'string') return val;
+  try {
+    const d = new Date(val as any);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -144,9 +156,9 @@ export async function GET(
       description: job.description,
       status: job.status,
       address: job.address,
-      scheduledAt: job.scheduledAt ? job.scheduledAt.toISOString() : null,
-      startedAt: job.actualStartTime ? job.actualStartTime.toISOString() : null,
-      completedAt: job.completedAt ? job.completedAt.toISOString() : null,
+      scheduledAt: toIso(job.scheduledAt),
+      startedAt: toIso(job.actualStartTime),
+      completedAt: toIso(job.completedAt),
       customerName: job.customer?.name ?? null,
       employeeName: job.assignee?.name ?? null,
       employeePhone: job.assignee?.phone ?? null,
@@ -156,7 +168,7 @@ export async function GET(
       currentLongitude: currentLng,
       destinationLatitude: jobLat,
       destinationLongitude: jobLng,
-      lastLocationAt: job.assignee?.lastLocationAt ? job.assignee.lastLocationAt.toISOString() : null,
+      lastLocationAt: toIso(job.assignee?.lastLocationAt),
       etaMinutes,
       distanceKm,
       provider: job.assignee

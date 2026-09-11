@@ -107,6 +107,7 @@ import {
 import { assetUrl, ApiRequestError } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
 import { captureGps } from '@/lib/gps';
+import { trackingManager } from '@/lib/tracking-manager';
 import {
   buildPhotoFormData,
   strokeToPath,
@@ -1149,10 +1150,13 @@ export default function JobCompletionScreen() {
       //    job.completed event, sends WhatsApp notifications.
       try {
         await lifecycle.mutateAsync({ id, action: 'complete' });
+        // Deterministically stop background travel tracking upon job completion
+        trackingManager.stopTravelling();
       } catch (lcErr) {
         // Proof was saved; lifecycle call may have failed because the job was
         // already completed or the validation rejected it. Surface but don't
         // fail the whole flow.
+        trackingManager.stopTravelling();
         show(
           lcErr instanceof Error
             ? `Proof saved, but lifecycle update failed: ${lcErr.message}`

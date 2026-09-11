@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+// @ts-ignore
 import nativewindPreset from 'nativewind/preset';
 
 const config: Config = {

@@ -71,6 +71,7 @@ export default function EmployeeLayout() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
+          body: JSON.stringify({ employeeId }),
         });
       } catch {
         // Non-critical — heartbeat will retry on next interval
