@@ -581,6 +581,7 @@ export interface LiveTrackingInfo {
   employeeName?: string | null;
   employeePhone?: string | null;
   etaMinutes?: number | null;
+  distanceKm?: number | null;
   currentLatitude?: number | null;
   currentLongitude?: number | null;
   scheduledAt: string | null;

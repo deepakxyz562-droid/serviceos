@@ -33,6 +33,7 @@ export const STORAGE_KEYS = {
   // Written by useLiveTracking when tracking starts; read by the module-level
   // TaskManager task to know which employee/job a background ping belongs to.
   LIVE_TRACKING_CTX: 'fieseros_live_tracking_ctx',
+  ACTIVE_TRAVEL_STATE: 'fieseros_active_travel_state',
 } as const;
 
 /**

@@ -14,7 +14,7 @@
  *   1. The "6th tab" bug — inventory was auto-discovered as a tab.
  *   2. The broken back button — tabs have no "back"; Stacks do.
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { AppState, AppStateStatus } from 'react-native';
 import { Home, Briefcase, CalendarDays, Clock, User } from 'lucide-react-native';
@@ -23,19 +23,40 @@ import { useAuthStore } from '@/stores/auth-store';
 import { API_BASE_URL, COLORS } from '@/lib/constants';
 import { getToken } from '@/lib/auth';
 import { processPhotoQueue } from '@/lib/offline-queue';
+import { trackingManager, ActiveTravelState } from '@/lib/tracking-manager';
+import { useLiveTracking } from '@/hooks/use-live-tracking';
 
 export default function EmployeeLayout() {
   const insets = useSafeAreaInsets();
+  const employeeId = useAuthStore((s) => s.user?.employeeId ?? null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Global continuous live GPS tracking ───────────────────────────
+  // Subscribes to trackingManager to maintain persistent 5s / 5m Uber-style
+  // live GPS tracking across all tabs and background states.
+  const [activeTravel, setActiveTravel] = useState<ActiveTravelState | null>(() =>
+    trackingManager.getState()
+  );
+
+  useEffect(() => {
+    trackingManager.init();
+    return trackingManager.subscribe((st) => {
+      setActiveTravel(st);
+    });
+  }, []);
+
+  useLiveTracking({
+    enabled: !!activeTravel?.jobId && !!(activeTravel?.employeeId ?? employeeId),
+    employeeId: activeTravel?.employeeId ?? employeeId,
+    jobId: activeTravel?.jobId ?? null,
+    apiBaseUrl: API_BASE_URL,
+  });
 
   // ── Employee heartbeat ────────────────────────────────────────────
   // Keeps `Employee.lastSeenAt` fresh on the backend so the Live Dispatch
-  // map shows the technician as "online" whenever the app is open — not
-  // only while actively tracking a job (useLiveTracking only runs inside
-  // jobs/[id].tsx). Posts to /api/employees/heartbeat every 60s, sends
-  // immediately on mount and when the app returns to the foreground, and
-  // tears down when the employee logs out (employeeId becomes null).
-  const employeeId = useAuthStore((s) => s.user?.employeeId ?? null);
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // map shows the technician as "online" whenever the app is open.
+  // Posts to /api/employees/heartbeat every 60s, sends immediately on mount
+  // and when the app returns to the foreground, and tears down when logged out.
 
   useEffect(() => {
     if (!employeeId) return;

@@ -114,7 +114,7 @@ export default function LiveTrackingScreen() {
     refetchInterval: (query) => {
       const d = query.state.data;
       if (d && (d.status === 'completed' || d.status === 'cancelled')) return false;
-      return 15000; // 15s while active
+      return 5000; // 5s for Uber-like responsive live tracking
     },
     refetchOnWindowFocus: true,
   });
@@ -236,9 +236,9 @@ export default function LiveTrackingScreen() {
                   ? 'Job Completed'
                   : isCancelled
                     ? 'Job Cancelled'
-                    : info.status === 'en_route'
+                    : info.status === 'en_route' || info.status === 'travelling'
                       ? 'On the way'
-                      : info.status === 'in_progress'
+                      : info.status === 'in_progress' || info.status === 'working'
                         ? 'Work in progress'
                         : info.status === 'assigned'
                           ? 'Technician assigned'
@@ -260,7 +260,7 @@ export default function LiveTrackingScreen() {
           ) : null}
           {!isCompleted && !isCancelled ? (
             <Text className="mt-2 text-xs text-muted-foreground">
-              {isFetching ? 'Updating…' : 'Auto-refreshes every 15 seconds'}
+              {isFetching ? 'Updating live…' : 'Live tracking active · Updates every 5s'}
             </Text>
           ) : null}
         </Card>
@@ -286,7 +286,11 @@ export default function LiveTrackingScreen() {
               </Text>
             </View>
             <Text className="mt-1 text-sm font-semibold text-foreground">
-              {isCompleted ? '—' : formatEta(info.etaMinutes)}
+              {isCompleted
+                ? '—'
+                : info.distanceKm != null && info.distanceKm > 0
+                  ? `${formatEta(info.etaMinutes)} (${info.distanceKm} km)`
+                  : formatEta(info.etaMinutes)}
             </Text>
           </Card>
         </View>

@@ -4,29 +4,12 @@ import { loadTenantEmailBranding } from '@/lib/tenant-branding';
 import { resolveTenantId } from '@/lib/owner-notifications';
 
 /**
- * GET /api/public/jobs/[id]
+ * GET /api/portal/[id]
  *
- * Public-safe job tracking DTO. NO authentication required.
- * Used by the customer portal tracking page (/portal/[id]).
- *
- * Returns ONLY fields safe for public consumption:
- *   - Job title, description, status, address, scheduledAt
- *   - Customer name (first name only — see note below)
- *   - Assignee name (technician's display name)
- *   - Assignee phone (for "Call Technician" button on tracking page)
- *   - Live location (latitude, longitude) for real-time tracking map
- *   - Service line items + quoted amount
- *   - Tenant branding (businessName, logoUrl, primary/accent color,
- *     hideFieserosBranding) — used by the portal page to render with the
- *     tenant's logo + colors instead of hardcoded "Fieseros" styling.
- *
- * NEVER includes:
- *   - verificationPin (the PIN is sent to the customer via SMS/WhatsApp/email)
- *   - internal notes
- *   - customer phone/email/address (beyond what's needed for display)
- *   - any pricing beyond the quoted amount
- *   - lifecycle timestamps (internal operational data)
+ * Public portal endpoint queried by the Customer Mobile App & Portal pages.
+ * Returns LiveTrackingInfo DTO with live technician moving coordinates and dynamic ETA.
  */
+
 function computeDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Earth radius in km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -68,11 +51,9 @@ export async function GET(
         completedAt: true,
         quotedAmount: true,
         lineItemsJson: true,
-        // Destination job site coordinates
         latitude: true,
         longitude: true,
         workspaceId: true,
-        // Relations — select ONLY display-safe fields
         customer: {
           select: {
             name: true,
@@ -93,13 +74,9 @@ export async function GET(
     });
 
     if (!job) {
-      return NextResponse.json(
-        { error: 'Job not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
-    // ── Resolve tenant branding (best-effort — never fatal) ──
     let branding: {
       businessName: string;
       logoUrl: string | null;
@@ -107,6 +84,7 @@ export async function GET(
       accentColor: string;
       hideFieserosBranding: boolean;
     } | null = null;
+
     try {
       if (job.workspaceId) {
         const tenantId = await resolveTenantId(job.workspaceId);
@@ -122,7 +100,7 @@ export async function GET(
         }
       }
     } catch {
-      // Non-fatal — branding is null, portal page uses defaults.
+      // Non-fatal
     }
 
     const isActive = [
@@ -138,7 +116,6 @@ export async function GET(
       'on_site',
     ].includes(job.status);
 
-    // Live technician coordinates (if assigned and active) or job coordinates fallback
     const techLat = job.assignee?.latitude ?? null;
     const techLng = job.assignee?.longitude ?? null;
     const jobLat = job.latitude ?? null;
@@ -159,37 +136,40 @@ export async function GET(
     const currentLat = isActive ? (techLat ?? jobLat) : null;
     const currentLng = isActive ? (techLng ?? jobLng) : null;
 
-    // Return a flat, rich DTO compatible with both web portal and mobile app
     return NextResponse.json({
-      id: job.id,
       jobId: job.id,
+      id: job.id,
       jobNumber: job.jobNumber,
       title: job.title,
       description: job.description,
       status: job.status,
       address: job.address,
-      scheduledAt: job.scheduledAt,
-      actualStartTime: job.actualStartTime,
-      completedAt: job.completedAt,
-      quotedAmount: job.quotedAmount,
-      lineItemsJson: job.lineItemsJson,
+      scheduledAt: job.scheduledAt ? job.scheduledAt.toISOString() : null,
+      startedAt: job.actualStartTime ? job.actualStartTime.toISOString() : null,
+      completedAt: job.completedAt ? job.completedAt.toISOString() : null,
       customerName: job.customer?.name ?? null,
-      assigneeName: job.assignee?.name ?? null,
-      assigneePhone: job.assignee?.phone ?? null,
       employeeName: job.assignee?.name ?? null,
       employeePhone: job.assignee?.phone ?? null,
-      // Live moving coordinates & destination coordinates
+      assigneeName: job.assignee?.name ?? null,
+      assigneePhone: job.assignee?.phone ?? null,
       currentLatitude: currentLat,
       currentLongitude: currentLng,
       destinationLatitude: jobLat,
       destinationLongitude: jobLng,
-      lastLocationAt: job.assignee?.lastLocationAt ?? null,
+      lastLocationAt: job.assignee?.lastLocationAt ? job.assignee.lastLocationAt.toISOString() : null,
       etaMinutes,
       distanceKm,
+      provider: job.assignee
+        ? {
+            id: job.assignee.id,
+            name: job.assignee.name,
+            phone: job.assignee.phone,
+          }
+        : null,
       branding,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to fetch job';
+    const message = error instanceof Error ? error.message : 'Failed to fetch portal job details';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

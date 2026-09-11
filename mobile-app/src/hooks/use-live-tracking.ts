@@ -56,12 +56,13 @@ import {
   setLiveTrackingContext,
   clearLiveTrackingContext,
 } from '@/lib/live-tracking-context';
+import { trackingManager } from '@/lib/tracking-manager';
 
 // ── Constants ────────────────────────────────────────────────────────────
 
 export const LOCATION_TASK_NAME = 'fieseros-live-dispatch-tracking';
-export const GPS_INTERVAL_MS = 15_000; // 15s — user's choice
-export const GPS_MIN_DISTANCE_M = 10; // 10m minimum movement between pings
+export const GPS_INTERVAL_MS = 5_000; // 5s — responsive Uber-like live GPS tracking
+export const GPS_MIN_DISTANCE_M = 5; // 5m minimum movement between pings
 export const HEARTBEAT_INTERVAL_MS = 60_000; // 60s
 
 // ── Module-level background task definition ──────────────────────────────
@@ -505,14 +506,17 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
         /* ignore */
       }
       if (heartbeatTimer) clearInterval(heartbeatTimer);
-      if (backgroundStarted) {
+      const isStillTravelling = trackingManager.isTravelling();
+      if (backgroundStarted && !isStillTravelling) {
         Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME).catch(() => {
           /* ignore — task may have already been stopped */
         });
       }
-      clearLiveTrackingContext().catch(() => {
-        /* non-fatal */
-      });
+      if (!isStillTravelling) {
+        clearLiveTrackingContext().catch(() => {
+          /* non-fatal */
+        });
+      }
     };
 
     // ── POST a GPS ping to /api/gps/track ──────────────────────────────
@@ -647,18 +651,21 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
         //    Balanced accuracy saves battery; the foreground watch uses
         //    BestForNavigation when the app is visible.
         try {
-          await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: GPS_INTERVAL_MS,
-            distanceInterval: GPS_MIN_DISTANCE_M,
-            showsBackgroundLocationIndicator: true,
-            // Android: foreground service notification config. iOS ignores.
-            foregroundService: {
-              notificationTitle: 'Fieseros is tracking your travel',
-              notificationBody: 'Live location is being shared with dispatch.',
-              notificationColor: '#10B981',
-            },
-          });
+          const isAlreadyRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME).catch(() => false);
+          if (!isAlreadyRunning) {
+            await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: GPS_INTERVAL_MS,
+              distanceInterval: GPS_MIN_DISTANCE_M,
+              showsBackgroundLocationIndicator: true,
+              // Android: foreground service notification config. iOS ignores.
+              foregroundService: {
+                notificationTitle: 'Fieseros is tracking your travel',
+                notificationBody: 'Live location is being shared with dispatch.',
+                notificationColor: '#10B981',
+              },
+            });
+          }
           backgroundStarted = true;
         } catch (bgErr) {
           // Background tracking is best-effort — foreground tracking still

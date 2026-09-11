@@ -30,6 +30,10 @@ interface PublicJobData {
   assigneePhone?: string;
   currentLatitude?: number | null;
   currentLongitude?: number | null;
+  destinationLatitude?: number | null;
+  destinationLongitude?: number | null;
+  etaMinutes?: number | null;
+  distanceKm?: number | null;
   lineItemsJson?: string;
   quotedAmount?: number;
   branding?: {
@@ -52,22 +56,43 @@ export default function CustomerPortalJobPage() {
   useEffect(() => {
     if (!id) return;
 
-    fetch(`/api/public/jobs/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Job details not found');
-        return res.json();
-      })
-      .then((data) => {
-        // /api/public/jobs/[id] returns a FLAT DTO (not wrapped in { job })
-        // and never includes verificationPin (the PIN is sent to the customer
-        // via SMS/WhatsApp/email, not displayed on the tracking page).
-        setJob(data);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load tracking details');
-      })
-      .finally(() => setLoading(false));
-  }, [id]);
+    let isMounted = true;
+
+    const fetchTracking = () => {
+      fetch(`/api/public/jobs/${id}`)
+        .then((res) => {
+          if (!res.ok) throw new Error('Job details not found');
+          return res.json();
+        })
+        .then((data) => {
+          if (isMounted) {
+            setJob(data);
+            setError(null);
+          }
+        })
+        .catch((err) => {
+          if (isMounted && !job) {
+            setError(err instanceof Error ? err.message : 'Failed to load tracking details');
+          }
+        })
+        .finally(() => {
+          if (isMounted) setLoading(false);
+        });
+    };
+
+    fetchTracking();
+
+    // Live 5s auto-refresh polling for Uber-style real-time tracking updates
+    const interval = setInterval(() => {
+      if (job && (job.status === 'completed' || job.status === 'cancelled')) return;
+      fetchTracking();
+    }, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [id, job?.status]);
 
   if (loading) {
     return (
@@ -184,6 +209,22 @@ export default function CustomerPortalJobPage() {
                   <p className="text-[10px] uppercase font-semibold text-muted-foreground">Scheduled Time</p>
                   <p className="text-sm font-semibold text-foreground">
                     {new Date(job.scheduledAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {job.etaMinutes != null && !isCompleted && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 sm:col-span-2">
+                <Clock className="size-5 text-emerald-600" />
+                <div className="flex-1">
+                  <p className="text-[10px] uppercase font-semibold text-emerald-800">Estimated Arrival (ETA)</p>
+                  <p className="text-sm font-bold text-emerald-700">
+                    {job.etaMinutes === 0
+                      ? 'Arrived at destination'
+                      : `${job.etaMinutes} min away${
+                          job.distanceKm != null ? ` (${job.distanceKm} km)` : ''
+                        }`}
                   </p>
                 </div>
               </div>

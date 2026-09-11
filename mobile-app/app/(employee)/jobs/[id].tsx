@@ -72,6 +72,7 @@ import { COLORS, API_BASE_URL } from '@/lib/constants';
 import { formatCurrency } from '@/lib/currency';
 import { captureGps } from '@/lib/gps';
 import { getStatusVariant } from '@/lib/status-colors';
+import { trackingManager } from '@/lib/tracking-manager';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Job } from '@/types';
 import { format, parseISO } from 'date-fns';
@@ -306,13 +307,25 @@ export default function JobDetailScreen() {
   // both the LifecycleBadge and the sticky footer's stage-aware buttons.
   const currentState = resolveLifecycleStage(job).toLowerCase();
 
-  // ── Continuous live GPS tracking ────────────────────────────────────
-  // While the active job is in the `travelling` state, start a foreground
-  // GPS watch + background location task + 60s heartbeat so the Live
-  // Dispatch dashboard shows the technician's position in real time and
-  // the employee never appears "Offline" mid-route.
-  // Stops automatically when the job transitions to `arrived` / `working`
-  // / `completed` (because `enabled` becomes false).
+  // ── Synchronize with trackingManager ────────────────────────────────
+  // Ensures global background GPS tracking stays synchronized with the
+  // job's lifecycle status.
+  useEffect(() => {
+    if (!job?.id || !employeeId) return;
+    const isTravelling = currentState === 'travelling';
+    const activeState = trackingManager.getState();
+    if (isTravelling) {
+      if (!activeState?.jobId || activeState.jobId !== job.id) {
+        trackingManager.startTravelling(employeeId, job.id);
+      }
+    } else {
+      if (activeState?.jobId === job.id) {
+        trackingManager.stopTravelling();
+      }
+    }
+  }, [job?.id, currentState, employeeId]);
+
+  // ── Local live GPS tracking hook (provides UI status & permissions) ─
   const liveTracking = useLiveTracking({
     enabled: currentState === 'travelling',
     employeeId,
@@ -364,6 +377,16 @@ export default function JobDetailScreen() {
           ...(pinValue !== undefined ? { pin: pinValue } : {}),
           ...(coords ? { latitude: coords.latitude, longitude: coords.longitude } : {}),
         });
+
+        // Lifecycle transition succeeded — update trackingManager immediately
+        if (action === 'start_travel' && employeeId) {
+          trackingManager.startTravelling(employeeId, job.id);
+        } else if (
+          ['arrive', 'start_work', 'complete', 'cancelled', 'cancel'].includes(action)
+        ) {
+          trackingManager.stopTravelling();
+        }
+
         show(`${label} ✓`, 'success');
         setPendingAction(null);
         setPin('');
@@ -380,7 +403,7 @@ export default function JobDetailScreen() {
         }
       }
     },
-    [job, lifecycle, show, pendingAction]
+    [job, employeeId, lifecycle, show, pendingAction]
   );
 
   const handleActionPress = useCallback(
