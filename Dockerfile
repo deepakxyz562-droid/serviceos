@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 FROM oven/bun:1.2-slim AS base
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y openssl ca-certificates nodejs npm && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && apt-get install -y openssl ca-certificates nodejs && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # 2. Dependencies stage
