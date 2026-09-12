@@ -406,7 +406,7 @@ export function RecurringSchedulePage({
   // ─── Loading state ──────────────────────────────────────────────────────
   if (loadingSchedule) {
     return (
-      <main className="p-4 sm:p-6 w-full max-w-7xl mx-auto space-y-6">
+      <main className="p-4 sm:p-6 lg:p-8 w-full space-y-6">
         <SchedulePageHeaderSkeleton />
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 space-y-6">
@@ -425,7 +425,7 @@ export function RecurringSchedulePage({
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <main className="p-4 sm:p-6 w-full max-w-7xl mx-auto space-y-6">
+    <main className="p-4 sm:p-6 lg:p-8 w-full space-y-6">
       {/* ─── 1. Header ────────────────────────────────────────────────────── */}
       <FormPageHeader
         title={isEdit ? 'Edit Recurring Schedule' : 'New Recurring Schedule'}

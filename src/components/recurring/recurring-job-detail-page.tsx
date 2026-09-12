@@ -419,7 +419,7 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
   // ─── Loading state ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+      <main className="p-4 sm:p-6 lg:p-8 w-full space-y-6">
         <DetailHeaderSkeleton />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -447,7 +447,7 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
   const status = deriveStatus(schedule);
 
   return (
-    <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+    <main className="p-4 sm:p-6 lg:p-8 w-full space-y-6">
       {/* ─── Hero Header ─────────────────────────────────────────────────── */}
       <header className="space-y-4">
         <Button

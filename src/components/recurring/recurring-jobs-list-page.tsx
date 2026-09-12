@@ -449,7 +449,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
   // ─── Loading state ─────────────────────────────────────────────────────
   if (loading) {
     return (
-      <main className="p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 w-full">
         <ListHeaderSkeleton />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -481,7 +481,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
   // ─── Error state ────────────────────────────────────────────────────────
   if (error) {
     return (
-      <main className="p-4 sm:p-6 w-full max-w-7xl mx-auto">
+      <main className="p-4 sm:p-6 lg:p-8 w-full">
         <Card className="rounded-xl border-dashed">
           <CardContent className="p-10 flex flex-col items-center justify-center text-center gap-3">
             <div className="size-12 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
@@ -499,7 +499,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <main className="p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
+    <main className="p-4 sm:p-6 lg:p-8 space-y-6 w-full">
       {/* ─── 1. Header ────────────────────────────────────────────────────── */}
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-border/60">
         <div className="flex items-center gap-3.5">
