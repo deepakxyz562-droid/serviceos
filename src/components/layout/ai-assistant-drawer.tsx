@@ -5,6 +5,8 @@
  *
  * Triggered from the top bar (AppHeader) right side.
  * Allows users to access the AI Copilot from any page in ServiceOS:
+ *   • Multi-mode width: Standard (540px), Wide (760px), and Fullscreen.
+ *   • Active Page Context awareness.
  *   • Ask questions about jobs, invoices, schedules, and CRM data.
  *   • Run AI actions & tool calls in real time.
  *   • Smart insights & intent analysis.
@@ -18,12 +20,15 @@ import {
   Bot,
   BookOpen,
   Maximize2,
+  Minimize2,
   Zap,
   TrendingUp,
   CheckCircle2,
   Clock,
   Send,
   HelpCircle,
+  ExternalLink,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +47,9 @@ export interface AiAssistantDrawerProps {
 export function AiAssistantDrawer({ open, onClose }: AiAssistantDrawerProps) {
   const [activeTab, setActiveTab] = useState<'chat' | 'insights' | 'kb'>('chat');
   const [injectedPrompt, setInjectedPrompt] = useState<string | undefined>(undefined);
+  const [widthMode, setWidthMode] = useState<'standard' | 'wide' | 'fullscreen'>('standard');
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const activeView = useAppStore((s) => s.activeView);
 
   // Close on Escape key
   useEffect(() => {
@@ -64,6 +71,12 @@ export function AiAssistantDrawer({ open, onClose }: AiAssistantDrawerProps) {
     setActiveTab('chat');
   };
 
+  const toggleWidth = () => {
+    if (widthMode === 'standard') setWidthMode('wide');
+    else if (widthMode === 'wide') setWidthMode('standard');
+    else setWidthMode('standard');
+  };
+
   if (!open) return null;
 
   return (
@@ -78,9 +91,12 @@ export function AiAssistantDrawer({ open, onClose }: AiAssistantDrawerProps) {
       {/* ─── Right-side Slide-Over Drawer ─────────────────────────── */}
       <div
         className={cn(
-          'fixed inset-y-0 right-0 z-50 flex flex-col w-full sm:w-[540px] lg:w-[620px]',
+          'fixed inset-y-0 right-0 z-50 flex flex-col transition-all duration-300 ease-out',
           'bg-background border-l border-border shadow-2xl',
-          'animate-in slide-in-from-right duration-300 ease-out',
+          'animate-in slide-in-from-right duration-300',
+          widthMode === 'standard' && 'w-full sm:w-[540px] lg:w-[600px]',
+          widthMode === 'wide' && 'w-full sm:w-[760px] lg:w-[840px]',
+          widthMode === 'fullscreen' && 'w-full inset-x-0',
         )}
         role="dialog"
         aria-label="AI Assistant"
@@ -93,16 +109,21 @@ export function AiAssistantDrawer({ open, onClose }: AiAssistantDrawerProps) {
               <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <h2 className="text-sm font-semibold text-foreground tracking-tight">
-                  ServiceOS AI Assistant
+                  ServiceOS Copilot
                 </h2>
                 <Badge
                   variant="secondary"
                   className="text-[10px] font-medium h-4 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                 >
-                  Live Copilot
+                  Live AI
                 </Badge>
+                {activeView && (
+                  <Badge variant="outline" className="text-[10px] font-mono h-4 px-1.5 text-muted-foreground hidden sm:inline-flex">
+                    Context: {activeView}
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-muted-foreground truncate">
                 Real-time business intelligence & automated answers
@@ -111,6 +132,16 @@ export function AiAssistantDrawer({ open, onClose }: AiAssistantDrawerProps) {
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 text-muted-foreground hover:text-foreground hidden sm:flex"
+              onClick={toggleWidth}
+              title={widthMode === 'standard' ? 'Expand to wide view' : 'Standard width'}
+            >
+              <Layers className="size-4" />
+              <span className="sr-only">Toggle width</span>
+            </Button>
             <Button
               variant="ghost"
               size="icon"

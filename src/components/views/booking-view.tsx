@@ -53,7 +53,7 @@ import type {
   CustomerOption,
 } from '@/features/booking/types';
 import { BookingFormPage } from '@/features/booking/components/booking-form-page';
-import { BookingViewDialog } from '@/features/booking/components/booking-view-dialog';
+import { BookingDetailPage } from '@/features/booking/components/booking-detail-page';
 import { BookingDeleteDialog } from '@/features/booking/components/booking-delete-dialog';
 import {
   buildBookingColumns,
@@ -83,7 +83,6 @@ export function BookingView() {
   const [isCreatingBooking, setIsCreatingBooking] = useState(false);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [formData, setFormData] = useState<BookingFormData>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -233,7 +232,6 @@ export function BookingView() {
     setSelectedBooking(null);
     setFormData(EMPTY_FORM);
     setIsCreatingBooking(true);
-    setShowCreateDialog(false);
   }
 
   function handleEdit(booking: Booking) {
@@ -266,12 +264,10 @@ export function BookingView() {
       lineItems: initialLineItems,
     });
     setIsCreatingBooking(false);
-    setShowViewDialog(false);
   }
 
   function handleView(booking: Booking) {
     setSelectedBooking(booking);
-    setShowViewDialog(true);
   }
 
   function handleDelete(booking: Booking) {
@@ -282,6 +278,9 @@ export function BookingView() {
   async function handleStatusChange(booking: Booking, newStatus: string) {
     try {
       await apiPut(`/api/bookings/${booking.id}`, { status: newStatus });
+      if (selectedBooking && selectedBooking.id === booking.id) {
+        setSelectedBooking({ ...selectedBooking, status: newStatus });
+      }
       await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
@@ -338,7 +337,6 @@ export function BookingView() {
       }
 
       setIsCreatingBooking(false);
-      setShowCreateDialog(false);
       await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
@@ -379,7 +377,6 @@ export function BookingView() {
       });
       toast.success('Booking created and employee assigned');
       setIsCreatingBooking(false);
-      setShowCreateDialog(false);
       await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
@@ -431,7 +428,6 @@ export function BookingView() {
         toast.success('Booking created');
       }
       setIsCreatingBooking(false);
-      setShowCreateDialog(false);
       await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
@@ -444,12 +440,24 @@ export function BookingView() {
   async function handleAutoAssign(bookingId: string) {
     setSubmitting(true);
     try {
-      const result = await apiPost<{ employee?: { name?: string } }>(
+      const result = await apiPost<{ employee?: { id?: string; name?: string } }>(
         '/api/bookings/auto-assign',
         { bookingId, strategy: 'workload' }
       );
       if (result?.employee?.name) {
         toast.success(`Auto-assigned to ${result.employee.name}`);
+        if (selectedBooking && selectedBooking.id === bookingId) {
+          setSelectedBooking({
+            ...selectedBooking,
+            employeeId: result.employee.id || null,
+            employee: {
+              id: result.employee.id || '',
+              name: result.employee.name,
+              phone: '',
+              avatar: null,
+            },
+          });
+        }
       } else {
         toast.success('Booking auto-assigned');
       }
@@ -467,6 +475,14 @@ export function BookingView() {
     try {
       await apiPost(`/api/bookings/${bookingId}/assign`, { employeeId });
       toast.success('Employee assigned');
+      if (selectedBooking && selectedBooking.id === bookingId) {
+        const emp = employees.find((e) => e.id === employeeId);
+        setSelectedBooking({
+          ...selectedBooking,
+          employeeId,
+          employee: emp ? { id: emp.id, name: emp.name, phone: '', avatar: null } : null,
+        });
+      }
       await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
@@ -549,7 +565,6 @@ export function BookingView() {
       toast.success('Booking updated');
       setEditingBooking(null);
       setSelectedBooking(null);
-      setShowEditDialog(false);
       await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
@@ -610,7 +625,6 @@ export function BookingView() {
       }
       setEditingBooking(null);
       setSelectedBooking(null);
-      setShowEditDialog(false);
       await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
@@ -681,6 +695,25 @@ export function BookingView() {
         services={services}
         symbol={symbol}
         employees={employees}
+      />
+    );
+  }
+
+  // Full-page Booking Detail view (Jobber-style 2-column layout)
+  if (selectedBooking !== null && !isCreatingBooking && editingBooking === null) {
+    return (
+      <BookingDetailPage
+        booking={selectedBooking}
+        onBack={() => setSelectedBooking(null)}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onStatusChange={handleStatusChange}
+        onAssignEmployee={handleAssignEmployee}
+        onAutoAssign={handleAutoAssign}
+        onCreateJob={handleCreateJobFromBooking}
+        employees={employees}
+        submitting={submitting}
+        symbol={symbol}
       />
     );
   }
@@ -1129,20 +1162,6 @@ export function BookingView() {
           )}
         </TabsContent>
       </Tabs>
-
-      {/* VIEW DIALOG */}
-      <BookingViewDialog
-        open={showViewDialog}
-        onOpenChange={setShowViewDialog}
-        booking={selectedBooking}
-        employees={employees}
-        submitting={submitting}
-        onEdit={handleEdit}
-        onAssignEmployee={handleAssignEmployee}
-        onAutoAssign={handleAutoAssign}
-        onCreateJobFromBooking={handleCreateJobFromBooking}
-        onStatusChange={handleStatusChange}
-      />
 
       {/* DELETE CONFIRMATION */}
       <BookingDeleteDialog

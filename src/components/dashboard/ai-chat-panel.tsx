@@ -3,16 +3,18 @@
 /**
  * AiChatPanel
  * ===========
- * Modern, high-performance conversational AI assistant UI.
+ * Modern, high-performance conversational AI assistant UI for ServiceOS.
  *
- * Communicates with POST /api/ai/chat.
  * Features:
- *   • Rich Markdown rendering with lists, bold, inline code, and syntax styling.
- *   • Expandable Tool Execution Cards with parameters and result summaries.
- *   • Copy to Clipboard and 1-Click Regenerate Response on AI messages.
- *   • Categorized Quick Prompt Starters (Overview, Invoices, Schedule, Leads, Services).
+ *   • Rich Markdown rendering: GFM Tables, Fenced Code Blocks with 1-click copy,
+ *     Headers, Bullet/Ordered Lists, Blockquotes, Bold, and Inline Code.
+ *   • Expandable Tool Execution Cards with JSON inspector and status indicators.
+ *   • Dynamic Contextual Follow-up Chips after each AI response.
+ *   • Voice / Speech-to-Text Input with real-time listening wave.
+ *   • Message actions: Copy to Clipboard, 1-Click Regenerate, Helpful Feedback.
+ *   • Chat Session actions: Export Transcript to Markdown, Copy Entire Chat, Reset.
+ *   • Categorized Quick Prompt Starters with icons and instant execution.
  *   • Auto-expanding multiline composer with keyboard shortcuts (Enter to send, Shift+Enter for newline).
- *   • Quota and live status indicator beacon.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -37,6 +39,13 @@ import {
   Users,
   Database,
   ArrowRight,
+  Mic,
+  MicOff,
+  Download,
+  ThumbsUp,
+  ThumbsDown,
+  FileCode,
+  CornerDownLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -59,6 +68,8 @@ export interface ChatMessage {
   toolCalls?: ToolCall[];
   failed?: boolean;
   timestamp?: string;
+  followUps?: string[];
+  feedback?: 'up' | 'down';
 }
 
 export interface QuotaInfo {
@@ -66,7 +77,7 @@ export interface QuotaInfo {
   quota: number;
 }
 
-// ─── Lightweight Markdown Parser ─────────────────────────────────────────────
+// ─── Inline Markdown Renderer ────────────────────────────────────────────────
 
 function renderInline(text: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
@@ -88,7 +99,7 @@ function renderInline(text: string): React.ReactNode[] {
       nodes.push(
         <code
           key={key++}
-          className="rounded bg-muted-foreground/10 px-1.5 py-0.5 text-[0.85em] font-mono font-medium text-emerald-600 dark:text-emerald-400"
+          className="rounded bg-muted-foreground/10 px-1.5 py-0.5 text-[0.85em] font-mono font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
         >
           {token.slice(1, -1)}
         </code>,
@@ -106,20 +117,83 @@ function renderInline(text: string): React.ReactNode[] {
   return nodes;
 }
 
-function Markdownish({ text }: { text: string }) {
+// ─── Code Block with 1-Click Copy ───────────────────────────────────────────
+
+function CodeBlock({ code, language }: { code: string; language?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    toast.success('Code copied to clipboard');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative my-3 rounded-lg border border-border/80 bg-slate-950 text-slate-100 overflow-hidden font-mono text-xs shadow-xs">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900 border-b border-slate-800 text-[11px] text-slate-400">
+        <div className="flex items-center gap-1.5">
+          <FileCode className="size-3.5 text-emerald-400" />
+          <span>{language || 'code'}</span>
+        </div>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center gap-1 hover:text-white transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-slate-800"
+        >
+          {copied ? <Check className="size-3 text-emerald-400" /> : <Copy className="size-3" />}
+          <span>{copied ? 'Copied' : 'Copy'}</span>
+        </button>
+      </div>
+      <pre className="p-3 overflow-x-auto leading-relaxed text-slate-200">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+// ─── Markdown Table Parser ──────────────────────────────────────────────────
+
+function parseMarkdownTable(lines: string[]): { headers: string[]; rows: string[][] } | null {
+  if (lines.length < 2) return null;
+  const parseRow = (line: string) =>
+    line
+      .trim()
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((c) => c.trim());
+
+  const headers = parseRow(lines[0]);
+  // Check if second line is separator (e.g. |---|---|)
+  const isSeparator = /^\|?(\s*:?-+:?\s*\|?)+$/.test(lines[1].trim());
+  if (!isSeparator) return null;
+
+  const rows: string[][] = [];
+  for (let i = 2; i < lines.length; i++) {
+    if (!lines[i].includes('|')) break;
+    rows.push(parseRow(lines[i]));
+  }
+  return { headers, rows };
+}
+
+// ─── Rich Markdown Renderer Component ───────────────────────────────────────
+
+function RichMarkdown({ text }: { text: string }) {
   const blocks: React.ReactNode[] = [];
   const lines = text.split('\n');
   let bullets: string[] = [];
   let key = 0;
+  let i = 0;
 
   const flushBullets = () => {
     if (bullets.length === 0) return;
     blocks.push(
-      <ul key={key++} className="my-2 space-y-1.5 pl-1.5">
-        {bullets.map((b, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm text-foreground/90">
+      <ul key={key++} className="my-2 space-y-1.5 pl-1">
+        {bullets.map((b, idx) => (
+          <li key={idx} className="flex items-start gap-2 text-sm text-foreground/90 leading-relaxed">
             <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-emerald-500" />
-            <span className="flex-1 leading-relaxed">{renderInline(b)}</span>
+            <span className="flex-1">{renderInline(b)}</span>
           </li>
         ))}
       </ul>,
@@ -127,30 +201,103 @@ function Markdownish({ text }: { text: string }) {
     bullets = [];
   };
 
-  for (const raw of lines) {
+  while (i < lines.length) {
+    const raw = lines[i];
     const line = raw.trimEnd();
 
-    // Check for headings
+    // Check for fenced code block ```
+    if (line.startsWith('```')) {
+      flushBullets();
+      const language = line.slice(3).trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trimEnd().startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      blocks.push(<CodeBlock key={key++} code={codeLines.join('\n')} language={language} />);
+      i++;
+      continue;
+    }
+
+    // Check for Markdown Table
+    if (line.includes('|') && i + 1 < lines.length && lines[i + 1].includes('|') && /^\|?(\s*:?-+:?\s*\|?)+$/.test(lines[i + 1].trim())) {
+      flushBullets();
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().includes('|')) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      const tableData = parseMarkdownTable(tableLines);
+      if (tableData) {
+        blocks.push(
+          <div key={key++} className="my-3 overflow-x-auto rounded-lg border border-border/70 shadow-2xs">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-muted/70 border-b border-border/70 font-semibold text-foreground">
+                <tr>
+                  {tableData.headers.map((h, hIdx) => (
+                    <th key={hIdx} className="px-3 py-2">
+                      {renderInline(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {tableData.rows.map((row, rIdx) => (
+                  <tr key={rIdx} className={cn('hover:bg-muted/30 transition-colors', rIdx % 2 === 1 && 'bg-muted/10')}>
+                    {row.map((cell, cIdx) => (
+                      <td key={cIdx} className="px-3 py-2 text-foreground/90">
+                        {renderInline(cell)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>,
+        );
+        continue;
+      }
+    }
+
+    // Check for Blockquotes (> quote)
+    if (line.startsWith('> ')) {
+      flushBullets();
+      blocks.push(
+        <div
+          key={key++}
+          className="my-2.5 rounded-r-lg border-l-3 border-emerald-500 bg-emerald-500/5 px-3 py-2 text-xs italic text-foreground/90 leading-relaxed"
+        >
+          {renderInline(line.slice(2))}
+        </div>,
+      );
+      i++;
+      continue;
+    }
+
+    // Check for Headings
     if (line.startsWith('### ')) {
       flushBullets();
       blocks.push(
-        <h4 key={key++} className="mt-3 mb-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        <h4 key={key++} className="mt-3 mb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           {renderInline(line.slice(4))}
         </h4>,
       );
+      i++;
       continue;
     }
     if (line.startsWith('## ') || line.startsWith('# ')) {
       flushBullets();
       blocks.push(
-        <h3 key={key++} className="mt-3 mb-1.5 text-sm font-bold text-foreground">
+        <h3 key={key++} className="mt-3.5 mb-1.5 text-sm font-bold text-foreground">
           {renderInline(line.replace(/^#+\s/, ''))}
         </h3>,
       );
+      i++;
       continue;
     }
 
-    // Check for bullet lists
+    // Check for Bullet/Numbered lists
     const bulletMatch = line.match(/^\s*[-•*]\s+(.*)$/);
     const numberedMatch = line.match(/^\s*\d+[.)]\s+(.*)$/);
     if (bulletMatch || numberedMatch) {
@@ -159,14 +306,15 @@ function Markdownish({ text }: { text: string }) {
       flushBullets();
       if (line.trim() === '') {
         blocks.push(<div key={key++} className="h-1.5" />);
-        continue;
+      } else {
+        blocks.push(
+          <p key={key++} className="my-1 text-sm leading-relaxed text-foreground/90">
+            {renderInline(line)}
+          </p>,
+        );
       }
-      blocks.push(
-        <p key={key++} className="my-1.5 text-sm leading-relaxed text-foreground/90">
-          {renderInline(line)}
-        </p>,
-      );
     }
+    i++;
   }
   flushBullets();
 
@@ -225,6 +373,29 @@ function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
   );
 }
 
+// ─── Dynamic Follow-Up Generator ────────────────────────────────────────────
+
+function generateDynamicFollowUps(content: string): string[] {
+  const lower = content.toLowerCase();
+  const followUps: string[] = [];
+
+  if (lower.includes('invoice') || lower.includes('balance') || lower.includes('overdue') || lower.includes('revenue')) {
+    followUps.push('Which customer has the largest overdue balance?');
+    followUps.push('How much revenue was collected this month?');
+  } else if (lower.includes('job') || lower.includes('technician') || lower.includes('schedule') || lower.includes('assigned')) {
+    followUps.push('Show me unassigned jobs that need dispatch');
+    followUps.push('What are the scheduled start times for today?');
+  } else if (lower.includes('lead') || lower.includes('quote') || lower.includes('customer')) {
+    followUps.push('List all high-priority pending leads');
+    followUps.push('What is the conversion rate this month?');
+  } else {
+    followUps.push('Give me a full business snapshot for today');
+    followUps.push('Are there any urgent alerts or overdue items?');
+  }
+
+  return followUps.slice(0, 2);
+}
+
 // ─── Categorized Prompt Starters ─────────────────────────────────────────────
 
 interface PromptCategory {
@@ -274,9 +445,19 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
   const [loading, setLoading] = useState(false);
   const [quota, setQuota] = useState<QuotaInfo | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [isListening, setIsListening] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // Sync initialPrompt prop changes
+  useEffect(() => {
+    if (initialPrompt && initialPrompt.trim()) {
+      setInput(initialPrompt);
+      textareaRef.current?.focus();
+    }
+  }, [initialPrompt]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -295,6 +476,61 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   }, [input]);
+
+  // Voice Input Setup via Web Speech API
+  const toggleVoiceInput = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      toast.error('Voice input not supported', {
+        description: 'Your browser does not support the Web Speech API.',
+      });
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        toast.info('Listening...', { description: 'Speak your query now' });
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+      };
+
+      recognition.onerror = () => {
+        setIsListening(false);
+        toast.error('Voice input error');
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setIsListening(false);
+      toast.error('Could not initialize microphone');
+    }
+  };
 
   const send = useCallback(
     async (textToSend?: string) => {
@@ -346,13 +582,17 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
 
         if (data.quota) setQuota(data.quota);
 
+        const replyContent = data.reply ?? '(No response content)';
+        const followUps = generateDynamicFollowUps(replyContent);
+
         setMessages([
           ...outgoing,
           {
             role: 'assistant',
-            content: data.reply ?? '(No response content)',
+            content: replyContent,
             toolCalls: Array.isArray(data.toolCalls) ? data.toolCalls : [],
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            followUps,
           },
         ]);
       } catch {
@@ -381,9 +621,40 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
+  const handleCopyEntireChat = () => {
+    if (messages.length === 0) return;
+    const text = messages
+      .map((m) => `### ${m.role === 'user' ? 'User' : 'ServiceOS AI'} (${m.timestamp || ''})\n\n${m.content}`)
+      .join('\n\n---\n\n');
+    navigator.clipboard.writeText(text);
+    toast.success('Complete conversation copied to clipboard');
+  };
+
+  const handleExportTranscript = () => {
+    if (messages.length === 0) return;
+    const text = messages
+      .map((m) => `## ${m.role === 'user' ? 'User' : 'ServiceOS AI'} [${m.timestamp || ''}]\n\n${m.content}`)
+      .join('\n\n---\n\n');
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `ai-copilot-transcript-${new Date().toISOString().slice(0, 10)}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Conversation transcript downloaded');
+  };
+
+  const handleFeedback = (index: number, feedback: 'up' | 'down') => {
+    setMessages((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, feedback } : m)),
+    );
+    toast.success(feedback === 'up' ? 'Thanks for your feedback!' : 'Feedback noted for improvements.');
+  };
+
   const handleRegenerate = () => {
     if (messages.length < 2 || loading) return;
-    // Find last user message
     const lastUserIdx = [...messages].reverse().findIndex((m) => m.role === 'user');
     if (lastUserIdx === -1) return;
     const realIdx = messages.length - 1 - lastUserIdx;
@@ -414,7 +685,7 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
       {/* ── Top Header ── */}
       <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3 bg-muted/20 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs">
+          <div className="relative flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs shrink-0">
             <Sparkles className="size-4" />
             <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
           </div>
@@ -436,28 +707,48 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {quota && (
-            <div className="hidden sm:block w-28" title={`${quota.used} of ${quota.quota} AI credits used`}>
-              <div className="mb-1 flex justify-between text-[10px] text-muted-foreground">
-                <span>Usage</span>
+            <div className="hidden sm:block w-24 mr-1" title={`${quota.used} of ${quota.quota} AI credits used`}>
+              <div className="mb-0.5 flex justify-between text-[10px] text-muted-foreground">
+                <span>Credits</span>
                 <span className="font-mono">{quota.used}/{quota.quota}</span>
               </div>
-              <Progress value={pct} className="h-1.5" />
+              <Progress value={pct} className="h-1" />
             </div>
           )}
 
           {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setMessages([])}
-              className="h-8 text-xs text-muted-foreground hover:text-foreground"
-              title="Start a new conversation"
-            >
-              <RotateCcw className="size-3.5 mr-1" />
-              <span>Reset</span>
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCopyEntireChat}
+                className="size-7 text-muted-foreground hover:text-foreground"
+                title="Copy entire conversation"
+              >
+                <Copy className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleExportTranscript}
+                className="size-7 text-muted-foreground hover:text-foreground"
+                title="Download transcript (.md)"
+              >
+                <Download className="size-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMessages([])}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                title="Start a new conversation"
+              >
+                <RotateCcw className="size-3 mr-1" />
+                <span>Reset</span>
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -528,7 +819,7 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
                 {/* Message Bubble */}
                 <div
                   className={cn(
-                    'max-w-[85%] rounded-2xl p-3.5 space-y-2.5 text-sm shadow-2xs',
+                    'max-w-[88%] rounded-2xl p-3.5 space-y-2.5 text-sm shadow-2xs',
                     msg.role === 'user'
                       ? 'bg-emerald-600 text-white rounded-tr-xs'
                       : msg.failed
@@ -558,14 +849,55 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
                       <p className="leading-relaxed">{msg.content}</p>
                     </div>
                   ) : (
-                    <Markdownish text={msg.content} />
+                    <RichMarkdown text={msg.content} />
+                  )}
+
+                  {/* Dynamic Follow-Up Chips */}
+                  {msg.role === 'assistant' && !msg.failed && msg.followUps && msg.followUps.length > 0 && i === messages.length - 1 && (
+                    <div className="pt-2 border-t border-border/40 space-y-1.5">
+                      <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                        Suggested Follow-ups:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {msg.followUps.map((prompt, fIdx) => (
+                          <button
+                            key={fIdx}
+                            type="button"
+                            onClick={() => void send(prompt)}
+                            disabled={loading}
+                            className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-background border border-border/80 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:border-emerald-500/40 text-foreground transition-all cursor-pointer font-medium"
+                          >
+                            <Zap className="size-3 text-amber-500 shrink-0" />
+                            <span>{prompt}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
 
                   {/* Assistant Footer Toolbar */}
                   {msg.role === 'assistant' && !msg.failed && msg.content && (
-                    <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[10px] text-muted-foreground">
+                    <div className="flex items-center justify-between pt-1.5 border-t border-border/40 text-[10px] text-muted-foreground">
                       <span>{msg.timestamp || 'Just now'}</span>
                       <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn('size-6 hover:text-emerald-600', msg.feedback === 'up' && 'text-emerald-600')}
+                          onClick={() => handleFeedback(i, 'up')}
+                          title="Helpful response"
+                        >
+                          <ThumbsUp className="size-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn('size-6 hover:text-destructive', msg.feedback === 'down' && 'text-destructive')}
+                          onClick={() => handleFeedback(i, 'down')}
+                          title="Not helpful"
+                        >
+                          <ThumbsDown className="size-3" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -644,6 +976,21 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
               disabled={loading}
             />
 
+            {/* Voice Input Button */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'size-8 text-muted-foreground hover:text-foreground shrink-0 mb-1',
+                isListening && 'text-red-500 bg-red-50 dark:bg-red-950/40 animate-pulse',
+              )}
+              onClick={toggleVoiceInput}
+              title={isListening ? 'Stop listening' : 'Voice dictation'}
+            >
+              {isListening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+            </Button>
+
             {input.trim() && (
               <Button
                 type="button"
@@ -675,7 +1022,10 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
           </div>
 
           <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground">
-            <span>Press <kbd className="font-mono bg-muted px-1 rounded border border-border/60">Enter ↵</kbd> to send, <kbd className="font-mono bg-muted px-1 rounded border border-border/60">Shift+Enter</kbd> for newline</span>
+            <span className="flex items-center gap-1">
+              <CornerDownLeft className="size-3" />
+              <span>Press <kbd className="font-mono bg-muted px-1 rounded border border-border/60">Enter ↵</kbd> to send, <kbd className="font-mono bg-muted px-1 rounded border border-border/60">Shift+Enter</kbd> for newline</span>
+            </span>
             <span className="flex items-center gap-1">
               <Zap className="size-3 text-emerald-500" />
               Encrypted & Tenant-Isolated
