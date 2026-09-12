@@ -75,25 +75,22 @@ export interface LeadFormPageProps {
   saving: boolean;
 
   // ── Customer picker ───────────────────────────────────────────────────
-  /** Local list of customers (used for the picker's chip view). */
-  customers: CustomerOption[];
-  /** Customer-picker search query. */
-  customerQuery: string;
-  setCustomerQuery: (v: string) => void;
-  /** Customer-picker dropdown open state. */
-  customerPickerOpen: boolean;
-  setCustomerPickerOpen: (v: boolean) => void;
   /** Called when the user picks an existing customer. */
   onPickCustomer: (c: CustomerOption) => void;
-  /** Opens the CreateCustomerDialog with the current query pre-filled. */
-  onOpenCreateCustomer: (nameQuery: string) => void;
+  /** Optional customer picker props */
+  customers?: CustomerOption[];
+  customerQuery?: string;
+  setCustomerQuery?: (v: string) => void;
+  customerPickerOpen?: boolean;
+  setCustomerPickerOpen?: (v: boolean) => void;
+  onOpenCreateCustomer?: (nameQuery: string) => void;
 
   // ── Create-customer dialog ────────────────────────────────────────────
-  showCreateCustomerDialog: boolean;
-  setShowCreateCustomerDialog: (v: boolean) => void;
-  createCustomerPrefill: { name: string; phone?: string; email?: string };
+  showCreateCustomerDialog?: boolean;
+  setShowCreateCustomerDialog?: (v: boolean) => void;
+  createCustomerPrefill?: { name: string; phone?: string; email?: string };
   /** Adds a freshly-created customer to the local list + selects it. */
-  onCustomerCreated: (c: CustomerOption) => void;
+  onCustomerCreated?: (c: CustomerOption) => void;
 
   // ── Service catalog (line items) ──────────────────────────────────────
   services: CatalogService[];
@@ -156,23 +153,20 @@ export function LeadFormPage({
               onChange={(e) => setLeadForm({ ...leadForm, title: e.target.value })}
             />
           </div>
-          <div className="grid gap-2">
-            <Label>Select a client</Label>
-            <CustomerPicker
-              customers={customers}
-              selectedCustomerId={leadForm.customerId}
-              onPick={onPickCustomer}
-              onClear={() => setLeadForm({ ...leadForm, customerId: '' })}
-              onCreate={onOpenCreateCustomer}
-              query={customerQuery}
-              setQuery={setCustomerQuery}
-              open={customerPickerOpen}
-              setOpen={setCustomerPickerOpen}
-            />
-            <p className="text-xs text-muted-foreground">
-              Pick an existing client or click <span className="text-emerald-700 font-medium">+ Create new client</span> to add one on the fly.
-            </p>
-          </div>
+            <div className="grid gap-2">
+              <Label>Select a client</Label>
+              <CustomerPicker
+                selectedCustomerId={leadForm.customerId}
+                selectedAddress={leadForm.address}
+                onPick={onPickCustomer}
+                onClear={() => setLeadForm((prev) => ({ ...prev, customerId: '' }))}
+                onAddressSelect={(addr) => setLeadForm((prev) => ({ ...prev, address: addr }))}
+                onCustomAddressChange={(addr) => setLeadForm((prev) => ({ ...prev, address: addr }))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Pick an existing client or click <span className="text-emerald-700 font-medium">+ Create new client</span> to add one on the fly.
+              </p>
+            </div>
         </div>
       </FormSectionCard>
 

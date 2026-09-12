@@ -45,6 +45,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FormSectionCard } from '@/components/shared/form-section-card';
+import { CustomerPicker } from '@/features/line-items';
 import type { LineItem } from '@/features/invoices/types';
 import type {
   Customer,
@@ -209,134 +210,124 @@ export function NewInvoicePage({
         <div className="space-y-6">
           {/* Invoice header info */}
           <FormSectionCard icon={FileText} title="Invoice Details">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Subject</Label>
-                <Input
-                  placeholder="For Services Rendered"
-                  value={
-                    form.notes && form.notes.includes('For Services Rendered')
-                      ? 'For Services Rendered'
-                      : ''
-                  }
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, notes: e.target.value }))
-                  }
-                  className="text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Client *</Label>
-                <Select
-                  value={form.customer}
-                  onValueChange={(val) =>
-                    setForm((prev) => ({ ...prev, customer: val }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        loadingCustomers
-                          ? 'Loading customers...'
-                          : 'Select a client'
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {loadingCustomers ? (
-                      <div className="px-2 py-1.5 text-sm text-muted-foreground flex items-center gap-2">
-                        <Loader2 className="size-3 animate-spin" /> Loading...
-                      </div>
-                    ) : customers.length === 0 ? (
-                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                        No customers found
-                      </div>
-                    ) : (
-                      customers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                          {c.phone ? ` · ${c.phone}` : ''}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-              <div className="space-y-2">
-                <Label>Invoice #</Label>
-                <Input
-                  placeholder="Auto-generated"
-                  disabled
-                  className="bg-muted/30 font-mono text-sm"
-                  value={editingInvoice ? editingInvoice.number : 'Auto'}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Issued Date</Label>
-                <Input
-                  type="date"
-                  value={
-                    editingInvoice
-                      ? editingInvoice.createdAt.split('T')[0]
-                      : new Date().toISOString().split('T')[0]
-                  }
-                  disabled
-                  className="bg-muted/30 text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-              <div className="space-y-2">
-                <Label>Due Date *</Label>
-                <Input
-                  type="date"
-                  value={form.dueDate}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, dueDate: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Payment Terms</Label>
-                <Select
-                  value={form.dueDate ? 'custom' : 'due_receipt'}
-                  onValueChange={(val) => {
-                    if (val === 'due_receipt') {
-                      setForm((prev) => ({
-                        ...prev,
-                        dueDate: new Date().toISOString().split('T')[0],
-                      }));
-                    } else if (val === 'net15') {
-                      const d = new Date();
-                      d.setDate(d.getDate() + 15);
-                      setForm((prev) => ({
-                        ...prev,
-                        dueDate: d.toISOString().split('T')[0],
-                      }));
-                    } else if (val === 'net30') {
-                      const d = new Date();
-                      d.setDate(d.getDate() + 30);
-                      setForm((prev) => ({
-                        ...prev,
-                        dueDate: d.toISOString().split('T')[0],
-                      }));
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Subject</Label>
+                  <Input
+                    placeholder="For Services Rendered"
+                    value={
+                      form.notes && form.notes.includes('For Services Rendered')
+                        ? 'For Services Rendered'
+                        : ''
                     }
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, notes: e.target.value }))
+                    }
+                    className="text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Invoice #</Label>
+                  <Input
+                    placeholder="Auto-generated"
+                    disabled
+                    className="bg-muted/30 font-mono text-sm"
+                    value={editingInvoice ? editingInvoice.number : 'Auto'}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Select a client *</Label>
+                <CustomerPicker
+                  selectedCustomerId={form.customer}
+                  selectedCustomer={
+                    form.customer
+                      ? {
+                          id: form.customer,
+                          name: customers.find((c) => c.id === form.customer)?.name || '',
+                          phone: customers.find((c) => c.id === form.customer)?.phone,
+                          email: customers.find((c) => c.id === form.customer)?.email,
+                        }
+                      : null
+                  }
+                  onPick={(c) => {
+                    setForm((prev) => ({ ...prev, customer: c.id }));
                   }}
-                >
-                  <SelectTrigger className="text-sm">
-                    <SelectValue placeholder="Select payment terms" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="due_receipt">
-                      Due upon receipt
-                    </SelectItem>
-                    <SelectItem value="net15">Net 15 days</SelectItem>
-                    <SelectItem value="net30">Net 30 days</SelectItem>
-                    <SelectItem value="custom">Custom date</SelectItem>
-                  </SelectContent>
-                </Select>
+                  onClear={() => {
+                    setForm((prev) => ({ ...prev, customer: '' }));
+                  }}
+                  onCustomerCreated={(c) => {
+                    setForm((prev) => ({ ...prev, customer: c.id }));
+                  }}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Issued Date</Label>
+                  <Input
+                    type="date"
+                    value={
+                      editingInvoice
+                        ? editingInvoice.createdAt.split('T')[0]
+                        : new Date().toISOString().split('T')[0]
+                    }
+                    disabled
+                    className="bg-muted/30 text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Due Date *</Label>
+                  <Input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, dueDate: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment Terms</Label>
+                  <Select
+                    value={form.dueDate ? 'custom' : 'due_receipt'}
+                    onValueChange={(val) => {
+                      if (val === 'due_receipt') {
+                        setForm((prev) => ({
+                          ...prev,
+                          dueDate: new Date().toISOString().split('T')[0],
+                        }));
+                      } else if (val === 'net15') {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 15);
+                        setForm((prev) => ({
+                          ...prev,
+                          dueDate: d.toISOString().split('T')[0],
+                        }));
+                      } else if (val === 'net30') {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 30);
+                        setForm((prev) => ({
+                          ...prev,
+                          dueDate: d.toISOString().split('T')[0],
+                        }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="text-sm">
+                      <SelectValue placeholder="Select payment terms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="due_receipt">
+                        Due upon receipt
+                      </SelectItem>
+                      <SelectItem value="net15">Net 15 days</SelectItem>
+                      <SelectItem value="net30">Net 30 days</SelectItem>
+                      <SelectItem value="custom">Custom date</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </FormSectionCard>

@@ -54,7 +54,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CustomerSelect } from '@/components/shared/customer-select';
+import { CustomerPicker } from '@/features/line-items';
 import { FormSectionCard } from '@/components/shared/form-section-card';
 import {
   MOCK_SERVICE_CATALOG,
@@ -260,56 +260,86 @@ export function NewQuotePage({
 
           {/* Quote metadata */}
           <FormSectionCard icon={FileText} title="Quote Details">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Title *</Label>
-                <Input
-                  placeholder="e.g., Window Cleaning"
-                  value={form.title}
-                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                />
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Title *</Label>
+                  <Input
+                    placeholder="e.g., Window Cleaning"
+                    value={form.title}
+                    onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Quote #</Label>
+                    <Input
+                      placeholder="Auto-generated"
+                      disabled
+                      className="bg-muted/30 font-mono text-sm"
+                      value={editingQuoteId ? `#${editingQuoteId.slice(-6).toUpperCase()}` : 'Auto'}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Valid Until *</Label>
+                    <Input
+                      type="date"
+                      value={form.validUntil}
+                      onChange={(e) => setForm((prev) => ({ ...prev, validUntil: e.target.value }))}
+                    />
+                  </div>
+                </div>
               </div>
+
               <div className="space-y-2">
-                <Label>Client *</Label>
-                <CustomerSelect
-                  value={form.customerId}
-                  onChange={(id) => {
-                    const customer = id ? customers.find((c) => c.id === id) : null;
-                    setForm((prev) => ({ ...prev, customerId: id || '', customerName: customer?.name || '' }));
+                <Label>Select a client *</Label>
+                <CustomerPicker
+                  selectedCustomerId={form.customerId}
+                  selectedCustomer={
+                    form.customerId
+                      ? {
+                          id: form.customerId,
+                          name: form.customerName,
+                          phone: customers.find((c) => c.id === form.customerId)?.phone,
+                          email: customers.find((c) => c.id === form.customerId)?.email,
+                          address: customers.find((c) => c.id === form.customerId)?.address,
+                        }
+                      : null
+                  }
+                  onPick={(c) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      customerId: c.id,
+                      customerName: c.name,
+                    }));
                   }}
-                  initialCustomer={form.customerId && form.customerName ? { id: form.customerId, name: form.customerName } : null}
-                  placeholder="Search for a client…"
+                  onClear={() => {
+                    setForm((prev) => ({
+                      ...prev,
+                      customerId: '',
+                      customerName: '',
+                    }));
+                  }}
+                  onCustomerCreated={(c) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      customerId: c.id,
+                      customerName: c.name,
+                    }));
+                  }}
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+
               <div className="space-y-2">
-                <Label>Quote #</Label>
-                <Input
-                  placeholder="Auto-generated"
-                  disabled
-                  className="bg-muted/30 font-mono text-sm"
-                  value={editingQuoteId ? `#${editingQuoteId.slice(-6).toUpperCase()}` : 'Auto'}
+                <Label>Description</Label>
+                <Textarea
+                  placeholder="Quote description or notes..."
+                  value={form.description}
+                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                  rows={2}
+                  className="text-sm"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Valid Until *</Label>
-                <Input
-                  type="date"
-                  value={form.validUntil}
-                  onChange={(e) => setForm((prev) => ({ ...prev, validUntil: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="space-y-2 mt-4">
-              <Label>Description</Label>
-              <Textarea
-                placeholder="Quote description or notes..."
-                value={form.description}
-                onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                rows={2}
-                className="text-sm"
-              />
             </div>
           </FormSectionCard>
 

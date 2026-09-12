@@ -53,6 +53,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { CustomerPicker } from '@/features/line-items';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -474,28 +475,21 @@ export function AiQuoteGeneratorDialog({
                     <User className="size-3.5 text-muted-foreground" />
                     Customer <span className="text-red-500">*</span>
                   </Label>
-                  <Select
-                    value={customerId}
-                    onValueChange={setCustomerId}
-                    disabled={generating}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.length === 0 ? (
-                        <SelectItem value="_none" disabled>
-                          No customers available
-                        </SelectItem>
-                      ) : (
-                        customers.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <CustomerPicker
+                    selectedCustomerId={customerId}
+                    selectedCustomer={
+                      customerId
+                        ? {
+                            id: customerId,
+                            name: customers.find((c) => c.id === customerId)?.name || '',
+                            phone: customers.find((c) => c.id === customerId)?.phone,
+                          }
+                        : null
+                    }
+                    onPick={(c) => setCustomerId(c.id)}
+                    onClear={() => setCustomerId('')}
+                    onCustomerCreated={(c) => setCustomerId(c.id)}
+                  />
                 </div>
 
                 {/* Job description */}

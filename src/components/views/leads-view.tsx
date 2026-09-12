@@ -194,95 +194,25 @@ export function LeadsView() {
       .catch(() => setServices([]));
   }, []);
 
-  const [customers, setCustomers] = useState<{ id: string; name: string; phone: string; email?: string | null; address?: string | null; properties?: any[] }[]>([]);
-  const [defaultCustomers, setDefaultCustomers] = useState<{ id: string; name: string; phone: string; email?: string | null; address?: string | null; properties?: any[] }[]>([]);
-  const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Add a freshly-created or selected customer to the lead's customerId,
+  // and auto-fill the contact & address info from it.
+  const handlePickCustomer = useCallback((c: { id: string; name: string; phone?: string | null; email?: string | null; address?: string | null; properties?: any[] }) => {
+    const primaryProp = c.properties?.find((p: any) => p.isPrimary) || c.properties?.[0];
+    const propertyAddress = primaryProp
+      ? [primaryProp.street1, primaryProp.street2, primaryProp.city, primaryProp.province, primaryProp.postalCode, primaryProp.country]
+          .filter(Boolean)
+          .join(', ')
+      : c.address || '';
 
-  const fetchDefaultCustomers = useCallback(async () => {
-    try {
-      const res = await authFetch('/api/customers?limit=20');
-      if (res.ok) {
-        const data = await res.json();
-        const list = data.customers ?? (Array.isArray(data) ? data : []);
-        setDefaultCustomers(list);
-        setCustomers(list);
-      }
-    } catch {
-      setDefaultCustomers([]);
-      setCustomers([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchDefaultCustomers();
-  }, [fetchDefaultCustomers]);
-
-  const searchCustomers = useCallback((q: string) => {
-    if (customerSearchTimer.current) clearTimeout(customerSearchTimer.current);
-    if (q.trim().length < 2) {
-      setCustomers(defaultCustomers);
-      return;
-    }
-    customerSearchTimer.current = setTimeout(async () => {
-      try {
-        const res = await authFetch(`/api/customers?search=${encodeURIComponent(q.trim())}&limit=20`);
-        if (res.ok) {
-          const data = await res.json();
-          setCustomers(data.customers ?? (Array.isArray(data) ? data : []));
-        }
-      } catch {
-        setCustomers([]);
-      }
-    }, 300);
-  }, [defaultCustomers]);
-
-  // Server-side customer search triggered when customerQuery changes
-  useEffect(() => {
-    searchCustomers(customerQuery);
-  }, [customerQuery, searchCustomers]);
-
-  // Customer picker (Select a client) UI state.
-  const [customerQuery, setCustomerQuery] = useState('');
-  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
-  const [showCreateCustomerDialog, setShowCreateCustomerDialog] = useState(false);
-  const [createCustomerPrefill, setCreateCustomerPrefill] = useState<{ name: string; phone?: string; email?: string }>({ name: '' });
-
-  // Add a freshly-created customer to the local list AND select it as the
-  // lead's customerId, and auto-fill the contact info from it.
-  const addCustomerToList = useCallback((c: { id: string; name: string; phone: string; email?: string | null; address?: string | null; properties?: any[] }) => {
-    setDefaultCustomers((prev) => (prev.some((x) => x.id === c.id) ? prev : [c, ...prev]));
-    setCustomers((prev) => (prev.some((x) => x.id === c.id) ? prev : [c, ...prev]));
     setLeadForm((prev) => ({
       ...prev,
       customerId: c.id,
       name: c.name || prev.name,
       phone: c.phone || prev.phone,
-      email: c.email || prev.email,
-      address: c.address || prev.address,
+      email: c.email || prev.email || '',
+      address: propertyAddress || prev.address || '',
     }));
   }, []);
-
-  const handlePickCustomer = useCallback((c: { id: string; name: string; phone: string; email?: string | null; address?: string | null }) => {
-    setLeadForm((prev) => ({
-      ...prev,
-      customerId: c.id,
-      // Auto-fill contact info from the customer record (only overwrite empty
-      // fields so the user doesn't lose manual edits to non-empty fields).
-      name: prev.name || c.name,
-      phone: prev.phone || c.phone,
-      email: prev.email || c.email || '',
-      address: prev.address || c.address || '',
-    }));
-  }, []);
-
-  const openCreateCustomerDialog = useCallback((nameQuery: string) => {
-    setCreateCustomerPrefill({
-      name: nameQuery || leadForm.name,
-      phone: leadForm.phone,
-      email: leadForm.email,
-    });
-    setShowCreateCustomerDialog(true);
-  }, [leadForm.name, leadForm.phone, leadForm.email]);
 
   const addServiceToCatalog = useCallback((svc: CatalogService) => {
     setServices((prev) =>
@@ -1089,17 +1019,7 @@ export function LeadsView() {
           onSave={handleSaveLead}
           onCancel={closeLeadForm}
           saving={saving}
-          customers={customers}
-          customerQuery={customerQuery}
-          setCustomerQuery={setCustomerQuery}
-          customerPickerOpen={customerPickerOpen}
-          setCustomerPickerOpen={setCustomerPickerOpen}
           onPickCustomer={handlePickCustomer}
-          onOpenCreateCustomer={openCreateCustomerDialog}
-          showCreateCustomerDialog={showCreateCustomerDialog}
-          setShowCreateCustomerDialog={setShowCreateCustomerDialog}
-          createCustomerPrefill={createCustomerPrefill}
-          onCustomerCreated={addCustomerToList}
           services={services}
           onServiceCreated={addServiceToCatalog}
           symbol={symbol}

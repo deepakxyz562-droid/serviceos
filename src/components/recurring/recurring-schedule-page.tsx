@@ -59,7 +59,7 @@ import {
 } from '@/components/recurring/recurring-schedule-editor';
 
 import { apiGet, authFetch } from '@/lib/api';
-import { CustomerSelect } from '@/components/shared/customer-select';
+import { CustomerPicker } from '@/features/line-items';
 import {
   formatSchedulePreview,
   type RecurrenceInput,
@@ -515,14 +515,20 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
                   <Label htmlFor="customerId">
                     Customer <span className="text-destructive">*</span>
                   </Label>
-                  <CustomerSelect
-                    value={form.customerId}
-                    onChange={(id) => set('customerId', id || '')}
-                    initialCustomer={form.customerId ? (() => {
-                      const c = customers.find((c) => c.id === form.customerId);
-                      return c ? { id: c.id, name: c.name, phone: c.phone } : null;
-                    })() : null}
-                    placeholder="Search customer…"
+                  <CustomerPicker
+                    selectedCustomerId={form.customerId}
+                    selectedCustomer={
+                      form.customerId
+                        ? {
+                            id: form.customerId,
+                            name: customers.find((c) => c.id === form.customerId)?.name || '',
+                            phone: customers.find((c) => c.id === form.customerId)?.phone,
+                          }
+                        : null
+                    }
+                    onPick={(c) => set('customerId', c.id)}
+                    onClear={() => set('customerId', '')}
+                    onCustomerCreated={(c) => set('customerId', c.id)}
                   />
                 </div>
                 <div className="grid gap-2">
