@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -193,12 +194,10 @@ export function LeadFormPage({
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="lead-phone" className="text-xs">Phone <span className="text-red-500">*</span></Label>
-                      <Input
+                      <PhoneInput
                         id="lead-phone"
-                        className="form-input h-9 text-sm"
-                        placeholder="+1 234 567 8900"
                         value={leadForm.phone}
-                        onChange={(e) => setLeadForm((prev) => ({ ...prev, phone: e.target.value }))}
+                        onChange={(val) => setLeadForm((prev) => ({ ...prev, phone: val }))}
                       />
                     </div>
                     <div className="space-y-1 sm:col-span-2">

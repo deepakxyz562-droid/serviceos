@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import * as crypto from 'crypto'
+import { formatToE164 } from '@/lib/phone-utils'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -8,6 +9,7 @@ interface SendSmsOptions {
   message: string
   credentialId?: string
   tenantId?: string
+  countryCode?: string
   /** Override the resolved provider (skip DB resolution) */
   providerOverride?: string
   /** Override the resolved config (skip DB resolution) */
@@ -128,6 +130,7 @@ async function resolveSmsProvider(
       providerRow = await db.communicationProvider.findFirst({
         where: { type: 'sms' },
         orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+        include: { credential: true },
       })
     }
 
@@ -170,18 +173,8 @@ async function resolveSmsProvider(
 
 // ─── E.164 normalisation ────────────────────────────────────────────────────
 
-function normalisePhone(raw: string): string {
-  let p = (raw || '').trim()
-  // Strip spaces, dashes, parens
-  p = p.replace(/[\s\-()]/g, '')
-  // Indian-local landline/mobile → +91
-  if (/^[6-9]\d{9}$/.test(p)) p = '+91' + p
-  // US-local 10-digit → +1
-  if (/^\d{10}$/.test(p)) p = '+1' + p
-  // Bare country code without +
-  if (/^91\d{10}$/.test(p)) p = '+' + p
-  if (/^1\d{10}$/.test(p)) p = '+' + p
-  return p
+function normalisePhone(raw: string, countryCode = 'IN'): string {
+  return formatToE164(raw, countryCode)
 }
 
 // ─── Per-provider senders ───────────────────────────────────────────────────
@@ -551,7 +544,7 @@ const SENDER_BY_PROVIDER: Record<string, (cfg: Record<string, string>, to: strin
 export async function sendSmsMessage(options: SendSmsOptions): Promise<SendSmsResult> {
   const { to: rawTo, message } = options
   if (!rawTo || !message) return { success: false, error: 'to and message are required' }
-  const to = normalisePhone(rawTo)
+  const to = normalisePhone(rawTo, options.countryCode || 'IN')
 
   const resolved = await resolveSmsProvider(options)
 

@@ -96,7 +96,7 @@ import type { LineItem } from '@/features/line-items/types';
 export interface CustomerOption {
   id: string;
   name: string;
-  phone: string;
+  phone?: string | null;
   email?: string | null;
   address?: string | null;
   properties?: Array<{

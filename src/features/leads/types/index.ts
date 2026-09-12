@@ -103,7 +103,8 @@ export interface LeadFormData {
 export interface CustomerOption {
   id: string;
   name: string;
-  phone: string;
+  phone?: string | null;
   email?: string | null;
   address?: string | null;
+  properties?: any[];
 }

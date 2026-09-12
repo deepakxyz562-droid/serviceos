@@ -43,6 +43,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -380,12 +381,10 @@ export function BookingFormPage({
                         <Label htmlFor="cust-phone-manual" className="text-xs text-muted-foreground">
                           Phone Number
                         </Label>
-                        <Input
+                        <PhoneInput
                           id="cust-phone-manual"
-                          placeholder="+1 234 567 890"
                           value={formData.customerPhone}
-                          onChange={(e) => updateField('customerPhone', e.target.value)}
-                          className="h-9 text-sm"
+                          onChange={(val) => updateField('customerPhone', val)}
                         />
                       </div>
                       <div className="space-y-1">

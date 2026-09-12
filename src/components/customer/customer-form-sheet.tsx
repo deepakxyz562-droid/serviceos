@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -661,12 +662,10 @@ export function CustomerFormSheet({
                     <Label htmlFor="cust-phone">
                       Phone <span className="text-destructive">*</span>
                     </Label>
-                    <Input
+                    <PhoneInput
                       id="cust-phone"
-                      type="tel"
-                      placeholder="+1 (555) 000-0000"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={setPhone}
                       required
                     />
                   </div>
@@ -770,10 +769,10 @@ export function CustomerFormSheet({
                           value={c.name}
                           onChange={(e) => updateAdditionalContact(c.id, 'name', e.target.value)}
                         />
-                        <Input
+                        <PhoneInput
                           placeholder="Phone"
                           value={c.phone}
-                          onChange={(e) => updateAdditionalContact(c.id, 'phone', e.target.value)}
+                          onChange={(val) => updateAdditionalContact(c.id, 'phone', val)}
                         />
                         <Input
                           placeholder="Email"
@@ -990,16 +989,16 @@ export function CustomerFormSheet({
                                     )
                                   }
                                 />
-                                <Input
+                                <PhoneInput
                                   className="h-8 text-xs"
                                   placeholder="Phone"
                                   value={c.phone}
-                                  onChange={(e) =>
+                                  onChange={(val) =>
                                     updatePropertyContactInProperty(
                                       prop.id,
                                       c.id,
                                       'phone',
-                                      e.target.value,
+                                      val,
                                     )
                                   }
                                 />

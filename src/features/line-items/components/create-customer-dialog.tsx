@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { PhoneInput } from '@/components/ui/phone-input';
 import {
   Select,
   SelectContent,
@@ -26,10 +27,15 @@ import {
 export interface CreateCustomerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  prefillName: string;
+  prefillName?: string;
   prefillPhone?: string;
   prefillEmail?: string;
-  onCreated: (c: {
+  prefill?: {
+    name?: string;
+    phone?: string;
+    email?: string;
+  };
+  onCreated?: (c: {
     id: string;
     name: string;
     phone: string;
@@ -37,16 +43,23 @@ export interface CreateCustomerDialogProps {
     address?: string | null;
     properties?: any[];
   }) => void;
+  onCustomerCreated?: (c: any) => void;
 }
 
 export function CreateCustomerDialog({
   open,
   onOpenChange,
-  prefillName,
-  prefillPhone,
-  prefillEmail,
+  prefillName: rawPrefillName,
+  prefillPhone: rawPrefillPhone,
+  prefillEmail: rawPrefillEmail,
+  prefill,
   onCreated,
+  onCustomerCreated,
 }: CreateCustomerDialogProps) {
+  const effectivePrefillName = prefill?.name ?? rawPrefillName ?? '';
+  const effectivePrefillPhone = prefill?.phone ?? rawPrefillPhone ?? '';
+  const effectivePrefillEmail = prefill?.email ?? rawPrefillEmail ?? '';
+
   // Primary Contact & Company Fields
   const [title, setTitle] = useState('none');
   const [firstName, setFirstName] = useState('');
@@ -75,18 +88,18 @@ export function CreateCustomerDialog({
   useEffect(() => {
     if (open) {
       // Split prefillName into firstName and lastName if prefilled
-      const parts = (prefillName || '').trim().split(' ');
+      const parts = (effectivePrefillName || '').trim().split(' ');
       if (parts.length > 1) {
         setFirstName(parts[0]);
         setLastName(parts.slice(1).join(' '));
       } else {
-        setFirstName(prefillName || '');
+        setFirstName(effectivePrefillName || '');
         setLastName('');
       }
       setTitle('none');
       setCompanyName('');
-      setPhone(prefillPhone || '');
-      setEmail(prefillEmail || '');
+      setPhone(effectivePrefillPhone || '');
+      setEmail(effectivePrefillEmail || '');
       setLeadSource('none');
       setStreet1('');
       setStreet2('');
@@ -99,7 +112,7 @@ export function CreateCustomerDialog({
       setTaxId('');
       setNotes('');
     }
-  }, [open, prefillName, prefillPhone, prefillEmail]);
+  }, [open, effectivePrefillName, effectivePrefillPhone, effectivePrefillEmail]);
 
   const handleCreate = async () => {
     const derivedName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') || companyName.trim();
@@ -160,7 +173,12 @@ export function CreateCustomerDialog({
       if (res.ok) {
         const cust = await res.json();
         toast.success(`Client "${cust.name}" created`);
-        onCreated(cust);
+        if (onCreated) {
+          onCreated(cust);
+        }
+        if (onCustomerCreated) {
+          onCustomerCreated(cust);
+        }
         onOpenChange(false);
       } else {
         const data = await res.json();
@@ -230,9 +248,9 @@ export function CreateCustomerDialog({
 
           {/* ── 2. Phone number ── */}
           <div>
-            <Input
+            <PhoneInput
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={setPhone}
               placeholder="Phone number *"
               className="h-11 rounded-lg text-sm"
             />
@@ -346,11 +364,11 @@ export function CreateCustomerDialog({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs text-muted-foreground">Alternate Phone</Label>
-                    <Input
+                    <PhoneInput
                       value={altPhone}
-                      onChange={(e) => setAltPhone(e.target.value)}
+                      onChange={setAltPhone}
                       placeholder="Alt phone number"
-                      className="h-9 text-xs bg-card mt-1"
+                      className="mt-1"
                     />
                   </div>
                   <div>

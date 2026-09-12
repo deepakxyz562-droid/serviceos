@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { PhoneInput } from '@/components/ui/phone-input';
 import {
   Select,
   SelectContent,
@@ -171,11 +172,10 @@ function BookingFormBody({
         </div>
         <div className="grid gap-2">
           <Label htmlFor={`${idPrefix}-customerPhone`}>Phone</Label>
-          <Input
+          <PhoneInput
             id={`${idPrefix}-customerPhone`}
-            placeholder="+1 234 567 890"
             value={form.customerPhone}
-            onChange={(e) => updateForm('customerPhone', e.target.value)}
+            onChange={(val) => updateForm('customerPhone', val)}
           />
         </div>
       </div>
