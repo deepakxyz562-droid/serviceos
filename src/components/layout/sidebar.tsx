@@ -173,7 +173,7 @@ const ownerNavSections: NavSection[] = [
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
-      { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
+      // AI Assistant moved to the Top Bar (right-side drawer button) for global quick access from any page.
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
       { view: 'triggers', label: 'Triggers', icon: Zap },

@@ -1348,7 +1348,6 @@ export function LeadsView() {
         open={showDetailDialog}
         onOpenChange={setShowDetailDialog}
         lead={selectedLead}
-        customers={customers}
         statusLoadingId={statusLoadingId}
         onStatusChange={handleStatusChange}
         onAddNote={handleAddNote}

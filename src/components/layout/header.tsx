@@ -17,6 +17,7 @@ import {
   LogOut,
   Download,
   MessageSquare,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { MessageDrawer } from '@/components/layout/message-drawer';
+import { AiAssistantDrawer } from '@/components/layout/ai-assistant-drawer';
 import { authFetch } from '@/lib/api';
 
 // ─── View label mapping ─────────────────────────────────────────────────────
@@ -157,7 +159,10 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [hasInstallPrompt, setHasInstallPrompt] = useState(false);
   const [messageDrawerOpen, setMessageDrawerOpen] = useState(false);
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const queryClient = useQueryClient();
+
+  const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin');
 
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
@@ -237,6 +242,21 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
     retry: false,
   });
   const messageUnreadCount = msgUnreadData ?? 0;
+
+  // ─── Live menu visibility (respects SuperAdmin Menu Management toggles) ──
+  const { data: menuVisibilityData } = useQuery<{ disabledMenus: string[] }>({
+    queryKey: ['menu-visibility'],
+    queryFn: async () => {
+      const res = await fetch('/api/menu-visibility?XTransformPort=3000');
+      if (!res.ok) throw new Error('failed');
+      return res.json();
+    },
+    enabled: isAuthenticated,
+    staleTime: 10_000,
+    retry: false,
+  });
+  const disabledMenus = menuVisibilityData?.disabledMenus || [];
+  const isAiAssistantDisabled = !isSuperAdmin && disabledMenus.includes('aiAssistant');
 
   const refreshMessageUnread = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['messages-unread-count'] });
@@ -365,7 +385,28 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       <div className="flex-1" />
 
       {/* ─── Right side actions ────────────────────────────────────────── */}
-      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* ─── AI Assistant trigger button (opens right-side Copilot drawer) ── */}
+        {!isAiAssistantDisabled && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAiDrawerOpen(!aiDrawerOpen)}
+            className={cn(
+              'h-9 gap-1.5 px-2.5 sm:px-3 text-xs font-medium rounded-lg transition-all',
+              'bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/5',
+              'border-emerald-500/30 text-emerald-700 dark:text-emerald-300',
+              'hover:bg-emerald-500/20 hover:border-emerald-500/50 hover:text-emerald-800 dark:hover:text-emerald-200',
+              aiDrawerOpen && 'bg-emerald-500/20 border-emerald-500/60 ring-2 ring-emerald-500/20 text-emerald-800 dark:text-emerald-200',
+            )}
+            aria-label="AI Assistant"
+            title="Open AI Assistant"
+          >
+            <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="hidden sm:inline font-semibold">AI Assistant</span>
+          </Button>
+        )}
+
         {/* ─── Messages icon (opens Skype-style left drawer) ─────────────── */}
         <Button
           variant="ghost"
@@ -536,6 +577,12 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       open={messageDrawerOpen}
       onClose={() => setMessageDrawerOpen(false)}
       onRefresh={refreshMessageUnread}
+    />
+
+    {/* ─── Right-side AI Assistant drawer (overlay, fixed-position) ────── */}
+    <AiAssistantDrawer
+      open={aiDrawerOpen}
+      onClose={() => setAiDrawerOpen(false)}
     />
     </>
   );

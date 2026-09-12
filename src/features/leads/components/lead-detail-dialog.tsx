@@ -70,8 +70,8 @@ export interface LeadDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Lead being viewed (null → dialog renders nothing). */
   lead: Lead | null;
-  /** Local customers list — used to look up a linked customer's name. */
-  customers: CustomerOption[];
+  /** Optional local customers list — used to look up a linked customer's name. */
+  customers?: CustomerOption[];
   /** Per-lead spinner flag (set during onStatusChange). */
   statusLoadingId: string | null;
   /** Change the lead's pipeline status (PUT /api/leads/:id). */
@@ -103,7 +103,7 @@ export function LeadDetailDialog({
   open,
   onOpenChange,
   lead,
-  customers,
+  customers = [],
   statusLoadingId,
   onStatusChange,
   onAddNote,
