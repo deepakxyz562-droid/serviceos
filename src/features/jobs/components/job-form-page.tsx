@@ -31,7 +31,7 @@
  * Extracted from src/components/views/jobs-view.tsx (Phase 2C refactor).
  */
 
-import type { RefObject } from 'react';
+import { useState, type RefObject } from 'react';
 import {
   Briefcase, Plus, RefreshCw, CalendarDays, Repeat, UserCircle,
   StickyNote, ClipboardList, FileText, Wrench, MapPin, Tag, Link2,
@@ -54,6 +54,7 @@ import {
   type LineItem,
   lineItemsSubtotal,
   CreateCustomerDialog,
+  CreatePropertyDialog,
   CustomerPicker,
   LineItemsSection,
 } from '@/features/line-items';
@@ -116,6 +117,7 @@ export interface JobFormPageProps {
   handlePickCustomer: (c: CustomerOption) => void;
   openCreateCustomerDialog: (nameQuery: string) => void;
   addCustomerToList: (c: CustomerOption) => void;
+  onCustomerUpdated?: (c: CustomerOption) => void;
   addCustomField: () => void;
   updateCustomField: (id: string, patch: Partial<CustomField>) => void;
   removeCustomField: (id: string) => void;
@@ -154,6 +156,7 @@ export function JobFormPage({
   handlePickCustomer,
   openCreateCustomerDialog,
   addCustomerToList,
+  onCustomerUpdated,
   addCustomField,
   updateCustomField,
   removeCustomField,
@@ -162,6 +165,7 @@ export function JobFormPage({
   handleFileUpload,
   removeAttachment,
 }: JobFormPageProps) {
+  const [showCreatePropertyDialog, setShowCreatePropertyDialog] = useState(false);
   const subtotal = lineItemsSubtotal(jobForm.lineItems as LineItem[]);
   const isEditing = !!editingJob;
   const fromLead = !!prefillLeadId;
@@ -568,47 +572,78 @@ export function JobFormPage({
       {/* ─── Address & Priority ───────────────────────────────── */}
       <FormSectionCard icon={MapPin} title="Location">
         <div className="space-y-4">
-          {/* Saved customer properties picker if available */}
-          {selectedCustomer?.properties && selectedCustomer.properties.length > 0 && (
-            <div className="space-y-1.5 rounded-lg border bg-muted/20 p-3">
-              <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                <MapPin className="size-3.5 text-emerald-600" />
-                Select from Customer's Saved Properties:
-              </Label>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {selectedCustomer.properties.map((prop, pIdx) => {
-                  const propAddr = [prop.street1, prop.street2, prop.city, prop.province, prop.postalCode, prop.country]
-                    .filter(Boolean)
-                    .join(', ');
-                  const isSelected = jobForm.address === propAddr || jobForm.address === prop.street1;
-                  return (
-                    <Button
-                      key={prop.id || pIdx}
-                      type="button"
-                      variant={isSelected ? 'default' : 'outline'}
-                      size="sm"
-                      className={cn(
-                        'text-xs h-8 gap-1.5',
-                        isSelected && 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-                      )}
-                      onClick={() => setJobForm((prev) => ({ ...prev, address: propAddr }))}
-                    >
-                      <span className="font-semibold">{prop.label || `Address ${pIdx + 1}`}:</span>
-                      <span className="truncate max-w-[200px]">{prop.street1}</span>
-                      {prop.isPrimary && (
-                        <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-0.5">
-                          Primary
-                        </Badge>
-                      )}
-                    </Button>
-                  );
-                })}
+          {/* Saved customer properties picker if customer is selected */}
+          {selectedCustomer && (
+            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <MapPin className="size-3.5 text-emerald-600" />
+                  Client Saved Properties / Addresses:
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+                  onClick={() => setShowCreatePropertyDialog(true)}
+                >
+                  <Plus className="size-3.5" />
+                  Add Address
+                </Button>
               </div>
+
+              {selectedCustomer.properties && selectedCustomer.properties.length > 0 ? (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {selectedCustomer.properties.map((prop, pIdx) => {
+                    const propAddr = [prop.street1, prop.street2, prop.city, prop.province, prop.postalCode, prop.country]
+                      .filter(Boolean)
+                      .join(', ');
+                    const isSelected = jobForm.address === propAddr || jobForm.address === prop.street1;
+                    return (
+                      <Button
+                        key={prop.id || pIdx}
+                        type="button"
+                        variant={isSelected ? 'default' : 'outline'}
+                        size="sm"
+                        className={cn(
+                          'text-xs h-8 gap-1.5',
+                          isSelected && 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                        )}
+                        onClick={() => setJobForm((prev) => ({ ...prev, address: propAddr }))}
+                      >
+                        <span className="font-semibold">{prop.label || `Address ${pIdx + 1}`}:</span>
+                        <span className="truncate max-w-[200px]">{prop.street1}</span>
+                        {prop.isPrimary && (
+                          <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-0.5">
+                            Primary
+                          </Badge>
+                        )}
+                      </Button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between py-1 text-xs text-muted-foreground">
+                  <span>No saved property addresses for this client.</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePropertyDialog(true)}
+                    className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
+                  >
+                    + Add a property address to save
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
           <div className="grid gap-2">
-            <Label htmlFor="job-address">Service Location Address</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="job-address">Service Location Address</Label>
+              {!selectedCustomer && (
+                <span className="text-[11px] text-muted-foreground">Select a client above to choose from saved addresses</span>
+              )}
+            </div>
             <Input
               id="job-address"
               className="form-input h-10"
@@ -854,6 +889,25 @@ export function JobFormPage({
         prefillEmail={createCustomerPrefill.email}
         onCreated={addCustomerToList}
       />
+
+      {/* ─── Add Property Address Dialog ────────────────────── */}
+      {selectedCustomer && (
+        <CreatePropertyDialog
+          open={showCreatePropertyDialog}
+          onOpenChange={setShowCreatePropertyDialog}
+          customerId={selectedCustomer.id}
+          customerName={selectedCustomer.name}
+          existingProperties={selectedCustomer.properties || []}
+          onPropertyCreated={(updatedCust, newAddr) => {
+            setSelectedCustomer(updatedCust);
+            onCustomerUpdated?.(updatedCust);
+            setJobForm((prev) => ({
+              ...prev,
+              address: newAddr || prev.address,
+            }));
+          }}
+        />
+      )}
     </div>
   );
 }

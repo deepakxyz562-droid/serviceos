@@ -450,6 +450,7 @@ export function JobsView() {
   // State
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [defaultCustomers, setDefaultCustomers] = useState<CustomerOption[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   // Debounce search input so we don't fire an HTTP request on every keystroke.
@@ -890,18 +891,34 @@ export function JobsView() {
     }
   }, []);
 
+  const fetchDefaultCustomers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/customers?limit=20');
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.customers ?? (Array.isArray(data) ? data : []);
+        setDefaultCustomers(list);
+        setCustomers(list);
+      }
+    } catch {
+      setDefaultCustomers([]);
+      setCustomers([]);
+    }
+  }, []);
+
   // Server-side customer search — replaces the old limit=500 fetch.
-  // Debounced 300ms, requires 2+ characters, returns max 10 results.
+  // Debounced 300ms, requires 2+ characters, returns max 20 results.
+  // When query is empty or < 2 chars, it displays the top default customers.
   const searchCustomers = useCallback((q: string) => {
     if (customerSearchTimer.current) clearTimeout(customerSearchTimer.current);
     if (q.trim().length < 2) {
-      setCustomers([]);
+      setCustomers(defaultCustomers);
       return;
     }
     customerSearchTimer.current = setTimeout(async () => {
       setCustomerSearchLoading(true);
       try {
-        const res = await fetch(`/api/customers?search=${encodeURIComponent(q.trim())}&limit=10`);
+        const res = await fetch(`/api/customers?search=${encodeURIComponent(q.trim())}&limit=20`);
         if (res.ok) {
           const data = await res.json();
           setCustomers(data.customers ?? (Array.isArray(data) ? data : []));
@@ -912,7 +929,7 @@ export function JobsView() {
         setCustomerSearchLoading(false);
       }
     }, 300);
-  }, []);
+  }, [defaultCustomers]);
 
   // ── Bulk select helpers ──────────────────────────────────────────────────
   const toggleJobSelect = (id: string) => {
@@ -951,7 +968,8 @@ export function JobsView() {
 
   useEffect(() => {
     fetchEmployees();
-  }, [fetchEmployees]);
+    fetchDefaultCustomers();
+  }, [fetchEmployees, fetchDefaultCustomers]);
 
   // Server-side customer search — triggered when user types in the CustomerPicker
   useEffect(() => {
@@ -1137,9 +1155,17 @@ export function JobsView() {
   };
 
   const addCustomerToList = (c: CustomerOption) => {
+    setDefaultCustomers((prev) => [c, ...prev.filter((x) => x.id !== c.id)]);
+    setCustomers((prev) => [c, ...prev.filter((x) => x.id !== c.id)]);
     setSelectedCustomer(c);
     handlePickCustomer(c);
     setCustomerPickerOpen(false);
+  };
+
+  const handleCustomerUpdated = (c: CustomerOption) => {
+    setSelectedCustomer(c);
+    setDefaultCustomers((prev) => prev.map((x) => (x.id === c.id ? c : x)));
+    setCustomers((prev) => prev.map((x) => (x.id === c.id ? c : x)));
   };
 
   const openCreateCustomerDialog = (nameQuery: string) => {
@@ -2434,6 +2460,7 @@ export function JobsView() {
           handlePickCustomer={handlePickCustomer}
           openCreateCustomerDialog={openCreateCustomerDialog}
           addCustomerToList={addCustomerToList}
+          onCustomerUpdated={handleCustomerUpdated}
           addCustomField={addCustomField}
           updateCustomField={updateCustomField}
           removeCustomField={removeCustomField}
