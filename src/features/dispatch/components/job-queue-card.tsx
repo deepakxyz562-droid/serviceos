@@ -54,7 +54,7 @@ export function JobQueueCard({
   return (
     <Card
       className={cn(
-        'border rounded-xl shadow-xs transition-all hover:shadow-sm cursor-pointer group bg-card',
+        'py-0 gap-0 border rounded-xl shadow-xs transition-all hover:shadow-sm cursor-pointer group bg-card',
         isLate
           ? 'border-red-300 bg-red-50/20 dark:border-red-900/60 dark:bg-red-950/10'
           : 'border-border hover:border-teal-300 dark:hover:border-teal-800'

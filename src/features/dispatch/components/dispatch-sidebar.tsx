@@ -262,7 +262,7 @@ export function DispatchSidebar({
       </div>
 
       {/* ── 3. Scrollable List Body ───────────────────────────────── */}
-      <ScrollArea className="flex-1 min-h-0 w-full">
+      <ScrollArea className="flex-1 min-h-0 w-full [&>[data-slot=scroll-area-viewport]>div]:!block [&>[data-slot=scroll-area-viewport]>div]:!w-full [&>[data-slot=scroll-area-viewport]>div]:!min-w-0">
         <div className="p-3 pb-16 sm:pb-12 space-y-2.5">
           {activeTab === 'queue' ? (
             filteredJobs.length === 0 ? (
