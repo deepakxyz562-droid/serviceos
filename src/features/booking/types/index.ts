@@ -82,8 +82,27 @@ export interface EmployeeOption {
   status: string;
 }
 
+import type { LineItem } from '@/features/line-items/types';
+
+export interface CustomerOption {
+  id: string;
+  name: string;
+  phone: string;
+  email?: string | null;
+  address?: string | null;
+  properties?: Array<{
+    id: string;
+    street: string;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+    isPrimary?: boolean;
+  }>;
+}
+
 export interface BookingFormData {
   title: string;
+  customerId: string;
   customerName: string;
   customerPhone: string;
   customerEmail: string;
@@ -97,10 +116,12 @@ export interface BookingFormData {
   employeeId: string;
   serviceId: string;
   assignmentType: 'unassigned' | 'assign_now' | 'auto_assign';
+  lineItems: LineItem[];
 }
 
 export const EMPTY_FORM: BookingFormData = {
   title: '',
+  customerId: '',
   customerName: '',
   customerPhone: '',
   customerEmail: '',
@@ -114,4 +135,6 @@ export const EMPTY_FORM: BookingFormData = {
   employeeId: '',
   serviceId: '',
   assignmentType: 'unassigned',
+  lineItems: [],
 };
+

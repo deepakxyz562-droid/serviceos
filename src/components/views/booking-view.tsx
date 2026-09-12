@@ -37,6 +37,9 @@ import { toast } from 'sonner';
 import { useBookings } from '@/hooks/use-crm-data';
 import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/lib/query-keys';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { useAppStore } from '@/stores/app-store';
+import { lineItemsSubtotal, type LineItem } from '@/features/line-items';
 
 import {
   EMPTY_FORM,
@@ -47,11 +50,9 @@ import type {
   Pagination,
   EmployeeOption,
   ServiceOption,
+  CustomerOption,
 } from '@/features/booking/types';
-import {
-  CreateBookingDialog,
-  EditBookingDialog,
-} from '@/features/booking/components/booking-form-dialog';
+import { BookingFormPage } from '@/features/booking/components/booking-form-page';
 import { BookingViewDialog } from '@/features/booking/components/booking-view-dialog';
 import { BookingDeleteDialog } from '@/features/booking/components/booking-delete-dialog';
 import {
@@ -65,6 +66,10 @@ import { BookingStatusChips } from '@/features/booking/components/booking-status
 // ---------------------------------------------------------------------------
 
 export function BookingView() {
+  const { symbol } = useCompanyCurrency();
+  const pendingCreate = useAppStore((s) => s.pendingCreate);
+  const setPendingCreate = useAppStore((s) => s.setPendingCreate);
+
   // State
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
@@ -75,8 +80,8 @@ export function BookingView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -84,6 +89,7 @@ export function BookingView() {
   const [submitting, setSubmitting] = useState(false);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
 
   // ── PAGINATION-ARCHIVE-1: Active vs Archived tab ────────────────────────
   // The "Archived" tab fetches bookings with `archived=true` (soft-deleted
@@ -201,25 +207,47 @@ export function BookingView() {
       .catch(() => setServices([]));
   }, []);
 
-  // Fetch bookings — migrated to React Query (`useBookings` above). The
-  // RQ query is keyed by `{ status, search }` and refetches automatically
-  // when those filters change, so the manual `useEffect(() => fetchBookings())`
-  // is no longer needed.
+  // Fetch customers for CustomerPicker
+  useEffect(() => {
+    apiGet<{ customers: CustomerOption[] } | CustomerOption[]>('/api/customers?limit=200')
+      .then((data) => {
+        if (Array.isArray(data)) setCustomers(data);
+        else if (data && Array.isArray((data as { customers: CustomerOption[] }).customers))
+          setCustomers((data as { customers: CustomerOption[] }).customers);
+        else setCustomers([]);
+      })
+      .catch(() => setCustomers([]));
+  }, []);
 
-  // Stats previously computed here (todayCount, pendingCount, etc.) are
-  // now derived inline inside the BookingStatusChips component, which owns
-  // the chip count badges.
+  // Cross-view create hook (+ Create -> booking)
+  useEffect(() => {
+    if (pendingCreate === 'booking') {
+      handleCreate();
+      setPendingCreate(null);
+    }
+  }, [pendingCreate, setPendingCreate]);
 
   // Handlers
   function handleCreate() {
+    setEditingBooking(null);
+    setSelectedBooking(null);
     setFormData(EMPTY_FORM);
-    setShowCreateDialog(true);
+    setIsCreatingBooking(true);
+    setShowCreateDialog(false);
   }
 
   function handleEdit(booking: Booking) {
+    let initialLineItems: LineItem[] = [];
+    try {
+      const meta = JSON.parse(booking.metadataJson || '{}');
+      if (Array.isArray(meta.lineItems)) initialLineItems = meta.lineItems;
+    } catch {}
+
+    setEditingBooking(booking);
     setSelectedBooking(booking);
     setFormData({
       title: booking.title,
+      customerId: booking.customerId || '',
       customerName: booking.customerName || '',
       customerPhone: booking.customerPhone || '',
       customerEmail: booking.customerEmail || '',
@@ -227,7 +255,7 @@ export function BookingView() {
       scheduledAt: booking.scheduledAt
         ? new Date(booking.scheduledAt).toISOString().slice(0, 16)
         : '',
-      duration: String(booking.duration),
+      duration: String(booking.duration || 60),
       description: booking.description || '',
       notes: booking.notes || '',
       status: booking.status,
@@ -235,8 +263,10 @@ export function BookingView() {
       employeeId: booking.employeeId || '',
       serviceId: booking.serviceId || '',
       assignmentType: booking.employeeId ? 'assign_now' : 'unassigned',
+      lineItems: initialLineItems,
     });
-    setShowEditDialog(true);
+    setIsCreatingBooking(false);
+    setShowViewDialog(false);
   }
 
   function handleView(booking: Booking) {
@@ -252,6 +282,7 @@ export function BookingView() {
   async function handleStatusChange(booking: Booking, newStatus: string) {
     try {
       await apiPut(`/api/bookings/${booking.id}`, { status: newStatus });
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
       toast.error('Failed to update status');
@@ -262,8 +293,14 @@ export function BookingView() {
     if (!formData.title.trim()) return;
     setSubmitting(true);
     try {
+      const metadataObj = {
+        lineItems: formData.lineItems || [],
+        subtotal: lineItemsSubtotal(formData.lineItems || []),
+      };
+
       const created = await apiPost<{ id: string }>('/api/bookings', {
         title: formData.title.trim(),
+        customerId: formData.customerId || null,
         customerName: formData.customerName.trim() || null,
         customerPhone: formData.customerPhone.trim() || null,
         customerEmail: formData.customerEmail.trim() || null,
@@ -278,7 +315,9 @@ export function BookingView() {
           formData.assignmentType === 'assign_now' && formData.employeeId
             ? formData.employeeId
             : null,
+        metadataJson: JSON.stringify(metadataObj),
       });
+
       // If user picked Auto Assign, fire a follow-up auto-assign call.
       if (formData.assignmentType === 'auto_assign' && created?.id) {
         try {
@@ -297,7 +336,10 @@ export function BookingView() {
       } else {
         toast.success('Booking created');
       }
+
+      setIsCreatingBooking(false);
       setShowCreateDialog(false);
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
       toast.error('Failed to create booking');
@@ -307,7 +349,6 @@ export function BookingView() {
   }
 
   async function submitCreateAndAssign() {
-    // Same as submitCreate but forces assignmentType='assign_now' and requires employeeId
     if (!formData.title.trim()) return;
     if (!formData.employeeId) {
       toast.error('Please select an employee to assign');
@@ -315,8 +356,14 @@ export function BookingView() {
     }
     setSubmitting(true);
     try {
+      const metadataObj = {
+        lineItems: formData.lineItems || [],
+        subtotal: lineItemsSubtotal(formData.lineItems || []),
+      };
+
       await apiPost('/api/bookings', {
         title: formData.title.trim(),
+        customerId: formData.customerId || null,
         customerName: formData.customerName.trim() || null,
         customerPhone: formData.customerPhone.trim() || null,
         customerEmail: formData.customerEmail.trim() || null,
@@ -328,9 +375,12 @@ export function BookingView() {
         source: formData.source,
         serviceId: formData.serviceId || null,
         employeeId: formData.employeeId,
+        metadataJson: JSON.stringify(metadataObj),
       });
       toast.success('Booking created and employee assigned');
+      setIsCreatingBooking(false);
       setShowCreateDialog(false);
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
       toast.error('Failed to create booking');
@@ -340,12 +390,17 @@ export function BookingView() {
   }
 
   async function submitCreateAndJob() {
-    // Creates booking, then creates a job from it
     if (!formData.title.trim()) return;
     setSubmitting(true);
     try {
+      const metadataObj = {
+        lineItems: formData.lineItems || [],
+        subtotal: lineItemsSubtotal(formData.lineItems || []),
+      };
+
       const booking = await apiPost<{ id: string }>('/api/bookings', {
         title: formData.title.trim(),
+        customerId: formData.customerId || null,
         customerName: formData.customerName.trim() || null,
         customerPhone: formData.customerPhone.trim() || null,
         customerEmail: formData.customerEmail.trim() || null,
@@ -360,7 +415,9 @@ export function BookingView() {
           formData.assignmentType === 'assign_now' && formData.employeeId
             ? formData.employeeId
             : null,
+        metadataJson: JSON.stringify(metadataObj),
       });
+
       // Now create a job from this booking
       if (booking?.id) {
         try {
@@ -369,12 +426,13 @@ export function BookingView() {
         } catch (err) {
           console.error('Failed to create job from booking:', err);
           toast.success('Booking created — could not auto-create job');
-          // Don't fail the whole flow — booking was created successfully
         }
       } else {
         toast.success('Booking created');
       }
+      setIsCreatingBooking(false);
       setShowCreateDialog(false);
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
       toast.error('Failed to create booking');
@@ -395,6 +453,7 @@ export function BookingView() {
       } else {
         toast.success('Booking auto-assigned');
       }
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
       toast.error('Auto-assign failed — no available employees');
@@ -408,6 +467,7 @@ export function BookingView() {
     try {
       await apiPost(`/api/bookings/${bookingId}/assign`, { employeeId });
       toast.success('Employee assigned');
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
       toast.error('Failed to assign employee');
@@ -419,9 +479,6 @@ export function BookingView() {
   async function handleCreateJobFromBooking(bookingId: string) {
     setSubmitting(true);
     try {
-      // Note: apiPost resolves the JSON body regardless of HTTP status
-      // (fetch only rejects on network errors). So we inspect the body
-      // for an `error` field to detect e.g. 409 conflict.
       const result = await apiPost<{
         message?: string;
         job?: { id: string };
@@ -431,6 +488,7 @@ export function BookingView() {
         toast.error(result.error);
       } else {
         toast.success(result?.message || 'Job created from booking');
+        await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
         fetchBookings();
       }
     } catch {
@@ -441,11 +499,23 @@ export function BookingView() {
   }
 
   async function submitEdit() {
-    if (!selectedBooking || !formData.title.trim()) return;
+    const bookingToEdit = editingBooking || selectedBooking;
+    if (!bookingToEdit || !formData.title.trim()) return;
     setSubmitting(true);
     try {
-      await apiPut(`/api/bookings/${selectedBooking.id}`, {
+      let existingMeta = {};
+      try {
+        existingMeta = JSON.parse(bookingToEdit.metadataJson || '{}');
+      } catch {}
+      const metadataObj = {
+        ...existingMeta,
+        lineItems: formData.lineItems || [],
+        subtotal: lineItemsSubtotal(formData.lineItems || []),
+      };
+
+      await apiPut(`/api/bookings/${bookingToEdit.id}`, {
         title: formData.title.trim(),
+        customerId: formData.customerId || null,
         customerName: formData.customerName.trim() || null,
         customerPhone: formData.customerPhone.trim() || null,
         customerEmail: formData.customerEmail.trim() || null,
@@ -455,12 +525,32 @@ export function BookingView() {
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
         status: formData.status,
+        source: formData.source,
         serviceId: formData.serviceId || null,
-        employeeId: formData.employeeId || null,
+        employeeId:
+          formData.assignmentType === 'assign_now' && formData.employeeId
+            ? formData.employeeId
+            : null,
+        metadataJson: JSON.stringify(metadataObj),
       });
+
+      if (formData.assignmentType === 'auto_assign' && !bookingToEdit.employeeId) {
+        try {
+          const result = await apiPost<{ employee?: { name?: string } }>(
+            '/api/bookings/auto-assign',
+            { bookingId: bookingToEdit.id, strategy: 'workload' }
+          );
+          if (result?.employee?.name) {
+            toast.success(`Auto-assigned to ${result.employee.name}`);
+          }
+        } catch {}
+      }
+
       toast.success('Booking updated');
-      setShowEditDialog(false);
+      setEditingBooking(null);
       setSelectedBooking(null);
+      setShowEditDialog(false);
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
       toast.error('Failed to update booking');
@@ -470,11 +560,23 @@ export function BookingView() {
   }
 
   async function submitEditAndCreateJob() {
-    if (!selectedBooking || !formData.title.trim()) return;
+    const bookingToEdit = editingBooking || selectedBooking;
+    if (!bookingToEdit || !formData.title.trim()) return;
     setSubmitting(true);
     try {
-      await apiPut(`/api/bookings/${selectedBooking.id}`, {
+      let existingMeta = {};
+      try {
+        existingMeta = JSON.parse(bookingToEdit.metadataJson || '{}');
+      } catch {}
+      const metadataObj = {
+        ...existingMeta,
+        lineItems: formData.lineItems || [],
+        subtotal: lineItemsSubtotal(formData.lineItems || []),
+      };
+
+      await apiPut(`/api/bookings/${bookingToEdit.id}`, {
         title: formData.title.trim(),
+        customerId: formData.customerId || null,
         customerName: formData.customerName.trim() || null,
         customerPhone: formData.customerPhone.trim() || null,
         customerEmail: formData.customerEmail.trim() || null,
@@ -484,13 +586,18 @@ export function BookingView() {
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
         status: formData.status,
+        source: formData.source,
         serviceId: formData.serviceId || null,
-        employeeId: formData.employeeId || null,
+        employeeId:
+          formData.assignmentType === 'assign_now' && formData.employeeId
+            ? formData.employeeId
+            : null,
+        metadataJson: JSON.stringify(metadataObj),
       });
-      // Then create a job from this booking
+
       try {
         const result = await apiPost<{ message?: string; error?: string }>(
-          `/api/bookings/${selectedBooking.id}/create-job`,
+          `/api/bookings/${bookingToEdit.id}/create-job`,
           {}
         );
         if (result?.error) {
@@ -501,8 +608,10 @@ export function BookingView() {
       } catch {
         toast.error('Booking saved — could not auto-create job');
       }
-      setShowEditDialog(false);
+      setEditingBooking(null);
       setSelectedBooking(null);
+      setShowEditDialog(false);
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
       toast.error('Failed to update booking');
@@ -518,6 +627,7 @@ export function BookingView() {
       await apiDelete(`/api/bookings/${selectedBooking.id}`);
       setShowDeleteDialog(false);
       setSelectedBooking(null);
+      await queryClient.invalidateQueries({ queryKey: qk.bookings.all });
       fetchBookings();
     } catch {
       toast.error('Failed to delete booking');
@@ -545,6 +655,35 @@ export function BookingView() {
   // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------
+
+  // Full-page Create / Edit Booking view (Jobber-style 2-column layout)
+  if (isCreatingBooking || editingBooking !== null) {
+    return (
+      <BookingFormPage
+        editingBooking={editingBooking}
+        formData={formData}
+        setFormData={setFormData}
+        onSave={editingBooking ? submitEdit : submitCreate}
+        onSaveAndAssign={submitCreateAndAssign}
+        onSaveAndCreateJob={editingBooking ? submitEditAndCreateJob : submitCreateAndJob}
+        onCancel={() => {
+          setIsCreatingBooking(false);
+          setEditingBooking(null);
+        }}
+        saving={submitting}
+        customers={customers}
+        onPickCustomer={(c) => {
+          // Handled inside BookingFormPage
+        }}
+        onCustomerCreated={(c) => {
+          setCustomers((prev) => [c, ...prev]);
+        }}
+        services={services}
+        symbol={symbol}
+        employees={employees}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6 w-full">
@@ -990,36 +1129,6 @@ export function BookingView() {
           )}
         </TabsContent>
       </Tabs>
-
-      {/* CREATE DIALOG */}
-      <CreateBookingDialog
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        form={formData}
-        onFormChange={setFormData}
-        services={services}
-        employees={employees}
-        saving={submitting}
-        onSave={submitCreate}
-        onSaveAndAssign={submitCreateAndAssign}
-        onSaveAndCreateJob={submitCreateAndJob}
-      />
-
-      {/* EDIT DIALOG */}
-      <EditBookingDialog
-        open={showEditDialog}
-        onOpenChange={setShowEditDialog}
-        form={formData}
-        onFormChange={setFormData}
-        services={services}
-        employees={employees}
-        saving={submitting}
-        onSave={submitEdit}
-        onSaveAndCreateJob={submitEditAndCreateJob}
-        onAutoAssign={() =>
-          selectedBooking ? handleAutoAssign(selectedBooking.id) : undefined
-        }
-      />
 
       {/* VIEW DIALOG */}
       <BookingViewDialog
