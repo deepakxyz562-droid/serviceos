@@ -1,28 +1,38 @@
 'use client';
 
+/**
+ * AiAssistantView — Full-page AI Assistant & Intelligence Workspace.
+ */
+
 import { useState } from 'react';
 import {
-  Sparkles, MessageSquare, Brain, Tag, BarChart3,
-  AlertCircle, CheckCircle2, Clock, Zap, Send,
-  TrendingUp, Users, Eye,
+  Sparkles,
+  MessageSquare,
+  Brain,
+  Tag,
+  BarChart3,
+  CheckCircle2,
+  Clock,
+  Zap,
+  Send,
+  TrendingUp,
+  BookOpen,
+  Calendar,
+  DollarSign,
+  Briefcase,
+  Users,
+  ShieldCheck,
+  ArrowRight,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Textarea } from '@/components/ui/textarea';
-import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AiChatPanel } from '@/components/dashboard/ai-chat-panel';
 import { KnowledgeBasePanel } from '@/components/dashboard/knowledge-base-panel';
-
-// ─── Types ──────────────────────────────────────────────────────────────────
 
 interface SuggestedReply {
   id: string;
@@ -59,345 +69,320 @@ interface LeadScore {
   factors: { label: string; value: string; impact: 'high' | 'medium' | 'low' }[];
 }
 
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-
-const MOCK_SUGGESTED_REPLIES: SuggestedReply[] = [
-  { id: 'sr1', conversationId: 'c1', customerName: 'Alex Rivera', message: 'My delivery is late, where is it?', suggestedReplies: ['I apologize for the delay. Let me check the status of your delivery right away.', 'I\'m sorry about the delay. I can see your order is on its way and should arrive within 30 minutes.', 'I understand your frustration. Let me escalate this to our logistics team immediately.'], confidence: 92, intent: 'complaint' },
-  { id: 'sr2', conversationId: 'c2', customerName: 'Maria Santos', message: 'I want to book a cleaning for next week', suggestedReplies: ['Great! I can help you book a cleaning. What date works best for you?', 'I\'d be happy to schedule that! We have availability on Monday, Wednesday, and Friday next week.'], confidence: 95, intent: 'booking_request' },
-  { id: 'sr3', conversationId: 'c3', customerName: 'Robert Kim', message: 'How much do I owe on my last invoice?', suggestedReplies: ['Your last invoice #INV-0045 for $350 is currently pending. Would you like me to send you a payment link?', 'You have one outstanding invoice of $350. I can send a payment link via WhatsApp if you\'d like.'], confidence: 88, intent: 'payment_question' },
-];
-
-const MOCK_SUMMARIES: ConversationSummary[] = [
-  { id: 's1', customerName: 'Alex Rivera', summary: 'Customer inquired about a delayed delivery for order #4521. They are frustrated and want a status update.', keyPoints: ['Order #4521 delayed', 'Customer is frustrated', 'Needs delivery status update'], sentiment: 'negative', intent: 'complaint' },
-  { id: 's2', customerName: 'Maria Santos', summary: 'Repeat customer wants to book a cleaning service for next week. Previously satisfied with our services.', keyPoints: ['Repeat customer', 'Booking for next week', 'Previously satisfied'], sentiment: 'positive', intent: 'booking_request' },
-  { id: 's3', customerName: 'Robert Kim', summary: 'Customer asking about outstanding invoice balance. May need payment assistance.', keyPoints: ['Outstanding invoice inquiry', 'May need payment plan', 'VIP customer'], sentiment: 'neutral', intent: 'payment_question' },
-];
-
-const MOCK_INTENTS: DetectedIntent[] = [
-  { id: 'i1', type: 'complaint', customerName: 'Alex Rivera', message: 'This is unacceptable! My order is 2 days late!', confidence: 96, timestamp: '2 min ago' },
-  { id: 'i2', type: 'booking_request', customerName: 'Maria Santos', message: 'Can I schedule a cleaning for next Tuesday?', confidence: 94, timestamp: '5 min ago' },
-  { id: 'i3', type: 'payment_question', customerName: 'Robert Kim', message: 'What\'s my balance? I think I missed a payment.', confidence: 89, timestamp: '12 min ago' },
-  { id: 'i4', type: 'quote_request', customerName: 'Lisa Park', message: 'How much would a deep cleaning cost for my apartment?', confidence: 91, timestamp: '25 min ago' },
-  { id: 'i5', type: 'follow_up_request', customerName: 'James Wilson', message: 'Any update on my job request from yesterday?', confidence: 85, timestamp: '30 min ago' },
-];
-
-const MOCK_LEAD_SCORES: LeadScore[] = [
-  { id: 'ls1', customerName: 'Robert Kim', score: 88, factors: [{ label: 'Revenue', value: '$6,200 total', impact: 'high' }, { label: 'Frequency', value: '15 jobs', impact: 'high' }, { label: 'Recency', value: '1 hr ago', impact: 'medium' }] },
-  { id: 'ls2', customerName: 'Alex Rivera', score: 72, factors: [{ label: 'Revenue', value: '$4,500 total', impact: 'high' }, { label: 'Frequency', value: '8 jobs', impact: 'medium' }, { label: 'Recency', value: '2 hrs ago', impact: 'low' }] },
-  { id: 'ls3', customerName: 'Maria Santos', score: 65, factors: [{ label: 'Revenue', value: '$2,800 total', impact: 'medium' }, { label: 'Frequency', value: '5 jobs', impact: 'medium' }, { label: 'Recency', value: '5 min ago', impact: 'high' }] },
-];
-
 const INTENT_COLORS: Record<string, string> = {
-  complaint: 'bg-red-100 text-red-700 border-red-200',
-  booking_request: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  payment_question: 'bg-amber-100 text-amber-700 border-amber-200',
-  quote_request: 'bg-purple-100 text-purple-700 border-purple-200',
-  follow_up_request: 'bg-blue-100 text-blue-700 border-blue-200',
+  complaint: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400',
+  booking_request: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400',
+  payment_question: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400',
+  quote_request: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400',
+  follow_up_request: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400',
 };
 
 const SENTIMENT_COLORS: Record<string, string> = {
-  positive: 'text-emerald-600',
-  neutral: 'text-amber-600',
-  negative: 'text-red-600',
+  positive: 'text-emerald-600 dark:text-emerald-400',
+  neutral: 'text-amber-600 dark:text-amber-400',
+  negative: 'text-red-600 dark:text-red-400',
 };
-
-// ─── Component ──────────────────────────────────────────────────────────────
 
 export function AiAssistantView() {
   const [activeTab, setActiveTab] = useState('chat');
-  const [suggestedReplies, setSuggestedReplies] = useState<SuggestedReply[]>([]);
-  const [summaries, setSummaries] = useState<ConversationSummary[]>([]);
-  const [intents, setIntents] = useState<DetectedIntent[]>([]);
-  const [leadScores, setLeadScores] = useState<LeadScore[]>([]);
-  const [selectedSuggestion, setSelectedSuggestion] = useState<SuggestedReply | null>(null);
-  const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [chatInjectedPrompt, setChatInjectedPrompt] = useState<string | undefined>(undefined);
+  const [suggestedReplies] = useState<SuggestedReply[]>([]);
+  const [summaries] = useState<ConversationSummary[]>([]);
+  const [intents] = useState<DetectedIntent[]>([]);
+  const [leadScores] = useState<LeadScore[]>([]);
 
-  const handleApplyReply = (reply: string) => {
-    toast.success('Reply applied to conversation');
-    setShowDetailDialog(false);
-  };
-
-  const handleApplyTag = (tag: string) => {
-    toast.success(`Tag "${tag}" applied`);
+  const handleTriggerChatPrompt = (prompt: string) => {
+    setChatInjectedPrompt(prompt);
+    setActiveTab('chat');
   };
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="space-y-6 w-full max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
-            <Sparkles className="size-5 text-white" />
+          <div className="relative flex items-center justify-center size-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
+            <Sparkles className="size-5" />
+            <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
           </div>
           <div>
-            <h2 className="text-xl font-bold">AI Assistant</h2>
-            <p className="text-sm text-muted-foreground">AI-powered conversation intelligence</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-foreground">AI Copilot & Intelligence</h2>
+              <Badge
+                variant="secondary"
+                className="text-[10px] font-medium h-4 px-1.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-500/20"
+              >
+                Tenant-Isolated
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Conversational business insights, schedule queries, and automated intelligence
+            </p>
           </div>
         </div>
-        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-          <Sparkles className="size-3 mr-1" /> AI Active
-        </Badge>
-      </div>
 
-      {/* Stats */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
-        {[
-          { label: 'Suggestions', value: suggestedReplies.length, icon: MessageSquare, color: 'text-blue-600' },
-          { label: 'Summaries', value: summaries.length, icon: Brain, color: 'text-purple-600' },
-          { label: 'Intents Detected', value: intents.length, icon: Zap, color: 'text-orange-600' },
-          { label: 'Lead Scores', value: leadScores.length, icon: TrendingUp, color: 'text-emerald-600' },
-          { label: 'Avg Confidence', value: '0%', icon: BarChart3, color: 'text-green-600' },
-        ].map(stat => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.label} className="p-3">
-              <div className="flex items-center gap-2"><Icon className={`size-4 ${stat.color}`} /><div><p className="text-[10px] text-muted-foreground">{stat.label}</p><p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p></div></div>
-            </Card>
-          );
-        })}
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="bg-emerald-50/50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 text-xs px-2.5 py-1">
+            <ShieldCheck className="size-3.5 mr-1.5 text-emerald-600" />
+            Read-Only Business Engine
+          </Badge>
+        </div>
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
-        <TabsList className="flex-wrap h-auto">
-          <TabsTrigger value="chat" className="text-xs">Chat Assistant</TabsTrigger>
-          <TabsTrigger value="knowledge" className="text-xs">Knowledge Base</TabsTrigger>
-          <TabsTrigger value="suggestions" className="text-xs">Suggested Replies</TabsTrigger>
-          <TabsTrigger value="summaries" className="text-xs">Summaries</TabsTrigger>
-          <TabsTrigger value="intents" className="text-xs">Intent Detection</TabsTrigger>
-          <TabsTrigger value="leads" className="text-xs">Lead Scoring</TabsTrigger>
-          <TabsTrigger value="tags" className="text-xs">Auto Tags</TabsTrigger>
+        <TabsList className="flex-wrap h-auto bg-muted/60 p-1 rounded-xl">
+          <TabsTrigger value="chat" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+            Copilot Chat
+          </TabsTrigger>
+          <TabsTrigger value="knowledge" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <BookOpen className="size-3.5 text-blue-500" />
+            Knowledge Base
+          </TabsTrigger>
+          <TabsTrigger value="intents" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <Zap className="size-3.5 text-amber-500" />
+            Intent Intelligence
+          </TabsTrigger>
+          <TabsTrigger value="suggestions" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <MessageSquare className="size-3.5 text-purple-500" />
+            Suggested Replies
+          </TabsTrigger>
+          <TabsTrigger value="summaries" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <Brain className="size-3.5 text-indigo-500" />
+            Summaries
+          </TabsTrigger>
         </TabsList>
 
-        {/* Chat Assistant (Tier 2) */}
+        {/* ── Tab: Copilot Chat (Split View) ── */}
         <TabsContent value="chat" className="mt-0">
-          <div className="h-[calc(100vh-260px)] min-h-[480px]">
-            <AiChatPanel />
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+            {/* Primary Interactive Chat Stream */}
+            <div className="h-[calc(100vh-250px)] min-h-[560px]">
+              <AiChatPanel initialPrompt={chatInjectedPrompt} />
+            </div>
+
+            {/* Quick Actions & Copilot Launchpad Sidebar */}
+            <div className="space-y-4">
+              <Card className="border-border/80 shadow-2xs">
+                <CardContent className="p-4 space-y-3">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Zap className="size-3.5 text-amber-500" />
+                    Quick Launchpad
+                  </span>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => handleTriggerChatPrompt('Give me a full overview of today’s business performance, jobs, and revenue.')}
+                      className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-background/60 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs font-medium text-foreground text-left transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <TrendingUp className="size-3.5 text-emerald-600 shrink-0" />
+                        <span className="truncate">Today&apos;s Business Snapshot</span>
+                      </div>
+                      <ArrowRight className="size-3 text-muted-foreground group-hover:text-emerald-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleTriggerChatPrompt('Which jobs are scheduled for today, and are any technicians running late?')}
+                      className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-background/60 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-xs font-medium text-foreground text-left transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Calendar className="size-3.5 text-blue-600 shrink-0" />
+                        <span className="truncate">Schedule & Dispatch Review</span>
+                      </div>
+                      <ArrowRight className="size-3 text-muted-foreground group-hover:text-blue-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleTriggerChatPrompt('List all overdue invoices with customer names, contact numbers, and total balance.')}
+                      className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-background/60 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 text-xs font-medium text-foreground text-left transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <DollarSign className="size-3.5 text-purple-600 shrink-0" />
+                        <span className="truncate">Overdue Invoice Tracker</span>
+                      </div>
+                      <ArrowRight className="size-3 text-muted-foreground group-hover:text-purple-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleTriggerChatPrompt('Show me recent leads that have not been contacted or converted yet.')}
+                      className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-background/60 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 text-xs font-medium text-foreground text-left transition-all group cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Users className="size-3.5 text-amber-600 shrink-0" />
+                        <span className="truncate">Pending Leads Check</span>
+                      </div>
+                      <ArrowRight className="size-3 text-muted-foreground group-hover:text-amber-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border/80 shadow-2xs">
+                <CardContent className="p-4 space-y-2">
+                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <ShieldCheck className="size-3.5 text-emerald-600" />
+                    Security & Data Privacy
+                  </span>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    All queries run securely against your tenant database. The AI cannot modify records or expose confidential credentials.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
-        {/* Knowledge Base (Tier 3 — RAG) */}
+        {/* ── Tab: Knowledge Base ── */}
         <TabsContent value="knowledge" className="mt-0">
           <KnowledgeBasePanel />
         </TabsContent>
 
-        {/* Suggested Replies */}
-        <TabsContent value="suggestions">
-          {suggestedReplies.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <MessageSquare className="h-12 w-12 text-muted-foreground/40 mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-1">No suggested replies yet</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                AI-generated reply suggestions will appear here when you have active WhatsApp conversations.
-              </p>
-            </div>
-          ) : (
-          <div className="space-y-4">
-            {suggestedReplies.map(suggestion => (
-              <Card key={suggestion.id} className="hover:shadow-md transition-all">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Avatar className="size-7"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">{suggestion.customerName[0]}</AvatarFallback></Avatar>
-                        <span className="font-medium text-sm">{suggestion.customerName}</span>
-                        <Badge variant="outline" className={INTENT_COLORS[suggestion.intent] || ''}>{suggestion.intent.replace('_', ' ')}</Badge>
-                        <Badge variant="outline" className="text-[10px]">{suggestion.confidence}% confidence</Badge>
-                      </div>
-                      <div className="bg-muted/50 rounded-lg p-2 mb-3 text-sm text-muted-foreground">
-                        &quot;{suggestion.message}&quot;
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Suggested Replies:</p>
-                        {suggestion.suggestedReplies.map((reply, i) => (
-                          <div key={i} className="flex items-start gap-2 p-2 rounded-lg border hover:bg-emerald-50 cursor-pointer transition-colors" onClick={() => { setSelectedSuggestion(suggestion); setShowDetailDialog(true); }}>
-                            <CheckCircle2 className="size-4 text-emerald-600 shrink-0 mt-0.5" />
-                            <p className="text-sm">{reply}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          )}
-        </TabsContent>
-
-        {/* Summaries */}
-        <TabsContent value="summaries">
-          {summaries.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Brain className="h-12 w-12 text-muted-foreground/40 mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-1">No summaries yet</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                AI-generated conversation summaries will appear here as conversations are analyzed.
-              </p>
-            </div>
-          ) : (
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-            {summaries.map(summary => (
-              <Card key={summary.id} className="hover:shadow-md transition-all">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="size-7"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">{summary.customerName[0]}</AvatarFallback></Avatar>
-                      <span className="font-medium text-sm">{summary.customerName}</span>
-                    </div>
-                    <span className={cn('text-xs font-medium', SENTIMENT_COLORS[summary.sentiment])}>
-                      {summary.sentiment}
-                    </span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{summary.summary}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {summary.keyPoints.map((point, i) => (
-                      <Badge key={i} variant="secondary" className="text-[9px]">{point}</Badge>
-                    ))}
-                  </div>
-                  <Badge variant="outline" className={INTENT_COLORS[summary.intent] || ''}>{summary.intent.replace('_', ' ')}</Badge>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          )}
-        </TabsContent>
-
-        {/* Intents */}
-        <TabsContent value="intents">
+        {/* ── Tab: Intent Intelligence ── */}
+        <TabsContent value="intents" className="mt-0">
           {intents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Zap className="h-12 w-12 text-muted-foreground/40 mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-1">No intents detected yet</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                AI-detected intents from customer messages will appear here as conversations are processed.
+            <Card className="p-12 text-center">
+              <div className="size-12 rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center mx-auto mb-3">
+                <Zap className="size-6" />
+              </div>
+              <h3 className="text-base font-semibold text-foreground mb-1">Automated Intent Engine Active</h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                AI continuously monitors customer inquiries to classify urgent complaints, booking requests, and quote inquiries.
               </p>
-            </div>
+            </Card>
           ) : (
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                {intents.map(intent => (
-                  <div key={intent.id} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
-                    <Avatar className="size-8"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">{intent.customerName[0]}</AvatarFallback></Avatar>
+            <Card>
+              <CardContent className="p-4 space-y-3">
+                {intents.map((intent) => (
+                  <div key={intent.id} className="flex items-start gap-3 p-3 rounded-lg border border-border/70 hover:bg-muted/30 transition-colors">
+                    <Avatar className="size-8">
+                      <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">
+                        {intent.customerName[0]}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm">{intent.customerName}</span>
-                        <Badge variant="outline" className={INTENT_COLORS[intent.type] || ''}>{intent.type.replace('_', ' ')}</Badge>
+                        <span className="font-medium text-sm text-foreground">{intent.customerName}</span>
+                        <Badge variant="outline" className={INTENT_COLORS[intent.type] || ''}>
+                          {intent.type.replace('_', ' ')}
+                        </Badge>
                         <Badge variant="outline" className="text-[10px]">{intent.confidence}%</Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">&quot;{intent.message}&quot;</p>
+                      <p className="text-xs text-muted-foreground">&quot;{intent.message}&quot;</p>
                     </div>
                     <span className="text-xs text-muted-foreground shrink-0">{intent.timestamp}</span>
                   </div>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
 
-        {/* Lead Scoring */}
-        <TabsContent value="leads">
-          {leadScores.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <TrendingUp className="h-12 w-12 text-muted-foreground/40 mb-4" />
-              <h3 className="text-lg font-semibold text-foreground mb-1">No lead scores yet</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                AI-powered lead scoring will appear here as your customer base grows.
+        {/* ── Tab: Suggested Replies ── */}
+        <TabsContent value="suggestions" className="mt-0">
+          {suggestedReplies.length === 0 ? (
+            <Card className="p-12 text-center">
+              <div className="size-12 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center mx-auto mb-3">
+                <MessageSquare className="size-6" />
+              </div>
+              <h3 className="text-base font-semibold text-foreground mb-1">Smart Suggested Replies</h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Suggested responses will appear here for inbound customer messages across WhatsApp, SMS, and portal tickets.
               </p>
-            </div>
+            </Card>
           ) : (
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-            {leadScores.map(lead => (
-              <Card key={lead.id} className="hover:shadow-md transition-all">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-center justify-between">
+            <div className="space-y-4">
+              {suggestedReplies.map((suggestion) => (
+                <Card key={suggestion.id} className="hover:shadow-md transition-all">
+                  <CardContent className="p-4 space-y-2.5">
                     <div className="flex items-center gap-2">
-                      <Avatar className="size-8"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm">{lead.customerName[0]}</AvatarFallback></Avatar>
-                      <span className="font-medium">{lead.customerName}</span>
+                      <Avatar className="size-7">
+                        <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">
+                          {suggestion.customerName[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="font-medium text-sm text-foreground">{suggestion.customerName}</span>
+                      <Badge variant="outline" className={INTENT_COLORS[suggestion.intent] || ''}>
+                        {suggestion.intent.replace('_', ' ')}
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px]">{suggestion.confidence}% confidence</Badge>
                     </div>
-                    <div className="text-right">
-                      <p className={cn('text-2xl font-bold', lead.score >= 80 ? 'text-emerald-600' : lead.score >= 60 ? 'text-amber-600' : 'text-slate-500')}>{lead.score}</p>
-                      <p className="text-[10px] text-muted-foreground">Lead Score</p>
+                    <div className="bg-muted/50 rounded-lg p-2 text-xs text-muted-foreground">
+                      &quot;{suggestion.message}&quot;
                     </div>
-                  </div>
-                  <Progress value={lead.score} className="h-2" />
-                  <div className="space-y-1">
-                    {lead.factors.map((factor, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">{factor.label}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{factor.value}</span>
-                          <Badge variant="outline" className={factor.impact === 'high' ? 'bg-emerald-100 text-emerald-700 text-[8px]' : factor.impact === 'medium' ? 'bg-amber-100 text-amber-700 text-[8px]' : 'bg-slate-100 text-slate-600 text-[8px]'}>{factor.impact}</Badge>
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-xs font-medium text-muted-foreground">Suggested Replies:</p>
+                      {suggestion.suggestedReplies.map((reply, i) => (
+                        <div
+                          key={i}
+                          className="flex items-start gap-2 p-2 rounded-lg border border-border/70 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 cursor-pointer transition-colors"
+                          onClick={() => {
+                            toast.success('Reply copied to clipboard');
+                            navigator.clipboard.writeText(reply);
+                          }}
+                        >
+                          <CheckCircle2 className="size-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                          <p className="text-xs text-foreground">{reply}</p>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </TabsContent>
 
-        {/* Auto Tags */}
-        <TabsContent value="tags">
-          <Card>
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                {[
-                  { tag: 'urgent', category: 'Priority', auto: true, count: 23 },
-                  { tag: 'complaint', category: 'Sentiment', auto: true, count: 15 },
-                  { tag: 'booking_request', category: 'Intent', auto: true, count: 42 },
-                  { tag: 'payment_issue', category: 'Intent', auto: true, count: 18 },
-                  { tag: 'vip', category: 'Value', auto: false, count: 67 },
-                  { tag: 'repeat_customer', category: 'Behavior', auto: true, count: 89 },
-                  { tag: 'at_risk', category: 'Risk', auto: true, count: 12 },
-                  { tag: 'high_value', category: 'Value', auto: true, count: 34 },
-                ].map(item => (
-                  <div key={item.tag} className="flex items-center justify-between p-3 rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="outline" className="text-xs">{item.tag}</Badge>
-                      <span className="text-xs text-muted-foreground">{item.category}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground">{item.count} contacts</span>
-                      <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => handleApplyTag(item.tag)}>
-                        {item.auto ? 'Auto-applied' : 'Apply'}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+        {/* ── Tab: Summaries ── */}
+        <TabsContent value="summaries" className="mt-0">
+          {summaries.length === 0 ? (
+            <Card className="p-12 text-center">
+              <div className="size-12 rounded-full bg-purple-100 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center mx-auto mb-3">
+                <Brain className="size-6" />
               </div>
-            </CardContent>
-          </Card>
+              <h3 className="text-base font-semibold text-foreground mb-1">Conversation Summaries</h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Long customer threads will be automatically summarized here with sentiment and key takeaway action items.
+              </p>
+            </Card>
+          ) : (
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+              {summaries.map((summary) => (
+                <Card key={summary.id} className="hover:shadow-md transition-all">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="size-7">
+                          <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">
+                            {summary.customerName[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium text-sm text-foreground">{summary.customerName}</span>
+                      </div>
+                      <span className={cn('text-xs font-medium', SENTIMENT_COLORS[summary.sentiment])}>
+                        {summary.sentiment}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{summary.summary}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {summary.keyPoints.map((point, i) => (
+                        <Badge key={i} variant="secondary" className="text-[9px]">{point}</Badge>
+                      ))}
+                    </div>
+                    <Badge variant="outline" className={INTENT_COLORS[summary.intent] || ''}>
+                      {summary.intent.replace('_', ' ')}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
-
-      {/* Detail Dialog */}
-      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>AI Suggested Reply</DialogTitle>
-          </DialogHeader>
-          {selectedSuggestion && (
-            <div className="space-y-3">
-              <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                <p className="text-xs text-muted-foreground mb-1">Customer message:</p>
-                &quot;{selectedSuggestion.message}&quot;
-              </div>
-              <div className="space-y-2">
-                {selectedSuggestion.suggestedReplies.map((reply, i) => (
-                  <button key={i} className="w-full text-left p-3 rounded-lg border hover:bg-emerald-50 hover:border-emerald-200 transition-colors text-sm" onClick={() => handleApplyReply(reply)}>
-                    {reply}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
