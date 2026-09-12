@@ -496,6 +496,11 @@ export function JobsView() {
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [showCreateCustomerDialog, setShowCreateCustomerDialog] = useState(false);
   const [createCustomerPrefill, setCreateCustomerPrefill] = useState({ name: '', phone: '', email: '' });
+  // Preserve the selected customer separately so it shows as a chip even
+  // when the search results don't contain it (e.g. when editing an existing job).
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
+  const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Checklist builder state ──
   // Available checklist templates (loaded for the "Attach a Checklist" picker)
@@ -884,17 +889,6 @@ export function JobsView() {
       setEmployees([]);
     }
   }, []);
-
-  // NOTE: `customers`/`setCustomers` is already declared at line ~1343 in the
-  // main state block. The duplicate declaration here (added by the Phase 1.1
-  // server-side search refactor) caused a compile error ("the name 'customers'
-  // is defined multiple times") which broke the entire homepage (GET / → 500).
-  // Only the search-related state below is new.
-  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
-  const customerSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Preserve the selected customer separately so it shows as a chip even
-  // when the search results don't contain it (e.g. when editing an existing job).
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
 
   // Server-side customer search — replaces the old limit=500 fetch.
   // Debounced 300ms, requires 2+ characters, returns max 10 results.
