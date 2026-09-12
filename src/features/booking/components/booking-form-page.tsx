@@ -422,20 +422,10 @@ export function BookingFormPage({
               }
             >
               <LineItemsSection
-                lineItems={formData.lineItems || []}
+                items={formData.lineItems || []}
                 services={catalogServices}
                 onChange={handleLineItemsChange}
-                onOpenCreateService={() => onServiceCreated?.({
-                  id: `svc_${Date.now()}`,
-                  name: 'New Service',
-                  category: 'General',
-                  basePrice: 50,
-                  duration: 60,
-                  unitPrice: 50,
-                  unitType: 'fixed',
-                  serviceType: 'service',
-                  isActive: true,
-                })}
+                onServicesUpdate={(svc) => onServiceCreated?.(svc)}
                 symbol={symbol}
               />
             </FormSectionCard>

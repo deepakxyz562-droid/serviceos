@@ -31,12 +31,14 @@ export function lineItemCost(item: LineItem): number {
   return (parseFloat(item.quantity) || 0) * (parseFloat(item.unitCost || '0') || 0);
 }
 
-export function lineItemsSubtotal(items: LineItem[]): number {
+export function lineItemsSubtotal(items?: LineItem[] | null): number {
+  if (!Array.isArray(items)) return 0;
   return items.reduce((sum, it) => sum + lineItemTotal(it), 0);
 }
 
 /** Σ of all line-item costs. Used for the profit-margin sidebar. */
-export function lineItemsTotalCost(items: LineItem[]): number {
+export function lineItemsTotalCost(items?: LineItem[] | null): number {
+  if (!Array.isArray(items)) return 0;
   return items.reduce((sum, it) => sum + lineItemCost(it), 0);
 }
 

@@ -8,35 +8,45 @@ import { LineItemRow } from './line-item-row';
 import { CreateServiceDialog } from './create-service-dialog';
 
 export interface LineItemsSectionProps {
-  items: LineItem[];
-  services: CatalogService[];
-  symbol: string;
+  items?: LineItem[];
+  /** Alias for items */
+  lineItems?: LineItem[];
+  services?: CatalogService[];
+  symbol?: string;
   onChange: (items: LineItem[]) => void;
-  onServicesUpdate: (svc: CatalogService) => void;
+  onServicesUpdate?: (svc: CatalogService) => void;
+  onOpenCreateService?: () => void;
 }
 
 export function LineItemsSection({
   items,
-  services,
-  symbol,
+  lineItems,
+  services = [],
+  symbol = '$',
   onChange,
   onServicesUpdate,
+  onOpenCreateService,
 }: LineItemsSectionProps) {
-  const subtotal = lineItemsSubtotal(items);
+  const safeItems = Array.isArray(items) ? items : Array.isArray(lineItems) ? lineItems : [];
+  const subtotal = lineItemsSubtotal(safeItems);
   const [createOpen, setCreateOpen] = useState(false);
   const [prefillName, setPrefillName] = useState('');
   const [pendingIdx, setPendingIdx] = useState<number | null>(null);
 
   const requestCreate = (idx: number, currentName: string) => {
+    if (onOpenCreateService) {
+      onOpenCreateService();
+      return;
+    }
     setPendingIdx(idx);
     setPrefillName(currentName);
     setCreateOpen(true);
   };
 
   const handleCreated = (svc: CatalogService) => {
-    onServicesUpdate(svc);
+    onServicesUpdate?.(svc);
     if (pendingIdx !== null) {
-      const next = [...items];
+      const next = [...safeItems];
       next[pendingIdx] = {
         ...next[pendingIdx],
         serviceId: svc.id,
@@ -49,27 +59,27 @@ export function LineItemsSection({
   };
 
   const update = (idx: number, item: LineItem) => {
-    const next = [...items];
+    const next = [...safeItems];
     next[idx] = item;
     onChange(next);
   };
   const remove = (idx: number) => {
-    onChange(items.filter((_, i) => i !== idx));
+    onChange(safeItems.filter((_, i) => i !== idx));
   };
   const add = () => {
-    onChange([...items, emptyLineItem()]);
+    onChange([...safeItems, emptyLineItem()]);
   };
 
   return (
     <div className="grid gap-3">
-      {items.length === 0 ? (
+      {safeItems.length === 0 ? (
         <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 py-8 px-4 text-center">
           <p className="text-sm text-muted-foreground">No items added yet.</p>
           <p className="text-xs text-muted-foreground/80 mt-0.5">Click &ldquo;Add Line Item&rdquo; to begin.</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map((item, idx) => (
+          {safeItems.map((item, idx) => (
             <LineItemRow
               key={item.id}
               item={item}
@@ -77,7 +87,7 @@ export function LineItemsSection({
               symbol={symbol}
               onChange={(it) => update(idx, it)}
               onRemove={() => remove(idx)}
-              canRemove={items.length > 1}
+              canRemove={safeItems.length > 1}
               onAddNewItem={(name) => requestCreate(idx, name)}
             />
           ))}
@@ -92,7 +102,7 @@ export function LineItemsSection({
         <Plus className="size-4" /> Add Line Item
       </button>
 
-      {items.length > 0 && (
+      {safeItems.length > 0 && (
         <div className="flex items-center justify-between rounded-lg bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/70 dark:border-emerald-900/40 px-4 py-2.5 mt-1">
           <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">Subtotal</span>
           <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">

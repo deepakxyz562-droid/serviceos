@@ -1,15 +1,20 @@
 'use client';
 
+import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
 interface FormSectionCardProps {
-  icon?: LucideIcon;
+  icon?: LucideIcon | React.ComponentType<{ className?: string; strokeWidth?: number }> | React.ReactNode;
   title?: string;
+  subtitle?: string;
+  badge?: React.ReactNode;
   description?: string;
-  /** Right-aligned action slot (e.g. an "Add Field" button) */
+  /** Right-aligned action slot (e.g. an "Add Field" button or subtotal) */
   action?: React.ReactNode;
+  /** Legacy alias for action */
+  headerAction?: React.ReactNode;
   /** Extra className for the outer card */
   className?: string;
   /** Extra className for the content area */
@@ -27,47 +32,67 @@ interface FormSectionCardProps {
  * optional muted description + optional right-aligned action,
  * followed by a separator and the content area (p-6 / 24px padding).
  *
- * Used by the New Lead and New Job full-page forms to give every
- * section (Overview, Schedule, Billing, Product/Service, Notes, etc.)
- * a uniform, polished appearance.
+ * Used by New Lead, New Job, Booking Detail, and Booking Form to give every
+ * section a uniform, polished appearance.
  */
 export function FormSectionCard({
-  icon: Icon,
+  icon,
   title,
+  subtitle,
+  badge,
   description,
   action,
+  headerAction,
   className,
   contentClassName,
   separator = true,
   children,
 }: FormSectionCardProps) {
-  const hasHeader = !!(Icon || title || description || action);
+  const resolvedAction = action ?? headerAction;
+  const resolvedDescription = description ?? subtitle;
+  const hasHeader = !!(icon || title || resolvedDescription || badge || resolvedAction);
+
+  const renderIcon = () => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) {
+      return icon;
+    }
+    const IconComponent = icon as React.ComponentType<{ className?: string; strokeWidth?: number }>;
+    if (typeof IconComponent === 'function' || typeof IconComponent === 'object') {
+      return <IconComponent className="size-4" strokeWidth={2.2} />;
+    }
+    return null;
+  };
+
   return (
     <section className={cn('form-card', className)}>
       {hasHeader && (
         <div className="flex items-center justify-between gap-3 px-6 pt-5 pb-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            {Icon && (
+            {icon && (
               <span className="form-section-icon">
-                <Icon className="size-4" strokeWidth={2.2} />
+                {renderIcon()}
               </span>
             )}
-            {(title || description) && (
+            {(title || resolvedDescription || badge) && (
               <div className="min-w-0">
-                {title && (
-                  <h3 className="text-base font-semibold tracking-tight text-foreground leading-tight">
-                    {title}
-                  </h3>
-                )}
-                {description && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  {title && (
+                    <h3 className="text-base font-semibold tracking-tight text-foreground leading-tight">
+                      {title}
+                    </h3>
+                  )}
+                  {badge}
+                </div>
+                {resolvedDescription && (
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                    {description}
+                    {resolvedDescription}
                   </p>
                 )}
               </div>
             )}
           </div>
-          {action && <div className="shrink-0">{action}</div>}
+          {resolvedAction && <div className="shrink-0">{resolvedAction}</div>}
         </div>
       )}
       {hasHeader && separator && <Separator className="bg-border/60" />}
@@ -78,37 +103,56 @@ export function FormSectionCard({
 
 // ─── Form page header ───────────────────────────────────────────────
 
-interface FormPageHeaderProps {
-  icon: LucideIcon;
+export interface FormPageHeaderProps {
+  icon?: LucideIcon | React.ComponentType<{ className?: string; strokeWidth?: number }> | React.ReactNode;
   iconBg?: string;
   title: string;
   subtitle?: string;
+  badge?: React.ReactNode;
+  backLabel?: string;
   onBack: () => void;
   onSubmit?: () => void;
   submitLabel?: string;
   submitting?: boolean;
   /** Hide the Cancel + submit buttons in the header (e.g. if shown at the bottom instead) */
   hideActions?: boolean;
+  /** Custom right-hand actions slot (overrides default Cancel/Submit buttons if provided) */
+  actions?: React.ReactNode;
 }
 
 /**
- * Jobber-style sticky form page header.
+ * Jobber-style sticky form/detail page header.
  *
  * Full-width sticky bar with a translucent blurred background,
- * a Back button, an emerald icon badge + title on the left,
- * and a Cancel + primary submit button on the right.
+ * a Back button, an emerald icon badge + title + optional badge on the left,
+ * and customizable action buttons on the right.
  */
 export function FormPageHeader({
-  icon: Icon,
+  icon,
   iconBg = 'bg-emerald-600',
   title,
   subtitle,
+  badge,
+  backLabel = 'Back',
   onBack,
   onSubmit,
   submitLabel = 'Save',
   submitting = false,
   hideActions = false,
+  actions,
 }: FormPageHeaderProps) {
+  const renderIcon = () => {
+    if (!icon) return null;
+    if (React.isValidElement(icon)) {
+      return icon;
+    }
+    const IconComponent = icon as React.ComponentType<{ className?: string; strokeWidth?: number }>;
+    if (typeof IconComponent === 'function' || typeof IconComponent === 'object') {
+      return <IconComponent className="size-5 text-white" strokeWidth={2.2} />;
+    }
+    return null;
+  };
+
   return (
     <div className="form-page-header -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 mb-6">
       <div className="flex items-center justify-between gap-3">
@@ -129,22 +173,31 @@ export function FormPageHeader({
             >
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
-            <span className="hidden sm:inline">Back</span>
+            <span className="hidden sm:inline">{backLabel}</span>
           </button>
           <Separator orientation="vertical" className="h-8 bg-border/60 hidden sm:block" />
-          <div className={cn('flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm', iconBg)}>
-            <Icon className="size-5 text-white" strokeWidth={2.2} />
-          </div>
+          {icon && (
+            <div className={cn('flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm', iconBg)}>
+              {renderIcon()}
+            </div>
+          )}
           <div className="min-w-0">
-            <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight truncate">
-              {title}
-            </h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight truncate">
+                {title}
+              </h2>
+              {badge}
+            </div>
             {subtitle && (
               <p className="text-xs text-muted-foreground line-clamp-1">{subtitle}</p>
             )}
           </div>
         </div>
-        {!hideActions && onSubmit && (
+
+        {/* Right side actions */}
+        {actions ? (
+          <div className="shrink-0">{actions}</div>
+        ) : !hideActions && onSubmit ? (
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
@@ -168,7 +221,7 @@ export function FormPageHeader({
               {submitLabel}
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

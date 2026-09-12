@@ -152,6 +152,8 @@ export function BookingDetailPage({
     <div className="w-full max-w-7xl mx-auto space-y-6 pb-20 animate-in fade-in-50 duration-200">
       {/* ─── Top Sticky Header ─── */}
       <FormPageHeader
+        icon={CalendarCheck}
+        iconBg="bg-emerald-600"
         backLabel="Back to Bookings"
         onBack={onBack}
         title={booking.title}
@@ -263,7 +265,7 @@ export function BookingDetailPage({
         <div className="space-y-6">
           {/* Client & Location Card */}
           <FormSectionCard
-            icon={<User className="size-4 text-emerald-600" />}
+            icon={User}
             title="Client & Service Location"
             description="Contact details and property location for this appointment"
           >
@@ -356,7 +358,7 @@ export function BookingDetailPage({
 
           {/* Schedule & Timing Card */}
           <FormSectionCard
-            icon={<CalendarDays className="size-4 text-emerald-600" />}
+            icon={CalendarDays}
             title="Schedule & Appointment Window"
             description="Appointment date, start time, and estimated duration"
           >
@@ -395,10 +397,10 @@ export function BookingDetailPage({
 
           {/* Products & Services (Line Items) Card */}
           <FormSectionCard
-            icon={<DollarSign className="size-4 text-emerald-600" />}
+            icon={DollarSign}
             title="Products & Services"
             description="Items, services, and estimated totals for this booking"
-            headerAction={
+            action={
               <span className="text-xs font-semibold text-foreground">
                 Total: <strong className="text-emerald-600 font-bold">{symbol}{subtotal.toFixed(2)}</strong>
               </span>
@@ -440,7 +442,7 @@ export function BookingDetailPage({
                             {symbol}{Number(item.unitPrice || 0).toFixed(2)}
                           </td>
                           <td className="p-2.5 text-right font-mono font-semibold text-foreground">
-                            {symbol}{((item.quantity || 1) * Number(item.unitPrice || 0)).toFixed(2)}
+                            {symbol}{((Number(item.quantity) || 1) * Number(item.unitPrice || 0)).toFixed(2)}
                           </td>
                         </tr>
                       ))}
@@ -463,7 +465,7 @@ export function BookingDetailPage({
           {/* Scope of Work / Instructions Card */}
           {booking.description && (
             <FormSectionCard
-              icon={<FileText className="size-4 text-emerald-600" />}
+              icon={FileText}
               title="Scope of Work & Instructions"
               description="Customer requests or dispatch notes"
             >
@@ -475,7 +477,7 @@ export function BookingDetailPage({
 
           {/* Activity & Lifecycle Timeline */}
           <FormSectionCard
-            icon={<CheckCircle2 className="size-4 text-emerald-600" />}
+            icon={CheckCircle2}
             title="Booking Timeline & History"
             description="Audit history and milestone transitions"
           >
@@ -526,7 +528,7 @@ export function BookingDetailPage({
         <div className="space-y-6">
           {/* Assigned Technician & Dispatch */}
           <FormSectionCard
-            icon={<Users className="size-4 text-emerald-600" />}
+            icon={Users}
             title="Team Assignment"
             description="Field technician assigned to this booking"
           >
@@ -601,7 +603,7 @@ export function BookingDetailPage({
 
           {/* Booking Metadata & Source Card */}
           <FormSectionCard
-            icon={<Tag className="size-4 text-emerald-600" />}
+            icon={Tag}
             title="Metadata & Source"
           >
             <div className="space-y-2.5 text-xs">
@@ -628,7 +630,7 @@ export function BookingDetailPage({
 
           {/* Internal Staff Notes Card */}
           <FormSectionCard
-            icon={<StickyNote className="size-4 text-emerald-600" />}
+            icon={StickyNote}
             title="Internal Staff Notes"
             description="Private notes visible only to team members"
           >
