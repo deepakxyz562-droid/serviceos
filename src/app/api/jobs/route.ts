@@ -156,7 +156,7 @@ async function _GET(request: NextRequest) {
     // for `pageSize` (calendar-view passes ?limit=200, expenses-view and
     // whatsapp-dashboard pass ?limit=100). Hard cap: 100 for active, 200
     // for history.
-    const maxPageSize = historyMode ? 200 : 100;
+    const maxPageSize = historyMode ? 500 : (searchParams.has('limit') ? 500 : 100);
     const defaultPageSize = historyMode ? 200 : 50;
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
     const pageSizeRaw = parseInt(

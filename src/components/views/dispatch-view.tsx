@@ -110,7 +110,7 @@ export function DispatchView() {
   // ─── Data Fetchers ────────────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
     try {
-      const res = await fetch(apiUrl('/api/jobs?limit=200'));
+      const res = await fetch(apiUrl('/api/jobs?limit=250&excludeStatus=completed,cancelled'));
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data) ? data : data.jobs || [];

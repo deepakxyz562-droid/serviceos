@@ -110,3 +110,15 @@ export interface AttentionItem {
   detail: string;
   action?: { label: string; jobId?: string; employeeId?: string };
 }
+
+export interface DispatchSummary {
+  teamCount: number;
+  availableCount: number;
+  enRouteCount: number;
+  onJobCount: number;
+  unassignedCount: number;
+  gpsIssueCount: number;
+  attentionCount: number;
+  attentionItems: AttentionItem[];
+}
+

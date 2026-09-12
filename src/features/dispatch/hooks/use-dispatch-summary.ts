@@ -30,6 +30,8 @@ const ACTIVE_JOB_STATUSES = new Set([
   'arrived',
   'working',
   'paused',
+  'scheduled',
+  'in_progress',
 ]);
 
 export function useDispatchSummary(employees: Employee[], jobs: Job[]): UseDispatchSummaryResult {
@@ -52,17 +54,27 @@ export function useDispatchSummary(employees: Employee[], jobs: Job[]): UseDispa
 
   // 2. Filter job queues
   const pendingJobs = useMemo(
-    () => jobs.filter((j) => j.status === 'pending' || !j.assigneeId),
+    () =>
+      jobs.filter(
+        (j) =>
+          (j.status === 'pending' || !j.assigneeId) &&
+          !['completed', 'cancelled'].includes(j.status),
+      ),
     [jobs],
   );
 
   const assignedJobs = useMemo(
-    () => jobs.filter((j) => ['assigned', 'accepted', 'travelling'].includes(j.status)),
+    () =>
+      jobs.filter(
+        (j) =>
+          ['assigned', 'accepted', 'travelling', 'scheduled'].includes(j.status) &&
+          !!j.assigneeId,
+      ),
     [jobs],
   );
 
   const inProgressJobs = useMemo(
-    () => jobs.filter((j) => ['arrived', 'working'].includes(j.status)),
+    () => jobs.filter((j) => ['arrived', 'working', 'in_progress'].includes(j.status)),
     [jobs],
   );
 
