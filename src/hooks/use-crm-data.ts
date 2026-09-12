@@ -67,6 +67,11 @@ export interface JobListParams {
   // completed-before-today jobs from the ACTIVE list so its pages and
   // pagination total match the status chips.
   activeGrace?: boolean;
+  dateFilter?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 export function useJobs(params: JobListParams = {}) {
@@ -82,6 +87,11 @@ export function useJobs(params: JobListParams = {}) {
       if (params.excludeStatus) searchParams.set('excludeStatus', params.excludeStatus);
       if (params.includeCounts) searchParams.set('includeCounts', 'true');
       if (params.activeGrace) searchParams.set('activeGrace', 'true');
+      if (params.dateFilter && params.dateFilter !== 'all') searchParams.set('dateFilter', params.dateFilter);
+      if (params.dateFrom) searchParams.set('dateFrom', params.dateFrom);
+      if (params.dateTo) searchParams.set('dateTo', params.dateTo);
+      if (params.sortBy) searchParams.set('sortBy', params.sortBy);
+      if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
       searchParams.set('includeDeleted', 'false');
 
       const res = await authFetch(`/api/jobs?${searchParams.toString()}`);

@@ -88,7 +88,7 @@ import {
 } from '@/hooks/use-crm-data';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 import { ErrorState } from '@/components/shared/error-state';
-import { JobFilters, type JobStats, type JobStatusFilter } from '@/features/jobs/components/job-filters';
+import { JobFilters, type JobStats, type JobStatusFilter, type JobDateFilter } from '@/features/jobs/components/job-filters';
 import { useAppStore, type JobPrefillData } from '@/store/app-store';
 import { ChecklistExecution } from '@/components/job/checklist-execution';
 
@@ -452,6 +452,7 @@ export function JobsView() {
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [defaultCustomers, setDefaultCustomers] = useState<CustomerOption[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState<JobDateFilter>('all');
   const [search, setSearch] = useState('');
   // Debounce search input so we don't fire an HTTP request on every keystroke.
   // `search` stays immediately reactive for the input field; fetchJobs depends
@@ -804,6 +805,9 @@ export function JobsView() {
   const { data: jobsData, isLoading: loading, error: rqError, refetch: fetchJobs } = useJobs({
     status: statusFilter !== 'all' && statusFilter !== 'overdue' && statusFilter !== 'other' ? statusFilter : undefined,
     search: debouncedSearch || undefined,
+    dateFilter: dateFilter !== 'all' ? dateFilter : undefined,
+    sortBy: 'scheduledAt',
+    sortOrder: 'asc',
     // PAGINATION-ARCHIVE-1: Only paginate when NOT using the 'overdue' filter.
     // The 'overdue' filter is client-side (needs ALL non-terminal jobs to
     // compare scheduledAt + estimatedDuration to NOW). When 'overdue' is
@@ -846,7 +850,7 @@ export function JobsView() {
     const allJobs = jobsData?.jobs ?? [];
     const now = new Date();
     const nowMs = now.getTime();
-    return allJobs.filter((j: Job) => {
+    const filtered = allJobs.filter((j: Job) => {
       if (j.deletedAt) return false;
       // Phase 2: 'overdue' filter — keep only jobs past their scheduled
       // end time that aren't in a terminal state.
@@ -866,6 +870,16 @@ export function JobsView() {
         cd.getUTCDate() === now.getUTCDate()
       );
     });
+
+    // Client-side sort ascending by scheduledAt (earliest first, unscheduled at the end)
+    return [...filtered].sort((a, b) => {
+      if (!a.scheduledAt && !b.scheduledAt) {
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      }
+      if (!a.scheduledAt) return 1;
+      if (!b.scheduledAt) return -1;
+      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+    });
   }, [jobsData, statusFilter]);
 
   // PAGINATION-ARCHIVE-1: read pagination metadata from the API response.
@@ -874,10 +888,10 @@ export function JobsView() {
   const totalJobs = jobsPagination?.total ?? jobs.length;
   const totalPages = jobsPagination?.totalPages ?? 1;
 
-  // Reset to page 1 when the status filter, search, or page size changes
+  // Reset to page 1 when the status filter, date filter, search, or page size changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, debouncedSearch, jobsPerPage]);
+  }, [statusFilter, dateFilter, debouncedSearch, jobsPerPage]);
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -2586,6 +2600,8 @@ export function JobsView() {
       <JobFilters
         statusFilter={statusFilter as JobStatusFilter}
         onStatusFilterChange={(f) => setStatusFilter(f)}
+        dateFilter={dateFilter}
+        onDateFilterChange={setDateFilter}
         search={search}
         onSearchChange={setSearch}
         viewMode={viewMode}

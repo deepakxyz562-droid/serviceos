@@ -75,9 +75,9 @@ export function DispatchSidebar({
   const [statusFilter, setStatusFilter] = useState('all');
   const [gpsFilter, setGpsFilter] = useState('all');
 
-  // Filtered Unassigned Jobs
+  // Filtered Unassigned Jobs (sorted ascending by scheduled date: earliest upcoming first)
   const filteredJobs = useMemo(() => {
-    return unassignedJobs.filter((j) => {
+    const list = unassignedJobs.filter((j) => {
       if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
       return (
@@ -86,6 +86,14 @@ export function DispatchSidebar({
         (j.address && j.address.toLowerCase().includes(q)) ||
         (j.jobNumber && j.jobNumber.toLowerCase().includes(q))
       );
+    });
+    return [...list].sort((a, b) => {
+      if (!a.scheduledAt && !b.scheduledAt) {
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      }
+      if (!a.scheduledAt) return 1;
+      if (!b.scheduledAt) return -1;
+      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
     });
   }, [unassignedJobs, searchQuery]);
 

@@ -136,6 +136,10 @@ async function _GET(request: NextRequest) {
     const paymentStatusParam = searchParams.get('paymentStatus'); // 'paid' | 'pending'
     const dateFromParam = searchParams.get('dateFrom');           // YYYY-MM-DD
     const dateToParam = searchParams.get('dateTo');               // YYYY-MM-DD
+    // Date filter preset: 'all' | 'today' | 'tomorrow' | 'this_week' | 'next_week' | 'overdue' | 'unscheduled'
+    const dateFilterParam = searchParams.get('dateFilter');
+    const sortByParam = searchParams.get('sortBy');
+    const sortOrderParam = (searchParams.get('sortOrder') || 'asc') as 'asc' | 'desc';
     // JOBS-COUNTS-1: opt-in server-side same-day-grace filter (Jobs view
     // only). Active mode normally returns completed jobs too — the client
     // filters them out via the same-day grace rule, which used to pollute
@@ -167,7 +171,7 @@ async function _GET(request: NextRequest) {
     // different views (Active vs History vs Dispatch) and pages get separate
     // cache entries.
     if (!search && user.tenantId) {
-      const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${archivedParam || ''}:${excludeStatusParam || ''}:${paymentStatusParam || ''}:${dateFromParam || ''}:${dateToParam || ''}:${includeCounts ? 'c' : ''}:${activeGrace ? 'g' : ''}:${searchParams.get('tenantId') || ''}:p${page}:ps${pageSize}`;
+      const cacheKey = `jobs:${user.tenantId}:${status || ''}:${type || ''}:${priority || ''}:${assigneeId || ''}:${customerId || ''}:${historyMode ? 'h' : 'a'}:${excludeDeleted ? 'xd' : 'ad'}:${archivedParam || ''}:${excludeStatusParam || ''}:${paymentStatusParam || ''}:${dateFromParam || ''}:${dateToParam || ''}:${dateFilterParam || ''}:${sortByParam || ''}:${sortOrderParam || ''}:${includeCounts ? 'c' : ''}:${activeGrace ? 'g' : ''}:${searchParams.get('tenantId') || ''}:p${page}:ps${pageSize}`;
       const cached = cache.get<unknown>(cacheKey);
       if (cached !== undefined) {
         return cachedJson(cached);
@@ -345,11 +349,57 @@ async function _GET(request: NextRequest) {
         })
       }
     }
+    // ── Date Filter Presets (Today, Tomorrow, This Week, Next Week, Overdue, Unscheduled) ──
+    if (dateFilterParam && dateFilterParam !== 'all') {
+      const now = new Date();
+      if (dateFilterParam === 'today') {
+        const start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(now);
+        end.setHours(23, 59, 59, 999);
+        where.scheduledAt = { gte: start, lte: end };
+      } else if (dateFilterParam === 'tomorrow') {
+        const start = new Date(now);
+        start.setDate(start.getDate() + 1);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setHours(23, 59, 59, 999);
+        where.scheduledAt = { gte: start, lte: end };
+      } else if (dateFilterParam === 'this_week') {
+        const day = now.getDay();
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+        const start = new Date(now);
+        start.setDate(diff);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        where.scheduledAt = { gte: start, lte: end };
+      } else if (dateFilterParam === 'next_week') {
+        const day = now.getDay();
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1) + 7;
+        const start = new Date(now);
+        start.setDate(diff);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        where.scheduledAt = { gte: start, lte: end };
+      } else if (dateFilterParam === 'overdue') {
+        where.scheduledAt = { lt: now };
+        if (!where.status) {
+          where.status = { notIn: ['completed', 'cancelled'] };
+        }
+      } else if (dateFilterParam === 'unscheduled') {
+        where.scheduledAt = null;
+      }
+    }
+
     // JOBS-COUNTS-1: server-side same-day grace for the Jobs view —
     // status != 'completed' OR completed today (UTC). notIn is used instead
     // of `not` because the Supabase OR-part builder translates notIn but
     // not `not` (NULL semantics are irrelevant here: status is NOT NULL).
-    if (activeGrace && !historyMode && statusList.length === 0 && !excludeStatusParam && !archivedOnly && !includeArchived) {
+    if (activeGrace && !historyMode && statusList.length === 0 && !excludeStatusParam && !archivedOnly && !includeArchived && !dateFilterParam) {
       const graceTodayStart = new Date();
       graceTodayStart.setUTCHours(0, 0, 0, 0);
       andGroups.push({
@@ -464,6 +514,26 @@ async function _GET(request: NextRequest) {
       updatedAt: true,
     } as const;
 
+    // ── Dynamic OrderBy Construction ──────────────────────────────────
+    let finalOrderBy: any;
+    if (sortByParam === 'createdAt') {
+      finalOrderBy = { createdAt: sortOrderParam || 'desc' };
+    } else if (sortByParam === 'priority') {
+      finalOrderBy = [{ priority: sortOrderParam || 'asc' }, { scheduledAt: 'asc' }];
+    } else if (sortByParam === 'title') {
+      finalOrderBy = { title: sortOrderParam || 'asc' };
+    } else {
+      // Default: scheduledAt asc (earliest scheduled first), with secondary createdAt desc
+      if (historyMode) {
+        finalOrderBy = { createdAt: 'desc' };
+      } else {
+        finalOrderBy = [
+          { scheduledAt: sortOrderParam || 'asc' },
+          { createdAt: 'desc' },
+        ];
+      }
+    }
+
     // ── Fetch jobs + total count in parallel ─────────────────────────
     // The count query is needed for the pagination envelope (total +
     // totalPages). Running it in parallel with the findMany via Promise.all
@@ -474,7 +544,7 @@ async function _GET(request: NextRequest) {
       db.job.findMany({
         where,
         select: historyMode ? historySelect : activeSelect,
-        orderBy: { createdAt: 'desc' },
+        orderBy: finalOrderBy,
         take: pageSize,
         skip,
       }),

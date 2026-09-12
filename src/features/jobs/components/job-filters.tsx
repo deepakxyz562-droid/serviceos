@@ -3,10 +3,17 @@
 import * as React from 'react';
 import {
   Briefcase, Clock, User, Activity, CheckCircle2, AlertCircle, XCircle,
-  Search, RefreshCw, CircleDashed,
+  Search, RefreshCw, CircleDashed, Calendar,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -36,9 +43,20 @@ export type JobStatusFilter =
   | 'cancelled'
   | 'other';
 
+export type JobDateFilter =
+  | 'all'
+  | 'today'
+  | 'tomorrow'
+  | 'this_week'
+  | 'next_week'
+  | 'overdue'
+  | 'unscheduled';
+
 export interface JobFiltersProps {
   statusFilter: JobStatusFilter;
   onStatusFilterChange: (filter: JobStatusFilter) => void;
+  dateFilter?: JobDateFilter;
+  onDateFilterChange?: (filter: JobDateFilter) => void;
   search: string;
   onSearchChange: (value: string) => void;
   viewMode: 'cards' | 'table';
@@ -72,6 +90,8 @@ const CHIPS = [
 export function JobFilters({
   statusFilter,
   onStatusFilterChange,
+  dateFilter = 'all',
+  onDateFilterChange,
   search,
   onSearchChange,
   viewMode,
@@ -123,7 +143,7 @@ export function JobFilters({
         })}
       </div>
 
-      {/* ─── Search + View Toggle ───────────────────────────────────── */}
+      {/* ─── Search + Date Filter + View Toggle ─────────────────────── */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -134,6 +154,29 @@ export function JobFilters({
             className="pl-9"
           />
         </div>
+
+        {/* Date Filter Dropdown */}
+        {onDateFilterChange && (
+          <Select
+            value={dateFilter}
+            onValueChange={(val) => onDateFilterChange(val as JobDateFilter)}
+          >
+            <SelectTrigger className="h-9 text-xs w-[160px] bg-background border-border shrink-0">
+              <Calendar className="size-3.5 mr-1.5 text-teal-600 shrink-0" />
+              <SelectValue placeholder="All Dates" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">📅 All Dates</SelectItem>
+              <SelectItem value="today">☀️ Today</SelectItem>
+              <SelectItem value="tomorrow">🌅 Tomorrow</SelectItem>
+              <SelectItem value="this_week">📆 This Week</SelectItem>
+              <SelectItem value="next_week">🗓️ Next Week</SelectItem>
+              <SelectItem value="overdue">⚠️ Overdue / Past</SelectItem>
+              <SelectItem value="unscheduled">⏳ Unscheduled</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+
         <div className="hidden sm:flex gap-1 border rounded-md p-0.5">
           <Button size="sm" variant={viewMode === 'cards' ? 'default' : 'ghost'} className="h-9 text-xs px-2 min-h-[44px]" onClick={() => onViewModeChange('cards')}>Cards</Button>
           <Button size="sm" variant={viewMode === 'table' ? 'default' : 'ghost'} className="h-9 text-xs px-2 min-h-[44px]" onClick={() => onViewModeChange('table')}>Table</Button>
