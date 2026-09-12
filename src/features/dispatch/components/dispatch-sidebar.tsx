@@ -123,7 +123,7 @@ export function DispatchSidebar({
   }, [employees, searchQuery, teamFilter, statusFilter, gpsFilter]);
 
   return (
-    <aside className="w-full sm:w-[380px] lg:w-[420px] flex flex-col h-full bg-card border-r border-border shrink-0 min-h-0 overflow-hidden">
+    <aside className="w-full md:w-[360px] lg:w-[400px] xl:w-[420px] flex flex-col h-full bg-card border-r border-border shrink-0 min-h-0 overflow-hidden">
       {/* ── 1. Top Tab Switcher ────────────────────────────────────── */}
       <div className="p-3 border-b border-border bg-muted/20 shrink-0">
         <div className="grid grid-cols-2 p-1 bg-muted rounded-xl gap-1">
@@ -208,7 +208,7 @@ export function DispatchSidebar({
               <div className="grid grid-cols-2 gap-1.5">
                 {/* Team dropdown */}
                 <Select value={teamFilter} onValueChange={setTeamFilter}>
-                  <SelectTrigger className="h-7 text-[11px] bg-background border-border truncate">
+                  <SelectTrigger className="h-7 text-[11px] w-full bg-background border-border truncate">
                     <SelectValue placeholder="All Teams" />
                   </SelectTrigger>
                   <SelectContent>
@@ -223,7 +223,7 @@ export function DispatchSidebar({
 
                 {/* Status dropdown */}
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-7 text-[11px] bg-background border-border truncate">
+                  <SelectTrigger className="h-7 text-[11px] w-full bg-background border-border truncate">
                     <SelectValue placeholder="All Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -255,7 +255,7 @@ export function DispatchSidebar({
 
       {/* ── 3. Scrollable List Body ───────────────────────────────── */}
       <ScrollArea className="flex-1 min-h-0 w-full">
-        <div className="p-3 space-y-2.5">
+        <div className="p-3 pb-16 sm:pb-12 space-y-2.5">
           {activeTab === 'queue' ? (
             filteredJobs.length === 0 ? (
               <div className="py-12 flex flex-col items-center justify-center text-center p-4">

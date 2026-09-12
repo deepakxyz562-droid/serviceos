@@ -58,7 +58,10 @@ export function TechnicianCard({
     activitySnippet = (
       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/40 px-2 py-1 rounded-md mt-1.5 min-w-0">
         <Briefcase className="size-3 text-teal-600 shrink-0" />
-        <span className="truncate font-medium text-foreground flex-1 min-w-0">
+        <span
+          className="truncate font-medium text-foreground flex-1 min-w-0"
+          title={`Active Job: ${currentJob.title}`}
+        >
           {currentJob.title}
         </span>
         {currentJob.scheduledAt && (
@@ -106,7 +109,10 @@ export function TechnicianCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1.5 min-w-0">
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <span className="font-semibold text-xs text-foreground truncate">
+              <span
+                className="font-semibold text-xs text-foreground truncate"
+                title={e.name || 'Unnamed Technician'}
+              >
                 {e.name || 'Unnamed Technician'}
               </span>
               {e.team && (
@@ -182,7 +188,10 @@ export function TechnicianCard({
 
       {/* Action Footer */}
       <div className="flex items-center justify-between gap-2 pt-2 mt-2 border-t border-border/60 text-xs min-w-0">
-        <span className="text-[10px] text-muted-foreground truncate min-w-0 flex-1">
+        <span
+          className="text-[10px] text-muted-foreground truncate min-w-0 flex-1"
+          title={`${e.role || 'Technician'}${typeof e.completedJobs === 'number' && e.completedJobs > 0 ? ` · ${e.completedJobs} completed` : ''}`}
+        >
           {e.role || 'Technician'}
           {typeof e.completedJobs === 'number' && e.completedJobs > 0 ? ` · ${e.completedJobs} completed` : ''}
         </span>

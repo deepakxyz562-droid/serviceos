@@ -432,9 +432,9 @@ export function DispatchView() {
       </div>
 
       {/* ─── 3. Dominant Command Center Workspace ─────────────────────── */}
-      <div className="flex-1 flex gap-3 min-h-0 relative rounded-2xl overflow-hidden border border-border bg-card shadow-xs">
+      <div className="flex-1 flex min-h-0 relative rounded-2xl overflow-hidden border border-border bg-card shadow-xs">
         {/* Left Operational Sidebar */}
-        <div className={cn('h-full min-h-0', mobileView === 'sidebar' ? 'flex w-full md:w-auto' : 'hidden md:flex')}>
+        <div className={cn('h-full min-h-0 shrink-0', mobileView === 'sidebar' ? 'flex w-full md:w-auto' : 'hidden md:flex')}>
           <DispatchSidebar
             activeTab={activeSidebarTab}
             onTabChange={setActiveSidebarTab}

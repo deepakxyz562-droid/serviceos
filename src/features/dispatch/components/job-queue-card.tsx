@@ -69,11 +69,14 @@ export function JobQueueCard({
               {getServiceTypeIcon(job.type)}
             </span>
             <div className="min-w-0 flex-1">
-              <h4 className="font-semibold text-xs text-foreground truncate group-hover:text-teal-700 dark:group-hover:text-teal-300 transition-colors">
+              <h4
+                className="font-semibold text-xs text-foreground truncate group-hover:text-teal-700 dark:group-hover:text-teal-300 transition-colors"
+                title={job.title}
+              >
                 {job.title}
               </h4>
               {job.jobNumber && (
-                <span className="text-[10px] text-muted-foreground font-mono block truncate">
+                <span className="text-[10px] text-muted-foreground font-mono block truncate" title={`Job #${job.jobNumber}`}>
                   #{job.jobNumber}
                 </span>
               )}
@@ -101,14 +104,14 @@ export function JobQueueCard({
         {/* Middle: Customer + Location + Scheduled Time */}
         <div className="space-y-1 text-[11px] text-muted-foreground min-w-0">
           {job.customerName && (
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0" title={`Customer: ${job.customerName}`}>
               <User className="size-3 text-muted-foreground/70 shrink-0" />
               <span className="truncate font-medium text-foreground">{job.customerName}</span>
             </div>
           )}
 
           {job.address && (
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0" title={`Address: ${job.address}`}>
               <MapPin className="size-3 text-muted-foreground/70 shrink-0" />
               <span className="truncate">{job.address}</span>
             </div>
@@ -124,7 +127,10 @@ export function JobQueueCard({
 
         {/* Smart Match Suggestion (if unassigned) */}
         {isPending && suggestedEmployee && (
-          <div className="flex items-center justify-between gap-1.5 text-[11px] bg-teal-50/70 border border-teal-200/80 rounded-lg px-2.5 py-1.5 dark:bg-teal-950/40 dark:border-teal-800 min-w-0">
+          <div
+            className="flex items-center justify-between gap-1.5 text-[11px] bg-teal-50/70 border border-teal-200/80 rounded-lg px-2.5 py-1.5 dark:bg-teal-950/40 dark:border-teal-800 min-w-0"
+            title={`Suggested technician: ${suggestedEmployee.name}${typeof suggestedDistanceKm === 'number' ? ` (${Math.round(suggestedDistanceKm)}km away)` : ''}`}
+          >
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <Sparkles className="size-3 text-teal-600 shrink-0" />
               <span className="text-teal-900 dark:text-teal-200 font-medium truncate">
@@ -141,7 +147,10 @@ export function JobQueueCard({
 
         {/* Assigned tech snippet (if already assigned) */}
         {!isPending && job.assigneeName && (
-          <div className="flex items-center justify-between gap-1.5 text-[11px] bg-muted/40 rounded-lg px-2.5 py-1 min-w-0">
+          <div
+            className="flex items-center justify-between gap-1.5 text-[11px] bg-muted/40 rounded-lg px-2.5 py-1 min-w-0"
+            title={`Assigned to ${job.assigneeName}`}
+          >
             <span className="text-muted-foreground shrink-0">Assigned to:</span>
             <span className="font-semibold text-teal-700 dark:text-teal-300 truncate text-right">
               {job.assigneeName}
@@ -154,28 +163,30 @@ export function JobQueueCard({
           {isPending ? (
             <Button
               size="sm"
-              className="w-full h-7 text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium shadow-xs truncate"
+              className="w-full h-7 text-xs bg-teal-600 hover:bg-teal-700 text-white font-medium shadow-xs"
               onClick={() => (onAssign ? onAssign(job) : onSelect(job))}
             >
-              <ArrowRight className="size-3 mr-1.5 shrink-0" /> Assign Technician
+              <ArrowRight className="size-3 mr-1.5 shrink-0" />
+              <span className="truncate">Assign Technician</span>
             </Button>
           ) : (
             <>
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 h-7 text-xs border-border truncate"
+                className="flex-1 h-7 text-xs border-border"
                 onClick={() => onSelect(job)}
               >
-                Inspect
+                <span className="truncate">Inspect</span>
               </Button>
               {onStartJob && job.status === 'assigned' && (
                 <Button
                   size="sm"
-                  className="flex-1 h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white truncate"
+                  className="flex-1 h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
                   onClick={() => onStartJob(job)}
                 >
-                  <Play className="size-3 mr-1 shrink-0" /> Start
+                  <Play className="size-3 mr-1 shrink-0" />
+                  <span className="truncate">Start</span>
                 </Button>
               )}
             </>
