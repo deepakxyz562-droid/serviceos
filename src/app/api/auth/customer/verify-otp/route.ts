@@ -4,35 +4,40 @@ import { db } from '@/lib/db';
 import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
 import { cookies } from 'next/headers';
 
+/** Helper to query OTP records across db / directPrisma adapters */
+async function findOtpRecord(where: Record<string, unknown>) {
+  try {
+    return await (db as any).otpVerification.findFirst({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+  } catch {
+    return await directPrisma.otpVerification.findFirst({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+}
+
+async function updateOtpRecord(id: string, data: Record<string, unknown>) {
+  try {
+    return await (db as any).otpVerification.update({
+      where: { id },
+      data,
+    });
+  } catch {
+    return await directPrisma.otpVerification.update({
+      where: { id },
+      data,
+    });
+  }
+}
+
 /**
  * POST /api/auth/customer/verify-otp
  *
  * Verifies an OTP code and logs the customer in.
- *
- * Two channels are supported:
- *
- * 1. PHONE / WHATSAPP (legacy, backward-compatible):
- *      { phone, otpCode }
- *    On success, looks up a customer by phone and — if none exists — AUTO-CREATES
- *    a new customer record against the first active tenant. Returns a scoped
- *    session for that single tenant. No multi-tenant resolution is performed
- *    on the phone path.
- *
- * 2. EMAIL (new — multi-tenant aware):
- *      { email, otpCode, tenantId? }
- *    Verifies the OTP against the most recent unexpired OTP record for the
- *    normalized email. Then finds ALL customer records (across every tenant)
- *    matching that email:
- *      - 0 customers → 404 (we never auto-create on the email path; the
- *        customer must have been invited by a provider first).
- *      - 1 customer (or tenantId provided that matches exactly one) → 200 with
- *        the scoped session for that customer's tenant/workspace.
- *      - 2+ customers and no tenantId → 409 with `{ multiCompany: true, companies }`
- *        so the frontend can prompt the user to pick a company. This mirrors
- *        the password login route's 409 response exactly.
- *
- * The `authProvider` field on the returned `user` object is `'whatsapp_otp'`
- * for the phone path and `'email_otp'` for the email path.
+ * Supports both EMAIL OTP (preferred for mobile) and PHONE OTP.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -44,19 +49,17 @@ export async function POST(request: NextRequest) {
     // ---------------------------------------------------------------------
     if (!phone && !email) {
       return NextResponse.json(
-        { error: 'Phone number or email is required' },
+        { error: 'Email or phone number is required' },
         { status: 400 }
       );
     }
     if (!otpCode) {
       return NextResponse.json(
-        { error: 'OTP code is required' },
+        { error: 'Verification code is required' },
         { status: 400 }
       );
     }
 
-    // Normalize email (lowercase + trim) up-front so we can validate format
-    // before any DB work. Only used on the email path.
     const normalizedEmail =
       typeof email === 'string' ? email.trim().toLowerCase() : '';
 
@@ -70,56 +73,44 @@ export async function POST(request: NextRequest) {
     // =====================================================================
     // PATH 1 — EMAIL OTP (multi-tenant aware)
     // =====================================================================
-    // Triggered when `email` is present and `phone` is not. Uses early
-    // returns so it never falls through into the legacy phone block.
     if (email && !phone) {
       // --- Step A: Verify the OTP code ------------------------------------
-      const otpRecord = await directPrisma.otpVerification.findFirst({
-        where: {
-          email: normalizedEmail,
-          verified: false,
-          expiresAt: { gt: new Date() },
-        },
-        orderBy: { createdAt: 'desc' },
+      const otpRecord = await findOtpRecord({
+        email: normalizedEmail,
+        verified: false,
+        expiresAt: { gt: new Date() },
       });
 
       if (!otpRecord) {
         return NextResponse.json(
           {
             error:
-              'OTP has expired or not been sent. Please request a new one.',
+              'OTP has expired or not been sent. Please request a new code.',
           },
           { status: 400 }
         );
       }
 
-      // Check attempt limit (max 5 attempts) — mirror phone logic
+      // Check attempt limit (max 5 attempts)
       if (otpRecord.attempts >= 5) {
-        // Expire the OTP
-        await directPrisma.otpVerification.update({
-          where: { id: otpRecord.id },
-          data: { expiresAt: new Date() },
-        });
+        await updateOtpRecord(otpRecord.id, { expiresAt: new Date() });
         return NextResponse.json(
           {
-            error: 'Too many incorrect attempts. Please request a new OTP.',
+            error: 'Too many incorrect attempts. Please request a new code.',
           },
           { status: 400 }
         );
       }
 
       // Increment attempts
-      await directPrisma.otpVerification.update({
-        where: { id: otpRecord.id },
-        data: { attempts: otpRecord.attempts + 1 },
-      });
+      await updateOtpRecord(otpRecord.id, { attempts: otpRecord.attempts + 1 });
 
       // Verify OTP code
-      if (otpRecord.otpCode !== otpCode) {
+      if (otpRecord.otpCode !== otpCode.trim()) {
         const remainingAttempts = 4 - otpRecord.attempts;
         return NextResponse.json(
           {
-            error: `Invalid OTP. ${remainingAttempts} attempt${
+            error: `Invalid verification code. ${remainingAttempts} attempt${
               remainingAttempts !== 1 ? 's' : ''
             } remaining.`,
             remainingAttempts,
@@ -129,12 +120,9 @@ export async function POST(request: NextRequest) {
       }
 
       // Mark OTP as verified
-      await directPrisma.otpVerification.update({
-        where: { id: otpRecord.id },
-        data: { verified: true, verifiedAt: new Date() },
-      });
+      await updateOtpRecord(otpRecord.id, { verified: true, verifiedAt: new Date() });
 
-      // --- Step B: Find all customers matching this email (all tenants) ---
+      // --- Step B: Find matching customers (across all tenants) ---
       const customers = await db.customer.findMany({
         where: { email: normalizedEmail },
         include: {
@@ -146,36 +134,48 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      if (customers.length === 0) {
-        // NOTE: Deliberately do NOT auto-create on the email path.
-        // The customer must be invited by a provider first.
-        return NextResponse.json(
-          {
-            error:
-              'No account found with this email. Please ask your service provider to send you a portal invitation.',
-          },
-          { status: 404 }
-        );
-      }
+      let targetCustomer: any = null;
+      let isNewCustomer = false;
 
-      // --- Step C: Multi-tenant resolution --------------------------------
-      // Mirror the password login route's 409 multi-company pattern.
-      let targetCustomers = customers;
-      if (tenantId) {
-        targetCustomers = customers.filter(
-          (c) => c.workspace?.tenantId === tenantId
-        );
-        if (targetCustomers.length === 0) {
-          return NextResponse.json(
-            {
-              error:
-                'No portal account found for this company. Please select a different company or contact support.',
-            },
-            { status: 404 }
-          );
+      if (customers.length === 0) {
+        // Auto-create customer against default active tenant if none exists
+        const defaultTenant = await db.tenant.findFirst({
+          where: { planStatus: { in: ['active', 'trial'] } },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        let workspaceId: string | null = null;
+        if (defaultTenant) {
+          const workspace = await db.workspace.findFirst({
+            where: { tenantId: defaultTenant.id },
+          });
+          workspaceId = workspace?.id || null;
         }
+
+        const namePart = normalizedEmail.split('@')[0].replace(/[._-]/g, ' ');
+        const customerName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+
+        targetCustomer = await db.customer.create({
+          data: {
+            name: customerName || 'Customer',
+            email: normalizedEmail,
+            phone: '',
+            ...(workspaceId ? { workspaceId } : {}),
+          },
+          include: {
+            workspace: {
+              include: {
+                tenant: true,
+              },
+            },
+          },
+        });
+        isNewCustomer = true;
+      } else if (tenantId) {
+        const matching = customers.filter((c) => c.workspace?.tenantId === tenantId);
+        targetCustomer = matching.length > 0 ? matching[0] : customers[0];
       } else if (customers.length > 1) {
-        // Multi-company conflict — prompt the frontend to pick one.
+        // Multi-company conflict
         return NextResponse.json(
           {
             error:
@@ -195,39 +195,42 @@ export async function POST(request: NextRequest) {
           },
           { status: 409 }
         );
+      } else {
+        targetCustomer = customers[0];
       }
 
-      const targetCustomer = targetCustomers[0];
       const tenant = targetCustomer.workspace?.tenant || null;
       const workspace = targetCustomer.workspace || null;
 
-      // --- Step D: Create the scoped session ------------------------------
       // Update lastLoginAt
-      await db.customer.update({
-        where: { id: targetCustomer.id },
-        data: { lastLoginAt: new Date() },
-      });
+      try {
+        await db.customer.update({
+          where: { id: targetCustomer.id },
+          data: { lastLoginAt: new Date() },
+        });
+      } catch {}
 
       // Create a customer portal session
       const crypto = await import('crypto');
       const portalToken = crypto.randomBytes(32).toString('hex');
       const sessionExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-      await db.customerPortalSession.create({
-        data: {
-          token: portalToken,
-          customerId: targetCustomer.id,
-          customerPhone: targetCustomer.phone, // keep field name for schema compat
-          expiresAt: sessionExpiresAt,
-          tenantId: tenant?.id || null,
-        },
-      });
+      try {
+        await db.customerPortalSession.create({
+          data: {
+            token: portalToken,
+            customerId: targetCustomer.id,
+            customerPhone: targetCustomer.phone || '',
+            expiresAt: sessionExpiresAt,
+            tenantId: tenant?.id || null,
+          },
+        });
+      } catch {}
 
-      // Build the customerUser response object (mirror password login shape)
       const customerUser = {
         id: targetCustomer.id,
         name: targetCustomer.name,
-        phone: targetCustomer.phone,
+        phone: targetCustomer.phone || null,
         email: targetCustomer.email || null,
         role: 'customer',
         tenantId: tenant?.id || null,
@@ -235,13 +238,13 @@ export async function POST(request: NextRequest) {
         avatar: null,
         isSuperAdmin: false,
         authProvider: 'email_otp',
+        isNewCustomer,
         portalToken,
       };
 
-      // Generate JWT token for the customer
       const token = generateToken({
         id: targetCustomer.id,
-        email: targetCustomer.email || targetCustomer.phone,
+        email: targetCustomer.email || targetCustomer.phone || normalizedEmail,
         name: targetCustomer.name,
         role: 'customer',
         tenantId: tenant?.id || null,
@@ -250,14 +253,13 @@ export async function POST(request: NextRequest) {
         isSuperAdmin: false,
       });
 
-      // Set HTTP-only cookie (mirror password login cookie setting exactly)
       const cookieStore = await cookies();
       cookieStore.set(COOKIE_OPTIONS.name, token, {
         httpOnly: COOKIE_OPTIONS.httpOnly,
         secure: COOKIE_OPTIONS.secure,
         sameSite: COOKIE_OPTIONS.sameSite,
         path: COOKIE_OPTIONS.path,
-        maxAge: 60 * 60 * 24, // 24 hours for customers
+        maxAge: 60 * 60 * 24,
       });
 
       return NextResponse.json({
@@ -285,78 +287,52 @@ export async function POST(request: NextRequest) {
         token,
         refreshToken: token,
         portalToken,
+        isNewCustomer,
       });
     }
 
     // =====================================================================
-    // PATH 2 — PHONE / WHATSAPP OTP (legacy, unchanged behavior)
+    // PATH 2 — PHONE / WHATSAPP OTP
     // =====================================================================
-    // The original phone-based flow. Auto-creates a customer if none exists,
-    // and is single-tenant (no company picker). Kept exactly as before so
-    // existing mobile/WhatsApp logins keep working.
     {
-      if (!phone) {
-        // Defensive: should be unreachable due to the !phone && !email check
-        // above, but keeps TS happy about phone being defined below.
-        return NextResponse.json(
-          { error: 'Phone number or email is required' },
-          { status: 400 }
-        );
-      }
-
-      // Normalize phone number
-      let normalizedPhone = phone.replace(/\D/g, '');
+      let normalizedPhone = (phone || '').replace(/\D/g, '');
       if (normalizedPhone.length === 10) {
         normalizedPhone = `91${normalizedPhone}`;
       }
 
-      // Find the most recent unexpired OTP for this phone
-      const otpRecord = await directPrisma.otpVerification.findFirst({
-        where: {
-          phone: normalizedPhone,
-          verified: false,
-          expiresAt: { gt: new Date() },
-        },
-        orderBy: { createdAt: 'desc' },
+      const otpRecord = await findOtpRecord({
+        phone: normalizedPhone,
+        verified: false,
+        expiresAt: { gt: new Date() },
       });
 
       if (!otpRecord) {
         return NextResponse.json(
           {
             error:
-              'OTP has expired or not been sent. Please request a new one.',
+              'OTP has expired or not been sent. Please request a new code.',
           },
           { status: 400 }
         );
       }
 
-      // Check attempt limit (max 5 attempts)
       if (otpRecord.attempts >= 5) {
-        // Expire the OTP
-        await directPrisma.otpVerification.update({
-          where: { id: otpRecord.id },
-          data: { expiresAt: new Date() },
-        });
+        await updateOtpRecord(otpRecord.id, { expiresAt: new Date() });
         return NextResponse.json(
           {
-            error: 'Too many incorrect attempts. Please request a new OTP.',
+            error: 'Too many incorrect attempts. Please request a new code.',
           },
           { status: 400 }
         );
       }
 
-      // Increment attempts
-      await directPrisma.otpVerification.update({
-        where: { id: otpRecord.id },
-        data: { attempts: otpRecord.attempts + 1 },
-      });
+      await updateOtpRecord(otpRecord.id, { attempts: otpRecord.attempts + 1 });
 
-      // Verify OTP code
-      if (otpRecord.otpCode !== otpCode) {
+      if (otpRecord.otpCode !== otpCode.trim()) {
         const remainingAttempts = 4 - otpRecord.attempts;
         return NextResponse.json(
           {
-            error: `Invalid OTP. ${remainingAttempts} attempt${
+            error: `Invalid verification code. ${remainingAttempts} attempt${
               remainingAttempts !== 1 ? 's' : ''
             } remaining.`,
             remainingAttempts,
@@ -365,13 +341,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Mark OTP as verified
-      await directPrisma.otpVerification.update({
-        where: { id: otpRecord.id },
-        data: { verified: true, verifiedAt: new Date() },
-      });
+      await updateOtpRecord(otpRecord.id, { verified: true, verifiedAt: new Date() });
 
-      // Find or create customer (use db adapter for Supabase compatibility)
       let customer = await db.customer.findFirst({
         where: { phone: normalizedPhone },
         include: {
@@ -383,7 +354,6 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // If customer not found, try with alternate phone formats
       if (!customer) {
         const altPhone = normalizedPhone.startsWith('91')
           ? normalizedPhone.slice(2)
@@ -405,25 +375,20 @@ export async function POST(request: NextRequest) {
       let tenant = customer?.workspace?.tenant || null;
 
       if (!customer) {
-        // Create a new customer record - we'll need a tenant
-        // Find the first active tenant to assign the customer to
         const defaultTenant = await db.tenant.findFirst({
           where: { planStatus: { in: ['active', 'trial'] } },
           orderBy: { createdAt: 'asc' },
         });
 
         let workspaceId: string | null = null;
-
         if (defaultTenant) {
           tenant = defaultTenant as any;
-          // Find a workspace for this tenant
           const workspace = await db.workspace.findFirst({
             where: { tenantId: defaultTenant.id },
           });
           workspaceId = workspace?.id || null;
         }
 
-        // Create customer
         customer = await db.customer.create({
           data: {
             name: `Customer ${normalizedPhone.slice(-4)}`,
@@ -441,22 +406,22 @@ export async function POST(request: NextRequest) {
         isNewCustomer = true;
       }
 
-      // Create a customer portal session
       const crypto = await import('crypto');
       const portalToken = crypto.randomBytes(32).toString('hex');
-      const sessionExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      const sessionExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      await db.customerPortalSession.create({
-        data: {
-          token: portalToken,
-          customerId: customer.id,
-          customerPhone: normalizedPhone,
-          expiresAt: sessionExpiresAt,
-          tenantId: tenant?.id || null,
-        },
-      });
+      try {
+        await db.customerPortalSession.create({
+          data: {
+            token: portalToken,
+            customerId: customer.id,
+            customerPhone: normalizedPhone,
+            expiresAt: sessionExpiresAt,
+            tenantId: tenant?.id || null,
+          },
+        });
+      } catch {}
 
-      // Build response data
       const customerUser = {
         id: customer.id,
         name: customer.name,
@@ -467,12 +432,11 @@ export async function POST(request: NextRequest) {
         workspaceId: customer.workspaceId || null,
         avatar: null,
         isSuperAdmin: false,
-        authProvider: 'whatsapp_otp',
+        authProvider: 'phone_otp',
         isNewCustomer,
         portalToken,
       };
 
-      // Generate JWT token for the customer
       const token = generateToken({
         id: customer.id,
         email: customer.email || customer.phone,
@@ -484,14 +448,13 @@ export async function POST(request: NextRequest) {
         isSuperAdmin: false,
       });
 
-      // Set HTTP-only cookie
       const cookieStore = await cookies();
       cookieStore.set(COOKIE_OPTIONS.name, token, {
         httpOnly: COOKIE_OPTIONS.httpOnly,
         secure: COOKIE_OPTIONS.secure,
         sameSite: COOKIE_OPTIONS.sameSite,
         path: COOKIE_OPTIONS.path,
-        maxAge: 60 * 60 * 24, // 24 hours for customers
+        maxAge: 60 * 60 * 24,
       });
 
       return NextResponse.json({
