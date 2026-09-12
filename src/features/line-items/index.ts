@@ -5,10 +5,6 @@
  * constants, and form-building components (ImageUploader, CreateServiceDialog,
  * CreateCustomerDialog, CustomerPicker, LineItemRow, LineItemsSection).
  *
- * TYPES + UTILS + CONSTANTS are fully extracted to this feature folder.
- * COMPONENTS are currently re-exported from leads-view.tsx (Phase 1 bridge)
- * and will be moved here in Phase 4 (leads-view extraction).
- *
  * USAGE:
  *   import { LineItem, emptyLineItem, LineItemsSection, ImageUploader } from '@/features/line-items';
  */
@@ -30,9 +26,7 @@ export {
 // ── Constants ────────────────────────────────────────────────────────────────
 export { SERVICE_TYPES, getServiceTypeLabel } from './constants';
 
-// ── Components (bridge — will be moved here in Phase 4) ─────────────────────
-// These are re-exported from leads-view.tsx for now. Once Phase 4 moves them
-// into src/features/line-items/components/, these re-exports will point there.
+// ── Components ───────────────────────────────────────────────────────────────
 export {
   ImageUploader,
   CreateServiceDialog,
@@ -40,4 +34,14 @@ export {
   CustomerPicker,
   LineItemRow,
   LineItemsSection,
-} from '@/components/views/leads-view';
+} from './components';
+
+export type {
+  ImageUploaderProps,
+  CreateServiceDialogProps,
+  CreateCustomerDialogProps,
+  CustomerPickerProps,
+  CustomerPickerCustomer,
+  LineItemRowProps,
+  LineItemsSectionProps,
+} from './components';
