@@ -303,6 +303,7 @@ export function NewQuotePage({
                           phone: customers.find((c) => c.id === form.customerId)?.phone,
                           email: customers.find((c) => c.id === form.customerId)?.email,
                           address: customers.find((c) => c.id === form.customerId)?.address,
+                          properties: (customers.find((c) => c.id === form.customerId) as any)?.properties,
                         }
                       : null
                   }

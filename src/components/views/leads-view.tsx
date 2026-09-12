@@ -621,16 +621,12 @@ export function LeadsView() {
       customerId: lead.customerId || '',
       lineItems: parseLineItems(lead.lineItemsJson),
     });
-    setCustomerQuery('');
-    setCustomerPickerOpen(false);
     setFormMode('form');
   };
 
   const openAddLead = () => {
     setEditingLead(null);
     setLeadForm({ ...EMPTY_FORM });
-    setCustomerQuery('');
-    setCustomerPickerOpen(false);
     setFormMode('form');
   };
 
@@ -647,8 +643,6 @@ export function LeadsView() {
     setFormMode('list');
     setEditingLead(null);
     setLeadForm({ ...EMPTY_FORM });
-    setCustomerQuery('');
-    setCustomerPickerOpen(false);
   };
 
   const openDetail = (lead: Lead) => {

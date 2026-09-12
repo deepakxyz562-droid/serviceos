@@ -92,6 +92,7 @@ export function CustomerPicker({
   const [defaultCustomers, setDefaultCustomers] = useState<CustomerPickerCustomer[]>([]);
   const [loading, setLoading] = useState(false);
   const [isEditingCustom, setIsEditingCustom] = useState(false);
+  const [internalAddress, setInternalAddress] = useState<string>('');
 
   // Modals state (used if external handlers not provided)
   const [showCreateCustomerDialog, setShowCreateCustomerDialog] = useState(false);
@@ -160,8 +161,39 @@ export function CustomerPicker({
     };
   }, [query, defaultCustomers, externalCustomers]);
 
-  // Selected customer object resolution
-  const selected = selectedCustomer || customers.find((c) => c.id === selectedCustomerId) || null;
+  // Selected customer object resolution — merge selectedCustomer with internal customers cache for full properties
+  const matchingCustomer = customers.find((c) => c.id === (selectedCustomerId || selectedCustomer?.id));
+  const selected: CustomerPickerCustomer | null = selectedCustomer
+    ? {
+        ...selectedCustomer,
+        properties: (selectedCustomer.properties && selectedCustomer.properties.length > 0)
+          ? selectedCustomer.properties
+          : (matchingCustomer?.properties || []),
+        address: selectedCustomer.address || matchingCustomer?.address || '',
+      }
+    : (matchingCustomer || null);
+
+  // Auto-fetch full customer properties if missing from selected object
+  useEffect(() => {
+    if (!selected?.id) return;
+    if (selected.properties && selected.properties.length > 0) return;
+
+    let isMounted = true;
+    authFetch(`/api/customers/${selected.id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && data?.customer?.properties?.length) {
+          const fullCust = { ...selected, ...data.customer };
+          setDefaultCustomers((prev) => prev.map((x) => (x.id === fullCust.id ? fullCust : x)));
+          setInternalCustomers((prev) => prev.map((x) => (x.id === fullCust.id ? fullCust : x)));
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selected?.id, selected?.properties]);
 
   // Filtered dropdown items
   const filtered = useMemo(() => {
@@ -179,16 +211,25 @@ export function CustomerPicker({
     onPick(c);
     setOpen(false);
     setQuery('');
-    // Auto-select primary property address if available and onAddressSelect is provided
-    if (onAddressSelect) {
-      const primaryProp = c.properties?.find((p: any) => p.isPrimary) || c.properties?.[0];
-      const propertyAddress = primaryProp
-        ? [primaryProp.street1, primaryProp.street2, primaryProp.city, primaryProp.province, primaryProp.postalCode, primaryProp.country]
-            .filter(Boolean)
-            .join(', ')
-        : c.address || '';
-      onAddressSelect(propertyAddress);
-    }
+
+    // Auto-select primary property address if available
+    const primaryProp = c.properties?.find((p: any) => p.isPrimary) || c.properties?.[0];
+    const propertyAddress = primaryProp
+      ? [primaryProp.street1, primaryProp.street2, primaryProp.city, primaryProp.province, primaryProp.postalCode, primaryProp.country]
+          .filter(Boolean)
+          .join(', ')
+      : c.address || '';
+
+    setInternalAddress(propertyAddress);
+    onAddressSelect?.(propertyAddress);
+    onCustomAddressChange?.(propertyAddress);
+  };
+
+  const handleAddressChosen = (addr: string) => {
+    setInternalAddress(addr);
+    setIsEditingCustom(false);
+    onAddressSelect?.(addr);
+    onCustomAddressChange?.(addr);
   };
 
   const handleCreateCustomerClick = () => {
@@ -222,15 +263,17 @@ export function CustomerPicker({
     setInternalCustomers((prev) => prev.map((x) => (x.id === updatedCust.id ? updatedCust : x)));
     onPick(updatedCust);
     onCustomerUpdated?.(updatedCust);
-    if (onAddressSelect && newAddr) {
-      onAddressSelect(newAddr);
+    if (newAddr) {
+      handleAddressChosen(newAddr);
     }
   };
 
   // ── 1. SELECTED STATE: Comprehensive, slick Client & Address card ───────────
   if (selected) {
     const properties: any[] = selected.properties || [];
-    const currentAddress = selectedAddress !== undefined ? selectedAddress : (selected.address || '');
+    const currentAddress = selectedAddress !== undefined
+      ? selectedAddress
+      : (internalAddress || selected.address || (properties[0] ? [properties[0].street1, properties[0].street2, properties[0].city, properties[0].province, properties[0].postalCode, properties[0].country].filter(Boolean).join(', ') : ''));
 
     return (
       <div className={`rounded-lg border border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/30 p-3 space-y-2.5 shadow-xs transition-all ${className || ''}`}>
@@ -268,6 +311,7 @@ export function CustomerPicker({
               type="button"
               onClick={() => {
                 setIsEditingCustom(false);
+                setInternalAddress('');
                 onClear();
                 inputRef.current?.focus();
               }}
@@ -291,7 +335,7 @@ export function CustomerPicker({
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
-              {properties.length > 0 && onAddressSelect && (
+              {properties.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -317,10 +361,7 @@ export function CustomerPicker({
                       return (
                         <DropdownMenuItem
                           key={prop.id || idx}
-                          onClick={() => {
-                            onAddressSelect(propAddr);
-                            setIsEditingCustom(false);
-                          }}
+                          onClick={() => handleAddressChosen(propAddr)}
                           className="flex items-start justify-between gap-2 cursor-pointer py-2"
                         >
                           <div className="min-w-0">
@@ -360,25 +401,23 @@ export function CustomerPicker({
                 <span>Add Location</span>
               </Button>
 
-              {onCustomAddressChange && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingCustom((v) => !v)}
-                  className="text-emerald-700 hover:text-emerald-950 dark:text-emerald-400 p-1 rounded hover:bg-emerald-100/50 transition-colors cursor-pointer"
-                  title={isEditingCustom ? 'Done editing' : 'Edit address manually'}
-                >
-                  <Pencil className="size-3" />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setIsEditingCustom((v) => !v)}
+                className="text-emerald-700 hover:text-emerald-950 dark:text-emerald-400 p-1 rounded hover:bg-emerald-100/50 transition-colors cursor-pointer"
+                title={isEditingCustom ? 'Done editing' : 'Edit address manually'}
+              >
+                <Pencil className="size-3" />
+              </button>
             </div>
           </div>
 
           {/* Address Display / Inline Edit Mode */}
-          {isEditingCustom && onCustomAddressChange ? (
+          {isEditingCustom ? (
             <div className="pt-1">
               <Input
                 value={currentAddress}
-                onChange={(e) => onCustomAddressChange(e.target.value)}
+                onChange={(e) => handleAddressChosen(e.target.value)}
                 placeholder="Enter service location address"
                 className="h-8 text-xs bg-white dark:bg-background border-emerald-300 focus-visible:ring-emerald-500"
                 autoFocus

@@ -249,6 +249,8 @@ export function NewInvoicePage({
                           name: customers.find((c) => c.id === form.customer)?.name || '',
                           phone: customers.find((c) => c.id === form.customer)?.phone,
                           email: customers.find((c) => c.id === form.customer)?.email,
+                          address: (customers.find((c) => c.id === form.customer) as any)?.address,
+                          properties: (customers.find((c) => c.id === form.customer) as any)?.properties,
                         }
                       : null
                   }
