@@ -713,6 +713,9 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
             assignees={assignees}
             loadingAssignees={loadingAssignees}
             checklists={checklists}
+            recentJobs={recentJobs}
+            onGenerateNow={handleGenerateNow}
+            onViewAllJobs={() => setActiveTab('jobs')}
           />
         </TabsContent>
 
@@ -836,12 +839,18 @@ function OverviewTab({
   assignees,
   loadingAssignees,
   checklists,
+  recentJobs = [],
+  onGenerateNow,
+  onViewAllJobs,
 }: {
   schedule: Schedule;
   metrics: ScheduleMetrics | null;
   assignees: { id: string; name: string }[];
   loadingAssignees: boolean;
   checklists: ChecklistItem[];
+  recentJobs?: GeneratedJob[];
+  onGenerateNow?: () => void;
+  onViewAllJobs?: () => void;
 }) {
   const { setActiveView, setPendingOpenEntity } = useAppStore();
   const { format } = useCompanyCurrency();
@@ -1017,6 +1026,108 @@ function OverviewTab({
                 </span>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Generated Visits & Jobs Card */}
+        <Card className="border-border/60 shadow-xs">
+          <CardHeader className="pb-3 border-b border-border/40 flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                Generated Visits &amp; Jobs
+              </CardTitle>
+              <CardDescription>
+                {recentJobs.length > 0
+                  ? `Showing the ${recentJobs.length} latest generated job${recentJobs.length === 1 ? '' : 's'}.`
+                  : 'Visits created by this schedule.'}
+              </CardDescription>
+            </div>
+            {recentJobs.length > 0 && onViewAllJobs && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-medium"
+                onClick={onViewAllJobs}
+              >
+                View all ({metrics?.total ?? recentJobs.length}) <ExternalLink className="size-3 ml-1" />
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="p-0">
+            {recentJobs.length === 0 ? (
+              <div className="p-8 text-center space-y-3">
+                <CheckCircle2 className="size-8 mx-auto text-muted-foreground/30" />
+                <p className="text-xs text-muted-foreground">
+                  No jobs generated yet for this recurring schedule.
+                </p>
+                {status !== 'stopped' && onGenerateNow && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs border-emerald-500/30 hover:bg-emerald-50 text-emerald-700 dark:hover:bg-emerald-950/30 dark:text-emerald-300"
+                    onClick={onGenerateNow}
+                  >
+                    <Zap className="size-3 mr-1 text-emerald-600" />
+                    Generate First Job Now
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/40 border-b border-border/60">
+                    <tr className="text-muted-foreground uppercase tracking-wider font-semibold">
+                      <th className="text-left px-4 py-2.5">Job Title / #</th>
+                      <th className="text-left px-4 py-2.5">Scheduled Date</th>
+                      <th className="text-left px-4 py-2.5">Status</th>
+                      <th className="text-left px-4 py-2.5">Assignee</th>
+                      <th className="text-right px-4 py-2.5">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {recentJobs.map((j) => (
+                      <tr key={j.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-2.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPendingOpenEntity({ kind: 'job', id: j.id });
+                              setActiveView('jobs');
+                            }}
+                            className="font-medium text-foreground hover:text-emerald-600 hover:underline text-left truncate max-w-[220px] block"
+                          >
+                            {j.jobNumber ? `#${j.jobNumber} · ` : ''}{j.title || 'Untitled Job'}
+                          </button>
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground">
+                          {j.scheduledAt ? formatShortDate(j.scheduledAt) : '—'}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {jobStatusBadge(j.status)}
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground">
+                          {j.assignee?.name || j.assigneeName || '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-7 px-2 hover:text-emerald-600"
+                            onClick={() => {
+                              setPendingOpenEntity({ kind: 'job', id: j.id });
+                              setActiveView('jobs');
+                            }}
+                          >
+                            Open <ExternalLink className="size-3 ml-1" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1494,16 +1605,16 @@ function GeneratedJobsTab({
     if (metrics?.total != null) setTotal(metrics.total);
   }, [metrics?.total]);
 
+  // Synchronize jobs when initialJobs is updated in parent
+  useEffect(() => {
+    if (statusFilter === 'all' && initialJobs.length > 0) {
+      setJobs(initialJobs);
+    }
+  }, [initialJobs, statusFilter]);
+
   const hasMore = jobs.length < total;
 
-  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   useEffect(() => {
-    if (!hasInitiallyLoaded && initialJobs.length > 0 && statusFilter === 'all') {
-      setHasInitiallyLoaded(true);
-      return;
-    }
-    setHasInitiallyLoaded(true);
-
     let cancelled = false;
     (async () => {
       try {
@@ -1533,7 +1644,7 @@ function GeneratedJobsTab({
     return () => {
       cancelled = true;
     };
-  }, [scheduleId, statusFilter, initialJobs, hasInitiallyLoaded]);
+  }, [scheduleId, statusFilter]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;

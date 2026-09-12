@@ -39,7 +39,26 @@ export async function GET(
             return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
           }
           if (!rpcResult.error) {
-            return NextResponse.json(rpcResult);
+            const rawMetrics = (rpcResult.metrics as Record<string, unknown>) || {};
+            const total = Number(rawMetrics.total ?? rawMetrics.totalGenerated ?? 0);
+            const completed = Number(rawMetrics.completed ?? 0);
+            const cancelled = Number(rawMetrics.cancelled ?? 0);
+            const upcoming = Number(rawMetrics.upcoming ?? Math.max(0, total - completed - cancelled));
+            const recentJobs = (rpcResult.recentJobs as any[]) || [];
+            const lastGenerated = recentJobs[0] ?? null;
+
+            return NextResponse.json({
+              ...rpcResult,
+              recentJobs,
+              metrics: {
+                total,
+                completed,
+                cancelled,
+                upcoming,
+                lastJobScheduledAt: lastGenerated?.scheduledAt ?? rawMetrics.nextRunAt ?? null,
+                lastJobCreatedAt: lastGenerated?.createdAt ?? rawMetrics.lastRunAt ?? null,
+              },
+            });
           }
         }
       } catch (err) {
@@ -81,28 +100,26 @@ export async function GET(
         scheduledAt: true,
         createdAt: true,
         customerId: true,
+        customerName: true,
+        assigneeId: true,
+        assigneeName: true,
+        recurringScheduleId: true,
+        assignee: { select: { id: true, name: true } },
       },
     });
 
     // ── Schedule-level metrics for the Overview tab. ───────────────────────
     //
-    // The Overview tab now shows compact counts (total / completed / upcoming
+    // The Overview tab shows compact counts (total / completed / upcoming
     // / cancelled) + the most-recently-generated job's scheduled date. We
     // compute these server-side so the UI doesn't have to issue a second
     // call to /jobs and so the "Last generated" label can be derived from
-    // the actual generated Job's scheduledAt (NOT schedule.lastRunAt, which
-    // is the schedule's processing timestamp and misleading as a "last
-    // visit" indicator).
+    // the actual generated Job's scheduledAt.
     //
     // Definitions match the Generated Jobs tab filter:
-    //   upcoming = status IN (pending, assigned, accepted, in_progress)
+    //   upcoming = status IN (scheduled, pending, assigned, accepted, in_progress)
     //   completed = status = 'completed'
     //   cancelled = status = 'cancelled'
-    //
-    // "Last generated" = the most-recently-CREATED job's scheduledAt
-    // (ordered by createdAt desc, NOT scheduledAt desc — the latter would
-    // surface the furthest-future visit, which doesn't match the user's
-    // mental model of "the last visit we generated just now").
     const statusCounts = await db.job.groupBy({
       by: ['status'],
       where: { recurringScheduleId: schedule.id },
@@ -113,7 +130,7 @@ export async function GET(
     let completed = 0;
     let cancelled = 0;
     let upcoming = 0;
-    const upcomingStatuses = new Set(['pending', 'assigned', 'accepted', 'in_progress']);
+    const upcomingStatuses = new Set(['scheduled', 'pending', 'assigned', 'accepted', 'in_progress']);
 
     for (const sc of statusCounts) {
       const c = sc._count._all;

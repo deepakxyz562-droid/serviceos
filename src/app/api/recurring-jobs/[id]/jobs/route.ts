@@ -77,7 +77,7 @@ export async function GET(
     const status = searchParams.get('status')?.trim() || null;
     const statusFilter: Record<string, unknown> | null = status
       ? status === 'upcoming'
-        ? { status: { in: ['pending', 'assigned', 'accepted', 'in_progress'] } }
+        ? { status: { in: ['scheduled', 'pending', 'assigned', 'accepted', 'in_progress'] } }
         : { status }
       : null;
 
