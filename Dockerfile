@@ -10,8 +10,7 @@ RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /v
 # -----------------------------------------------------------------------------
 FROM base AS deps
 COPY package.json bun.lock ./
-COPY prisma ./prisma
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --ignore-scripts
 
 # -----------------------------------------------------------------------------
 # 3. Builder stage
