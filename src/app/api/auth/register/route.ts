@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
           currency: 'USD',
           billingCycle: 'monthly',
           trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-          maxUsers: 1,
+          maxUsers: 5,
           maxJobs: 200,
           maxWorkflows: 10,
           // SMS + email + WhatsApp quotas per plan

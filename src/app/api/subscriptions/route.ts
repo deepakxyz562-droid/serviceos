@@ -130,7 +130,7 @@ export async function GET() {
       }
     }
     // Final safety net: starter-equivalent defaults.
-    if (maxUsers === null) maxUsers = 1;
+    if (maxUsers === null) maxUsers = 5;
     if (maxJobs === null) maxJobs = 100;
     if (maxWorkflows === null) maxWorkflows = 10;
 
@@ -371,7 +371,7 @@ export async function POST(request: NextRequest) {
     const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
       starter: {
         amount: 29,
-        maxUsers: 1,
+        maxUsers: 5,
         maxJobs: 100,
         maxWorkflows: 10,
         features: {
@@ -383,7 +383,7 @@ export async function POST(request: NextRequest) {
       },
       growth: {
         amount: 79,
-        maxUsers: 5,
+        maxUsers: 10,
         maxJobs: 1000,
         maxWorkflows: 50,
         features: {
@@ -395,7 +395,7 @@ export async function POST(request: NextRequest) {
       },
       business: {
         amount: 149,
-        maxUsers: 20,
+        maxUsers: 25,
         maxJobs: 99999,
         maxWorkflows: 999,
         features: {

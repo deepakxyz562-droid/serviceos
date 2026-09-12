@@ -37,7 +37,7 @@ const DEFAULT_PLANS: PlanCard[] = [
     price: "$29",
     period: "/mo",
     description: "For solo contractors getting started.",
-    features: ["Scheduling", "Customer CRM", "Invoicing", "1 user"],
+    features: ["Scheduling", "Customer CRM", "Invoicing", "Up to 5 users"],
     ctaLabel: "Start free trial",
   },
   {
@@ -45,7 +45,7 @@ const DEFAULT_PLANS: PlanCard[] = [
     price: "$59",
     period: "/mo",
     description: "For growing service businesses.",
-    features: ["Everything in Starter", "Dispatch board", "SMS reminders", "Up to 5 users"],
+    features: ["Everything in Starter", "Dispatch board", "SMS reminders", "Up to 10 users"],
     highlight: true,
     ctaLabel: "Start free trial",
   },
@@ -54,7 +54,7 @@ const DEFAULT_PLANS: PlanCard[] = [
     price: "$99",
     period: "/mo",
     description: "For multi-technician teams.",
-    features: ["Everything in Growth", "Equipment tracking", "Recurring jobs", "AI receptionist", "Unlimited users"],
+    features: ["Everything in Growth", "Equipment tracking", "Recurring jobs", "AI receptionist", "Up to 25 users"],
     ctaLabel: "Start free trial",
   },
   {

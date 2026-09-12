@@ -712,7 +712,7 @@ async function main() {
     data: {
       tenantId: tenant3.id, plan: 'starter', status: 'cancelled', amount: 29, currency: 'USD',
       billingCycle: 'monthly', startDate: daysAgo(180), endDate: daysAgo(120),
-      maxUsers: 3, maxJobs: 100, maxWorkflows: 10,
+      maxUsers: 5, maxJobs: 100, maxWorkflows: 10,
     },
   });
   await db.subscription.create({

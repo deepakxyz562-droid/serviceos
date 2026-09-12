@@ -381,7 +381,7 @@ const pricingPlans: PricingPlan[] = [
     yearlyPrice: null, // Monthly only
     description: 'Founding member offer — first 100 only',
     icon: Zap,
-    features: ['1 user', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Cancel anytime'],
+    features: ['Up to 5 users', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Cancel anytime'],
     popular: true,
     cta: 'Claim Launch Special',
   },
@@ -391,7 +391,7 @@ const pricingPlans: PricingPlan[] = [
     yearlyPrice: 290,
     description: 'For solo entrepreneurs',
     icon: Zap,
-    features: ['1 user', '200 jobs/month', 'Email & SMS notifications', 'Basic CRM & leads', 'Invoice generation', 'Email support'],
+    features: ['Up to 5 users', '200 jobs/month', 'Email & SMS notifications', 'Basic CRM & leads', 'Invoice generation', 'Email support'],
     cta: 'Start Free Trial',
   },
   {
@@ -400,7 +400,7 @@ const pricingPlans: PricingPlan[] = [
     yearlyPrice: 790,
     description: 'For growing teams',
     icon: Building2,
-    features: ['5 users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'AI Receptionist (BYOK)', 'Priority support'],
+    features: ['Up to 10 users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'AI Receptionist (BYOK)', 'Priority support'],
     popular: true,
     cta: 'Start Free Trial',
   },
@@ -410,7 +410,7 @@ const pricingPlans: PricingPlan[] = [
     yearlyPrice: 1490,
     description: 'For scaling businesses',
     icon: Shield,
-    features: ['Unlimited users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'No-code automation builder', 'Custom workflows', 'AI Receptionist (BYOK)', 'API access', 'Dedicated support'],
+    features: ['Up to 25 users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'No-code automation builder', 'Custom workflows', 'AI Receptionist (BYOK)', 'API access', 'Dedicated support'],
     cta: 'Start Free Trial',
   },
   {

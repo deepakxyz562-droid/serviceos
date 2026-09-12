@@ -395,7 +395,7 @@ const PLAN_DEFS: PlanDef[] = [
     yearlyPrice: 0, // Monthly only — no annual option for Launch Special
     originalMonthlyPrice: 29,
     discountBadge: 'Launch Special — $5/mo',
-    maxUsers: 1,
+    maxUsers: 5,
     maxJobs: 200,
     maxWorkflows: 10,
     features: {
@@ -417,10 +417,10 @@ const PLAN_DEFS: PlanDef[] = [
       onlinePayments: true,
     },
     limits: {
-      maxEmployees: 1,
+      maxEmployees: 5,
       maxBranches: 1,
       maxServiceAreas: 3,
-      maxUsers: 1,
+      maxUsers: 5,
       maxJobs: 200,
       maxWorkflows: 10,
       storageQuotaMb: 5120, // 5GB
@@ -437,7 +437,7 @@ const PLAN_DEFS: PlanDef[] = [
     yearlyPrice: 290, // 2 months free
     originalMonthlyPrice: 49,
     originalYearlyPrice: 490,
-    maxUsers: 1,
+    maxUsers: 5,
     maxJobs: 200,
     maxWorkflows: 10,
     features: {
@@ -462,10 +462,10 @@ const PLAN_DEFS: PlanDef[] = [
       onlinePayments: true,
     },
     limits: {
-      maxEmployees: 1,
+      maxEmployees: 5,
       maxBranches: 1,
       maxServiceAreas: 3,
-      maxUsers: 1,
+      maxUsers: 5,
       maxJobs: 200,
       maxWorkflows: 10,
       storageQuotaMb: 5120, // 5GB
@@ -482,7 +482,7 @@ const PLAN_DEFS: PlanDef[] = [
     yearlyPrice: 790, // 2 months free
     originalMonthlyPrice: 129,
     originalYearlyPrice: 1290,
-    maxUsers: 5,
+    maxUsers: 10,
     maxJobs: 999999, // effectively unlimited
     maxWorkflows: 50,
     features: {
@@ -524,10 +524,10 @@ const PLAN_DEFS: PlanDef[] = [
       webhooks: true,
     },
     limits: {
-      maxEmployees: 5,
+      maxEmployees: 10,
       maxBranches: 1,
       maxServiceAreas: 10,
-      maxUsers: 5,
+      maxUsers: 10,
       maxJobs: 999999,
       maxWorkflows: 50,
       storageQuotaMb: 51200, // 50GB
@@ -545,7 +545,7 @@ const PLAN_DEFS: PlanDef[] = [
     yearlyPrice: 1490, // 2 months free
     originalMonthlyPrice: 249,
     originalYearlyPrice: 2490,
-    maxUsers: 20,
+    maxUsers: 25,
     maxJobs: 999999,
     maxWorkflows: 999,
     features: {
@@ -599,10 +599,10 @@ const PLAN_DEFS: PlanDef[] = [
       rolePermissions: true,
     },
     limits: {
-      maxEmployees: 20,
+      maxEmployees: 25,
       maxBranches: 10,
       maxServiceAreas: 50,
-      maxUsers: 20,
+      maxUsers: 25,
       maxJobs: 999999,
       maxWorkflows: 999,
       storageQuotaMb: 204800, // 200GB

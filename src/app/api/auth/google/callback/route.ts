@@ -115,7 +115,7 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
         currency: 'USD',
         billingCycle: 'monthly',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        maxUsers: 1,
+        maxUsers: 5,
         maxJobs: 200,
         maxWorkflows: 10,
         featuresJson: JSON.stringify({

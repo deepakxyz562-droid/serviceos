@@ -177,7 +177,7 @@ const FALLBACK_PLANS: OnboardingPlan[] = [
     yearlyPrice: 0, // Monthly only
     originalMonthlyPrice: 29,
     description: 'Founding member offer — first 100 only',
-    features: ['1 user', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Cancel anytime'],
+    features: ['Up to 5 users', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Cancel anytime'],
     icon: Zap,
   },
   {
@@ -187,7 +187,7 @@ const FALLBACK_PLANS: OnboardingPlan[] = [
     yearlyPrice: 290, // 2 months free on yearly
     originalMonthlyPrice: 49,
     description: 'For solo pros & new businesses',
-    features: ['1 user', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Email support'],
+    features: ['Up to 5 users', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Email support'],
     icon: Zap,
   },
   {
@@ -197,7 +197,7 @@ const FALLBACK_PLANS: OnboardingPlan[] = [
     yearlyPrice: 790, // 2 months free on yearly
     originalMonthlyPrice: 129,
     description: 'For growing teams — most popular',
-    features: ['Up to 5 users', 'Unlimited jobs', 'WhatsApp + Email + SMS', 'AI Assistant + AI Quote Generator', 'Workflow + Forms Builder', 'Omnichannel Inbox', 'API access'],
+    features: ['Up to 10 users', 'Unlimited jobs', 'WhatsApp + Email + SMS', 'AI Assistant + AI Quote Generator', 'Workflow + Forms Builder', 'Omnichannel Inbox', 'API access'],
     icon: Star,
     popular: true,
   },
@@ -208,7 +208,7 @@ const FALLBACK_PLANS: OnboardingPlan[] = [
     yearlyPrice: 1490, // 2 months free on yearly
     originalMonthlyPrice: 249,
     description: 'For multi-branch operators',
-    features: ['Up to 20 users', 'AI Receptionist + AI Dispatcher', 'Inventory + Purchase Orders', 'Recurring Jobs', 'Live Technician Map (GPS)', 'Advanced Reports', 'Role Permissions'],
+    features: ['Up to 25 users', 'AI Receptionist + AI Dispatcher', 'Inventory + Purchase Orders', 'Recurring Jobs', 'Live Technician Map (GPS)', 'Advanced Reports', 'Role Permissions'],
     icon: Crown,
   },
   {

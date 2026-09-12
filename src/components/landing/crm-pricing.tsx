@@ -56,7 +56,7 @@ export const FALLBACK_PRICING_PLANS: PricingPlan[] = [
     description: 'Founding member offer — first 100 only',
     icon: Zap,
     features: [
-      '1 User',
+      'Up to 5 Users',
       'CRM & Customer Management',
       'Quotes & Estimates',
       'Jobs & Scheduling',
@@ -85,7 +85,7 @@ export const FALLBACK_PRICING_PLANS: PricingPlan[] = [
     description: 'For solo pros & new businesses',
     icon: Zap,
     features: [
-      '1 User',
+      'Up to 5 Users',
       'CRM & Customer Management',
       'Quotes & Estimates',
       'Jobs & Scheduling',
@@ -114,7 +114,7 @@ export const FALLBACK_PRICING_PLANS: PricingPlan[] = [
     icon: Building2,
     features: [
       'Everything in Starter, plus:',
-      'Up to 5 Users',
+      'Up to 10 Users',
       'Unlimited Customers & Jobs',
       'Email + SMS + Push Notifications',
       'WhatsApp (BYO Meta API)',
@@ -142,7 +142,7 @@ export const FALLBACK_PRICING_PLANS: PricingPlan[] = [
     icon: Shield,
     features: [
       'Everything in Professional, plus:',
-      'Up to 20 Users',
+      'Up to 25 Users',
       'AI Receptionist (Voice Agents)',
       'AI Phone Numbers + Call History',
       'AI Dispatcher (Smart Dispatch)',

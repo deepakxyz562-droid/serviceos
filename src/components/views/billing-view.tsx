@@ -237,7 +237,7 @@ const FALLBACK_PLANS: Plan[] = [
     yearlyPrice: 290,
     description: 'For solo entrepreneurs & freelancers',
     features: [
-      { text: '1 user', included: true },
+      { text: 'Up to 5 users', included: true },
       { text: '200 jobs/month', included: true },
       { text: '10 workflows', included: true },
       { text: 'WhatsApp notifications', included: true },
@@ -260,7 +260,7 @@ const FALLBACK_PLANS: Plan[] = [
     description: 'For growing service businesses',
     popular: true,
     features: [
-      { text: '5 users', included: true },
+      { text: 'Up to 10 users', included: true },
       { text: 'Unlimited jobs/month', included: true },
       { text: '50 workflows', included: true },
       { text: 'WhatsApp notifications', included: true },
@@ -283,7 +283,7 @@ const FALLBACK_PLANS: Plan[] = [
     yearlyPrice: 1490,
     description: 'For scaling organizations',
     features: [
-      { text: 'Unlimited users', included: true },
+      { text: 'Up to 25 users', included: true },
       { text: 'Unlimited jobs', included: true },
       { text: 'Unlimited workflows', included: true },
       { text: 'WhatsApp notifications', included: true },
@@ -439,7 +439,7 @@ const FALLBACK_DATA: SubscriptionData = {
   usage: {
     jobs: { used: 0, limit: 100 },
     workflows: { used: 0, limit: 10 },
-    users: { used: 1, limit: 1 },
+    users: { used: 1, limit: 5 },
   },
   paymentMethod: null,
   billingHistory: [],

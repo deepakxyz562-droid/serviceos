@@ -530,28 +530,28 @@ export const PLAN_QUOTAS: Record<PlanTier, PlanQuotas> = {
     smsQuota: 50,        // 50 SMS during trial
     emailQuota: 200,     // 200 emails during trial
     whatsappQuota: 0,    // BYO
-    maxUsers: 1,
+    maxUsers: 5,
     maxJobs: 200,
   },
   starter: {
     smsQuota: 50,        // 50 SMS/month
     emailQuota: 200,     // 200 emails/month
     whatsappQuota: 0,    // BYO
-    maxUsers: 1,
+    maxUsers: 5,
     maxJobs: 200,
   },
   growth: {
     smsQuota: 500,       // 500 SMS/month
     emailQuota: 2000,    // 2,000 emails/month
     whatsappQuota: 0,    // BYO
-    maxUsers: 5,
+    maxUsers: 10,
     maxJobs: 1000,
   },
   business: {
     smsQuota: 2000,      // 2,000 SMS/month
     emailQuota: 10000,   // 10,000 emails/month
     whatsappQuota: 0,    // BYO
-    maxUsers: 20,
+    maxUsers: 25,
     maxJobs: 5000,
   },
   enterprise: {

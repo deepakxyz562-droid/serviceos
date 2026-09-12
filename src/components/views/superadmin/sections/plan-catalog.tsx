@@ -112,7 +112,7 @@ const EMPTY_FORM: PlanFormState = {
   originalYearlyPrice: '0',
   discountBadge: '',
   currency: 'USD',
-  maxUsers: '1',
+  maxUsers: '5',
   maxJobs: '100',
   maxWorkflows: '10',
   aiQuota: '100',
