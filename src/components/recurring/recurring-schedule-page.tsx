@@ -1,49 +1,56 @@
 'use client';
 
-// ─── RecurringSchedulePage — full-page create/edit form ─────────────────────
-//
-// Shared by both /recurring-jobs/new (mode='create') and
-// /recurring-jobs/[id]/edit (mode='edit'). This is a STANDALONE Next.js route
-// page, NOT a modal — it replaces the legacy dialog-based editor inside
-// RecurringJobsView (which still exists as the SPA fallback per user
-// decision D).
-//
-// Architecture:
-//   - This is a 'use client' component — it needs useEffect/useRouter/useState.
-//   - It fetches supporting data (customers, employees, services, checklists)
-//     on mount, then renders the form. The recurrence config section delegates
-//     to the shared <RecurringScheduleEditor /> (the SAME component Create Job
-//     uses), guaranteeing identical recurrence UX across both entry points.
-//   - On submit, it POSTs to /api/recurring-jobs (create) or PUTs to
-//     /api/recurring-jobs/[id] (edit). The body shape mirrors the
-//     RecurringScheduleValue interface so the backend's createRecurringSchedule
-//     domain service consumes it directly.
-//
-// In edit mode, we map DB → RecurringScheduleValue on load (inverse of what
-// the POST endpoint does). See `scheduleToForm()` below.
+/**
+ * RecurringSchedulePage — Modern 2-Column Jobber-Style Create/Edit Surface
+ * =======================================================================
+ *
+ * Provides a responsive 2-column layout matching JobFormPage and BookingFormPage:
+ *
+ *   Top Header: FormPageHeader with Back navigation, title, Cancel & Save actions.
+ *   Left Column (Main Content - 8 cols / ~67%):
+ *     1. Title & Client (CustomerPicker + Schedule Title & Description)
+ *     2. Recurrence Rhythm & Timing (RecurringScheduleEditor + Live Preview banner)
+ *     3. Products & Services (Line items table with unit pricing & real-time total)
+ *     4. Scope & Visit Instructions (Guidelines displayed to on-site technicians)
+ *   Right Column (Sidebar - 4 cols / ~33%):
+ *     1. Team & Technician Assignment (Multi-assignee picker with primary tag)
+ *     2. Automated Billing & Invoicing (Auto-generate invoice toggle + timing)
+ *     3. Quality Checklists (Attach SOP inspection templates to each visit)
+ *     4. Schedule Summary & Status (Recurrence overview & first run date)
+ *   Bottom Action Bar: Sticky bar with Cancel and Primary Save actions.
+ */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  Briefcase,
   CalendarClock,
   CheckCircle2,
+  ClipboardList,
+  DollarSign,
+  FileText,
   ListChecks,
   Loader2,
+  Plus,
+  Repeat,
   Save,
+  Trash2,
   User,
   Users,
   X,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   Select,
   SelectContent,
@@ -51,6 +58,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
+import { CustomerPicker } from '@/features/line-items';
 
 import {
   RecurringScheduleEditor,
@@ -59,11 +68,11 @@ import {
 } from '@/components/recurring/recurring-schedule-editor';
 
 import { apiGet, authFetch } from '@/lib/api';
-import { CustomerPicker } from '@/features/line-items';
 import {
   formatSchedulePreview,
   type RecurrenceInput,
 } from '@/lib/recurrence-engine';
+import { cn } from '@/lib/utils';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -130,7 +139,12 @@ export interface RecurringSchedulePageProps {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: RecurringSchedulePageProps) {
+export function RecurringSchedulePage({
+  mode,
+  scheduleId,
+  onBack,
+  onSaved,
+}: RecurringSchedulePageProps) {
   const isEdit = mode === 'edit';
 
   const [form, setForm] = useState<ScheduleForm>(EMPTY_FORM);
@@ -144,11 +158,6 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
   const [submitting, setSubmitting] = useState(false);
 
   // ─── Load supporting data (employees/services/checklists) ──────────────
-  // Performance fix: reduced limits from 200 → 50. These are supporting
-  // datasets for the form, not the full list. 50 is enough for most tenants;
-  // if a tenant has more, the select components should use server-side search.
-  // Customers are NO LONGER fetched upfront — the CustomerSelect component
-  // does debounced server-side search on demand (max 10 results).
   const loadSupporting = useCallback(async () => {
     try {
       setLoadingSupporting(true);
@@ -178,9 +187,6 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
   }, []);
 
   // ─── Load existing schedule (edit mode only) ────────────────────────────
-  // NOTE: apiGet() in @/lib/api does NOT throw on HTTP 4xx/5xx — it just returns
-  // the parsed JSON body. We need to inspect the response shape ourselves to
-  // distinguish success ({ schedule, recentJobs }) from failure ({ error }).
   const loadSchedule = useCallback(async () => {
     if (!isEdit || !scheduleId) return;
     try {
@@ -278,6 +284,15 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
       lineItems: f.lineItems.map((li, i) => (i === idx ? { ...li, [field]: value } : li)),
     }));
 
+  // Line items calculated subtotal
+  const lineItemsSubtotal = useMemo(() => {
+    return form.lineItems.reduce((acc, li) => {
+      const q = parseFloat(li.quantity) || 0;
+      const r = parseFloat(li.rate) || 0;
+      return acc + q * r;
+    }, 0);
+  }, [form.lineItems]);
+
   // ─── Submit ─────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!form.title.trim()) {
@@ -303,7 +318,6 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
       serviceId: form.serviceId || null,
       checklistIds: form.checklistIds,
       lineItemsJson: JSON.stringify(form.lineItems.filter((li) => li.description.trim())),
-      // Recurrence rules (from the shared editor — identical shape to Create Job)
       frequency: r.frequency,
       dayOfWeek: r.dayOfWeek,
       dayOfMonth: r.dayOfMonth,
@@ -325,11 +339,6 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
 
     try {
       setSubmitting(true);
-      // IMPORTANT: apiPut/apiPost in @/lib/api do NOT throw on HTTP 4xx/5xx —
-      // they just return the parsed JSON. So we use authFetch and check res.ok
-      // ourselves, then parse the JSON body to extract the server-side error
-      // message. This is what surfaces plan-gate (402) and validation (400)
-      // failures to the user as a toast instead of a misleading success.
       const headers = { 'Content-Type': 'application/json' };
       if (isEdit && scheduleId) {
         const res = await authFetch(`/api/recurring-jobs/${scheduleId}`, {
@@ -344,7 +353,7 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
             if (err?.error) message = err.error;
             else if (err?.message) message = err.message;
           } catch {
-            // ignore JSON parse error
+            // ignore
           }
           throw new Error(message);
         }
@@ -363,7 +372,7 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
             if (err?.error) message = err.error;
             else if (err?.message) message = err.message;
           } catch {
-            // ignore JSON parse error
+            // ignore
           }
           throw new Error(message);
         }
@@ -374,7 +383,7 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
         };
         toast.success(
           result?.firstJobCreated
-            ? 'Schedule created — first job generated'
+            ? 'Schedule created — first visit generated'
             : 'Schedule created',
         );
         const newId = result?.schedule?.id || result?.id;
@@ -394,153 +403,190 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
     }
   };
 
-  // ─── Loading state (edit mode loads the schedule first) ─────────────────
+  // ─── Loading state ──────────────────────────────────────────────────────
   if (loadingSchedule) {
     return (
-      <main className="p-4 sm:p-6 w-full space-y-6">
+      <main className="p-4 sm:p-6 w-full max-w-7xl mx-auto space-y-6">
         <SchedulePageHeaderSkeleton />
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-40 w-full" />
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-8 space-y-6">
+            <Skeleton className="h-44 w-full rounded-xl" />
+            <Skeleton className="h-64 w-full rounded-xl" />
+            <Skeleton className="h-36 w-full rounded-xl" />
+          </div>
+          <div className="lg:col-span-4 space-y-6">
+            <Skeleton className="h-44 w-full rounded-xl" />
+            <Skeleton className="h-36 w-full rounded-xl" />
+          </div>
+        </div>
       </main>
     );
   }
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <main className="p-4 sm:p-6 w-full space-y-6">
-      {/* ─── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-2 text-muted-foreground hover:text-foreground"
-            onClick={onBack}
-          >
-            <ArrowLeft className="size-4 mr-1.5" />
-            Recurring Jobs
-          </Button>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {isEdit ? 'Edit Recurring Job Schedule' : 'New Recurring Job Schedule'}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Configure how and when visits are scheduled.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={onBack}
-            disabled={submitting}
-          >
-            <X className="size-4 mr-1.5" />
-            Cancel
-          </Button>
-          <Button
-            className="bg-emerald-600 hover:bg-emerald-700"
-            onClick={handleSubmit}
-            disabled={submitting || loadingSupporting}
-          >
-            {submitting ? (
-              <Loader2 className="size-4 mr-1.5 animate-spin" />
-            ) : isEdit ? (
-              <Save className="size-4 mr-1.5" />
-            ) : (
-              <CheckCircle2 className="size-4 mr-1.5" />
-            )}
-            {isEdit ? 'Save changes' : 'Create Schedule'}
-          </Button>
-        </div>
-      </header>
+    <main className="p-4 sm:p-6 w-full max-w-7xl mx-auto space-y-6">
+      {/* ─── 1. Header ────────────────────────────────────────────────────── */}
+      <FormPageHeader
+        title={isEdit ? 'Edit Recurring Schedule' : 'New Recurring Schedule'}
+        subtitle="Configure repeat service intervals, customer details, line items, and automated dispatch."
+        onBack={onBack}
+        backLabel="Recurring Jobs"
+        primaryAction={{
+          label: isEdit ? 'Save Changes' : 'Create Schedule',
+          onClick: handleSubmit,
+          disabled: submitting || loadingSupporting,
+          loading: submitting,
+          icon: isEdit ? Save : CheckCircle2,
+        }}
+        secondaryAction={{
+          label: 'Cancel',
+          onClick: onBack,
+          disabled: submitting,
+        }}
+      />
 
-      {/* ─── Live preview banner ────────────────────────────────────────── */}
-      <div className="rounded-md border bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3">
-        <div className="flex items-start gap-2.5">
-          <CalendarClock className="size-4 mt-0.5 text-emerald-600 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
-              {preview}
-            </p>
-            {!form.recurring.asNeeded && (
-              <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
-                {isEdit
-                  ? 'Updates to schedule timing apply to the next generated visit.'
-                  : form.recurring.generateFirstJob
-                    ? 'A first visit will be created when you save.'
-                    : 'Visits start on the next scheduled date after you save.'}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ─── Job details ───────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Job details</CardTitle>
-          <CardDescription>
-            The title, customer, and team that will be applied to every generated job.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {loadingSupporting ? (
-            <div className="space-y-3">
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-9 w-full" />
-              <Skeleton className="h-20 w-full" />
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-2">
-                <Label htmlFor="title">
-                  Title <span className="text-destructive">*</span>
+      {/* ─── 2. Responsive 2-Column Grid ──────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* ─── LEFT COLUMN: Main Content (8 cols / ~67%) ─────────────────── */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Section 1: Title & Client */}
+          <FormSectionCard
+            title="Title & Client"
+            description="The title and customer profile associated with this recurring schedule."
+            icon={Repeat}
+          >
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="sched-title" className="text-xs font-semibold">
+                  Schedule Title <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  id="title"
-                  placeholder="e.g. Monthly HVAC inspection"
+                  id="sched-title"
+                  placeholder="e.g. Monthly Commercial HVAC Maintenance & Filter Replacement"
                   value={form.title}
                   onChange={(e) => set('title', e.target.value)}
                   maxLength={200}
+                  className="h-10 text-sm"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="customerId">
-                    Customer <span className="text-destructive">*</span>
-                  </Label>
-                  <CustomerPicker
-                    selectedCustomerId={form.customerId}
-                    selectedCustomer={
-                      form.customerId
-                        ? {
-                            id: form.customerId,
-                            name: customers.find((c) => c.id === form.customerId)?.name || '',
-                            phone: customers.find((c) => c.id === form.customerId)?.phone,
-                          }
-                        : null
-                    }
-                    onPick={(c) => set('customerId', c.id)}
-                    onClear={() => set('customerId', '')}
-                    onCustomerCreated={(c) => set('customerId', c.id)}
-                  />
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">
+                  Customer <span className="text-destructive">*</span>
+                </Label>
+                <CustomerPicker
+                  selectedCustomerId={form.customerId}
+                  selectedCustomer={
+                    form.customerId
+                      ? {
+                          id: form.customerId,
+                          name: customers.find((c) => c.id === form.customerId)?.name || '',
+                          phone: customers.find((c) => c.id === form.customerId)?.phone,
+                        }
+                      : null
+                  }
+                  onPick={(c) => set('customerId', c.id)}
+                  onClear={() => set('customerId', '')}
+                  onCustomerCreated={(c) => set('customerId', c.id)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="sched-desc" className="text-xs font-semibold">
+                  Schedule Notes / Description
+                </Label>
+                <Textarea
+                  id="sched-desc"
+                  rows={2}
+                  placeholder="Add any context, account numbers, or notes for this recurring contract..."
+                  value={form.description}
+                  onChange={(e) => set('description', e.target.value)}
+                  className="text-xs sm:text-sm resize-y"
+                />
+              </div>
+            </div>
+          </FormSectionCard>
+
+          {/* Section 2: Recurrence Rhythm & Timing */}
+          <FormSectionCard
+            title="Recurrence Rhythm & Schedule"
+            description="Control how often, on which days, and at what times visits are automatically created."
+            icon={CalendarClock}
+          >
+            <div className="space-y-4">
+              {/* Dynamic Live Schedule Preview Banner */}
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3.5 flex items-start gap-3">
+                <div className="size-8 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center justify-center shrink-0 mt-0.5">
+                  <Repeat className="size-4" />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="serviceId">Service (optional)</Label>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+                    {preview}
+                  </p>
+                  <p className="text-xs text-emerald-700/90 dark:text-emerald-400/90 mt-0.5">
+                    {isEdit
+                      ? 'Timing updates will apply to the next generated visit.'
+                      : form.recurring.generateFirstJob
+                        ? 'A first visit will be created immediately upon saving.'
+                        : 'Visits will start generating automatically on the first scheduled date.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Shared Recurrence Editor */}
+              <div className="pt-2">
+                <RecurringScheduleEditor
+                  value={form.recurring}
+                  onChange={(next) => set('recurring', next)}
+                  showSwitch={false}
+                  showGenerateFirstJob={!isEdit}
+                  showBilling={false}
+                  showTimezone
+                />
+              </div>
+            </div>
+          </FormSectionCard>
+
+          {/* Section 3: Scope & Visit Instructions */}
+          <FormSectionCard
+            title="On-Site Visit Instructions"
+            description="Work scope and guidelines displayed directly to technicians on each generated visit."
+            icon={ClipboardList}
+          >
+            <div className="space-y-1.5">
+              <Textarea
+                id="sched-instructions"
+                rows={3}
+                placeholder="e.g. Enter through side loading dock. Check in with property manager on arrival. Check filter gauges before replacing."
+                value={form.visitInstructions}
+                onChange={(e) => set('visitInstructions', e.target.value)}
+                className="text-xs sm:text-sm resize-y"
+              />
+            </div>
+          </FormSectionCard>
+
+          {/* Section 4: Products & Services (Line Items) */}
+          <FormSectionCard
+            title="Products, Services & Line Items"
+            description="Default itemized items and labor rates copied to every generated visit."
+            icon={FileText}
+          >
+            <div className="space-y-4">
+              {/* Optional Primary Service dropdown */}
+              {services.length > 0 && (
+                <div className="space-y-1.5 max-w-sm">
+                  <Label htmlFor="sched-service" className="text-xs font-semibold">
+                    Primary Service Category
+                  </Label>
                   <Select
                     value={form.serviceId || '__none__'}
                     onValueChange={(v) => set('serviceId', v === '__none__' ? '' : v)}
                   >
-                    <SelectTrigger id="serviceId">
-                      <SelectValue placeholder="None" />
+                    <SelectTrigger id="sched-service" className="h-9 text-xs">
+                      <SelectValue placeholder="— Select service category —" />
                     </SelectTrigger>
-                    <SelectContent className="max-h-72">
+                    <SelectContent>
                       <SelectItem value="__none__">— None —</SelectItem>
                       {services.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
@@ -550,218 +596,307 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
+              )}
 
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  rows={2}
-                  placeholder="Optional notes about this schedule"
-                  value={form.description}
-                  onChange={(e) => set('description', e.target.value)}
-                />
-              </div>
-
-              {/* Assignees */}
-              <div className="grid gap-2">
-                <Label>
-                  <span className="flex items-center gap-1.5">
-                    <Users className="size-3.5" /> Assignees
-                  </span>
-                </Label>
-                {employees.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-amber-300 bg-amber-50/60 dark:bg-amber-950/20 px-3 py-2.5 text-sm">
-                    <p className="font-medium text-amber-900 dark:text-amber-200">
-                      No team members yet
-                    </p>
-                    <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
-                      Add employees in your workspace first to assign them to
-                      generated visits. You can still save the schedule without
-                      assignees.
-                    </p>
+              {/* Line items table */}
+              {form.lineItems.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/80 p-6 text-center space-y-2 bg-muted/20">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    No default line items added. Each generated job will start with an empty invoice items list.
+                  </p>
+                  <Button type="button" variant="outline" size="sm" onClick={addLineItem} className="h-8 text-xs gap-1.5">
+                    <Plus className="size-3.5" /> Add First Line Item
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    {form.lineItems.map((li, idx) => {
+                      const rowTotal = (parseFloat(li.quantity) || 0) * (parseFloat(li.rate) || 0);
+                      return (
+                        <div
+                          key={idx}
+                          className="grid grid-cols-12 gap-2 items-center p-2.5 rounded-lg border border-border/60 bg-muted/20"
+                        >
+                          <div className="col-span-12 sm:col-span-6">
+                            <Input
+                              placeholder="Item description or service title"
+                              value={li.description}
+                              onChange={(e) => updateLineItem(idx, 'description', e.target.value)}
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                          <div className="col-span-4 sm:col-span-2">
+                            <Input
+                              type="number"
+                              placeholder="Qty"
+                              value={li.quantity}
+                              onChange={(e) => updateLineItem(idx, 'quantity', e.target.value)}
+                              className="h-8 text-xs"
+                              min="0"
+                              step="any"
+                            />
+                          </div>
+                          <div className="col-span-4 sm:col-span-2">
+                            <Input
+                              type="number"
+                              placeholder="Rate"
+                              value={li.rate}
+                              onChange={(e) => updateLineItem(idx, 'rate', e.target.value)}
+                              className="h-8 text-xs"
+                              min="0"
+                              step="any"
+                            />
+                          </div>
+                          <div className="col-span-3 sm:col-span-1 text-right text-xs font-semibold text-foreground">
+                            ${rowTotal.toFixed(2)}
+                          </div>
+                          <div className="col-span-1 sm:col-span-1 text-right">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-muted-foreground hover:text-destructive"
+                              onClick={() => removeLineItem(idx)}
+                              aria-label="Remove item"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ) : (
-                  <div className="border rounded-md p-3 max-h-48 overflow-y-auto grid gap-2">
-                    {employees.map((emp) => (
+
+                  <div className="flex items-center justify-between pt-2 border-t border-border/60">
+                    <Button type="button" variant="outline" size="sm" onClick={addLineItem} className="h-8 text-xs gap-1.5">
+                      <Plus className="size-3.5" /> Add Line Item
+                    </Button>
+                    <div className="text-right">
+                      <span className="text-xs text-muted-foreground mr-2">Estimated Visit Subtotal:</span>
+                      <span className="text-sm font-bold text-foreground">
+                        ${lineItemsSubtotal.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </FormSectionCard>
+        </div>
+
+        {/* ─── RIGHT COLUMN: Sidebar (4 cols / ~33%) ─────────────────────── */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Section 1: Team & Technician Assignment */}
+          <FormSectionCard
+            title="Assigned Technicians"
+            description="Assign field staff to every generated visit."
+            icon={Users}
+          >
+            <div className="space-y-3">
+              {employees.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/60 dark:bg-amber-950/20 p-3 text-xs text-amber-900 dark:text-amber-200">
+                  <p className="font-semibold">No employees found</p>
+                  <p className="text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                    Visits will be created unassigned until team members are added.
+                  </p>
+                </div>
+              ) : (
+                <div className="border border-border/70 rounded-xl p-2.5 max-h-56 overflow-y-auto space-y-1.5 divide-y divide-border/40">
+                  {employees.map((emp) => {
+                    const isSelected = form.assigneeIds.includes(emp.id);
+                    const isPrimary = form.assigneeIds[0] === emp.id;
+                    return (
                       <label
                         key={emp.id}
-                        className="flex items-center gap-2 text-sm cursor-pointer"
-                      >
-                        <Checkbox
-                          checked={form.assigneeIds.includes(emp.id)}
-                          onCheckedChange={() => toggleAssignee(emp.id)}
-                        />
-                        <span>{emp.name}</span>
-                        {emp.role && (
-                          <span className="text-xs text-muted-foreground">({emp.role})</span>
+                        className={cn(
+                          'flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors pt-2 first:pt-1.5',
+                          isSelected ? 'bg-emerald-500/10' : 'hover:bg-muted/40'
                         )}
-                        {form.assigneeIds[0] === emp.id && (
-                          <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
-                            primary
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleAssignee(emp.id)}
+                          />
+                          <Avatar className="size-7 rounded-md text-[11px] font-bold border">
+                            <AvatarFallback className="rounded-md">
+                              {emp.name.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-foreground truncate">{emp.name}</p>
+                            {emp.role && (
+                              <p className="text-[10px] text-muted-foreground truncate">{emp.role}</p>
+                            )}
+                          </div>
+                        </div>
+                        {isPrimary && (
+                          <Badge className="bg-emerald-600 text-white text-[9px] px-1.5 py-0 h-4">
+                            Primary
                           </Badge>
                         )}
                       </label>
-                    ))}
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  The first selected assignee becomes the primary for every generated job.
-                </p>
-              </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                The first selected technician is designated as the primary assignee.
+              </p>
+            </div>
+          </FormSectionCard>
 
-              <div className="grid gap-2">
-                <Label htmlFor="visitInstructions">Visit instructions</Label>
-                <Textarea
-                  id="visitInstructions"
-                  rows={3}
-                  placeholder="Notes shown to the assigned employee on-site"
-                  value={form.visitInstructions}
-                  onChange={(e) => set('visitInstructions', e.target.value)}
+          {/* Section 2: Automated Invoicing & Billing */}
+          <FormSectionCard
+            title="Billing & Invoicing Automation"
+            description="Automatically generate drafts or invoices per visit."
+            icon={DollarSign}
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5 pr-2">
+                  <Label htmlFor="sched-gen-inv" className="text-xs font-semibold cursor-pointer">
+                    Auto-Generate Invoice
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Create invoice automatically when visits trigger
+                  </p>
+                </div>
+                <Switch
+                  id="sched-gen-inv"
+                  checked={form.recurring.generateInvoice}
+                  onCheckedChange={(val) =>
+                    set('recurring', { ...form.recurring, generateInvoice: val })
+                  }
                 />
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* ─── Schedule (shared editor — identical to Create Job) ──────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <CalendarClock className="size-4" /> Schedule
-          </CardTitle>
-          <CardDescription>
-            How often, when, and for how long this recurring schedule runs.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <RecurringScheduleEditor
-            value={form.recurring}
-            onChange={(next) => set('recurring', next)}
-            showSwitch={false}
-            // Hide the "Generate first job now" toggle in edit mode — the
-            // first job was already generated at create time and PUT does NOT
-            // honor this field, so showing it would be misleading.
-            showGenerateFirstJob={!isEdit}
-            showBilling
-            showTimezone
-          />
-        </CardContent>
-      </Card>
-
-      {/* ─── Checklists ─────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <ListChecks className="size-4" /> Checklists
-          </CardTitle>
-          <CardDescription>
-            Attach checklist templates to every generated job — captured on-site by the assignee.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loadingSupporting ? (
-            <Skeleton className="h-24 w-full" />
-          ) : checklists.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No checklist templates exist yet. Create one first to attach it here.
-            </p>
-          ) : (
-            <div className="border rounded-md p-3 max-h-48 overflow-y-auto grid gap-2">
-              {checklists.map((chk) => (
-                <label
-                  key={chk.id}
-                  className="flex items-center gap-2 text-sm cursor-pointer"
-                >
-                  <Checkbox
-                    checked={form.checklistIds.includes(chk.id)}
-                    onCheckedChange={() => toggleChecklist(chk.id)}
-                  />
-                  <span>{chk.title}</span>
-                  {chk.category && (
-                    <span className="text-xs text-muted-foreground">({chk.category})</span>
-                  )}
-                </label>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ─── Line items ─────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Line items (copied to generated jobs)</CardTitle>
-          <CardDescription>
-            Default itemized list every generated job starts with. Editable per job.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {form.lineItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No line items. Generated jobs will start with an empty list.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {form.lineItems.map((li, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                  <Input
-                    className="col-span-12 sm:col-span-6"
-                    placeholder="Description"
-                    value={li.description}
-                    onChange={(e) => updateLineItem(idx, 'description', e.target.value)}
-                  />
-                  <Input
-                    className="col-span-4 sm:col-span-2"
-                    type="number"
-                    placeholder="Qty"
-                    value={li.quantity}
-                    onChange={(e) => updateLineItem(idx, 'quantity', e.target.value)}
-                  />
-                  <Input
-                    className="col-span-6 sm:col-span-3"
-                    type="number"
-                    placeholder="Rate"
-                    value={li.rate}
-                    onChange={(e) => updateLineItem(idx, 'rate', e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="col-span-2 sm:col-span-1"
-                    onClick={() => removeLineItem(idx)}
-                    aria-label="Remove line item"
+              {form.recurring.generateInvoice && (
+                <div className="space-y-1.5 pt-2 border-t border-border/50">
+                  <Label htmlFor="sched-inv-timing" className="text-xs font-semibold">
+                    Invoice Creation Trigger
+                  </Label>
+                  <Select
+                    value={form.recurring.invoiceTiming}
+                    onValueChange={(val: 'on_generation' | 'on_completion') =>
+                      set('recurring', { ...form.recurring, invoiceTiming: val })
+                    }
                   >
-                    <X className="size-4" />
-                  </Button>
+                    <SelectTrigger id="sched-inv-timing" className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="on_completion">
+                        When visit is completed by technician
+                      </SelectItem>
+                      <SelectItem value="on_generation">
+                        Immediately when visit is generated
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              ))}
+              )}
             </div>
-          )}
-          <Button type="button" variant="outline" size="sm" onClick={addLineItem}>
-            <CheckCircle2 className="size-3.5 mr-1.5" /> Add line item
-          </Button>
-        </CardContent>
-      </Card>
+          </FormSectionCard>
 
-      {/* ─── Bottom action bar ─────────────────────────────────────────── */}
-      <div className="sticky bottom-0 z-10 -mx-4 sm:-mx-6 mt-6 border-t bg-background/95 backdrop-blur px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground hidden sm:block">
-          <User className="size-3 inline mr-1" />
-          {isEdit ? 'Editing existing schedule' : 'Creating a new schedule'}
+          {/* Section 3: Quality Checklists */}
+          <FormSectionCard
+            title="Quality & Inspection Checklists"
+            description="Attach standard operating procedures to every visit."
+            icon={ListChecks}
+          >
+            <div className="space-y-3">
+              {checklists.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  No checklist templates available. Create templates in Checklists to attach them here.
+                </p>
+              ) : (
+                <div className="border border-border/70 rounded-xl p-2.5 max-h-48 overflow-y-auto space-y-1.5 divide-y divide-border/40">
+                  {checklists.map((chk) => {
+                    const isChecked = form.checklistIds.includes(chk.id);
+                    return (
+                      <label
+                        key={chk.id}
+                        className={cn(
+                          'flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-colors pt-2 first:pt-1.5',
+                          isChecked ? 'bg-emerald-500/10' : 'hover:bg-muted/40'
+                        )}
+                      >
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => toggleChecklist(chk.id)}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-foreground truncate">{chk.title}</p>
+                          {chk.category && (
+                            <p className="text-[10px] text-muted-foreground truncate">{chk.category}</p>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </FormSectionCard>
+
+          {/* Section 4: Schedule Status & Information */}
+          <FormSectionCard
+            title="Schedule Configuration"
+            description="Overview of initial automation settings."
+            icon={Zap}
+          >
+            <div className="space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Frequency Rhythm:</span>
+                <Badge variant="outline" className="font-semibold text-xs capitalize">
+                  {form.recurring.frequency}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Start Date:</span>
+                <span className="font-medium text-foreground">
+                  {form.recurring.startDate || 'Today'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Default Time:</span>
+                <span className="font-medium text-foreground">
+                  {form.recurring.timeOfDay || '09:00'} ({form.recurring.durationMins || 60}m)
+                </span>
+              </div>
+              {form.recurring.timezone && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Timezone:</span>
+                  <span className="font-medium text-foreground truncate max-w-[140px]">
+                    {form.recurring.timezone}
+                  </span>
+                </div>
+              )}
+            </div>
+          </FormSectionCard>
+        </div>
+      </div>
+
+      {/* ─── 3. Sticky Bottom Action Bar ──────────────────────────────────── */}
+      <div className="sticky bottom-0 z-10 -mx-4 sm:-mx-6 mt-8 border-t border-border/80 bg-background/95 backdrop-blur-md px-4 sm:px-6 py-3.5 flex items-center justify-between shadow-lg">
+        <p className="text-xs text-muted-foreground hidden sm:flex items-center gap-1.5">
+          <Repeat className="size-3.5 text-emerald-600" />
+          <span>{isEdit ? 'Editing recurring schedule' : 'Configuring new recurring schedule'}</span>
         </p>
-        <div className="flex items-center gap-2 ml-auto">
+
+        <div className="flex items-center gap-2.5 ml-auto">
           <Button
             variant="outline"
             onClick={onBack}
             disabled={submitting}
+            className="h-9 text-xs sm:text-sm"
           >
             Cancel
           </Button>
           <Button
-            className="bg-emerald-600 hover:bg-emerald-700"
+            className="bg-emerald-600 hover:bg-emerald-700 shadow-xs h-9 text-xs sm:text-sm font-semibold px-5"
             onClick={handleSubmit}
             disabled={submitting || loadingSupporting}
           >
@@ -772,7 +907,7 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
             ) : (
               <CheckCircle2 className="size-4 mr-1.5" />
             )}
-            {isEdit ? 'Save changes' : 'Create Schedule'}
+            {isEdit ? 'Save Changes' : 'Create Schedule'}
           </Button>
         </div>
       </div>
@@ -782,21 +917,6 @@ export function RecurringSchedulePage({ mode, scheduleId, onBack, onSaved }: Rec
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/**
- * Map a DB schedule row (snake_case Prisma fields) → the form's `ScheduleForm`
- * shape. This is the INVERSE of what the POST endpoint does in
- * src/app/api/recurring-jobs/route.ts.
- *
- * Field-by-field mapping notes:
- *  - assigneeIdsJson → string[] (parse JSON)
- *  - checklistIdsJson → string[] (parse JSON)
- *  - lineItemsJson → LineItem[] (parse JSON, coerce to strings)
- *  - startDate/endDate → ISO date strings sliced to YYYY-MM-DD for the
- *    <input type="date">
- *  - The shared editor wants `enabled=true` here because we always render it
- *    expanded (no showSwitch). The DB has no `enabled` column — once a schedule
- *    exists, it IS recurring.
- */
 function scheduleToForm(s: Record<string, unknown>): ScheduleForm {
   const parseStrArr = (json: unknown): string[] => {
     if (typeof json !== 'string' || !json) return [];
@@ -849,7 +969,7 @@ function scheduleToForm(s: Record<string, unknown>): ScheduleForm {
       s.endAfterOccurrences == null ? null : Number(s.endAfterOccurrences),
     asNeeded: Boolean(s.asNeeded),
     timezone: (s.timezone as string | null) ?? null,
-    generateFirstJob: false, // not relevant for edit — first job already exists & PUT doesn't read this field
+    generateFirstJob: false,
     generateInvoice: Boolean(s.generateInvoice),
     invoiceTiming:
       s.invoiceTiming === 'on_generation' ? 'on_generation' : 'on_completion',
@@ -868,11 +988,11 @@ function scheduleToForm(s: Record<string, unknown>): ScheduleForm {
   };
 }
 
-// ─── Skeleton pieces ────────────────────────────────────────────────────────
+// ─── Skeleton ───────────────────────────────────────────────────────────────
 
 function SchedulePageHeaderSkeleton() {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 pb-2 border-b">
       <Skeleton className="h-4 w-32" />
       <Skeleton className="h-8 w-72" />
       <Skeleton className="h-4 w-96" />

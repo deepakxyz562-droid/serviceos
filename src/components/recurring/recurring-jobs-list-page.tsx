@@ -1,36 +1,27 @@
 'use client';
 
-// ─── RecurringJobsListPage — client-side list of recurring schedules ──────────
-//
-// Replaces the legacy in-SPA modal list inside RecurringJobsView. The list
-// page renders:
-//   - Header with "+ New Schedule" CTA → router.push('/recurring-jobs/new')
-//   - Search input (filters by title / customer name, client-side)
-//   - Status filter pills (All / Active / Paused / Stopped)
-//   - Schedule cards (1 column on mobile, 2 columns on desktop) showing:
-//       • Title + customer name
-//       • Frequency summary (via formatScheduleSummary from recurrence-engine)
-//       • Status badge (Active emerald / Paused amber / Stopped red)
-//       • Next run date (formatted)
-//       • Execution count ("N jobs generated")
-//       • Action menu (View / Edit / Pause|Resume / Generate Now / Delete)
-//   - Empty state with friendly copy + CTA
-//   - Loading skeleton rows
-//   - Error state with retry button
-//
-// All actions toast + refetch (no full page reload). List is sorted:
-//   active first, then by nextRunAt asc — matches the API default ordering.
-//
-// HARD CONSTRAINTS respected:
-//   - NO Prisma schema, recurrence-engine, schedule-editor, or API changes.
-//   - Does NOT touch the old SPA recurring-jobs-view.tsx.
-//   - Inline AlertDialog for Delete (does not depend on other agents' dialogs).
-//   - Uses existing shadcn/ui components only.
+/**
+ * RecurringJobsListPage — Modernized 3-Column Recurring Jobs Command Center
+ * =========================================================================
+ *
+ * Features:
+ *   - Top KPI metric summary cards (Active, Generated Jobs, Paused, Upcoming 7 Days)
+ *   - Interactive filter toolbar: Search, Frequency dropdown, Status pill counters, View switcher
+ *   - 3-Column Responsive Card Grid (grid-cols-1 md:grid-cols-2 xl:grid-cols-3)
+ *   - Elevated Card design with customer initials/avatar, recurrence rhythm tag,
+ *     countdown badges, execution counter chip, and 1-click action triggers
+ *   - Full Data Table view toggle with sortable headers and responsive pagination
+ *   - Inline Delete Confirmation Dialog
+ */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Briefcase,
   Calendar as CalendarIcon,
+  CheckCircle2,
+  Clock,
   Eye,
+  Filter,
   LayoutGrid,
   Loader2,
   MoreVertical,
@@ -40,8 +31,12 @@ import {
   Plus,
   Repeat,
   Search,
+  Sparkles,
   Table as TableIcon,
   Trash2,
+  User,
+  X,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -51,6 +46,14 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -81,6 +84,7 @@ import {
 import { apiDelete, apiPost } from '@/lib/api';
 import { useRecurringJobs } from '@/hooks/use-crm-data';
 import { formatScheduleSummary, type RecurrenceInput } from '@/lib/recurrence-engine';
+import { cn } from '@/lib/utils';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -124,12 +128,7 @@ interface Schedule {
 type Status = 'active' | 'paused' | 'stopped';
 type StatusFilter = 'all' | Status;
 
-interface ApiResponse {
-  schedules: Schedule[];
-  total?: number;
-}
-
-// ─── Status derivation (per task spec) ──────────────────────────────────────
+// ─── Status derivation ──────────────────────────────────────────────────────
 
 function deriveStatus(s: {
   active: boolean;
@@ -141,7 +140,7 @@ function deriveStatus(s: {
   return 'active';
 }
 
-// ─── Date formatting ────────────────────────────────────────────────────────
+// ─── Date formatting & Relative Time ────────────────────────────────────────
 
 function formatNextRun(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -160,7 +159,29 @@ function formatNextRun(iso: string | null | undefined): string {
   }
 }
 
-// ─── Frequency summary (uses shared engine) ──────────────────────────────────
+function getRelativeNextRun(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  try {
+    const target = new Date(iso);
+    if (Number.isNaN(target.getTime())) return null;
+    const now = new Date();
+    const diffMs = target.getTime() - now.getTime();
+    if (diffMs < 0) return 'Due now';
+    const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+    if (diffHours < 24) {
+      if (diffHours <= 1) return 'In < 1 hour';
+      return `In ${diffHours} hrs`;
+    }
+    const diffDays = Math.round(diffHours / 24);
+    if (diffDays === 1) return 'Tomorrow';
+    if (diffDays <= 7) return `In ${diffDays} days`;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Frequency summary ──────────────────────────────────────────────────────
 
 function buildSummary(s: Schedule): string {
   if (s.asNeeded) return 'As needed';
@@ -187,25 +208,28 @@ function buildSummary(s: Schedule): string {
   }
 }
 
-// ─── Status badge ───────────────────────────────────────────────────────────
+// ─── Status badge with dot ──────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: Status }) {
   if (status === 'active') {
     return (
-      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+      <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-medium text-[11px] gap-1.5 px-2 py-0.5">
+        <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
         Active
       </Badge>
     );
   }
   if (status === 'paused') {
     return (
-      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+      <Badge className="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-medium text-[11px] gap-1.5 px-2 py-0.5">
+        <span className="size-1.5 rounded-full bg-amber-500" />
         Paused
       </Badge>
     );
   }
   return (
-    <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
+    <Badge className="bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 font-medium text-[11px] gap-1.5 px-2 py-0.5">
+      <span className="size-1.5 rounded-full bg-rose-500" />
       Stopped
     </Badge>
   );
@@ -222,28 +246,23 @@ export interface RecurringJobsListPageProps {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: RecurringJobsListPageProps) {
-
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('all');
+  const [frequencyFilter, setFrequencyFilter] = useState<string>('all');
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Schedule | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // PAGINATION: server-side pagination — API supports page + limit params.
-  // Default page size = 10 (matches PaginationBar default).
+  // PAGINATION: server-side pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(12);
 
-  // VIEW LAYOUT: cards (default) or table.
+  // VIEW LAYOUT: cards (default) or table
   const [viewLayout, setViewLayout] = useState<'cards' | 'table'>('cards');
 
   // ─── Fetch via React Query ─────────────────────────────────────────────
-  // Status filtering (active/paused/stopped) and search are intentionally
-  // kept client-side — deriveStatus maps active+pausedAt+endDate → 'active'
-  // | 'paused' | 'stopped', which doesn't map cleanly to the API's boolean
-  // `active` param. Only page+limit are sent to the server.
   const {
     data: recurringData,
     isLoading: loading,
@@ -253,6 +272,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
     page: currentPage,
     limit: itemsPerPage,
   });
+
   const schedules = recurringData?.schedules ?? [];
   const pagination = recurringData?.pagination ?? null;
   const totalPages = pagination?.totalPages ?? 1;
@@ -261,10 +281,49 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
     ? 'Failed to load recurring job schedules. Please try again.'
     : null;
 
-  // Helper used by mutation handlers to refresh the list cache.
+  // Helper to invalidate cache
   const refreshSchedules = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ['recurringJobs'] });
   }, [queryClient]);
+
+  // ─── Top KPI Metrics ───────────────────────────────────────────────────
+  const metrics = useMemo(() => {
+    let active = 0;
+    let paused = 0;
+    let stopped = 0;
+    let totalGenerated = 0;
+    let upcomingThisWeek = 0;
+
+    const now = new Date();
+    const nextWeek = new Date(now);
+    nextWeek.setDate(now.getDate() + 7);
+
+    for (const s of schedules) {
+      const status = deriveStatus(s);
+      if (status === 'active') active++;
+      else if (status === 'paused') paused++;
+      else if (status === 'stopped') stopped++;
+
+      const count = s._count?.generatedJobs ?? s.generatedCount ?? s.executionCount ?? 0;
+      totalGenerated += count;
+
+      if (status === 'active' && s.nextRunAt) {
+        const next = new Date(s.nextRunAt);
+        if (next >= now && next <= nextWeek) {
+          upcomingThisWeek++;
+        }
+      }
+    }
+
+    return {
+      total: schedules.length,
+      active,
+      paused,
+      stopped,
+      totalGenerated,
+      upcomingThisWeek,
+    };
+  }, [schedules]);
 
   // ─── Filtering ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -272,6 +331,10 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
       .filter((s) => {
         if (filter === 'all') return true;
         return deriveStatus(s) === filter;
+      })
+      .filter((s) => {
+        if (frequencyFilter === 'all') return true;
+        return s.frequency === frequencyFilter;
       })
       .filter((s) => {
         if (!search.trim()) return true;
@@ -282,13 +345,12 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         );
       })
       .sort((a, b) => {
-        // Active first, then by nextRunAt asc.
+        // Active first, then by nextRunAt asc
         const sa = deriveStatus(a);
         const sb = deriveStatus(b);
         if (sa !== sb) {
           if (sa === 'active') return -1;
           if (sb === 'active') return 1;
-          // Both paused/stopped — keep stable-ish: paused before stopped.
           if (sa === 'paused' && sb === 'stopped') return -1;
           if (sb === 'paused' && sa === 'stopped') return 1;
           return 0;
@@ -299,12 +361,12 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
           return 0;
         }
       });
-  }, [schedules, filter, search]);
+  }, [schedules, filter, frequencyFilter, search]);
 
-  // PAGINATION: Reset to page 1 when filter/search changes
+  // Reset to page 1 on filter change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter, search]);
+  }, [filter, frequencyFilter, search]);
 
   // ─── Actions ────────────────────────────────────────────────────────────
   const handlePause = useCallback(
@@ -333,10 +395,6 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         await refreshSchedules();
       } catch (err) {
         console.error('[RecurringJobsListPage] resume failed:', err);
-        // 400 from resume usually means the schedule's end date has passed
-        // (e.g. it was Stopped). The /stop endpoint sets active=false +
-        // endDate=now, so resume is permanently refused. Surface a specific
-        // toast so the user understands they can't restart a stopped schedule.
         const message =
           err instanceof Error
             ? err.message
@@ -360,7 +418,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
       try {
         setActioningId(s.id);
         await apiPost(`/api/recurring-jobs/${s.id}/generate-now`);
-        toast.success('Job generated');
+        toast.success('Job generated successfully');
         await refreshSchedules();
       } catch (err) {
         console.error('[RecurringJobsListPage] generate-now failed:', err);
@@ -391,20 +449,26 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
   // ─── Loading state ─────────────────────────────────────────────────────
   if (loading) {
     return (
-      <main className="p-4 sm:p-6 space-y-6 w-full">
+      <main className="p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
         <ListHeaderSkeleton />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}>
-              <CardContent className="p-4 space-y-3">
+            <Skeleton key={i} className="h-20 w-full rounded-xl" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4.5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} className="rounded-xl border border-border/80">
+              <CardContent className="p-5 space-y-3.5">
                 <div className="flex items-center justify-between">
                   <Skeleton className="h-5 w-40" />
-                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-6 w-16 rounded-full" />
                 </div>
                 <Skeleton className="h-4 w-28" />
-                <div className="flex items-center gap-4 pt-1">
-                  <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-7 w-full rounded-md" />
+                <div className="flex items-center justify-between pt-2 border-t">
                   <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-8 w-20 rounded-md" />
                 </div>
               </CardContent>
             </Card>
@@ -417,14 +481,14 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
   // ─── Error state ────────────────────────────────────────────────────────
   if (error) {
     return (
-      <main className="p-4 sm:p-6 w-full">
-        <Card>
-          <CardContent className="p-8 flex flex-col items-center justify-center text-center gap-3">
+      <main className="p-4 sm:p-6 w-full max-w-7xl mx-auto">
+        <Card className="rounded-xl border-dashed">
+          <CardContent className="p-10 flex flex-col items-center justify-center text-center gap-3">
             <div className="size-12 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
               <Repeat className="size-6 text-rose-600" />
             </div>
             <h2 className="text-lg font-semibold">{error}</h2>
-            <Button onClick={() => void refetch()} variant="outline">
+            <Button onClick={() => void refetch()} variant="outline" className="mt-1">
               Retry
             </Button>
           </CardContent>
@@ -435,141 +499,277 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
 
   // ─── Render ─────────────────────────────────────────────────────────────
   return (
-    <main className="p-4 sm:p-6 space-y-6 w-full">
-      {/* ─── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shrink-0">
-            <Repeat className="size-5 text-white" />
+    <main className="p-4 sm:p-6 space-y-6 w-full max-w-7xl mx-auto">
+      {/* ─── 1. Header ────────────────────────────────────────────────────── */}
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-border/60">
+        <div className="flex items-center gap-3.5">
+          <div className="flex items-center justify-center size-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-xs text-white shrink-0">
+            <Repeat className="size-5.5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Recurring Jobs</h1>
-            <p className="text-sm text-muted-foreground">
-              Automate visit generation with repeating schedules
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              Recurring Jobs
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+              Automate repeat service visits, recurring maintenance & scheduled contracts
             </p>
           </div>
         </div>
         <Button
-          className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto"
+          className="bg-emerald-600 hover:bg-emerald-700 shadow-xs font-semibold px-4 h-9.5 text-xs sm:text-sm"
           onClick={onCreateNew}
         >
           <Plus className="size-4 mr-1.5" /> New Schedule
         </Button>
       </header>
 
-      {/* ─── Search + filter pills ──────────────────────────────────────── */}
-      <div className="flex flex-col gap-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Search by title or customer..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            aria-label="Search schedules"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Filter schedules by status">
-          {(
-            [
-              { key: 'all', label: 'All' },
-              { key: 'active', label: 'Active' },
-              { key: 'paused', label: 'Paused' },
-              { key: 'stopped', label: 'Stopped' },
-            ] as { key: StatusFilter; label: string }[]
-          ).map((pill) => {
-            const isActive = filter === pill.key;
-            return (
-              <button
-                key={pill.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setFilter(pill.key)}
-                className={[
-                  'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors min-h-[36px]',
-                  isActive
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/70',
-                ].join(' ')}
-              >
-                {pill.label}
-                {pill.key !== 'all' && (
-                  <span
-                    className={[
-                      'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] font-semibold',
-                      isActive ? 'bg-white/20 text-white' : 'bg-background/80 text-muted-foreground',
-                    ].join(' ')}
-                  >
-                    {schedules.filter((s) => deriveStatus(s) === pill.key).length}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ─── View toggle: Cards | Table ──────────────────────────────── */}
-      <div className="flex items-center justify-end gap-1">
-        <Button
-          variant={viewLayout === 'cards' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setViewLayout('cards')}
-          aria-pressed={viewLayout === 'cards'}
-          className="h-8"
+      {/* ─── 2. Top KPI Metric Summary Strip ──────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Active Schedules */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setFilter('active')}
+          className={cn(
+            'flex items-center justify-between p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer',
+            filter === 'active'
+              ? 'bg-emerald-500/10 border-emerald-500/50 shadow-xs ring-1 ring-emerald-500/30'
+              : 'bg-card hover:border-emerald-500/40 border-border/70 shadow-2xs'
+          )}
         >
-          <LayoutGrid className="size-4 mr-1.5" /> Cards
-        </Button>
-        <Button
-          variant={viewLayout === 'table' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setViewLayout('table')}
-          aria-pressed={viewLayout === 'table'}
-          className="h-8"
-        >
-          <TableIcon className="size-4 mr-1.5" /> Table
-        </Button>
-      </div>
-
-      {/* ─── Schedule cards / table ─────────────────────────────────── */}
-      {filtered.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 flex flex-col items-center justify-center text-center gap-3">
-            <div className="size-14 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <Repeat className="size-7 text-emerald-600" />
-            </div>
-            <h2 className="text-lg font-semibold">
-              {schedules.length === 0
-                ? 'No recurring schedules yet'
-                : 'No schedules match your filters'}
-            </h2>
-            <p className="text-sm text-muted-foreground max-w-md">
-              {schedules.length === 0
-                ? 'Create your first schedule to automate visit generation.'
-                : 'Try a different search or filter.'}
+          <div className="space-y-1 min-w-0">
+            <p className="text-[11px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Active Schedules
             </p>
-            {schedules.length === 0 && (
+            <p className="text-xl sm:text-2xl font-bold text-foreground">
+              {metrics.active}
+            </p>
+          </div>
+          <div className="size-9 rounded-lg bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Zap className="size-4.5" />
+          </div>
+        </div>
+
+        {/* Total Generated Jobs */}
+        <div className="flex items-center justify-between p-3.5 sm:p-4 rounded-xl border bg-card border-border/70 shadow-2xs">
+          <div className="space-y-1 min-w-0">
+            <p className="text-[11px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Jobs Generated
+            </p>
+            <p className="text-xl sm:text-2xl font-bold text-foreground">
+              {metrics.totalGenerated}
+            </p>
+          </div>
+          <div className="size-9 rounded-lg bg-teal-100 dark:bg-teal-950/50 text-teal-600 flex items-center justify-center shrink-0">
+            <Briefcase className="size-4.5" />
+          </div>
+        </div>
+
+        {/* Paused Schedules */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setFilter('paused')}
+          className={cn(
+            'flex items-center justify-between p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer',
+            filter === 'paused'
+              ? 'bg-amber-500/10 border-amber-500/50 shadow-xs ring-1 ring-amber-500/30'
+              : 'bg-card hover:border-amber-500/40 border-border/70 shadow-2xs'
+          )}
+        >
+          <div className="space-y-1 min-w-0">
+            <p className="text-[11px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Paused
+            </p>
+            <p className="text-xl sm:text-2xl font-bold text-foreground">
+              {metrics.paused}
+            </p>
+          </div>
+          <div className="size-9 rounded-lg bg-amber-100 dark:bg-amber-950/50 text-amber-600 flex items-center justify-center shrink-0">
+            <Pause className="size-4.5" />
+          </div>
+        </div>
+
+        {/* Upcoming in 7 Days */}
+        <div className="flex items-center justify-between p-3.5 sm:p-4 rounded-xl border bg-card border-border/70 shadow-2xs">
+          <div className="space-y-1 min-w-0">
+            <p className="text-[11px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Due This Week
+            </p>
+            <p className="text-xl sm:text-2xl font-bold text-foreground">
+              {metrics.upcomingThisWeek}
+            </p>
+          </div>
+          <div className="size-9 rounded-lg bg-blue-100 dark:bg-blue-950/50 text-blue-600 flex items-center justify-center shrink-0">
+            <CalendarIcon className="size-4.5" />
+          </div>
+        </div>
+      </div>
+
+      {/* ─── 3. Unified Filter & Search Toolbar ──────────────────────────── */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border/70 shadow-2xs">
+        {/* Left: Search & Frequency Selector */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1 max-w-2xl">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search schedules by title or customer..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 h-9 text-xs sm:text-sm bg-background/80 border-border/80"
+              aria-label="Search schedules"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          <Select value={frequencyFilter} onValueChange={setFrequencyFilter}>
+            <SelectTrigger className="h-9 text-xs sm:text-sm sm:w-[155px] bg-background/80 border-border/80 shrink-0">
+              <SelectValue placeholder="All Frequencies" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Frequencies</SelectItem>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="biweekly">Bi-weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="quarterly">Quarterly</SelectItem>
+              <SelectItem value="annually">Annually</SelectItem>
+              <SelectItem value="as_needed">As needed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Right: Status Pills + View Layout Toggle */}
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2">
+          <div className="inline-flex items-center gap-1 p-1 bg-muted/60 rounded-lg border border-border/50" role="tablist">
+            {(
+              [
+                { key: 'all', label: 'All' },
+                { key: 'active', label: 'Active' },
+                { key: 'paused', label: 'Paused' },
+                { key: 'stopped', label: 'Stopped' },
+              ] as { key: StatusFilter; label: string }[]
+            ).map((pill) => {
+              const isActive = filter === pill.key;
+              const count = pill.key === 'all'
+                ? schedules.length
+                : schedules.filter((s) => deriveStatus(s) === pill.key).length;
+
+              return (
+                <button
+                  key={pill.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setFilter(pill.key)}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all',
+                    isActive
+                      ? 'bg-background text-foreground shadow-2xs font-semibold'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {pill.label}
+                  <span
+                    className={cn(
+                      'inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-semibold',
+                      isActive ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-1 border-l pl-2 border-border/60">
+            <Button
+              variant={viewLayout === 'cards' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewLayout('cards')}
+              className="h-8 px-2.5 text-xs gap-1.5"
+              title="3-Column Cards"
+            >
+              <LayoutGrid className="size-3.5 text-muted-foreground" />
+              <span className="hidden sm:inline">Cards</span>
+            </Button>
+            <Button
+              variant={viewLayout === 'table' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewLayout('table')}
+              className="h-8 px-2.5 text-xs gap-1.5"
+              title="Table View"
+            >
+              <TableIcon className="size-3.5 text-muted-foreground" />
+              <span className="hidden sm:inline">Table</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── 4. Schedules 3-Column Grid / Table View ──────────────────────── */}
+      {filtered.length === 0 ? (
+        <Card className="rounded-xl border border-dashed border-border/80">
+          <CardContent className="p-12 flex flex-col items-center justify-center text-center gap-3.5">
+            <div className="size-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center text-emerald-600 shadow-2xs">
+              <Repeat className="size-7" />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-base font-semibold text-foreground">
+                {schedules.length === 0
+                  ? 'No recurring schedules configured yet'
+                  : 'No schedules match your filters'}
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground max-w-sm">
+                {schedules.length === 0
+                  ? 'Automate your recurring services, preventive maintenance contracts, and periodic visits.'
+                  : 'Try clearing the search query or changing the frequency and status filters.'}
+              </p>
+            </div>
+            {schedules.length === 0 ? (
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700"
+                className="bg-emerald-600 hover:bg-emerald-700 mt-2 font-semibold shadow-xs"
                 onClick={onCreateNew}
               >
-                <Plus className="size-4 mr-1.5" /> New Schedule
+                <Plus className="size-4 mr-1.5" /> Create First Schedule
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearch('');
+                  setFilter('all');
+                  setFrequencyFilter('all');
+                }}
+                className="mt-1"
+              >
+                Reset all filters
               </Button>
             )}
           </CardContent>
         </Card>
       ) : viewLayout === 'table' ? (
-        <div className="rounded-md border">
+        /* ── Data Table View ── */
+        <div className="rounded-xl border border-border/80 bg-card overflow-hidden shadow-2xs">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Frequency</TableHead>
-                <TableHead>Next Run</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+            <TableHeader className="bg-muted/40">
+              <TableRow className="border-border/60">
+                <TableHead className="font-semibold text-xs text-foreground">Title & Customer</TableHead>
+                <TableHead className="font-semibold text-xs text-foreground">Frequency</TableHead>
+                <TableHead className="font-semibold text-xs text-foreground">Next Scheduled Run</TableHead>
+                <TableHead className="font-semibold text-xs text-foreground">Generated</TableHead>
+                <TableHead className="font-semibold text-xs text-foreground">Status</TableHead>
+                <TableHead className="text-right font-semibold text-xs text-foreground">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -577,68 +777,91 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
                 const status = deriveStatus(s);
                 const summary = buildSummary(s);
                 const isActioning = actioningId === s.id;
+                const genCount = s._count?.generatedJobs ?? s.generatedCount ?? s.executionCount ?? 0;
+                const relativeNext = getRelativeNextRun(s.nextRunAt);
+
                 return (
                   <TableRow
                     key={s.id}
-                    className="cursor-pointer hover:bg-emerald-50/40 dark:hover:bg-emerald-900/10"
+                    className="cursor-pointer hover:bg-muted/40 transition-colors border-border/60"
                     onClick={() => onViewDetail(s.id)}
                   >
-                    <TableCell className="font-medium">{s.title}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {s.customer?.name ?? 'No customer'}
+                    <TableCell>
+                      <div className="flex items-center gap-2.5">
+                        <Avatar className="size-8 rounded-lg bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 font-semibold text-xs border">
+                          <AvatarFallback className="rounded-lg">
+                            {s.customer?.name ? s.customer.name.slice(0, 2).toUpperCase() : 'RJ'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm text-foreground truncate max-w-xs">{s.title}</p>
+                          <p className="text-xs text-muted-foreground truncate">{s.customer?.name ?? 'No customer'}</p>
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{summary}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {status === 'active' && s.nextRunAt
-                        ? formatNextRun(s.nextRunAt)
-                        : status === 'paused'
-                          ? 'Paused'
-                          : status === 'stopped'
-                            ? 'Stopped'
-                            : 'No upcoming run'}
+                    <TableCell>
+                      <Badge variant="outline" className="font-normal text-xs bg-muted/30">
+                        {summary}
+                      </Badge>
                     </TableCell>
-                    <TableCell><StatusBadge status={status} /></TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-medium text-foreground">
+                          {status === 'active' && s.nextRunAt
+                            ? formatNextRun(s.nextRunAt)
+                            : status === 'paused'
+                              ? 'Paused'
+                              : status === 'stopped'
+                                ? 'Stopped'
+                                : 'No upcoming run'}
+                        </p>
+                        {status === 'active' && relativeNext && (
+                          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                            {relativeNext}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs text-muted-foreground font-medium">
+                        {genCount} job{genCount === 1 ? '' : 's'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={status} />
+                    </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="size-8 p-0"
+                            className="size-8 p-0 hover:bg-muted"
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`Actions for ${s.title}`}
                             disabled={isActioning}
                           >
                             {isActioning ? (
-                              <Loader2 className="size-4 animate-spin" />
+                              <Loader2 className="size-4 animate-spin text-emerald-600" />
                             ) : (
-                              <MoreVertical className="size-4" />
+                              <MoreVertical className="size-4 text-muted-foreground" />
                             )}
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()} className="w-44">
                           <DropdownMenuItem onClick={() => onViewDetail(s.id)}>
-                            <Eye className="size-4 mr-2" /> View
+                            <Eye className="size-4 mr-2" /> View Details
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => onEdit(s.id)}>
-                            <Pencil className="size-4 mr-2" /> Edit
+                            <Pencil className="size-4 mr-2" /> Edit Schedule
                           </DropdownMenuItem>
                           {status === 'active' ? (
-                            <DropdownMenuItem
-                              disabled={isActioning}
-                              onClick={() => handlePause(s)}
-                            >
-                              <Pause className="size-4 mr-2" /> Pause
+                            <DropdownMenuItem disabled={isActioning} onClick={() => handlePause(s)}>
+                              <Pause className="size-4 mr-2" /> Pause Schedule
                             </DropdownMenuItem>
                           ) : status === 'paused' ? (
-                            <DropdownMenuItem
-                              disabled={isActioning}
-                              onClick={() => handleResume(s)}
-                            >
-                              <Play className="size-4 mr-2" /> Resume
+                            <DropdownMenuItem disabled={isActioning} onClick={() => handleResume(s)}>
+                              <Play className="size-4 mr-2" /> Resume Schedule
                             </DropdownMenuItem>
                           ) : null}
                           <DropdownMenuSeparator />
@@ -646,11 +869,11 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
                             disabled={isActioning || status === 'stopped'}
                             onClick={() => handleGenerateNow(s)}
                           >
-                            <Play className="size-4 mr-2" /> Generate Now
+                            <Sparkles className="size-4 mr-2 text-emerald-600" /> Generate Job Now
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/20"
+                            className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-950/20"
                             onClick={() => setDeleteTarget(s)}
                           >
                             <Trash2 className="size-4 mr-2" /> Delete
@@ -665,13 +888,14 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
           </Table>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        /* ── 3-Column Card Grid View ── */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4.5">
           {filtered.map((s) => {
             const status = deriveStatus(s);
             const summary = buildSummary(s);
-            const generatedCount =
-              s._count?.generatedJobs ?? s.generatedCount ?? s.executionCount;
+            const generatedCount = s._count?.generatedJobs ?? s.generatedCount ?? s.executionCount ?? 0;
             const isActioning = actioningId === s.id;
+            const relativeNext = getRelativeNextRun(s.nextRunAt);
 
             return (
               <Card
@@ -685,106 +909,159 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
                     onViewDetail(s.id);
                   }
                 }}
-                className="group cursor-pointer hover:border-emerald-400/60 hover:shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+                className="group cursor-pointer rounded-xl border border-border/80 bg-card hover:border-emerald-500/50 hover:shadow-md transition-all flex flex-col justify-between overflow-hidden shadow-2xs"
               >
-                <CardContent className="p-4 space-y-3">
-                  {/* Row 1: title + status */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-base truncate">{s.title}</h3>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {s.customer?.name ?? 'No customer'}
-                      </p>
+                <CardContent className="p-4.5 space-y-3.5 flex-1 flex flex-col justify-between">
+                  {/* Top: Customer Avatar + Title + Status */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <Avatar className="size-9 rounded-lg bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 font-bold text-xs border border-emerald-200 dark:border-emerald-800/50 shrink-0">
+                          <AvatarFallback className="rounded-lg">
+                            {s.customer?.name ? s.customer.name.slice(0, 2).toUpperCase() : 'RJ'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-sm sm:text-base text-foreground group-hover:text-emerald-600 transition-colors truncate">
+                            {s.title}
+                          </h3>
+                          <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                            <User className="size-3 shrink-0" />
+                            {s.customer?.name ?? 'No customer linked'}
+                          </p>
+                        </div>
+                      </div>
+                      <StatusBadge status={status} />
                     </div>
-                    <StatusBadge status={status} />
+
+                    {/* Recurrence Rhythm Tag */}
+                    <div className="flex items-center gap-2 py-1.5 px-2.5 rounded-lg bg-muted/50 border border-border/40 text-xs text-foreground/90">
+                      <Repeat className="size-3.5 text-emerald-600 shrink-0" />
+                      <span className="font-medium truncate">{summary}</span>
+                    </div>
                   </div>
 
-                  {/* Row 2: frequency summary */}
-                  <div className="flex items-center gap-2 text-sm">
-                    <Repeat className="size-4 text-muted-foreground shrink-0" />
-                    <span className="truncate">{summary}</span>
+                  {/* Middle: Timing & Statistics Chips */}
+                  <div className="space-y-2 pt-1 border-t border-border/40 text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <CalendarIcon className="size-3.5 text-muted-foreground shrink-0" />
+                        <span>
+                          {status === 'active' && s.nextRunAt
+                            ? formatNextRun(s.nextRunAt)
+                            : status === 'paused'
+                              ? 'Paused'
+                              : 'Stopped'}
+                        </span>
+                      </span>
+                      {status === 'active' && relativeNext && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 font-semibold text-[10px] shrink-0 border border-emerald-200/60 dark:border-emerald-800/40">
+                          {relativeNext}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <Briefcase className="size-3.5 shrink-0" />
+                        <span>{generatedCount} visit{generatedCount === 1 ? '' : 's'} generated</span>
+                      </span>
+                      {s.timeOfDay && (
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Clock className="size-3" />
+                          {s.timeOfDay}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Row 3: meta line — next run + execution count */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1">
-                      <CalendarIcon className="size-3.5" />
-                      {status === 'active' && s.nextRunAt
-                        ? `Next: ${formatNextRun(s.nextRunAt)}`
-                        : status === 'paused'
-                          ? 'Paused'
-                          : status === 'stopped'
-                            ? 'Stopped'
-                            : 'No upcoming run'}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Repeat className="size-3.5" />
-                      {generatedCount} job{generatedCount === 1 ? '' : 's'} generated
-                    </span>
-                  </div>
-
-                  {/* Row 4: action menu */}
-                  <div className="flex items-center justify-end pt-1 border-t">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="size-8 p-0"
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label={`Actions for ${s.title}`}
-                          disabled={isActioning}
-                        >
-                          {isActioning ? (
-                            <Loader2 className="size-4 animate-spin" />
-                          ) : (
-                            <MoreVertical className="size-4" />
-                          )}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        onClick={(e) => e.stopPropagation()}
+                  {/* Bottom: Quick Actions Bar */}
+                  <div className="flex items-center justify-between pt-2.5 border-t border-border/60 gap-2">
+                    {status === 'active' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1.5"
+                        disabled={isActioning}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleGenerateNow(s);
+                        }}
                       >
-                        <DropdownMenuItem onClick={() => onViewDetail(s.id)}>
-                          <Eye className="size-4 mr-2" /> View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onEdit(s.id)}
-                        >
-                          <Pencil className="size-4 mr-2" /> Edit
-                        </DropdownMenuItem>
-                        {status === 'active' ? (
-                          <DropdownMenuItem
+                        {isActioning ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="size-3.5" />
+                        )}
+                        Generate Now
+                      </Button>
+                    ) : status === 'paused' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs font-medium text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1.5"
+                        disabled={isActioning}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleResume(s);
+                        }}
+                      >
+                        {isActioning ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Play className="size-3.5" />
+                        )}
+                        Resume
+                      </Button>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground italic">Schedule ended</span>
+                    )}
+
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => onEdit(s.id)}
+                      >
+                        <Pencil className="size-3.5 mr-1" /> Edit
+                      </Button>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="size-8 p-0 hover:bg-muted"
+                            aria-label={`More options for ${s.title}`}
                             disabled={isActioning}
-                            onClick={() => handlePause(s)}
                           >
-                            <Pause className="size-4 mr-2" /> Pause
+                            <MoreVertical className="size-4 text-muted-foreground" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem onClick={() => onViewDetail(s.id)}>
+                            <Eye className="size-4 mr-2" /> View Details
                           </DropdownMenuItem>
-                        ) : status === 'paused' ? (
+                          {status === 'active' ? (
+                            <DropdownMenuItem onClick={() => handlePause(s)}>
+                              <Pause className="size-4 mr-2" /> Pause Schedule
+                            </DropdownMenuItem>
+                          ) : status === 'paused' ? (
+                            <DropdownMenuItem onClick={() => handleResume(s)}>
+                              <Play className="size-4 mr-2" /> Resume Schedule
+                            </DropdownMenuItem>
+                          ) : null}
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            disabled={isActioning}
-                            onClick={() => handleResume(s)}
+                            className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-950/20"
+                            onClick={() => setDeleteTarget(s)}
                           >
-                            <Play className="size-4 mr-2" /> Resume
+                            <Trash2 className="size-4 mr-2" /> Delete
                           </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          disabled={isActioning || status === 'stopped'}
-                          onClick={() => handleGenerateNow(s)}
-                        >
-                          <Play className="size-4 mr-2" /> Generate Now
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 dark:focus:bg-rose-900/20"
-                          onClick={() => setDeleteTarget(s)}
-                        >
-                          <Trash2 className="size-4 mr-2" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -793,7 +1070,7 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
         </div>
       )}
 
-      {/* PAGINATION: Server-side pagination controls (shared by cards + table views) */}
+      {/* ─── 5. Server-Side Pagination Bar ───────────────────────────────── */}
       {filtered.length > 0 && (
         <PaginationBar
           currentPage={currentPage}
@@ -801,12 +1078,15 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
           totalItems={totalItems}
           pageSize={itemsPerPage}
           onPageChange={setCurrentPage}
-          onPageSizeChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
+          onPageSizeChange={(size) => {
+            setItemsPerPage(size);
+            setCurrentPage(1);
+          }}
           itemName="schedules"
         />
       )}
 
-      {/* ─── Delete confirmation dialog (inline, no dependency on other agents' files) ─── */}
+      {/* ─── 6. Delete Confirmation Dialog ───────────────────────────────── */}
       <AlertDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
@@ -817,13 +1097,11 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this recurring schedule?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete
-              {' '}
-              <span className="font-medium text-foreground">
+              This will permanently delete{' '}
+              <span className="font-semibold text-foreground">
                 {deleteTarget?.title ?? 'this schedule'}
-              </span>
-              {' '}and remove it from your recurring jobs list. Any jobs already generated by this schedule will remain on your calendar.
-              This action cannot be undone.
+              </span>{' '}
+              and stop automatic visit generation. Previously generated jobs will remain in your calendar and jobs history.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -851,19 +1129,19 @@ export function RecurringJobsListPage({ onViewDetail, onCreateNew, onEdit }: Rec
   );
 }
 
-// ─── Header skeleton ────────────────────────────────────────────────────────
+// ─── Header Skeleton ────────────────────────────────────────────────────────
 
 function ListHeaderSkeleton() {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-border/60">
       <div className="flex items-center gap-3">
-        <Skeleton className="size-10 rounded-lg" />
-        <div className="space-y-1">
-          <Skeleton className="h-6 w-40" />
-          <Skeleton className="h-4 w-56" />
+        <Skeleton className="size-11 rounded-xl" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-6 w-44" />
+          <Skeleton className="h-4 w-72" />
         </div>
       </div>
-      <Skeleton className="h-9 w-36" />
+      <Skeleton className="h-9.5 w-36 rounded-lg" />
     </div>
   );
 }

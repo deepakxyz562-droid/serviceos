@@ -1,62 +1,46 @@
 'use client';
 
-// ─── RecurringJobDetailPage — 5-tab schedule detail (T1-DETAIL) ─────────────
+// ─── RecurringJobDetailPage — Modernized 5-tab schedule detail ──────────────
 //
-// Renders the full schedule detail view with shadcn/ui Tabs:
-//   1. Overview        — customer info, frequency summary, date range, next
-//                        run, execution count, assignees, visit instructions.
-//   2. Schedule        — read-only recurrence rules (frequency, weekdays,
-//                        time, end condition, timezone, schedule preview).
-//   3. Generated Jobs  — paginated list of jobs this schedule created.
-//   4. Billing         — generateInvoice/invoiceTiming settings + generated
-//                        invoices (fetched from a dedicated endpoint).
-//   5. Activity        — timeline of ActivityLog entries (schedule + jobs).
-//
-// Inline action buttons in the header:
-//   - Edit Schedule    → router.push(`/recurring-jobs/[id]/edit`)
-//   - Pause / Resume   → POST /api/recurring-jobs/[id]/{pause|resume}
-//                         (toggle based on schedule state)
-//   - Generate Now     → POST /api/recurring-jobs/[id]/generate-now
-//   - Stop Schedule     → inline AlertDialog with RadioGroup
-//                         (Keep future visits / Remove future visits)
-//                         → POST /api/recurring-jobs/[id]/stop
-//                         with { keepFutureVisits: boolean }
-//
-// Fetches:
-//   - GET  /api/recurring-jobs/[id]                  → { schedule, recentJobs }
-//   - GET  /api/recurring-jobs/[id]/jobs?page&limit  → paginated generated jobs
-//   - GET  /api/recurring-jobs/[id]/invoices         → generated invoices
-//   - GET  /api/recurring-jobs/[id]/activity         → ActivityLog timeline
-//
-// Hard constraints respected:
-//   - NO Prisma schema changes, NO recurrence-engine changes, NO schedule-editor changes.
-//   - NO dependency on other agents' dialog components — Stop dialog is inline
-//     with its own RadioGroup (does NOT import StopScheduleDialog).
-//   - Uses existing shadcn/ui components: Card, Button, Badge, Tabs,
-//     AlertDialog, RadioGroup, Skeleton.
-//   - All fetches use relative paths (via apiGet/apiPost helpers from @/lib/api
-//     which transparently append XTransformPort for the gateway).
+// Renders the modernized schedule detail view matching the Job & Booking design language:
+//   1. Hero Header: Back navigation, title, status pill badge with live indicator,
+//      customer / rhythm metadata, and primary action group (Generate Now, Pause/Resume, Edit, Stop).
+//   2. KPI Metrics Summary Strip: 4 summary cards (Active Cadence, Total Jobs Generated,
+//      Upcoming Visits, Completed Visits).
+//   3. Tabbed Workspace (Jobber-style 2-Column Overview Tab):
+//      - Left Column (8 cols): Recurrence Rhythm & Next 5 Visits Preview, Default Line Items & Pricing,
+//        Scope & Visit Instructions.
+//      - Right Column (4 cols): Customer Profile & Contact card, Assigned Team & Primary Tech,
+//        Automated Billing & Invoicing, Attached Quality Checklists, Lifecycle metadata.
+//   4. Other Tabs: Schedule Rules & Lifecycle, Paginated Generated Jobs with status filter & load more,
+//      Generated Invoices & Billing configuration, and Activity Log Timeline.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import Link from 'next/link';
 import {
   Activity as ActivityIcon,
   ArrowLeft,
   Calendar as CalendarIcon,
   CalendarClock,
   CalendarDays,
+  Check,
   CheckCircle2,
+  CheckSquare,
   Clock,
   CreditCard,
   DollarSign,
+  ExternalLink,
   FileText,
   Loader2,
+  Mail,
+  MapPin,
   Pause,
   Pencil,
+  Phone,
   Play,
   Plus,
   Receipt,
   Repeat,
+  Sparkles,
   Square,
   Trash2,
   User,
@@ -69,7 +53,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
@@ -93,6 +76,8 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { apiGet, apiPost } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { parseLineItems, lineItemsSubtotal } from '@/features/line-items';
 import {
   calculateOccurrences,
   DAY_NAMES,
@@ -110,6 +95,7 @@ interface Customer {
   name: string;
   phone?: string | null;
   email?: string | null;
+  address?: string | null;
 }
 
 interface Schedule {
@@ -206,6 +192,12 @@ interface ScheduleMetrics {
   lastJobCreatedAt: string | null;
 }
 
+interface ChecklistItem {
+  id: string;
+  title: string;
+  description?: string | null;
+}
+
 export interface RecurringJobDetailPageProps {
   scheduleId: string;
   onBack: () => void;
@@ -230,7 +222,14 @@ function deriveStatus(s: {
   return 'active';
 }
 
-// ─── Component ──────────────────────────────────────────────────────────────
+function getInitials(name: string): string {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────
 
 export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: RecurringJobDetailPageProps) {
   const { setActiveView, setPendingOpenEntity } = useAppStore();
@@ -246,11 +245,9 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
     'overview' | 'schedule' | 'jobs' | 'billing' | 'activity'
   >('overview');
 
-  // Fix: assignees state moved HERE (parent) so loadSchedule can set it.
-  // Previously this was in the child OverviewTab, causing setAssignees
-  // to be undefined in the parent's loadSchedule scope.
   const [assignees, setAssignees] = useState<{ id: string; name: string }[]>([]);
   const [loadingAssignees, setLoadingAssignees] = useState(false);
+  const [checklists, setChecklists] = useState<ChecklistItem[]>([]);
 
   const loadSchedule = useCallback(async () => {
     try {
@@ -264,7 +261,6 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
       setSchedule(data.schedule);
       setRecentJobs(data.recentJobs || []);
       setMetrics(data.metrics ?? null);
-      // Fix: setAssignees is now in scope (parent component)
       if (data.assignees) {
         setAssignees(data.assignees);
       }
@@ -281,8 +277,7 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
     loadSchedule();
   }, [loadSchedule]);
 
-  // Fix: Fallback assignee fetch — only runs if the API didn't return
-  // assignees (e.g. Supabase RPC path) AND we have assignee IDs to resolve.
+  // Assignee resolution fallback
   const assigneeIds = useMemo(
     () => parseStrArr(schedule?.assigneeIdsJson || ''),
     [schedule?.assigneeIdsJson],
@@ -308,7 +303,7 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
           );
         }
       } catch {
-        // silent — names just won't resolve
+        // silent fallback
       } finally {
         if (!cancelled) setLoadingAssignees(false);
       }
@@ -317,6 +312,32 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
       cancelled = true;
     };
   }, [assigneeIds, assignees.length]);
+
+  // Load checklist titles if checklistIds are present
+  const checklistIds = useMemo(
+    () => parseStrArr(schedule?.checklistIdsJson || ''),
+    [schedule?.checklistIdsJson],
+  );
+  useEffect(() => {
+    if (checklistIds.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/checklists', { credentials: 'include' });
+        if (!res.ok) return;
+        const d = await res.json();
+        const list = Array.isArray(d) ? d : d.checklists || [];
+        if (!cancelled) {
+          setChecklists(list);
+        }
+      } catch {
+        // silent fallback
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [checklistIds.length]);
 
   // ─── Actions ─────────────────────────────────────────────────────────────
   const handlePause = async () => {
@@ -358,7 +379,7 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
     try {
       setActioning(true);
       await apiPost(`/api/recurring-jobs/${schedule.id}/generate-now`);
-      toast.success('Job generated');
+      toast.success('Job generated successfully');
       await loadSchedule();
     } catch {
       toast.error('Failed to generate job now');
@@ -398,11 +419,18 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
   // ─── Loading state ──────────────────────────────────────────────────────
   if (loading) {
     return (
-      <main className="p-4 sm:p-6 w-full space-y-6">
+      <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
         <DetailHeaderSkeleton />
-        <Skeleton className="h-10 w-full max-w-md" />
-        <Card>
-          <CardContent className="p-6 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="p-4 space-y-2 border-border/60">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-8 w-16" />
+            </Card>
+          ))}
+        </div>
+        <Card className="border-border/60">
+          <CardContent className="p-6 space-y-4">
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-3/4" />
@@ -413,87 +441,122 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
   }
 
   if (!schedule) {
-    return null; // redirect already triggered in loadSchedule
+    return null;
   }
 
   const status = deriveStatus(schedule);
 
   return (
-    <main className="p-4 sm:p-6 w-full space-y-6">
-      {/* ─── Header ─────────────────────────────────────────────────────── */}
-      <header className="space-y-3">
+    <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+      {/* ─── Hero Header ─────────────────────────────────────────────────── */}
+      <header className="space-y-4">
         <Button
           variant="ghost"
           size="sm"
-          className="-ml-2 text-muted-foreground hover:text-foreground"
+          className="-ml-2 text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-xs font-medium"
           onClick={onBack}
         >
-          <ArrowLeft className="size-4 mr-1.5" />
-          Recurring Jobs
+          <ArrowLeft className="size-4" />
+          Back to Recurring Schedules
         </Button>
 
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight break-words">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2 min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground break-words">
                 {schedule.title}
               </h1>
               <StatusBadge status={status} />
+              {schedule.nextRunAt && status === 'active' && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                  <Sparkles className="size-3" />
+                  Next run {relativeTime(schedule.nextRunAt)}
+                </span>
+              )}
             </div>
-            <p className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
+
+            <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1.5">
               {schedule.customer ? (
-                <span className="inline-flex items-center gap-1">
-                  <User className="size-3" /> {schedule.customer.name}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (schedule.customer?.id) {
+                      setPendingOpenEntity({ kind: 'customer', id: schedule.customer.id });
+                      setActiveView('customers');
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 font-medium text-foreground hover:text-emerald-600 transition-colors"
+                >
+                  <User className="size-3.5 text-muted-foreground" />
+                  {schedule.customer.name}
+                </button>
               ) : (
-                <span className="text-muted-foreground">No customer linked</span>
-              )}
-              {schedule.timeOfDay && (
-                <span className="inline-flex items-center gap-1">
-                  <Clock className="size-3" /> {schedule.timeOfDay}
+                <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <User className="size-3.5" /> No customer linked
                 </span>
               )}
-              <span className="inline-flex items-center gap-1">
-                <Repeat className="size-3" /> {schedule.frequency}
+
+              <span className="inline-flex items-center gap-1.5">
+                <Repeat className="size-3.5 text-muted-foreground" />
+                {humanizeFrequency(schedule.frequency)}
               </span>
-            </p>
+
+              {schedule.timeOfDay && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="size-3.5 text-muted-foreground" />
+                  {schedule.timeOfDay} ({schedule.durationMins} min)
+                </span>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Action Buttons Group */}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             <Button
               variant="outline"
+              size="sm"
               onClick={() => onEdit(schedule.id)}
               disabled={actioning}
+              className="border-border/70 hover:bg-muted/60"
             >
-              <Pencil className="size-4 mr-1.5" /> Edit Schedule
+              <Pencil className="size-3.5 mr-1.5" />
+              Edit Schedule
             </Button>
 
             {status === 'active' ? (
-              <Button variant="outline" onClick={handlePause} disabled={actioning}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePause}
+                disabled={actioning}
+                className="border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800/60 dark:text-amber-300 dark:hover:bg-amber-950/30"
+              >
                 {actioning ? (
-                  <Loader2 className="size-4 mr-1.5 animate-spin" />
+                  <Loader2 className="size-3.5 mr-1.5 animate-spin" />
                 ) : (
-                  <Pause className="size-4 mr-1.5" />
+                  <Pause className="size-3.5 mr-1.5" />
                 )}
                 Pause
               </Button>
             ) : status === 'paused' ? (
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700"
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
                 onClick={handleResume}
                 disabled={actioning}
               >
                 {actioning ? (
-                  <Loader2 className="size-4 mr-1.5 animate-spin" />
+                  <Loader2 className="size-3.5 mr-1.5 animate-spin" />
                 ) : (
-                  <Play className="size-4 mr-1.5" />
+                  <Play className="size-3.5 mr-1.5" />
                 )}
                 Resume
               </Button>
             ) : null}
 
             <Button
-              variant="outline"
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
               onClick={handleGenerateNow}
               disabled={actioning || status === 'stopped'}
               title={
@@ -501,9 +564,9 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
               }
             >
               {actioning ? (
-                <Loader2 className="size-4 mr-1.5 animate-spin" />
+                <Loader2 className="size-3.5 mr-1.5 animate-spin" />
               ) : (
-                <Play className="size-4 mr-1.5" />
+                <Zap className="size-3.5 mr-1.5" />
               )}
               Generate Now
             </Button>
@@ -511,49 +574,155 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
             {status !== 'stopped' && (
               <Button
                 variant="outline"
-                className="text-destructive hover:text-destructive"
+                size="sm"
+                className="text-destructive border-red-200 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-950/20"
                 onClick={() => setStopDialogOpen(true)}
                 disabled={actioning}
               >
-                <Square className="size-4 mr-1.5" /> Stop Schedule
+                <Square className="size-3.5 mr-1.5" />
+                Stop
               </Button>
             )}
           </div>
         </div>
       </header>
 
-      {/* ─── Tabs ───────────────────────────────────────────────────────── */}
+      {/* ─── Top KPI Metrics Strip ────────────────────────────────────────── */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Schedule Rhythm */}
+        <Card className="border-border/60 shadow-xs bg-card hover:border-border transition-colors">
+          <CardContent className="p-4 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-xs font-medium uppercase tracking-wider">Recurrence Cadence</span>
+              <CalendarClock className="size-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <p className="text-lg font-bold tracking-tight text-foreground truncate">
+              {humanizeFrequency(schedule.frequency)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {status === 'active'
+                ? schedule.nextRunAt
+                  ? `Next: ${formatShortDate(schedule.nextRunAt)}`
+                  : 'Active schedule'
+                : status === 'paused'
+                  ? 'Temporarily paused'
+                  : 'Permanently stopped'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Generated Jobs */}
+        <Card className="border-border/60 shadow-xs bg-card hover:border-border transition-colors">
+          <CardContent className="p-4 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-xs font-medium uppercase tracking-wider">Total Jobs Generated</span>
+              <Zap className="size-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            <p className="text-2xl font-bold tracking-tight text-foreground tabular-nums">
+              {metrics?.total ?? schedule.executionCount ?? 0}
+            </p>
+            <p className="text-xs text-muted-foreground">Created by this recurring schedule</p>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Upcoming Visits */}
+        <Card className="border-border/60 shadow-xs bg-card hover:border-border transition-colors">
+          <CardContent className="p-4 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-xs font-medium uppercase tracking-wider">Upcoming Visits</span>
+              <CalendarDays className="size-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <p className="text-2xl font-bold tracking-tight text-foreground tabular-nums">
+              {metrics?.upcoming ?? 0}
+            </p>
+            <p className="text-xs text-muted-foreground">Scheduled &amp; in progress</p>
+          </CardContent>
+        </Card>
+
+        {/* Card 4: Completed Visits */}
+        <Card className="border-border/60 shadow-xs bg-card hover:border-border transition-colors">
+          <CardContent className="p-4 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-xs font-medium uppercase tracking-wider">Completed Visits</span>
+              <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <p className="text-2xl font-bold tracking-tight text-foreground tabular-nums">
+              {metrics?.completed ?? 0}
+            </p>
+            <p className="text-xs text-muted-foreground">Successfully finished visits</p>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* ─── Tabs Navigation ──────────────────────────────────────────────── */}
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+        className="space-y-6"
       >
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5">
-          <TabsTrigger value="overview">
-            <CalendarIcon className="size-3.5 mr-1" /> Overview
-          </TabsTrigger>
-          <TabsTrigger value="schedule">
-            <Repeat className="size-3.5 mr-1" /> Schedule
-          </TabsTrigger>
-          <TabsTrigger value="jobs">
-            <CalendarDays className="size-3.5 mr-1" /> Generated Jobs
-          </TabsTrigger>
-          <TabsTrigger value="billing">
-            <DollarSign className="size-3.5 mr-1" /> Billing
-          </TabsTrigger>
-          <TabsTrigger value="activity">
-            <ActivityIcon className="size-3.5 mr-1" /> Activity
-          </TabsTrigger>
-        </TabsList>
+        <div className="border-b border-border/60">
+          <TabsList className="w-full justify-start h-11 bg-transparent p-0 gap-6 rounded-none">
+            <TabsTrigger
+              value="overview"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none px-2 py-2.5 font-medium text-sm text-muted-foreground hover:text-foreground"
+            >
+              <CalendarIcon className="size-4 mr-1.5" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger
+              value="schedule"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none px-2 py-2.5 font-medium text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Repeat className="size-4 mr-1.5" />
+              Schedule Rule
+            </TabsTrigger>
+            <TabsTrigger
+              value="jobs"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none px-2 py-2.5 font-medium text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5"
+            >
+              <CalendarDays className="size-4 mr-0.5" />
+              Generated Jobs
+              {metrics?.total != null && metrics.total > 0 && (
+                <Badge variant="secondary" className="px-1.5 py-0 text-[11px] font-mono">
+                  {metrics.total}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="billing"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none px-2 py-2.5 font-medium text-sm text-muted-foreground hover:text-foreground"
+            >
+              <DollarSign className="size-4 mr-1.5" />
+              Billing &amp; Invoicing
+            </TabsTrigger>
+            <TabsTrigger
+              value="activity"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-emerald-600 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none px-2 py-2.5 font-medium text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ActivityIcon className="size-4 mr-1.5" />
+              Activity History
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="overview" className="mt-4 space-y-4">
-          <OverviewTab schedule={schedule} metrics={metrics} assignees={assignees} loadingAssignees={loadingAssignees} />
+        {/* ── Tab: Overview (2 Columns) ── */}
+        <TabsContent value="overview" className="mt-0 focus-visible:outline-none">
+          <OverviewTab
+            schedule={schedule}
+            metrics={metrics}
+            assignees={assignees}
+            loadingAssignees={loadingAssignees}
+            checklists={checklists}
+          />
         </TabsContent>
 
-        <TabsContent value="schedule" className="mt-4">
+        {/* ── Tab: Schedule ── */}
+        <TabsContent value="schedule" className="mt-0 focus-visible:outline-none">
           <ScheduleTab schedule={schedule} />
         </TabsContent>
 
-        <TabsContent value="jobs" className="mt-4">
+        {/* ── Tab: Jobs ── */}
+        <TabsContent value="jobs" className="mt-0 focus-visible:outline-none">
           <GeneratedJobsTab
             scheduleId={schedule.id}
             initialJobs={recentJobs}
@@ -561,61 +730,54 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
           />
         </TabsContent>
 
-        <TabsContent value="billing" className="mt-4">
+        {/* ── Tab: Billing ── */}
+        <TabsContent value="billing" className="mt-0 focus-visible:outline-none">
           <BillingTab schedule={schedule} />
         </TabsContent>
 
-        <TabsContent value="activity" className="mt-4">
+        {/* ── Tab: Activity ── */}
+        <TabsContent value="activity" className="mt-0 focus-visible:outline-none">
           <ActivityTab scheduleId={schedule.id} />
         </TabsContent>
       </Tabs>
 
-      {/* ─── Stop schedule dialog (inline, RadioGroup) ──────────────────── */}
+      {/* ─── Stop schedule dialog ─────────────────────────────────────────── */}
       <AlertDialog open={stopDialogOpen} onOpenChange={setStopDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Square className="size-5 text-red-600" />
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <Square className="size-5" />
               Stop recurring schedule?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This will prevent new visits from being generated. The stop is{' '}
-              <span className="font-medium text-foreground">permanent</span> — the schedule
-              cannot be resumed later.
+              This will permanently halt automatic job generation for{' '}
+              <span className="font-semibold text-foreground">{schedule.title}</span>. This action
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          {/* Radio group: keep vs remove future visits. */}
-          <div className="space-y-2">
+          <div className="space-y-2 py-2">
             <RadioGroup
               value={keepFutureVisits}
               onValueChange={(v) => setKeepFutureVisits(v as 'keep' | 'remove')}
-              className="gap-2"
+              className="gap-2.5"
             >
               <label
                 htmlFor="stop-choice-keep"
                 className={cn(
-                  'flex items-start gap-3 rounded-md border p-3 cursor-pointer transition-colors',
+                  'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors text-sm',
                   keepFutureVisits === 'keep'
                     ? 'border-emerald-500 bg-emerald-500/5'
                     : 'border-border hover:bg-muted/40',
                 )}
               >
-                <RadioGroupItem
-                  id="stop-choice-keep"
-                  value="keep"
-                  className="mt-0.5"
-                  aria-describedby="stop-choice-keep-desc"
-                />
+                <RadioGroupItem id="stop-choice-keep" value="keep" className="mt-0.5" />
                 <div className="space-y-0.5">
-                  <Label htmlFor="stop-choice-keep" className="cursor-pointer font-medium">
-                    Keep future visits
+                  <Label htmlFor="stop-choice-keep" className="cursor-pointer font-medium text-foreground">
+                    Keep existing future visits
                   </Label>
-                  <p
-                    id="stop-choice-keep-desc"
-                    className="text-xs text-muted-foreground"
-                  >
-                    Existing future visits remain on the calendar. Only NEW generation is stopped.
+                  <p className="text-xs text-muted-foreground">
+                    Existing visits already on the calendar will stay. Only NEW future generation is stopped.
                   </p>
                 </div>
               </label>
@@ -623,27 +785,19 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
               <label
                 htmlFor="stop-choice-remove"
                 className={cn(
-                  'flex items-start gap-3 rounded-md border p-3 cursor-pointer transition-colors',
+                  'flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors text-sm',
                   keepFutureVisits === 'remove'
                     ? 'border-red-500 bg-red-500/5'
                     : 'border-border hover:bg-muted/40',
                 )}
               >
-                <RadioGroupItem
-                  id="stop-choice-remove"
-                  value="remove"
-                  className="mt-0.5"
-                  aria-describedby="stop-choice-remove-desc"
-                />
+                <RadioGroupItem id="stop-choice-remove" value="remove" className="mt-0.5" />
                 <div className="space-y-0.5">
-                  <Label htmlFor="stop-choice-remove" className="cursor-pointer font-medium">
-                    Remove future visits
+                  <Label htmlFor="stop-choice-remove" className="cursor-pointer font-medium text-foreground">
+                    Remove &amp; cancel future visits
                   </Label>
-                  <p
-                    id="stop-choice-remove-desc"
-                    className="text-xs text-muted-foreground"
-                  >
-                    Future visits will be cancelled. Completed visits are not affected.
+                  <p className="text-xs text-muted-foreground">
+                    All upcoming incomplete visits generated by this schedule will be cancelled.
                   </p>
                 </div>
               </label>
@@ -655,7 +809,7 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
             <AlertDialogAction
               onClick={handleStop}
               disabled={actioning}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              className="bg-red-600 hover:bg-red-700 text-white focus:ring-red-600"
             >
               {actioning ? (
                 <>
@@ -674,44 +828,24 @@ export function RecurringJobDetailPage({ scheduleId, onBack, onEdit }: Recurring
   );
 }
 
-// ─── Tab: Overview ──────────────────────────────────────────────────────────
-//
-// Operational summary — answers "what's the state of this schedule right now?"
-// without duplicating the recurrence rule (that lives on the Schedule tab) or
-// the full generated-jobs list (that lives on the Generated Jobs tab).
-//
-// Layout:
-//   Card 1: Status & Visits
-//     - Status badge (Active / Paused / Stopped)
-//     - First visit     ← from calculateOccurrences(input)[0] (the actual first
-//                         occurrence date, NOT schedule.startDate which is the
-//                         raw user input and may diverge from the first visit)
-//     - Next visit      ← schedule.nextRunAt (the next time the cron will fire
-//                         to create a new job)
-//     - Last generated  ← from metrics.lastJobScheduledAt (the most-recently-
-//                         CREATED job's scheduledAt — NOT schedule.lastRunAt
-//                         which is the schedule's processing timestamp)
-//     - Schedule last processed ← schedule.lastRunAt (clarified label)
-//
-//   Card 2: Generated Jobs (compact counts, NOT large KPI cards)
-//     - Total / Completed / Upcoming / Cancelled
-//
-//   Card 3: Customer & Team (unchanged — customer + assignees)
-//
-//   Card 4: Visit Instructions (only if non-empty)
+// ─── Tab: Overview (2-Column Jobber-Style Layout) ───────────────────────────
 
 function OverviewTab({
   schedule,
   metrics,
   assignees,
   loadingAssignees,
+  checklists,
 }: {
   schedule: Schedule;
   metrics: ScheduleMetrics | null;
   assignees: { id: string; name: string }[];
   loadingAssignees: boolean;
+  checklists: ChecklistItem[];
 }) {
   const { setActiveView, setPendingOpenEntity } = useAppStore();
+  const { format } = useCompanyCurrency();
+
   const recurrenceInput: RecurrenceInput = useMemo(
     () => ({
       frequency: schedule.frequency,
@@ -732,10 +866,21 @@ function OverviewTab({
     [schedule],
   );
 
-  // First ACTUAL occurrence — uses inclusiveFirst=true so it equals startDate
-  // when startDate matches the pattern, otherwise the next matching date.
-  // This is the source of truth for the "First visit" label and matches what
-  // the Generated Jobs tab shows for the first generated job's scheduledAt.
+  const summary = useMemo(
+    () => formatScheduleSummary(recurrenceInput),
+    [recurrenceInput],
+  );
+
+  // Next 5 upcoming visits preview
+  const upcomingOccurrences = useMemo<Date[]>(() => {
+    try {
+      return calculateOccurrences(recurrenceInput, { max: 5, after: new Date() });
+    } catch {
+      return [];
+    }
+  }, [recurrenceInput]);
+
+  // First occurrence date
   const firstVisit = useMemo<Date | null>(() => {
     try {
       const occurrences = calculateOccurrences(recurrenceInput, { max: 1 });
@@ -747,224 +892,426 @@ function OverviewTab({
 
   const status = deriveStatus(schedule);
 
-  const nextVisitLabel = useMemo(() => {
-    if (status === 'stopped') return 'Stopped';
-    if (status === 'paused') return 'Paused';
-    return schedule.nextRunAt ? formatVisitLabel(schedule.nextRunAt) : '—';
-  }, [status, schedule.nextRunAt]);
+  // Line items parsing
+  const lineItems = useMemo(() => {
+    return parseLineItems(schedule.lineItemsJson);
+  }, [schedule.lineItemsJson]);
 
-  // Assignees — now passed as props from the parent component.
-  // The parent owns the assignees state + the API-returned data + the fallback fetch.
+  const subtotal = useMemo(() => {
+    return lineItemsSubtotal(lineItems);
+  }, [lineItems]);
+
   const assigneeIds = useMemo(
     () => parseStrArr(schedule.assigneeIdsJson),
     [schedule.assigneeIdsJson],
   );
 
-  // Render metrics compactly: small grid of stat cells, NOT big KPI cards
-  // (per user direction: "don't necessarily show all these as large KPI
-  // cards. Keep them compact so the page doesn't become dashboard-heavy.").
-  const metricsCells = useMemo(() => {
-    const m = metrics ?? {
-      total: 0,
-      completed: 0,
-      cancelled: 0,
-      upcoming: 0,
-      lastJobScheduledAt: null,
-      lastJobCreatedAt: null,
-    };
-    return [
-      { label: 'Generated', value: m.total, tone: 'neutral' as const },
-      { label: 'Upcoming', value: m.upcoming, tone: 'info' as const },
-      { label: 'Completed', value: m.completed, tone: 'success' as const },
-      { label: 'Cancelled', value: m.cancelled, tone: 'muted' as const },
-    ];
-  }, [metrics]);
+  const checklistIds = useMemo(
+    () => parseStrArr(schedule.checklistIdsJson),
+    [schedule.checklistIdsJson],
+  );
+
+  const matchedChecklists = useMemo(() => {
+    if (checklistIds.length === 0) return [];
+    const set = new Set(checklistIds);
+    return checklists.filter((c) => set.has(c.id));
+  }, [checklistIds, checklists]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* ── Card 1: Status & Visits ──────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center justify-between gap-2">
-            <span className="flex items-center gap-2">
-              <CalendarClock className="size-4" /> Status &amp; Visits
-            </span>
-            <StatusBadge status={status} />
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <Row
-            label="First visit"
-            value={firstVisit ? formatVisitLabel(firstVisit.toISOString()) : '—'}
-          />
-          <Row label="Next visit" value={nextVisitLabel} />
-          <Row
-            label="Last generated"
-            value={
-              metrics?.lastJobScheduledAt
-                ? formatShortDate(metrics.lastJobScheduledAt)
-                : '—'
-            }
-          />
-          <Row
-            label="Schedule last processed"
-            value={schedule.lastRunAt ? formatShortDate(schedule.lastRunAt) : '—'}
-          />
-        </CardContent>
-      </Card>
-
-      {/* ── Card 2: Generated Jobs (compact counts) ────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <CheckCircle2 className="size-4" /> Generated Jobs
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {metricsCells.map((cell) => (
-              <div
-                key={cell.label}
-                className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5"
-              >
-                <p
-                  className={cn(
-                    'text-2xl font-semibold leading-none tabular-nums',
-                    cell.tone === 'success' && 'text-emerald-600 dark:text-emerald-400',
-                    cell.tone === 'info' && 'text-blue-600 dark:text-blue-400',
-                    cell.tone === 'muted' && 'text-muted-foreground',
-                  )}
-                >
-                  {cell.value}
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* ─── Left Column: Scope, Rhythm, Next Visits, Line Items (8 Cols) ─── */}
+      <div className="lg:col-span-8 space-y-6">
+        {/* Recurrence Rhythm & Upcoming Visits Preview Card */}
+        <Card className="border-border/60 shadow-xs">
+          <CardHeader className="pb-3 border-b border-border/40">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <CalendarClock className="size-4 text-emerald-600 dark:text-emerald-400" />
+                Recurrence Rhythm &amp; Schedule Preview
+              </CardTitle>
+              <StatusBadge status={status} />
+            </div>
+          </CardHeader>
+          <CardContent className="p-5 space-y-5">
+            {/* Rhythm Banner */}
+            <div className="flex items-start gap-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm">
+              <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <p className="font-semibold text-emerald-950 dark:text-emerald-200">
+                  {summary}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">{cell.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  {schedule.timeOfDay ? `Starts at ${schedule.timeOfDay} · ` : ''}
+                  {schedule.durationMins} minutes estimated duration per visit
+                </p>
               </div>
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            See the <span className="font-medium text-foreground">Generated Jobs</span> tab
-            for the full list with filters and per-job actions.
-          </p>
-        </CardContent>
-      </Card>
+            </div>
 
-      {/* ── Card 3: Customer & Team ──────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <User className="size-4" /> Customer &amp; Team
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          {schedule.customer ? (
-            <>
-              <Row
-                label="Customer"
-                value={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (schedule.customer?.id) {
-                        setPendingOpenEntity({ kind: 'customer', id: schedule.customer.id });
-                        setActiveView('customers');
-                      }
-                    }}
-                    className="font-medium text-foreground hover:underline text-left"
-                  >
-                    {schedule.customer.name}
-                  </button>
-                }
-              />
-              {schedule.customer.phone && (
-                <Row label="Phone" value={schedule.customer.phone} />
-              )}
-              {schedule.customer.email && (
-                <Row label="Email" value={schedule.customer.email} />
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">No customer linked.</p>
-          )}
+            {/* Next 5 Upcoming Visits Preview */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Upcoming Visit Timeline (Next 5 Runs)
+                </h4>
+                <span className="text-xs text-muted-foreground">
+                  {upcomingOccurrences.length} visits projected
+                </span>
+              </div>
 
-          <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground">Assignees</p>
+              {upcomingOccurrences.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic py-2">
+                  No upcoming visits projected (schedule may have reached end date).
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {upcomingOccurrences.map((occ, idx) => (
+                    <div
+                      key={occ.toISOString()}
+                      className="flex items-center justify-between p-2.5 rounded-lg border border-border/50 bg-muted/20 hover:bg-muted/40 transition-colors text-xs"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="size-5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center justify-center font-bold text-[10px]">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {formatFullDate(occ.toISOString())}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {schedule.timeOfDay ? `${schedule.timeOfDay} · ` : ''}
+                            {schedule.durationMins} mins
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="font-medium text-[11px] bg-background">
+                        {formatRelativeUpcoming(occ)}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Recurrence Rule Key Metadata */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t border-border/40 text-xs">
+              <div>
+                <span className="text-muted-foreground block">First Visit</span>
+                <span className="font-medium text-foreground">
+                  {firstVisit ? formatShortDate(firstVisit.toISOString()) : '—'}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">End Condition</span>
+                <span className="font-medium text-foreground">
+                  {schedule.endAfterOccurrences != null
+                    ? `After ${schedule.endAfterOccurrences} visits`
+                    : schedule.endDate
+                      ? `Ends on ${formatShortDate(schedule.endDate)}`
+                      : 'Never ends'}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Timezone</span>
+                <span className="font-medium text-foreground">
+                  {schedule.timezone || 'Server Local'}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Default Line Items & Pricing */}
+        {lineItems.length > 0 && (
+          <Card className="border-border/60 shadow-xs">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <DollarSign className="size-4 text-emerald-600 dark:text-emerald-400" />
+                  Default Line Items &amp; Pricing Template
+                </CardTitle>
+                <Badge variant="secondary" className="font-mono text-xs">
+                  {lineItems.length} item{lineItems.length === 1 ? '' : 's'}
+                </Badge>
+              </div>
+              <CardDescription>
+                These items are automatically attached to every newly generated job.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/40 border-b border-border/60">
+                    <tr className="text-muted-foreground uppercase tracking-wider font-semibold">
+                      <th className="text-left px-4 py-2.5">Service / Product</th>
+                      <th className="text-center px-4 py-2.5 w-16">Qty</th>
+                      <th className="text-right px-4 py-2.5 w-24">Unit Price</th>
+                      <th className="text-right px-4 py-2.5 w-28">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {lineItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-muted/20">
+                        <td className="px-4 py-2.5">
+                          <p className="font-medium text-foreground">{item.name}</p>
+                          {item.description && (
+                            <p className="text-muted-foreground text-[11px] line-clamp-1 mt-0.5">
+                              {item.description}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-center tabular-nums text-muted-foreground">
+                          {item.quantity}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                          {format(item.unitPrice)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground">
+                          {format(item.total)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Subtotal Footer */}
+              <div className="flex items-center justify-between p-4 border-t border-border/60 bg-muted/20">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Estimated visit total (excl. tax)
+                </span>
+                <span className="text-base font-bold text-foreground tabular-nums">
+                  {format(subtotal)}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Scope & Visit Instructions */}
+        {schedule.visitInstructions && (
+          <Card className="border-border/60 shadow-xs">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <FileText className="size-4 text-emerald-600 dark:text-emerald-400" />
+                Scope &amp; Visit Instructions
+              </CardTitle>
+              <CardDescription>
+                Instructions provided to field technicians for every recurring visit.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-5">
+              <div className="rounded-lg bg-muted/30 border border-border/50 p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                {schedule.visitInstructions}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* ─── Right Column: Customer, Team, Billing, Checklists (4 Cols) ──── */}
+      <div className="lg:col-span-4 space-y-6">
+        {/* Customer Card */}
+        <Card className="border-border/60 shadow-xs">
+          <CardHeader className="pb-3 border-b border-border/40">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <User className="size-4 text-emerald-600 dark:text-emerald-400" />
+              Customer Contact
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-5 space-y-4">
+            {schedule.customer ? (
+              <>
+                <div className="flex items-start gap-3">
+                  <div className="size-11 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 flex items-center justify-center font-bold text-sm shrink-0 border border-emerald-200/60 dark:border-emerald-800/40">
+                    {getInitials(schedule.customer.name)}
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="font-semibold text-foreground text-sm truncate">
+                      {schedule.customer.name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Primary Account</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs pt-2 border-t border-border/40">
+                  {schedule.customer.phone && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Phone className="size-3.5 shrink-0 text-foreground/70" />
+                      <a
+                        href={`tel:${schedule.customer.phone}`}
+                        className="hover:underline text-foreground"
+                      >
+                        {schedule.customer.phone}
+                      </a>
+                    </div>
+                  )}
+
+                  {schedule.customer.email && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Mail className="size-3.5 shrink-0 text-foreground/70" />
+                      <a
+                        href={`mailto:${schedule.customer.email}`}
+                        className="hover:underline text-foreground truncate"
+                      >
+                        {schedule.customer.email}
+                      </a>
+                    </div>
+                  )}
+
+                  {schedule.customer.address && (
+                    <div className="flex items-start gap-2 text-muted-foreground">
+                      <MapPin className="size-3.5 shrink-0 text-foreground/70 mt-0.5" />
+                      <span className="text-foreground">{schedule.customer.address}</span>
+                    </div>
+                  )}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={() => {
+                    if (schedule.customer?.id) {
+                      setPendingOpenEntity({ kind: 'customer', id: schedule.customer.id });
+                      setActiveView('customers');
+                    }
+                  }}
+                >
+                  <ExternalLink className="size-3.5 mr-1.5" />
+                  View Customer Profile
+                </Button>
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No customer linked to this schedule.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Assigned Team Card */}
+        <Card className="border-border/60 shadow-xs">
+          <CardHeader className="pb-3 border-b border-border/40">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Users className="size-4 text-emerald-600 dark:text-emerald-400" />
+              Assigned Team
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-5 space-y-3">
             {assigneeIds.length === 0 ? (
-              <p className="text-sm text-muted-foreground">None assigned.</p>
+              <p className="text-xs text-muted-foreground italic">
+                Unassigned — jobs will generate without a primary technician assigned.
+              </p>
             ) : loadingAssignees ? (
-              <Skeleton className="h-5 w-32" />
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-3/4" />
+              </div>
             ) : assignees.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {assignees.map((a, i) => (
-                  <Badge
-                    key={a.id}
-                    variant="secondary"
-                    className={i === 0 ? 'border-emerald-300' : ''}
+              <div className="space-y-2">
+                {assignees.map((tech, idx) => (
+                  <div
+                    key={tech.id}
+                    className="flex items-center justify-between p-2 rounded-lg border border-border/40 bg-muted/20 text-xs"
                   >
-                    <Users className="size-3 mr-1" />
-                    {a.name}
-                    {i === 0 && ' · primary'}
-                  </Badge>
+                    <div className="flex items-center gap-2">
+                      <div className="size-7 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 flex items-center justify-center font-bold text-[11px]">
+                        {getInitials(tech.name)}
+                      </div>
+                      <span className="font-medium text-foreground">{tech.name}</span>
+                    </div>
+                    {idx === 0 && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
+                        Primary
+                      </Badge>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {assigneeIds.map((id, i) => (
-                  <Badge
-                    key={id}
-                    variant="outline"
-                    className={i === 0 ? 'border-emerald-300' : ''}
-                  >
+                {assigneeIds.map((id, idx) => (
+                  <Badge key={id} variant="outline" className="text-xs">
                     <Users className="size-3 mr-1" />
-                    <span className="font-mono text-xs">{id.slice(-6)}</span>
-                    {i === 0 && ' · primary'}
+                    Tech #{id.slice(-6)}
+                    {idx === 0 && ' (Primary)'}
                   </Badge>
                 ))}
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Card 4: Visit Instructions (only if non-empty) ─────────────── */}
-      {schedule.visitInstructions && (
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="size-4" /> Visit Instructions
-            </CardTitle>
-            <CardDescription>Shown to the assigned employee on-site.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              readOnly
-              value={schedule.visitInstructions}
-              className="bg-muted/30 min-h-20 resize-y"
-            />
           </CardContent>
         </Card>
-      )}
+
+        {/* Automated Billing Card */}
+        <Card className="border-border/60 shadow-xs">
+          <CardHeader className="pb-3 border-b border-border/40">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <CreditCard className="size-4 text-emerald-600 dark:text-emerald-400" />
+              Invoicing Automation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-5 space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Auto-generate invoice</span>
+              <Badge
+                variant={schedule.generateInvoice ? 'default' : 'secondary'}
+                className={schedule.generateInvoice ? 'bg-emerald-600 text-white' : ''}
+              >
+                {schedule.generateInvoice ? 'Enabled' : 'Disabled'}
+              </Badge>
+            </div>
+
+            {schedule.generateInvoice && (
+              <div className="flex items-center justify-between pt-2 border-t border-border/40">
+                <span className="text-muted-foreground">Invoice timing</span>
+                <span className="font-medium text-foreground">
+                  {schedule.invoiceTiming === 'on_generation'
+                    ? 'On Job Generation'
+                    : 'On Job Completion'}
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Attached Quality Checklists Card */}
+        {checklistIds.length > 0 && (
+          <Card className="border-border/60 shadow-xs">
+            <CardHeader className="pb-3 border-b border-border/40">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <CheckSquare className="size-4 text-emerald-600 dark:text-emerald-400" />
+                Attached Checklists
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5 space-y-2">
+              {matchedChecklists.length > 0 ? (
+                matchedChecklists.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/20 text-xs"
+                  >
+                    <Check className="size-3.5 text-emerald-600 shrink-0" />
+                    <span className="font-medium text-foreground">{c.title}</span>
+                  </div>
+                ))
+              ) : (
+                checklistIds.map((id) => (
+                  <div
+                    key={id}
+                    className="flex items-center gap-2 p-2 rounded-lg border border-border/40 bg-muted/20 text-xs"
+                  >
+                    <Check className="size-3.5 text-emerald-600 shrink-0" />
+                    <span className="font-medium text-foreground">Checklist #{id.slice(-6)}</span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
 
-// ─── Tab: Schedule (read-only recurrence rules) ─────────────────────────────
-//
-// The complete recurrence configuration, as the schedule engine understands it.
-// Distinct from the Overview tab which is the OPERATIONAL summary (status,
-// next/last visit, counts). Here we show:
-//   - Cadence (the rule itself: "Weekly on Monday", "Monthly on the 18th", …)
-//   - Start time + Duration
-//   - First visit (the actual first occurrence, NOT the raw user-input start)
-//   - End condition (Never / After N / On date)
-//   - Timezone
-//   - "Originally configured from" — the raw user-input startDate, surfaced as
-//     secondary info so dispatchers can understand why the first occurrence
-//     may differ from the configured start date (e.g. user picked Tuesday
-//     for a "Weekly on Monday" schedule → first visit is the next Monday).
-//
-// Lifecycle card holds admin metadata: created / updated / paused / resumed.
-// We do NOT duplicate "Next run" / "Last run" / "Execution count" from the
-// Overview tab — those are operational concerns and live there.
+// ─── Tab: Schedule Rule ────────────────────────────────────────────────────
 
 function ScheduleTab({ schedule }: { schedule: Schedule }) {
   const recurrenceInput: RecurrenceInput = useMemo(
@@ -1011,11 +1358,6 @@ function ScheduleTab({ schedule }: { schedule: Schedule }) {
         ? `On ${formatShortDate(schedule.endDate)}`
         : 'Never ends';
 
-  // Whether the user's raw startDate differs from the computed first
-  // occurrence. If they're the same date, we collapse the "Originally
-  // configured from" row into nothing — no need to surface it. If they
-  // differ, show it as secondary info so dispatchers can troubleshoot
-  // "why is the first visit Aug 24 when I picked Aug 18?".
   const configuredStartDate = schedule.startDate ? new Date(schedule.startDate) : null;
   const firstVisitDate = firstVisit;
   const datesDiffer =
@@ -1024,23 +1366,23 @@ function ScheduleTab({ schedule }: { schedule: Schedule }) {
     configuredStartDate.toDateString() !== firstVisitDate.toDateString();
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Repeat className="size-4" /> Recurrence Rule
+    <div className="space-y-6">
+      <Card className="border-border/60 shadow-xs">
+        <CardHeader className="border-b border-border/40 pb-4">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Repeat className="size-4 text-emerald-600 dark:text-emerald-400" />
+            Recurrence Engine Configuration
           </CardTitle>
+          <CardDescription>
+            The exact mathematical rhythm and pattern evaluated by the recurring job generator.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {/* Highlighted cadence summary */}
-          <div className="rounded-md border bg-emerald-50/60 dark:bg-emerald-950/20 px-3 py-2.5">
-            <p className="text-sm font-medium text-emerald-900 dark:text-emerald-200">
-              {summary}
-            </p>
+        <CardContent className="p-6 space-y-4">
+          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm font-semibold text-emerald-950 dark:text-emerald-200">
+            {summary}
           </div>
 
-          {/* Core rule rows */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm pt-2">
             <Row label="Frequency" value={humanizeFrequency(schedule.frequency)} />
             {schedule.interval > 1 && (
               <Row label="Interval" value={`Every ${schedule.interval}`} />
@@ -1077,10 +1419,7 @@ function ScheduleTab({ schedule }: { schedule: Schedule }) {
                 <Row label="Day of month" value={String(schedule.dayOfMonth)} />
               )}
             {schedule.timeOfDay && (
-              <Row
-                label="Start time"
-                value={schedule.timeOfDay}
-              />
+              <Row label="Start time" value={schedule.timeOfDay} />
             )}
             <Row label="Duration" value={`${schedule.durationMins} min`} />
             {schedule.asNeeded && (
@@ -1097,32 +1436,27 @@ function ScheduleTab({ schedule }: { schedule: Schedule }) {
             />
           </div>
 
-          {/* Secondary info: the raw user-input start date, surfaced only
-              when it differs from the computed first occurrence. This is
-              intentionally muted (muted foreground, small text) so it
-              reads as troubleshooting context, not as the primary schedule
-              information. */}
           {datesDiffer && configuredStartDate && (
-            <div className="mt-2 pt-2 border-t border-border/40">
+            <div className="mt-3 pt-3 border-t border-border/40">
               <p className="text-xs text-muted-foreground">
-                <span className="font-medium">Originally configured from:</span>{' '}
-                {formatShortDate(configuredStartDate.toISOString())}
-              </p>
-              <p className="text-[11px] text-muted-foreground/80 mt-0.5">
-                The first visit is the next pattern-matching date on or after this date.
+                <span className="font-medium text-foreground">Configured start date:</span>{' '}
+                {formatShortDate(configuredStartDate.toISOString())} (first occurrence calculated on{' '}
+                {formatShortDate(firstVisitDate.toISOString())})
               </p>
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <CalendarDays className="size-4" /> Lifecycle
+      {/* Lifecycle Metadata Card */}
+      <Card className="border-border/60 shadow-xs">
+        <CardHeader className="border-b border-border/40 pb-4">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <CalendarDays className="size-4 text-emerald-600 dark:text-emerald-400" />
+            Lifecycle Timestamps
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
           <Row label="Created" value={formatShortDate(schedule.createdAt)} />
           <Row label="Last updated" value={formatShortDate(schedule.updatedAt)} />
           {schedule.pausedAt && (
@@ -1149,10 +1483,6 @@ function GeneratedJobsTab({
   metrics: ScheduleMetrics | null;
 }) {
   const { setActiveView, setPendingOpenEntity } = useAppStore();
-  // Accumulated list across all loaded pages. Initial seed comes from the
-  // parent's `recentJobs` (the last 10 from GET /api/recurring-jobs/[id]) so
-  // the user sees something immediately; we then re-fetch page 1 from the
-  // dedicated /jobs endpoint to get the canonical, filter-respecting view.
   const [jobs, setJobs] = useState<GeneratedJob[]>(initialJobs);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1160,26 +1490,14 @@ function GeneratedJobsTab({
   const [total, setTotal] = useState(metrics?.total ?? 0);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Refresh the total count whenever metrics refresh (e.g. after a
-  // generate-now click bumps the count). This keeps the "{N} jobs generated"
-  // header in sync with the Overview tab.
   useEffect(() => {
     if (metrics?.total != null) setTotal(metrics.total);
   }, [metrics?.total]);
 
-  // Whether the user has loaded all available rows. We compute this from
-  // (jobs.length < total) — once they've loaded everything for the current
-  // filter, the "Load more" button disappears.
   const hasMore = jobs.length < total;
 
-  // Load (or reload) page 1 — used when the status filter changes.
-  // Performance fix: skip the initial fetch when we already have initialJobs
-  // from the parent detail endpoint (which returns the same 10 recent jobs).
-  // Only fetch when the user changes the filter (statusFilter !== 'all')
-  // or when initialJobs is empty.
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false);
   useEffect(() => {
-    // Skip the initial mount fetch if we have initialJobs AND no filter is applied.
     if (!hasInitiallyLoaded && initialJobs.length > 0 && statusFilter === 'all') {
       setHasInitiallyLoaded(true);
       return;
@@ -1207,7 +1525,7 @@ function GeneratedJobsTab({
           setTotal(d.total ?? 0);
         }
       } catch {
-        // Keep showing whatever we had — better than an empty list.
+        // preserve current list on failure
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1217,11 +1535,6 @@ function GeneratedJobsTab({
     };
   }, [scheduleId, statusFilter, initialJobs, hasInitiallyLoaded]);
 
-  // Load the NEXT page and APPEND to the existing list (Load More pattern,
-  // per user direction: "I would personally choose Load more"). Page size is
-  // 10 — small enough that each load is fast even for schedules with 200+
-  // occurrences, and matches the user's mockup ("Showing 1–10 of 27" →
-  // "Load 10 more" → "Showing 1–20 of 27" → "Load 7 more").
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     try {
@@ -1238,7 +1551,6 @@ function GeneratedJobsTab({
         page: number;
         totalPages: number;
       }>(`/api/recurring-jobs/${scheduleId}/jobs?${params.toString()}`);
-      // Deduplicate by job id — defensive against any pagination glitch.
       setJobs((prev) => {
         const seen = new Set(prev.map((j) => j.id));
         const merged = [...prev, ...(d.jobs || []).filter((j) => !seen.has(j.id))];
@@ -1247,37 +1559,33 @@ function GeneratedJobsTab({
       setPage(nextPage);
       if (d.total != null) setTotal(d.total);
     } catch {
-      // Silent — user can retry.
+      // silent
     } finally {
       setLoadingMore(false);
     }
   }, [loadingMore, hasMore, page, scheduleId, statusFilter]);
 
-  // How many more rows are available beyond what's currently shown. Drives
-  // the "Load N more" button label — caps at the page size (10) so the
-  // label doesn't read "Load 187 more" when the user is on page 1 of a
-  // 200-occurrence schedule.
   const remaining = Math.max(0, total - jobs.length);
   const nextLoadCount = Math.min(10, remaining);
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+    <Card className="border-border/60 shadow-xs">
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 border-b border-border/40 pb-4">
         <div>
-          <CardTitle className="text-base flex items-center gap-2">
-            <CheckCircle2 className="size-4" /> Generated Jobs
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+            Generated Visits &amp; Jobs
           </CardTitle>
           <CardDescription>
-            {total} job{total === 1 ? '' : 's'} generated by this schedule. Each row
-            is a real Job — click to view, edit, reassign, or complete it independently.
+            {total} job{total === 1 ? '' : 's'} created by this schedule so far.
           </CardDescription>
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px]" aria-label="Filter by status">
+          <SelectTrigger className="w-[140px] text-xs h-8" aria-label="Filter by status">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="all">All Visits</SelectItem>
             <SelectItem value="upcoming">Upcoming</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
@@ -1293,10 +1601,10 @@ function GeneratedJobsTab({
           </div>
         ) : jobs.length === 0 ? (
           <div className="p-12 text-center">
-            <CheckCircle2 className="size-10 mx-auto text-muted-foreground/40" />
+            <CheckCircle2 className="size-10 mx-auto text-muted-foreground/30" />
             <p className="mt-3 text-sm text-muted-foreground">
               {total === 0
-                ? 'No jobs generated yet. The first job will be created on the next scheduled date.'
+                ? 'No jobs generated yet. The first job will be created on the next scheduled run.'
                 : 'No jobs match this filter.'}
             </p>
           </div>
@@ -1304,18 +1612,18 @@ function GeneratedJobsTab({
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/50 border-b">
-                  <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="px-4 py-3 font-medium">Job</th>
-                    <th className="px-4 py-3 font-medium">Scheduled</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Assignee</th>
-                    <th className="px-4 py-3 font-medium text-right">Open</th>
+                <thead className="bg-muted/40 border-b border-border/60">
+                  <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 font-semibold">Job / Visit</th>
+                    <th className="px-4 py-3 font-semibold">Scheduled Date</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Assignee</th>
+                    <th className="px-4 py-3 font-semibold text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border/40">
                   {jobs.map((j) => (
-                    <tr key={j.id} className="border-b last:border-b-0 hover:bg-muted/30">
+                    <tr key={j.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3">
                         <button
                           type="button"
@@ -1323,7 +1631,7 @@ function GeneratedJobsTab({
                             setPendingOpenEntity({ kind: 'job', id: j.id });
                             setActiveView('jobs');
                           }}
-                          className="font-medium hover:underline text-left"
+                          className="font-medium text-foreground hover:text-emerald-600 hover:underline text-left text-sm"
                         >
                           {j.jobNumber || j.title || 'Untitled job'}
                         </button>
@@ -1333,23 +1641,24 @@ function GeneratedJobsTab({
                           </p>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
                         {j.scheduledAt ? formatShortDate(j.scheduledAt) : '—'}
                       </td>
                       <td className="px-4 py-3">{jobStatusBadge(j.status)}</td>
-                      <td className="px-4 py-3 text-xs">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
                         {j.assignee?.name || j.assigneeName || '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="text-xs h-7 hover:text-emerald-600"
                           onClick={() => {
                             setPendingOpenEntity({ kind: 'job', id: j.id });
                             setActiveView('jobs');
                           }}
                         >
-                          <ArrowLeft className="size-3.5 mr-1 rotate-180" /> Open
+                          Open Job <ExternalLink className="size-3 ml-1" />
                         </Button>
                       </td>
                     </tr>
@@ -1358,12 +1667,9 @@ function GeneratedJobsTab({
               </table>
             </div>
 
-            {/* Footer: "Showing 1–N of M" + Load More button (replaces
-                Previous/Next pagination per user direction). Button only
-                renders when there are more rows available. */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t px-4 py-3 text-sm">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/60 px-4 py-3 text-sm bg-muted/10">
               <span className="text-xs text-muted-foreground">
-                Showing 1–{jobs.length} of {total}
+                Showing 1–{jobs.length} of {total} visits
               </span>
               {hasMore && (
                 <Button
@@ -1371,6 +1677,7 @@ function GeneratedJobsTab({
                   size="sm"
                   onClick={loadMore}
                   disabled={loadingMore}
+                  className="text-xs"
                 >
                   {loadingMore ? (
                     <>
@@ -1395,6 +1702,7 @@ function GeneratedJobsTab({
 
 function BillingTab({ schedule }: { schedule: Schedule }) {
   const { setActiveView, setPendingOpenEntity } = useAppStore();
+  const { format } = useCompanyCurrency();
   const [invoices, setInvoices] = useState<GeneratedInvoice[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1419,41 +1727,43 @@ function BillingTab({ schedule }: { schedule: Schedule }) {
   }, [schedule.id]);
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <CreditCard className="size-4" /> Billing Configuration
+    <div className="space-y-6">
+      <Card className="border-border/60 shadow-xs">
+        <CardHeader className="border-b border-border/40 pb-4">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <CreditCard className="size-4 text-emerald-600 dark:text-emerald-400" />
+            Billing &amp; Invoicing Automation Rules
           </CardTitle>
           <CardDescription>
-            How invoices are created for each generated job.
+            How invoices and line items are automatically generated for each visit.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+        <CardContent className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <Row
             label="Auto-generate invoice"
-            value={schedule.generateInvoice ? 'Yes' : 'No — manual only'}
+            value={schedule.generateInvoice ? 'Yes (automated)' : 'No (manual only)'}
           />
           <Row
             label="Invoice timing"
             value={
               schedule.generateInvoice
                 ? schedule.invoiceTiming === 'on_generation'
-                  ? 'On generation (draft invoice when job is created)'
-                  : 'On completion (invoice after job is completed)'
+                  ? 'On generation (draft invoice created immediately)'
+                  : 'On completion (invoice generated upon visit finish)'
                 : '—'
             }
           />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Receipt className="size-4" /> Generated Invoices
+      <Card className="border-border/60 shadow-xs">
+        <CardHeader className="border-b border-border/40 pb-4">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Receipt className="size-4 text-emerald-600 dark:text-emerald-400" />
+            Generated Invoices
           </CardTitle>
           <CardDescription>
-            {invoices.length} invoice{invoices.length === 1 ? '' : 's'} created by this schedule.
+            {invoices.length} invoice{invoices.length === 1 ? '' : 's'} linked to this recurring schedule.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -1465,46 +1775,47 @@ function BillingTab({ schedule }: { schedule: Schedule }) {
             </div>
           ) : invoices.length === 0 ? (
             <div className="p-12 text-center">
-              <Receipt className="size-10 mx-auto text-muted-foreground/40" />
+              <Receipt className="size-10 mx-auto text-muted-foreground/30" />
               <p className="mt-3 text-sm text-muted-foreground">
                 {schedule.generateInvoice
-                  ? 'No invoices generated yet. They appear here when jobs are created or completed.'
-                  : 'Auto-invoicing is OFF for this schedule. Generate invoices manually from each job.'}
+                  ? 'No invoices generated yet. They will appear here when visits are created.'
+                  : 'Auto-invoicing is disabled for this schedule.'}
               </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/50 border-b">
-                  <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="px-4 py-3 font-medium">Invoice #</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium text-right">Amount</th>
-                    <th className="px-4 py-3 font-medium">Due</th>
-                    <th className="px-4 py-3 font-medium text-right">Open</th>
+                <thead className="bg-muted/40 border-b border-border/60">
+                  <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 font-semibold">Invoice #</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold text-right">Amount</th>
+                    <th className="px-4 py-3 font-semibold">Due Date</th>
+                    <th className="px-4 py-3 font-semibold text-right">Action</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border/40">
                   {invoices.map((inv) => (
-                    <tr key={inv.id} className="border-b last:border-b-0 hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">{inv.number}</td>
+                    <tr key={inv.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3 font-medium text-foreground">{inv.number}</td>
                       <td className="px-4 py-3">{invoiceStatusBadge(inv.status)}</td>
-                      <td className="px-4 py-3 text-right">
-                        {formatCurrency(inv.total ?? inv.amount, inv.currency)}
+                      <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">
+                        {format(inv.total ?? inv.amount)}
                       </td>
-                      <td className="px-4 py-3 text-xs">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
                         {inv.dueDate ? formatShortDate(inv.dueDate) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Button
                           variant="ghost"
                           size="sm"
+                          className="text-xs h-7 hover:text-emerald-600"
                           onClick={() => {
                             setPendingOpenEntity({ kind: 'invoice', id: inv.id });
                             setActiveView('invoices');
                           }}
                         >
-                          <ArrowLeft className="size-3.5 mr-1 rotate-180" /> Open
+                          Open Invoice <ExternalLink className="size-3 ml-1" />
                         </Button>
                       </td>
                     </tr>
@@ -1545,17 +1856,11 @@ function ActivityTab({ scheduleId }: { scheduleId: string }) {
     };
   }, [scheduleId]);
 
-  // IMPORTANT: useMemo MUST be called before any early return — otherwise
-  // the hook count differs between renders (loading=true returns early,
-  // skipping this useMemo; the next render with loading=false would call
-  // it, causing "Rendered more hooks than during the previous render").
-  // Pre-existing latent bug surfaced during this session's runtime
-  // verification; fixed here.
   const groups = useMemo(() => groupActivitiesByDate(activities), [activities]);
 
   if (loading) {
     return (
-      <Card>
+      <Card className="border-border/60 shadow-xs">
         <CardContent className="p-6 space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
             <Skeleton key={i} className="h-10 w-full" />
@@ -1567,35 +1872,34 @@ function ActivityTab({ scheduleId }: { scheduleId: string }) {
 
   if (activities.length === 0) {
     return (
-      <Card>
+      <Card className="border-border/60 shadow-xs">
         <CardContent className="p-12 text-center">
-          <ActivityIcon className="size-10 mx-auto text-muted-foreground/40" />
-          <p className="mt-3 text-sm text-muted-foreground">No activity yet.</p>
+          <ActivityIcon className="size-10 mx-auto text-muted-foreground/30" />
+          <p className="mt-3 text-sm text-muted-foreground">No activity recorded yet.</p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <ActivityIcon className="size-4" /> Activity Timeline
+    <Card className="border-border/60 shadow-xs">
+      <CardHeader className="border-b border-border/40 pb-4">
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <ActivityIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
+          Activity &amp; Audit Timeline
         </CardTitle>
         <CardDescription>
-          Schedule-level audit events — created, edited, paused, resumed, stopped,
-          and generated-jobs. Individual job lifecycle (assigned, started, completed)
-          lives on each Job&apos;s own detail page.
+          Schedule-level audit events — creations, edits, pauses, resumes, stops, and visit generation.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-6">
         <div className="space-y-6">
           {groups.map((group) => (
             <div key={group.key} className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 {group.label}
               </p>
-              <ol className="relative border-l ml-3 space-y-4">
+              <ol className="relative border-l border-border/60 ml-3 space-y-4">
                 {group.items.map((a) => {
                   const Icon = activityIcon(a.action, a.entityType);
                   const label = activityLabel(a);
@@ -1606,13 +1910,12 @@ function ActivityTab({ scheduleId }: { scheduleId: string }) {
                       />
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                         <Icon className="size-3.5 text-muted-foreground inline" />
-                        <p className="text-sm font-medium">{label}</p>
+                        <p className="text-sm font-medium text-foreground">{label}</p>
                         {severityBadge(a.severity)}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {a.actorName ||
-                          (a.actorType === 'system' ? 'System' : 'Unknown')}{' '}
-                        · {relativeTime(a.createdAt)}
+                        {a.actorName || (a.actorType === 'system' ? 'System' : 'Unknown')} ·{' '}
+                        {relativeTime(a.createdAt)}
                       </p>
                     </li>
                   );
@@ -1632,19 +1935,22 @@ function StatusBadge({ status }: { status: ScheduleStatus }) {
   switch (status) {
     case 'active':
       return (
-        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-          Active
+        <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 text-xs font-medium inline-flex items-center gap-1.5">
+          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Active Schedule
         </Badge>
       );
     case 'paused':
       return (
-        <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+        <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 text-xs font-medium inline-flex items-center gap-1.5">
+          <span className="size-1.5 rounded-full bg-amber-500" />
           Paused
         </Badge>
       );
     case 'stopped':
       return (
-        <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
+        <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20 text-xs font-medium inline-flex items-center gap-1.5">
+          <span className="size-1.5 rounded-full bg-rose-500" />
           Stopped
         </Badge>
       );
@@ -1667,12 +1973,12 @@ function humanizeFrequency(freq: string): string {
   const map: Record<string, string> = {
     daily: 'Daily',
     weekly: 'Weekly',
-    biweekly: 'Every 2 weeks',
+    biweekly: 'Every 2 Weeks',
     monthly: 'Monthly',
     quarterly: 'Quarterly',
     annually: 'Annually',
-    as_needed: 'As needed (flexible)',
-    custom: 'Custom',
+    as_needed: 'As Needed (Flexible)',
+    custom: 'Custom Rhythm',
   };
   return map[freq] || freq;
 }
@@ -1695,28 +2001,31 @@ function formatShortDate(iso: string | null): string {
   }
 }
 
-// Format a visit datetime as "Aug 24, 2026 · 09:00" (date + 24h time).
-// Used for "First visit" and "Next visit" rows on the Overview tab where
-// the time-of-day is part of what the user cares about. Falls back to the
-// short date alone if time extraction fails (e.g. a Date-only value).
-function formatVisitLabel(iso: string | null): string {
+function formatFullDate(iso: string | null): string {
   if (!iso) return '—';
   try {
-    const d = new Date(iso);
-    const datePart = d.toLocaleDateString(undefined, {
+    return new Date(iso).toLocaleDateString(undefined, {
+      weekday: 'short',
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
-    const timePart = d.toLocaleTimeString(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-    return `${datePart} · ${timePart}`;
   } catch {
-    return formatShortDate(iso);
+    return '—';
   }
+}
+
+function formatRelativeUpcoming(date: Date): string {
+  const now = new Date();
+  const diffDays = Math.round((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return 'Today / Next';
+  if (diffDays === 1) return 'Tomorrow';
+  if (diffDays < 7) return `In ${diffDays} days`;
+  const weeks = Math.round(diffDays / 7);
+  if (weeks === 1) return 'In 1 week';
+  if (weeks < 5) return `In ${weeks} weeks`;
+  const months = Math.round(diffDays / 30);
+  return `In ${months} month${months === 1 ? '' : 's'}`;
 }
 
 function relativeTime(iso: string | null): string {
@@ -1725,44 +2034,45 @@ function relativeTime(iso: string | null): string {
     const then = new Date(iso).getTime();
     const now = Date.now();
     const diffMs = now - then;
-    if (diffMs < 60_000) return 'just now';
+    if (Math.abs(diffMs) < 60_000) return 'in a few moments';
+    if (diffMs < 0) {
+      // Future date
+      const futureMs = -diffMs;
+      const mins = Math.round(futureMs / 60_000);
+      if (mins < 60) return `in ${mins}m`;
+      const hours = Math.round(mins / 60);
+      if (hours < 24) return `in ${hours}h`;
+      const days = Math.round(hours / 24);
+      if (days < 7) return `in ${days}d`;
+      const weeks = Math.round(days / 7);
+      return `in ${weeks}w`;
+    }
     const mins = Math.round(diffMs / 60_000);
-    if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+    if (mins < 60) return `${mins}m ago`;
     const hours = Math.round(mins / 60);
-    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    if (hours < 24) return `${hours}h ago`;
     const days = Math.round(hours / 24);
-    if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+    if (days < 7) return `${days}d ago`;
     const weeks = Math.round(days / 7);
-    if (weeks < 5) return `${weeks} week${weeks === 1 ? '' : 's'} ago`;
+    if (weeks < 5) return `${weeks}w ago`;
     return formatShortDate(iso);
   } catch {
     return '—';
   }
 }
 
-function formatCurrency(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: 'currency',
-      currency: currency || 'USD',
-    }).format(amount || 0);
-  } catch {
-    return `${currency || ''} ${amount || 0}`;
-  }
-}
-
 function jobStatusBadge(status: string) {
   const map: Record<string, string> = {
-    scheduled: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-    in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-    completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-    cancelled: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-    pending: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-    assigned: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
-    accepted: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
+    scheduled: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20',
+    in_progress: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
+    completed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+    cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
+    pending: 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20',
+    assigned: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20',
+    accepted: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20',
   };
   return (
-    <Badge className={map[status] || map.pending}>
+    <Badge variant="outline" className={cn('text-xs font-medium capitalize', map[status] || map.pending)}>
       {status.replace(/_/g, ' ')}
     </Badge>
   );
@@ -1770,15 +2080,15 @@ function jobStatusBadge(status: string) {
 
 function invoiceStatusBadge(status: string) {
   const map: Record<string, string> = {
-    draft: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-    sent: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-    paid: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    draft: 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20',
+    sent: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20',
+    paid: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
     pending_approval:
-      'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-    cancelled: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+      'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
+    cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
   };
   return (
-    <Badge className={map[status] || map.draft}>
+    <Badge variant="outline" className={cn('text-xs font-medium capitalize', map[status] || map.draft)}>
       {status.replace(/_/g, ' ')}
     </Badge>
   );
@@ -1816,13 +2126,6 @@ function severityBadge(severity: string) {
   );
 }
 
-// Pick an icon based on the action verb AND entity type. Falls back to
-// ActivityIcon for unknown actions. Returns a lucide-react component reference
-// (NOT an element so the caller can render it with the right size class).
-//
-// Per the user's mental model, "Job generated" is a schedule-level event
-// (the schedule produced a new occurrence) — so we map job+create → Zap
-// rather than the generic Plus icon used for create-schedule.
 function activityIcon(action: string, entityType?: string) {
   if (entityType === 'job' && action === 'create') return Zap;
   switch (action) {
@@ -1838,29 +2141,10 @@ function activityIcon(action: string, entityType?: string) {
   }
 }
 
-// Convert an ActivityLog row into a clean, schedule-scoped label. The raw
-// activityLog.description is sometimes verbose ("Recurring schedule
-// "monthly landscaping" generated job abc123") — we shorten + standardize
-// here so the timeline reads cleanly:
-//
-//   create (recurringJobSchedule) → "Schedule created"
-//   update                        → "Schedule edited"
-//   status_change (paused)        → "Schedule paused"
-//   status_change (resumed)       → "Schedule resumed"
-//   status_change (stopped)       → "Schedule stopped"
-//   delete                        → "Schedule deleted"
-//   create (job)                  → "Job generated"
-//
-// We fall back to the raw description if we can't categorize the row — that
-// keeps the timeline honest for any future event types we haven't mapped.
 function activityLabel(a: ActivityLogRow): string {
-  // Try to parse metadataJson for status_change events so we can distinguish
-  // paused/resumed/stopped (all three log as action='status_change').
   if (a.action === 'status_change' && a.entityType === 'recurringJobSchedule') {
     try {
       const meta = JSON.parse(
-        // The activity-log helper stores metadataJson as a JSON string. If
-        // it's missing or malformed, the catch below falls back gracefully.
         (a as ActivityLogRow & { metadataJson?: string }).metadataJson || '{}',
       );
       const toStatus: string | undefined = meta?.toStatus;
@@ -1868,9 +2152,8 @@ function activityLabel(a: ActivityLogRow): string {
       if (toStatus === 'active') return 'Schedule resumed';
       if (toStatus === 'stopped') return 'Schedule stopped';
     } catch {
-      // fall through to the description-based heuristic below
+      // fall through
     }
-    // Fallback: inspect the description text.
     if (/paused/i.test(a.description)) return 'Schedule paused';
     if (/resumed/i.test(a.description)) return 'Schedule resumed';
     if (/stopped/i.test(a.description)) return 'Schedule stopped';
@@ -1921,27 +2204,28 @@ function groupActivitiesByDate(activities: ActivityLogRow[]): ActivityGroup[] {
   return Array.from(groups.values());
 }
 
-// ─── Row + Skeleton ────────────────────────────────────────────────────────
-
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <p className="text-xs text-muted-foreground shrink-0">{label}</p>
-      <p className="text-sm font-medium text-right break-words">{value}</p>
+      <p className="text-sm font-medium text-right text-foreground break-words">{value}</p>
     </div>
   );
 }
 
 function DetailHeaderSkeleton() {
   return (
-    <div className="space-y-2">
-      <Skeleton className="h-4 w-32" />
-      <Skeleton className="h-8 w-72" />
-      <Skeleton className="h-4 w-96" />
-      <div className="flex gap-2 mt-2">
-        <Skeleton className="h-9 w-32" />
-        <Skeleton className="h-9 w-32" />
-        <Skeleton className="h-9 w-32" />
+    <div className="space-y-3">
+      <Skeleton className="h-4 w-36" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-28" />
+          <Skeleton className="h-9 w-28" />
+        </div>
       </div>
     </div>
   );
