@@ -38,7 +38,7 @@ import { useBookings } from '@/hooks/use-crm-data';
 import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/lib/query-keys';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
-import { useAppStore } from '@/stores/app-store';
+import { useAppStore } from '@/store/app-store';
 import { lineItemsSubtotal, type LineItem } from '@/features/line-items';
 
 import {
