@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   description:
     "Get in touch with the Fieseros team. Reach out for sales inquiries, technical support, API integrations, billing questions, or partnership opportunities. We're here to help.",
   openGraph: {
-    title: "Contact Us — Fieseros CRM & Field Service OS",
+    title: "Contact Us — Fieseros CRM & Field Service Platform",
     description:
       "Get in touch with the Fieseros team. Reach out for sales inquiries, technical support, API integrations, billing questions, or partnership opportunities.",
     url: "https://fieseros.com/contact-us",

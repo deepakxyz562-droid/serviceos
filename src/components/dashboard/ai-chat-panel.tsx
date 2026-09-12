@@ -3,7 +3,7 @@
 /**
  * AiChatPanel
  * ===========
- * Modern, high-performance conversational AI assistant UI for ServiceOS.
+ * Modern, high-performance conversational AI assistant UI for Fieseros.
  *
  * Features:
  *   • Rich Markdown rendering: GFM Tables, Fenced Code Blocks with 1-click copy,
@@ -53,6 +53,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { BRAND } from '@/lib/brand';
 
 export interface ToolCall {
   name: string;
@@ -624,7 +625,7 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
   const handleCopyEntireChat = () => {
     if (messages.length === 0) return;
     const text = messages
-      .map((m) => `### ${m.role === 'user' ? 'User' : 'ServiceOS AI'} (${m.timestamp || ''})\n\n${m.content}`)
+      .map((m) => `### ${m.role === 'user' ? 'User' : `${BRAND.name} AI`} (${m.timestamp || ''})\n\n${m.content}`)
       .join('\n\n---\n\n');
     navigator.clipboard.writeText(text);
     toast.success('Complete conversation copied to clipboard');
@@ -633,7 +634,7 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
   const handleExportTranscript = () => {
     if (messages.length === 0) return;
     const text = messages
-      .map((m) => `## ${m.role === 'user' ? 'User' : 'ServiceOS AI'} [${m.timestamp || ''}]\n\n${m.content}`)
+      .map((m) => `## ${m.role === 'user' ? 'User' : `${BRAND.name} AI`} [${m.timestamp || ''}]\n\n${m.content}`)
       .join('\n\n---\n\n');
     const blob = new Blob([text], { type: 'text/markdown;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -692,7 +693,7 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-foreground tracking-tight">
-                ServiceOS Copilot
+                {BRAND.name} Copilot
               </span>
               <Badge
                 variant="outline"

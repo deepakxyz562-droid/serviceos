@@ -1,5 +1,5 @@
 -- ============================================================================
--- FIESEROS / SERVICEOS — COMPLETE DATABASE FUNCTIONS & TRIGGERS
+-- FIESEROS — COMPLETE DATABASE FUNCTIONS & TRIGGERS
 -- TARGET: Hostinger / Coolify Self-Hosted Supabase
 -- FULL MATCH FOR ALL SUPABASE CLOUD FUNCTIONS & TRIGGERS
 -- ============================================================================

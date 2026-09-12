@@ -226,7 +226,7 @@ export function BookingFormPage({
   const isFormValid = formData.title.trim().length > 0;
 
   return (
-    <div className="min-h-screen bg-muted/20 pb-28">
+    <div className="w-full space-y-6 pb-28">
       {/* ── STICKY TOP HEADER ── */}
       <FormPageHeader
         onBack={onCancel}
@@ -297,13 +297,13 @@ export function BookingFormPage({
         }
       />
 
-      {/* ── 2-COLUMN MAIN CONTENT ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+      {/* ── 2-COLUMN MAIN CONTENT (100% Width) ── */}
+      <div className="w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px] gap-6 items-start">
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* LEFT COLUMN: Main Form Details                                */}
           {/* ═══════════════════════════════════════════════════════════════ */}
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             {/* 1. Title & Client Card */}
             <FormSectionCard
               icon={CalendarCheck}
@@ -548,7 +548,7 @@ export function BookingFormPage({
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* RIGHT COLUMN: Sidebar Metadata & Actions                       */}
           {/* ═══════════════════════════════════════════════════════════════ */}
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             {/* 1. Team Assignment */}
             <FormSectionCard
               icon={Users}
@@ -738,9 +738,9 @@ export function BookingFormPage({
         </div>
       </div>
 
-      {/* ── STICKY BOTTOM ACTION BAR ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg py-3 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+      {/* ── STICKY BOTTOM ACTION BAR (100% Width) ── */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg py-3 px-4 sm:px-6 lg:px-8">
+        <div className="w-full flex items-center justify-between gap-3">
           <Button
             type="button"
             variant="ghost"

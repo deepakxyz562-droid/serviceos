@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
 import { checkAiQuota } from '@/lib/ai-usage-tracker';
 import { callAI, isAiConfiguredAsync } from '@/lib/ai-client';
+import { BRAND } from '@/lib/brand';
 import {
   executeChatTool,
   getToolCatalogForPrompt,
@@ -64,7 +65,7 @@ function summarizeToolResult(name: string, result: unknown): string {
 }
 
 function buildSystemPrompt(tenantName: string, tenantCtx: string, today: string): string {
-  return `You are the AI Assistant embedded in the ServiceOS dashboard for "${tenantName}".
+  return `You are the AI Assistant embedded in the ${BRAND.name} dashboard for "${tenantName}".
 ${tenantCtx}
 
 Today's date is ${today}. The user is the business owner or a staff member asking questions about THEIR OWN business data.

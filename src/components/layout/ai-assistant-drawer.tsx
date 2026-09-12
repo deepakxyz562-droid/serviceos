@@ -4,7 +4,7 @@
  * AiAssistantDrawer — Right-side slide-over panel for the conversational AI Assistant.
  *
  * Triggered from the top bar (AppHeader) right side.
- * Allows users to access the AI Copilot from any page in ServiceOS:
+ * Allows users to access the AI Copilot from any page in Fieseros:
  *   • Multi-mode width: Standard (540px), Wide (760px), and Fullscreen.
  *   • Active Page Context awareness.
  *   • Ask questions about jobs, invoices, schedules, and CRM data.
@@ -38,6 +38,7 @@ import { KnowledgeBasePanel } from '@/components/dashboard/knowledge-base-panel'
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { BRAND } from '@/lib/brand';
 
 export interface AiAssistantDrawerProps {
   open: boolean;
@@ -111,7 +112,7 @@ export function AiAssistantDrawer({ open, onClose }: AiAssistantDrawerProps) {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <h2 className="text-sm font-semibold text-foreground tracking-tight">
-                  ServiceOS Copilot
+                  {BRAND.name} Copilot
                 </h2>
                 <Badge
                   variant="secondary"

@@ -1,5 +1,5 @@
 -- ============================================================================
--- FIESEROS / SERVICEOS — ROLES & ROW LEVEL SECURITY (RLS) POLICIES
+-- FIESEROS — ROLES & ROW LEVEL SECURITY (RLS) POLICIES
 -- TARGET: Hostinger / Coolify Self-Hosted Supabase
 -- FULL MIGRATION FOR ALL SUPABASE ROLES, GRANTS & POLICIES
 -- ============================================================================

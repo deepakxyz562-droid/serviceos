@@ -5,6 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { sendSmsMessage } from '@/lib/sms-send';
 import { sendEmail } from '@/lib/email-send';
 import { otpLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { BRAND } from '@/lib/brand';
 
 // Rate limiting: track OTP requests per phone number OR per email.
 const otpRateLimit = new Map<string, { count: number; lastRequest: number }>();
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
     <table role="presentation" cellpadding="0" cellspacing="0" style="max-width: 480px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
       <tr>
         <td style="padding: 28px 32px 8px 32px; text-align: center;">
-          <h1 style="font-size: 20px; font-weight: 600; color: #111827; margin: 0;">ServiceOS Customer Portal</h1>
+          <h1 style="font-size: 20px; font-weight: 600; color: #111827; margin: 0;">${BRAND.name} Customer Portal</h1>
         </td>
       </tr>
       <tr>
@@ -201,7 +202,7 @@ export async function POST(request: NextRequest) {
   </body>
 </html>`;
 
-      const textBody = `ServiceOS Customer Portal
+      const textBody = `${BRAND.name} Customer Portal
 
 Your verification code is: ${otpCode}
 
@@ -213,7 +214,7 @@ If you didn't request this code, you can safely ignore this email.`;
       try {
         sendResult = await sendEmail({
           to: normalizedEmail,
-          subject: 'Your ServiceOS verification code',
+          subject: `Your ${BRAND.name} verification code`,
           html: htmlBody,
           text: textBody,
           usageType: 'transactional',
@@ -312,7 +313,7 @@ If you didn't request this code, you can safely ignore this email.`;
       expiresAt,
     });
 
-    const otpMessage = `🔐 *Your ServiceOS verification code is: ${otpCode}*\n\nThis code expires in 5 minutes.\n\n_Do not share this code with anyone._`;
+    const otpMessage = `🔐 *Your ${BRAND.name} verification code is: ${otpCode}*\n\nThis code expires in 5 minutes.\n\n_Do not share this code with anyone._`;
 
     // Try WhatsApp first
     let sendResult = await sendWhatsAppMessage({
@@ -325,7 +326,7 @@ If you didn't request this code, you can safely ignore this email.`;
       try {
         const smsResult = await sendSmsMessage({
           to: normalizedPhone,
-          message: `Your ServiceOS verification code is: ${otpCode}. Valid for 5 minutes.`,
+          message: `Your ${BRAND.name} verification code is: ${otpCode}. Valid for 5 minutes.`,
         });
         if (smsResult.success) {
           sendResult = { success: true, simulated: smsResult.simulated };

@@ -149,7 +149,7 @@ export function BookingDetailPage({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 pb-20 animate-in fade-in-50 duration-200">
+    <div className="w-full space-y-6 pb-16 animate-in fade-in-50 duration-200">
       {/* ─── Top Sticky Header ─── */}
       <FormPageHeader
         icon={CalendarCheck}
@@ -259,10 +259,10 @@ export function BookingDetailPage({
         }
       />
 
-      {/* ─── 2-Column Jobber-Style Layout ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
+      {/* ─── 2-Column Jobber-Style Layout (100% Width) ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px] gap-6 items-start">
         {/* ─── Left Column (Main Information) ─── */}
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           {/* Client & Location Card */}
           <FormSectionCard
             icon={User}
@@ -525,7 +525,7 @@ export function BookingDetailPage({
         </div>
 
         {/* ─── Right Column (Sidebar Intelligence & Dispatch) ─── */}
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           {/* Assigned Technician & Dispatch */}
           <FormSectionCard
             icon={Users}
