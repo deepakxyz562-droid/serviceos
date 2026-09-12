@@ -289,20 +289,20 @@ export function InspectorTechnician({
 
 export interface InspectorJobProps {
   job: Job;
-  employees: Employee[];
-  candidates: CandidateScore[];
-  smartMatchLoading: boolean;
-  assignLoading: boolean;
-  onStartJob: (job: Job) => void;
-  onAssign: (jobId: string, employeeId: string) => void;
+  employees?: Employee[];
+  candidates?: CandidateScore[];
+  smartMatchLoading?: boolean;
+  assignLoading?: boolean;
+  onStartJob?: (job: Job) => void;
+  onAssign?: (jobId: string, employeeId: string) => void;
 }
 
 export function InspectorJob({
   job,
-  employees,
-  candidates,
-  smartMatchLoading,
-  assignLoading,
+  employees = [],
+  candidates = [],
+  smartMatchLoading = false,
+  assignLoading = false,
   onStartJob,
   onAssign,
 }: InspectorJobProps) {

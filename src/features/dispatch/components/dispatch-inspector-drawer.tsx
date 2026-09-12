@@ -24,6 +24,7 @@ export interface DispatchInspectorDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   inspectTarget: { type: 'technician'; data: Employee } | { type: 'job'; data: Job } | null;
+  employees?: Employee[];
   activeJobsByEmployee: Map<string, Job[]>;
   smartMatchCandidates: CandidateScore[];
   isSearchingSmartMatch: boolean;
@@ -39,6 +40,7 @@ export function DispatchInspectorDrawer({
   open,
   onOpenChange,
   inspectTarget,
+  employees = [],
   activeJobsByEmployee,
   smartMatchCandidates,
   isSearchingSmartMatch,
@@ -73,12 +75,15 @@ export function DispatchInspectorDrawer({
           ) : (
             <InspectorJob
               job={inspectTarget.data}
-              smartMatchCandidates={smartMatchCandidates}
-              isSearchingSmartMatch={isSearchingSmartMatch}
-              onAssignTech={onAssignTech}
+              employees={employees}
+              candidates={smartMatchCandidates || []}
+              smartMatchLoading={isSearchingSmartMatch}
+              assignLoading={false}
               onStartJob={onStartJob}
-              onViewTech={onViewTech}
-              onDeselect={() => onOpenChange(false)}
+              onAssign={(jobId, empId) => {
+                const emp = employees.find((e) => e.id === empId);
+                if (emp) onAssignTech(jobId, emp);
+              }}
             />
           )}
         </div>

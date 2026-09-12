@@ -513,6 +513,7 @@ export function DispatchView() {
           }
         }}
         inspectTarget={inspectTarget}
+        employees={employees}
         activeJobsByEmployee={activeJobsByEmployee}
         smartMatchCandidates={smartMatchCandidates}
         isSearchingSmartMatch={isSearchingSmartMatch}
