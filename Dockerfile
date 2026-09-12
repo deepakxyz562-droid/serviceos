@@ -1,9 +1,9 @@
 # -----------------------------------------------------------------------------
-# 1. Base image with Bun & OpenSSL
+# 1. Base image with Bun, Node.js & OpenSSL
 # -----------------------------------------------------------------------------
 FROM oven/bun:1.2-slim AS base
 WORKDIR /app
-RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && apt-get install -y openssl ca-certificates nodejs npm && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # 2. Dependencies stage
@@ -31,7 +31,7 @@ ENV NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
 ENV SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
 ENV USE_SUPABASE_DB=${USE_SUPABASE_DB}
 
-RUN bun run db:generate
+RUN node node_modules/.bin/prisma generate
 RUN bun run build
 
 # -----------------------------------------------------------------------------
