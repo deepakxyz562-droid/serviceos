@@ -204,8 +204,13 @@ export function JobFormPage({
               <CustomerPicker
                 customers={selectedCustomer && !customers.find(c => c.id === selectedCustomer.id) ? [selectedCustomer, ...customers] : customers}
                 selectedCustomerId={jobForm.customerId}
+                selectedCustomer={selectedCustomer}
+                selectedAddress={jobForm.address}
+                onAddressSelect={(addr) => setJobForm((prev) => ({ ...prev, address: addr }))}
+                onAddAddressClick={() => setShowCreatePropertyDialog(true)}
+                onCustomAddressChange={(addr) => setJobForm((prev) => ({ ...prev, address: addr }))}
                 onPick={handlePickCustomer}
-                onClear={() => { setSelectedCustomer(null); setJobForm({ ...jobForm, customerId: '' }); }}
+                onClear={() => { setSelectedCustomer(null); setJobForm({ ...jobForm, customerId: '', address: '' }); }}
                 onCreate={openCreateCustomerDialog}
                 query={customerQuery}
                 setQuery={setCustomerQuery}
@@ -569,79 +574,16 @@ export function JobFormPage({
         </div>
       </FormSectionCard>
 
-      {/* ─── Address & Priority ───────────────────────────────── */}
-      <FormSectionCard icon={MapPin} title="Location">
+      {/* ─── Location & Priority ──────────────────────────────── */}
+      <FormSectionCard icon={MapPin} title="Location & Priority">
         <div className="space-y-4">
-          {/* Saved customer properties picker if customer is selected */}
-          {selectedCustomer && (
-            <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <MapPin className="size-3.5 text-emerald-600" />
-                  Client Saved Properties / Addresses:
-                </Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
-                  onClick={() => setShowCreatePropertyDialog(true)}
-                >
-                  <Plus className="size-3.5" />
-                  Add Address
-                </Button>
-              </div>
-
-              {selectedCustomer.properties && selectedCustomer.properties.length > 0 ? (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {selectedCustomer.properties.map((prop, pIdx) => {
-                    const propAddr = [prop.street1, prop.street2, prop.city, prop.province, prop.postalCode, prop.country]
-                      .filter(Boolean)
-                      .join(', ');
-                    const isSelected = jobForm.address === propAddr || jobForm.address === prop.street1;
-                    return (
-                      <Button
-                        key={prop.id || pIdx}
-                        type="button"
-                        variant={isSelected ? 'default' : 'outline'}
-                        size="sm"
-                        className={cn(
-                          'text-xs h-8 gap-1.5',
-                          isSelected && 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-                        )}
-                        onClick={() => setJobForm((prev) => ({ ...prev, address: propAddr }))}
-                      >
-                        <span className="font-semibold">{prop.label || `Address ${pIdx + 1}`}:</span>
-                        <span className="truncate max-w-[200px]">{prop.street1}</span>
-                        {prop.isPrimary && (
-                          <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-0.5">
-                            Primary
-                          </Badge>
-                        )}
-                      </Button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="flex items-center justify-between py-1 text-xs text-muted-foreground">
-                  <span>No saved property addresses for this client.</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowCreatePropertyDialog(true)}
-                    className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
-                  >
-                    + Add a property address to save
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
           <div className="grid gap-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="job-address">Service Location Address</Label>
-              {!selectedCustomer && (
-                <span className="text-[11px] text-muted-foreground">Select a client above to choose from saved addresses</span>
+              {selectedCustomer ? (
+                <span className="text-[11px] text-muted-foreground">Synced with selected client above</span>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">Select a client above to auto-fill saved addresses</span>
               )}
             </div>
             <Input
