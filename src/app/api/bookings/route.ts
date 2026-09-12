@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     const employeeId = searchParams.get('employeeId');
     const serviceId = searchParams.get('serviceId');
     const source = searchParams.get('source');
+    const dateFilter = searchParams.get('dateFilter');
     const dateFrom = searchParams.get('dateFrom');
     const dateTo = searchParams.get('dateTo');
     const search = searchParams.get('search');
@@ -82,7 +83,68 @@ export async function GET(request: NextRequest) {
       where.deletedAt = null;
     }
 
-    if (dateFrom || dateTo) {
+    // Date range filtering (dateFilter preset or explicit dateFrom/dateTo)
+    if (dateFilter && dateFilter !== 'all') {
+      const now = new Date();
+      const startOfDay = (d: Date) => {
+        const res = new Date(d);
+        res.setHours(0, 0, 0, 0);
+        return res;
+      };
+      const endOfDay = (d: Date) => {
+        const res = new Date(d);
+        res.setHours(23, 59, 59, 999);
+        return res;
+      };
+
+      if (dateFilter === 'today') {
+        where.scheduledAt = {
+          gte: startOfDay(now),
+          lte: endOfDay(now),
+        };
+      } else if (dateFilter === 'tomorrow') {
+        const tmr = new Date(now);
+        tmr.setDate(tmr.getDate() + 1);
+        where.scheduledAt = {
+          gte: startOfDay(tmr),
+          lte: endOfDay(tmr),
+        };
+      } else if (dateFilter === 'this_week') {
+        const current = new Date(now);
+        const day = current.getDay();
+        const diffToMon = (day + 6) % 7;
+        const monday = new Date(current);
+        monday.setDate(current.getDate() - diffToMon);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        where.scheduledAt = {
+          gte: startOfDay(monday),
+          lte: endOfDay(sunday),
+        };
+      } else if (dateFilter === 'next_week') {
+        const current = new Date(now);
+        const day = current.getDay();
+        const diffToMon = (day + 6) % 7;
+        const nextMon = new Date(current);
+        nextMon.setDate(current.getDate() - diffToMon + 7);
+        const nextSun = new Date(nextMon);
+        nextSun.setDate(nextMon.getDate() + 6);
+        where.scheduledAt = {
+          gte: startOfDay(nextMon),
+          lte: endOfDay(nextSun),
+        };
+      } else if (dateFilter === 'overdue') {
+        where.scheduledAt = {
+          lt: now,
+          not: null,
+        };
+        if (!where.status) {
+          where.status = { notIn: ['completed', 'cancelled', 'no_show'] };
+        }
+      } else if (dateFilter === 'unscheduled') {
+        where.scheduledAt = null;
+      }
+    } else if (dateFrom || dateTo) {
       const scheduledAt: Record<string, unknown> = {};
       if (dateFrom) scheduledAt.gte = new Date(dateFrom);
       if (dateTo) scheduledAt.lte = new Date(dateTo);
@@ -99,10 +161,17 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    const orderBy = sortBy === 'scheduledAt'
+      ? [
+          { scheduledAt: sortOrder === 'desc' ? 'desc' : 'asc' },
+          { createdAt: 'desc' },
+        ]
+      : { [sortBy]: sortOrder === 'desc' ? 'desc' : 'asc' };
+
     const [bookings, total] = await Promise.all([
       db.booking.findMany({
         where,
-        orderBy: { [sortBy]: sortOrder === 'desc' ? 'desc' : 'asc' },
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
         include: {

@@ -66,6 +66,15 @@ export interface BookingsResponse {
   pagination: Pagination;
 }
 
+export type BookingDateFilter =
+  | 'all'
+  | 'today'
+  | 'tomorrow'
+  | 'this_week'
+  | 'next_week'
+  | 'overdue'
+  | 'unscheduled';
+
 export interface ServiceOption {
   id: string;
   name: string;

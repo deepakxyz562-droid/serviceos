@@ -12,6 +12,7 @@ import {
   Loader2, ImagePlus,
   LayoutGrid, MessageSquare, UserCheck, XCircle,
   Archive as ArchiveIcon, RotateCcw,
+  Calendar,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -51,7 +52,7 @@ import {
 } from '@/hooks/use-crm-data';
 
 // Phase 4: lead types + helpers + sub-components extracted to src/features/leads/
-import type { Lead, LeadFormData, CustomerOption } from '@/features/leads/types';
+import type { Lead, LeadFormData, CustomerOption, LeadDateFilter } from '@/features/leads/types';
 import {
   KANBAN_STATUSES,
   STATUS_CONFIG,
@@ -148,6 +149,7 @@ export function LeadsView() {
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 250);
   const [statusFilter, setStatusFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState<LeadDateFilter>('all');
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
   const [page, setPage] = useState(1);
   // pageSize is stateful so the PaginationBar's rows-per-page selector can
@@ -276,6 +278,7 @@ export function LeadsView() {
   const { data: leadsData, isLoading: loading, error: rqError, refetch: fetchLeads } = useLeads({
     status: statusFilter !== 'all' ? statusFilter : undefined,
     source: sourceFilter !== 'all' ? sourceFilter : undefined,
+    dateFilter: dateFilter !== 'all' ? dateFilter : undefined,
     search: debouncedSearchQuery || undefined,
     page,
     limit: pageSize,
@@ -361,7 +364,7 @@ export function LeadsView() {
   // "stop typing" event resets page once, not once per keystroke)
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, sourceFilter, debouncedSearchQuery]);
+  }, [statusFilter, sourceFilter, dateFilter, debouncedSearchQuery]);
 
   // ============================================================
   // Sorted leads (table view)
@@ -1142,7 +1145,7 @@ export function LeadsView() {
           <div className="flex flex-wrap gap-3 items-center justify-between">
             <div className="flex flex-wrap gap-3 items-center flex-1">
               <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="w-44 h-9 text-xs">
+                <SelectTrigger className="w-40 h-9 text-xs">
                   <SelectValue placeholder="Source" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1152,6 +1155,70 @@ export function LeadsView() {
                   ))}
                 </SelectContent>
               </Select>
+
+              {/* Date Filter Dropdown */}
+              <Select
+                value={dateFilter}
+                onValueChange={(val) => setDateFilter(val as LeadDateFilter)}
+              >
+                <SelectTrigger className="w-44 h-9 text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <Calendar className="size-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue placeholder="Date Filter" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent align="start" className="w-[190px]">
+                  <SelectItem value="all" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="size-3.5 text-muted-foreground" />
+                      <span>All Dates</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="today" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                      <span>Today</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="yesterday" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+                      <span>Yesterday</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="this_week" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-indigo-500 shrink-0" />
+                      <span>This Week</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="last_week" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-purple-500 shrink-0" />
+                      <span>Last Week</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="this_month" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-teal-500 shrink-0" />
+                      <span>This Month</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="follow_up_today" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-amber-500 shrink-0" />
+                      <span>Follow-up Today</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="overdue_follow_up" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-rose-500 shrink-0" />
+                      <span>Overdue Follow-up</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+
               <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => fetchLeads()}>
                 <RefreshCw className="size-3.5 mr-1" /> Refresh
               </Button>

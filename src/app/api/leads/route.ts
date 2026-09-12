@@ -47,6 +47,11 @@ async function _GET(request: NextRequest) {
     const status = searchParams.get('status');
     const source = searchParams.get('source');
     const priority = searchParams.get('priority');
+    const dateFilter = searchParams.get('dateFilter');
+    const dateFrom = searchParams.get('dateFrom');
+    const dateTo = searchParams.get('dateTo');
+    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const sortOrder = searchParams.get('sortOrder') || 'desc';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
     const search = searchParams.get('search');
@@ -111,6 +116,85 @@ async function _GET(request: NextRequest) {
     } else if (!includeArchived) {
       where.deletedAt = null;
     }
+
+    // Date range filtering (dateFilter preset or explicit dateFrom/dateTo)
+    if (dateFilter && dateFilter !== 'all') {
+      const now = new Date();
+      const startOfDay = (d: Date) => {
+        const res = new Date(d);
+        res.setHours(0, 0, 0, 0);
+        return res;
+      };
+      const endOfDay = (d: Date) => {
+        const res = new Date(d);
+        res.setHours(23, 59, 59, 999);
+        return res;
+      };
+
+      if (dateFilter === 'today') {
+        where.createdAt = {
+          gte: startOfDay(now),
+          lte: endOfDay(now),
+        };
+      } else if (dateFilter === 'yesterday') {
+        const yst = new Date(now);
+        yst.setDate(yst.getDate() - 1);
+        where.createdAt = {
+          gte: startOfDay(yst),
+          lte: endOfDay(yst),
+        };
+      } else if (dateFilter === 'this_week') {
+        const current = new Date(now);
+        const day = current.getDay();
+        const diffToMon = (day + 6) % 7;
+        const monday = new Date(current);
+        monday.setDate(current.getDate() - diffToMon);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        where.createdAt = {
+          gte: startOfDay(monday),
+          lte: endOfDay(sunday),
+        };
+      } else if (dateFilter === 'last_week') {
+        const current = new Date(now);
+        const day = current.getDay();
+        const diffToMon = (day + 6) % 7;
+        const lastMon = new Date(current);
+        lastMon.setDate(current.getDate() - diffToMon - 7);
+        const lastSun = new Date(lastMon);
+        lastSun.setDate(lastMon.getDate() + 6);
+        where.createdAt = {
+          gte: startOfDay(lastMon),
+          lte: endOfDay(lastSun),
+        };
+      } else if (dateFilter === 'this_month') {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        where.createdAt = {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        };
+      } else if (dateFilter === 'follow_up_today') {
+        where.followUpAt = {
+          gte: startOfDay(now),
+          lte: endOfDay(now),
+        };
+      } else if (dateFilter === 'overdue_follow_up') {
+        where.followUpAt = {
+          lt: now,
+          not: null,
+        };
+        if (!where.status) {
+          where.status = { notIn: ['won', 'lost'] };
+        }
+      }
+    } else if (dateFrom || dateTo) {
+      const createdAt: Record<string, unknown> = {};
+      if (dateFrom) createdAt.gte = new Date(dateFrom);
+      if (dateTo) createdAt.lte = new Date(dateTo);
+      where.createdAt = createdAt;
+    }
+
     if (search) {
       where.OR = [
         { name: { contains: search } },
@@ -124,14 +208,8 @@ async function _GET(request: NextRequest) {
     // The SQL function (supabase-rpc-leads.sql) consolidates the lead list +
     // count + Customer/Job/Employee JOINs into a single PostgREST round-trip.
     // Expected: ~140-200ms (vs ~275-507ms with the 4-call fallback).
-    //
-    // rpcTenantId is null ONLY for super-admins viewing all tenants — the
-    // RPC handles NULL p_tenant_id as "no tenant filter" (shows all).
-    //
-    // AVAILABILITY CACHE: the first failed attempt caches "not_found" for
-    // 5 minutes (see shouldTryLeadsRpc above), so subsequent requests
-    // skip the failed RPC call and go straight to the fallback path.
-    if (shouldTryLeadsRpc()) {
+    const isStandardQuery = !dateFilter && !dateFrom && !dateTo && sortBy === 'createdAt' && sortOrder === 'desc';
+    if (isStandardQuery && shouldTryLeadsRpc()) {
       try {
         const result = await getLeads(
           rpcTenantId,
@@ -176,7 +254,7 @@ async function _GET(request: NextRequest) {
             select: { id: true, title: true, status: true },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder === 'asc' ? 'asc' : 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),

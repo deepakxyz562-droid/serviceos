@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   CalendarCheck,
   AlertCircle,
@@ -14,6 +14,7 @@ import {
   RotateCcw,
   ChevronLeft,
   ChevronRight,
+  Calendar,
 } from 'lucide-react';
 import {
   Card,
@@ -51,6 +52,7 @@ import type {
   EmployeeOption,
   ServiceOption,
   CustomerOption,
+  BookingDateFilter,
 } from '@/features/booking/types';
 import { BookingFormPage } from '@/features/booking/components/booking-form-page';
 import { BookingDetailPage } from '@/features/booking/components/booking-detail-page';
@@ -79,6 +81,7 @@ export function BookingView() {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState<BookingDateFilter>('all');
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
   const [isCreatingBooking, setIsCreatingBooking] = useState(false);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
@@ -101,7 +104,7 @@ export function BookingView() {
   // Reset page when tab/search/filter/pageSize changes (mirrors leads-view pattern).
   useEffect(() => {
     setPage(1);
-  }, [archiveTab, statusFilter, searchQuery, pageSize]);
+  }, [archiveTab, statusFilter, dateFilter, searchQuery, pageSize]);
 
   // Main list data — React Query replaces the manual fetchBookings
   // useCallback + useEffect. RQ keys the query by `{ status, search, archived,
@@ -115,11 +118,24 @@ export function BookingView() {
   } = useBookings({
     status: statusFilter !== 'all' ? statusFilter : undefined,
     search: searchQuery || undefined,
+    dateFilter: dateFilter !== 'all' ? dateFilter : undefined,
+    sortBy: 'scheduledAt',
+    sortOrder: 'asc',
     page,
     limit: pageSize,
     archived: archiveTab === 'archived' ? 'true' : 'false',
   });
-  const bookings = bookingsData?.bookings ?? [];
+  const rawBookings = bookingsData?.bookings ?? [];
+  const bookings = useMemo<Booking[]>(() => {
+    return [...rawBookings].sort((a, b) => {
+      if (!a.scheduledAt && !b.scheduledAt) {
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      }
+      if (!a.scheduledAt) return 1;
+      if (!b.scheduledAt) return -1;
+      return new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime();
+    });
+  }, [rawBookings]);
   // Sync the local pagination state with the API response (so the
   // pagination controls render the right page/total).
   useEffect(() => {
@@ -788,24 +804,83 @@ export function BookingView() {
 
           {/* Search & Filter Bar + Layout Switcher */}
           <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                placeholder="Search bookings by title, customer, phone..."
-                className="pl-9 h-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
-                  onClick={() => setSearchQuery('')}
-                >
-                  <X className="size-3" />
-                </Button>
-              )}
+            <div className="flex flex-1 flex-col sm:flex-row gap-2 w-full">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search bookings by title, customer, phone..."
+                  className="pl-9 h-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    <X className="size-3" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Date Filter Dropdown */}
+              <Select
+                value={dateFilter}
+                onValueChange={(val) => setDateFilter(val as BookingDateFilter)}
+              >
+                <SelectTrigger className="w-full sm:w-[170px] h-10 text-xs bg-background shrink-0">
+                  <div className="flex items-center gap-2 truncate">
+                    <Calendar className="size-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue placeholder="Date Filter" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent align="end" className="w-[190px]">
+                  <SelectItem value="all" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="size-3.5 text-muted-foreground" />
+                      <span>All Dates</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="today" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                      <span>Today</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="tomorrow" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+                      <span>Tomorrow</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="this_week" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-indigo-500 shrink-0" />
+                      <span>This Week</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="next_week" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-purple-500 shrink-0" />
+                      <span>Next Week</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="overdue" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-amber-500 shrink-0" />
+                      <span>Overdue / Past</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="unscheduled" className="text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-slate-400 shrink-0" />
+                      <span>Unscheduled</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">

@@ -223,6 +223,11 @@ export function useInvoices(params: InvoiceListParams = {}) {
 export interface LeadListParams {
   status?: string;
   source?: string;
+  dateFilter?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
   search?: string;
   page?: number;
   limit?: number;
@@ -246,6 +251,11 @@ export function useLeads(params: LeadListParams = {}) {
       const searchParams = new URLSearchParams();
       if (params.status && params.status !== 'all') searchParams.set('status', params.status);
       if (params.source && params.source !== 'all') searchParams.set('source', params.source);
+      if (params.dateFilter && params.dateFilter !== 'all') searchParams.set('dateFilter', params.dateFilter);
+      if (params.dateFrom) searchParams.set('dateFrom', params.dateFrom);
+      if (params.dateTo) searchParams.set('dateTo', params.dateTo);
+      if (params.sortBy) searchParams.set('sortBy', params.sortBy);
+      if (params.sortOrder) searchParams.set('sortOrder', params.sortOrder);
       if (params.search) searchParams.set('search', params.search);
       if (params.page) searchParams.set('page', String(params.page));
       if (params.limit) searchParams.set('limit', String(params.limit));
@@ -511,6 +521,11 @@ export function useCalendarEvents(params: { employeeId?: string; startDate?: str
 export interface BookingListParams {
   status?: string;
   search?: string;
+  dateFilter?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
   page?: number;
   limit?: number;
   /**
@@ -529,6 +544,11 @@ export function useBookings(params: BookingListParams = {}) {
       const sp = new URLSearchParams();
       if (params.status && params.status !== 'all') sp.set('status', params.status);
       if (params.search) sp.set('search', params.search);
+      if (params.dateFilter && params.dateFilter !== 'all') sp.set('dateFilter', params.dateFilter);
+      if (params.dateFrom) sp.set('dateFrom', params.dateFrom);
+      if (params.dateTo) sp.set('dateTo', params.dateTo);
+      if (params.sortBy) sp.set('sortBy', params.sortBy);
+      if (params.sortOrder) sp.set('sortOrder', params.sortOrder);
       if (params.page) sp.set('page', String(params.page));
       if (params.limit) sp.set('limit', String(params.limit));
       // PAGINATION-ARCHIVE-1: archived filter — defaults to active-only.

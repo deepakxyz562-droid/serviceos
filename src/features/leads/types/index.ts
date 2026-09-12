@@ -62,6 +62,16 @@ export interface Lead {
   deletedAt?: string | null;
 }
 
+export type LeadDateFilter =
+  | 'all'
+  | 'today'
+  | 'yesterday'
+  | 'this_week'
+  | 'last_week'
+  | 'this_month'
+  | 'follow_up_today'
+  | 'overdue_follow_up';
+
 /**
  * Form state shape for the New/Edit Lead form (renderLeadFormPage).
  * Mirrors the Lead interface but with strings for inputs and arrays for
