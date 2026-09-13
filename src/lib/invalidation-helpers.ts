@@ -217,7 +217,13 @@ export function getLeadInvalidations(opts: InvalidationContext): QueryKey[] {
     return [];
   }
 
-  const keys: QueryKey[] = [qk.leads.all, qk.dashboard.all];
+  const keys: QueryKey[] = [
+    qk.leads.all,
+    qk.dashboard.all,
+    ['pipeline'] as unknown as QueryKey,
+    ['pipeline', 'deals'] as unknown as QueryKey,
+    ['deals'] as unknown as QueryKey,
+  ];
 
   // Lead detail — for update/delete/status/convert
   if ((mutation === 'update' || mutation === 'delete' || mutation === 'status' || mutation === 'convert') && leadId) {

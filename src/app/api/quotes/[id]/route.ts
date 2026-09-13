@@ -4,6 +4,7 @@ import { toISOString } from '@/lib/utils';
 import { EventBus } from '@/lib/event-bus';
 import { autoCloseDealAsWonByQuote } from '@/lib/deal-auto-close';
 import { getAuthUser } from '@/lib/auth';
+import { acceptQuoteAndCreateJob } from '@/lib/quote-acceptance';
 
 // ─── GET /api/quotes/[id] ────────────────────────────────────────────────
 //
@@ -211,27 +212,18 @@ export async function PUT(
       }
     }
 
-    // ─── Auto-close linked Deal as 'won' when Quote is accepted ───────
-    // Phase 6 hook: when a Quote's status transitions to 'accepted',
-    // automatically move the linked Deal (via Quote.dealId, OR
-    // Deal.leadId === Quote.leadId fallback) to the 'won' stage + stamp
-    // `closedAt` + (optionally) `convertedJobId` + create a
-    // DealStageHistory entry + sync the linked Lead's status to 'won'.
-    //
-    // Best-effort / non-blocking: if the Deal update fails for any
-    // reason (no linked Deal, DB error, race condition), the Quote
-    // approval still succeeds. The Deal can be moved to 'won' manually
-    // via the Sales Pipeline view.
+    // ─── Auto-create Job and auto-close linked Deal when Quote is accepted ───────
     if (status === 'accepted' && status !== existing.status) {
       try {
-        await autoCloseDealAsWonByQuote(
-          quote.id,
-          quote.jobId || null, // stamp convertedJobId if the quote already has a jobId
-        );
-      } catch (dealErr) {
+        const acceptResult = await acceptQuoteAndCreateJob(quote.id, {
+          tenantId: quote.tenantId,
+          isSuperAdmin: true,
+        });
+        return NextResponse.json(acceptResult.quote);
+      } catch (acceptErr) {
         console.error(
-          '[Quotes PUT] auto-close Deal as won failed (non-blocking):',
-          dealErr,
+          '[Quotes PUT] acceptQuoteAndCreateJob failed (non-blocking fallback):',
+          acceptErr,
         );
       }
     }

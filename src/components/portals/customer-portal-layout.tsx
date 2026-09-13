@@ -548,40 +548,54 @@ interface PaymentMethodItem {
 
 // ─── Sub-Views ──────────────────────────────────────────────────────────────
 
-function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading, onViewInvoices }: {
+function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading, onViewInvoices, onViewQuotes }: {
   onNewBooking: () => void;
   customerName: string;
   bookings: BookingItem[];
   bookingsLoading: boolean;
   onViewInvoices: () => void;
+  onViewQuotes?: () => void;
 }) {
   const auth = useAppStore((s) => s.auth);
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [invoicesLoading, setInvoicesLoading] = useState(true);
+  const [quotes, setQuotes] = useState<QuoteItem[]>([]);
+  const [quotesLoading, setQuotesLoading] = useState(true);
 
-  // Fetch invoices for the dashboard summary
+  // Fetch invoices and quotes for the dashboard summary
   useEffect(() => {
     let cancelled = false;
-    const fetchInvoices = async () => {
+    const fetchDashboardData = async () => {
       setInvoicesLoading(true);
+      setQuotesLoading(true);
       try {
         const customerId = getRealCustomerId(auth.user);
         const params = new URLSearchParams({ limit: '50' });
         if (customerId) params.set('customerId', customerId);
-        const res = await fetch(apiUrl(`/api/invoices?${params.toString()}`), {
-          credentials: 'include',
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (!cancelled) setInvoices(data.invoices || []);
+        
+        const [invRes, quoteRes] = await Promise.allSettled([
+          fetch(apiUrl(`/api/invoices?${params.toString()}`), { credentials: 'include' }),
+          fetch(apiUrl(`/api/quotes?${params.toString()}`), { credentials: 'include' }),
+        ]);
+
+        if (!cancelled && invRes.status === 'fulfilled' && invRes.value.ok) {
+          const invData = await invRes.value.json();
+          setInvoices(invData.invoices || []);
+        }
+        if (!cancelled && quoteRes.status === 'fulfilled' && quoteRes.value.ok) {
+          const quoteData = await quoteRes.value.json();
+          setQuotes(Array.isArray(quoteData) ? quoteData : (quoteData.quotes || []));
         }
       } catch {
         // silently fail on dashboard
       } finally {
-        if (!cancelled) setInvoicesLoading(false);
+        if (!cancelled) {
+          setInvoicesLoading(false);
+          setQuotesLoading(false);
+        }
       }
     };
-    fetchInvoices();
+    fetchDashboardData();
     return () => { cancelled = true; };
   }, [auth.user]);
 
@@ -590,6 +604,10 @@ function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading, 
     .filter(b => ['pending', 'confirmed'].includes(b.status) && b.scheduledAt && new Date(b.scheduledAt) > new Date())
     .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime())
     .slice(0, 3);
+
+  // Quote stats
+  const approvedQuotes = quotes.filter(q => q.status === 'accepted');
+  const pendingQuotes = quotes.filter(q => ['draft', 'sent', 'pending'].includes(q.status));
 
   // Invoice stats
   const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + (i.total || i.amount), 0);
@@ -620,7 +638,7 @@ function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading, 
       </Card>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
@@ -642,22 +660,22 @@ function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading, 
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={cn(onViewQuotes && 'cursor-pointer hover:shadow-md transition-shadow')} onClick={onViewQuotes}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground font-medium">Completed Services</p>
-                {bookingsLoading ? (
+                <p className="text-sm text-muted-foreground font-medium">Approved Quotes</p>
+                {quotesLoading ? (
                   <Skeleton className="h-8 w-16 mt-1" />
                 ) : (
-                  <p className="text-3xl font-bold text-foreground mt-1">{bookings.filter(b => b.status === 'completed').length}</p>
+                  <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{approvedQuotes.length}</p>
                 )}
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
-                  <CheckCircle2 className="size-3" /> All time
+                  <CheckCircle2 className="size-3" /> {pendingQuotes.length > 0 ? `${pendingQuotes.length} pending review` : 'Ready for service'}
                 </p>
               </div>
               <div className="size-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center">
-                <CheckCircle2 className="size-6 text-emerald-600 dark:text-emerald-400" />
+                <FileText className="size-6 text-emerald-600 dark:text-emerald-400" />
               </div>
             </div>
           </CardContent>
@@ -679,6 +697,27 @@ function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading, 
               </div>
               <div className="size-12 rounded-xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center">
                 <Receipt className="size-6 text-amber-600 dark:text-amber-400" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground font-medium">Completed Services</p>
+                {bookingsLoading ? (
+                  <Skeleton className="h-8 w-16 mt-1" />
+                ) : (
+                  <p className="text-3xl font-bold text-foreground mt-1">{bookings.filter(b => b.status === 'completed').length}</p>
+                )}
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
+                  <CheckCircle2 className="size-3" /> All time
+                </p>
+              </div>
+              <div className="size-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center">
+                <CheckCircle2 className="size-6 text-emerald-600 dark:text-emerald-400" />
               </div>
             </div>
           </CardContent>
@@ -829,6 +868,91 @@ function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading, 
                       <Calendar className="size-3" />
                       {formatBookingDate(booking.scheduledAt)} at {formatBookingTime(booking.scheduledAt)}
                     </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Quotes Section (Approved Quotes & Pending Quotes) */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="size-4 text-emerald-600 dark:text-emerald-400" />
+              Your Quotes & Proposals
+            </CardTitle>
+            {onViewQuotes && (
+              <Button variant="ghost" size="sm" className="text-teal-600 hover:bg-teal-50 text-xs" onClick={onViewQuotes}>
+                View all quotes ({quotes.length})
+                <ArrowUpRight className="size-3.5 ml-1" />
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {quotesLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : quotes.length === 0 ? (
+            <div className="text-center py-6">
+              <FileText className="size-8 text-muted-foreground/30 mx-auto mb-1.5" />
+              <p className="text-sm text-muted-foreground">No quotes received yet</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {/* Pending quotes prompt banner if any */}
+              {pendingQuotes.length > 0 && (
+                <div
+                  onClick={onViewQuotes}
+                  className="flex items-center justify-between p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 cursor-pointer hover:bg-amber-100/60 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <AlertCircle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                        {pendingQuotes.length} Quote{pendingQuotes.length > 1 ? 's' : ''} Ready for Review
+                      </p>
+                      <p className="text-[11px] text-amber-700 dark:text-amber-400 truncate">
+                        Click to review line items, pricing, and approve
+                      </p>
+                    </div>
+                  </div>
+                  <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white shrink-0">
+                    Review Now
+                  </Button>
+                </div>
+              )}
+
+              {/* Quotes preview list */}
+              {quotes.slice(0, 3).map(quote => (
+                <div
+                  key={quote.id}
+                  onClick={onViewQuotes}
+                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={cn(
+                      'size-9 rounded-lg flex items-center justify-center shrink-0',
+                      quote.status === 'accepted' ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-muted/60 text-muted-foreground'
+                    )}>
+                      {quote.status === 'accepted' ? <CheckCircle2 className="size-4" /> : <FileText className="size-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-foreground truncate">{quote.title}</p>
+                        {getQuoteStatusBadge(quote.status)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {quote.status === 'accepted' ? 'Approved · Job created' : `Created ${formatQuoteDate(quote.createdAt)}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-sm font-bold text-foreground">{formatCurrency(quote.total)}</span>
                   </div>
                 </div>
               ))}
@@ -2069,16 +2193,19 @@ function QuotesView({
   initialQuoteId,
   isActive = false,
   dataNonce = 0,
+  onQuoteAccepted,
 }: {
   initialQuoteId?: string | null;
   isActive?: boolean;
   dataNonce?: number;
+  onQuoteAccepted?: () => void;
 }) {
   const auth = useAppStore((s) => s.auth);
   const [quotes, setQuotes] = useState<QuoteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // `silent=true` skips the loading spinner + error reset so background
   // refetches (on tab re-activation or after a mutation) update data in place
@@ -2131,6 +2258,49 @@ function QuotesView({
   }, [initialQuoteId]);
 
   const selectedQuote = quotes.find(q => q.id === selectedQuoteId);
+
+  const handleAcceptQuote = async (quote: QuoteItem) => {
+    setActionLoading(true);
+    try {
+      const res = await authFetch(apiUrl(`/api/quotes/${quote.id}/accept`), {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to approve quote');
+      }
+      toast.success('Quote approved! A job has been created for your service.');
+      await fetchQuotes(true);
+      if (onQuoteAccepted) {
+        onQuoteAccepted();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to approve quote');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeclineQuote = async (quote: QuoteItem) => {
+    setActionLoading(true);
+    try {
+      const res = await authFetch(apiUrl(`/api/quotes/${quote.id}/decline`), {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to decline quote');
+      }
+      toast.success('Quote has been declined.');
+      await fetchQuotes(true);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to decline quote');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   // Loading skeleton
   if (loading) {
@@ -2350,6 +2520,54 @@ function QuotesView({
                   </div>
                 </div>
               </div>
+
+              {/* Status Banner / Action Buttons */}
+              {selectedQuote.status === 'accepted' ? (
+                <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 p-4 text-center space-y-1">
+                  <div className="flex items-center justify-center gap-2 text-emerald-700 dark:text-emerald-300 font-semibold text-sm">
+                    <CheckCircle2 className="size-4" />
+                    Quote Approved
+                  </div>
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                    This quote has been approved. A job has been created and our team is preparing for your service.
+                  </p>
+                </div>
+              ) : selectedQuote.status === 'rejected' || selectedQuote.status === 'declined' ? (
+                <div className="rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 p-3 text-center">
+                  <div className="flex items-center justify-center gap-2 text-red-700 dark:text-red-400 font-medium text-sm">
+                    <XCircle className="size-4" />
+                    Quote Declined
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 pt-2">
+                  <Button
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 h-auto shadow-sm"
+                    onClick={() => handleAcceptQuote(selectedQuote)}
+                    disabled={actionLoading}
+                  >
+                    {actionLoading ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin mr-2" />
+                        Approving Quote…
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="size-4 mr-2" />
+                        Approve & Accept Quote
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full text-muted-foreground hover:text-red-600 hover:border-red-200"
+                    onClick={() => handleDeclineQuote(selectedQuote)}
+                    disabled={actionLoading}
+                  >
+                    Decline Quote
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </SheetContent>
@@ -3314,6 +3532,7 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
             bookings={bookings}
             bookingsLoading={bookingsLoading}
             onViewInvoices={() => setActiveView('invoices')}
+            onViewQuotes={() => setActiveView('quotes')}
           />
         </div>
       )}
@@ -3357,6 +3576,10 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
             initialQuoteId={deepLinkQuoteId}
             isActive={activeView === 'quotes'}
             dataNonce={dataNonce}
+            onQuoteAccepted={() => {
+              setDataNonce(n => n + 1);
+              fetchBookings();
+            }}
           />
         </div>
       )}

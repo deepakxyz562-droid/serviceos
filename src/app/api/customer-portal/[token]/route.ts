@@ -42,7 +42,7 @@ export async function GET(
     const customerId = session.customerId
 
     // Fetch customer data in parallel
-    const [jobs, invoices, leads] = await Promise.all([
+    const [jobs, invoices, leads, quotes] = await Promise.all([
       // Jobs (bookings)
       db.job.findMany({
         where: { customerId },
@@ -67,6 +67,11 @@ export async function GET(
           description: true,
           createdAt: true,
         },
+        orderBy: { createdAt: 'desc' },
+      }),
+      // Quotes
+      db.quote.findMany({
+        where: { customerId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
       }),
     ])
@@ -96,6 +101,32 @@ export async function GET(
         paidAt: inv.paidAt,
         createdAt: inv.createdAt,
       })),
+      quotes: quotes.map(q => {
+        let services = [];
+        let addOns = [];
+        try { services = JSON.parse(q.itemsJson || '[]'); } catch { services = []; }
+        try { addOns = JSON.parse(q.addOnsJson || '[]'); } catch { addOns = []; }
+        return {
+          id: q.id,
+          title: q.title,
+          description: q.description,
+          services,
+          addOns,
+          subtotal: q.subtotal,
+          tax: q.tax,
+          taxRate: q.taxRate,
+          discount: q.discount,
+          discountType: q.discountType,
+          total: q.total,
+          currency: q.currency,
+          status: q.status,
+          jobId: q.jobId,
+          validUntil: q.validUntil,
+          whatsappSent: q.whatsappSent,
+          createdAt: q.createdAt,
+          updatedAt: q.updatedAt,
+        };
+      }),
       leads,
       session: {
         id: session.id,

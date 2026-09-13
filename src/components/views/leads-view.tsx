@@ -128,6 +128,8 @@ export function LeadsView() {
   // re-open it.
   const pendingCreate = useAppStore((s) => s.pendingCreate);
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
+  const pendingCreateReturnView = useAppStore((s) => s.pendingCreateReturnView);
+  const setPendingCreateReturnView = useAppStore((s) => s.setPendingCreateReturnView);
 
   // Data state — main list fetch is backed by React Query (useLeads).
   // The manual `useState + useEffect + fetch` pattern was replaced to
@@ -511,7 +513,13 @@ export function LeadsView() {
       }
 
       toast.success(`Lead ${isEditing ? 'updated' : 'created'} successfully`);
-      setFormMode('list');
+      const returnView = pendingCreateReturnView;
+      if (returnView) {
+        setPendingCreateReturnView(null);
+        setGlobalView(returnView);
+      } else {
+        setFormMode('list');
+      }
       setEditingLead(null);
       setLeadForm({ ...EMPTY_FORM });
     } catch (e: any) {
@@ -643,7 +651,13 @@ export function LeadsView() {
   }, [pendingCreate, setPendingCreate]);
 
   const closeLeadForm = () => {
-    setFormMode('list');
+    const returnView = pendingCreateReturnView;
+    if (returnView) {
+      setPendingCreateReturnView(null);
+      setGlobalView(returnView);
+    } else {
+      setFormMode('list');
+    }
     setEditingLead(null);
     setLeadForm({ ...EMPTY_FORM });
   };

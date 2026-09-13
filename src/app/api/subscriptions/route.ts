@@ -298,6 +298,14 @@ export async function GET() {
         jobs: { used: jobCount, limit: maxJobs },
         workflows: { used: workflowCount, limit: maxWorkflows },
         users: { used: userCount, limit: maxUsers },
+        sms: {
+          used: subscription?.smsUsageCount ?? 0,
+          limit: subscription?.smsQuota ?? 100,
+        },
+        email: {
+          used: subscription?.emailUsageCount ?? 0,
+          limit: subscription?.emailQuota ?? 200,
+        },
       },
       paymentMethod,
       paymentProvider,

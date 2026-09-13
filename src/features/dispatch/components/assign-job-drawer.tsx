@@ -14,13 +14,15 @@ import {
   MapPin,
   Clock,
   CheckCircle2,
-  AlertTriangle,
   UserCheck,
   Loader2,
   Navigation,
   Briefcase,
   Star,
+  Plus,
+  UserPlus,
 } from 'lucide-react';
+import { QuickAddEmployeeModal } from '@/features/employees/components/quick-add-employee-modal';
 import {
   Sheet,
   SheetContent,
@@ -59,6 +61,7 @@ export function AssignJobDrawer({
   const [candidates, setCandidates] = useState<CandidateScore[]>([]);
   const [loading, setLoading] = useState(false);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
 
   // Fetch smart match rankings when drawer opens for a job
   useEffect(() => {
@@ -168,7 +171,7 @@ export function AssignJobDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md p-0 flex flex-col bg-background">
         <SheetHeader className="p-4 border-b border-border bg-muted/20">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <div>
               <SheetTitle className="text-base font-bold flex items-center gap-2">
                 <Briefcase className="size-4 text-teal-600" />
@@ -183,6 +186,14 @@ export function AssignJobDrawer({
                 Select the most suitable technician for this assignment
               </SheetDescription>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1 border-teal-200 text-teal-700 hover:bg-teal-50 dark:border-teal-800 dark:text-teal-300 shrink-0"
+              onClick={() => setShowAddEmployeeModal(true)}
+            >
+              <Plus className="size-3.5" /> Add Tech
+            </Button>
           </div>
 
           {/* Job summary pill */}
@@ -217,6 +228,27 @@ export function AssignJobDrawer({
                 </span>
               )}
             </div>
+
+            {candidateList.length === 0 && !loading && (
+              <div className="text-center py-8 px-4 rounded-xl border border-dashed border-border bg-muted/30 space-y-3">
+                <div className="size-12 rounded-full bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 mx-auto flex items-center justify-center">
+                  <UserPlus className="size-6" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-semibold text-foreground">No Technicians Available</h4>
+                  <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                    You haven&apos;t added any technicians to your workspace yet. Add a technician to assign this job.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5"
+                  onClick={() => setShowAddEmployeeModal(true)}
+                >
+                  <Plus className="size-4" /> Add Technician
+                </Button>
+              </div>
+            )}
 
             {candidateList.map((cand, index) => {
               const emp = employees.find((e) => e.id === cand.employeeId);
@@ -335,5 +367,16 @@ export function AssignJobDrawer({
         </ScrollArea>
       </SheetContent>
     </Sheet>
+
+    <QuickAddEmployeeModal
+      open={showAddEmployeeModal}
+      onOpenChange={setShowAddEmployeeModal}
+      onCreated={(newEmp) => {
+        if (newEmp?.id) {
+          handleAssign(newEmp.id);
+        }
+      }}
+    />
+    </>
   );
 }

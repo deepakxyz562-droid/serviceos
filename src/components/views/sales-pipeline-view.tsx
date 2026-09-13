@@ -151,6 +151,7 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
   // Dialog so the Pipeline "New Lead" button opens the SAME form as the
   // Leads view (single source of truth for lead creation).
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
+  const setPendingCreateReturnView = useAppStore((s) => s.setPendingCreateReturnView);
 
   // ─── Cross-view Reports tab + filter (Phase 6) ────────────────────────
   // Used by the Won / Lost 30-day summary boxes' onClick handlers — sets
@@ -1308,7 +1309,7 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
             </Button>
             {/* ── Phase 4: View Switcher ── */}
             <ViewSwitcher />
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setPendingCreate('lead'); setCurrentView('leads'); }}>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setPendingCreate('lead'); setPendingCreateReturnView('sales_pipeline'); setCurrentView('leads'); }}>
               <Plus className="size-4 mr-1.5" /> New Lead
             </Button>
           </div>
@@ -1332,7 +1333,7 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
             <RefreshCw className={cn('size-4 mr-1.5', loading && 'animate-spin')} />
             Refresh
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" size="sm" onClick={() => { setPendingCreate('lead'); setCurrentView('leads'); }}>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" size="sm" onClick={() => { setPendingCreate('lead'); setPendingCreateReturnView('sales_pipeline'); setCurrentView('leads'); }}>
             <Plus className="size-4 mr-1.5" /> New Lead
           </Button>
         </div>

@@ -527,14 +527,14 @@ export interface PlanQuotas {
 
 export const PLAN_QUOTAS: Record<PlanTier, PlanQuotas> = {
   trial: {
-    smsQuota: 50,        // 50 SMS during trial
+    smsQuota: 100,       // 100 SMS during trial
     emailQuota: 200,     // 200 emails during trial
     whatsappQuota: 0,    // BYO
     maxUsers: 5,
     maxJobs: 200,
   },
   starter: {
-    smsQuota: 50,        // 50 SMS/month
+    smsQuota: 100,       // 100 SMS/month
     emailQuota: 200,     // 200 emails/month
     whatsappQuota: 0,    // BYO
     maxUsers: 5,
@@ -548,7 +548,7 @@ export const PLAN_QUOTAS: Record<PlanTier, PlanQuotas> = {
     maxJobs: 1000,
   },
   business: {
-    smsQuota: 2000,      // 2,000 SMS/month
+    smsQuota: 3000,      // 3,000 SMS/month (Unlimited 2-way texting with FUP)
     emailQuota: 10000,   // 10,000 emails/month
     whatsappQuota: 0,    // BYO
     maxUsers: 25,

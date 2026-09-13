@@ -24,6 +24,9 @@ import {
   History,
   TrendingDown,
   FileText,
+  Smartphone,
+  MessageSquare,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -66,6 +69,8 @@ interface UsageStat {
   limit: number;
   label: string;
   icon: React.ReactNode;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 interface BillingRecord {
@@ -87,7 +92,16 @@ interface SubscriptionData {
     jobs: { used: number; limit: number };
     workflows: { used: number; limit: number };
     users: { used: number; limit: number };
+    sms?: { used: number; limit: number };
+    email?: { used: number; limit: number };
   };
+  subscription?: {
+    smsQuota?: number;
+    smsUsageCount?: number;
+    emailQuota?: number;
+    emailUsageCount?: number;
+    [key: string]: any;
+  } | null;
   paymentMethod: {
     brand: string;
     last4: string;
@@ -204,6 +218,21 @@ const ADDON_CATALOG: AddonCatalogEntry[] = [
     fallbackMonthlyPrice: 49,
     icon: <Crown className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />,
   },
+];
+
+export interface SmsPackOption {
+  id: string;
+  name: string;
+  count: number;
+  price: number;
+  pricePerSms: string;
+  popular?: boolean;
+}
+
+export const SMS_PACKS: SmsPackOption[] = [
+  { id: '500_sms', name: '500 SMS Pack', count: 500, price: 5, pricePerSms: '$0.010 / SMS' },
+  { id: '1000_sms', name: '1,000 SMS Pack', count: 1000, price: 9, pricePerSms: '$0.009 / SMS', popular: true },
+  { id: '2500_sms', name: '2,500 SMS Pack', count: 2500, price: 20, pricePerSms: '$0.008 / SMS' },
 ];
 
 interface AddonSubscriptionRecord {
@@ -440,6 +469,8 @@ const FALLBACK_DATA: SubscriptionData = {
     jobs: { used: 0, limit: 100 },
     workflows: { used: 0, limit: 10 },
     users: { used: 1, limit: 5 },
+    sms: { used: 0, limit: 100 },
+    email: { used: 0, limit: 200 },
   },
   paymentMethod: null,
   billingHistory: [],
@@ -471,6 +502,10 @@ export function BillingView() {
   const [subscribingAddonCode, setSubscribingAddonCode] = useState<string | null>(null);
   const [cancellingAddon, setCancellingAddon] = useState<AddonSubscriptionRecord | null>(null);
   const [isCancellingAddon, setIsCancellingAddon] = useState(false);
+  // ── SMS Top-up state ──────────────────────────────────────────────────────
+  const [showSmsTopupDialog, setShowSmsTopupDialog] = useState(false);
+  const [selectedSmsPack, setSelectedSmsPack] = useState<string>('500_sms');
+  const [isPurchasingSmsTopup, setIsPurchasingSmsTopup] = useState(false);
 
   // Merge the /api/subscriptions JSON response into our SubscriptionData
   // shape. Shared between initial fetch + post-payment refetch.
@@ -576,6 +611,9 @@ export function BillingView() {
   const currentPlanData = effectivePlans.find((p) => p.id === data.plan) || FALLBACK_PLANS[0];
   const currentPrice = isYearly ? (currentPlanData?.yearlyPrice || 0) : (currentPlanData?.monthlyPrice || 0);
 
+  const smsLimit = data.usage?.sms?.limit ?? data.subscription?.smsQuota ?? 100;
+  const smsUsed = data.usage?.sms?.used ?? data.subscription?.smsUsageCount ?? 0;
+
   const usageStats: UsageStat[] = [
     {
       label: 'Jobs',
@@ -594,6 +632,14 @@ export function BillingView() {
       used: data.usage?.users?.used ?? 0,
       limit: data.usage?.users?.limit ?? 1,
       icon: <Users className="h-4 w-4" />,
+    },
+    {
+      label: 'SMS Messages',
+      used: smsUsed,
+      limit: smsLimit,
+      icon: <Smartphone className="h-4 w-4" />,
+      actionLabel: '+ Add SMS Pack',
+      onAction: () => setShowSmsTopupDialog(true),
     },
   ];
 
@@ -808,6 +854,37 @@ export function BillingView() {
       });
     } finally {
       setIsCancellingAddon(false);
+    }
+  }
+
+  async function handleBuySmsTopup() {
+    setIsPurchasingSmsTopup(true);
+    try {
+      const res = await authFetch('/api/sms/topup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packId: selectedSmsPack }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Failed to purchase SMS pack');
+
+      toast.success('SMS Pack Added!', {
+        description: json.message || 'Your SMS allowance has been increased.',
+      });
+      setShowSmsTopupDialog(false);
+
+      // Refresh subscription data
+      const subRes = await authFetch('/api/subscriptions');
+      if (subRes.ok) {
+        const subJson = await subRes.json();
+        setData(mergeJson(subJson));
+      }
+    } catch (err) {
+      toast.error('SMS Top-Up Failed', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    } finally {
+      setIsPurchasingSmsTopup(false);
     }
   }
 
@@ -1094,29 +1171,42 @@ export function BillingView() {
           )}
 
           {/* Usage */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {usageStats.map((stat) => {
               const pct = stat.limit === 0 ? 100 : Math.min(100, Math.round((stat.used / stat.limit) * 100));
               const isNearLimit = pct >= 80;
               return (
-                <div key={stat.label} className="space-y-2 rounded-lg border bg-card p-4 dark:bg-card/50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      {stat.icon}
-                      {stat.label}
+                <div key={stat.label} className="flex flex-col justify-between space-y-2 rounded-lg border bg-card p-4 dark:bg-card/50">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        {stat.icon}
+                        {stat.label}
+                      </div>
+                      <span className="text-sm font-mono text-muted-foreground">
+                        {stat.used.toLocaleString('en-US')}/{stat.limit === 0 ? '∞' : stat.limit.toLocaleString('en-US')}
+                      </span>
                     </div>
-                    <span className="text-sm text-muted-foreground">
-                      {stat.used.toLocaleString('en-US')}/{stat.limit === 0 ? '∞' : stat.limit.toLocaleString('en-US')}
-                    </span>
+                    <Progress
+                      value={pct}
+                      className={`h-2 ${isNearLimit ? '[&>[data-slot=progress-indicator]]:bg-amber-500' : '[&>[data-slot=progress-indicator]]:bg-emerald-500'}`}
+                    />
+                    {isNearLimit && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Approaching limit
+                      </p>
+                    )}
                   </div>
-                  <Progress
-                    value={pct}
-                    className={`h-2 ${isNearLimit ? '[&>[data-slot=progress-indicator]]:bg-amber-500' : '[&>[data-slot=progress-indicator]]:bg-emerald-500'}`}
-                  />
-                  {isNearLimit && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">
-                      Approaching limit
-                    </p>
+                  {stat.actionLabel && stat.onAction && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={stat.onAction}
+                      className="mt-1 h-7 w-full justify-center text-xs font-medium text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      {stat.actionLabel}
+                    </Button>
                   )}
                 </div>
               );
@@ -1912,6 +2002,101 @@ export function BillingView() {
                 </>
               ) : (
                 'Yes, Cancel Add-on'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── SMS Top-Up Dialog ─────────────────────────────────────────── */}
+      <Dialog open={showSmsTopupDialog} onOpenChange={setShowSmsTopupDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Smartphone className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              Add Extra SMS Messages
+            </DialogTitle>
+            <DialogDescription>
+              Need more SMS notifications for customer updates and dispatches? Top up instantly. SMS packs never expire within your billing cycle.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-2.5 text-xs text-muted-foreground">
+              <span>Current Monthly Usage:</span>
+              <span className="font-semibold text-foreground">
+                {smsUsed} / {smsLimit === 0 ? '∞' : smsLimit} SMS used
+              </span>
+            </div>
+
+            <div className="grid gap-2.5">
+              {SMS_PACKS.map((pack) => {
+                const isSelected = selectedSmsPack === pack.id;
+                return (
+                  <div
+                    key={pack.id}
+                    onClick={() => setSelectedSmsPack(pack.id)}
+                    className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-all ${
+                      isSelected
+                        ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500 dark:bg-emerald-950/20'
+                        : 'border-border hover:border-muted-foreground/40'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`flex h-4 w-4 items-center justify-center rounded-full border ${
+                          isSelected
+                            ? 'border-emerald-600 bg-emerald-600 text-white'
+                            : 'border-muted-foreground'
+                        }`}
+                      >
+                        {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold">{pack.name}</p>
+                          {pack.popular && (
+                            <Badge className="bg-emerald-100 px-1.5 py-0 text-[10px] text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                              Best Value
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{pack.pricePerSms}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-base font-bold text-foreground">${pack.price}</span>
+                      <span className="block text-[11px] text-muted-foreground">one-time</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50/50 p-2.5 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-300">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Want unlimited SMS? Connect your own Twilio account in <strong>Channels &amp; Integrations</strong> for $0 platform markup.
+              </span>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setShowSmsTopupDialog(false)} disabled={isPurchasingSmsTopup}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={handleBuySmsTopup}
+              disabled={isPurchasingSmsTopup}
+            >
+              {isPurchasingSmsTopup ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                `Add ${SMS_PACKS.find((p) => p.id === selectedSmsPack)?.count} SMS ($${SMS_PACKS.find((p) => p.id === selectedSmsPack)?.price})`
               )}
             </Button>
           </DialogFooter>

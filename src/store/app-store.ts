@@ -84,6 +84,8 @@ interface AppState {
   // This avoids the user having to click the in-view "New X" button twice.
   pendingCreate: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | null;
   setPendingCreate: (entity: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | null) => void;
+  pendingCreateReturnView: ActiveView | null;
+  setPendingCreateReturnView: (view: ActiveView | null) => void;
 
   // ── Cross-view Reports tab + filter signal (Phase 6) ────────────────
   // When the user clicks the Won / Lost summary box on the Sales Pipeline
@@ -233,6 +235,8 @@ export const useAppStore = create<AppState>()(
   // Cross-view "New X" create signal
   pendingCreate: null,
   setPendingCreate: (entity) => set({ pendingCreate: entity }),
+  pendingCreateReturnView: null,
+  setPendingCreateReturnView: (view) => set({ pendingCreateReturnView: view }),
 
   // Cross-view Reports tab + filter signal (Phase 6)
   pendingReportsTab: null,

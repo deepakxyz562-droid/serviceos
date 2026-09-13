@@ -436,28 +436,30 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // ─── Auto-create a linked Deal (HubSpot model) — non-blocking background task ───
-    // Every Lead gets a matching Deal in the Sales Pipeline. We fire this in the
-    // background so the POST /api/leads HTTP response returns immediately (<100ms).
-    void db.deal.create({
-      data: {
-        title: lead.title || lead.name,
-        value: lead.value || 0,
-        currency: 'USD',
-        stage: 'new_lead',
-        probability: 10,
-        customerId: lead.customerId || null,
-        customerName: lead.name,
-        customerPhone: lead.phone,
-        assigneeId: lead.assignedToId || null,
-        leadId: lead.id,
-        source: lead.source || 'manual',
-        notesJson: '[]',
-        tenantId: lead.tenantId || null,
-      },
-    }).catch((dealErr) => {
+    // ─── Auto-create a linked Deal (HubSpot model) ───────────────────────────
+    // Every Lead gets a matching Deal in the Sales Pipeline. Await creation so
+    // it is guaranteed in the database before the response triggers UI invalidation.
+    try {
+      await db.deal.create({
+        data: {
+          title: lead.title || lead.name,
+          value: lead.value || 0,
+          currency: 'USD',
+          stage: 'new_lead',
+          probability: 10,
+          customerId: lead.customerId || null,
+          customerName: lead.name,
+          customerPhone: lead.phone,
+          assigneeId: lead.assignedToId || null,
+          leadId: lead.id,
+          source: lead.source || 'manual',
+          notesJson: '[]',
+          tenantId: lead.tenantId || null,
+        },
+      });
+    } catch (dealErr) {
       console.error('[LeadsCreate] Failed to auto-create Deal for lead:', dealErr);
-    });
+    }
 
     // ─── Background side-effects (don't block the response) ──────
     // EventBus audit-log, owner email, and owner WhatsApp all run detached

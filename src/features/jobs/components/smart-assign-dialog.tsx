@@ -27,11 +27,13 @@
  * Extracted from src/components/views/jobs-view.tsx (Phase 2B refactor).
  */
 
+import { useState } from 'react';
 import {
   Phone, MessageSquare, MapPin, Loader2, Check, CheckCircle2,
   Navigation, Clock3, ShieldAlert, Sparkles, MoreHorizontal,
-  Calendar, AlertCircle, RefreshCw, UserCheck,
+  Calendar, AlertCircle, RefreshCw, UserCheck, Plus, UserPlus,
 } from 'lucide-react';
+import { QuickAddEmployeeModal } from '@/features/employees/components/quick-add-employee-modal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -376,220 +378,260 @@ export function SmartAssignDialog({
   lifecycleLoading,
   handleLifecycleAction,
 }: SmartAssignDialogProps) {
+  const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[92dvh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {assigningJob?.assigneeId ? (
-              <><RefreshCw className="size-4 text-amber-600" /> Reassign Job</>
-            ) : (
-              <><UserCheck className="size-4 text-emerald-600" /> Assign Job</>
-            )}
-            {assigningJob?.jobNumber && (
-              <Badge variant="outline" className="ml-1 font-mono text-[10px]">#{assigningJob.jobNumber}</Badge>
-            )}
-          </DialogTitle>
-          <DialogDescription>
-            {assigningJob ? `${assigningJob.title}${assigningJob.customerName ? ` · ${assigningJob.customerName}` : ''}` : 'Select a technician'}
-          </DialogDescription>
-        </DialogHeader>
-        {assigningJob && (() => {
-          const isReassignment = !!assigningJob.assigneeId;
-          const canAssign = !isReassignment || !!reassignReason.trim();
-          // Build the "assign" handler that injects reason/note for reassignment
-          const doAssign = (employeeId: string) => {
-            if (isReassignment) {
-              handleLifecycleAction('assign', assigningJob.id, employeeId, {
-                reason: reassignReason.trim(),
-                reassignmentNote: reassignNote.trim() || undefined,
-              });
-            } else {
-              handleLifecycleAction('assign', assigningJob.id, employeeId);
-            }
-          };
-          // Split candidates: best match (top score, no high-risk conflict) vs others
-          const sortedCandidates = [...smartCandidates].sort((a, b) => b.score - a.score);
-          const bestMatch = sortedCandidates.find((c) => !c.conflict || c.conflict.type === 'none' || c.conflict.riskLevel !== 'high');
-          const others = sortedCandidates.filter((c) => c !== bestMatch);
-          return (
-            <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
-              {/* ── Job context card ─────────────────────────────────── */}
-              <div className="p-3 rounded-lg bg-muted/50 space-y-1.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-sm">{assigningJob.title}</span>
-                  <Badge variant="outline" className={getStatusColor('jobs', assigningJob.status)}>{assigningJob.status.replace('_', ' ')}</Badge>
-                  {assigningJob.priority && (
-                    <Badge variant="outline" className={getPriorityColor(assigningJob.priority)}>{assigningJob.priority}</Badge>
-                  )}
-                </div>
-                {assigningJob.address && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> {assigningJob.address}</p>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[92dvh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                {assigningJob?.assigneeId ? (
+                  <><RefreshCw className="size-4 text-amber-600" /> Reassign Job</>
+                ) : (
+                  <><UserCheck className="size-4 text-emerald-600" /> Assign Job</>
                 )}
-                {assigningJob.scheduledAt && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Calendar className="size-3" /> {formatDate(assigningJob.scheduledAt)}
-                    {assigningJob.scheduledTime && <span className="ml-1">· {assigningJob.scheduledTime}</span>}
-                  </p>
+                {assigningJob?.jobNumber && (
+                  <Badge variant="outline" className="ml-1 font-mono text-[10px]">#{assigningJob.jobNumber}</Badge>
                 )}
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1 border-teal-200 text-teal-700 hover:bg-teal-50 dark:border-teal-800 dark:text-teal-300"
+                onClick={() => setShowAddEmployeeModal(true)}
+              >
+                <Plus className="size-3.5" /> Add Technician
+              </Button>
+            </DialogTitle>
+            <DialogDescription>
+              {assigningJob ? `${assigningJob.title}${assigningJob.customerName ? ` · ${assigningJob.customerName}` : ''}` : 'Select a technician'}
+            </DialogDescription>
+          </DialogHeader>
+          {assigningJob && (() => {
+            const isReassignment = !!assigningJob.assigneeId;
+            const canAssign = !isReassignment || !!reassignReason.trim();
+            // Build the "assign" handler that injects reason/note for reassignment
+            const doAssign = (employeeId: string) => {
+              if (isReassignment) {
+                handleLifecycleAction('assign', assigningJob.id, employeeId, {
+                  reason: reassignReason.trim(),
+                  reassignmentNote: reassignNote.trim() || undefined,
+                });
+              } else {
+                handleLifecycleAction('assign', assigningJob.id, employeeId);
+              }
+            };
+            // Split candidates: best match (top score, no high-risk conflict) vs others
+            const sortedCandidates = [...smartCandidates].sort((a, b) => b.score - a.score);
+            const bestMatch = sortedCandidates.find((c) => !c.conflict || c.conflict.type === 'none' || c.conflict.riskLevel !== 'high');
+            const others = sortedCandidates.filter((c) => c !== bestMatch);
+            return (
+              <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
+                {/* ── Job context card ─────────────────────────────────── */}
+                <div className="p-3 rounded-lg bg-muted/50 space-y-1.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm">{assigningJob.title}</span>
+                    <Badge variant="outline" className={getStatusColor('jobs', assigningJob.status)}>{assigningJob.status.replace('_', ' ')}</Badge>
+                    {assigningJob.priority && (
+                      <Badge variant="outline" className={getPriorityColor(assigningJob.priority)}>{assigningJob.priority}</Badge>
+                    )}
+                  </div>
+                  {assigningJob.address && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> {assigningJob.address}</p>
+                  )}
+                  {assigningJob.scheduledAt && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Calendar className="size-3" /> {formatDate(assigningJob.scheduledAt)}
+                      {assigningJob.scheduledTime && <span className="ml-1">· {assigningJob.scheduledTime}</span>}
+                    </p>
+                  )}
+                </div>
 
-              {/* ── Reassignment reason (mandatory) ──────────────────── */}
-              {isReassignment && (
-                <div className="p-3.5 rounded-lg border border-amber-200 bg-amber-50/70 space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between gap-2 text-amber-900">
-                    <div className="flex items-center gap-2">
-                      <ShieldAlert className="size-4 text-amber-600 shrink-0" />
-                      <span className="text-sm font-semibold">Reassignment Required</span>
+                {/* ── Reassignment reason (mandatory) ──────────────────── */}
+                {isReassignment && (
+                  <div className="p-3.5 rounded-lg border border-amber-200 bg-amber-50/70 space-y-3 shadow-xs">
+                    <div className="flex items-center justify-between gap-2 text-amber-900">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert className="size-4 text-amber-600 shrink-0" />
+                        <span className="text-sm font-semibold">Reassignment Required</span>
+                      </div>
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 text-[10px]">
+                        Currently: {assigningJob.assigneeName || 'Assigned'}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 text-[10px]">
-                      Currently: {assigningJob.assigneeName || 'Assigned'}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-amber-800 leading-normal">
-                    Reassigning from <span className="font-semibold text-amber-950">{assigningJob.assigneeName || 'current technician'}</span>. Select a reason below to unlock the technician selection list.
-                  </p>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-amber-900">Reason for reassignment <span className="text-red-600 font-bold">*</span></Label>
-                    <Select value={reassignReason} onValueChange={setReassignReason}>
-                      <SelectTrigger className="h-9 bg-white border-amber-300">
-                        <SelectValue placeholder="Select a reason (e.g. Schedule conflict, Customer request)…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {REASSIGNMENT_REASONS.map((r) => (
-                          <SelectItem key={r} value={r}>{r}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-amber-800">Note (optional)</Label>
-                    <Textarea
-                      value={reassignNote}
-                      onChange={(e) => setReassignNote(e.target.value)}
-                      placeholder="e.g. Customer requested earlier arrival"
-                      className="min-h-[60px] text-sm bg-white"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <Separator />
-
-              {/* ── BEST MATCH section ──────────────────────────────── */}
-              {loadingSmart ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-sm text-muted-foreground">Finding best matches…</span>
-                </div>
-              ) : smartError ? (
-                <div className="flex items-center gap-2 py-3 px-3 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-xs">
-                  <AlertCircle className="size-4 shrink-0" />
-                  <span>Smart match unavailable. Showing full roster below — pick manually.</span>
-                </div>
-              ) : (
-                <>
-                  {bestMatch && (
+                    <p className="text-xs text-amber-800 leading-normal">
+                      Reassigning from <span className="font-semibold text-amber-950">{assigningJob.assigneeName || 'current technician'}</span>. Select a reason below to unlock the technician selection list.
+                    </p>
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 flex items-center gap-1.5">
-                        <Sparkles className="size-3.5 text-amber-500" /> Best Match
-                      </p>
-                      <CandidateCard
-                        candidate={bestMatch}
-                        isBestMatch
-                        canAssign={canAssign}
-                        isReassignment={isReassignment}
-                        doAssign={doAssign}
-                        expandedId={expandedCandidateId}
-                        setExpandedId={setExpandedCandidateId}
-                        lifecycleLoading={lifecycleLoading}
+                      <Label className="text-xs font-semibold text-amber-950">Reason for reassignment *</Label>
+                      <Select value={reassignReason} onValueChange={setReassignReason}>
+                        <SelectTrigger className="w-full bg-white border-amber-300">
+                          <SelectValue placeholder="Select a reason..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {REASSIGNMENT_REASONS.map((r) => (
+                            <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium text-amber-950">Dispatcher Note (Optional)</Label>
+                      <Textarea
+                        placeholder="Additional details for the technician or customer..."
+                        className="text-xs min-h-[50px] bg-white border-amber-300"
+                        value={reassignNote}
+                        onChange={(e) => setReassignNote(e.target.value)}
                       />
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {/* ── OTHER TECHNICIANS section ──────────────────── */}
-                  {others.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Other Technicians ({others.length})
-                      </p>
+                {/* ── Candidate list ───────────────────────────────────── */}
+                {loadingSmart ? (
+                  <div className="flex flex-col items-center justify-center py-10 space-y-2">
+                    <Loader2 className="size-6 animate-spin text-teal-600" />
+                    <p className="text-xs text-muted-foreground">Finding best-matched technicians…</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* ── BEST MATCH section ─────────────────────────── */}
+                    {bestMatch && (
                       <div className="space-y-2">
-                        {others.map((c) => (
-                          <CandidateCard
-                            key={c.employeeId}
-                            candidate={c}
-                            isBestMatch={false}
-                            canAssign={canAssign}
-                            isReassignment={isReassignment}
-                            doAssign={doAssign}
-                            expandedId={expandedCandidateId}
-                            setExpandedId={setExpandedCandidateId}
-                            lifecycleLoading={lifecycleLoading}
-                          />
-                        ))}
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 flex items-center gap-1.5">
+                            <Sparkles className="size-3.5" /> Best Recommended Match
+                          </p>
+                          <Badge className="bg-emerald-600 text-white text-[10px]">
+                            {bestMatch.score}% match score
+                          </Badge>
+                        </div>
+                        <CandidateCard
+                          candidate={bestMatch}
+                          isBestMatch={true}
+                          canAssign={canAssign}
+                          isReassignment={isReassignment}
+                          doAssign={doAssign}
+                          expandedId={expandedCandidateId}
+                          setExpandedId={setExpandedCandidateId}
+                          lifecycleLoading={lifecycleLoading}
+                        />
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* ── Manual roster fallback (employees not in smart candidates) ── */}
-                  {smartCandidates.length === 0 && employees.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">All Technicians</p>
+                    {/* ── OTHER TECHNICIANS section ──────────────────── */}
+                    {others.length > 0 && (
                       <div className="space-y-2">
-                        {employees.map((emp) => {
-                          const isOnLeave = emp.status === 'on_leave' || (emp as { onLeaveUntil?: string | null }).onLeaveUntil;
-                          let skills: string[] = [];
-                          try { skills = JSON.parse(emp.skills || '[]'); } catch { /* empty */ }
-                          return (
-                            <div key={emp.id} className="p-3 rounded-lg border flex items-center gap-3">
-                              <Avatar className="size-9 shrink-0">
-                                <AvatarFallback className="bg-slate-100 text-slate-700 text-sm font-medium">
-                                  {emp.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium text-sm">{emp.name}</span>
-                                  <Badge variant="outline" className="text-[10px] h-4">{emp.role}</Badge>
-                                  <Badge variant="outline" className={cn('text-[10px] h-4', emp.status === 'available' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : emp.status === 'busy' ? 'text-amber-700 bg-amber-50 border-amber-200' : emp.status === 'offline' ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-red-700 bg-red-50 border-red-200')}>
-                                    {emp.status.replace('_', ' ')}
-                                  </Badge>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Other Technicians ({others.length})
+                        </p>
+                        <div className="space-y-2">
+                          {others.map((c) => (
+                            <CandidateCard
+                              key={c.employeeId}
+                              candidate={c}
+                              isBestMatch={false}
+                              canAssign={canAssign}
+                              isReassignment={isReassignment}
+                              doAssign={doAssign}
+                              expandedId={expandedCandidateId}
+                              setExpandedId={setExpandedCandidateId}
+                              lifecycleLoading={lifecycleLoading}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Manual roster fallback (employees not in smart candidates) ── */}
+                    {smartCandidates.length === 0 && employees.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">All Technicians</p>
+                        <div className="space-y-2">
+                          {employees.map((emp) => {
+                            const isOnLeave = emp.status === 'on_leave' || (emp as { onLeaveUntil?: string | null }).onLeaveUntil;
+                            let skills: string[] = [];
+                            try { skills = JSON.parse(emp.skills || '[]'); } catch { /* empty */ }
+                            return (
+                              <div key={emp.id} className="p-3 rounded-lg border flex items-center gap-3">
+                                <Avatar className="size-9 shrink-0">
+                                  <AvatarFallback className="bg-slate-100 text-slate-700 text-sm font-medium">
+                                    {emp.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium text-sm">{emp.name}</span>
+                                    <Badge variant="outline" className="text-[10px] h-4">{emp.role}</Badge>
+                                    <Badge variant="outline" className={cn('text-[10px] h-4', emp.status === 'available' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : emp.status === 'busy' ? 'text-amber-700 bg-amber-50 border-amber-200' : emp.status === 'offline' ? 'text-slate-600 bg-slate-50 border-slate-200' : 'text-red-700 bg-red-50 border-red-200')}>
+                                      {emp.status.replace('_', ' ')}
+                                    </Badge>
+                                  </div>
+                                  {skills.length > 0 && (
+                                    <div className="flex gap-1 mt-1">{skills.slice(0, 3).map((s, i) => (<Badge key={i} variant="secondary" className="text-[9px] h-4">{s}</Badge>))}</div>
+                                  )}
                                 </div>
-                                {skills.length > 0 && (
-                                  <div className="flex gap-1 mt-1">{skills.slice(0, 3).map((s, i) => (<Badge key={i} variant="secondary" className="text-[9px] h-4">{s}</Badge>))}</div>
-                                )}
+                                <Button
+                                  size="sm"
+                                  className={cn('h-8 text-xs', isOnLeave ? 'bg-slate-300 text-slate-500 hover:bg-slate-300' : 'bg-emerald-600 hover:bg-emerald-700')}
+                                  disabled={lifecycleLoading || Boolean(isOnLeave)}
+                                  onClick={() => doAssign(emp.id)}
+                                >
+                                  {isOnLeave ? 'On Leave' : 'Assign'}
+                                </Button>
                               </div>
-                              <Button
-                                size="sm"
-                                className={cn('h-8 text-xs', isOnLeave ? 'bg-slate-300 text-slate-500 hover:bg-slate-300' : 'bg-emerald-600 hover:bg-emerald-700')}
-                                disabled={lifecycleLoading || Boolean(isOnLeave)}
-                                onClick={() => doAssign(emp.id)}
-                              >
-                                {isOnLeave ? 'On Leave' : 'Assign'}
-                              </Button>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {smartCandidates.length === 0 && employees.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground text-sm">No technicians found in your workspace.</div>
-                  )}
-                </>
-              )}
+                    {smartCandidates.length === 0 && employees.length === 0 && (
+                      <div className="text-center py-8 px-4 rounded-xl border border-dashed border-border bg-muted/30 space-y-3">
+                        <div className="size-12 rounded-full bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 mx-auto flex items-center justify-center">
+                          <UserPlus className="size-6" />
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-semibold text-foreground">No Technicians Available</h4>
+                          <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                            You haven&apos;t added any technicians to your workspace yet. Add a technician to assign this job.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="bg-teal-600 hover:bg-teal-700 text-white gap-1.5"
+                          onClick={() => setShowAddEmployeeModal(true)}
+                        >
+                          <Plus className="size-4" /> Add Technician
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
 
-              {isReassignment && !reassignReason.trim() && (
-                <div className="flex items-center gap-2 py-2 px-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
-                  <AlertCircle className="size-3.5 shrink-0" />
-                  <span>Select a reason for reassignment to enable assigning.</span>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-      </DialogContent>
-    </Dialog>
+                {isReassignment && !reassignReason.trim() && (
+                  <div className="flex items-center gap-2 py-2 px-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+                    <AlertCircle className="size-3.5 shrink-0" />
+                    <span>Select a reason for reassignment to enable assigning.</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      <QuickAddEmployeeModal
+        open={showAddEmployeeModal}
+        onOpenChange={setShowAddEmployeeModal}
+        onCreated={(newEmp) => {
+          if (assigningJob && newEmp?.id) {
+            handleLifecycleAction('assign', assigningJob.id, newEmp.id);
+          }
+        }}
+      />
+    </>
   );
 }

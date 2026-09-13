@@ -1149,17 +1149,17 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     };
 
     // Coverage-area tag input — add on Enter or comma, remove via X badge
-    const addCoverageArea = () => {
-      const val = step2.coverageAreaInput.trim().replace(/,$/, '');
+    const addCoverageArea = (explicitVal?: string) => {
+      const val = (explicitVal ?? step2.coverageAreaInput).trim().replace(/,$/, '');
       if (!val) return;
       if (step2.coverageAreas.includes(val)) {
-        setStep2((s) => ({ ...s, coverageAreaInput: '' }));
+        if (!explicitVal) setStep2((s) => ({ ...s, coverageAreaInput: '' }));
         return;
       }
       setStep2((s) => ({
         ...s,
         coverageAreas: [...s.coverageAreas, val],
-        coverageAreaInput: '',
+        coverageAreaInput: explicitVal ? s.coverageAreaInput : '',
         errors: { ...s.errors, coverageAreas: '' },
       }));
     };
@@ -1354,13 +1354,17 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
               Coverage Area
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Postcodes or city names where you accept jobs. Press Enter or comma to add.
+              Add the cities, postal codes, or neighborhoods your team covers. Press Enter or comma to add.
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex gap-2">
               <Input
-                placeholder="e.g. 90210, Beverly Hills, Santa Monica"
+                placeholder={
+                  step1.city
+                    ? `e.g. ${step1.city}${step1.pincode ? `, ${step1.pincode}` : ''}, Downtown`
+                    : 'e.g. 90210, Beverly Hills, Santa Monica'
+                }
                 value={step2.coverageAreaInput}
                 onChange={(e) =>
                   setStep2((s) => ({ ...s, coverageAreaInput: e.target.value }))
@@ -1382,7 +1386,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
               <Button
                 type="button"
                 variant="outline"
-                onClick={addCoverageArea}
+                onClick={() => addCoverageArea()}
                 disabled={!step2.coverageAreaInput.trim()}
                 className="gap-1.5 shrink-0"
               >
@@ -1390,6 +1394,39 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                 <span className="hidden sm:inline">Add</span>
               </Button>
             </div>
+
+            {/* Quick 1-click suggestions based on Step 1 primary business address */}
+            {((step1.city && !step2.coverageAreas.includes(step1.city)) ||
+              (step1.pincode && !step2.coverageAreas.includes(step1.pincode))) && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 text-xs">
+                <span className="text-muted-foreground">Quick suggestions:</span>
+                {step1.city && !step2.coverageAreas.includes(step1.city) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[11px] px-2.5 rounded-full border-dashed border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-950/30 gap-1"
+                    onClick={() => addCoverageArea(step1.city)}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add &quot;{step1.city}&quot;
+                  </Button>
+                )}
+                {step1.pincode && !step2.coverageAreas.includes(step1.pincode) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-[11px] px-2.5 rounded-full border-dashed border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-300 dark:bg-emerald-950/30 gap-1"
+                    onClick={() => addCoverageArea(step1.pincode)}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add &quot;{step1.pincode}&quot;
+                  </Button>
+                )}
+              </div>
+            )}
+
             {step2.coverageAreas.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {step2.coverageAreas.map((area) => (
