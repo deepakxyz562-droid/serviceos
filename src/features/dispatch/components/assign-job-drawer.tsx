@@ -168,7 +168,8 @@ export function AssignJobDrawer({
         });
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-md p-0 flex flex-col bg-background">
         <SheetHeader className="p-4 border-b border-border bg-muted/20">
           <div className="flex items-center justify-between gap-2">
