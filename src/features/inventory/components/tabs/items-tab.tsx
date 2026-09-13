@@ -1,19 +1,12 @@
 'use client';
 
 /**
- * ItemsTab — search/filter + table of inventory SKUs.
- *
- * Extracted from src/components/views/inventory-view.tsx (Phase 6B1).
- *
- * Pure presentational component. All state (items list, loading, error,
- * search, category filter) is owned by the parent `InventoryView` and passed
- * in as props. Write actions (edit / create-asset / adjust-stock / delete)
- * are surfaced to the parent via callback props.
+ * ItemsTab — search/filter + table of inventory SKUs with multi-location breakdown support.
  */
 
 import {
-  Package, Search, Filter, Plus, MoreHorizontal, RotateCcw,
-  Pencil, PackagePlus, SlidersHorizontal, Trash2,
+  Package, Search, Plus, MoreHorizontal, RotateCcw,
+  Pencil, PackagePlus, SlidersHorizontal, Trash2, MapPin, Store,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,15 +17,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
-import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  ITEM_CATEGORIES, formatCategoryLabel,
-} from '../../utils/inventory-helpers';
 import type { CurrencyFormatFn, InventoryItem } from '../../types';
 
 export function ItemsTab({
@@ -48,6 +35,7 @@ export function ItemsTab({
   onEditItem,
   onCreateAssetFromItem,
   onAdjustStock,
+  onViewLocations,
   onDeleteItem,
   format,
   currency,
@@ -64,6 +52,7 @@ export function ItemsTab({
   onEditItem: (item: InventoryItem) => void;
   onCreateAssetFromItem: (item: InventoryItem) => void;
   onAdjustStock: (item: InventoryItem) => void;
+  onViewLocations?: (item: InventoryItem) => void;
   onDeleteItem: (item: InventoryItem) => void;
   format: CurrencyFormatFn;
   currency: string;
@@ -166,7 +155,20 @@ export function ItemsTab({
                           </div>
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums">
-                          {item.totalStock} <span className="text-xs text-muted-foreground">{item.unit}</span>
+                          {onViewLocations ? (
+                            <button
+                              type="button"
+                              onClick={() => onViewLocations(item)}
+                              className="font-semibold underline decoration-dotted underline-offset-4 hover:text-emerald-600 transition-colors"
+                              title="Click to view stock breakdown by warehouse and van"
+                            >
+                              {item.totalStock} <span className="text-xs text-muted-foreground">{item.unit}</span>
+                            </button>
+                          ) : (
+                            <>
+                              {item.totalStock} <span className="text-xs text-muted-foreground">{item.unit}</span>
+                            </>
+                          )}
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums">
                           {item.availableStock}
@@ -202,6 +204,11 @@ export function ItemsTab({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              {onViewLocations && (
+                                <DropdownMenuItem onClick={() => onViewLocations(item)}>
+                                  <Store className="size-3.5 mr-2 text-emerald-600" /> View Locations / Vans
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => onEditItem(item)}>
                                 <Pencil className="size-3.5 mr-2" /> Edit
                               </DropdownMenuItem>

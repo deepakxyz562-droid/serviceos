@@ -4,15 +4,15 @@
  * Endpoints (all relative to API_BASE_URL):
  *   GET   /api/inventory/items?search=&status=        → InventoryItem[]
  *   GET   /api/inventory/items/[id]                   → InventoryItem (+ transactions)
- *   PATCH /api/inventory/items/[id]/adjust            → { quantity, reason, type: 'in'|'out' }
+ *   GET   /api/inventory/items/[id]/locations         → { locations: ItemStockLocation[] }
+ *   POST  /api/inventory/items/[id]/adjust            → { quantity, reason, type: 'in'|'out', warehouseId?, employeeId? }
  *   GET   /api/inventory/transactions?itemId=         → InventoryTransaction[]
  *
- * Adjust mutations invalidate the list, the item detail, and its transactions
- * so any screen observing inventory state re-fetches immediately.
+ * Adjust mutations invalidate the list, the item detail, transactions, and location stock breakdown.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { InventoryItem, InventoryTransaction } from '@/types';
+import type { InventoryItem, InventoryTransaction, ItemStockLocation } from '@/types';
 
 export interface InventoryListParams {
   search?: string;
@@ -53,6 +53,20 @@ export function useInventoryItemDetail(id: string | undefined) {
   });
 }
 
+export function useItemLocations(itemId: string | undefined) {
+  return useQuery({
+    queryKey: ['inventory', 'locations', itemId],
+    queryFn: async () => {
+      if (!itemId) return [] as ItemStockLocation[];
+      const res = await api.get<{ locations: ItemStockLocation[] }>(
+        `/api/inventory/items/${itemId}/locations`
+      );
+      return res?.locations || [];
+    },
+    enabled: !!itemId,
+  });
+}
+
 export interface AdjustStockVars {
   id: string;
   /** Positive integer quantity to adjust by. */
@@ -60,20 +74,25 @@ export interface AdjustStockVars {
   /** Type of adjustment — sent as `type` field per API contract. */
   type: 'in' | 'out';
   reason?: string;
+  warehouseId?: string;
+  employeeId?: string;
 }
 
 export function useAdjustStock() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, quantity, type, reason }: AdjustStockVars) =>
-      api.patch<InventoryItem>(`/api/inventory/items/${id}/adjust`, {
+    mutationFn: ({ id, quantity, type, reason, warehouseId, employeeId }: AdjustStockVars) =>
+      api.post<InventoryItem>(`/api/inventory/items/${id}/adjust`, {
         quantity: Math.abs(quantity),
         type,
         reason: reason?.trim() || undefined,
+        warehouseId,
+        employeeId,
       }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['inventory', 'items'] });
       qc.invalidateQueries({ queryKey: ['inventory', 'items', vars.id] });
+      qc.invalidateQueries({ queryKey: ['inventory', 'locations', vars.id] });
       qc.invalidateQueries({ queryKey: ['inventory', 'transactions', vars.id] });
       qc.invalidateQueries({ queryKey: ['inventory', 'alerts'] });
     },

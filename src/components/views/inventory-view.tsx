@@ -61,12 +61,14 @@ import { StatCard } from '@/components/shared/stat-card';
 import { PaginationBar } from '@/components/ui/pagination-bar';
 
 import { ItemsTab } from '@/features/inventory/components/tabs/items-tab';
+import { WarehousesTab } from '@/features/inventory/components/tabs/warehouses-tab';
 import { AssetsTab } from '@/features/inventory/components/tabs/assets-tab';
 import { TransfersTab } from '@/features/inventory/components/tabs/transfers-tab';
 import { SuppliersTab } from '@/features/inventory/components/tabs/suppliers-tab';
 import { TransactionsTab } from '@/features/inventory/components/tabs/transactions-tab';
 import { AlertsTab } from '@/features/inventory/components/tabs/alerts-tab';
 import { ItemFormDialog } from '@/features/inventory/components/item-form-dialog';
+import { ItemLocationsDialog } from '@/features/inventory/components/item-locations-dialog';
 import { AdjustStockDialog } from '@/features/inventory/components/adjust-stock-dialog';
 import { SupplierFormDialog } from '@/features/inventory/components/supplier-form-dialog';
 import { TransferFormDialog } from '@/features/inventory/components/transfer-form-dialog';
@@ -98,6 +100,8 @@ export function InventoryView() {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [adjustTarget, setAdjustTarget] = useState<InventoryItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null);
+  const [locationsTarget, setLocationsTarget] = useState<InventoryItem | null>(null);
+  const [transferInitialItemId, setTransferInitialItemId] = useState<string | undefined>(undefined);
 
   // ── Assets state (serialized equipment tracking + employee assignment) ──
   const [assets, setAssets] = useState<InventoryAssetRow[]>([]);
@@ -438,6 +442,7 @@ export function InventoryView() {
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as InventoryTab)}>
         <TabsList className="w-full sm:w-auto overflow-x-auto">
           <TabsTrigger value="items">Items</TabsTrigger>
+          <TabsTrigger value="warehouses">Warehouses & Vans</TabsTrigger>
           <TabsTrigger value="assets">Assets</TabsTrigger>
           <TabsTrigger value="transfers">Transfers</TabsTrigger>
           <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
@@ -459,6 +464,7 @@ export function InventoryView() {
             onEditItem={(item) => { setEditingItem(item); setItemDialogOpen(true); }}
             onCreateAssetFromItem={handleCreateAssetFromItem}
             onAdjustStock={(item) => setAdjustTarget(item)}
+            onViewLocations={(item) => setLocationsTarget(item)}
             onDeleteItem={(item) => setDeleteTarget(item)}
             format={format}
             currency={currency}
@@ -472,6 +478,10 @@ export function InventoryView() {
             onPageSizeChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
             itemName="items"
           />
+        </TabsContent>
+
+        <TabsContent value="warehouses" className="space-y-4">
+          <WarehousesTab />
         </TabsContent>
 
         <TabsContent value="assets" className="space-y-4">
@@ -494,7 +504,15 @@ export function InventoryView() {
             transfers={transfers}
             transfersLoading={transfersLoading}
             hasItems={items.length > 0}
-            onNewTransfer={() => setTransferDialogOpen(true)}
+            onNewTransfer={() => {
+              setTransferInitialItemId(undefined);
+              setTransferDialogOpen(true);
+            }}
+            onTransferUpdated={() => {
+              fetchTransfers();
+              fetchItems();
+              fetchTransactions();
+            }}
           />
         </TabsContent>
 
@@ -541,6 +559,16 @@ export function InventoryView() {
         onSaved={handleItemSaved}
       />
 
+      <ItemLocationsDialog
+        open={!!locationsTarget}
+        item={locationsTarget}
+        onClose={() => setLocationsTarget(null)}
+        onInitiateTransfer={(item) => {
+          setTransferInitialItemId(item.id);
+          setTransferDialogOpen(true);
+        }}
+      />
+
       <AdjustStockDialog
         open={!!adjustTarget}
         item={adjustTarget}
@@ -558,8 +586,18 @@ export function InventoryView() {
       <TransferFormDialog
         open={transferDialogOpen}
         items={items.filter((i) => i.isActive)}
-        onClose={() => setTransferDialogOpen(false)}
-        onCreated={() => { setTransferDialogOpen(false); fetchTransfers(); fetchTransactions(); }}
+        initialItemId={transferInitialItemId}
+        onClose={() => {
+          setTransferDialogOpen(false);
+          setTransferInitialItemId(undefined);
+        }}
+        onCreated={() => {
+          setTransferDialogOpen(false);
+          setTransferInitialItemId(undefined);
+          fetchTransfers();
+          fetchTransactions();
+          fetchItems();
+        }}
       />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>

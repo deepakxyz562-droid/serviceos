@@ -68,11 +68,29 @@ export async function GET(request: NextRequest) {
       where.status = status;
     }
 
-    const transfers = await db.stockTransfer.findMany({
+    const rawTransfers = await db.stockTransfer.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
+
+    // Lookup warehouse and employee names
+    const whIds = Array.from(new Set(rawTransfers.flatMap((t) => [t.fromWarehouseId, t.toWarehouseId]).filter(Boolean))) as string[];
+    const empIds = Array.from(new Set(rawTransfers.flatMap((t) => [t.fromEmployeeId, t.toEmployeeId]).filter(Boolean))) as string[];
+
+    const [whs, emps] = await Promise.all([
+      whIds.length > 0 ? db.warehouse.findMany({ where: { id: { in: whIds } }, select: { id: true, name: true, type: true } }) : [],
+      empIds.length > 0 ? db.employee.findMany({ where: { id: { in: empIds } }, select: { id: true, name: true } }) : [],
+    ]);
+
+    const whMap = new Map(whs.map((w) => [w.id, w.name]));
+    const empMap = new Map(emps.map((e) => [e.id, `${e.name}'s Van`]));
+
+    const transfers = rawTransfers.map((t) => ({
+      ...t,
+      fromLocationName: t.fromWarehouseId ? whMap.get(t.fromWarehouseId) || 'Main Shop' : t.fromEmployeeId ? empMap.get(t.fromEmployeeId) || 'Technician Van' : 'Main Shop',
+      toLocationName: t.toWarehouseId ? whMap.get(t.toWarehouseId) || 'Main Shop' : t.toEmployeeId ? empMap.get(t.toEmployeeId) || 'Technician Van' : 'Technician Van',
+    }));
 
     log.info({ userId: authUser.id, count: transfers.length }, 'Stock transfers listed');
 

@@ -73,10 +73,10 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { quantity, reason, type, reference, notes } = body as Record<string, unknown>;
+    const { quantity, reason, type, reference, notes, warehouseId, employeeId } = body as Record<string, unknown>;
 
-    const qty = Number(quantity);
-    if (!Number.isFinite(qty) || qty === 0) {
+    const qtyRaw = Number(quantity);
+    if (!Number.isFinite(qtyRaw) || qtyRaw === 0) {
       return NextResponse.json(
         { error: 'quantity is required and must be a non-zero number' },
         { status: 400 },
@@ -86,6 +86,9 @@ export async function POST(
     if (typeof reason !== 'string' || !reason.trim()) {
       return NextResponse.json({ error: 'reason is required' }, { status: 400 });
     }
+
+    // Support both signed quantity (-5) and directional type ({ quantity: 5, type: 'out' })
+    const qty = type === 'out' && qtyRaw > 0 ? -qtyRaw : qtyRaw;
 
     const txType =
       typeof type === 'string' && VALID_TYPES.includes(type as (typeof VALID_TYPES)[number])
@@ -108,6 +111,38 @@ export async function POST(
 
     const newReserved = existing.reservedStock;
     const newAvailable = Math.max(0, newTotal - newReserved);
+
+    // Update location-specific quantity if warehouseId or employeeId is provided
+    const targetWarehouseId = warehouseId ? String(warehouseId) : null;
+    const targetEmployeeId = employeeId ? String(employeeId) : null;
+
+    if (targetWarehouseId || targetEmployeeId) {
+      try {
+        const locWhere: Record<string, unknown> = { inventoryItemId: id };
+        if (targetWarehouseId) locWhere.warehouseId = targetWarehouseId;
+        if (targetEmployeeId) locWhere.employeeId = targetEmployeeId;
+
+        const existingLoc = await db.stockLocation.findFirst({ where: locWhere });
+        if (existingLoc) {
+          const locNewQty = Math.max(0, existingLoc.quantity + qty);
+          await db.stockLocation.update({
+            where: { id: existingLoc.id },
+            data: { quantity: locNewQty },
+          });
+        } else if (qty > 0) {
+          await db.stockLocation.create({
+            data: {
+              inventoryItemId: id,
+              warehouseId: targetWarehouseId,
+              employeeId: targetEmployeeId,
+              quantity: Math.floor(qty),
+            },
+          });
+        }
+      } catch (locErr) {
+        log.warn({ err: locErr }, 'Could not update location-specific stock');
+      }
+    }
 
     // Use a transaction so the StockTransaction + InventoryItem update are atomic
     const [updatedItem, transaction] = await db.$transaction([
@@ -135,6 +170,8 @@ export async function POST(
           metadataJson: JSON.stringify({
             source: 'stock_adjustment',
             reason: reason.trim(),
+            warehouseId: targetWarehouseId,
+            employeeId: targetEmployeeId,
             previousTotal: existing.totalStock,
             newTotal,
           }),
@@ -206,3 +243,6 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+export const PATCH = POST;
+

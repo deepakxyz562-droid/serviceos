@@ -54,12 +54,51 @@ export interface StockTransfer {
   toWarehouseId: string | null;
   fromEmployeeId: string | null;
   toEmployeeId: string | null;
+  fromLocationName?: string;
+  toLocationName?: string;
   status: StockTransferStatus;
   transferDate: string;
   receivedDate: string | null;
   itemsJson: string;
   notes: string | null;
   createdAt: string;
+}
+
+export interface Warehouse {
+  id: string;
+  name: string;
+  code?: string | null;
+  address: string | null;
+  type: 'main' | 'branch' | 'secondary' | 'vehicle' | 'technician' | string;
+  capacity: number | null;
+  employeeId?: string | null;
+  employee?: { id: string; name: string } | null;
+  isDefault?: boolean;
+  isActive: boolean;
+  metadataJson?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LocationStockBreakdown {
+  id: string;
+  locationType?: 'main_shop' | 'van' | 'warehouse' | string;
+  warehouseId?: string | null;
+  warehouseName?: string | null;
+  warehouseCode?: string | null;
+  warehouseType?: string | null;
+  isDefault?: boolean;
+  employeeId?: string | null;
+  employeeName?: string | null;
+  name?: string;
+  address?: string | null;
+  quantity: number;
+  locationCode?: string | null;
+  minStock?: number;
+  maxStock?: number;
+  aisle?: string | null;
+  shelf?: string | null;
+  bin?: string | null;
 }
 
 // Serialized equipment asset (distinct from quantity-level InventoryItem).
@@ -172,7 +211,7 @@ export interface TransferItem {
 // ─── Active tab + sub-tab types ──────────────────────────────────────────────
 
 export type InventoryTab =
-  | 'items' | 'assets' | 'transfers' | 'suppliers' | 'transactions' | 'alerts';
+  | 'items' | 'assets' | 'transfers' | 'warehouses' | 'suppliers' | 'transactions' | 'alerts';
 export type AssetSubTab = 'available' | 'assigned';
 
 // ─── Currency formatter signature (from useCompanyCurrency) ──────────────────

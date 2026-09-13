@@ -417,6 +417,23 @@ export interface InventoryItem {
   supplier?: { id: string; name: string } | null;
 }
 
+export interface ItemStockLocation {
+  id: string;
+  warehouseId?: string | null;
+  warehouseName?: string | null;
+  warehouseCode?: string | null;
+  warehouseType?: string | null;
+  isDefault?: boolean;
+  employeeId?: string | null;
+  employeeName?: string | null;
+  quantity: number;
+  minStock: number;
+  maxStock: number;
+  aisle?: string | null;
+  shelf?: string | null;
+  bin?: string | null;
+}
+
 export interface InventoryTransaction {
   id: string;
   type: string;

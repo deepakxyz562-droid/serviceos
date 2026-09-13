@@ -4,13 +4,9 @@
  * Mirrors the PWA employee portal's inventory detail view:
  *  - Full item info (name, SKU, description, quantity, reorder level, unit price,
  *    location, supplier, status).
- *  - Stock adjustment modal: "Stock In" / "Stock Out" with quantity + reason.
+ *  - Stock breakdown across Main Shop and Field Service Vans.
+ *  - Location-aware Stock adjustment modal: "Stock In" / "Stock Out" with quantity, reason & location.
  *  - Transaction history (last 20): type, qty, reason, user, date.
- *
- * APIs:
- *   GET   /api/inventory/items/[id]
- *   PATCH /api/inventory/items/[id]/adjust { quantity, reason, type: 'in'|'out' }
- *   GET   /api/inventory/transactions?itemId=
  */
 import React, { useCallback, useState } from 'react';
 import {
@@ -37,12 +33,14 @@ import {
   SlidersHorizontal,
   History,
   Truck,
+  Store,
   X,
+  CheckCircle2,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { StatusBadge } from '@/components/ui/Badge';
+import { StatusBadge, Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
@@ -51,6 +49,7 @@ import {
   useInventoryItemDetail,
   useAdjustStock,
   useInventoryTransactions,
+  useItemLocations,
 } from '@/hooks/use-inventory';
 import { COLORS } from '@/lib/constants';
 import { cn } from '@/lib/cn';
@@ -58,7 +57,7 @@ import {
   formatCurrency as formatCurrencyAmount,
 } from '@/lib/currency';
 import { useAuthStore } from '@/stores/auth-store';
-import type { InventoryTransaction } from '@/types';
+import type { InventoryTransaction, ItemStockLocation } from '@/types';
 
 const getStockStatus = (quantity: number, reorderLevel: number): string => {
   if (quantity <= 0) return 'out_of_stock';
@@ -109,9 +108,11 @@ export default function InventoryItemDetailScreen() {
         ? params.id[0]
         : '';
   const tenantCurrency = useAuthStore((s) => s.tenant?.currency ?? null);
+  const user = useAuthStore((s) => s.user);
 
   const { data: item, isLoading, error, refetch, isRefetching } =
     useInventoryItemDetail(id);
+  const { data: locations, refetch: refetchLocations } = useItemLocations(id || undefined);
   const { data: transactions } = useInventoryTransactions(id || undefined);
   const adjustStock = useAdjustStock();
   const toast = useToast();
@@ -120,19 +121,22 @@ export default function InventoryItemDetailScreen() {
   const [adjustType, setAdjustType] = useState<'in' | 'out'>('in');
   const [adjustQty, setAdjustQty] = useState('1');
   const [adjustReason, setAdjustReason] = useState('');
+  const [targetLocation, setTargetLocation] = useState<'van' | 'main'>('van');
 
   useFocusEffect(
     useCallback(() => {
       if (id) {
         refetch();
+        refetchLocations();
       }
-    }, [id, refetch])
+    }, [id, refetch, refetchLocations])
   );
 
-  const openAdjust = (type: 'in' | 'out') => {
+  const openAdjust = (type: 'in' | 'out', preferredTarget: 'van' | 'main' = 'van') => {
     setAdjustType(type);
     setAdjustQty('1');
     setAdjustReason('');
+    setTargetLocation(preferredTarget);
     setAdjustOpen(true);
   };
 
@@ -149,12 +153,17 @@ export default function InventoryItemDetailScreen() {
         quantity: parsedQty,
         type: adjustType,
         reason: adjustReason.trim() || undefined,
+        employeeId: targetLocation === 'van' && user?.employeeId ? user.employeeId : undefined,
       });
       toast.show(
-        `${adjustType === 'in' ? 'Added' : 'Removed'} ${parsedQty} unit${parsedQty === 1 ? '' : 's'}.`,
+        `${adjustType === 'in' ? 'Added' : 'Removed'} ${parsedQty} unit${parsedQty === 1 ? '' : 's'}${
+          targetLocation === 'van' ? ' on Van' : ''
+        }.`,
         'success'
       );
       setAdjustOpen(false);
+      refetch();
+      refetchLocations();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Please try again.';
       toast.show(`Adjustment failed: ${msg}`, 'error');
@@ -189,6 +198,9 @@ export default function InventoryItemDetailScreen() {
 
   const status = getStockStatus(item.quantity, item.reorderLevel);
   const txList: InventoryTransaction[] = transactions ?? [];
+  const locList: ItemStockLocation[] = locations ?? [];
+
+  const myVanStock = locList.find((l) => l.employeeId && l.employeeId === user?.employeeId);
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
@@ -200,7 +212,10 @@ export default function InventoryItemDetailScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={refetch}
+            onRefresh={() => {
+              refetch();
+              refetchLocations();
+            }}
             colors={[COLORS.primary]}
             tintColor={COLORS.primary}
           />
@@ -227,7 +242,7 @@ export default function InventoryItemDetailScreen() {
           <View className="mt-4 flex-row items-end justify-between">
             <View>
               <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Current Quantity
+                Total Stock
               </Text>
               <Text
                 className={cn(
@@ -253,6 +268,73 @@ export default function InventoryItemDetailScreen() {
           </View>
         </Card>
 
+        {/* Stock Breakdown across Locations & Vans */}
+        <Card className="mb-3">
+          <View className="flex-row items-center justify-between mb-2">
+            <View className="flex-row items-center">
+              <Store size={16} color={COLORS.primary} />
+              <Text className="ml-2 text-base font-bold text-foreground">
+                Stock by Location & Van
+              </Text>
+            </View>
+          </View>
+
+          {locList.length === 0 ? (
+            <View className="py-2">
+              <View className="flex-row items-center justify-between py-1.5 border-b border-border/50">
+                <View className="flex-row items-center">
+                  <Store size={14} color={COLORS.mutedForeground} />
+                  <Text className="ml-2 text-sm text-foreground">Main Shop / HQ</Text>
+                </View>
+                <Text className="text-sm font-bold text-foreground">{item.quantity} units</Text>
+              </View>
+            </View>
+          ) : (
+            <View className="divide-y divide-border/50">
+              {locList.map((loc) => {
+                const isMyVan = loc.employeeId && loc.employeeId === user?.employeeId;
+                const isVan = !!loc.employeeId || loc.warehouseType === 'vehicle';
+                return (
+                  <View key={loc.id} className="flex-row items-center justify-between py-2.5">
+                    <View className="flex-row items-center flex-1 pr-2">
+                      {isVan ? (
+                        <Truck size={15} color={isMyVan ? COLORS.primary : COLORS.mutedForeground} />
+                      ) : (
+                        <Store size={15} color={COLORS.mutedForeground} />
+                      )}
+                      <View className="ml-2 flex-1">
+                        <View className="flex-row items-center">
+                          <Text
+                            className={cn(
+                              'text-sm font-medium',
+                              isMyVan ? 'font-bold text-primary' : 'text-foreground'
+                            )}
+                            numberOfLines={1}
+                          >
+                            {loc.employeeName
+                              ? `${loc.employeeName}'s Van`
+                              : loc.warehouseName || 'Warehouse'}
+                          </Text>
+                          {isMyVan ? (
+                            <View className="ml-1.5">
+                              <Badge variant="info">
+                                <Text className="text-[10px] font-bold text-blue-800">You</Text>
+                              </Badge>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    </View>
+                    <Text className="text-sm font-bold text-foreground tabular-nums">
+                      {loc.quantity} units
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </Card>
+
         {/* Details grid */}
         <Card className="mb-3">
           {item.unitPrice !== null && item.unitPrice !== undefined ? (
@@ -266,7 +348,7 @@ export default function InventoryItemDetailScreen() {
             <View style={{ marginTop: item.unitPrice !== null ? 12 : 0 }}>
               <DetailRow
                 icon={<MapPin size={16} color={COLORS.mutedForeground} />}
-                label="Location"
+                label="Primary Location"
                 value={item.location}
               />
             </View>
@@ -288,17 +370,24 @@ export default function InventoryItemDetailScreen() {
 
         {/* Stock adjustment buttons */}
         <Card className="mb-3">
-          <View className="flex-row items-center">
-            <SlidersHorizontal size={16} color={COLORS.primary} />
-            <Text className="ml-2 text-base font-bold text-foreground">
-              Adjust Stock
-            </Text>
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center">
+              <SlidersHorizontal size={16} color={COLORS.primary} />
+              <Text className="ml-2 text-base font-bold text-foreground">
+                Adjust Van Stock
+              </Text>
+            </View>
+            {myVanStock && (
+              <Text className="text-xs font-semibold text-primary">
+                On your van: {myVanStock.quantity}
+              </Text>
+            )}
           </View>
           <View className="mt-3 flex-row gap-2">
             <View className="flex-1">
               <Button
                 variant="outline"
-                onPress={() => openAdjust('out')}
+                onPress={() => openAdjust('out', 'van')}
                 loading={adjustStock.isPending}
               >
                 <View className="flex-row items-center justify-center">
@@ -310,7 +399,10 @@ export default function InventoryItemDetailScreen() {
               </Button>
             </View>
             <View className="flex-1">
-              <Button onPress={() => openAdjust('in')} loading={adjustStock.isPending}>
+              <Button
+                onPress={() => openAdjust('in', 'van')}
+                loading={adjustStock.isPending}
+              >
                 <View className="flex-row items-center justify-center">
                   <ArrowBigUp size={16} color="#fff" />
                   <Text className="ml-2 font-semibold text-white">Stock In</Text>
@@ -425,6 +517,49 @@ export default function InventoryItemDetailScreen() {
             <Text className="font-semibold text-foreground">{item.name}</Text>
           </Text>
 
+          {/* Location toggle (My Van vs Main Shop) */}
+          <View className="mb-3">
+            <Text className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Location
+            </Text>
+            <View className="flex-row rounded-lg bg-muted p-1 border border-border">
+              <Pressable
+                onPress={() => setTargetLocation('van')}
+                className={cn(
+                  'flex-1 py-1.5 rounded-md items-center justify-center flex-row',
+                  targetLocation === 'van' ? 'bg-white shadow-xs' : 'bg-transparent'
+                )}
+              >
+                <Truck size={14} color={targetLocation === 'van' ? COLORS.primary : COLORS.mutedForeground} />
+                <Text
+                  className={cn(
+                    'ml-1.5 text-xs font-semibold',
+                    targetLocation === 'van' ? 'text-primary' : 'text-muted-foreground'
+                  )}
+                >
+                  My Van Stock
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setTargetLocation('main')}
+                className={cn(
+                  'flex-1 py-1.5 rounded-md items-center justify-center flex-row',
+                  targetLocation === 'main' ? 'bg-white shadow-xs' : 'bg-transparent'
+                )}
+              >
+                <Store size={14} color={targetLocation === 'main' ? COLORS.primary : COLORS.mutedForeground} />
+                <Text
+                  className={cn(
+                    'ml-1.5 text-xs font-semibold',
+                    targetLocation === 'main' ? 'text-primary' : 'text-muted-foreground'
+                  )}
+                >
+                  Main Shop
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
           {/* Quantity stepper */}
           <View className="mb-2">
             <Text className="mb-1.5 text-sm font-medium text-foreground">
@@ -470,7 +605,7 @@ export default function InventoryItemDetailScreen() {
             label="Reason (optional)"
             value={adjustReason}
             onChangeText={setAdjustReason}
-            placeholder="e.g. damaged, received, used on job"
+            placeholder="e.g. used on job, restocked from shop"
             maxLength={200}
           />
 
