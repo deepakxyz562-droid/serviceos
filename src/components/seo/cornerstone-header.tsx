@@ -20,6 +20,9 @@ import {
   Megaphone,
   Briefcase,
   Scale,
+  Store,
+  FileText,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
@@ -80,10 +83,11 @@ const productLinks: NavProductItem[] = [
     badge: 'AI Powered',
   },
   {
-    label: 'All Features Overview',
-    desc: 'Explore the complete Fieseros capability stack',
-    href: '/features',
-    icon: Layers,
+    label: 'Free Invoice Generator',
+    desc: 'Instant professional invoice creation tool',
+    href: '/invoice-generator',
+    icon: FileText,
+    badge: 'Free Tool',
   },
 ];
 
@@ -152,8 +156,8 @@ const serviceLinks: NavServiceItem[] = [
 const compareList = [
   { label: 'Jobber Alternatives', desc: 'Modern features, zero per-seat fees', href: '/jobber-alternatives' },
   { label: 'Housecall Pro Alternatives', desc: 'Simpler dispatch & built-in AI', href: '/housecall-pro-alternatives' },
-  { label: 'ServiceTitan Alternatives', desc: 'Enterprise power without $500/mo lock-in', href: '/servicetitan-alternatives' },
-  { label: '2026 Best Software Guide', desc: 'Full side-by-side contractor software review', href: '/best-field-service-software' },
+  { label: 'ServiceTitan Alternatives', desc: 'Enterprise power without lock-in', href: '/servicetitan-alternatives' },
+  { label: '2026 Best Software Guide', desc: 'Full contractor software review', href: '/best-field-service-software' },
 ];
 
 /**
@@ -176,7 +180,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     closeTimer.current = setTimeout(() => {
       setOpenDropdown(null);
-    }, 150);
+    }, 140);
   };
 
   const toggleMobileSection = (name: string) => {
@@ -194,31 +198,31 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
           </span>
         </Link>
 
-        {/* ── Desktop Navigation ── */}
-        <nav className="hidden lg:flex items-center gap-1">
-          {/* Dropdown 1: Products */}
+        {/* ── Desktop Navigation (4 Streamlined Items) ── */}
+        <nav className="hidden lg:flex items-center gap-1.5">
+          {/* Dropdown 1: Product */}
           <div
             className="relative"
-            onMouseEnter={() => handleMouseEnter('products')}
+            onMouseEnter={() => handleMouseEnter('product')}
             onMouseLeave={handleMouseLeave}
           >
             <button
               type="button"
-              onClick={() => setOpenDropdown((v) => (v === 'products' ? null : 'products'))}
-              aria-expanded={openDropdown === 'products'}
+              onClick={() => setOpenDropdown((v) => (v === 'product' ? null : 'product'))}
+              aria-expanded={openDropdown === 'product'}
               className={cn(
-                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                productLinks.some((p) => p.href === activePath)
+                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                productLinks.some((p) => p.href === activePath) || openDropdown === 'product'
                   ? 'text-foreground bg-accent'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
               )}
             >
-              Products <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'products' && 'rotate-180')} />
+              Product <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'product' && 'rotate-180')} />
             </button>
 
-            {openDropdown === 'products' && (
+            {openDropdown === 'product' && (
               <div className="absolute left-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                <div className="w-[520px] rounded-2xl border border-border bg-background p-4 shadow-xl grid grid-cols-2 gap-2">
+                <div className="w-[560px] rounded-2xl border border-border/80 bg-background p-4 shadow-2xl grid grid-cols-2 gap-2">
                   {productLinks.map((item) => {
                     const Icon = item.icon;
                     const isActive = activePath === item.href;
@@ -241,7 +245,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs font-semibold text-foreground truncate">{item.label}</span>
                             {item.badge && (
-                              <span className="text-[10px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded-full">
+                              <span className="text-[9px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded-full">
                                 {item.badge}
                               </span>
                             )}
@@ -254,13 +258,13 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
                     );
                   })}
                   <div className="col-span-2 mt-1 pt-2 border-t border-border flex items-center justify-between text-xs px-2">
-                    <span className="text-muted-foreground">Looking for industry-specific setups?</span>
+                    <span className="text-muted-foreground">Looking for industry setups?</span>
                     <Link
-                      href="/industries"
+                      href="/field-service-software"
                       onClick={() => setOpenDropdown(null)}
                       className="font-medium text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
                     >
-                      Browse all trades <ArrowRight className="h-3 w-3" />
+                      Explore trade workflows <ArrowRight className="h-3 w-3" />
                     </Link>
                   </div>
                 </div>
@@ -268,226 +272,151 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
             )}
           </div>
 
-          {/* Dropdown 2: Industries (2-column mega-menu) */}
+          {/* Dropdown 2: Solutions (Industries + Services + Compare) */}
           <div
             className="relative"
-            onMouseEnter={() => handleMouseEnter('industries')}
+            onMouseEnter={() => handleMouseEnter('solutions')}
             onMouseLeave={handleMouseLeave}
           >
             <button
               type="button"
-              onClick={() => setOpenDropdown((v) => (v === 'industries' ? null : 'industries'))}
-              aria-expanded={openDropdown === 'industries'}
+              onClick={() => setOpenDropdown((v) => (v === 'solutions' ? null : 'solutions'))}
+              aria-expanded={openDropdown === 'solutions'}
               className={cn(
-                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                industryList.some((i) => i.href === activePath)
+                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                industryList.some((i) => i.href === activePath) || serviceLinks.some((s) => s.href === activePath) || openDropdown === 'solutions'
                   ? 'text-foreground bg-accent'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
               )}
             >
-              Industries <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'industries' && 'rotate-180')} />
+              Solutions <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'solutions' && 'rotate-180')} />
             </button>
 
-            {openDropdown === 'industries' && (
+            {openDropdown === 'solutions' && (
               <div className="absolute left-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                <div className="w-[420px] rounded-2xl border border-border bg-background p-4 shadow-xl">
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                    <div>
-                      {industriesCol1.map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setOpenDropdown(null)}
-                          className={cn(
-                            'block px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors',
-                            activePath === item.href
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
-                          )}
-                        >
-                          {item.label} Software
-                        </Link>
-                      ))}
+                <div className="w-[620px] rounded-2xl border border-border/80 bg-background p-4 shadow-2xl grid grid-cols-12 gap-4">
+                  {/* Industries (6/12 cols) */}
+                  <div className="col-span-6 border-r border-border/60 pr-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Industries
+                      </span>
+                      <span className="text-[10px] text-muted-foreground font-medium bg-muted px-1.5 py-0.5 rounded">
+                        18+ Trades
+                      </span>
                     </div>
-                    <div>
-                      {industriesCol2.map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={() => setOpenDropdown(null)}
-                          className={cn(
-                            'block px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors',
-                            activePath === item.href
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
-                          )}
-                        >
-                          {item.label} Software
-                        </Link>
-                      ))}
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      <div>
+                        {industriesCol1.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setOpenDropdown(null)}
+                            className="block px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/70 rounded transition-colors truncate"
+                          >
+                            {item.label}
+                          </Link>
+                        ))}
+                      </div>
+                      <div>
+                        {industriesCol2.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setOpenDropdown(null)}
+                            className="block px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/70 rounded transition-colors truncate"
+                          >
+                            {item.label}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-2.5 pt-2.5 border-t border-border flex items-center justify-between text-xs px-2">
-                    <span className="text-muted-foreground">18+ specialized trade workflows</span>
-                    <Link
-                      href="/industries"
-                      onClick={() => setOpenDropdown(null)}
-                      className="font-semibold text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
-                    >
-                      All industries →
-                    </Link>
+
+                  {/* Services & Compare (6/12 cols) */}
+                  <div className="col-span-6 space-y-3">
+                    <div>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
+                        Growth Services
+                      </span>
+                      <div className="space-y-1">
+                        {serviceLinks.map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setOpenDropdown(null)}
+                              className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-muted/70 transition-colors group"
+                            >
+                              <div className="p-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5">
+                                <Icon className="h-3.5 w-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-xs font-semibold text-foreground group-hover:text-emerald-600 block truncate">
+                                  {item.label}
+                                </span>
+                                <p className="text-[10.5px] text-muted-foreground line-clamp-1 leading-tight">
+                                  {item.desc}
+                                </p>
+                              </div>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-border/60">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                        Compare
+                      </span>
+                      <div className="grid grid-cols-2 gap-1">
+                        {compareList.map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setOpenDropdown(null)}
+                            className="p-1 text-[11.5px] text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded truncate block"
+                          >
+                            {item.label}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Dropdown 3: Services (Agency Solutions) */}
-          <div
-            className="relative"
-            onMouseEnter={() => handleMouseEnter('services')}
-            onMouseLeave={handleMouseLeave}
-          >
-            <button
-              type="button"
-              onClick={() => setOpenDropdown((v) => (v === 'services' ? null : 'services'))}
-              aria-expanded={openDropdown === 'services'}
-              className={cn(
-                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                serviceLinks.some((s) => s.href === activePath)
-                  ? 'text-foreground bg-accent'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-              )}
-            >
-              Services <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'services' && 'rotate-180')} />
-            </button>
-
-            {openDropdown === 'services' && (
-              <div className="absolute left-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                <div className="w-[380px] rounded-2xl border border-border bg-background p-3 shadow-xl space-y-1">
-                  {serviceLinks.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = activePath === item.href;
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setOpenDropdown(null)}
-                        className={cn(
-                          'flex items-start gap-3 p-2 rounded-xl transition-all',
-                          isActive
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                            : 'hover:bg-muted/70 text-foreground'
-                        )}
-                      >
-                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5">
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-xs font-semibold text-foreground block truncate">{item.label}</span>
-                          <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
-                            {item.desc}
-                          </p>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
+          {/* Item 3: Marketplace (First-Class Top Nav Link) */}
+          <Link
+            href="/marketplace"
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+              activePath === '/marketplace' || activePath?.startsWith('/marketplace/')
+                ? 'text-foreground bg-accent'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
             )}
-          </div>
-
-          {/* Dropdown 4: Compare */}
-          <div
-            className="relative"
-            onMouseEnter={() => handleMouseEnter('compare')}
-            onMouseLeave={handleMouseLeave}
           >
-            <button
-              type="button"
-              onClick={() => setOpenDropdown((v) => (v === 'compare' ? null : 'compare'))}
-              aria-expanded={openDropdown === 'compare'}
-              className={cn(
-                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                compareList.some((c) => c.href === activePath)
-                  ? 'text-foreground bg-accent'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-              )}
-            >
-              Compare <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'compare' && 'rotate-180')} />
-            </button>
+            <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <span>Marketplace</span>
+            <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 px-1.5 py-0.2 rounded-full">
+              Pros
+            </span>
+          </Link>
 
-            {openDropdown === 'compare' && (
-              <div className="absolute left-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                <div className="w-[360px] rounded-2xl border border-border bg-background p-3 shadow-xl space-y-1">
-                  {compareList.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setOpenDropdown(null)}
-                      className={cn(
-                        'block p-2.5 rounded-xl transition-all',
-                        activePath === item.href
-                          ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                          : 'hover:bg-muted/70 text-foreground'
-                      )}
-                    >
-                      <span className="text-xs font-semibold text-foreground block">{item.label}</span>
-                      <span className="text-[11px] text-muted-foreground block mt-0.5">{item.desc}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Direct Navigation Links */}
+          {/* Item 4: Pricing */}
           <Link
             href="/#pricing"
             className={cn(
-              'px-3 py-2 text-sm font-medium rounded-md transition-colors',
+              'px-3 py-2 text-sm font-medium rounded-lg transition-colors',
               activePath === '/#pricing'
                 ? 'text-foreground bg-accent'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
             )}
           >
             Pricing
-          </Link>
-
-          <Link
-            href="/invoice-generator"
-            className={cn(
-              'px-3 py-2 text-sm font-medium rounded-md transition-colors',
-              activePath === '/invoice-generator'
-                ? 'text-foreground bg-accent'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-            )}
-          >
-            Free Tools
-          </Link>
-
-          <Link
-            href="/blog"
-            className={cn(
-              'px-3 py-2 text-sm font-medium rounded-md transition-colors',
-              activePath === '/blog' || activePath?.startsWith('/blog/')
-                ? 'text-foreground bg-accent'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-            )}
-          >
-            Blog
-          </Link>
-
-          <Link
-            href="/contact-us"
-            className={cn(
-              'px-3 py-2 text-sm font-medium rounded-md transition-colors',
-              activePath === '/contact-us'
-                ? 'text-foreground bg-accent'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-            )}
-          >
-            Contact
           </Link>
         </nav>
 
@@ -495,14 +424,14 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
         <div className="flex items-center gap-2.5">
           <Link
             href="/auth/login"
-            className="hidden sm:inline-flex text-xs font-semibold text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg transition-colors"
+            className="hidden sm:inline-flex text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg transition-colors"
           >
             Sign In
           </Link>
 
           <Link
             href="/#signup"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:bg-emerald-800 hover:shadow-emerald-700/25"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow-md hover:shadow-emerald-600/20"
           >
             <span>Start Free Trial</span>
             <ArrowRight className="h-3.5 w-3.5" />
@@ -523,7 +452,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
       {/* ── Mobile Navigation Slide-over Drawer ── */}
       {mobileMenuOpen && (
         <div className="lg:hidden fixed inset-x-0 top-16 bottom-0 z-50 bg-background/98 backdrop-blur-xl border-t border-border overflow-y-auto px-4 py-6 pb-20 animate-in fade-in duration-200">
-          <div className="max-w-md mx-auto space-y-4">
+          <div className="max-w-md mx-auto space-y-3">
             {/* Mobile Section 1: Products */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <button
@@ -533,7 +462,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
               >
                 <div className="flex items-center gap-2">
                   <Wrench className="h-4 w-4 text-emerald-600" />
-                  <span>Products &amp; Features</span>
+                  <span>Platform &amp; Features</span>
                 </div>
                 <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'products' && 'rotate-180')} />
               </button>
@@ -558,111 +487,79 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
               )}
             </div>
 
-            {/* Mobile Section 2: Industries */}
+            {/* Mobile Section 2: Solutions */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <button
                 type="button"
-                onClick={() => toggleMobileSection('industries')}
+                onClick={() => toggleMobileSection('solutions')}
                 className="w-full flex items-center justify-between p-3.5 text-sm font-bold text-foreground text-left"
               >
                 <div className="flex items-center gap-2">
                   <Briefcase className="h-4 w-4 text-emerald-600" />
-                  <span>Industries (18 Trades)</span>
+                  <span>Solutions &amp; Trades</span>
                 </div>
-                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'industries' && 'rotate-180')} />
+                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'solutions' && 'rotate-180')} />
               </button>
-              {mobileSection === 'industries' && (
-                <div className="p-3 pt-0 border-t border-border/60 grid grid-cols-2 gap-1 bg-muted/20">
-                  {industryList.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="p-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted truncate transition-colors"
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                  <Link
-                    href="/industries"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="col-span-2 p-2 mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400 border-t border-border"
-                  >
-                    View all industries →
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Mobile Section 3: Services */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <button
-                type="button"
-                onClick={() => toggleMobileSection('services')}
-                className="w-full flex items-center justify-between p-3.5 text-sm font-bold text-foreground text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-emerald-600" />
-                  <span>Agency Growth Services</span>
-                </div>
-                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'services' && 'rotate-180')} />
-              </button>
-              {mobileSection === 'services' && (
-                <div className="p-3 pt-0 border-t border-border/60 space-y-1 bg-muted/20">
-                  {serviceLinks.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="block p-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
-                    >
-                      <span className="block font-semibold">{item.label}</span>
-                      <span className="text-[11px] text-muted-foreground">{item.desc}</span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Mobile Section 4: Compare */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <button
-                type="button"
-                onClick={() => toggleMobileSection('compare')}
-                className="w-full flex items-center justify-between p-3.5 text-sm font-bold text-foreground text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <Scale className="h-4 w-4 text-emerald-600" />
-                  <span>Software Comparisons</span>
-                </div>
-                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'compare' && 'rotate-180')} />
-              </button>
-              {mobileSection === 'compare' && (
-                <div className="p-3 pt-0 border-t border-border/60 space-y-1 bg-muted/20">
-                  {compareList.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="block p-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
-                    >
-                      <span className="block font-semibold">{item.label}</span>
-                      <span className="text-[11px] text-muted-foreground">{item.desc}</span>
-                    </Link>
-                  ))}
+              {mobileSection === 'solutions' && (
+                <div className="p-3 pt-0 border-t border-border/60 space-y-3 bg-muted/20">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-2 mb-1">
+                      18+ Trades
+                    </p>
+                    <div className="grid grid-cols-2 gap-1">
+                      {industryList.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="p-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted truncate transition-colors"
+                        >
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-border/60">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                      Growth Services
+                    </p>
+                    {serviceLinks.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="block p-1.5 rounded-md text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Direct Mobile Links */}
-            <div className="rounded-xl border border-border bg-card p-2 space-y-0.5">
+            <div className="rounded-xl border border-border bg-card p-2 space-y-1">
+              <Link
+                href="/marketplace"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between p-2.5 text-xs font-semibold text-foreground hover:bg-muted rounded-lg transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Store className="h-4 w-4 text-emerald-600" />
+                  <span>Verified Pro Marketplace</span>
+                </div>
+                <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 px-1.5 py-0.5 rounded-full font-semibold">
+                  Browse
+                </span>
+              </Link>
               <Link
                 href="/#pricing"
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center justify-between p-2.5 text-xs font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
               >
                 <span>Pricing Plans</span>
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
               </Link>
               <Link
                 href="/invoice-generator"
@@ -670,7 +567,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
                 className="flex items-center justify-between p-2.5 text-xs font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
               >
                 <span>Free Invoice Generator</span>
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
               </Link>
               <Link
                 href="/blog"
@@ -678,15 +575,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
                 className="flex items-center justify-between p-2.5 text-xs font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
               >
                 <span>Contractor Resource Blog</span>
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-              </Link>
-              <Link
-                href="/contact-us"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-between p-2.5 text-xs font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
-              >
-                <span>Contact &amp; Support</span>
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
               </Link>
             </div>
 
@@ -695,7 +584,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
               <Link
                 href="/#signup"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-700 py-3 text-sm font-semibold text-white shadow-md hover:bg-emerald-800"
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white shadow-md hover:bg-emerald-700"
               >
                 <span>Start 14-Day Free Trial</span>
                 <ArrowRight className="h-4 w-4" />
@@ -709,7 +598,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
                 Sign In to Your Account
               </Link>
 
-              <div className="pt-3 text-center">
+              <div className="pt-2 text-center">
                 <p className="text-xs text-muted-foreground mb-2 font-medium">Get the Mobile Field App</p>
                 <div className="flex justify-center">
                   <GooglePlayBadge size="sm" />

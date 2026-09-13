@@ -18,7 +18,15 @@ export function CornerstoneFooter() {
     { href: "/technician-app", label: "Technician App" },
     { href: "/automations", label: "Automations" },
     { href: "/#ai-receptionist", label: "AI Receptionist" },
-    { href: "/features", label: "All Features" },
+    { href: "/#pricing", label: "Pricing Plans" },
+  ];
+
+  const marketplaceLinks = [
+    { href: "/marketplace", label: "Browse Pro Directory" },
+    { href: "/marketplace", label: "Find Verified Contractors" },
+    { href: "/?auth=register", label: "List Your Business (Free)" },
+    { href: "/marketplace", label: "Claim Business Listing" },
+    { href: "/marketplace", label: "Top Service Categories" },
   ];
 
   const servicesLinks = [
@@ -141,14 +149,14 @@ export function CornerstoneFooter() {
       {/* ── Main Links Columns ── */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
-          {/* Product */}
+          {/* Column 1: Product */}
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
               Product
             </h3>
             <ul className="space-y-2 text-xs">
               {productLinks.map((link) => (
-                <li key={link.href}>
+                <li key={link.label}>
                   <Link
                     href={link.href}
                     className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
@@ -160,7 +168,31 @@ export function CornerstoneFooter() {
             </ul>
           </div>
 
-          {/* Services */}
+          {/* Column 2: Marketplace (Dedicated First-Class Column) */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-3.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                Marketplace
+              </h3>
+              <span className="text-[9px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1 py-0.2 rounded-full uppercase">
+                Directory
+              </span>
+            </div>
+            <ul className="space-y-2 text-xs">
+              {marketplaceLinks.map((link) => (
+                <li key={link.label}>
+                  <Link
+                    href={link.href}
+                    className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Column 3: Services */}
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
               Services
@@ -179,7 +211,7 @@ export function CornerstoneFooter() {
             </ul>
           </div>
 
-          {/* Industries (split into two columns) */}
+          {/* Column 4-5: Industries (split into two sub-columns) */}
           <div className="col-span-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
               Industries Served
@@ -212,10 +244,10 @@ export function CornerstoneFooter() {
             </div>
           </div>
 
-          {/* Compare */}
+          {/* Column 6: Compare & Resources */}
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
-              Compare
+              Compare &amp; Legal
             </h3>
             <ul className="space-y-2 text-xs">
               {compareLinks.map((link) => (
@@ -229,16 +261,12 @@ export function CornerstoneFooter() {
                 </li>
               ))}
             </ul>
-          </div>
-
-          {/* Resources & Legal */}
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
-              Resources &amp; Legal
-            </h3>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground mb-2 mt-4">
+              Resources
+            </h4>
             <ul className="space-y-2 text-xs">
-              {resourceLinks.map((link) => (
-                <li key={link.href}>
+              {resourceLinks.slice(0, 4).map((link) => (
+                <li key={link.label}>
                   <Link
                     href={link.href}
                     className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
@@ -258,7 +286,7 @@ export function CornerstoneFooter() {
             <span>&copy; {new Date().getFullYear()} Fieseros, Inc. All rights reserved.</span>
           </div>
           <p className="text-center sm:text-right">
-            The Operating System for Trade &amp; Field Service Businesses.
+            The Operating System for Trade &amp; Field Service Businesses &amp; Verified Pro Marketplace.
           </p>
         </div>
       </div>
