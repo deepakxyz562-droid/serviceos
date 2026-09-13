@@ -145,6 +145,22 @@ export async function ensureDealForLead(
     }
 
     // ── 3. Create the Deal ──────────────────────────────────────────────
+    const effectiveTenantId = lead.tenantId || tenantId || null
+    let dealCurrency = DEAL_DEFAULT_CURRENCY
+    if (effectiveTenantId) {
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: effectiveTenantId },
+          select: { currency: true },
+        })
+        if (tenant?.currency) {
+          dealCurrency = tenant.currency
+        }
+      } catch {
+        // Fallback to DEAL_DEFAULT_CURRENCY
+      }
+    }
+
     // Field mapping mirrors the inline `db.deal.create` call in
     // `POST /api/leads` (the canonical reference) so the Deals produced
     // by the sync layer are byte-identical to those produced by the
@@ -153,7 +169,7 @@ export async function ensureDealForLead(
       data: {
         title: lead.title || lead.name,
         value: lead.value || 0,
-        currency: DEAL_DEFAULT_CURRENCY,
+        currency: dealCurrency,
         stage: DEAL_STAGE_NEW_LEAD,
         probability: DEAL_DEFAULT_PROBABILITY,
         customerId: lead.customerId || null,
@@ -163,7 +179,7 @@ export async function ensureDealForLead(
         leadId: lead.id,
         source: lead.source || 'manual',
         notesJson: '[]',
-        tenantId: lead.tenantId || tenantId || null,
+        tenantId: effectiveTenantId,
       },
       select: { id: true },
     })

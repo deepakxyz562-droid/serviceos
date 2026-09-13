@@ -323,11 +323,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let tenantCurrency = 'USD'
+    if (tenantId) {
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: tenantId },
+          select: { currency: true },
+        })
+        if (tenant?.currency) {
+          tenantCurrency = tenant.currency
+        }
+      } catch (tErr) {
+        console.error('[DealsCreate] Failed to fetch tenant currency:', tErr)
+      }
+    }
+
     const deal = await db.deal.create({
       data: {
         title: body.title,
         value: body.value || 0,
-        currency: body.currency || 'USD',
+        currency: body.currency || tenantCurrency,
         stage: body.stage || 'new_lead',
         probability: body.probability ?? 10,
         customerId: resolvedCustomerId,

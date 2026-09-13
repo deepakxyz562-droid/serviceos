@@ -66,14 +66,12 @@ async function fetchCompanyCurrency(): Promise<CompanyCurrencyConfig> {
  * Usage:
  *   const { currency, format, formatCompact, isLoading, refresh } = useCompanyCurrency();
  *
- *   // Amount stored in USD (default source currency for template/demo data):
+ *   // Amount already in company currency (default behavior, e.g. leads, deals, jobs from DB):
+ *   format(670)                    → "₹670.00" if currency=INR, "$670.00" if currency=USD
+ *   formatCompact(2300)            → "₹2.3K" if currency=INR, "$2.3K" if currency=USD
+ *
+ *   // Explicit cross-currency conversion (e.g. converting a locked USD quote to company currency):
  *   format(79, 'USD')              → "$79.00" if currency=USD, "₹6,717.69" if currency=INR
- *   format(79)                      → same as format(79, 'USD') — USD is the default source
- *
- *   // Amount already in company currency (e.g., from database):
- *   format(230000, currency)        → "₹2,30,000.00" if currency=INR (no conversion)
- *
- *   // Compact format for dashboards:
  *   formatCompact(2300, 'USD')     → "$2.3K" if currency=USD, "₹1.96L" if currency=INR
  */
 export function useCompanyCurrency() {
@@ -118,23 +116,26 @@ export function useCompanyCurrency() {
   // ─── Conversion-aware formatting ────────────────────────────────────
 
   /**
-   * Format a monetary amount with automatic currency conversion.
+   * Format a monetary amount with optional currency conversion.
    *
    * @param amount - The numeric value
    * @param sourceCurrency - The currency this amount is originally in.
-   *                         Defaults to 'USD' (all demo/template data is in USD).
-   * @returns Formatted string in the company currency, e.g. "₹6,717.69" or "$79.00"
+   *                         Defaults to company currency (no conversion needed).
+   *                         Pass a different currency code (e.g. 'USD') only if
+   *                         converting an external or locked currency value.
+   * @returns Formatted string in the company currency, e.g. "₹670.00" or "$79.00"
    *
    * Examples:
-   *   format(79, 'USD')       → if company=INR: "₹6,717.69" (converted)
+   *   format(670)             → if company=INR: "₹670.00" (default: no conversion)
+   *                           → if company=USD: "$670.00" (default: no conversion)
+   *   format(79, 'USD')       → if company=INR: "₹6,717.69" (explicit USD conversion)
    *                           → if company=USD: "$79.00" (no conversion)
-   *   format(230000, 'INR')   → if company=USD: "$2,705.28" (converted)
+   *   format(230000, 'INR')   → if company=USD: "$2,705.28" (explicit INR conversion)
    *                           → if company=INR: "₹2,30,000.00" (no conversion)
-   *   format(5000, 'INR')     → if company=USD: "$58.80" (converted)
    */
   const format = useCallback(
     (amount: number, sourceCurrency?: string): string => {
-      const src = sourceCurrency || 'USD';
+      const src = sourceCurrency || currency;
       if (src === currency) {
         return formatCurrency(amount, currency);
       }
@@ -145,18 +146,17 @@ export function useCompanyCurrency() {
   );
 
   /**
-   * Compact format with automatic currency conversion.
+   * Compact format with optional currency conversion.
    * Used for dashboard cards, small spaces.
    *
    * Examples:
-   *   formatCompact(2300, 'USD')  → if company=INR: "₹1.96L"
-   *                                → if company=USD: "$2.3K"
-   *   formatCompact(79, 'USD')    → if company=INR: "₹6.7K"
-   *                                → if company=USD: "$79"
+   *   formatCompact(2300)         → if company=INR: "₹2.3K" (no conversion)
+   *   formatCompact(2300, 'USD')  → if company=INR: "₹1.96L" (converted)
+   *                               → if company=USD: "$2.3K"
    */
   const formatCompact = useCallback(
     (amount: number, sourceCurrency?: string): string => {
-      const src = sourceCurrency || 'USD';
+      const src = sourceCurrency || currency;
       if (src === currency) {
         return formatCurrencyCompact(amount, currency);
       }
@@ -172,7 +172,7 @@ export function useCompanyCurrency() {
    */
   const convert = useCallback(
     (amount: number, sourceCurrency?: string): number => {
-      const src = sourceCurrency || 'USD';
+      const src = sourceCurrency || currency;
       if (src === currency) return amount;
       return convertCurrency(amount, src, currency);
     },
@@ -184,7 +184,7 @@ export function useCompanyCurrency() {
    */
   const getRate = useCallback(
     (sourceCurrency?: string): number => {
-      const src = sourceCurrency || 'USD';
+      const src = sourceCurrency || currency;
       return getExchangeRate(src, currency);
     },
     [currency]

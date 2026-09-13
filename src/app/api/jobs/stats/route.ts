@@ -66,14 +66,24 @@ export async function GET() {
 
     // For non-super-admins, resolve workspace IDs from their tenant
     let workspaceIds: string[] = [];
+    let statsCurrency = 'USD';
     if (!isSuperAdmin) {
       if (!authUser.tenantId) {
         return NextResponse.json(emptyJobStats());
       }
-      const tenantWorkspaces = await db.workspace.findMany({
-        where: { tenantId: authUser.tenantId },
-        select: { id: true },
-      });
+      const [tenantWorkspaces, tenant] = await Promise.all([
+        db.workspace.findMany({
+          where: { tenantId: authUser.tenantId },
+          select: { id: true },
+        }),
+        db.tenant.findUnique({
+          where: { id: authUser.tenantId },
+          select: { currency: true },
+        }),
+      ]);
+      if (tenant?.currency) {
+        statsCurrency = tenant.currency;
+      }
       workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
       if (workspaceIds.length === 0) {
         return NextResponse.json(emptyJobStats());
@@ -325,7 +335,7 @@ export async function GET() {
         thisMonth: monthRevenue,
         inProgress: inProgressRevenue,
         projected: totalRevenue + inProgressRevenue,
-        currency: 'USD',
+        currency: statsCurrency,
       },
       performance: {
         avgCompletionHours,

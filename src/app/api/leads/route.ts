@@ -377,6 +377,15 @@ export async function POST(request: NextRequest) {
             where: { workspaceId, OR: orClauses },
             select: { id: true },
           });
+        let tenantCurrency = 'USD';
+        if (authUser?.tenantId) {
+          const tenant = await db.tenant.findUnique({
+            where: { id: authUser.tenantId },
+            select: { currency: true },
+          });
+          if (tenant?.currency) {
+            tenantCurrency = tenant.currency;
+          }
         }
 
         if (existingCustomer) {
@@ -392,7 +401,7 @@ export async function POST(request: NextRequest) {
                 email: email?.trim() || null,
                 address: address?.trim() || null,
                 workspaceId,
-                preferredCurrency: 'USD',
+                preferredCurrency: tenantCurrency,
               },
               select: { id: true },
             });
@@ -402,6 +411,18 @@ export async function POST(request: NextRequest) {
             // Non-fatal — the lead will still be created without a customer link.
           }
         }
+      }
+    }
+
+    // Resolve tenant currency for deal creation if not already fetched
+    let leadTenantCurrency = 'USD';
+    if (authUser?.tenantId) {
+      const tenant = await db.tenant.findUnique({
+        where: { id: authUser.tenantId },
+        select: { currency: true },
+      });
+      if (tenant?.currency) {
+        leadTenantCurrency = tenant.currency;
       }
     }
 
@@ -444,7 +465,7 @@ export async function POST(request: NextRequest) {
         data: {
           title: lead.title || lead.name,
           value: lead.value || 0,
-          currency: 'USD',
+          currency: leadTenantCurrency,
           stage: 'new_lead',
           probability: 10,
           customerId: lead.customerId || null,

@@ -28,6 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAppStore } from '@/store/app-store';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -111,15 +112,6 @@ interface SaaSStats {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatUSD(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function formatShortDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -244,6 +236,7 @@ function TableSkeleton() {
 
 export function SaaSDashboardView() {
   const { setCurrentView } = useAppStore();
+  const { format: formatCurrency, symbol } = useCompanyCurrency();
   const [stats, setStats] = useState<SaaSStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -380,7 +373,7 @@ export function SaaSDashboardView() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground font-medium">Monthly Revenue</p>
-                    <p className="text-2xl font-bold mt-1">{formatUSD(stats.monthlyRevenue.amount)}</p>
+                    <p className="text-2xl font-bold mt-1">{formatCurrency(stats.monthlyRevenue.amount)}</p>
                     <div className="flex items-center gap-1 mt-1">
                       {stats.monthlyRevenue.trend >= 0 ? (
                         <TrendingUp className="size-3.5 text-emerald-500" />
@@ -467,7 +460,7 @@ export function SaaSDashboardView() {
                       </p>
                       <p className={cn('text-xl font-bold mt-0.5', colors.text)}>{stage.count}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatUSD(stage.value)}
+                        {formatCurrency(stage.value)}
                       </p>
                     </div>
                     {idx < stageOrder.length - 1 && (
@@ -524,7 +517,7 @@ export function SaaSDashboardView() {
                     tick={{ fontSize: 11, fill: '#94a3b8' }}
                     axisLine={false}
                     tickLine={false}
-                    tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                    tickFormatter={(v: number) => `${symbol}${(v / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -533,7 +526,7 @@ export function SaaSDashboardView() {
                       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                       fontSize: '12px',
                     }}
-                    formatter={(value: number) => [formatUSD(value), 'Revenue']}
+                    formatter={(value: number) => [formatCurrency(value), 'Revenue']}
                   />
                   <Area
                     type="monotone"
@@ -684,7 +677,7 @@ export function SaaSDashboardView() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-medium text-sm">
-                          {formatUSD(lead.value)}
+                          {formatCurrency(lead.value)}
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground hidden sm:table-cell">
                           {formatShortDate(lead.date)}

@@ -12,6 +12,8 @@
  *   import { formatDate, timeAgo, formatMinutes } from '@/lib/format-utils';
  */
 
+import { formatCurrency as libFormatCurrency } from '@/lib/currency';
+
 // ── Date formatting ─────────────────────────────────────────────────────────
 
 /**
@@ -162,20 +164,13 @@ export function formatNumber(n: number): string {
 }
 
 /**
- * Format a number as currency (e.g., 1234.5 → "$1,234.50").
+ * Format a number as currency using currency metadata and proper locale (e.g., 1234.5 → "$1,234.50" or "₹1,234.50").
  */
 export function formatCurrency(n: number, currency = 'USD'): string {
-  if (n == null || isNaN(n)) return '$0.00';
-  try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return `$${n.toFixed(2)}`;
+  if (n == null || isNaN(n)) {
+    return libFormatCurrency(0, currency);
   }
+  return libFormatCurrency(n, currency);
 }
 
 // ── File size formatting ─────────────────────────────────────────────────────
