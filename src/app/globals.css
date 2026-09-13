@@ -314,17 +314,6 @@
   background-color: oklch(1 0 0 / 85%);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid oklch(0.928 0.005 256);
-  margin-top: -0.75rem;
-}
-@media (min-width: 640px) {
-  .form-page-header {
-    margin-top: -1rem;
-  }
-}
-@media (min-width: 1024px) {
-  .form-page-header {
-    margin-top: -1.5rem;
-  }
 }
 .dark .form-page-header {
   background-color: oklch(0.145 0 0 / 85%);

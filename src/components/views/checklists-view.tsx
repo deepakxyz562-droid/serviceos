@@ -282,7 +282,7 @@ export function ChecklistBuilder({
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       {/* ─── Top bar ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 sticky top-0 z-10 -mt-3 sm:-mt-4 lg:-mt-6 !mt-0 -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 bg-background border-b flex-wrap">
+      <div className="flex items-center justify-between gap-3 sticky top-0 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 bg-background border-b flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1 shrink-0 min-h-[44px]">
             <ArrowLeft className="size-4" /> Back

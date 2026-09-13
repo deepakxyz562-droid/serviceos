@@ -154,7 +154,7 @@ export function FormPageHeader({
   };
 
   return (
-    <div className="form-page-header -mt-3 sm:-mt-4 lg:-mt-6 !mt-0 -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 mb-6">
+    <div className="form-page-header -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 mb-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <button
