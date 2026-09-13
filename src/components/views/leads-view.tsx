@@ -1039,42 +1039,30 @@ export function LeadsView() {
         />
       ) : (
         <>
-      {/* ─── Header (title row + search/New Lead row) ─────────────── */}
-      <div className="flex flex-col gap-4">
+      {/* ─── Header ─────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
         {/* Title row with count badge */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shadow-sm">
-              <Target className="size-5 text-white" />
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shadow-sm">
+            <Target className="size-5 text-white" />
+          </div>
+          <div className="flex items-center gap-2.5">
+            <div>
+              <h2 className="text-xl font-bold leading-tight">Leads</h2>
+              <p className="text-xs text-muted-foreground">Manage leads and track pipeline progress</p>
             </div>
-            <div className="flex items-center gap-2.5">
-              <div>
-                <h2 className="text-xl font-bold leading-tight">Leads</h2>
-                <p className="text-xs text-muted-foreground">Manage leads and track pipeline progress</p>
-              </div>
-              <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs h-6 px-2 shrink-0">
-                {totalLeads}
-              </Badge>
-            </div>
+            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs h-6 px-2 shrink-0">
+              {totalLeads}
+            </Badge>
           </div>
         </div>
 
-        {/* Search + New Lead row (stacks vertically on mobile) */}
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-          <div className="relative flex-1 sm:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="Search leads by name, email, phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-10"
-            />
-          </div>
+        <div className="flex items-center gap-2">
           <Button
-            className="bg-emerald-600 hover:bg-emerald-700 h-10 w-full sm:w-auto shrink-0"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
             onClick={openAddLead}
           >
-            <Plus className="size-4 mr-1" /> New Lead
+            <Plus className="size-4 mr-1.5" /> New Lead
           </Button>
         </div>
       </div>
@@ -1141,115 +1129,129 @@ export function LeadsView() {
             })}
           </div>
 
-          {/* Filters Bar + Layout Switcher Toggle (Grid Cards vs Table) */}
-          <div className="flex flex-wrap gap-3 items-center justify-between">
-            <div className="flex flex-wrap gap-3 items-center flex-1">
-              <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="w-40 h-9 text-xs">
-                  <SelectValue placeholder="Source" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sources</SelectItem>
-                  {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>{val.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* ─── Search + Filters Bar + Layout Switcher (matching Jobs View) ─── */}
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Search Input */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search leads by name, email, phone, address..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9 text-xs sm:text-sm"
+              />
+            </div>
 
-              {/* Date Filter Dropdown */}
-              <Select
-                value={dateFilter}
-                onValueChange={(val) => setDateFilter(val as LeadDateFilter)}
-              >
-                <SelectTrigger className="w-44 h-9 text-xs">
-                  <div className="flex items-center gap-2 truncate">
-                    <Calendar className="size-3.5 text-muted-foreground shrink-0" />
-                    <SelectValue placeholder="Date Filter" />
+            {/* Source Filter Dropdown */}
+            <Select value={sourceFilter} onValueChange={setSourceFilter}>
+              <SelectTrigger className="w-36 h-9 text-xs">
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
+                  <SelectItem key={key} value={key}>{val.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Date Filter Dropdown */}
+            <Select
+              value={dateFilter}
+              onValueChange={(val) => setDateFilter(val as LeadDateFilter)}
+            >
+              <SelectTrigger className="w-40 h-9 text-xs">
+                <div className="flex items-center gap-2 truncate">
+                  <Calendar className="size-3.5 text-emerald-600 shrink-0" />
+                  <SelectValue placeholder="Date Filter" />
+                </div>
+              </SelectTrigger>
+              <SelectContent align="start" className="w-[190px]">
+                <SelectItem value="all" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="size-3.5 text-muted-foreground" />
+                    <span>All Dates</span>
                   </div>
-                </SelectTrigger>
-                <SelectContent align="start" className="w-[190px]">
-                  <SelectItem value="all" className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="size-3.5 text-muted-foreground" />
-                      <span>All Dates</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="today" className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
-                      <span>Today</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="yesterday" className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2 rounded-full bg-blue-500 shrink-0" />
-                      <span>Yesterday</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="this_week" className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2 rounded-full bg-indigo-500 shrink-0" />
-                      <span>This Week</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="last_week" className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2 rounded-full bg-purple-500 shrink-0" />
-                      <span>Last Week</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="this_month" className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2 rounded-full bg-teal-500 shrink-0" />
-                      <span>This Month</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="follow_up_today" className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2 rounded-full bg-amber-500 shrink-0" />
-                      <span>Follow-up Today</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="overdue_follow_up" className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2 rounded-full bg-rose-500 shrink-0" />
-                      <span>Overdue Follow-up</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                </SelectItem>
+                <SelectItem value="today" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-emerald-500 shrink-0" />
+                    <span>Today</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="yesterday" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+                    <span>Yesterday</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="this_week" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-indigo-500 shrink-0" />
+                    <span>This Week</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="last_week" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-purple-500 shrink-0" />
+                    <span>Last Week</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="this_month" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-teal-500 shrink-0" />
+                    <span>This Month</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="follow_up_today" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-amber-500 shrink-0" />
+                    <span>Follow-up Today</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="overdue_follow_up" className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-rose-500 shrink-0" />
+                    <span>Overdue Follow-up</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
 
-              <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => fetchLeads()}>
-                <RefreshCw className="size-3.5 mr-1" /> Refresh
+            {/* Layout Toggle: Grid vs Table */}
+            <div className="hidden sm:flex gap-1 border rounded-md p-0.5 bg-muted/40">
+              <Button
+                type="button"
+                size="sm"
+                variant={viewLayout === 'grid' ? 'default' : 'ghost'}
+                className={cn(
+                  "h-8 text-xs px-2.5 min-h-[32px]",
+                  viewLayout === 'grid' ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs" : "hover:text-foreground"
+                )}
+                onClick={() => setViewLayout('grid')}
+              >
+                <LayoutGrid className="size-3.5 mr-1" /> Cards
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={viewLayout === 'table' ? 'default' : 'ghost'}
+                className={cn(
+                  "h-8 text-xs px-2.5 min-h-[32px]",
+                  viewLayout === 'table' ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs" : "hover:text-foreground"
+                )}
+                onClick={() => setViewLayout('table')}
+              >
+                <List className="size-3.5 mr-1" /> Table
               </Button>
             </div>
 
-            {/* Layout Toggle: Grid vs Table */}
-            <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border">
-              <button
-                type="button"
-                onClick={() => setViewLayout('grid')}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all',
-                  viewLayout === 'grid' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
-                )}
-                title="Grid Cards View"
-              >
-                <LayoutGrid className="size-3.5" /> Cards
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewLayout('table')}
-                className={cn(
-                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all',
-                  viewLayout === 'table' ? 'bg-background text-emerald-700 shadow-2xs' : 'text-muted-foreground hover:text-foreground'
-                )}
-                title="Table View"
-              >
-                <List className="size-3.5" /> Table
-              </button>
-            </div>
+            {/* Refresh Button */}
+            <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => fetchLeads()}>
+              <RefreshCw className="size-3.5 mr-1" /> Refresh
+            </Button>
 
+            {/* Open Pipeline */}
             <Button
               variant="outline"
               size="sm"
@@ -1289,10 +1291,6 @@ export function LeadsView() {
         </TabsContent>
 
         {/* ─── Archived Tab (PAGINATION-ARCHIVE-1) ──────────────────────── */}
-        {/* Soft-deleted leads with Restore action. Reuses the same useLeads
-            query (with archived=true) and renders the same DataTable shape as
-            the Active tab, but each row's dropdown only shows "View" and
-            "Restore" (no Edit / Convert / Delete). */}
         <TabsContent value="archived" className="mt-6 space-y-6 outline-none">
           <Card className="border-amber-200 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/10">
             <CardContent className="p-4 flex items-start gap-3">
@@ -1306,16 +1304,15 @@ export function LeadsView() {
             </CardContent>
           </Card>
 
-          {/* Search bar (mirrors the Active tab; archived leads respect the
-              same status/source/search filters for parity) */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <div className="relative flex-1 sm:max-w-md">
+          {/* Search bar for archived tab */}
+          <div className="flex flex-wrap gap-3 items-center">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
               <Input
                 placeholder="Search archived leads..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-10"
+                className="pl-9 h-9 text-xs sm:text-sm"
               />
             </div>
             <Button
