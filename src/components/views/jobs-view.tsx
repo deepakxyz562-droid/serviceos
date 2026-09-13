@@ -2484,14 +2484,16 @@ export function JobsView() {
   ];
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="w-full">
       {/* ─── Checklist builder takes over when creating/editing a checklist ── */}
       {formMode === 'checklist' ? (
-        <ChecklistBuilder
-          initial={editingChecklist}
-          onCancel={handleChecklistCancel}
-          onSaved={handleChecklistSaved}
-        />
+        <div className="p-3 sm:p-4 lg:p-6">
+          <ChecklistBuilder
+            initial={editingChecklist}
+            onCancel={handleChecklistCancel}
+            onSaved={handleChecklistSaved}
+          />
+        </div>
       ) : formMode === 'form' ? (
         <JobFormPage
           jobForm={jobForm}
@@ -2577,7 +2579,7 @@ export function JobsView() {
           renderMoreMenuItems={renderMoreMenuItems}
         />
       ) : (
-        <>
+        <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
@@ -2971,8 +2973,6 @@ export function JobsView() {
       )}
         </>
       )}
-        </>
-      )}
 
       {/* Cards View Pagination */}
       {viewMode === 'cards' && jobsTab === 'active' && statusFilter !== 'overdue' && (
@@ -3153,6 +3153,8 @@ export function JobsView() {
         loading={routeLoading}
         data={routeData}
       />
+        </div>
+      )}
 
       {/* ─── V1.5: AI Field Assistant (floating button + slide-over) ──── */}
       {formMode === 'detail' && selectedJob && (

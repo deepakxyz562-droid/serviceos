@@ -151,9 +151,9 @@ export function InvoiceDetailPage({
   ];
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full">
       {/* ─── Sticky page header (Back + title + actions) ────────── */}
-      <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
+      <div className="form-page-header sticky top-0 z-20 w-full border-b border-border/80 bg-background/95 backdrop-blur px-3 sm:px-4 lg:px-6 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -296,8 +296,10 @@ export function InvoiceDetailPage({
         </div>
       </div>
 
-      {/* ─── Actionable Payment Status Banner ───────────────────── */}
-      {inv.status === 'draft' ? (
+      {/* ─── Padded page body (Full 16px/24px padding without scroll) ─── */}
+      <div className="p-3 sm:p-4 lg:p-6 space-y-6">
+        {/* ─── Actionable Payment Status Banner ───────────────────── */}
+        {inv.status === 'draft' ? (
         <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 shrink-0">
@@ -763,5 +765,6 @@ export function InvoiceDetailPage({
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }

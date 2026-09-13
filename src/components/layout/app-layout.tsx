@@ -517,12 +517,12 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
         <main
           className={cn(
-            'flex-1 overflow-auto animate-fade-in',
+            'flex-1 overflow-auto animate-fade-in bg-background',
             isFullHeight
               ? 'flex flex-col min-h-0 p-0 overflow-hidden'
               : isMobile
-                ? 'p-3 sm:p-4 bg-background pb-[calc(4rem+env(safe-area-inset-bottom,0px))]'
-                : 'p-4 lg:p-6 bg-background',
+                ? 'pb-[calc(4rem+env(safe-area-inset-bottom,0px))]'
+                : '',
           )}
         >
           {/* ── Keep-alive view cache (A7: now uses the reusable <ViewCache>) ──

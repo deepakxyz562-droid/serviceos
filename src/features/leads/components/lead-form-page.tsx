@@ -122,7 +122,7 @@ export function LeadFormPage({
   const computedSubtotal = lineItemsSubtotal(leadForm.lineItems || []);
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full">
       {/* ─── Page header with Back button & actions ─────────────── */}
       <FormPageHeader
         icon={UserPlus}
@@ -135,7 +135,8 @@ export function LeadFormPage({
       />
 
       {/* ─── Main content: 2-column Jobber-style grid ──────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+      <div className="p-3 sm:p-4 lg:p-6 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
         {/* ─── Left Column (Primary Scope & Details) ───────────── */}
         <div className="space-y-6 min-w-0">
           {/* Title & Client Section */}
@@ -440,6 +441,7 @@ export function LeadFormPage({
           {saving && <RefreshCw className="size-4 mr-2 animate-spin" />}
           {editingLead ? 'Update Lead' : 'Create Lead'}
         </Button>
+      </div>
       </div>
 
       {/* ─── Create-customer dialog (opened from the picker) ──── */}

@@ -770,7 +770,7 @@ export function DashboardView() {
   }
 
   return (
-    <div ref={rootRef} className="space-y-6 w-full">
+    <div ref={rootRef} className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

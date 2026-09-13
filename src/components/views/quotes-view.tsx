@@ -710,7 +710,7 @@ export function QuotesView() {
   // ============================================================
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="w-full">
       {formMode === 'create' ? (
         <NewQuotePage
           editingQuoteId={editingQuoteId}
@@ -750,7 +750,7 @@ export function QuotesView() {
           format={format}
         />
       ) : (
-        <>
+        <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* ── Header ───────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -1201,7 +1201,7 @@ export function QuotesView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-        </>
+        </div>
       )}
 
       {/* ── AI Quote Generator Dialog ────────────────────────────── */}

@@ -171,7 +171,7 @@ export function JobFormPage({
   const fromLead = !!prefillLeadId;
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full">
       {/* ─── Page header with Back button ─────────────────────── */}
       <FormPageHeader
         icon={Briefcase}
@@ -184,8 +184,9 @@ export function JobFormPage({
         submitLabel={isEditing ? 'Update Job' : 'Create Job'}
       />
 
-      {/* ─── Title & Client + #job / Customize (merged) ────────── */}
-      <FormSectionCard>
+      <div className="p-3 sm:p-4 lg:p-6 space-y-6">
+        {/* ─── Title & Client + #job / Customize (merged) ────────── */}
+        <FormSectionCard>
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
           {/* Left: Title + Client */}
           <div className="space-y-4">
@@ -820,6 +821,7 @@ export function JobFormPage({
           {saving && <RefreshCw className="size-4 mr-1 animate-spin" />}
           {isEditing ? 'Update Job' : 'Create Job'}
         </Button>
+      </div>
       </div>
 
       {/* ─── Create-customer dialog (opened from the picker) ──── */}

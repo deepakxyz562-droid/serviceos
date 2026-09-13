@@ -1020,7 +1020,7 @@ export function LeadsView() {
   // ============================================================
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="w-full">
       {/* ─── Form page takes over when adding/editing a lead ───────── */}
       {formMode === 'form' ? (
         <LeadFormPage
@@ -1052,7 +1052,7 @@ export function LeadsView() {
           symbol={symbol}
         />
       ) : (
-        <>
+        <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         {/* Title row with count badge */}
@@ -1447,7 +1447,7 @@ export function LeadsView() {
         deleting={deletingLeadLoading}
         onConfirm={handleDeleteLead}
       />
-        </>
+        </div>
       )}
     </div>
   );
