@@ -82,8 +82,8 @@ interface AppState {
   // we set this to the target entity, switch to the matching view, and the
   // target view consumes it (opens its create form/dialog) then clears it.
   // This avoids the user having to click the in-view "New X" button twice.
-  pendingCreate: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | null;
-  setPendingCreate: (entity: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | null) => void;
+  pendingCreate: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | 'employee' | 'user' | 'booking' | null;
+  setPendingCreate: (entity: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | 'employee' | 'user' | 'booking' | null) => void;
   pendingCreateReturnView: ActiveView | null;
   setPendingCreateReturnView: (view: ActiveView | null) => void;
 

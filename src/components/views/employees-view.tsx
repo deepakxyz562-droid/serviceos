@@ -60,7 +60,7 @@ import { ActivityTab } from '@/features/employees/components/tabs/activity-tab';
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function EmployeesView() {
-  const { currentWorkspaceId, auth } = useAppStore();
+  const { currentWorkspaceId, auth, pendingCreate, setPendingCreate } = useAppStore();
   const queryClient = useQueryClient();
 
   // Pagination state (server-side). Default page size = 10.
@@ -283,6 +283,15 @@ export function EmployeesView() {
       setFormSkills(emp.skills || '');
     }
   };
+
+  // ─── Consume cross-view "New Employee/User" signal ───────────────────────
+  useEffect(() => {
+    if (pendingCreate === 'employee' || pendingCreate === 'user') {
+      resetForm();
+      setShowAddDialog(true);
+      setPendingCreate(null);
+    }
+  }, [pendingCreate, setPendingCreate]);
 
   // ─── Actions ────────────────────────────────────────────────────────────
 

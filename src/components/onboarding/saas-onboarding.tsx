@@ -60,6 +60,7 @@ import {
   type Industry,
 } from '@/lib/industry-catalog';
 import { AddressAutocomplete, type AddressValue } from '@/components/onboarding/address-autocomplete';
+import { useAppStore } from '@/store/app-store';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -947,22 +948,40 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     [createSubscription, saveTenantProgress, step3, goNext, plans],
   );
 
-  // (was handleComplete) Now the 4th step — All Set!
-  const handleComplete = useCallback(async () => {
-    setSaving(true);
-    try {
-      await saveTenantProgress({
-        onboardingStep: 4,
-        onboardingCompleted: true,
-      });
-      toast.success('Welcome to Fieseros! 🎉');
-      onComplete();
-    } catch {
-      toast.error('Something went wrong. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  }, [saveTenantProgress, onComplete]);
+  // Finalize Onboarding and optionally route directly to specific quick-start destination
+  const handleFinalizeAction = useCallback(
+    async (destination: 'dashboard' | 'job' | 'employee' = 'dashboard') => {
+      setSaving(true);
+      try {
+        await saveTenantProgress({
+          onboardingStep: 4,
+          onboardingCompleted: true,
+        });
+
+        if (destination === 'employee') {
+          useAppStore.getState().setPendingCreate('employee');
+          useAppStore.getState().setCurrentView('employees');
+        } else if (destination === 'job') {
+          useAppStore.getState().setPendingCreate('job');
+          useAppStore.getState().setCurrentView('jobs');
+        } else {
+          useAppStore.getState().setCurrentView('dashboard');
+        }
+
+        toast.success('Welcome to ServiceOS! 🎉');
+        onComplete();
+      } catch {
+        toast.error('Something went wrong. Please try again.');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [saveTenantProgress, onComplete],
+  );
+
+  const handleComplete = useCallback(() => {
+    return handleFinalizeAction('dashboard');
+  }, [handleFinalizeAction]);
 
   const handleNext = useCallback(() => {
     if (currentStep === 1) handleStep1Next();
@@ -1887,18 +1906,21 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         label: 'Add Employees',
         description: 'Invite your team members',
         color: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
+        destination: 'employee' as const,
       },
       {
         icon: FileText,
         label: 'Create First Job',
         description: 'Set up your first service job',
         color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
+        destination: 'job' as const,
       },
       {
         icon: LayoutDashboard,
         label: 'Go to Dashboard',
         description: 'Explore your workspace',
         color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
+        destination: 'dashboard' as const,
       },
     ];
 
@@ -2018,7 +2040,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.7 }}
-          className="grid grid-cols-2 gap-3"
+          className="grid grid-cols-1 sm:grid-cols-3 gap-3.5"
         >
           {quickActions.map((action) => {
             const ActionIcon = action.icon;
@@ -2026,7 +2048,9 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
               <button
                 key={action.label}
                 type="button"
-                className="group flex flex-col items-center gap-2 rounded-xl border-2 border-border p-5 text-center transition-all duration-200 hover:border-emerald-400/50 hover:shadow-md hover:shadow-emerald-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+                disabled={saving}
+                onClick={() => handleFinalizeAction(action.destination)}
+                className="group flex flex-col items-center gap-2 rounded-xl border-2 border-border p-5 text-center transition-all duration-200 hover:border-emerald-400/50 hover:shadow-md hover:shadow-emerald-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <div
                   className={cn(
