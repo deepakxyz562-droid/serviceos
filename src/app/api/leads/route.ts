@@ -337,8 +337,21 @@ export async function POST(request: NextRequest) {
     // whether to link an existing customer via the picker.
     let resolvedCustomerId: string | null = customerId || null;
 
-    const normalizedSource = (source || 'manual').toLowerCase();
-    const isExternalSource = normalizedSource !== 'manual';
+    // Resolve tenant currency for customer and deal creation
+    let tenantCurrency = 'USD';
+    if (authUser?.tenantId) {
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: authUser.tenantId },
+          select: { currency: true },
+        });
+        if (tenant?.currency) {
+          tenantCurrency = tenant.currency;
+        }
+      } catch (tErr) {
+        console.error('[LeadsCreate] Failed to fetch tenant currency:', tErr);
+      }
+    }
 
     if (isExternalSource && !resolvedCustomerId) {
       // Resolve the caller's workspace so we don't accidentally link a lead
@@ -377,15 +390,6 @@ export async function POST(request: NextRequest) {
             where: { workspaceId, OR: orClauses },
             select: { id: true },
           });
-        let tenantCurrency = 'USD';
-        if (authUser?.tenantId) {
-          const tenant = await db.tenant.findUnique({
-            where: { id: authUser.tenantId },
-            select: { currency: true },
-          });
-          if (tenant?.currency) {
-            tenantCurrency = tenant.currency;
-          }
         }
 
         if (existingCustomer) {
@@ -411,18 +415,6 @@ export async function POST(request: NextRequest) {
             // Non-fatal — the lead will still be created without a customer link.
           }
         }
-      }
-    }
-
-    // Resolve tenant currency for deal creation if not already fetched
-    let leadTenantCurrency = 'USD';
-    if (authUser?.tenantId) {
-      const tenant = await db.tenant.findUnique({
-        where: { id: authUser.tenantId },
-        select: { currency: true },
-      });
-      if (tenant?.currency) {
-        leadTenantCurrency = tenant.currency;
       }
     }
 
@@ -465,7 +457,7 @@ export async function POST(request: NextRequest) {
         data: {
           title: lead.title || lead.name,
           value: lead.value || 0,
-          currency: leadTenantCurrency,
+          currency: tenantCurrency,
           stage: 'new_lead',
           probability: 10,
           customerId: lead.customerId || null,
