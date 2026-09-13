@@ -16,6 +16,7 @@ import {
   Sparkles,
   Briefcase,
   Play,
+  Repeat,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -84,6 +85,14 @@ export function JobQueueCard({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {(job.recurringScheduleId || job.type === 'recurring') && (
+              <Badge
+                variant="outline"
+                className="text-[9px] h-4.5 px-1.5 bg-teal-50 text-teal-700 border-teal-300 dark:bg-teal-950/40 dark:text-teal-300 font-bold inline-flex items-center gap-0.5"
+              >
+                <Repeat className="size-2.5 mr-0.5" /> Recurring
+              </Badge>
+            )}
             <Badge
               variant="outline"
               className={cn('text-[9px] h-4.5 px-1.5 font-medium', getPriorityColor(job.priority))}

@@ -29,6 +29,20 @@ describe('jobService', () => {
       expect(result.jobs).toHaveLength(1)
     })
 
+    it('passes search=recurring correctly to /api/jobs', async () => {
+      vi.mocked(authFetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ jobs: [{ id: '2', title: 'Weekly Maintenance', recurringScheduleId: 'rec-123' }] }),
+      } as Response)
+
+      const result = await jobService.list({ search: 'recurring' })
+      expect(authFetch).toHaveBeenCalledWith(expect.stringContaining('/api/jobs'))
+      const calledUrl = vi.mocked(authFetch).mock.calls[0][0] as string
+      expect(calledUrl).toContain('search=recurring')
+      expect(result.jobs).toHaveLength(1)
+      expect(result.jobs[0].recurringScheduleId).toBe('rec-123')
+    })
+
     it('skips status param when status is "all"', async () => {
       vi.mocked(authFetch).mockResolvedValueOnce({
         ok: true,

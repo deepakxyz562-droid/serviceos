@@ -24,6 +24,7 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
+  Repeat,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -47,6 +48,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { formatCurrency } from '@/lib/format-utils';
+import { authFetch } from '@/lib/auth-fetch';
 import { toast } from 'sonner';
 import { ActivityLogsView } from './activity-logs-view';
 
@@ -58,6 +61,8 @@ interface HistoryJob {
   title: string;
   status: string;
   priority: string;
+  type?: string;
+  recurringScheduleId?: string | null;
   paymentStatus?: string | null;
   paymentMethod?: string | null;
   amountCollected?: number | null;
@@ -293,6 +298,11 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-mono text-muted-foreground">{job.jobNumber || job.id.slice(0, 8).toUpperCase()}</span>
+                    {(job.recurringScheduleId || job.type === 'recurring') && (
+                      <Badge variant="outline" className="text-[10px] bg-teal-50 text-teal-700 border-teal-300 dark:bg-teal-950/40 dark:text-teal-300 font-bold inline-flex items-center gap-0.5">
+                        <Repeat className="size-2.5 mr-0.5" /> Recurring
+                      </Badge>
+                    )}
                     {job.deletedAt ? (
                       <Badge variant="outline" className="text-[10px] bg-gray-100 text-gray-600 border-gray-200">Archived</Badge>
                     ) : job.status === 'cancelled' ? (

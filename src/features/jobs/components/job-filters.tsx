@@ -148,7 +148,7 @@ export function JobFilters({
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
-            placeholder="Search jobs by title, customer, address..."
+            placeholder="Search jobs by title, customer, address, #job, recurring..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             className="pl-9"

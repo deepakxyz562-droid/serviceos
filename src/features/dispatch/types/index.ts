@@ -79,6 +79,7 @@ export interface Job {
   updatedAt: string;
   latitude?: number | null;
   longitude?: number | null;
+  recurringScheduleId?: string | null;
   assignee?: { id: string; name: string; phone: string; role: string; status: string };
 }
 

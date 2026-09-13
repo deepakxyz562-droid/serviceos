@@ -84,7 +84,9 @@ export function DispatchSidebar({
         j.title.toLowerCase().includes(q) ||
         (j.customerName && j.customerName.toLowerCase().includes(q)) ||
         (j.address && j.address.toLowerCase().includes(q)) ||
-        (j.jobNumber && j.jobNumber.toLowerCase().includes(q))
+        (j.jobNumber && j.jobNumber.toLowerCase().includes(q)) ||
+        (j.type && j.type.toLowerCase().includes(q)) ||
+        (Boolean(j.recurringScheduleId) && ('recurring'.includes(q) || q.includes('recur') || q === 'repeat'))
       );
     });
     return [...list].sort((a, b) => {

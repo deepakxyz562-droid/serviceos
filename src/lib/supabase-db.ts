@@ -833,6 +833,9 @@ function buildOrConditionPart(cond: WhereInput): string | null {
         // Issue #1 Fix A: handle notIn inside OR clauses (was silently dropped).
         // PostgREST syntax: field=not.in.(val1,val2,val3)
         parts.push(`${orField}.not.in.(${(op.notIn as (string | number | boolean)[]).map(toOrLiteral).join(',')})`);
+      } else if (op.not !== undefined) {
+        if (op.not === null) parts.push(`${orField}.not.is.null`);
+        else parts.push(`${orField}.neq.${toOrLiteral(op.not)}`);
       }
     } else if (orValue === null) {
       parts.push(`${orField}.is.null`);

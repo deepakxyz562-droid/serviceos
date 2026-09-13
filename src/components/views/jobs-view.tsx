@@ -2292,6 +2292,11 @@ export function JobsView() {
           <Badge variant="outline" className="font-mono text-[11px] bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 font-bold">
             #{job.jobNumber || job.id.slice(0, 8).toUpperCase()}
           </Badge>
+          {(job.recurringScheduleId || job.type === 'recurring') && (
+            <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-teal-50 text-teal-700 border-teal-300 dark:bg-teal-950/40 dark:text-teal-300 font-bold inline-flex items-center gap-0.5">
+              <Repeat className="size-2.5 mr-0.5" /> Recurring
+            </Badge>
+          )}
           {job.priority === 'urgent' && (
             <Badge variant="outline" className="text-[9px] h-4 px-1 bg-red-50 text-red-700 border-red-300 font-bold animate-pulse">
               Urgent
@@ -2709,6 +2714,11 @@ export function JobsView() {
                         <Badge variant="outline" className="font-mono text-[11px] h-5 px-2 bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 font-bold shadow-2xs">
                           #{job.jobNumber || job.id.slice(0, 8).toUpperCase()}
                         </Badge>
+                        {(job.recurringScheduleId || job.type === 'recurring') && (
+                          <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-teal-50 text-teal-700 border-teal-300 dark:bg-teal-950/40 dark:text-teal-300 font-bold inline-flex items-center gap-0.5">
+                            <Repeat className="size-2.5 mr-0.5" /> Recurring
+                          </Badge>
+                        )}
                         <Badge variant="secondary" className="text-[10px] h-5 font-medium px-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                           {getJobTypeLabel(job.type)}
                         </Badge>
