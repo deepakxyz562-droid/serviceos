@@ -227,7 +227,7 @@ export function BookingFormPage({
   const isFormValid = formData.title.trim().length > 0;
 
   return (
-    <div className="w-full space-y-6 pb-28">
+    <div className="w-full pb-28">
       {/* ── STICKY TOP HEADER ── */}
       <FormPageHeader
         onBack={onCancel}
@@ -299,7 +299,7 @@ export function BookingFormPage({
       />
 
       {/* ── 2-COLUMN MAIN CONTENT (100% Width) ── */}
-      <div className="w-full">
+      <div className="p-3 sm:p-4 lg:p-6 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px] gap-6 items-start">
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* LEFT COLUMN: Main Form Details                                */}

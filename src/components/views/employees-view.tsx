@@ -482,7 +482,7 @@ export function EmployeesView() {
   // ─── Render: List Mode ───────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* Top-level Tabs: Employees | Timesheet */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList className="h-11">

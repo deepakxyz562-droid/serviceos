@@ -149,7 +149,7 @@ export function BookingDetailPage({
   };
 
   return (
-    <div className="w-full space-y-6 pb-16 animate-in fade-in-50 duration-200">
+    <div className="w-full pb-16 animate-in fade-in-50 duration-200">
       {/* ─── Top Sticky Header ─── */}
       <FormPageHeader
         icon={CalendarCheck}
@@ -179,14 +179,13 @@ export function BookingDetailPage({
             {/* Convert to Job */}
             <Button
               type="button"
-              variant="outline"
               size="sm"
               onClick={() => onCreateJob(booking.id)}
-              disabled={submitting}
-              className="gap-1.5 h-9 text-xs font-medium border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              disabled={submitting || booking.status === 'completed' || booking.status === 'cancelled'}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-2xs"
             >
-              <Briefcase className="size-3.5 text-emerald-600" />
-              <span>Convert to Job</span>
+              <Briefcase className="size-4" />
+              <span className="hidden sm:inline">Convert to Job</span>
             </Button>
 
             {/* Edit Booking */}
@@ -196,21 +195,22 @@ export function BookingDetailPage({
               size="sm"
               onClick={() => onEdit(booking)}
               disabled={submitting}
-              className="gap-1.5 h-9 text-xs font-medium"
+              className="gap-1.5"
             >
               <Pencil className="size-3.5" />
-              <span>Edit</span>
+              <span className="hidden sm:inline">Edit</span>
             </Button>
 
-            {/* Status Transitions */}
+            {/* Status Change Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 h-9 text-xs" disabled={submitting}>
-                  <span>Status: <strong>{statusCfg.label}</strong></span>
+                <Button variant="outline" size="sm" className="gap-1.5" disabled={submitting}>
+                  <CheckCircle2 className="size-3.5 text-emerald-600" />
+                  <span className="hidden md:inline">Change Status</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuLabel className="text-xs">Change Status</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs">Update Status</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {STATUS_OPTIONS.map((opt) => (
                   <DropdownMenuItem
@@ -260,7 +260,8 @@ export function BookingDetailPage({
       />
 
       {/* ─── 2-Column Jobber-Style Layout (100% Width) ─── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px] gap-6 items-start">
+      <div className="p-3 sm:p-4 lg:p-6 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] xl:grid-cols-[1fr_380px] gap-6 items-start">
         {/* ─── Left Column (Main Information) ─── */}
         <div className="space-y-6 min-w-0">
           {/* Client & Location Card */}
@@ -657,6 +658,7 @@ export function BookingDetailPage({
             </div>
           </FormSectionCard>
         </div>
+      </div>
       </div>
     </div>
   );
