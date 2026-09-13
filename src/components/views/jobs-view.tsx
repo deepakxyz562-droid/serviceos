@@ -1219,7 +1219,23 @@ export function JobsView() {
         address: job.address || null,
       });
     }
-    const scheduledAt = job.scheduledAt ? new Date(job.scheduledAt) : null;
+    const parsedItems = parseLineItems(job.lineItemsJson);
+    const initialLineItems =
+      parsedItems.length > 0
+        ? parsedItems
+        : job.quotedAmount && job.quotedAmount > 0
+          ? [
+              {
+                id: `li_job_${job.id || Date.now()}`,
+                name: job.title || 'Service',
+                quantity: '1',
+                unitPrice: String(job.quotedAmount),
+                unitCost: '0',
+                description: 'Service line item',
+              },
+            ]
+          : [];
+
     setJobForm({
       title: job.title || '',
       customerId: job.customerId || '',
@@ -1234,7 +1250,7 @@ export function JobsView() {
       assigneeId: job.assigneeId || 'none',
       visitInstructions: job.visitInstructions || '',
       invoiceOnClose: true,
-      lineItems: parseLineItems(job.lineItemsJson),
+      lineItems: initialLineItems,
       notes: job.notes || '',
       priority: job.priority || 'medium',
       serviceId: job.serviceId || '',
@@ -1258,7 +1274,20 @@ export function JobsView() {
     setEditingJob(null);
     setPrefillLeadId(prefill.leadId);
     const items = parseLineItems(prefill.lineItemsJson);
-    const computedValue = prefill.value && prefill.value > 0 ? String(prefill.value) : '';
+    const finalItems = items.length > 0
+      ? items
+      : prefill.value && prefill.value > 0
+      ? [{
+          id: newLineItemId(),
+          serviceId: prefill.serviceId || null,
+          name: prefill.title || 'Service',
+          quantity: '1',
+          unitPrice: String(prefill.value),
+          unitCost: '0',
+          description: prefill.description || '',
+        }]
+      : [emptyLineItem()];
+
     setJobForm({
       ...EMPTY_JOB_FORM,
       title: prefill.title || '',
@@ -1271,10 +1300,8 @@ export function JobsView() {
       serviceId: prefill.serviceId || '',
       visitInstructions: prefill.description || '',
       notes: prefill.description ? `Converted from lead.\n\n${prefill.description}` : 'Converted from lead.',
-      lineItems: items,
-      // If the lead had a negotiated value and no line items, seed it as the
-      // quoted amount via a single line item so the billing section shows it.
-      estimatedDuration: computedValue ? '' : '',
+      lineItems: finalItems,
+      estimatedDuration: '',
     });
     setCustomerQuery('');
     setCustomerPickerOpen(false);
@@ -1451,7 +1478,7 @@ export function JobsView() {
         visitInstructions: jobForm.visitInstructions || undefined,
         lineItemsJson: JSON.stringify(jobForm.lineItems),
         estimatedDuration: jobForm.estimatedDuration ? Number(jobForm.estimatedDuration) : undefined,
-        quotedAmount: subtotal > 0 ? subtotal : (jobForm.estimatedDuration ? undefined : undefined),
+        quotedAmount: subtotal > 0 ? subtotal : (editingJob?.quotedAmount ? editingJob.quotedAmount : undefined),
         status: assignee ? 'assigned' : 'pending',
         // ── "#job" Customize / Attach files & photos / Linked checklists / Link to related ──
         customFieldsJson: JSON.stringify(jobForm.customFields),
@@ -2418,6 +2445,22 @@ export function JobsView() {
       headerClassName: 'font-bold',
     },
     {
+      key: 'price',
+      header: 'Amount',
+      render: (job) => {
+        const items = parseLineItems(job.lineItemsJson);
+        const subtotal = lineItemsSubtotal(items);
+        const amount = subtotal > 0 ? subtotal : (job.quotedAmount || 0);
+        if (amount <= 0) return <span className="text-slate-400 text-xs">—</span>;
+        return (
+          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+            {symbol}{amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        );
+      },
+      headerClassName: 'font-bold',
+    },
+    {
       key: 'status',
       header: 'Status',
       render: (job) => (
@@ -2732,6 +2775,17 @@ export function JobsView() {
                             <AlertCircle className="size-2.5 mr-0.5" /> Overdue
                           </Badge>
                         )}
+                        {(() => {
+                          const jobItems = parseLineItems(job.lineItemsJson);
+                          const jobSubtotal = lineItemsSubtotal(jobItems);
+                          const jobAmount = jobSubtotal > 0 ? jobSubtotal : (job.quotedAmount || 0);
+                          if (jobAmount <= 0) return null;
+                          return (
+                            <Badge variant="outline" className="text-[10px] h-5 px-1.5 bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 font-bold">
+                              {symbol}{jobAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </Badge>
+                          );
+                        })()}
                       </div>
                       <Badge variant="outline" className={cn('shrink-0 text-[10px] px-2.5 py-0.5 font-bold uppercase tracking-wide shadow-2xs', getStatusColor('jobs', job.status))}>
                         <span className="mr-1">{getStatusIcon(job.status)}</span>{job.status.replace('_', ' ')}

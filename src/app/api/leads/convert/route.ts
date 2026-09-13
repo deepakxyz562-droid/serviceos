@@ -120,6 +120,41 @@ export async function POST(request: NextRequest) {
       ? `${lead.serviceType.charAt(0).toUpperCase() + lead.serviceType.slice(1)} - ${lead.name}`
       : `Job for ${lead.name}`;
 
+    // Prepare line items: carry lead lineItemsJson if present, or seed a line item from lead.value
+    let jobLineItemsJson = '[]';
+    try {
+      const parsed = JSON.parse(lead.lineItemsJson || '[]');
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        jobLineItemsJson = JSON.stringify(parsed);
+      } else if (lead.value && lead.value > 0) {
+        jobLineItemsJson = JSON.stringify([
+          {
+            id: `li_lead_${lead.id}`,
+            serviceId: lead.serviceId || null,
+            name: lead.title || lead.serviceType || lead.name || 'Service',
+            quantity: '1',
+            unitPrice: String(lead.value),
+            unitCost: '0',
+            description: lead.description || 'Service from lead',
+          },
+        ]);
+      }
+    } catch {
+      if (lead.value && lead.value > 0) {
+        jobLineItemsJson = JSON.stringify([
+          {
+            id: `li_lead_${lead.id}`,
+            serviceId: lead.serviceId || null,
+            name: lead.title || lead.serviceType || lead.name || 'Service',
+            quantity: '1',
+            unitPrice: String(lead.value),
+            unitCost: '0',
+            description: lead.description || 'Service from lead',
+          },
+        ]);
+      }
+    }
+
     const job = await db.job.create({
       data: {
         title: jobTitle,
@@ -143,6 +178,7 @@ export async function POST(request: NextRequest) {
         // basePrice (which is just a generic default). Without this, the
         // invoice amount would mismatch the lead's quote value.
         quotedAmount: lead.value && lead.value > 0 ? lead.value : undefined,
+        lineItemsJson: jobLineItemsJson,
       },
       include: {
         assignee: {

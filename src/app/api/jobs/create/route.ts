@@ -129,6 +129,56 @@ export async function POST(request: NextRequest) {
     // Auto-generate ID
     const jobId = crypto.randomUUID();
 
+    // Prepare line items & quoted amount
+    let lineItemsJson = '[]';
+    let quotedAmount: number | null = null;
+
+    if (body.lineItemsJson) {
+      if (typeof body.lineItemsJson === 'string') {
+        try {
+          const parsed = JSON.parse(body.lineItemsJson);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            lineItemsJson = JSON.stringify(parsed);
+          }
+        } catch {
+          lineItemsJson = '[]';
+        }
+      } else if (Array.isArray(body.lineItemsJson) && body.lineItemsJson.length > 0) {
+        lineItemsJson = JSON.stringify(body.lineItemsJson);
+      }
+    }
+
+    if (body.quotedAmount !== undefined && body.quotedAmount !== null && !isNaN(Number(body.quotedAmount))) {
+      quotedAmount = Number(body.quotedAmount);
+    } else if (lineItemsJson !== '[]') {
+      try {
+        const parsed = JSON.parse(lineItemsJson);
+        const calc = parsed.reduce((sum: number, it: any) => {
+          const p = Number(it.unitPrice ?? it.price ?? it.rate ?? 0) || 0;
+          const q = Number(it.quantity ?? it.qty ?? 1) || 1;
+          return sum + p * q;
+        }, 0);
+        if (calc > 0) quotedAmount = calc;
+      } catch {}
+    }
+
+    if ((quotedAmount === null || quotedAmount === 0) && body.value && !isNaN(Number(body.value))) {
+      quotedAmount = Number(body.value);
+    }
+
+    if (quotedAmount && quotedAmount > 0 && lineItemsJson === '[]') {
+      lineItemsJson = JSON.stringify([
+        {
+          id: `li_${crypto.randomUUID()}`,
+          name: body.title || 'Service',
+          quantity: '1',
+          unitPrice: String(quotedAmount),
+          unitCost: '0',
+          description: body.description || 'Service line item',
+        },
+      ]);
+    }
+
     // Create the job in the database with status 'pending'
     const job = await db.job.create({
       data: {
@@ -141,6 +191,8 @@ export async function POST(request: NextRequest) {
         address: body.address || null,
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
         notes: body.notes || null,
+        quotedAmount: quotedAmount !== null ? quotedAmount : undefined,
+        lineItemsJson,
         // Customer info
         customerId: body.customerId || null,
         customerName: body.customerName || null,

@@ -1020,6 +1020,17 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
         customerName: deal.customerName || null,
         customerPhone: deal.customerPhone || null,
         notes: `Source deal: ${deal.id} | Value: ${deal.currency} ${deal.value}`,
+        quotedAmount: deal.value || 0,
+        lineItemsJson: JSON.stringify([
+          {
+            id: `li_deal_${deal.id}`,
+            name: deal.title || 'Service',
+            quantity: '1',
+            unitPrice: String(deal.value || 0),
+            unitCost: '0',
+            description: `Converted from deal: ${deal.title}`,
+          },
+        ]),
         // Phase 6: pass the deal's leadId so the jobs/create endpoint can
         // auto-close the linked Deal as 'won' (via autoCloseDealAsWonByLead
         // in src/lib/deal-auto-close.ts). The Deal will move to the won

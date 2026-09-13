@@ -46,15 +46,46 @@ export function parseLineItems(json: string | null | undefined): LineItem[] {
   try {
     const raw = JSON.parse(json || '[]');
     if (!Array.isArray(raw)) return [];
-    return raw.map((it: Record<string, unknown>) => ({
-      id: (it.id as string) || newLineItemId(),
-      serviceId: (it.serviceId as string) || null,
-      name: (it.name as string) || '',
-      quantity: String((it.quantity as number | string) ?? 1),
-      unitPrice: String((it.unitPrice as number | string) ?? 0),
-      unitCost: String((it.unitCost as number | string) ?? 0),
-      description: (it.description as string) || '',
-    }));
+    return raw.map((it: Record<string, unknown>) => {
+      const priceVal =
+        it.unitPrice !== undefined && it.unitPrice !== null && it.unitPrice !== ''
+          ? it.unitPrice
+          : it.price !== undefined && it.price !== null && it.price !== ''
+          ? it.price
+          : it.rate !== undefined && it.rate !== null && it.rate !== ''
+          ? it.rate
+          : it.unit_price !== undefined && it.unit_price !== null && it.unit_price !== ''
+          ? it.unit_price
+          : it.amount !== undefined && it.amount !== null && it.amount !== ''
+          ? it.amount
+          : 0;
+
+      const costVal =
+        it.unitCost !== undefined && it.unitCost !== null && it.unitCost !== ''
+          ? it.unitCost
+          : it.cost !== undefined && it.cost !== null && it.cost !== ''
+          ? it.cost
+          : it.unit_cost !== undefined && it.unit_cost !== null && it.unit_cost !== ''
+          ? it.unit_cost
+          : 0;
+
+      const qtyVal =
+        it.quantity !== undefined && it.quantity !== null && it.quantity !== ''
+          ? it.quantity
+          : it.qty !== undefined && it.qty !== null && it.qty !== ''
+          ? it.qty
+          : 1;
+
+      return {
+        id: (it.id as string) || newLineItemId(),
+        serviceId: (it.serviceId as string) || null,
+        name: (it.name as string) || (it.serviceName as string) || '',
+        quantity: String(qtyVal),
+        unitPrice: String(priceVal),
+        unitCost: String(costVal),
+        description: (it.description as string) || '',
+      };
+    });
   } catch {
     return [];
   }
