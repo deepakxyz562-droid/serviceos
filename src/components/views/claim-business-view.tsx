@@ -182,7 +182,7 @@ export function ClaimBusinessView() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
+    <div className="space-y-6 max-w-4xl">
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white">

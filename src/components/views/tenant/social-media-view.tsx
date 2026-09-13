@@ -46,7 +46,7 @@ export function SocialMediaView() {
   const [activeTab, setActiveTab] = useState<SocialTab>('accounts');
 
   return (
-    <div className="space-y-6">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-lg bg-emerald-50">
           <Share2 className="h-6 w-6 text-emerald-600" />

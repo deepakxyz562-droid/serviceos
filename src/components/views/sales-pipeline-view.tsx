@@ -1290,7 +1290,7 @@ export function SalesPipelineView({ embedded = false }: { embedded?: boolean } =
   };
 
   return (
-    <div className="space-y-6 w-full">
+    <div className={cn('space-y-6 w-full', !embedded && 'p-3 sm:p-4 lg:p-6')}>
       {/* Header — hidden in embedded mode (Leads > Pipeline tab provides its own) */}
       {!embedded && (
         <div className="flex items-center justify-between flex-wrap gap-4">

@@ -135,7 +135,7 @@ export function AiReceptionistOnboarding() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 max-w-3xl mx-auto">
       {/* Step indicator */}
       <div className="flex items-center justify-between">
         {[1, 2, 3, 4].map((stepNum) => (

@@ -1291,9 +1291,9 @@ export function CalendarView() {
   ];
 
   return (
-    <div className="space-y-4 w-full">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* Sticky Header */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border/50 -mx-4 px-4 sm:-mx-6 sm:px-6 py-3">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border/50 -mx-3 -mt-3 sm:-mx-4 sm:-mt-4 lg:-mx-6 lg:-mt-6 px-3 sm:px-4 lg:px-6 py-3">
         <div className="flex flex-col gap-3">
           {/* Title row */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

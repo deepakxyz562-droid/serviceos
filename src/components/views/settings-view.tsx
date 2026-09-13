@@ -664,7 +664,7 @@ export function SettingsView() {
   };
 
   return (
-    <div className="w-full">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* Page header — shows the active section's icon + label + description */}
       <header className="mb-6">
         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2.5">

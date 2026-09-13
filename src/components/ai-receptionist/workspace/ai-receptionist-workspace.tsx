@@ -159,7 +159,7 @@ export function AiReceptionistWorkspace() {
   const isAiActive = receptionist?.status === 'ACTIVE';
 
   return (
-    <div className="space-y-5">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">

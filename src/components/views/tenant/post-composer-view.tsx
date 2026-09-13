@@ -374,7 +374,7 @@ export function PostComposerView() {
 
   if (accounts.length === 0) {
     return (
-      <div className="p-4 lg:p-6">
+      <div>
         <Card>
           <CardContent className="py-12 text-center">
             <AlertCircle className="size-10 mx-auto text-amber-500" />
@@ -392,7 +392,7 @@ export function PostComposerView() {
   }
 
   return (
-    <div className="space-y-6 p-4 lg:p-6 max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-5xl">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Create Post</h1>

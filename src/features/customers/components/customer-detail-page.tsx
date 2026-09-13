@@ -170,7 +170,7 @@ export function CustomerDetailPage({
   onCustomerSaved,
 }: CustomerDetailPageProps) {
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-4 w-full">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* Back button */}
       <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5">
         <ArrowLeft className="size-4" /> Back to Customers
