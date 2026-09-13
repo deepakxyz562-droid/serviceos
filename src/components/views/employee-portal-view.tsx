@@ -45,6 +45,10 @@ import { authFetch } from '@/lib/client-auth';
 import { GpsTrackingProvider, useGpsTracking } from '@/hooks/use-gps-tracking';
 import { formatDistance, formatTimer } from '@/features/employee-portal/utils/portal-helpers';
 import { formatMinutes, formatTime } from '@/lib/format-utils';
+import { OfflineStatusBar } from '@/components/shared/offline-status-bar';
+import { syncTechnicianJobPack } from '@/lib/offline-job-pack';
+import { getCachedJobs, updateCachedJob } from '@/lib/offline-db';
+import { offlineSyncManager } from '@/lib/offline-sync-manager';
 import type {
   Employee, Job, ShiftData, TodayTotals,
   LifecycleAction, PhotoType, ShiftStatus,
@@ -191,6 +195,17 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
   // ── Fetch Jobs ──
   const fetchAllJobs = useCallback(async () => {
     try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const cached = await getCachedJobs({ assigneeId: currentEmployee?.id });
+        if (cached.length > 0) {
+          const today = new Date().toISOString().split('T')[0];
+          setTodayJobs(cached.filter((j) => j.status !== 'completed' && (j.scheduledDate === today || !j.scheduledDate)) as any);
+          setUpcomingJobs(cached.filter((j) => j.status !== 'completed' && j.scheduledDate && j.scheduledDate > today) as any);
+          setCompletedJobs(cached.filter((j) => j.status === 'completed') as any);
+          return;
+        }
+      }
+
       const [todayRes, upcomingRes, completedRes] = await Promise.all([
         fetch('/api/employee/jobs?filter=today'),
         fetch('/api/employee/jobs?filter=upcoming'),
@@ -208,10 +223,22 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
         const data = await completedRes.json();
         setCompletedJobs(Array.isArray(data) ? data : []);
       }
+
+      // Pre-cache assigned jobs for offline access
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        syncTechnicianJobPack(currentEmployee?.id).catch(() => {});
+      }
     } catch {
-      // Silent
+      // Offline fallback on network failure
+      const cached = await getCachedJobs({ assigneeId: currentEmployee?.id });
+      if (cached.length > 0) {
+        const today = new Date().toISOString().split('T')[0];
+        setTodayJobs(cached.filter((j) => j.status !== 'completed' && (j.scheduledDate === today || !j.scheduledDate)) as any);
+        setUpcomingJobs(cached.filter((j) => j.status !== 'completed' && j.scheduledDate && j.scheduledDate > today) as any);
+        setCompletedJobs(cached.filter((j) => j.status === 'completed') as any);
+      }
     }
-  }, []);
+  }, [currentEmployee?.id]);
 
   // ── Initial Load ──
   useEffect(() => {
@@ -308,15 +335,52 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
       opts?: { latitude?: number; longitude?: number },
     ) => {
       setActionLoading(`${action}-${jobId}`);
+      let bodyLatitude = opts?.latitude;
+      let bodyLongitude = opts?.longitude;
+
+      const labels: Record<LifecycleAction, string> = {
+        accept: 'accepted',
+        start_travel: 'travel started',
+        arrive: 'arrived',
+        start_work: 'work started',
+        pause: 'paused',
+        resume: 'resumed',
+        complete: 'completed',
+      };
+
+      const applyOptimisticOfflineUpdate = async () => {
+        const nextStatus = action === 'complete' ? 'completed' : action === 'start_work' ? 'in_progress' : undefined;
+        await updateCachedJob(jobId, {
+          lifecycleState: action,
+          ...(nextStatus ? { status: nextStatus } : {}),
+        });
+        setTodayJobs((prev) =>
+          prev.map((j) => (j.id === jobId ? { ...j, lifecycleState: action, ...(nextStatus ? { status: nextStatus } : {}) } : j))
+        );
+        await offlineSyncManager.enqueue({
+          method: 'POST',
+          url: `/api/employee/jobs/${jobId}/lifecycle`,
+          body: { action, latitude: bodyLatitude, longitude: bodyLongitude },
+          tag: 'job_lifecycle',
+          title: `${action} job #${jobId.slice(0, 8)}`,
+        });
+        toast.success(`Job ${labels[action] || action} saved offline (queued to sync)`);
+      };
+
       try {
+        // Offline check first
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          await applyOptimisticOfflineUpdate();
+          return;
+        }
+
         // Capture GPS for lifecycle transitions that need it (best-effort).
-        let bodyLatitude = opts?.latitude;
-        let bodyLongitude = opts?.longitude;
         if ((action === 'start_travel' || action === 'arrive' || action === 'complete') && bodyLatitude == null) {
           const coords = await captureOnce();
           bodyLatitude = coords.latitude;
           bodyLongitude = coords.longitude;
         }
+
         const res = await authFetch(`/api/employee/jobs/${jobId}/lifecycle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -326,23 +390,10 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
             longitude: bodyLongitude,
           }),
         });
+
         if (res.ok) {
-          const labels: Record<LifecycleAction, string> = {
-            accept: 'accepted',
-            start_travel: 'travel started',
-            arrive: 'arrived',
-            start_work: 'work started',
-            pause: 'paused',
-            resume: 'resumed',
-            complete: 'completed',
-          };
           toast.success(`Job ${labels[action] || action}`);
 
-          // Manage GPS based on action (Phase 2 spec):
-          //   start_travel → startTracking(jobId)  GPS ON
-          //   arrive       → keep tracking (no-op)  GPS still ON
-          //   start_work   → keep tracking (no-op)  GPS still ON
-          //   complete     → stopTracking()        GPS OFF
           if (action === 'start_travel') {
             startTracking(jobId);
           } else if (action === 'complete') {
@@ -355,7 +406,8 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
           toast.error(err.error || `Failed to ${action} job`);
         }
       } catch {
-        toast.error('Network error');
+        // On network error, gracefully fallback to offline mutation queue
+        await applyOptimisticOfflineUpdate();
       } finally {
         setActionLoading(null);
       }
@@ -558,16 +610,8 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto pb-24">
-      {/* ─── Offline Banner ─── */}
-      {!isOnline && (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-300">
-          <WifiOff className="size-5 text-amber-600 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-amber-800">You&apos;re Offline</p>
-            <p className="text-xs text-amber-600">Actions will be queued and synced when you&apos;re back online.</p>
-          </div>
-        </div>
-      )}
+      {/* ─── Offline Banner / Sync Status ─── */}
+      <OfflineStatusBar variant="banner" />
 
       {/* ─── Top Bar: Employee + Shift Status ─── */}
       <Card className="shadow-sm border-2" style={{ borderColor: '#10b981' }}>

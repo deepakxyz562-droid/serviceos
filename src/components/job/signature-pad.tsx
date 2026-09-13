@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { saveOfflineSignature } from '@/lib/offline-db';
+import { offlineSyncManager } from '@/lib/offline-sync-manager';
 
 type SignatoryType = 'customer' | 'employee';
 
@@ -261,31 +263,85 @@ export function SignaturePad({
         }
       }
 
-      const res = await fetch(`/api/jobs/${jobId}/signatures`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+      const saveLocallyAndQueue = async () => {
+        const sigId = `sig_${Date.now()}`;
+        await saveOfflineSignature({
+          id: sigId,
+          jobId,
           signatoryType,
           signatoryName: name.trim(),
           signatoryRole: role.trim() || undefined,
           signatureData,
           latitude,
           longitude,
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        // Include the HTTP status + server error message so the user sees
-        // what actually went wrong (auth, validation, server error, etc.)
-        const detail = err.error || res.statusText || 'Unknown error';
-        throw new Error(`Save failed (${res.status}): ${detail}`);
+          capturedAt: Date.now(),
+          synced: false,
+        });
+
+        await offlineSyncManager.enqueue({
+          method: 'POST',
+          url: `/api/jobs/${jobId}/signatures`,
+          body: {
+            signatoryType,
+            signatoryName: name.trim(),
+            signatoryRole: role.trim() || undefined,
+            signatureData,
+            latitude,
+            longitude,
+          },
+          tag: 'signature',
+          title: `${signatoryType === 'customer' ? 'Customer' : 'Employee'} signature for job #${jobId.slice(0, 8)}`,
+        });
+
+        toast.success(
+          `${signatoryType === 'customer' ? 'Customer' : 'Employee'} signature saved locally (queued for sync)`
+        );
+        clear();
+        onSaved?.({
+          id: sigId,
+          signatoryType,
+          signatoryName: name.trim(),
+          signatoryRole: role.trim() || null,
+          signatureUrl: signatureData,
+          signedAt: new Date().toISOString(),
+        });
+      };
+
+      if (isOffline) {
+        await saveLocallyAndQueue();
+        return;
       }
-      const data = await res.json();
-      toast.success(
-        `${signatoryType === 'customer' ? 'Customer' : 'Employee'} signature saved`
-      );
-      clear();
-      onSaved?.(data.signature as SavedSignature);
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/signatures`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            signatoryType,
+            signatoryName: name.trim(),
+            signatoryRole: role.trim() || undefined,
+            signatureData,
+            latitude,
+            longitude,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const detail = err.error || res.statusText || 'Unknown error';
+          throw new Error(`Save failed (${res.status}): ${detail}`);
+        }
+        const data = await res.json();
+        toast.success(
+          `${signatoryType === 'customer' ? 'Customer' : 'Employee'} signature saved`
+        );
+        clear();
+        onSaved?.(data.signature as SavedSignature);
+      } catch (networkOrServerError) {
+        // Fallback to offline save and queue
+        await saveLocallyAndQueue();
+      }
     } catch (err) {
       console.error('[SignaturePad] save error:', err);
       const msg = err instanceof Error ? err.message : 'Failed to save signature';

@@ -6,20 +6,16 @@
  *
  * This module provides a structured IndexedDB layer via Dexie.js for:
  *   1. **Marketplace catalog cache** — sync top providers per city into
- *      IndexedDB on first visit so users can browse offline (the SW's
- *      network-first `/api/` strategy returns a 503 offline JSON, not real
- *      data, so we need a real data layer for offline browse).
+ *      IndexedDB on first visit so users can browse offline.
  *   2. **Static reference data** — industries, categories, plans, etc.
- *      cached with a weekly TTL so we don't re-fetch them every session
- *      (reduces Supabase API Gateway hits per Concern #5b).
- *   3. **TanStack Query persistence** — the QueryClient cache is persisted
- *      to IndexedDB via `@tanstack/query-sync-storage-persister` + a
- *      custom idb-keyval storage adapter, so refreshes don't lose cached
- *      API data (cuts gateway hits dramatically on repeat visits).
- *
- * The mutation queue (`offline-queue.ts`) handles offline WRITES — when
- * the user submits a form while offline, the mutation is queued here and
- * replayed when the SW's Background Sync `fieseros-sync` event fires.
+ *      cached with a weekly TTL so we don't re-fetch them every session.
+ *   3. **Technician Job Pack cache (v2)** — complete snapshots of assigned
+ *      jobs (customer details, address, checklist templates, signatures,
+ *      line items) so technicians can work fully offline.
+ *   4. **Offline Signatures & Invoices (v2)** — local storage of captured
+ *      customer/employee signatures and offline invoice drafts.
+ *   5. **Global Mutation Queue** — serialized writes replayed sequentially
+ *      with idempotency keys upon network reconnection or Background Sync.
  *
  * DB versioning: Dexie uses semantic versioning. Bump `DB_VERSION` when
  * the schema changes and add an `.upgrade()` handler in the `.version()`
@@ -30,15 +26,14 @@ import Dexie, { type Table } from 'dexie';
 
 // ─── DB Version ─────────────────────────────────────────────────────────────
 
-const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 /**
  * A cached marketplace provider row. Mirrors the shape returned by the
  * marketplace browse API (`ProviderListItem`) but only the fields needed
- * for offline card rendering — we strip heavy fields (galleryJson,
- * portfolio) to keep IndexedDB lean.
+ * for offline card rendering.
  */
 export interface CachedProvider {
   id: string;
@@ -59,47 +54,143 @@ export interface CachedProvider {
   plan: string | null;
   claimed: boolean;
   marketplaceOptIn: boolean;
-  /** Card type for marketplace rendering: 'featured' | 'normal-full' | 'normal-minimal'. */
   cardType: string;
-  /** ISO timestamp when this row was cached. Used for TTL eviction. */
   cachedAt: number;
 }
 
 /**
- * A cached static reference data row. Used for industries, categories,
- * plans, etc. — data that rarely changes and would otherwise be re-fetched
- * on every session.
+ * A cached static reference data row.
  */
 export interface CachedReferenceData {
-  /** The cache key, e.g. 'industries', 'categories', 'plans'. */
   key: string;
-  /** The cached value (any JSON-serializable data). */
   value: unknown;
-  /** ISO timestamp when this row was cached. */
   cachedAt: number;
-  /** TTL in milliseconds. Entries older than this are considered stale. */
   ttlMs: number;
+}
+
+/**
+ * Complete cached job snapshot for offline technician access.
+ */
+export interface CachedJobPack {
+  id: string;
+  jobNumber?: string;
+  title: string;
+  description?: string;
+  status: string;
+  priority?: string;
+  type?: string;
+  address?: string;
+  scheduledAt?: string | null;
+  scheduledTime?: string;
+  scheduledDate?: string;
+  estimatedDuration?: number;
+  notes?: string;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneePhone?: string;
+  checkInLat?: number;
+  checkInLng?: number;
+  checkOutLat?: number;
+  checkOutLng?: number;
+  customerRating?: number;
+  employeeRating?: number;
+  lifecycleState?: string;
+  lifecycleTimestamps?: Record<string, string>;
+  checklists?: Array<{
+    id: string;
+    label: string;
+    checked: boolean;
+    notes?: string | null;
+  }>;
+  signatures?: Array<{
+    id: string;
+    signatoryType: string;
+    signatoryName: string;
+    signatoryRole?: string | null;
+    signatureUrl?: string;
+    signedAt?: string;
+  }>;
+  photos?: Array<{
+    id: string;
+    photoType: string;
+    url: string;
+    caption?: string;
+  }>;
+  lineItems?: Array<{
+    id: string;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+  }>;
+  quotedAmount?: number;
+  amountCollected?: number;
+  currency?: string;
+  rawJobData?: unknown;
+  cachedAt: number;
+}
+
+/**
+ * An offline-captured signature (customer or employee) stored locally before upload.
+ */
+export interface OfflineSignature {
+  id: string;
+  jobId: string;
+  signatoryType: 'customer' | 'employee';
+  signatoryName: string;
+  signatoryRole?: string | null;
+  signatureData: string; // Base64 data URL
+  latitude?: number;
+  longitude?: number;
+  capturedAt: number;
+  synced: boolean;
+}
+
+/**
+ * An offline invoice snapshot or draft.
+ */
+export interface OfflineInvoice {
+  id: string;
+  jobId: string;
+  invoiceNumber?: string;
+  data: unknown;
+  total: number;
+  currency: string;
+  generatedAt: number;
+  synced: boolean;
 }
 
 /**
  * A queued offline mutation. When the user submits a form/create/update
  * while offline, the mutation is serialized here and replayed by the
- * Background Sync handler when connectivity returns.
+ * Background Sync / Sync Manager when connectivity returns.
  */
 export interface QueuedMutation {
   /** Auto-incremented primary key. */
   id?: number;
+  /** Unique idempotency key to prevent duplicate writes on replay. */
+  idempotencyKey?: string;
   /** The HTTP method: POST | PUT | PATCH | DELETE. */
   method: string;
-  /** The API URL (relative, e.g. '/api/leads'). */
+  /** The API URL (relative, e.g. '/api/leads' or '/api/jobs/123/lifecycle'). */
   url: string;
   /** The request body (JSON-serializable). */
   body: unknown;
+  /** Additional custom headers to replay. */
+  headers?: Record<string, string>;
   /** ISO timestamp when the mutation was queued. */
   queuedAt: number;
   /** Number of replay attempts (for retry/backoff). */
   attempts: number;
-  /** Optional tag for grouping (e.g. 'lead', 'booking'). */
+  /** Processing status: 'pending' | 'syncing' | 'failed'. */
+  status?: 'pending' | 'syncing' | 'failed';
+  /** Human-readable title for UI tracking (e.g. "Completed Job #1024"). */
+  title?: string;
+  /** Optional tag for grouping (e.g. 'job_lifecycle', 'signature', 'expense'). */
   tag: string;
 }
 
@@ -109,31 +200,34 @@ class FieserosOfflineDB extends Dexie {
   providers!: Table<CachedProvider, string>;
   reference!: Table<CachedReferenceData, string>;
   mutations!: Table<QueuedMutation, number>;
+  jobs!: Table<CachedJobPack, string>;
+  signatures!: Table<OfflineSignature, string>;
+  offlineInvoices!: Table<OfflineInvoice, string>;
 
   constructor() {
     super('fieseros-offline');
 
-    this.version(DB_VERSION).stores({
-      // `id` is the primary key. Index the fields we query/sort by.
-      // Dexie index syntax: `&field` = unique, `field` = regular index.
+    // Version 1: Original schema
+    this.version(1).stores({
       providers: 'id, industryUrlSlug, cityUrlSlug, rating, cachedAt',
       reference: 'key, cachedAt',
       mutations: '++id, queuedAt, tag, attempts',
+    });
+
+    // Version 2: Complete offline mobile access & job pack tables
+    this.version(2).stores({
+      providers: 'id, industryUrlSlug, cityUrlSlug, rating, cachedAt',
+      reference: 'key, cachedAt',
+      mutations: '++id, idempotencyKey, queuedAt, tag, attempts, status',
+      jobs: 'id, status, scheduledDate, assigneeId, customerId, cachedAt',
+      signatures: 'id, jobId, signatoryType, capturedAt, synced',
+      offlineInvoices: 'id, jobId, invoiceNumber, generatedAt, synced',
     });
   }
 }
 
 // ─── Singleton ──────────────────────────────────────────────────────────────
 
-/**
- * Singleton DB instance. Dexie handles the IndexedDB connection lifecycle
- * (opens lazily on first query, auto-upgrades schema on version mismatch).
- *
- * IMPORTANT: This must only be instantiated in the browser (IndexedDB is
- * not available in Node.js / server components). The `getOfflineDB()`
- * guard below ensures SSR safety — if `window` is undefined, we return
- * null and callers must check.
- */
 let _db: FieserosOfflineDB | null = null;
 
 export function getOfflineDB(): FieserosOfflineDB | null {
@@ -142,9 +236,6 @@ export function getOfflineDB(): FieserosOfflineDB | null {
     try {
       _db = new FieserosOfflineDB();
     } catch (err) {
-      // IndexedDB may be unavailable (private browsing in some browsers,
-      // or the user disabled storage). Fail gracefully — callers fall
-      // back to network-only mode.
       console.warn('[offline-db] Failed to open IndexedDB:', err);
       return null;
     }
@@ -154,22 +245,8 @@ export function getOfflineDB(): FieserosOfflineDB | null {
 
 // ─── Provider cache helpers ─────────────────────────────────────────────────
 
-/**
- * Cache TTL for marketplace providers. 24 hours — providers rarely change
- * their core info (name, industry, rating), and the SW's network-first
- * strategy will refresh the data when online anyway. The cache is primarily
- * for offline browse.
- */
 export const PROVIDER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Bulk-upsert providers into the cache. Called after a successful
- * marketplace browse API response — we cache every provider in the
- * result so the user can re-browse offline.
- *
- * Uses Dexie's `bulkPut` (not `bulkAdd`) so re-caching overwrites
- * existing rows with the same `id` instead of throwing a ConstraintError.
- */
 export async function cacheProviders(providers: CachedProvider[]): Promise<void> {
   const db = getOfflineDB();
   if (!db) return;
@@ -180,13 +257,6 @@ export async function cacheProviders(providers: CachedProvider[]): Promise<void>
   }
 }
 
-/**
- * Fetch cached providers by city. Returns providers whose `cityUrlSlug`
- * matches AND whose `cachedAt` is within the TTL.
- *
- * If no cached providers exist for the city (or all are stale), returns
- * an empty array — the caller should fall back to the network.
- */
 export async function getCachedProvidersByCity(citySlug: string): Promise<CachedProvider[]> {
   const db = getOfflineDB();
   if (!db) return [];
@@ -203,10 +273,6 @@ export async function getCachedProvidersByCity(citySlug: string): Promise<Cached
   }
 }
 
-/**
- * Fetch a single cached provider by its canonical URL slug segments.
- * Used by the provider detail page for offline viewing.
- */
 export async function getCachedProvider(
   industrySlug: string,
   citySlug: string,
@@ -228,10 +294,6 @@ export async function getCachedProvider(
   }
 }
 
-/**
- * Clear the entire provider cache. Called when the user clicks "Clear
- * offline data" in settings, or when a SW `CLEAR_CACHE` message arrives.
- */
 export async function clearProviderCache(): Promise<void> {
   const db = getOfflineDB();
   if (!db) return;
@@ -244,20 +306,13 @@ export async function clearProviderCache(): Promise<void> {
 
 // ─── Reference data cache helpers ───────────────────────────────────────────
 
-/**
- * Get a cached reference data value by key. Returns `undefined` if the
- * key doesn't exist OR if the entry is older than its TTL.
- *
- * Used to cache static-ish data (industries, categories, plans) so we
- * don't re-fetch it every session — cutting Supabase API Gateway hits.
- */
 export async function getCachedReference<T>(key: string): Promise<T | undefined> {
   const db = getOfflineDB();
   if (!db) return undefined;
   try {
     const row = await db.reference.get(key);
     if (!row) return undefined;
-    if (Date.now() - row.cachedAt > row.ttlMs) return undefined; // stale
+    if (Date.now() - row.cachedAt > row.ttlMs) return undefined;
     return row.value as T;
   } catch (err) {
     console.warn('[offline-db] getCachedReference failed:', err);
@@ -265,10 +320,6 @@ export async function getCachedReference<T>(key: string): Promise<T | undefined>
   }
 }
 
-/**
- * Set a reference data value with a TTL. Default TTL is 7 days —
- * reference data changes rarely.
- */
 export async function setCachedReference(
   key: string,
   value: unknown,
@@ -288,13 +339,219 @@ export async function setCachedReference(
   }
 }
 
-// ─── Mutation queue helpers ─────────────────────────────────────────────────
+// ─── Job Pack (Technician Offline) Cache Helpers ────────────────────────────
+
+export const JOB_PACK_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours cache for offline jobs
 
 /**
- * Queue a mutation for later replay (when online). Called by the
- * `useOfflineMutation` hook when a fetch fails due to being offline.
- *
- * Returns the queued mutation's auto-generated `id` (for status tracking).
+ * Cache or update a single job pack in IndexedDB.
+ */
+export async function cacheJobPack(job: CachedJobPack): Promise<void> {
+  const db = getOfflineDB();
+  if (!db) return;
+  try {
+    await db.jobs.put({
+      ...job,
+      cachedAt: job.cachedAt || Date.now(),
+    });
+  } catch (err) {
+    console.warn('[offline-db] cacheJobPack failed:', err);
+  }
+}
+
+/**
+ * Bulk cache assigned job packs (e.g. at technician shift start).
+ */
+export async function cacheJobPacks(jobs: CachedJobPack[]): Promise<void> {
+  const db = getOfflineDB();
+  if (!db || !jobs.length) return;
+  try {
+    const now = Date.now();
+    const enriched = jobs.map((j) => ({
+      ...j,
+      cachedAt: j.cachedAt || now,
+    }));
+    await db.jobs.bulkPut(enriched);
+  } catch (err) {
+    console.warn('[offline-db] cacheJobPacks failed:', err);
+  }
+}
+
+/**
+ * Retrieve cached jobs with optional filters.
+ */
+export async function getCachedJobs(filter?: {
+  assigneeId?: string;
+  status?: string;
+  scheduledDate?: string;
+}): Promise<CachedJobPack[]> {
+  const db = getOfflineDB();
+  if (!db) return [];
+  try {
+    let collection = db.jobs.toCollection();
+    if (filter?.assigneeId) {
+      collection = db.jobs.where('assigneeId').equals(filter.assigneeId);
+    }
+    let list = await collection.toArray();
+    if (filter?.status) {
+      list = list.filter((j) => j.status === filter.status);
+    }
+    if (filter?.scheduledDate) {
+      list = list.filter((j) => j.scheduledDate === filter.scheduledDate);
+    }
+    return list;
+  } catch (err) {
+    console.warn('[offline-db] getCachedJobs failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Retrieve a specific cached job pack by its ID.
+ */
+export async function getCachedJobById(jobId: string): Promise<CachedJobPack | null> {
+  const db = getOfflineDB();
+  if (!db) return null;
+  try {
+    return (await db.jobs.get(jobId)) || null;
+  } catch (err) {
+    console.warn('[offline-db] getCachedJobById failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Optimistically patch a cached job locally (e.g., status changes, notes).
+ */
+export async function updateCachedJob(
+  jobId: string,
+  changes: Partial<CachedJobPack>,
+): Promise<void> {
+  const db = getOfflineDB();
+  if (!db) return;
+  try {
+    await db.jobs.update(jobId, {
+      ...changes,
+      cachedAt: Date.now(),
+    });
+  } catch (err) {
+    console.warn('[offline-db] updateCachedJob failed:', err);
+  }
+}
+
+// ─── Offline Signature Helpers ──────────────────────────────────────────────
+
+/**
+ * Save a signature locally in IndexedDB when offline.
+ */
+export async function saveOfflineSignature(sig: OfflineSignature): Promise<void> {
+  const db = getOfflineDB();
+  if (!db) return;
+  try {
+    await db.signatures.put(sig);
+    // Also patch into cached job if present
+    const job = await db.jobs.get(sig.jobId);
+    if (job) {
+      const existing = job.signatures || [];
+      const updated = [
+        ...existing.filter((s) => s.id !== sig.id),
+        {
+          id: sig.id,
+          signatoryType: sig.signatoryType,
+          signatoryName: sig.signatoryName,
+          signatoryRole: sig.signatoryRole,
+          signatureUrl: sig.signatureData,
+          signedAt: new Date(sig.capturedAt).toISOString(),
+        },
+      ];
+      await db.jobs.update(sig.jobId, { signatures: updated });
+    }
+  } catch (err) {
+    console.warn('[offline-db] saveOfflineSignature failed:', err);
+  }
+}
+
+/**
+ * Get all unsynced or job-specific offline signatures.
+ */
+export async function getOfflineSignatures(jobId?: string): Promise<OfflineSignature[]> {
+  const db = getOfflineDB();
+  if (!db) return [];
+  try {
+    if (jobId) {
+      return await db.signatures.where('jobId').equals(jobId).toArray();
+    }
+    return await db.signatures.toArray();
+  } catch (err) {
+    console.warn('[offline-db] getOfflineSignatures failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Mark an offline signature as successfully synced to server.
+ */
+export async function markOfflineSignatureSynced(id: string): Promise<void> {
+  const db = getOfflineDB();
+  if (!db) return;
+  try {
+    await db.signatures.update(id, { synced: true });
+  } catch (err) {
+    console.warn('[offline-db] markOfflineSignatureSynced failed:', err);
+  }
+}
+
+// ─── Offline Invoice Helpers ────────────────────────────────────────────────
+
+/**
+ * Save an offline invoice draft.
+ */
+export async function saveOfflineInvoice(inv: OfflineInvoice): Promise<void> {
+  const db = getOfflineDB();
+  if (!db) return;
+  try {
+    await db.offlineInvoices.put(inv);
+  } catch (err) {
+    console.warn('[offline-db] saveOfflineInvoice failed:', err);
+  }
+}
+
+/**
+ * Retrieve offline invoices for a job or all unsynced invoices.
+ */
+export async function getOfflineInvoices(jobId?: string): Promise<OfflineInvoice[]> {
+  const db = getOfflineDB();
+  if (!db) return [];
+  try {
+    if (jobId) {
+      return await db.offlineInvoices.where('jobId').equals(jobId).toArray();
+    }
+    return await db.offlineInvoices.toArray();
+  } catch (err) {
+    console.warn('[offline-db] getOfflineInvoices failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Mark an offline invoice as synced.
+ */
+export async function markOfflineInvoiceSynced(id: string): Promise<void> {
+  const db = getOfflineDB();
+  if (!db) return;
+  try {
+    await db.offlineInvoices.update(id, { synced: true });
+  } catch (err) {
+    console.warn('[offline-db] markOfflineInvoiceSynced failed:', err);
+  }
+}
+
+// ─── Mutation queue helpers ─────────────────────────────────────────────────
+
+export const MAX_REPLAY_ATTEMPTS = 5;
+
+/**
+ * Queue a mutation for later replay with an optional idempotency key.
  */
 export async function queueMutation(
   mutation: Omit<QueuedMutation, 'id' | 'queuedAt' | 'attempts'>,
@@ -302,10 +559,18 @@ export async function queueMutation(
   const db = getOfflineDB();
   if (!db) return undefined;
   try {
+    const idempotencyKey =
+      mutation.idempotencyKey ||
+      (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `mut_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
+
     const id = await db.mutations.add({
       ...mutation,
+      idempotencyKey,
       queuedAt: Date.now(),
       attempts: 0,
+      status: 'pending',
     });
     return id;
   } catch (err) {
@@ -315,8 +580,7 @@ export async function queueMutation(
 }
 
 /**
- * Get all pending queued mutations, ordered by queue time (oldest first).
- * Used by the Background Sync replay handler.
+ * Get all pending queued mutations, ordered by queue time (FIFO).
  */
 export async function getQueuedMutations(): Promise<QueuedMutation[]> {
   const db = getOfflineDB();
@@ -343,10 +607,23 @@ export async function removeQueuedMutation(id: number): Promise<void> {
 }
 
 /**
- * Increment the attempt counter on a queued mutation (for retry/backoff).
- * If `attempts` exceeds MAX_REPLAY_ATTEMPTS, the mutation is removed and
- * a console error is logged (the user's data is lost — we could surface
- * this as a toast in the future).
+ * Update the status of a queued mutation.
+ */
+export async function updateMutationStatus(
+  id: number,
+  status: 'pending' | 'syncing' | 'failed',
+): Promise<void> {
+  const db = getOfflineDB();
+  if (!db) return;
+  try {
+    await db.mutations.update(id, { status });
+  } catch (err) {
+    console.warn('[offline-db] updateMutationStatus failed:', err);
+  }
+}
+
+/**
+ * Increment the attempt counter on a queued mutation with exponential backoff.
  */
 export async function incrementMutationAttempts(id: number): Promise<void> {
   const db = getOfflineDB();
@@ -362,7 +639,7 @@ export async function incrementMutationAttempts(id: number): Promise<void> {
       );
       await db.mutations.delete(id);
     } else {
-      await db.mutations.update(id, { attempts });
+      await db.mutations.update(id, { attempts, status: 'pending' });
     }
   } catch (err) {
     console.warn('[offline-db] incrementMutationAttempts failed:', err);
@@ -370,15 +647,7 @@ export async function incrementMutationAttempts(id: number): Promise<void> {
 }
 
 /**
- * Maximum number of replay attempts before a queued mutation is discarded.
- * With exponential backoff (1s, 2s, 4s, 8s, 16s), this gives the mutation
- * ~31 seconds of total retry time across 5 attempts.
- */
-export const MAX_REPLAY_ATTEMPTS = 5;
-
-/**
- * Get the count of pending queued mutations. Used by the UI to show a
- * "N pending syncs" badge.
+ * Get the count of pending queued mutations.
  */
 export async function getQueuedMutationCount(): Promise<number> {
   const db = getOfflineDB();
@@ -392,8 +661,7 @@ export async function getQueuedMutationCount(): Promise<number> {
 }
 
 /**
- * Clear ALL offline data (providers, reference, mutations). Called when
- * the user logs out or clicks "Clear offline data" in settings.
+ * Clear ALL offline data (providers, reference, jobs, signatures, invoices, mutations).
  */
 export async function clearAllOfflineData(): Promise<void> {
   const db = getOfflineDB();
@@ -402,9 +670,13 @@ export async function clearAllOfflineData(): Promise<void> {
     await Promise.all([
       db.providers.clear(),
       db.reference.clear(),
+      db.jobs.clear(),
+      db.signatures.clear(),
+      db.offlineInvoices.clear(),
       db.mutations.clear(),
     ]);
   } catch (err) {
     console.warn('[offline-db] clearAllOfflineData failed:', err);
   }
 }
+

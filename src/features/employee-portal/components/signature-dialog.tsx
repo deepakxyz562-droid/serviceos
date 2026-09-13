@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
+import { saveOfflineSignature } from '@/lib/offline-db';
+import { offlineSyncManager } from '@/lib/offline-sync-manager';
 
 export interface SignatureDialogProps {
   open: boolean;
@@ -127,6 +129,49 @@ export function SignatureDialog({
     if (!canvas) return;
     const dataUrl = canvas.toDataURL('image/png');
     setSaving(true);
+
+    const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+
+    const saveOfflineAndClose = async () => {
+      const sigId = `sig_${Date.now()}`;
+      await saveOfflineSignature({
+        id: sigId,
+        jobId,
+        signatoryType: 'customer',
+        signatoryName: signatoryName.trim(),
+        signatoryRole: 'Customer',
+        signatureData: dataUrl,
+        capturedAt: Date.now(),
+        synced: false,
+      });
+
+      await offlineSyncManager.enqueue({
+        method: 'POST',
+        url: `/api/jobs/${jobId}/signatures`,
+        body: {
+          signatoryType: 'customer',
+          signatoryName: signatoryName.trim(),
+          signatoryRole: 'Customer',
+          signatureData: dataUrl,
+        },
+        tag: 'signature',
+        title: `Customer signature for job #${jobId.slice(0, 8)}`,
+      });
+
+      toast.success('Signature saved locally (queued for sync)');
+      await onSaved();
+      onClose();
+    };
+
+    if (isOffline) {
+      try {
+        await saveOfflineAndClose();
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     try {
       const res = await authFetch(`/api/jobs/${jobId}/signatures`, {
         method: 'POST',
@@ -147,7 +192,8 @@ export function SignatureDialog({
         toast.error(err.error);
       }
     } catch {
-      toast.error('Network error');
+      // Offline fallback on network error
+      await saveOfflineAndClose();
     } finally {
       setSaving(false);
     }

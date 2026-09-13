@@ -26,6 +26,8 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
+import { getCachedJobById, getOfflineSignatures, updateCachedJob } from '@/lib/offline-db';
+import { offlineSyncManager } from '@/lib/offline-sync-manager';
 import type { CompletionValidation } from '@/features/employee-portal/types';
 import { ValidationItem } from './validation-item';
 
@@ -55,28 +57,59 @@ export function CompleteJobDialog({
     setValidating(true);
     (async () => {
       try {
-        // Fetch the latest proof data for this job
-        const [photosRes, sigRes, checkRes] = await Promise.all([
-          fetch(`/api/jobs/${jobId}/photos`),
-          fetch(`/api/jobs/${jobId}/signatures`),
-          fetch(`/api/jobs/${jobId}/checklist`),
-        ]);
         let before = false, after = false, signature = false, checklist = false;
-        if (photosRes.ok) {
-          const data = await photosRes.json();
-          const photos = (data.photos || []) as Array<{ photoType: string }>;
-          before = photos.some((p) => p.photoType === 'before');
-          after = photos.some((p) => p.photoType === 'after');
+
+        // Check offline cached signatures first
+        const offlineSigs = await getOfflineSignatures(jobId);
+        if (offlineSigs.some((s) => s.signatoryType === 'customer')) {
+          signature = true;
         }
-        if (sigRes.ok) {
-          const data = await sigRes.json();
-          const sigs = (data.signatures || []) as Array<{ signatoryType: string }>;
-          signature = sigs.some((s) => s.signatoryType === 'customer');
+
+        // Check cached job snapshot
+        const cachedJob = await getCachedJobById(jobId);
+        if (cachedJob) {
+          if (cachedJob.signatures?.some((s) => s.signatoryType === 'customer')) {
+            signature = true;
+          }
+          if (cachedJob.photos?.some((p) => p.photoType === 'before')) {
+            before = true;
+          }
+          if (cachedJob.photos?.some((p) => p.photoType === 'after')) {
+            after = true;
+          }
+          if (cachedJob.checklists && cachedJob.checklists.length > 0 && cachedJob.checklists.every((c) => c.checked)) {
+            checklist = true;
+          }
         }
-        if (checkRes.ok) {
-          const data = await checkRes.json();
-          checklist = data.checklist?.status === 'completed';
+
+        // If online, also check server records
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+          try {
+            const [photosRes, sigRes, checkRes] = await Promise.all([
+              fetch(`/api/jobs/${jobId}/photos`).catch(() => null),
+              fetch(`/api/jobs/${jobId}/signatures`).catch(() => null),
+              fetch(`/api/jobs/${jobId}/checklist`).catch(() => null),
+            ]);
+            if (photosRes && photosRes.ok) {
+              const data = await photosRes.json();
+              const photos = (data.photos || []) as Array<{ photoType: string }>;
+              if (photos.some((p) => p.photoType === 'before')) before = true;
+              if (photos.some((p) => p.photoType === 'after')) after = true;
+            }
+            if (sigRes && sigRes.ok) {
+              const data = await sigRes.json();
+              const sigs = (data.signatures || []) as Array<{ signatoryType: string }>;
+              if (sigs.some((s) => s.signatoryType === 'customer')) signature = true;
+            }
+            if (checkRes && checkRes.ok) {
+              const data = await checkRes.json();
+              if (data.checklist?.status === 'completed') checklist = true;
+            }
+          } catch {
+            // Use local validation results
+          }
         }
+
         const missing: string[] = [];
         if (!before) missing.push('Before photo');
         if (!after) missing.push('After photo');
@@ -97,18 +130,37 @@ export function CompleteJobDialog({
       toast.error('Cannot complete: ' + validation.missing.join(', '));
       return;
     }
+
     // Save completion notes to the job
     if (completionNotes.trim()) {
-      try {
-        await authFetch(`/api/jobs/${jobId}`, {
+      await updateCachedJob(jobId, { notes: completionNotes });
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        await offlineSyncManager.enqueue({
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: jobId, notes: completionNotes }),
+          url: `/api/jobs/${jobId}`,
+          body: { id: jobId, notes: completionNotes },
+          tag: 'job_notes',
+          title: `Notes for job #${jobId.slice(0, 8)}`,
         });
-      } catch {
-        // Continue with completion even if notes fail
+      } else {
+        try {
+          await authFetch(`/api/jobs/${jobId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: jobId, notes: completionNotes }),
+          });
+        } catch {
+          await offlineSyncManager.enqueue({
+            method: 'PUT',
+            url: `/api/jobs/${jobId}`,
+            body: { id: jobId, notes: completionNotes },
+            tag: 'job_notes',
+            title: `Notes for job #${jobId.slice(0, 8)}`,
+          });
+        }
       }
     }
+
     // Capture GPS for check-out if available
     let lat: number | undefined;
     let lng: number | undefined;

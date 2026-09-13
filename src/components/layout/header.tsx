@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { MessageDrawer } from '@/components/layout/message-drawer';
 import { AiAssistantDrawer } from '@/components/layout/ai-assistant-drawer';
+import { OfflineStatusBar } from '@/components/shared/offline-status-bar';
 import { authFetch } from '@/lib/api';
 
 // ─── View label mapping ─────────────────────────────────────────────────────
@@ -386,6 +387,9 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
 
       {/* ─── Right side actions ────────────────────────────────────────── */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* ─── Global Offline Status Indicator / Sync Trigger ────────────── */}
+        <OfflineStatusBar variant="compact" />
+
         {/* ─── AI Assistant trigger button (opens right-side Copilot drawer) ── */}
         {!isAiAssistantDisabled && (
           <Button
