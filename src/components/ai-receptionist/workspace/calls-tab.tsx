@@ -62,7 +62,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
-import { cn, safeParse } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { parseStructuredTranscript } from '@/lib/transcript-parser';
 
 interface CallRecord {
