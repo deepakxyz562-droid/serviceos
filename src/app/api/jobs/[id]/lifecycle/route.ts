@@ -544,8 +544,12 @@ export async function POST(
       // set must not proceed (otherwise both employees point at the same
       // job, breaking the @unique constraint on currentJobId).
       const previousAssigneeId = job.assigneeId;
-      const isReassignment =
-        previousAssigneeId && previousAssigneeId !== emp.id;
+      const isReassignment = Boolean(
+        previousAssigneeId &&
+        previousAssigneeId !== emp.id &&
+        job.status !== 'pending' &&
+        job.status !== 'unassigned'
+      );
 
       // ── Phase 1: Reassignment reason validation ──────────────────────
       // When reassigning (previous assignee exists and is different from

@@ -85,14 +85,13 @@ async function _GET(request: NextRequest) {
     // like skills, avatar, etc.) for every employee. Now select only the
     // fields the UI actually consumes, cutting payload size ~5x and JSON
     // parse time on the client.
-    // Cap at 200 rows to prevent runaway queries. UIs that need more should
-    // paginate via ?page=&limit=.
     const selectFields = {
       id: true,
       name: true,
       phone: true,
       email: true,
       role: true,
+      skills: true,
       status: true,
       avatar: true,
       rating: true,
@@ -126,20 +125,53 @@ async function _GET(request: NextRequest) {
       }
     }
 
-    const [employees, total] = await Promise.all([
-      db.employee.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        select: selectFields,
-        take: limit,
-        ...(hasPagination ? { skip: (page - 1) * limit } : {}),
-      }),
-      // Only run the count query when paginating (dashboard polls don't need it)
-      hasPagination ? db.employee.count({ where }) : Promise.resolve(0),
-    ])
+    let employees: unknown[] = []
+    let total = 0
+
+    try {
+      const [empList, count] = await Promise.all([
+        db.employee.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          select: selectFields,
+          take: limit,
+          ...(hasPagination ? { skip: (page - 1) * limit } : {}),
+        }),
+        // Only run the count query when paginating (dashboard polls don't need it)
+        hasPagination ? db.employee.count({ where }) : Promise.resolve(0),
+      ])
+      employees = empList as unknown[]
+      total = count
+    } catch (primaryErr) {
+      console.warn('Error fetching employees with selectFields, trying fallback query:', primaryErr)
+      try {
+        const [empList, count] = await Promise.all([
+          db.employee.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            ...(hasPagination ? { skip: (page - 1) * limit } : {}),
+          }),
+          hasPagination ? db.employee.count({ where }) : Promise.resolve(0),
+        ])
+        employees = empList as unknown[]
+        total = count
+      } catch (fallbackErr) {
+        console.error('Error in employee fallback query:', fallbackErr)
+        return NextResponse.json({ error: 'Failed to fetch employees' }, { status: 500 })
+      }
+    }
+
+    // Normalize employee rows to guarantee safe client consumption
+    const normalizedEmployees = (employees || []).map((emp: any) => ({
+      ...emp,
+      skills: emp.skills || '[]',
+      hourlyRate: emp.hourlyRate ?? 0,
+      metadataJson: emp.metadataJson || '{}',
+    }))
 
     if (isCacheable) {
-      cache.set(cacheKey, employees, EMPLOYEE_LIST_CACHE_TTL)
+      cache.set(cacheKey, normalizedEmployees, EMPLOYEE_LIST_CACHE_TTL)
     }
 
     // Paginated callers get the envelope; legacy callers (dashboard) get the
@@ -147,7 +179,7 @@ async function _GET(request: NextRequest) {
     // callers don't break.
     if (hasPagination) {
       return cachedJson({
-        employees,
+        employees: normalizedEmployees,
         pagination: {
           page,
           limit,
@@ -157,7 +189,7 @@ async function _GET(request: NextRequest) {
       })
     }
 
-    return cachedJson(employees)
+    return cachedJson(normalizedEmployees)
   } catch (error) {
     console.error('Error fetching employees:', error)
     return NextResponse.json({ error: 'Failed to fetch employees' }, { status: 500 })

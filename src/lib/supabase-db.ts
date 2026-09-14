@@ -91,6 +91,7 @@ const TABLE_MAP: Record<string, string> = {
   template: 'Template',
   employee: 'Employee',
   employeeStatusLog: 'EmployeeStatusLog',
+  team: 'Team',
   notificationLog: 'NotificationLog',
   // ── Live Dispatch / GPS tracking (Wave 3) ──
   // These MUST be explicitly mapped so the PostgREST adapter targets the
@@ -418,6 +419,12 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
     userAccount: { targetTable: 'User', fkColumn: 'userId' },
     currentJob: { targetTable: 'Job', fkColumn: 'currentJobId' },
+    team: { targetTable: 'Team', fkColumn: 'teamId' },
+  },
+  Team: {
+    workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
+    members: { targetTable: 'Employee', targetFkColumn: 'teamId', isMany: true },
+    lead: { targetTable: 'Employee', fkColumn: 'leadId' },
   },
   Customer: {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
@@ -1601,7 +1608,34 @@ class SupabaseModel {
     // after 5 consecutive failures and fail-fasts subsequent reads with
     // CircuitOpenError — which sharedCacheWrap catches to serve stale data.
     // Application errors (4xx, missing column) do NOT trip the breaker.
-    const { data, error } = await withCircuitBreaker(this.tableName, () => query);
+    let { data, error } = await withCircuitBreaker(this.tableName, () => query);
+    if (error) {
+      // Schema drift / unmigrated columns fallback: if a specific column in `select`
+      // does not exist on the PostgREST table, retry with select('*') so queries
+      // succeed cleanly with existing columns.
+      if (selectStr !== '*' && (
+        error.code === 'PGRST100' ||
+        error.code === '42703' ||
+        error.message?.includes('schema cache') ||
+        error.message?.includes('column') ||
+        error.message?.includes('does not exist')
+      )) {
+        console.warn(`[SupabaseDB] findMany on ${this.tableName} failed on select="${selectStr}" (${error.message}), retrying with select('*')...`);
+        let fallbackQuery = this.client.from(this.tableName).select('*');
+        if (where) applyWhereFilters(fallbackQuery, where);
+        if (orderBy) applyOrderBy(fallbackQuery, orderBy);
+        if (skip !== undefined || take !== undefined) {
+          const from = skip || 0;
+          const to = take !== undefined ? from + take - 1 : from + 49;
+          fallbackQuery.range(from, to);
+        }
+        const fallbackRes = await withCircuitBreaker(this.tableName, () => fallbackQuery);
+        if (!fallbackRes.error) {
+          data = fallbackRes.data;
+          error = null;
+        }
+      }
+    }
     if (error) {
       const whereStr = where ? JSON.stringify(where).substring(0, 200) : 'none';
       // Issue #1 Fix B: THROW instead of silently returning []. The previous
@@ -1676,15 +1710,34 @@ class SupabaseModel {
       }
     }
 
-    const { data, error } = await withCircuitBreaker(this.tableName, () =>
+    let { data, error } = await withCircuitBreaker(this.tableName, () =>
       query.limit(1).single(),
     );
     if (error) {
-      // PGRST116 = "JSON object requested, 0 rows returned" — this is the
-      // expected "no match" case for findUnique, NOT an error. Return null.
-      // (Does not trip the breaker — it's a valid "no row" result.)
       if (error.code === 'PGRST116') return null;
-      // Issue #1 Fix B: THROW on real errors instead of silently returning null.
+      if (selectStr !== '*' && (
+        error.code === 'PGRST100' ||
+        error.code === '42703' ||
+        error.message?.includes('schema cache') ||
+        error.message?.includes('column') ||
+        error.message?.includes('does not exist')
+      )) {
+        console.warn(`[SupabaseDB] findUnique on ${this.tableName} failed on select="${selectStr}" (${error.message}), retrying with select('*')...`);
+        let fallbackQuery = this.client.from(this.tableName).select('*');
+        for (const [field, value] of Object.entries(flatWhere)) {
+          if (value !== undefined) {
+            fallbackQuery.eq(field, value as string | number | boolean);
+          }
+        }
+        const fallbackRes = await withCircuitBreaker(this.tableName, () => fallbackQuery.limit(1).single());
+        if (fallbackRes.error && fallbackRes.error.code === 'PGRST116') return null;
+        if (!fallbackRes.error) {
+          data = fallbackRes.data;
+          error = null;
+        }
+      }
+    }
+    if (error) {
       console.error(`[SupabaseDB] findUnique error on ${this.tableName}:`, error.message);
       throw new Error(`[SupabaseDB] findUnique on ${this.tableName} failed: ${error.message} (code=${error.code})`);
     }
@@ -1721,15 +1774,31 @@ class SupabaseModel {
     if (where) applyWhereFilters(query, where);
     if (orderBy) applyOrderBy(query, orderBy);
 
-    const { data, error } = await withCircuitBreaker(this.tableName, () =>
+    let { data, error } = await withCircuitBreaker(this.tableName, () =>
       query.limit(1).single(),
     );
     if (error) {
-      // PGRST116 = no rows found — this is a legitimate "no match" case, NOT
-      // an error. Return null for that code only. (Does not trip the breaker.)
       if (error.code === 'PGRST116') return null;
-      // Issue #1 Fix B: THROW on real errors instead of silently returning null.
-      // Log detailed error context for production debugging.
+      if (selectStr !== '*' && (
+        error.code === 'PGRST100' ||
+        error.code === '42703' ||
+        error.message?.includes('schema cache') ||
+        error.message?.includes('column') ||
+        error.message?.includes('does not exist')
+      )) {
+        console.warn(`[SupabaseDB] findFirst on ${this.tableName} failed on select="${selectStr}" (${error.message}), retrying with select('*')...`);
+        let fallbackQuery = this.client.from(this.tableName).select('*');
+        if (where) applyWhereFilters(fallbackQuery, where);
+        if (orderBy) applyOrderBy(fallbackQuery, orderBy);
+        const fallbackRes = await withCircuitBreaker(this.tableName, () => fallbackQuery.limit(1).single());
+        if (fallbackRes.error && fallbackRes.error.code === 'PGRST116') return null;
+        if (!fallbackRes.error) {
+          data = fallbackRes.data;
+          error = null;
+        }
+      }
+    }
+    if (error) {
       const whereStr = where ? JSON.stringify(where).substring(0, 200) : 'none';
       console.error(
         `[SupabaseDB] findFirst error on ${this.tableName}: code=${error.code} message="${error.message}" details="${error.details || ''}" hint="${error.hint || ''}" where=${whereStr}`
@@ -1802,10 +1871,10 @@ class SupabaseModel {
       // times (15 seconds wasted) before giving up. By checking missing-column
       // FIRST, we strip the bad column and retry immediately (0s delay).
       const missingColMatch = msg.match(
-        /(?:Could not find the ['`"]?(\w+)['`"]? column of|column "(\w+)" of relation)/
+        /(?:Could not find the (?:column )?['`"]?(\w+)['`"]?(?: column)? of|column ['`"]?(\w+)['`"]? of relation|column ['`"]?(\w+)['`"]? does not exist)/i
       );
       if (missingColMatch) {
-        const badCol = missingColMatch[1] || missingColMatch[2];
+        const badCol = missingColMatch[1] || missingColMatch[2] || missingColMatch[3];
         if (badCol && badCol in serialized) {
           console.log(`[SupabaseDB] create retry on ${this.tableName}: stripping missing column "${badCol}" and retrying`);
           delete serialized[badCol];
@@ -1943,10 +2012,10 @@ class SupabaseModel {
     //   'column "updatedAt" of relation "ContactGroup" does not exist'  (PostgreSQL)
     if (result.error) {
       const missingColMatch = result.error.match(
-        /(?:Could not find the ['`"]?(\w+)['`"]? column|column "(\w+)" of relation)/
+        /(?:Could not find the (?:column )?['`"]?(\w+)['`"]?(?: column)? of|column ['`"]?(\w+)['`"]? of relation|column ['`"]?(\w+)['`"]? does not exist)/i
       );
       if (missingColMatch) {
-        const badCol = missingColMatch[1] || missingColMatch[2];
+        const badCol = missingColMatch[1] || missingColMatch[2] || missingColMatch[3];
         if (badCol) {
           const strippedRows = baseRows.map((r) => {
             const { [badCol]: _, ...rest } = r;
@@ -1986,10 +2055,10 @@ class SupabaseModel {
       if (rowErr) {
         // If the error is about a missing column, strip it from remaining rows
         const colMatch = rowErr.message?.match(
-          /(?:Could not find the ['`"]?(\w+)['`"]? column|column "(\w+)" of relation)/
+          /(?:Could not find the (?:column )?['`"]?(\w+)['`"]?(?: column)? of|column ['`"]?(\w+)['`"]? of relation|column ['`"]?(\w+)['`"]? does not exist)/i
         );
         if (colMatch) {
-          const badCol = colMatch[1] || colMatch[2];
+          const badCol = colMatch[1] || colMatch[2] || colMatch[3];
           if (badCol) {
             for (const r of baseRows) {
               delete r[badCol];
@@ -2072,10 +2141,10 @@ class SupabaseModel {
     while (error && retryCount < 4) {
       const msg = error.message || '';
       const missingColMatch = msg.match(
-        /(?:Could not find the ['`"]?(\w+)['`"]? column of|column "(\w+)" of relation)/
+        /(?:Could not find the (?:column )?['`"]?(\w+)['`"]?(?: column)? of|column ['`"]?(\w+)['`"]? of relation|column ['`"]?(\w+)['`"]? does not exist)/i
       );
       if (!missingColMatch) break;
-      const badCol = missingColMatch[1] || missingColMatch[2];
+      const badCol = missingColMatch[1] || missingColMatch[2] || missingColMatch[3];
       if (!badCol || !(badCol in serialized)) break;
       delete serialized[badCol];
       retryCount++;

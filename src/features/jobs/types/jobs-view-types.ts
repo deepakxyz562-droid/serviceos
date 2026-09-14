@@ -220,6 +220,11 @@ export const REASSIGNMENT_REASONS = [
   'Other',
 ] as const;
 
+export const REASSIGNMENT_REASON_OPTIONS = REASSIGNMENT_REASONS.map((reason) => ({
+  value: reason,
+  label: reason,
+}));
+
 // ── V1.6 "Link to related → Quotes" picker option ──────────────────────────
 // Lightweight customer-quote shape used by the job form's Quote picker. Only
 // draft / sent quotes are linkable (accepted/rejected/expired are filtered out

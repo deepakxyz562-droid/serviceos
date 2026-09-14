@@ -379,6 +379,11 @@ export function SmartAssignDialog({
   handleLifecycleAction,
 }: SmartAssignDialogProps) {
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
+  const isReassignment = Boolean(
+    assigningJob?.assigneeId &&
+    assigningJob.status !== 'pending' &&
+    assigningJob.status !== 'unassigned'
+  );
 
   return (
     <>
@@ -387,7 +392,7 @@ export function SmartAssignDialog({
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                {assigningJob?.assigneeId ? (
+                {isReassignment ? (
                   <><RefreshCw className="size-4 text-amber-600" /> Reassign Job</>
                 ) : (
                   <><UserCheck className="size-4 text-emerald-600" /> Assign Job</>
@@ -410,14 +415,13 @@ export function SmartAssignDialog({
             </DialogDescription>
           </DialogHeader>
           {assigningJob && (() => {
-            const isReassignment = !!assigningJob.assigneeId;
-            const canAssign = !isReassignment || !!reassignReason.trim();
+            const canAssign = !isReassignment || Boolean(reassignReason?.trim());
             // Build the "assign" handler that injects reason/note for reassignment
             const doAssign = (employeeId: string) => {
               if (isReassignment) {
                 handleLifecycleAction('assign', assigningJob.id, employeeId, {
-                  reason: reassignReason.trim(),
-                  reassignmentNote: reassignNote.trim() || undefined,
+                  reason: (reassignReason || '').trim(),
+                  reassignmentNote: (reassignNote || '').trim() || undefined,
                 });
               } else {
                 handleLifecycleAction('assign', assigningJob.id, employeeId);
@@ -471,9 +475,15 @@ export function SmartAssignDialog({
                           <SelectValue placeholder="Select a reason..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {REASSIGNMENT_REASONS.map((r) => (
-                            <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-                          ))}
+                          {REASSIGNMENT_REASONS.map((r) => {
+                            const val = typeof r === 'string' ? r : (r as { value: string }).value;
+                            const lab = typeof r === 'string' ? r : (r as { label: string }).label;
+                            return (
+                              <SelectItem key={val} value={val}>
+                                {lab}
+                              </SelectItem>
+                            );
+                          })}
                         </SelectContent>
                       </Select>
                     </div>
@@ -611,7 +621,7 @@ export function SmartAssignDialog({
                   </>
                 )}
 
-                {isReassignment && !reassignReason.trim() && (
+                {isReassignment && !reassignReason?.trim() && (
                   <div className="flex items-center gap-2 py-2 px-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
                     <AlertCircle className="size-3.5 shrink-0" />
                     <span>Select a reason for reassignment to enable assigning.</span>
