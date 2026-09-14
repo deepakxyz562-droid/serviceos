@@ -45,6 +45,15 @@ export interface EmployeeFormDialogProps {
   setFormWhatsappId: (v: string) => void;
   formSkills: string;
   setFormSkills: (v: string) => void;
+  // Compensation & Worker Type state
+  formPayType?: string;
+  setFormPayType?: (v: string) => void;
+  formHourlyRate?: number | string;
+  setFormHourlyRate?: (v: number | string) => void;
+  formCommissionRate?: number | string;
+  setFormCommissionRate?: (v: number | string) => void;
+  formFlatAmount?: number | string;
+  setFormFlatAmount?: (v: number | string) => void;
   onSubmit: () => void;
   onCancel?: () => void;
 }
@@ -70,6 +79,14 @@ export function EmployeeFormDialog({
   setFormWhatsappId,
   formSkills,
   setFormSkills,
+  formPayType = 'hourly',
+  setFormPayType,
+  formHourlyRate = 0,
+  setFormHourlyRate,
+  formCommissionRate = 10,
+  setFormCommissionRate,
+  formFlatAmount = 0,
+  setFormFlatAmount,
   onSubmit,
   onCancel,
 }: EmployeeFormDialogProps) {
@@ -135,6 +152,103 @@ export function EmployeeFormDialog({
           <div className="space-y-2">
             <Label>Skills (comma separated)</Label>
             <Input placeholder="e.g., Plumbing, Electrical, Carpentry" value={formSkills} onChange={e => setFormSkills(e.target.value)} />
+          </div>
+
+          {/* ── Compensation & Worker Type ── */}
+          <div className="rounded-lg border border-teal-100 bg-teal-50/40 p-3 space-y-3 dark:border-teal-900/60 dark:bg-teal-950/20">
+            <div className="flex items-center justify-between">
+              <Label className="font-semibold text-xs text-teal-900 dark:text-teal-200">
+                Compensation & Worker Model
+              </Label>
+              <span className="text-[10px] text-teal-700 dark:text-teal-400 font-medium">
+                Individual per-worker settings
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Pay Type</Label>
+                <Select value={formPayType} onValueChange={setFormPayType}>
+                  <SelectTrigger className="h-8 text-xs bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hourly">Hourly Wage ($/hr)</SelectItem>
+                    <SelectItem value="commission">Percentage Commission (%)</SelectItem>
+                    <SelectItem value="flat">Flat Rate per Job ($)</SelectItem>
+                    <SelectItem value="subcontractor">1099 Subcontractor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {formPayType === 'hourly' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Hourly Rate ($/hr)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    className="h-8 text-xs bg-background"
+                    placeholder="25.00"
+                    value={formHourlyRate}
+                    onChange={(e) => setFormHourlyRate?.(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {formPayType === 'commission' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Commission Rate (%)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    className="h-8 text-xs bg-background"
+                    placeholder="10"
+                    value={formCommissionRate}
+                    onChange={(e) => setFormCommissionRate?.(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {formPayType === 'flat' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Flat Amount ($/job)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="5"
+                    className="h-8 text-xs bg-background"
+                    placeholder="50.00"
+                    value={formFlatAmount}
+                    onChange={(e) => setFormFlatAmount?.(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {formPayType === 'subcontractor' && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Commission Rate (%)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    className="h-8 text-xs bg-background"
+                    placeholder="15"
+                    value={formCommissionRate}
+                    onChange={(e) => setFormCommissionRate?.(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-muted-foreground leading-tight">
+              {formPayType === 'hourly'
+                ? 'Hourly employees log in each morning and track active shift hours.'
+                : 'Commission & 1099 workers operate on-demand without morning clock-in requirements. Earnings auto-calculate upon job completion.'}
+            </p>
           </div>
         </div>
         <DialogFooter className="gap-2">

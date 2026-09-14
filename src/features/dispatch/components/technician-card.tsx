@@ -20,7 +20,11 @@ import {
   Briefcase,
   UserCheck,
   UserX,
+  Share2,
+  DollarSign,
+  Link2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -54,6 +58,33 @@ export function TechnicianCard({
   const currentJob = activeJobs[0];
   const activeCount = activeJobs.length;
   const hasRating = typeof e.rating === 'number' && e.rating > 0;
+
+  // Extract compensation metadata
+  let meta: Record<string, unknown> = {};
+  try {
+    const raw = (e as unknown as { metadataJson?: string | Record<string, unknown> }).metadataJson;
+    if (typeof raw === 'string') meta = JSON.parse(raw);
+    else if (raw && typeof raw === 'object') meta = raw;
+  } catch {}
+  const payType = (meta.payType as string) || (e as unknown as { payType?: string }).payType;
+
+  const handleShareMagicLink = async () => {
+    if (!currentJob) return;
+    try {
+      const res = await fetch(`/api/dispatch/jobs/${currentJob.id}/magic-link`);
+      const data = await res.json();
+      if (data.magicUrl) {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(data.magicUrl);
+          toast.success(`Copied PWA magic link for ${e.name || 'technician'}!`);
+        } else {
+          toast.info(`Magic link: ${data.magicUrl}`);
+        }
+      }
+    } catch {
+      toast.error('Failed to get magic link');
+    }
+  };
 
   // Determine operational activity description
   let activitySnippet: React.ReactNode = null;
@@ -128,15 +159,26 @@ export function TechnicianCard({
             </div>
 
             {/* Employee Status Badge */}
-            <Badge
-              variant="outline"
-              className={cn(
-                'text-[9px] h-4.5 px-1.5 font-medium shrink-0 capitalize',
-                getEmployeeStatusBg(e.status)
+            <div className="flex items-center gap-1 shrink-0">
+              {payType && payType !== 'hourly' && (
+                <Badge
+                  variant="outline"
+                  className="text-[9px] h-4.5 px-1.5 font-medium border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 capitalize"
+                  title={`Compensation: ${payType}`}
+                >
+                  {payType === 'commission' ? '% Comm' : payType === 'flat' ? 'Flat' : '1099'}
+                </Badge>
               )}
-            >
-              {e.status === 'available' ? 'Available' : (e.status || 'offline').replace('_', ' ')}
-            </Badge>
+              <Badge
+                variant="outline"
+                className={cn(
+                  'text-[9px] h-4.5 px-1.5 font-medium capitalize',
+                  getEmployeeStatusBg(e.status)
+                )}
+              >
+                {e.status === 'available' ? 'Available' : (e.status || 'offline').replace('_', ' ')}
+              </Badge>
+            </div>
           </div>
 
           {/* Sub-row: GPS Telemetry + Workload */}
@@ -200,6 +242,17 @@ export function TechnicianCard({
         </span>
 
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {currentJob && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[10px] px-2 text-blue-700 hover:text-blue-800 hover:bg-blue-100/60 dark:text-blue-300 dark:hover:bg-blue-950/60 font-medium"
+              onClick={handleShareMagicLink}
+              title="Copy zero-install PWA magic link for technician"
+            >
+              <Link2 className="size-3 mr-1 shrink-0" /> PWA Link
+            </Button>
+          )}
           {e.status === 'leave' && onReassignAbsent && (
             <Button
               variant="ghost"

@@ -95,6 +95,10 @@ export function EmployeesView() {
   const [formLocation, setFormLocation] = useState('');
   const [formWhatsappId, setFormWhatsappId] = useState('');
   const [formSkills, setFormSkills] = useState('');
+  const [formPayType, setFormPayType] = useState('hourly');
+  const [formHourlyRate, setFormHourlyRate] = useState<number | string>(0);
+  const [formCommissionRate, setFormCommissionRate] = useState<number | string>(10);
+  const [formFlatAmount, setFormFlatAmount] = useState<number | string>(0);
 
   // ─── Data fetching (React Query) ───────────────────────────────────────
   // Replaces the manual `useEffect + authFetch('/api/employees')` pattern.
@@ -266,6 +270,10 @@ export function EmployeesView() {
     setFormLocation('');
     setFormWhatsappId('');
     setFormSkills('');
+    setFormPayType('hourly');
+    setFormHourlyRate(0);
+    setFormCommissionRate(10);
+    setFormFlatAmount(0);
   };
 
   const populateFormForEdit = (emp: Employee) => {
@@ -282,6 +290,22 @@ export function EmployeesView() {
     } catch {
       setFormSkills(emp.skills || '');
     }
+
+    // Extract compensation metadata
+    let meta: Record<string, unknown> = {};
+    const empRecord = emp as unknown as { metadataJson?: string | Record<string, unknown>; hourlyRate?: number };
+    try {
+      if (typeof empRecord.metadataJson === 'string') {
+        meta = JSON.parse(empRecord.metadataJson || '{}');
+      } else if (empRecord.metadataJson && typeof empRecord.metadataJson === 'object') {
+        meta = empRecord.metadataJson;
+      }
+    } catch {}
+
+    setFormPayType((meta.payType as string) || (empRecord.hourlyRate && empRecord.hourlyRate > 0 ? 'hourly' : 'hourly'));
+    setFormHourlyRate(typeof empRecord.hourlyRate === 'number' ? empRecord.hourlyRate : (meta.hourlyRate as number) || 0);
+    setFormCommissionRate(typeof meta.commissionRate === 'number' ? meta.commissionRate : 10);
+    setFormFlatAmount(typeof meta.commissionFlat === 'number' ? meta.commissionFlat : 0);
   };
 
   // ─── Consume cross-view "New Employee/User" signal ───────────────────────
@@ -319,6 +343,10 @@ export function EmployeesView() {
           location: formLocation.trim() || undefined,
           whatsappId: formWhatsappId.trim() || undefined,
           skills,
+          payType: formPayType,
+          hourlyRate: Number(formHourlyRate || 0),
+          commissionRate: Number(formCommissionRate || 10),
+          flatAmount: Number(formFlatAmount || 0),
           workspaceId: currentWorkspaceId || auth?.user?.workspaceId || undefined,
         }),
       });
@@ -363,6 +391,10 @@ export function EmployeesView() {
           location: formLocation.trim() || undefined,
           whatsappId: formWhatsappId.trim() || undefined,
           skills,
+          payType: formPayType,
+          hourlyRate: Number(formHourlyRate || 0),
+          commissionRate: Number(formCommissionRate || 10),
+          flatAmount: Number(formFlatAmount || 0),
         }),
       });
 
@@ -447,6 +479,14 @@ export function EmployeesView() {
           setFormWhatsappId={setFormWhatsappId}
           formSkills={formSkills}
           setFormSkills={setFormSkills}
+          formPayType={formPayType}
+          setFormPayType={setFormPayType}
+          formHourlyRate={formHourlyRate}
+          setFormHourlyRate={setFormHourlyRate}
+          formCommissionRate={formCommissionRate}
+          setFormCommissionRate={setFormCommissionRate}
+          formFlatAmount={formFlatAmount}
+          setFormFlatAmount={setFormFlatAmount}
           onSubmit={handleEdit}
           onCancel={() => { setShowEditDialog(false); setEditingEmployee(null); }}
         />
@@ -1014,6 +1054,14 @@ export function EmployeesView() {
         setFormWhatsappId={setFormWhatsappId}
         formSkills={formSkills}
         setFormSkills={setFormSkills}
+        formPayType={formPayType}
+        setFormPayType={setFormPayType}
+        formHourlyRate={formHourlyRate}
+        setFormHourlyRate={setFormHourlyRate}
+        formCommissionRate={formCommissionRate}
+        setFormCommissionRate={setFormCommissionRate}
+        formFlatAmount={formFlatAmount}
+        setFormFlatAmount={setFormFlatAmount}
         onSubmit={handleAdd}
       />
 
@@ -1039,6 +1087,14 @@ export function EmployeesView() {
         setFormWhatsappId={setFormWhatsappId}
         formSkills={formSkills}
         setFormSkills={setFormSkills}
+        formPayType={formPayType}
+        setFormPayType={setFormPayType}
+        formHourlyRate={formHourlyRate}
+        setFormHourlyRate={setFormHourlyRate}
+        formCommissionRate={formCommissionRate}
+        setFormCommissionRate={setFormCommissionRate}
+        formFlatAmount={formFlatAmount}
+        setFormFlatAmount={setFormFlatAmount}
         onSubmit={handleEdit}
         onCancel={() => { setShowEditDialog(false); setEditingEmployee(null); }}
       />

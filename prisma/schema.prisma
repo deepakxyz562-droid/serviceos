@@ -1615,6 +1615,7 @@ model Employee {
   lastLocationAt  DateTime?
   onLeaveUntil    DateTime?
   hourlyRate      Float     @default(0)  // used for job costing / profitability
+  metadataJson    String    @default("{}")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

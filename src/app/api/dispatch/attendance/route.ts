@@ -28,6 +28,8 @@ export async function GET(request: NextRequest) {
         status: true,
         onLeaveUntil: true,
         lastSeenAt: true,
+        hourlyRate: true,
+        metadataJson: true,
         assignedJobs: {
           where: {
             status: { in: ['assigned', 'in_progress', 'scheduled'] },
@@ -68,9 +70,18 @@ export async function GET(request: NextRequest) {
     let clockedInCount = 0;
     let onLeaveCount = 0;
     let offDutyCount = 0;
+    let onDemandCount = 0;
     let lateUnconfirmedCount = 0;
 
     const roster = employees.map((emp) => {
+      let meta: Record<string, unknown> = {};
+      try {
+        meta = JSON.parse(emp.metadataJson || '{}');
+      } catch {}
+
+      const payType = (meta.payType as string) || (emp.hourlyRate && emp.hourlyRate > 0 ? 'hourly' : 'hourly');
+      const isOnDemand = payType === 'commission' || payType === 'flat' || payType === 'subcontractor';
+
       const isClockedIn = clockedInEmployeeIds.has(emp.id);
       const isOnLeave = emp.status === 'leave' || (emp.onLeaveUntil && new Date(emp.onLeaveUntil) > now);
       
@@ -86,12 +97,16 @@ export async function GET(request: NextRequest) {
         return jobTime <= now.getTime() + 30 * 60 * 1000;
       });
 
-      const isLate = !isClockedIn && !isOnLeave && hasEarlyJob;
+      // On-demand/commission technicians do not require morning shift clock-in,
+      // so they are not flagged as late unconfirmed.
+      const isLate = !isClockedIn && !isOnLeave && !isOnDemand && hasEarlyJob;
 
       if (isOnLeave) {
         onLeaveCount++;
       } else if (isClockedIn) {
         clockedInCount++;
+      } else if (isOnDemand) {
+        onDemandCount++;
       } else {
         offDutyCount++;
       }
@@ -104,7 +119,9 @@ export async function GET(request: NextRequest) {
         id: emp.id,
         name: emp.name,
         role: emp.role,
-        status: isOnLeave ? 'leave' : isClockedIn ? 'available' : emp.status,
+        status: isOnLeave ? 'leave' : isClockedIn ? 'available' : isOnDemand ? (emp.status || 'available') : emp.status,
+        payType,
+        isOnDemand,
         isClockedIn,
         isOnLeave,
         isLate,
@@ -118,6 +135,7 @@ export async function GET(request: NextRequest) {
       clockedIn: clockedInCount,
       onLeave: onLeaveCount,
       offDuty: offDutyCount,
+      onDemand: onDemandCount,
       lateUnconfirmed: lateUnconfirmedCount,
       roster,
     });

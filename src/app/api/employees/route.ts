@@ -108,6 +108,8 @@ async function _GET(request: NextRequest) {
       userId: true,
       lastLocationAt: true,
       onLeaveUntil: true,
+      hourlyRate: true,
+      metadataJson: true,
       createdAt: true,
       updatedAt: true,
     }
@@ -186,11 +188,26 @@ export async function POST(request: NextRequest) {
       onLeaveUntil,
       latitude,
       longitude,
+      hourlyRate,
+      payType,
+      commissionRate,
+      flatAmount,
+      metadataJson,
     } = body
 
     if (!name || !phone) {
       return NextResponse.json({ error: 'Name and phone are required' }, { status: 400 })
     }
+
+    let metaObj: Record<string, unknown> = {}
+    try {
+      metaObj = (typeof metadataJson === 'string' ? JSON.parse(metadataJson || '{}') : metadataJson) || {}
+    } catch {}
+    if (payType) metaObj.payType = payType
+    if (commissionRate !== undefined) metaObj.commissionRate = Number(commissionRate)
+    if (flatAmount !== undefined) metaObj.commissionFlat = Number(flatAmount)
+    if (payType === 'flat') metaObj.commissionType = 'flat'
+    else if (payType === 'commission' || payType === 'subcontractor') metaObj.commissionType = 'percent'
 
     const employee = await db.employee.create({
       data: {
@@ -214,6 +231,8 @@ export async function POST(request: NextRequest) {
         userId: userId || null,
         lastLocationAt: lastLocationAt ? new Date(lastLocationAt) : null,
         onLeaveUntil: onLeaveUntil ? new Date(onLeaveUntil) : null,
+        hourlyRate: Number(hourlyRate || 0),
+        metadataJson: JSON.stringify(metaObj),
       },
     })
 
@@ -319,7 +338,37 @@ export async function PUT(request: NextRequest) {
       longitude,
       workspaceId,
       teamId,
+      hourlyRate,
+      payType,
+      commissionRate,
+      flatAmount,
+      metadataJson,
     } = body
+
+    // If compensation fields or metadata are updated, merge with existing employee metadataJson
+    let metaUpdate: string | undefined = undefined
+    if (metadataJson !== undefined || payType !== undefined || commissionRate !== undefined || flatAmount !== undefined) {
+      const existingEmpForMeta = await db.employee.findUnique({
+        where: { id },
+        select: { metadataJson: true },
+      })
+      let metaObj: Record<string, unknown> = {}
+      try {
+        metaObj = JSON.parse(existingEmpForMeta?.metadataJson || '{}')
+      } catch {}
+      if (typeof metadataJson === 'object' && metadataJson !== null) {
+        metaObj = { ...metaObj, ...metadataJson }
+      } else if (typeof metadataJson === 'string') {
+        try { metaObj = { ...metaObj, ...JSON.parse(metadataJson) } } catch {}
+      }
+      if (payType !== undefined) metaObj.payType = payType
+      if (commissionRate !== undefined) metaObj.commissionRate = Number(commissionRate)
+      if (flatAmount !== undefined) metaObj.commissionFlat = Number(flatAmount)
+      if (payType === 'flat') metaObj.commissionType = 'flat'
+      else if (payType === 'commission' || payType === 'subcontractor') metaObj.commissionType = 'percent'
+      else if (payType === 'hourly') metaObj.commissionType = 'percent'
+      metaUpdate = JSON.stringify(metaObj)
+    }
 
     // If the email is being changed, verify the NEW email isn't already taken
     // by a DIFFERENT User BEFORE updating the Employee — otherwise the
@@ -381,6 +430,8 @@ export async function PUT(request: NextRequest) {
         ...(userId !== undefined && { userId: userId || null }),
         ...(lastLocationAt !== undefined && { lastLocationAt: lastLocationAt ? new Date(lastLocationAt) : null }),
         ...(onLeaveUntil !== undefined && { onLeaveUntil: onLeaveUntil ? new Date(onLeaveUntil) : null }),
+        ...(hourlyRate !== undefined && { hourlyRate: Number(hourlyRate || 0) }),
+        ...(metaUpdate !== undefined && { metadataJson: metaUpdate }),
       },
     })
 
