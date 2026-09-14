@@ -62,7 +62,8 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, safeParse } from '@/lib/utils';
+import { parseStructuredTranscript } from '@/lib/transcript-parser';
 
 interface CallRecord {
   id: string;
@@ -359,12 +360,10 @@ function CallDetailDialog({
     fetchDetail();
   }, [callId]);
 
-  const rawTranscript = Array.isArray(call?.transcriptJson)
-    ? call.transcriptJson
-    : call
-      ? safeParse(call.transcriptJson, [])
-      : [];
-  const transcript: Array<{ role: string; content: string; timestamp?: string }> = Array.isArray(rawTranscript) ? rawTranscript : [];
+  const transcript: Array<{ role: string; content: string; timestamp?: string }> =
+    Array.isArray(call?.transcript) && call.transcript.length > 0
+      ? call.transcript
+      : parseStructuredTranscript(call?.transcriptJson || call?.transcript || []);
 
   const rawFunctionCalls = Array.isArray(call?.functionCallsJson)
     ? call.functionCallsJson

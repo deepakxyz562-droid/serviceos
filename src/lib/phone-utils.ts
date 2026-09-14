@@ -33,7 +33,7 @@ export const COUNTRIES: CountryInfo[] = [
   { code: "PH", name: "Philippines", callingCode: "63", flag: "🇵🇭", format: "XXX XXX XXXX", minLength: 10, maxLength: 10 },
 ];
 
-export const DEFAULT_COUNTRY: CountryInfo = COUNTRIES[0]; // India (+91)
+export const DEFAULT_COUNTRY: CountryInfo = COUNTRIES.find((c) => c.code === "US") || COUNTRIES[0]; // Default US (+1) if unconfigured
 
 export const COUNTRY_MAP: Record<string, CountryInfo> = COUNTRIES.reduce((acc, c) => {
   acc[c.code] = c;
@@ -71,7 +71,7 @@ export function detectCountryFromPhone(phone?: string | null): CountryInfo | nul
 /**
  * Converts any phone input into standard E.164 format: +[CountryCode][SubscriberNumber]
  */
-export function formatToE164(rawPhone?: string | null, defaultCountryCode: string = "IN"): string {
+export function formatToE164(rawPhone?: string | null, defaultCountryCode: string = "US"): string {
   if (!rawPhone || !rawPhone.trim()) return "";
 
   let p = rawPhone.trim().replace(/[\s\-()]/g, "");
@@ -114,7 +114,7 @@ export function formatToE164(rawPhone?: string | null, defaultCountryCode: strin
  * E.g. "+919876543210" -> "98765 43210" (if country=IN)
  *      "+14155552671"  -> "(415) 555-2671" (if country=US)
  */
-export function formatNational(phone?: string | null, defaultCountryCode: string = "IN"): string {
+export function formatNational(phone?: string | null, defaultCountryCode: string = "US"): string {
   if (!phone) return "";
   const detected = detectCountryFromPhone(phone);
   const country = detected || getCountryByCode(defaultCountryCode);
@@ -144,7 +144,7 @@ export function formatNational(phone?: string | null, defaultCountryCode: string
 /**
  * Basic validation check for phone number sanity.
  */
-export function isValidPhoneNumber(phone?: string | null, countryCode: string = "IN"): boolean {
+export function isValidPhoneNumber(phone?: string | null, countryCode: string = "US"): boolean {
   if (!phone || !phone.trim()) return false;
   const e164 = formatToE164(phone, countryCode);
   if (!e164.startsWith("+")) return false;

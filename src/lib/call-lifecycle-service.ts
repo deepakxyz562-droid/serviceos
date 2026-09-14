@@ -27,6 +27,7 @@
 
 import { db } from '@/lib/db';
 import { finalizeUsage, releaseReservationByCallId } from '@/lib/usage-service';
+import { parseStructuredTranscript } from '@/lib/transcript-parser';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -53,7 +54,7 @@ export interface CallEndParams {
   endedReason?: string;
   recordingUrl?: string;
   stereoRecordingUrl?: string;
-  transcript?: Array<{ role: string; content: string; timestamp: string }>;
+  transcript?: string | Array<{ role: string; content: string; timestamp?: string }>;
   summary?: string;
   analysis?: Record<string, unknown>;
   outcomeType?: string;
@@ -308,7 +309,7 @@ export async function onCallEnd(params: CallEndParams): Promise<{
       endedReason: params.endedReason || null,
       recordingUrl: params.recordingUrl || null,
       stereoRecordingUrl: params.stereoRecordingUrl || null,
-      transcriptJson: params.transcript ? JSON.stringify(params.transcript) : '[]',
+      transcriptJson: JSON.stringify(params.transcript ? parseStructuredTranscript(params.transcript) : []),
       summary: params.summary || null,
       analysisJson: params.analysis ? JSON.stringify(params.analysis) : '{}',
       outcomeType: params.outcomeType || null,

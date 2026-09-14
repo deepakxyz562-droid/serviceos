@@ -479,37 +479,51 @@ export function CustomerPicker({
       </div>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-72 overflow-y-auto">
-          {filtered.length === 0 && !loading && (
-            <div className="px-3 py-2 text-sm text-muted-foreground">No matching client found</div>
-          )}
-          {filtered.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => handlePickCustomer(c)}
-              className="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 border-b border-border last:border-b-0 transition-colors cursor-pointer"
-            >
-              <p className="font-medium text-sm text-foreground">{c.name}</p>
-              {c.address && <p className="text-xs text-muted-foreground truncate">{c.address}</p>}
-              <p className="text-xs text-muted-foreground truncate">
-                {c.email ? `${c.email} · ` : ''}
-                {c.phone}
-              </p>
-            </button>
-          ))}
+        <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-lg overflow-hidden flex flex-col">
+          {/* 1. Pinned / Fixed Create Action at Top */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={handleCreateCustomerClick}
-            className="w-full text-left px-3 py-2 bg-emerald-50/50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 font-medium text-sm flex items-center gap-2 border-t border-border cursor-pointer"
+            className="w-full text-left px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100/80 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-medium text-sm flex items-center gap-2.5 border-b border-emerald-200 dark:border-emerald-900/60 shrink-0 transition-colors cursor-pointer"
           >
-            <span className="flex items-center justify-center size-5 rounded-full bg-emerald-600 text-white">
+            <span className="flex items-center justify-center size-5 rounded-full bg-emerald-600 text-white shrink-0 shadow-2xs">
               <Plus className="size-3.5" />
             </span>
-            Create new client{query.trim() ? ` "${query.trim()}"` : ''}
+            <div className="min-w-0 flex-1 flex items-center gap-1.5">
+              <span className="font-semibold">Create new client</span>
+              {query.trim() && (
+                <span className="text-xs text-emerald-600 dark:text-emerald-400 font-normal truncate max-w-[200px]">
+                  &ldquo;{query.trim()}&rdquo;
+                </span>
+              )}
+            </div>
           </button>
+
+          {/* 2. Scrollable matching customer list */}
+          <div className="max-h-60 overflow-y-auto divide-y divide-border">
+            {filtered.length === 0 && !loading && (
+              <div className="px-3.5 py-3 text-sm text-muted-foreground text-center">
+                No matching client found
+              </div>
+            )}
+            {filtered.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handlePickCustomer(c)}
+                className="w-full text-left px-3.5 py-2 hover:bg-muted/50 transition-colors cursor-pointer"
+              >
+                <p className="font-medium text-sm text-foreground">{c.name}</p>
+                {c.address && <p className="text-xs text-muted-foreground truncate">{c.address}</p>}
+                <p className="text-xs text-muted-foreground truncate">
+                  {c.email ? `${c.email} · ` : ''}
+                  {c.phone}
+                </p>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

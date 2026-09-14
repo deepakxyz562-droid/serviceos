@@ -45,6 +45,7 @@ import { toast } from 'sonner';
 import { CURRENCIES as SHARED_CURRENCIES } from '@/lib/currency';
 import { CUSTOMER_COUNTRIES } from '@/lib/customer-countries';
 import { invalidateCurrencyCache } from '@/hooks/use-company-currency';
+import { invalidateCompanyCountryCache } from '@/hooks/use-company-country';
 import { authFetch } from '@/lib/api';
 
 const INDUSTRIES = [
@@ -323,6 +324,7 @@ export function CompanySettings({ onSaved }: CompanySettingsProps) {
 
       if (res.ok) {
         invalidateCurrencyCache();
+        invalidateCompanyCountryCache();
         toast.success('Company profile and business hours saved!');
         setSavedFlash(true);
         setTimeout(() => setSavedFlash(false), 1500);

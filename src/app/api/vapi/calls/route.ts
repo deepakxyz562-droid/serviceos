@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getCall as vapiGetCall } from '@/lib/vapi-client';
+import { parseStructuredTranscript } from '@/lib/transcript-parser';
 
 /**
  * Helper: safely serialize dates from BOTH Prisma (Date objects) and the
@@ -54,22 +55,9 @@ export async function GET(request: NextRequest) {
         try { vapiCall = await vapiGetCall(call.vapiCallId); } catch { /* ignore */ }
       }
 
-      let dbTranscript: Array<{ role: string; content: string; timestamp?: string | null }> = [];
-      try {
-        const parsed = JSON.parse(call.transcriptJson || '[]');
-        dbTranscript = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        dbTranscript = [];
-      }
+      const dbTranscript = parseStructuredTranscript(call.transcriptJson);
 
-      const vapiTranscript = Array.isArray(vapiCall?.messages)
-        ? (vapiCall.messages as Array<{ role?: string; message?: string; content?: string }>)
-            .filter((m) => m.role === 'bot' || m.role === 'assistant' || m.role === 'user')
-            .map((m) => ({
-              role: m.role === 'user' ? 'user' : 'assistant',
-              content: m.message || m.content || '',
-            }))
-        : [];
+      const vapiTranscript = parseStructuredTranscript(vapiCall?.messages || vapiCall?.transcript);
 
       let analysis: Record<string, unknown> = {};
       try {

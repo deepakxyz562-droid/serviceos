@@ -20,6 +20,7 @@
 import { db } from '@/lib/db';
 import { registerToolHandler, type AiExecutionContext } from '@/lib/ai-tool-dispatcher';
 import { getVapiVoiceProvider } from '@/lib/vapi-voice-provider';
+import { formatToE164 } from '@/lib/phone-utils';
 
 // Helper to resolve workspaceId from tenantId (Job table uses workspaceId instead of tenantId)
 async function getTenantWorkspaceId(tenantId: string): Promise<string | null> {
@@ -28,6 +29,74 @@ async function getTenantWorkspaceId(tenantId: string): Promise<string | null> {
     select: { id: true },
   });
   return ws?.id || null;
+}
+
+/**
+ * Resolves authoritative phone number:
+ * 1. Prioritizes carrier-verified caller ID from active telephony call (AiCall.customerPhone / fromNumber)
+ * 2. Formats un-prefixed spoken numbers using the business owner's configured country (Tenant.country)
+ */
+async function resolveAuthoritativePhone(
+  ctx: AiExecutionContext,
+  spokenPhone?: string | null,
+): Promise<string> {
+  const raw = (spokenPhone || '').trim();
+
+  // 1. Fetch carrier-verified caller phone from active AiCall
+  let verifiedCallerPhone: string | null = null;
+  if (ctx.externalCallId) {
+    try {
+      const activeCall = await db.aiCall.findFirst({
+        where: { vapiCallId: ctx.externalCallId, tenantId: ctx.tenantId },
+        select: { customerPhone: true, fromNumber: true },
+      });
+      const callerNum = activeCall?.customerPhone || activeCall?.fromNumber;
+      if (callerNum && callerNum !== 'unknown' && !callerNum.startsWith('web_')) {
+        verifiedCallerPhone = callerNum.trim();
+      }
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  // 2. Fetch tenant country for default dialing code
+  let tenantCountry = 'US';
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: ctx.tenantId },
+      select: { country: true },
+    });
+    if (tenant?.country) tenantCountry = tenant.country;
+  } catch {
+    // Non-fatal
+  }
+
+  // 3. If verified carrier caller ID exists:
+  if (verifiedCallerPhone) {
+    if (!raw || raw === 'unknown') {
+      return verifiedCallerPhone;
+    }
+    const callerDigits = verifiedCallerPhone.replace(/\D/g, '');
+    const rawDigits = raw.replace(/\D/g, '');
+    const callerLast7 = callerDigits.slice(-7);
+    const rawLast7 = rawDigits.slice(-7);
+
+    // If digits match, last 7 digits overlap, or LLM defaulted to +1 on international caller:
+    if (
+      callerDigits === rawDigits ||
+      callerLast7 === rawLast7 ||
+      (raw.startsWith('+1') && !verifiedCallerPhone.startsWith('+1'))
+    ) {
+      return verifiedCallerPhone;
+    }
+  }
+
+  // 4. Format with tenant country if available
+  if (raw && raw !== 'unknown') {
+    return formatToE164(raw, tenantCountry);
+  }
+
+  return verifiedCallerPhone || raw || 'unknown';
 }
 
 // ─── Read tools ──────────────────────────────────────────────────────────────
@@ -258,16 +327,18 @@ registerToolHandler('check_availability', async (ctx, params) => {
 
 registerToolHandler('create_lead', async (ctx, params) => {
   const name = (params.name as string) || '';
-  const phone = (params.phone as string) || '';
+  const spokenPhone = (params.phone as string) || '';
   const email = (params.email as string) || '';
   const notes = (params.notes as string) || '';
 
-  if (!name && !phone) {
+  const phone = await resolveAuthoritativePhone(ctx, spokenPhone);
+
+  if (!name && (!phone || phone === 'unknown')) {
     return { error: 'At least a name or phone is required' };
   }
 
   // Check for existing lead with same phone (dedup)
-  if (phone) {
+  if (phone && phone !== 'unknown') {
     const normalized = phone.replace(/[\s\-()]/g, '');
     const existing = await db.lead.findFirst({
       where: {
@@ -321,7 +392,7 @@ registerToolHandler('create_lead', async (ctx, params) => {
 
 registerToolHandler('create_customer', async (ctx, params) => {
   const name = (params.name as string) || '';
-  const phone = (params.phone as string) || '';
+  const spokenPhone = (params.phone as string) || '';
   const email = (params.email as string) || '';
   const address = (params.address as string) || '';
 
@@ -329,8 +400,10 @@ registerToolHandler('create_customer', async (ctx, params) => {
     return { error: 'Name is required' };
   }
 
+  const phone = await resolveAuthoritativePhone(ctx, spokenPhone);
+
   // Check for existing customer with same phone
-  if (phone) {
+  if (phone && phone !== 'unknown') {
     const normalized = phone.replace(/[\s\-()]/g, '');
     const existing = await db.customer.findFirst({
       where: { tenantId: ctx.tenantId, phone: { contains: normalized } },

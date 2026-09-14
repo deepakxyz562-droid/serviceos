@@ -20,6 +20,7 @@ import {
   formatNational,
   type CountryInfo,
 } from "@/lib/phone-utils";
+import { useCompanyCountry } from "@/hooks/use-company-country";
 
 export interface PhoneInputProps {
   value?: string;
@@ -37,7 +38,7 @@ export interface PhoneInputProps {
 export function PhoneInput({
   value = "",
   onChange,
-  defaultCountry = "IN",
+  defaultCountry: explicitDefaultCountry,
   placeholder,
   disabled = false,
   required = false,
@@ -46,16 +47,27 @@ export function PhoneInput({
   name,
   autoFocus = false,
 }: PhoneInputProps) {
+  const { country: companyCountry } = useCompanyCountry();
+  const effectiveDefaultCountry = explicitDefaultCountry || companyCountry || "US";
+
   // 1. Selected Country State
   const initialCountry = React.useMemo(() => {
     if (value && value.trim().startsWith("+")) {
       const detected = detectCountryFromPhone(value);
       if (detected) return detected;
     }
-    return getCountryByCode(defaultCountry);
-  }, [value, defaultCountry]);
+    return getCountryByCode(effectiveDefaultCountry);
+  }, [value, effectiveDefaultCountry]);
 
   const [selectedCountry, setSelectedCountry] = React.useState<CountryInfo>(initialCountry);
+  const userManuallySelected = React.useRef(false);
+
+  // Sync when company country resolves (unless user typed/selected another country)
+  React.useEffect(() => {
+    if (!value && !userManuallySelected.current) {
+      setSelectedCountry(getCountryByCode(effectiveDefaultCountry));
+    }
+  }, [effectiveDefaultCountry, value]);
 
   // Sync if defaultCountry changes or a full international number is provided
   React.useEffect(() => {
@@ -101,6 +113,7 @@ export function PhoneInput({
   };
 
   const handleCountryChange = (countryCode: string) => {
+    userManuallySelected.current = true;
     const nextCountry = getCountryByCode(countryCode);
     setSelectedCountry(nextCountry);
 
