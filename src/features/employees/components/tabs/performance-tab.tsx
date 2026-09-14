@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Briefcase, Clock, Route, Star, IndianRupee, Timer, AlertCircle, CalendarCheck,
+  Briefcase, Clock, Route, Star, Coins, Timer, AlertCircle, CalendarCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -113,7 +113,7 @@ export function PerformanceTab({ employeeId }: { employeeId: string }) {
             title="Revenue Generated"
             value={format(metrics.revenueGenerated, currency)}
             subtitle={metrics.revenueGenerated > 0 ? formatCompact(metrics.revenueGenerated, currency) : 'no invoices'}
-            icon={IndianRupee}
+            icon={Coins}
             bg="bg-emerald-50"
             color="text-emerald-700"
             trend={prevMetrics ? trendPct(metrics.revenueGenerated, prevMetrics.revenueGenerated) : undefined}

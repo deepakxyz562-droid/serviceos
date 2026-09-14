@@ -9,7 +9,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Wallet, IndianRupee, Clock, Clock3, AlertCircle, Shield,
+  Wallet, Coins, Clock, Clock3, AlertCircle, Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -176,7 +176,7 @@ export function PayrollTab({ employeeName, employeeId }: { employeeName: string;
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <IndianRupee className="size-4 text-emerald-600" /> {employeeName}&apos;s Summary
+                <Coins className="size-4 text-emerald-600" /> {employeeName}&apos;s Summary
               </CardTitle>
               <CardDescription className="text-xs">Hours worked in the selected period</CardDescription>
             </CardHeader>
