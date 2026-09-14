@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatDate } from '@/lib/format-utils';
-import { authFetch } from '@/lib/client-auth';
+import { authFetch, apiUrl } from '@/lib/api';
 import {
   TRANSFER_STATUS_STYLES,
   safeParseItems,
@@ -46,7 +46,7 @@ export function TransfersTab({
   const handleReceive = async (transfer: StockTransfer) => {
     setUpdatingId(transfer.id);
     try {
-      const res = await authFetch(`/api/inventory/transfers/${transfer.id}`, {
+      const res = await authFetch(apiUrl(`/api/inventory/transfers/${transfer.id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'received' }),

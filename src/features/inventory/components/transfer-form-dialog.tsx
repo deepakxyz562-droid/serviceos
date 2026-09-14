@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { authFetch } from '@/lib/client-auth';
+import { authFetch, apiUrl } from '@/lib/api';
 import { TRANSFER_STATUSES } from '../utils/inventory-helpers';
 import type { InventoryItem, TransferItem, Warehouse } from '../types';
 
@@ -71,7 +71,7 @@ export function TransferFormDialog({
     async function loadLocations() {
       setLoadingLocations(true);
       try {
-        const res = await authFetch('/api/inventory/warehouses');
+        const res = await authFetch(apiUrl('/api/inventory/warehouses'));
         if (!res.ok) throw new Error('Failed to load locations');
         const data = await res.json();
         const whs: Warehouse[] = data.warehouses || [];
@@ -204,7 +204,7 @@ export function TransferFormDialog({
 
     setSubmitting(true);
     try {
-      const res = await authFetch('/api/inventory/transfers', {
+      const res = await authFetch(apiUrl('/api/inventory/transfers'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -18,7 +18,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { authFetch } from '@/lib/client-auth';
+import { authFetch, apiUrl } from '@/lib/api';
 import type { InventoryItem, LocationStockBreakdown } from '../types';
 
 export function ItemLocationsDialog({
@@ -41,7 +41,7 @@ export function ItemLocationsDialog({
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch(`/api/inventory/items/${item.id}/locations`);
+      const res = await authFetch(apiUrl(`/api/inventory/items/${item.id}/locations`));
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || 'Failed to load stock locations');

@@ -56,7 +56,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { authFetch } from '@/lib/client-auth';
+import { authFetch, apiUrl } from '@/lib/api';
 import type { Warehouse } from '../../types';
 
 export function WarehousesTab() {
@@ -79,8 +79,11 @@ export function WarehousesTab() {
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch('/api/inventory/warehouses');
-      if (!res.ok) throw new Error('Failed to load storage locations');
+      const res = await authFetch(apiUrl('/api/inventory/warehouses'));
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to load storage locations');
+      }
       const data = await res.json();
       setWarehouses(data.warehouses || []);
       setEmployees(data.employees || []);
@@ -123,8 +126,8 @@ export function WarehousesTab() {
     setSubmitting(true);
     try {
       const url = editingWarehouse
-        ? `/api/inventory/warehouses/${editingWarehouse.id}`
-        : '/api/inventory/warehouses';
+        ? apiUrl(`/api/inventory/warehouses/${editingWarehouse.id}`)
+        : apiUrl('/api/inventory/warehouses');
       const method = editingWarehouse ? 'PATCH' : 'POST';
 
       const res = await authFetch(url, {
@@ -160,7 +163,7 @@ export function WarehousesTab() {
       return;
     }
     try {
-      const res = await authFetch(`/api/inventory/warehouses/${w.id}`, {
+      const res = await authFetch(apiUrl(`/api/inventory/warehouses/${w.id}`), {
         method: 'DELETE',
       });
       if (!res.ok) {

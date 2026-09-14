@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { authFetch } from '@/lib/client-auth';
+import { authFetch, apiUrl } from '@/lib/api';
 import { ADJUST_TYPES } from '../utils/inventory-helpers';
 import type { InventoryItem, Warehouse } from '../types';
 
@@ -62,7 +62,7 @@ export function AdjustStockDialog({
       setNotes('');
       setLocationKey('default');
 
-      authFetch('/api/inventory/warehouses')
+      authFetch(apiUrl('/api/inventory/warehouses'))
         .then((r) => (r.ok ? r.json() : { warehouses: [], employees: [] }))
         .then((d) => {
           setWarehouses(d.warehouses || []);
@@ -103,7 +103,7 @@ export function AdjustStockDialog({
 
     setSubmitting(true);
     try {
-      const res = await authFetch(`/api/inventory/items/${item.id}/adjust`, {
+      const res = await authFetch(apiUrl(`/api/inventory/items/${item.id}/adjust`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
