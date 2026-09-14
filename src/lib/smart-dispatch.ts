@@ -1265,3 +1265,16 @@ export function getAlgorithmInfo() {
     totalMaxScore: 100,
   }
 }
+
+export const SmartDispatch = {
+  findBestMatch,
+  autoAssign,
+  scoreEmployee,
+  detectConflicts,
+  findAvailableEmployees,
+  findAllEmployeesForDispatch,
+  calculateDistance,
+  getAlgorithmInfo,
+  SCORING_WEIGHTS,
+}
+

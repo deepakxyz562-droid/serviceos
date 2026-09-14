@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { SmartDispatch } from '@/lib/smart-dispatch';
+import { findBestMatch } from '@/lib/smart-dispatch';
 import { EventBus } from '@/lib/event-bus';
 
 /**
@@ -60,19 +60,27 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
     const todayStr = now.toISOString().slice(0, 10);
-    const todayJobs = absentEmployee.assignedJobs.filter((j) => {
-      if (!j.scheduledAt) return true;
-      const jobDate = new Date(j.scheduledAt).toISOString().slice(0, 10);
-      return jobDate === todayStr;
+    const todayJobs = absentEmployee.assignedJobs.filter((job) => {
+      if (!job.scheduledAt) return true; // unassigned time today
+      return new Date(job.scheduledAt).toISOString().slice(0, 10) === todayStr;
     });
+
+    if (todayJobs.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'No active jobs assigned to this employee for today',
+        reassignedCount: 0,
+        results: [],
+      });
+    }
 
     const executionResults: Array<{
       jobId: string;
       jobTitle: string;
       previousEmployeeId: string;
-      newEmployeeId: string;
+      newEmployeeId?: string;
       newEmployeeName?: string;
-      status: 'reassigned' | 'failed';
+      status: 'reassigned' | 'failed' | 'no_match';
       reason?: string;
     }> = [];
 
@@ -82,7 +90,7 @@ export async function POST(request: NextRequest) {
         try {
           const targetEmp = await db.employee.findUnique({
             where: { id: item.targetEmployeeId },
-            select: { id: true, name: true },
+            select: { id: true, name: true, phone: true },
           });
 
           if (!targetEmp) {
@@ -100,7 +108,9 @@ export async function POST(request: NextRequest) {
           const updatedJob = await db.job.update({
             where: { id: item.jobId },
             data: {
-              assignedEmployeeId: targetEmp.id,
+              assigneeId: targetEmp.id,
+              assigneeName: targetEmp.name,
+              assigneePhone: targetEmp.phone,
               assignmentStatus: 'assigned',
               status: 'assigned',
               updatedAt: now,
@@ -139,7 +149,7 @@ export async function POST(request: NextRequest) {
       // Mode B: Smart Auto-Match
       for (const job of todayJobs) {
         try {
-          const matchResult = await SmartDispatch.findBestMatch(job.id, {
+          const matchResult = await findBestMatch(job.id, {
             excludeOnLeave: true,
             workspaceId: absentEmployee.workspaceId || undefined,
           });
@@ -151,7 +161,8 @@ export async function POST(request: NextRequest) {
             await db.job.update({
               where: { id: job.id },
               data: {
-                assignedEmployeeId: targetEmpId,
+                assigneeId: targetEmpId,
+                assigneeName: targetEmpName,
                 assignmentStatus: 'assigned',
                 status: 'assigned',
                 updatedAt: now,
