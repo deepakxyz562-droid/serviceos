@@ -25,7 +25,7 @@
  *   `parseToolCall()` implements the tolerant side of that contract.
  */
 
-import { db } from '@/lib/db';
+import { db } from './db';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -84,81 +84,189 @@ async function resolveWorkspaceId(tenantId: string): Promise<string | null> {
   }
 }
 
+function getAggCount(agg: unknown): number {
+  if (!agg) return 0;
+  if (typeof agg === 'number') return agg;
+  const a = agg as Record<string, unknown>;
+  if (typeof a._count === 'number') return a._count;
+  if (a._count && typeof (a._count as Record<string, unknown>).id === 'number') return (a._count as Record<string, unknown>).id as number;
+  if (a._count && typeof (a._count as Record<string, unknown>)._all === 'number') return (a._count as Record<string, unknown>)._all as number;
+  return 0;
+}
+
+function getAggSum(agg: unknown, field = 'total'): number {
+  if (!agg) return 0;
+  const a = agg as Record<string, unknown>;
+  if (!a._sum || typeof a._sum !== 'object') return 0;
+  const val = (a._sum as Record<string, unknown>)[field];
+  return typeof val === 'number' && Number.isFinite(val) ? Number(val.toFixed(2)) : 0;
+}
+
 // ─── Tool implementations ───────────────────────────────────────────────────
 
 const getBusinessOverview: ChatTool = {
   name: 'get_business_overview',
-  description: 'Snapshot of the business: profile, customer/lead/job counts by status, outstanding and overdue invoice totals, revenue for this month.',
+  description: 'Snapshot of the business: profile, customer/lead/job counts by status, lead conversion rate, outstanding and overdue invoice totals, revenue for this month.',
   argsSpec: '{} (no arguments)',
   async execute({ tenantId, workspaceId }) {
-    const [tenant, customerCount, leadGroups, jobGroups, outstandingAgg, overdueAgg, paidThisMonthAgg] = await Promise.all([
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+    const [
+      tenant,
+      customerCount,
+      leadGroups,
+      jobGroups,
+      leadsThisMonthCount,
+      convertedThisMonthCount,
+      outstandingAgg,
+      overdueAgg,
+      paidThisMonthAgg,
+    ] = await Promise.all([
       db.tenant.findUnique({
         where: { id: tenantId },
         select: { name: true, industry: true, city: true, state: true, currency: true, phone: true },
-      }),
-      db.customer.count({ where: { tenantId } }),
-      db.lead.groupBy({ by: ['status'], where: { tenantId, deletedAt: null }, _count: { id: true }, _sum: { value: true } }),
+      }).catch(() => null),
+      db.customer.count({ where: { tenantId } }).catch(() => 0),
+      db.lead.groupBy({ by: ['status'], where: { tenantId, deletedAt: null }, _count: { id: true }, _sum: { value: true } }).catch(() => []),
       workspaceId
-        ? db.job.groupBy({ by: ['status'], where: { workspaceId, deletedAt: null }, _count: { id: true } })
-        : Promise.resolve([] as Array<{ status: string; _count: { id: number } }>),
+        ? db.job.groupBy({ by: ['status'], where: { workspaceId, deletedAt: null }, _count: { id: true } }).catch(() => [])
+        : Promise.resolve([] as Array<{ status: string; _count: unknown }>),
+      db.lead.count({ where: { tenantId, deletedAt: null, createdAt: { gte: startOfMonth } } }).catch(() => 0),
+      db.lead.count({ where: { tenantId, deletedAt: null, OR: [{ status: 'won' }, { convertedAt: { not: null } }], createdAt: { gte: startOfMonth } } }).catch(() => 0),
       db.invoice.aggregate({
         where: { tenantId, deletedAt: null, status: 'sent' },
         _count: { id: true },
         _sum: { total: true },
-      }),
+      }).catch(() => ({ _count: 0, _sum: { total: 0 } })),
       db.invoice.aggregate({
         where: { tenantId, deletedAt: null, status: 'sent', dueDate: { lt: new Date() } },
         _count: { id: true },
         _sum: { total: true },
-      }),
+      }).catch(() => ({ _count: 0, _sum: { total: 0 } })),
       db.invoice.aggregate({
         where: {
           tenantId,
           deletedAt: null,
           status: 'paid',
-          paidAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+          paidAt: { gte: startOfMonth },
         },
         _sum: { total: true },
-      }),
+      }).catch(() => ({ _sum: { total: 0 } })),
     ]);
+
+    const conversionRateThisMonth = leadsThisMonthCount > 0
+      ? Number(((convertedThisMonthCount / leadsThisMonthCount) * 100).toFixed(1))
+      : 0;
 
     return {
       business: tenant ?? { name: 'Unknown' },
       totals: {
-        customers: customerCount,
-        outstandingInvoices: { count: outstandingAgg._count.id, total: Number((outstandingAgg._sum.total ?? 0).toFixed(2)) },
-        overdueInvoices: { count: overdueAgg._count.id, total: Number((overdueAgg._sum.total ?? 0).toFixed(2)) },
-        revenueThisMonth: Number((paidThisMonthAgg._sum.total ?? 0).toFixed(2)),
+        customers: typeof customerCount === 'number' ? customerCount : 0,
+        leadsThisMonth: {
+          totalCreated: leadsThisMonthCount,
+          converted: convertedThisMonthCount,
+          conversionRate: `${conversionRateThisMonth}%`,
+        },
+        outstandingInvoices: { count: getAggCount(outstandingAgg), total: getAggSum(outstandingAgg) },
+        overdueInvoices: { count: getAggCount(overdueAgg), total: getAggSum(overdueAgg) },
+        revenueThisMonth: getAggSum(paidThisMonthAgg),
       },
-      leadsByStatus: leadGroups.map((g) => ({ status: g.status, count: g._count.id, pipelineValue: Number((g._sum.value ?? 0).toFixed(2)) })),
-      jobsByStatus: jobGroups.map((g) => ({ status: g.status, count: g._count.id })),
+      leadsByStatus: Array.isArray(leadGroups) ? leadGroups.map((g: any) => ({
+        status: g.status,
+        count: typeof g._count === 'number' ? g._count : g._count?.id ?? g._count?._all ?? 0,
+        pipelineValue: g._sum && typeof g._sum.value === 'number' ? Number(g._sum.value.toFixed(2)) : 0,
+      })) : [],
+      jobsByStatus: Array.isArray(jobGroups) ? jobGroups.map((g: any) => ({
+        status: g.status,
+        count: typeof g._count === 'number' ? g._count : g._count?.id ?? g._count?._all ?? 0,
+      })) : [],
+    };
+  },
+};
+
+const getLeadAnalytics: ChatTool = {
+  name: 'get_lead_analytics',
+  description: 'Lead conversion metrics, funnel breakdown, win/loss rates, and pipeline values for this month, last month, or all-time.',
+  argsSpec: '{ timeframe?: "this_month" | "last_month" | "all_time" }',
+  async execute({ tenantId }, args) {
+    const timeframe = asString(args.timeframe, 'this_month');
+    let dateFilter: Record<string, unknown> | undefined = undefined;
+
+    const now = new Date();
+    if (timeframe === 'this_month') {
+      dateFilter = { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
+    } else if (timeframe === 'last_month') {
+      const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      dateFilter = { gte: startLastMonth, lte: endLastMonth };
+    }
+
+    const where: Record<string, unknown> = {
+      tenantId,
+      deletedAt: null,
+      ...(dateFilter ? { createdAt: dateFilter } : {}),
+    };
+
+    const [totalLeads, wonLeads, lostLeads, leadGroups, wonValueAgg, totalValueAgg] = await Promise.all([
+      db.lead.count({ where }).catch(() => 0),
+      db.lead.count({ where: { ...where, OR: [{ status: 'won' }, { convertedAt: { not: null } }] } }).catch(() => 0),
+      db.lead.count({ where: { ...where, status: 'lost' } }).catch(() => 0),
+      db.lead.groupBy({ by: ['status'], where, _count: { id: true }, _sum: { value: true } }).catch(() => []),
+      db.lead.aggregate({ where: { ...where, status: 'won' }, _sum: { value: true } }).catch(() => ({ _sum: { value: 0 } })),
+      db.lead.aggregate({ where, _sum: { value: true } }).catch(() => ({ _sum: { value: 0 } })),
+    ]);
+
+    const conversionRate = totalLeads > 0
+      ? Number(((wonLeads / totalLeads) * 100).toFixed(1))
+      : 0;
+
+    return {
+      timeframe,
+      totalLeads,
+      convertedLeads: wonLeads,
+      lostLeads,
+      pendingLeads: Math.max(0, totalLeads - wonLeads - lostLeads),
+      conversionRatePercent: `${conversionRate}%`,
+      totalPipelineValue: getAggSum(totalValueAgg, 'value'),
+      wonRevenueValue: getAggSum(wonValueAgg, 'value'),
+      breakdownByStatus: Array.isArray(leadGroups) ? leadGroups.map((g: any) => ({
+        status: g.status,
+        count: typeof g._count === 'number' ? g._count : g._count?.id ?? g._count?._all ?? 0,
+        pipelineValue: g._sum && typeof g._sum.value === 'number' ? Number(g._sum.value.toFixed(2)) : 0,
+      })) : [],
     };
   },
 };
 
 const searchCustomers: ChatTool = {
   name: 'search_customers',
-  description: 'Find customers by name, phone, or email. Returns up to 5 matches with ids (needed for follow-up lookups).',
-  argsSpec: '{ query: string } — partial name, phone, or email',
+  description: 'Search customers by name, phone, email, or list recently added customers (when query is empty/omitted or generic like "recent" / "all").',
+  argsSpec: '{ query?: string, limit?: number } — partial name, phone, email, or leave empty for recent customers',
   async execute({ tenantId }, args) {
-    const query = asString(args.query);
-    if (!query) return { error: 'query is required', results: [] };
+    const rawQuery = asString(args.query);
+    const limit = asLimit(args.limit, 10, 25);
 
-    const digits = query.replace(/[^+\d]/g, '');
-    const where: Record<string, unknown> = {
-      tenantId,
-      OR: [
-        { name: { contains: query } },
-        { email: { contains: query } },
-        { companyName: { contains: query } },
-        ...(digits ? [{ phone: { contains: digits } }] : []),
-      ],
-    };
+    // If query is empty, or generic words like "recent", "all", "new", "list", return recent customers
+    const isGeneric = !rawQuery || /^(recent|all|new|latest|list|recently added|customers|added)$/i.test(rawQuery);
+
+    let where: Record<string, unknown> = { tenantId };
+    if (!isGeneric) {
+      const digits = rawQuery.replace(/[^+\d]/g, '');
+      where = {
+        tenantId,
+        OR: [
+          { name: { contains: rawQuery } },
+          { email: { contains: rawQuery } },
+          { companyName: { contains: rawQuery } },
+          ...(digits ? [{ phone: { contains: digits } }] : []),
+        ],
+      };
+    }
 
     const customers = await db.customer.findMany({
       where,
       select: { id: true, name: true, phone: true, email: true, address: true, companyName: true, createdAt: true },
-      take: 5,
+      take: limit,
       orderBy: { createdAt: 'desc' },
     });
     return { count: customers.length, results: customers };
@@ -202,18 +310,53 @@ const getCustomerDetails: ChatTool = {
 
 const listRecentLeads: ChatTool = {
   name: 'list_recent_leads',
-  description: 'Recent leads, newest first. Optionally filter by status (new, contacted, quoted, won, lost…).',
-  argsSpec: '{ status?: string, limit?: number }',
+  description: 'List leads with optional filtering by status (new, contacted, quoted, qualified, won, lost, pending, active) and priority (high, urgent, medium, low).',
+  argsSpec: '{ status?: string, priority?: string, query?: string, limit?: number }',
   async execute({ tenantId }, args) {
-    const status = asString(args.status);
+    const status = asString(args.status).toLowerCase();
+    const priority = asString(args.priority).toLowerCase();
+    const query = asString(args.query);
+
     const where: Record<string, unknown> = { tenantId, deletedAt: null };
-    if (status) where.status = status;
+
+    // Status filtering with smart aliases
+    if (status) {
+      if (status === 'pending' || status === 'waiting') {
+        where.status = { in: ['new', 'contacted', 'quoted', 'qualified'] };
+      } else if (status === 'active' || status === 'open') {
+        where.status = { notIn: ['won', 'lost', 'cancelled'] };
+      } else if (status === 'closed') {
+        where.status = { in: ['won', 'lost', 'cancelled'] };
+      } else if (status !== 'all') {
+        where.status = status;
+      }
+    }
+
+    // Priority filtering
+    if (priority) {
+      if (priority === 'high' || priority === 'high-priority' || priority === 'urgent') {
+        where.priority = { in: ['high', 'urgent'] };
+      } else if (priority !== 'all') {
+        where.priority = priority;
+      }
+    }
+
+    // Optional query search
+    if (query) {
+      const digits = query.replace(/[^+\d]/g, '');
+      where.OR = [
+        { name: { contains: query } },
+        { email: { contains: query } },
+        { serviceType: { contains: query } },
+        ...(digits ? [{ phone: { contains: digits } }] : []),
+      ];
+    }
 
     const leads = await db.lead.findMany({
       where,
-      select: { id: true, name: true, phone: true, email: true, status: true, source: true, value: true, serviceType: true, createdAt: true },
+      select: { id: true, name: true, phone: true, email: true, status: true, priority: true, source: true, value: true, serviceType: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
-      take: asLimit(args.limit, 10),
+      take: asLimit(args.limit, 15),
     });
     return { count: leads.length, leads };
   },
@@ -370,10 +513,1080 @@ const getServicesCatalog: ChatTool = {
   },
 };
 
+// ─── Universal Tenant Query Engine (query_tenant_records) ───────────────────
+
+export type TenantEntity =
+  | 'customers'
+  | 'leads'
+  | 'jobs'
+  | 'invoices'
+  | 'quotes'
+  | 'bookings'
+  | 'employees'
+  | 'expenses'
+  | 'inventory'
+  | 'services'
+  | 'reviews'
+  | 'timesheets';
+
+export function normalizeEntity(name: string): TenantEntity | null {
+  const n = (name || '').toLowerCase().trim().replace(/[-_\s]+/g, '_');
+  if (['customer', 'customers', 'clients', 'client'].includes(n)) return 'customers';
+  if (['lead', 'leads', 'prospect', 'prospects'].includes(n)) return 'leads';
+  if (['job', 'jobs', 'work_order', 'work_orders', 'orders'].includes(n)) return 'jobs';
+  if (['invoice', 'invoices', 'bill', 'bills'].includes(n)) return 'invoices';
+  if (['quote', 'quotes', 'estimate', 'estimates', 'proposal', 'proposals'].includes(n)) return 'quotes';
+  if (['booking', 'bookings', 'appointment', 'appointments', 'schedule', 'schedules'].includes(n)) return 'bookings';
+  if (['employee', 'employees', 'staff', 'technician', 'technicians', 'workers', 'team'].includes(n)) return 'employees';
+  if (['expense', 'expenses', 'spending', 'cost', 'costs'].includes(n)) return 'expenses';
+  if (['inventory', 'inventory_items', 'inventory_item', 'stock', 'products', 'product', 'items', 'item'].includes(n)) return 'inventory';
+  if (['service', 'services', 'catalog', 'offerings'].includes(n)) return 'services';
+  if (['review', 'reviews', 'rating', 'ratings', 'feedback'].includes(n)) return 'reviews';
+  if (['timesheet', 'timesheets', 'employee_shift', 'employee_shifts', 'shift', 'shifts', 'time_entries', 'time_entry', 'attendance'].includes(n)) return 'timesheets';
+  return null;
+}
+
+export function parseDateFilter(
+  dateWindow?: unknown,
+  startDate?: unknown,
+  endDate?: unknown
+): { gte?: Date; lte?: Date } | undefined {
+  const sDate = typeof startDate === 'string' ? startDate.trim() : '';
+  const eDate = typeof endDate === 'string' ? endDate.trim() : '';
+
+  if (sDate || eDate) {
+    const res: { gte?: Date; lte?: Date } = {};
+    if (sDate) {
+      const d = new Date(sDate);
+      if (!isNaN(d.getTime())) res.gte = d;
+    }
+    if (eDate) {
+      const d = new Date(eDate);
+      if (!isNaN(d.getTime())) {
+        if (eDate.length <= 10) d.setHours(23, 59, 59, 999);
+        res.lte = d;
+      }
+    }
+    return Object.keys(res).length > 0 ? res : undefined;
+  }
+
+  const wStr = typeof dateWindow === 'string' ? dateWindow.toLowerCase().trim().replace(/[-_\s]+/g, '_') : '';
+  if (!wStr || wStr === 'all' || wStr === 'all_time') return undefined;
+
+  const now = new Date();
+  if (wStr === 'today') {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+    return { gte: start, lte: end };
+  }
+  if (wStr === 'yesterday') {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(23, 59, 59, 999);
+    return { gte: start, lte: end };
+  }
+  if (wStr === 'this_week' || wStr === 'week') {
+    const start = new Date(now);
+    const day = start.getDay();
+    const diff = start.getDate() - day + (day === 0 ? -6 : 1);
+    start.setDate(diff);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { gte: start, lte: end };
+  }
+  if (wStr === 'last_week') {
+    const start = new Date(now);
+    const day = start.getDay();
+    const diff = start.getDate() - day + (day === 0 ? -6 : 1) - 7;
+    start.setDate(diff);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { gte: start, lte: end };
+  }
+  if (wStr === 'this_month' || wStr === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    return { gte: start, lte: end };
+  }
+  if (wStr === 'last_month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    return { gte: start, lte: end };
+  }
+  if (wStr === 'this_year' || wStr === 'year') {
+    const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    return { gte: start, lte: end };
+  }
+  if (wStr === 'last_year') {
+    const start = new Date(now.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+    return { gte: start, lte: end };
+  }
+  return undefined;
+}
+
+const queryTenantRecords: ChatTool = {
+  name: 'query_tenant_records',
+  description:
+    'Universal query engine for ALL business records: customers, leads, jobs, invoices, quotes, bookings, employees, expenses, inventory, services, reviews, timesheets. Use this whenever the user asks about quotes, expenses, inventory/stock, employees/staff, bookings, reviews, timesheets, or wants custom filters, aggregations (sums, averages), and breakdowns on any entity.',
+  argsSpec:
+    '{ entity: "customers"|"leads"|"jobs"|"invoices"|"quotes"|"bookings"|"employees"|"expenses"|"inventory"|"services"|"reviews"|"timesheets", operation?: "list"|"aggregate"|"grouped_summary", filters?: { status?, priority?, category?, role?, source?, search?, minAmount?, maxAmount?, lowStockOnly?, ... }, dateWindow?: "today"|"yesterday"|"this_week"|"last_week"|"this_month"|"last_month"|"this_year"|"all_time", aggregate?: { func: "count"|"sum"|"avg"|"min"|"max", field?: string }, groupBy?: string, sortBy?: string, sortOrder?: "asc"|"desc", limit?: number }',
+  async execute({ tenantId, workspaceId }, rawArgs) {
+    const args = (rawArgs ?? {}) as Record<string, unknown>;
+    const entityParam = asString(args.entity || args.model || args.table);
+    const entity = normalizeEntity(entityParam);
+    if (!entity) {
+      return {
+        error: `Unknown entity "${entityParam}". Supported entities: customers, leads, jobs, invoices, quotes, bookings, employees, expenses, inventory, services, reviews, timesheets.`,
+      };
+    }
+
+    const operation = (asString(args.operation) || 'list').toLowerCase();
+    const rawFilters = (typeof args.filters === 'object' && args.filters !== null ? args.filters : args) as Record<string, unknown>;
+    const dateWindow = args.dateWindow || rawFilters.dateWindow;
+    const startDate = args.startDate || rawFilters.startDate;
+    const endDate = args.endDate || rawFilters.endDate;
+    const dateRange = parseDateFilter(dateWindow, startDate, endDate);
+
+    const limit = asLimit(args.limit || rawFilters.limit, 10, 25);
+    const sortBy = asString(args.sortBy || rawFilters.sortBy);
+    const sortOrder = (asString(args.sortOrder || rawFilters.sortOrder) || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    const search = asString(rawFilters.search || rawFilters.query || args.search || args.query);
+    const status = rawFilters.status || args.status;
+    const priority = rawFilters.priority || args.priority;
+    const category = rawFilters.category || args.category;
+    const role = rawFilters.role || args.role;
+    const source = rawFilters.source || args.source;
+
+    // Helper for number parsing
+    const getNum = (v: unknown): number | undefined => {
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      if (typeof v === 'string') {
+        const n = parseFloat(v);
+        if (Number.isFinite(n)) return n;
+      }
+      return undefined;
+    };
+
+    const minAmount = getNum(rawFilters.minAmount ?? rawFilters.minValue ?? rawFilters.minTotal ?? args.minAmount);
+    const maxAmount = getNum(rawFilters.maxAmount ?? rawFilters.maxValue ?? rawFilters.maxTotal ?? args.maxAmount);
+
+    try {
+      if (entity === 'quotes') {
+        const where: Record<string, unknown> = { tenantId, deletedAt: null };
+        if (status) {
+          where.status = Array.isArray(status) ? { in: status } : asString(status);
+        }
+        if (minAmount !== undefined || maxAmount !== undefined) {
+          where.total = {
+            ...(minAmount !== undefined ? { gte: minAmount } : {}),
+            ...(maxAmount !== undefined ? { lte: maxAmount } : {}),
+          };
+        }
+        if (dateRange) where.createdAt = dateRange;
+        if (search) {
+          where.OR = [
+            { title: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+            { customer: { name: { contains: search, mode: 'insensitive' } } },
+          ];
+        }
+
+        if (operation === 'aggregate') {
+          const aggObj = (args.aggregate || rawFilters.aggregate || {}) as Record<string, unknown>;
+          const func = (asString(aggObj.func) || 'count').toLowerCase();
+          const field = asString(aggObj.field) || 'total';
+          if (func === 'count') {
+            const count = await db.quote.count({ where });
+            return { entity, operation: 'aggregate', func: 'count', count };
+          }
+          const agg = await db.quote.aggregate({
+            where,
+            _count: { id: true },
+            _sum: { total: true, subtotal: true },
+            _avg: { total: true },
+            _min: { total: true },
+            _max: { total: true },
+          });
+          let result = 0;
+          if (func === 'sum') result = field === 'subtotal' ? getAggSum(agg, 'subtotal') : getAggSum(agg, 'total');
+          else if (func === 'avg') result = Number((agg._avg?.total ?? 0).toFixed(2));
+          else if (func === 'min') result = Number((agg._min?.total ?? 0).toFixed(2));
+          else if (func === 'max') result = Number((agg._max?.total ?? 0).toFixed(2));
+          return { entity, operation: 'aggregate', func, field, result, count: agg._count.id };
+        }
+
+        if (operation === 'grouped_summary') {
+          const groupByField = asString(args.groupBy || rawFilters.groupBy) || 'status';
+          const quotes = await db.quote.findMany({
+            where,
+            select: { id: true, status: true, total: true, currency: true },
+            take: 200,
+          });
+          const groupMap = new Map<string, { count: number; totalSum: number }>();
+          for (const q of quotes) {
+            const key = String((q as Record<string, unknown>)[groupByField] || 'unknown');
+            const cur = groupMap.get(key) || { count: 0, totalSum: 0 };
+            cur.count += 1;
+            cur.totalSum += q.total || 0;
+            groupMap.set(key, cur);
+          }
+          const groups = Array.from(groupMap.entries()).map(([key, data]) => ({
+            key,
+            count: data.count,
+            totalValue: Number(data.totalSum.toFixed(2)),
+          }));
+          return { entity, operation: 'grouped_summary', groupBy: groupByField, totalRecords: quotes.length, groups };
+        }
+
+        const orderByObj: Record<string, string> = {};
+        if (['total', 'subtotal', 'createdAt', 'validUntil'].includes(sortBy)) {
+          orderByObj[sortBy] = sortOrder;
+        } else {
+          orderByObj.createdAt = 'desc';
+        }
+
+        const [quotes, totalMatches] = await Promise.all([
+          db.quote.findMany({
+            where,
+            orderBy: orderByObj,
+            take: limit,
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              subtotal: true,
+              tax: true,
+              discount: true,
+              total: true,
+              currency: true,
+              status: true,
+              validUntil: true,
+              createdAt: true,
+              customer: { select: { id: true, name: true, phone: true } },
+              job: { select: { id: true, jobNumber: true, title: true } },
+            },
+          }),
+          db.quote.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: quotes.length, totalMatches, records: quotes };
+      }
+
+      if (entity === 'expenses') {
+        const where: Record<string, unknown> = { tenantId };
+        if (status) {
+          where.status = Array.isArray(status) ? { in: status } : asString(status);
+        }
+        if (category) {
+          where.category = { contains: asString(category), mode: 'insensitive' };
+        }
+        if (minAmount !== undefined || maxAmount !== undefined) {
+          where.amount = {
+            ...(minAmount !== undefined ? { gte: minAmount } : {}),
+            ...(maxAmount !== undefined ? { lte: maxAmount } : {}),
+          };
+        }
+        if (dateRange) where.expenseDate = dateRange;
+        if (search) {
+          where.OR = [
+            { number: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+            { category: { contains: search, mode: 'insensitive' } },
+            { employeeName: { contains: search, mode: 'insensitive' } },
+            { submittedByName: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+
+        if (operation === 'aggregate') {
+          const aggObj = (args.aggregate || rawFilters.aggregate || {}) as Record<string, unknown>;
+          const func = (asString(aggObj.func) || 'sum').toLowerCase();
+          const field = asString(aggObj.field) || 'amount';
+          if (func === 'count') {
+            const count = await db.expense.count({ where });
+            return { entity, operation: 'aggregate', func: 'count', count };
+          }
+          const agg = await db.expense.aggregate({
+            where,
+            _count: { id: true },
+            _sum: { amount: true },
+            _avg: { amount: true },
+            _min: { amount: true },
+            _max: { amount: true },
+          });
+          let result = 0;
+          if (func === 'sum') result = getAggSum(agg, 'amount');
+          else if (func === 'avg') result = Number((agg._avg?.amount ?? 0).toFixed(2));
+          else if (func === 'min') result = Number((agg._min?.amount ?? 0).toFixed(2));
+          else if (func === 'max') result = Number((agg._max?.amount ?? 0).toFixed(2));
+          return { entity, operation: 'aggregate', func, field, result, count: agg._count.id };
+        }
+
+        if (operation === 'grouped_summary') {
+          const groupByField = asString(args.groupBy || rawFilters.groupBy) || 'category';
+          const expenses = await db.expense.findMany({
+            where,
+            select: { id: true, category: true, status: true, employeeName: true, amount: true, currency: true },
+            take: 200,
+          });
+          const groupMap = new Map<string, { count: number; totalSum: number }>();
+          for (const exp of expenses) {
+            const key = String((exp as Record<string, unknown>)[groupByField] || 'uncategorized');
+            const cur = groupMap.get(key) || { count: 0, totalSum: 0 };
+            cur.count += 1;
+            cur.totalSum += exp.amount || 0;
+            groupMap.set(key, cur);
+          }
+          const groups = Array.from(groupMap.entries()).map(([key, data]) => ({
+            key,
+            count: data.count,
+            totalAmount: Number(data.totalSum.toFixed(2)),
+          }));
+          return { entity, operation: 'grouped_summary', groupBy: groupByField, totalRecords: expenses.length, groups };
+        }
+
+        const orderByObj: Record<string, string> = {};
+        if (['amount', 'expenseDate', 'createdAt'].includes(sortBy)) {
+          orderByObj[sortBy] = sortOrder;
+        } else {
+          orderByObj.expenseDate = 'desc';
+        }
+
+        const [expenses, totalMatches] = await Promise.all([
+          db.expense.findMany({
+            where,
+            orderBy: orderByObj,
+            take: limit,
+            select: {
+              id: true,
+              number: true,
+              employeeName: true,
+              submittedByName: true,
+              jobTitle: true,
+              category: true,
+              description: true,
+              amount: true,
+              currency: true,
+              expenseDate: true,
+              status: true,
+              notes: true,
+              approvedByName: true,
+              approvedAt: true,
+              createdAt: true,
+            },
+          }),
+          db.expense.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: expenses.length, totalMatches, records: expenses };
+      }
+
+      if (entity === 'inventory') {
+        const where: Record<string, unknown> = { tenantId, isActive: true };
+        if (category) {
+          where.category = { contains: asString(category), mode: 'insensitive' };
+        }
+        const lowStockOnly = rawFilters.lowStockOnly === true || args.lowStockOnly === true;
+        if (lowStockOnly) {
+          where.availableStock = { lte: 10 };
+        }
+        if (minAmount !== undefined || maxAmount !== undefined) {
+          where.availableStock = {
+            ...(minAmount !== undefined ? { gte: minAmount } : {}),
+            ...(maxAmount !== undefined ? { lte: maxAmount } : {}),
+          };
+        }
+        if (search) {
+          where.OR = [
+            { name: { contains: search, mode: 'insensitive' } },
+            { sku: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+            { category: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+
+        if (operation === 'aggregate') {
+          const aggObj = (args.aggregate || rawFilters.aggregate || {}) as Record<string, unknown>;
+          const func = (asString(aggObj.func) || 'count').toLowerCase();
+          const field = asString(aggObj.field) || 'totalStock';
+          if (func === 'count') {
+            const count = await db.inventoryItem.count({ where });
+            return { entity, operation: 'aggregate', func: 'count', count };
+          }
+          const agg = await db.inventoryItem.aggregate({
+            where,
+            _count: { id: true },
+            _sum: { totalStock: true, availableStock: true, costPrice: true, salePrice: true },
+            _avg: { costPrice: true, salePrice: true },
+          });
+          let result = 0;
+          if (func === 'sum') {
+            result = getAggSum(agg, field === 'availableStock' ? 'availableStock' : (field === 'costPrice' ? 'costPrice' : 'totalStock'));
+          } else if (func === 'avg') {
+            result = Number(((agg._avg as Record<string, number | null>)?.[field] ?? 0).toFixed(2));
+          }
+          return { entity, operation: 'aggregate', func, field, result, count: agg._count.id };
+        }
+
+        if (operation === 'grouped_summary') {
+          const groupByField = asString(args.groupBy || rawFilters.groupBy) || 'category';
+          const items = await db.inventoryItem.findMany({
+            where,
+            select: { id: true, category: true, totalStock: true, availableStock: true, costPrice: true },
+            take: 200,
+          });
+          const groupMap = new Map<string, { count: number; totalStock: number; totalValue: number }>();
+          for (const it of items) {
+            const key = String((it as Record<string, unknown>)[groupByField] || 'general');
+            const cur = groupMap.get(key) || { count: 0, totalStock: 0, totalValue: 0 };
+            cur.count += 1;
+            cur.totalStock += it.totalStock || 0;
+            cur.totalValue += (it.costPrice || 0) * (it.totalStock || 0);
+            groupMap.set(key, cur);
+          }
+          const groups = Array.from(groupMap.entries()).map(([key, data]) => ({
+            key,
+            count: data.count,
+            totalStock: data.totalStock,
+            totalValuation: Number(data.totalValue.toFixed(2)),
+          }));
+          return { entity, operation: 'grouped_summary', groupBy: groupByField, totalRecords: items.length, groups };
+        }
+
+        const orderByObj: Record<string, string> = {};
+        if (['name', 'totalStock', 'availableStock', 'salePrice', 'costPrice'].includes(sortBy)) {
+          orderByObj[sortBy] = sortOrder;
+        } else {
+          orderByObj.name = 'asc';
+        }
+
+        const [items, totalMatches] = await Promise.all([
+          db.inventoryItem.findMany({
+            where,
+            orderBy: orderByObj,
+            take: limit,
+            select: {
+              id: true,
+              sku: true,
+              name: true,
+              description: true,
+              category: true,
+              unit: true,
+              costPrice: true,
+              salePrice: true,
+              currency: true,
+              totalStock: true,
+              reservedStock: true,
+              availableStock: true,
+              reorderLevel: true,
+              reorderQty: true,
+              barcode: true,
+              isActive: true,
+              createdAt: true,
+            },
+          }),
+          db.inventoryItem.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: items.length, totalMatches, records: items };
+      }
+
+      if (entity === 'employees') {
+        const where: Record<string, unknown> = workspaceId ? { workspaceId } : { workspace: { tenantId } };
+        if (role) where.role = asString(role);
+        if (status) where.status = asString(status);
+        if (search) {
+          where.OR = [
+            { name: { contains: search, mode: 'insensitive' } },
+            { phone: { contains: search } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { location: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+
+        if (operation === 'aggregate') {
+          const count = await db.employee.count({ where });
+          return { entity, operation: 'aggregate', func: 'count', count };
+        }
+
+        if (operation === 'grouped_summary') {
+          const groupByField = asString(args.groupBy || rawFilters.groupBy) || 'role';
+          const emps = await db.employee.findMany({
+            where,
+            select: { id: true, role: true, status: true, rating: true, completedJobs: true },
+            take: 200,
+          });
+          const groupMap = new Map<string, { count: number; completedJobs: number }>();
+          for (const emp of emps) {
+            const key = String((emp as Record<string, unknown>)[groupByField] || 'other');
+            const cur = groupMap.get(key) || { count: 0, completedJobs: 0 };
+            cur.count += 1;
+            cur.completedJobs += emp.completedJobs || 0;
+            groupMap.set(key, cur);
+          }
+          const groups = Array.from(groupMap.entries()).map(([key, data]) => ({
+            key,
+            count: data.count,
+            totalCompletedJobs: data.completedJobs,
+          }));
+          return { entity, operation: 'grouped_summary', groupBy: groupByField, totalRecords: emps.length, groups };
+        }
+
+        const [employees, totalMatches] = await Promise.all([
+          db.employee.findMany({
+            where,
+            orderBy: { name: 'asc' },
+            take: limit,
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+              role: true,
+              skills: true,
+              status: true,
+              rating: true,
+              completedJobs: true,
+              location: true,
+              hourlyRate: true,
+              createdAt: true,
+            },
+          }),
+          db.employee.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: employees.length, totalMatches, records: employees };
+      }
+
+      if (entity === 'bookings') {
+        const where: Record<string, unknown> = { tenantId, deletedAt: null };
+        if (status) {
+          where.status = Array.isArray(status) ? { in: status } : asString(status);
+        }
+        if (source) where.source = asString(source);
+        if (dateRange) where.scheduledAt = dateRange;
+        if (search) {
+          where.OR = [
+            { title: { contains: search, mode: 'insensitive' } },
+            { customerName: { contains: search, mode: 'insensitive' } },
+            { customerPhone: { contains: search } },
+            { address: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+
+        if (operation === 'aggregate') {
+          const count = await db.booking.count({ where });
+          return { entity, operation: 'aggregate', func: 'count', count };
+        }
+
+        if (operation === 'grouped_summary') {
+          const groupByField = asString(args.groupBy || rawFilters.groupBy) || 'status';
+          const bookings = await db.booking.findMany({
+            where,
+            select: { id: true, status: true, bookingType: true, source: true },
+            take: 200,
+          });
+          const groupMap = new Map<string, number>();
+          for (const b of bookings) {
+            const key = String((b as Record<string, unknown>)[groupByField] || 'other');
+            groupMap.set(key, (groupMap.get(key) || 0) + 1);
+          }
+          const groups = Array.from(groupMap.entries()).map(([key, count]) => ({ key, count }));
+          return { entity, operation: 'grouped_summary', groupBy: groupByField, totalRecords: bookings.length, groups };
+        }
+
+        const [bookings, totalMatches] = await Promise.all([
+          db.booking.findMany({
+            where,
+            orderBy: { scheduledAt: 'desc' },
+            take: limit,
+            select: {
+              id: true,
+              title: true,
+              description: true,
+              bookingType: true,
+              status: true,
+              source: true,
+              customerName: true,
+              customerPhone: true,
+              customerEmail: true,
+              address: true,
+              scheduledAt: true,
+              scheduledEndTime: true,
+              duration: true,
+              notes: true,
+              confirmedAt: true,
+              completedAt: true,
+              cancelledAt: true,
+              cancellationReason: true,
+              createdAt: true,
+            },
+          }),
+          db.booking.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: bookings.length, totalMatches, records: bookings };
+      }
+
+      if (entity === 'reviews') {
+        const where: Record<string, unknown> = { tenantId };
+        if (status) where.status = asString(status);
+        if (source) where.source = asString(source);
+        if (minAmount !== undefined) where.rating = { gte: Math.round(minAmount) };
+        if (dateRange) where.createdAt = dateRange;
+        if (search) {
+          where.OR = [
+            { authorName: { contains: search, mode: 'insensitive' } },
+            { comment: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+
+        if (operation === 'aggregate') {
+          const agg = await db.review.aggregate({
+            where,
+            _count: { id: true },
+            _avg: { rating: true, npsScore: true },
+          });
+          return {
+            entity,
+            operation: 'aggregate',
+            count: agg._count.id,
+            avgRating: agg._avg.rating ? Number(agg._avg.rating.toFixed(2)) : 0,
+            avgNps: agg._avg.npsScore ? Number(agg._avg.npsScore.toFixed(1)) : null,
+          };
+        }
+
+        const [reviews, totalMatches] = await Promise.all([
+          db.review.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: {
+              id: true,
+              rating: true,
+              comment: true,
+              authorName: true,
+              source: true,
+              status: true,
+              responseJson: true,
+              npsScore: true,
+              createdAt: true,
+            },
+          }),
+          db.review.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: reviews.length, totalMatches, records: reviews };
+      }
+
+      if (entity === 'timesheets') {
+        const where: Record<string, unknown> = { tenantId };
+        if (status) where.status = asString(status);
+        if (category) where.category = asString(category);
+        if (dateRange) where.shiftDate = dateRange;
+
+        if (operation === 'aggregate') {
+          const agg = await db.employeeShift.aggregate({
+            where,
+            _count: { id: true },
+            _sum: { totalMinutes: true, workingMinutes: true, breakMinutes: true, travelMinutes: true },
+          });
+          const totalHours = Number(((agg._sum.totalMinutes || 0) / 60).toFixed(1));
+          const workingHours = Number(((agg._sum.workingMinutes || 0) / 60).toFixed(1));
+          return {
+            entity,
+            operation: 'aggregate',
+            count: agg._count.id,
+            totalHours,
+            workingHours,
+            totalMinutes: agg._sum.totalMinutes || 0,
+          };
+        }
+
+        const [shifts, totalMatches] = await Promise.all([
+          db.employeeShift.findMany({
+            where,
+            orderBy: { shiftDate: 'desc' },
+            take: limit,
+            select: {
+              id: true,
+              employeeId: true,
+              shiftDate: true,
+              clockIn: true,
+              clockOut: true,
+              totalMinutes: true,
+              workingMinutes: true,
+              breakMinutes: true,
+              travelMinutes: true,
+              status: true,
+              notes: true,
+              category: true,
+              jobId: true,
+              isManual: true,
+              approvalStatus: true,
+              approvedBy: true,
+              approvedAt: true,
+              createdAt: true,
+            },
+          }),
+          db.employeeShift.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: shifts.length, totalMatches, records: shifts };
+      }
+
+      if (entity === 'customers') {
+        const where: Record<string, unknown> = { tenantId };
+        if (search) {
+          where.OR = [
+            { name: { contains: search, mode: 'insensitive' } },
+            { phone: { contains: search } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { companyName: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+        if (dateRange) where.createdAt = dateRange;
+
+        if (operation === 'aggregate') {
+          const count = await db.customer.count({ where });
+          return { entity, operation: 'aggregate', func: 'count', count };
+        }
+
+        const [customers, totalMatches] = await Promise.all([
+          db.customer.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: {
+              id: true,
+              name: true,
+              firstName: true,
+              lastName: true,
+              companyName: true,
+              phone: true,
+              email: true,
+              address: true,
+              leadSource: true,
+              portalEnabled: true,
+              invitationStatus: true,
+              createdAt: true,
+            },
+          }),
+          db.customer.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: customers.length, totalMatches, records: customers };
+      }
+
+      if (entity === 'leads') {
+        const where: Record<string, unknown> = { tenantId, deletedAt: null };
+        if (status) where.status = Array.isArray(status) ? { in: status } : asString(status);
+        if (priority) where.priority = asString(priority);
+        if (source) where.source = asString(source);
+        if (minAmount !== undefined || maxAmount !== undefined) {
+          where.value = {
+            ...(minAmount !== undefined ? { gte: minAmount } : {}),
+            ...(maxAmount !== undefined ? { lte: maxAmount } : {}),
+          };
+        }
+        if (dateRange) where.createdAt = dateRange;
+        if (search) {
+          where.OR = [
+            { name: { contains: search, mode: 'insensitive' } },
+            { phone: { contains: search } },
+            { title: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+            { serviceType: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+
+        if (operation === 'aggregate') {
+          const agg = await db.lead.aggregate({
+            where,
+            _count: { id: true },
+            _sum: { value: true },
+            _avg: { value: true },
+          });
+          return {
+            entity,
+            operation: 'aggregate',
+            count: agg._count.id,
+            totalPipelineValue: getAggSum(agg, 'value'),
+            avgValue: Number((agg._avg.value ?? 0).toFixed(2)),
+          };
+        }
+
+        if (operation === 'grouped_summary') {
+          const groupByField = asString(args.groupBy || rawFilters.groupBy) || 'status';
+          const leads = await db.lead.findMany({
+            where,
+            select: { id: true, status: true, source: true, priority: true, value: true },
+            take: 200,
+          });
+          const groupMap = new Map<string, { count: number; totalValue: number }>();
+          for (const ld of leads) {
+            const key = String((ld as Record<string, unknown>)[groupByField] || 'unknown');
+            const cur = groupMap.get(key) || { count: 0, totalValue: 0 };
+            cur.count += 1;
+            cur.totalValue += ld.value || 0;
+            groupMap.set(key, cur);
+          }
+          const groups = Array.from(groupMap.entries()).map(([key, data]) => ({
+            key,
+            count: data.count,
+            totalValue: Number(data.totalValue.toFixed(2)),
+          }));
+          return { entity, operation: 'grouped_summary', groupBy: groupByField, totalRecords: leads.length, groups };
+        }
+
+        const [leads, totalMatches] = await Promise.all([
+          db.lead.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: {
+              id: true,
+              title: true,
+              name: true,
+              phone: true,
+              email: true,
+              source: true,
+              status: true,
+              priority: true,
+              value: true,
+              serviceType: true,
+              address: true,
+              followUpAt: true,
+              convertedAt: true,
+              createdAt: true,
+            },
+          }),
+          db.lead.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: leads.length, totalMatches, records: leads };
+      }
+
+      if (entity === 'jobs') {
+        const where: Record<string, unknown> = workspaceId ? { workspaceId, deletedAt: null } : { workspace: { tenantId }, deletedAt: null };
+        if (status) where.status = Array.isArray(status) ? { in: status } : asString(status);
+        if (priority) where.priority = asString(priority);
+        if (dateRange) where.scheduledAt = dateRange;
+        if (search) {
+          where.OR = [
+            { title: { contains: search, mode: 'insensitive' } },
+            { jobNumber: { contains: search, mode: 'insensitive' } },
+            { customerName: { contains: search, mode: 'insensitive' } },
+            { assigneeName: { contains: search, mode: 'insensitive' } },
+            { address: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+
+        if (operation === 'aggregate') {
+          const agg = await db.job.aggregate({
+            where,
+            _count: { id: true },
+            _sum: { quotedAmount: true, amountCollected: true },
+          });
+          return {
+            entity,
+            operation: 'aggregate',
+            count: agg._count.id,
+            totalQuoted: getAggSum(agg, 'quotedAmount'),
+            totalCollected: getAggSum(agg, 'amountCollected'),
+          };
+        }
+
+        if (operation === 'grouped_summary') {
+          const groupByField = asString(args.groupBy || rawFilters.groupBy) || 'status';
+          const jobs = await db.job.findMany({
+            where,
+            select: { id: true, status: true, priority: true, assigneeName: true, quotedAmount: true },
+            take: 200,
+          });
+          const groupMap = new Map<string, { count: number; totalQuoted: number }>();
+          for (const j of jobs) {
+            const key = String((j as Record<string, unknown>)[groupByField] || 'unassigned');
+            const cur = groupMap.get(key) || { count: 0, totalQuoted: 0 };
+            cur.count += 1;
+            cur.totalQuoted += j.quotedAmount || 0;
+            groupMap.set(key, cur);
+          }
+          const groups = Array.from(groupMap.entries()).map(([key, data]) => ({
+            key,
+            count: data.count,
+            totalQuoted: Number(data.totalQuoted.toFixed(2)),
+          }));
+          return { entity, operation: 'grouped_summary', groupBy: groupByField, totalRecords: jobs.length, groups };
+        }
+
+        const [jobs, totalMatches] = await Promise.all([
+          db.job.findMany({
+            where,
+            orderBy: { scheduledAt: 'desc' },
+            take: limit,
+            select: {
+              id: true,
+              jobNumber: true,
+              title: true,
+              description: true,
+              status: true,
+              priority: true,
+              type: true,
+              address: true,
+              scheduledAt: true,
+              quotedAmount: true,
+              actualStartTime: true,
+              actualEndTime: true,
+              customerName: true,
+              customerPhone: true,
+              assigneeName: true,
+              paymentStatus: true,
+              amountCollected: true,
+              completedAt: true,
+              createdAt: true,
+            },
+          }),
+          db.job.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: jobs.length, totalMatches, records: jobs };
+      }
+
+      if (entity === 'invoices') {
+        const where: Record<string, unknown> = { tenantId, deletedAt: null };
+        if (status) where.status = Array.isArray(status) ? { in: status } : asString(status);
+        if (minAmount !== undefined || maxAmount !== undefined) {
+          where.total = {
+            ...(minAmount !== undefined ? { gte: minAmount } : {}),
+            ...(maxAmount !== undefined ? { lte: maxAmount } : {}),
+          };
+        }
+        if (dateRange) where.createdAt = dateRange;
+        if (search) {
+          where.OR = [
+            { number: { contains: search, mode: 'insensitive' } },
+            { customer: { name: { contains: search, mode: 'insensitive' } } },
+          ];
+        }
+
+        if (operation === 'aggregate') {
+          const agg = await db.invoice.aggregate({
+            where,
+            _count: { id: true },
+            _sum: { total: true, amount: true, tax: true },
+            _avg: { total: true },
+          });
+          return {
+            entity,
+            operation: 'aggregate',
+            count: agg._count.id,
+            totalAmount: getAggSum(agg, 'total'),
+            avgInvoice: Number((agg._avg.total ?? 0).toFixed(2)),
+          };
+        }
+
+        if (operation === 'grouped_summary') {
+          const groupByField = asString(args.groupBy || rawFilters.groupBy) || 'status';
+          const invoices = await db.invoice.findMany({
+            where,
+            select: { id: true, status: true, total: true, invoiceType: true, currency: true },
+            take: 200,
+          });
+          const groupMap = new Map<string, { count: number; totalSum: number }>();
+          for (const inv of invoices) {
+            const key = String((inv as Record<string, unknown>)[groupByField] || 'standard');
+            const cur = groupMap.get(key) || { count: 0, totalSum: 0 };
+            cur.count += 1;
+            cur.totalSum += inv.total || 0;
+            groupMap.set(key, cur);
+          }
+          const groups = Array.from(groupMap.entries()).map(([key, data]) => ({
+            key,
+            count: data.count,
+            totalValue: Number(data.totalSum.toFixed(2)),
+          }));
+          return { entity, operation: 'grouped_summary', groupBy: groupByField, totalRecords: invoices.length, groups };
+        }
+
+        const [invoices, totalMatches] = await Promise.all([
+          db.invoice.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: {
+              id: true,
+              number: true,
+              amount: true,
+              tax: true,
+              discount: true,
+              total: true,
+              currency: true,
+              status: true,
+              invoiceType: true,
+              dueDate: true,
+              sentAt: true,
+              paidAt: true,
+              createdAt: true,
+              customer: { select: { id: true, name: true, phone: true } },
+              job: { select: { id: true, jobNumber: true, title: true } },
+            },
+          }),
+          db.invoice.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: invoices.length, totalMatches, records: invoices };
+      }
+
+      if (entity === 'services') {
+        const where: Record<string, unknown> = { tenantId };
+        if (category) where.category = { contains: asString(category), mode: 'insensitive' };
+        if (search) {
+          where.OR = [
+            { name: { contains: search, mode: 'insensitive' } },
+            { description: { contains: search, mode: 'insensitive' } },
+            { category: { contains: search, mode: 'insensitive' } },
+          ];
+        }
+
+        const [services, totalMatches] = await Promise.all([
+          db.service.findMany({
+            where,
+            orderBy: { name: 'asc' },
+            take: limit,
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              category: true,
+              basePrice: true,
+              duration: true,
+              isActive: true,
+              isPublic: true,
+              costPrice: true,
+              markup: true,
+              isBookable: true,
+              createdAt: true,
+            },
+          }),
+          db.service.count({ where }),
+        ]);
+        return { entity, operation: 'list', count: services.length, totalMatches, records: services };
+      }
+
+      return { error: `Unsupported entity query for "${entity}"` };
+    } catch (err) {
+      console.error(`[query_tenant_records] failed for entity ${entity}:`, err);
+      return { error: `Failed to query ${entity} records: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  },
+};
+
 // ─── Registry ───────────────────────────────────────────────────────────────
 
 const REGISTRY: ChatTool[] = [
+  queryTenantRecords,
   getBusinessOverview,
+  getLeadAnalytics,
   searchCustomers,
   getCustomerDetails,
   listRecentLeads,
@@ -389,7 +1602,7 @@ const REGISTRY: ChatTool[] = [
     async execute({ tenantId }, args) {
       const query = asString(args.query);
       if (!query) return { error: 'query is required', results: [] };
-      const { searchKnowledgeBase } = await import('@/lib/ai-knowledge');
+      const { searchKnowledgeBase } = await import('./ai-knowledge');
       const results = await searchKnowledgeBase(tenantId, query, 4);
       return {
         count: results.length,
@@ -407,6 +1620,28 @@ export function getToolCatalogForPrompt(): string {
   return REGISTRY.map((t) => `- ${t.name}: ${t.description}\n  args: ${t.argsSpec}`).join('\n');
 }
 
+function sanitizeToolArgs(val: unknown, depth = 0): unknown {
+  if (depth > 5) return undefined;
+  if (val === null || val === undefined) return val;
+  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') return val;
+  if (Array.isArray(val)) {
+    return val.slice(0, 50).map((item) => sanitizeToolArgs(item, depth + 1)).filter((x) => x !== undefined);
+  }
+  if (typeof val === 'object') {
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+      if (k.length > 60) continue;
+      const cleaned = sanitizeToolArgs(v, depth + 1);
+      if (cleaned !== undefined) {
+        clean[k] = cleaned;
+      }
+    }
+    return clean;
+  }
+  return undefined;
+}
+
 /**
  * Execute a tool requested by the LLM. The LLM-controlled `args` are parsed
  * defensively (strings/numbers/booleans only, clamped); tenant scoping comes
@@ -421,15 +1656,7 @@ export async function executeChatTool(
   const tool = REGISTRY_MAP.get(name);
   if (!tool) return { ok: false, error: `Unknown tool "${name}"` };
 
-  // Sanitize args: keep only primitives, drop everything else.
-  const args: Record<string, unknown> = {};
-  if (rawArgs && typeof rawArgs === 'object') {
-    for (const [k, v] of Object.entries(rawArgs as Record<string, unknown>)) {
-      if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
-        args[k] = v;
-      }
-    }
-  }
+  const args = (sanitizeToolArgs(rawArgs) as Record<string, unknown>) ?? {};
 
   try {
     const workspaceId = await resolveWorkspaceId(tenantId);

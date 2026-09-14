@@ -52,7 +52,23 @@ function summarizeToolResult(name: string, result: unknown): string {
   try {
     const r = result as Record<string, unknown>;
     if (!r) return name;
+    if (name === 'query_tenant_records') {
+      const entity = typeof r.entity === 'string' ? r.entity : 'records';
+      if (r.operation === 'aggregate') {
+        const func = typeof r.func === 'string' ? r.func : 'agg';
+        const val = r.result ?? r.count ?? r.totalHours ?? r.avgRating;
+        return `${entity} ${func}: ${val !== undefined ? val : 'done'}`;
+      }
+      if (r.operation === 'grouped_summary') {
+        const groups = Array.isArray(r.groups) ? r.groups.length : 0;
+        return `${entity} by ${r.groupBy || 'group'} (${groups} groups)`;
+      }
+      if (typeof r.count === 'number') {
+        return `${r.count} ${entity}`;
+      }
+    }
     if ('count' in r && typeof r.count === 'number') return `${r.count} result${r.count === 1 ? '' : 's'}`;
+    if ('conversionRatePercent' in r) return 'lead analytics';
     if ('business' in r) return 'business snapshot';
     if ('job' in r) return 'job details';
     if ('customer' in r) return 'customer profile';
@@ -71,6 +87,22 @@ ${tenantCtx}
 Today's date is ${today}. The user is the business owner or a staff member asking questions about THEIR OWN business data.
 
 You answer questions by using the READ-ONLY tools listed below. You CANNOT create, modify, or delete anything — if asked, say so and point the user to the relevant dashboard section.
+
+BUSINESS DATA ENTITIES:
+- Customers (client roster, contact details, company names)
+- Leads (sales pipeline, lead status, priority, estimated values)
+- Jobs (scheduled work orders, assigned technicians, status, quoted amounts)
+- Invoices (billing, paid revenue, unpaid/overdue balances)
+- Quotes (estimates, proposals, pending/accepted totals)
+- Bookings (online appointments, customer bookings, schedules)
+- Employees (staff/technicians, roles, performance ratings, hourly rates)
+- Expenses (business spending, expense categories, approved/pending receipts)
+- Inventory (stock levels, low stock alerts, SKUs, cost & retail prices)
+- Services (service offerings, pricing catalog, durations)
+- Reviews (customer feedback, star ratings, Google/internal reviews)
+- Timesheets (staff shift logs, total hours, clock-in/out, work/travel/break times)
+
+Use 'query_tenant_records' for any questions about Quotes, Expenses, Inventory, Employees, Bookings, Reviews, Timesheets, or for custom filters, aggregations, and grouped breakdowns!
 
 AVAILABLE TOOLS:
 ${getToolCatalogForPrompt()}
