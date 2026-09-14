@@ -457,12 +457,8 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   // ViewErrorBoundary + Suspense (with the rich ViewLoader that has chunk-
   // error detection + reload button). ViewCache itself is boundary-agnostic.
 
-  // Helper: render a view by ID. Handles the special marketplaceDashboard
-  // case (uses a router component, not a lazy component).
+  // Helper: render a view by ID.
   const renderView = (viewId: string) => {
-    if (viewId === 'marketplaceDashboard') {
-      return <MarketplaceDashboardRouter />;
-    }
     const Component = viewComponents[viewId] || DashboardView;
     return <Component />;
   };

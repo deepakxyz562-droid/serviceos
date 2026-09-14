@@ -2208,9 +2208,14 @@ function EmergencyStatusTracker({
   );
 }
 
+export interface ProviderMarketplaceDashboardProps {
+  hideHeader?: boolean;
+  className?: string;
+}
+
 // ─── Main dashboard ─────────────────────────────────────────────────────────
 
-export function ProviderMarketplaceDashboard() {
+export function ProviderMarketplaceDashboard({ hideHeader = false, className }: ProviderMarketplaceDashboardProps = {}) {
   const [tab, setTab] = useState<string>('overview');
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const tenant = useAppStore((s) => s.auth?.tenant);
@@ -2231,25 +2236,27 @@ export function ProviderMarketplaceDashboard() {
     tenant?.listingTier === 'claimed_free';
 
   if (isListingOnly) {
-    return <ListingProviderDashboard />;
+    return <ListingProviderDashboard hideHeader={hideHeader} className={className} />;
   }
 
   const showOptInTab = tab === 'opt-in';
 
   return (
-    <div className="space-y-4 w-full">
+    <div className={cn('space-y-6 w-full', !hideHeader && 'p-3 sm:p-4 lg:p-6', className)}>
       {/* Header */}
-      <div className="flex items-start gap-3 flex-wrap">
-        <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shadow-sm shadow-emerald-500/20 shrink-0">
-          <Store className="size-5 text-white" />
+      {!hideHeader && (
+        <div className="flex items-start gap-3 flex-wrap">
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shadow-sm shadow-emerald-500/20 shrink-0">
+            <Store className="size-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold tracking-tight">Marketplace</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage your marketplace eligibility, portfolio, certifications, incoming quote requests, and emergency dispatches.
+            </p>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold tracking-tight">Marketplace</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your marketplace eligibility, portfolio, certifications, incoming quote requests, and emergency dispatches.
-          </p>
-        </div>
-      </div>
+      )}
 
       {/* ── Marketing banner — promotes plan upgrade & feature adoption ──
           Dismissible per-session. Only shows for CRM users (listing-only

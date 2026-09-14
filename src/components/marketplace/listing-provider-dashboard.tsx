@@ -57,6 +57,7 @@ import { ServiceCatalogView } from '@/components/views/service-catalog-view';
 import { VerificationComplianceSection } from '@/components/settings/sections/verification-compliance-section';
 import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import {
   VERTICALS,
   getIndustriesByVertical,
@@ -74,7 +75,12 @@ interface TenantSnapshot {
   marketplaceOptIn: boolean;
 }
 
-export function ListingProviderDashboard() {
+export interface ListingProviderDashboardProps {
+  hideHeader?: boolean;
+  className?: string;
+}
+
+export function ListingProviderDashboard({ hideHeader = false, className }: ListingProviderDashboardProps = {}) {
   const [tab, setTab] = useState('page');
   const auth = useAppStore((s) => s.auth);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
@@ -86,11 +92,8 @@ export function ListingProviderDashboard() {
   const [loadingSnap, setLoadingSnap] = useState(true);
 
   const loadSnapshot = useCallback(async () => {
-    if (!auth?.tenant?.id) return;
     try {
-      const res = await authFetch(
-        `/api/tenants/${auth.tenant.id}?XTransformPort=3000`
-      );
+      const res = await authFetch('/api/settings/tenant');
       if (res.ok) {
         const data = await res.json();
         setTenantSnap({
@@ -109,31 +112,33 @@ export function ListingProviderDashboard() {
     } finally {
       setLoadingSnap(false);
     }
-  }, [auth?.tenant?.id]);
+  }, []);
 
   useEffect(() => {
     loadSnapshot();
   }, [loadSnapshot]);
 
   return (
-    <div className="space-y-4 w-full">
+    <div className={cn('space-y-6 w-full', !hideHeader && 'p-3 sm:p-4 lg:p-6', className)}>
       {/* Header */}
-      <div className="flex items-start gap-3 flex-wrap">
-        <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shadow-sm shadow-emerald-500/20 shrink-0">
-          <Store className="size-5 text-white" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold tracking-tight">Marketplace</h1>
-            <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
-              Free Listing
-            </Badge>
+      {!hideHeader && (
+        <div className="flex items-start gap-3 flex-wrap">
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shadow-sm shadow-emerald-500/20 shrink-0">
+            <Store className="size-5 text-white" />
           </div>
-          <p className="text-sm text-muted-foreground">
-            Manage your public marketplace page. Customers can find you and call you directly.
-          </p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-bold tracking-tight">Marketplace</h1>
+              <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800">
+                Free Listing
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Manage your public marketplace page. Customers can find you and call you directly.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Upsell banner */}
       <Card className="border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 dark:border-emerald-900/40">

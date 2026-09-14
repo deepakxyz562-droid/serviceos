@@ -69,7 +69,7 @@ export function MarketplaceView() {
   };
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">

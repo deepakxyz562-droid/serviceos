@@ -52,13 +52,13 @@ function MarketplaceDashboardRouterInner() {
   if (isListingOnly) {
     return (
       <Suspense fallback={<TabLoader />}>
-        <ListingProviderDashboard />
+        <ListingProviderDashboard hideHeader />
       </Suspense>
     );
   }
   return (
     <Suspense fallback={<TabLoader />}>
-      <ProviderMarketplaceDashboard />
+      <ProviderMarketplaceDashboard hideHeader />
     </Suspense>
   );
 }
@@ -96,7 +96,7 @@ export function MarketplaceHubView() {
 
         <TabsContent value="claim" className="mt-6">
           <Suspense fallback={<TabLoader />}>
-            <ClaimBusinessView />
+            <ClaimBusinessView hideHeader />
           </Suspense>
         </TabsContent>
       </Tabs>

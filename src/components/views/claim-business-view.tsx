@@ -51,6 +51,12 @@ import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
 import { ClaimBusinessModal } from '@/components/marketplace/claim-business-modal';
 import { useAppStore } from '@/store/app-store';
+import { cn } from '@/lib/utils';
+
+export interface ClaimBusinessViewProps {
+  hideHeader?: boolean;
+  className?: string;
+}
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,7 +98,7 @@ interface MyClaim {
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export function ClaimBusinessView() {
+export function ClaimBusinessView({ hideHeader = false, className }: ClaimBusinessViewProps = {}) {
   const auth = useAppStore((s) => s.auth);
   const currentTenantId = (auth?.tenant as { id?: string } | null)?.id ?? null;
 
@@ -182,19 +188,21 @@ export function ClaimBusinessView() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className={cn('space-y-6 max-w-4xl', !hideHeader && 'p-3 sm:p-4 lg:p-6', className)}>
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white">
-          <Store className="h-5 w-5" />
+      {!hideHeader && (
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white">
+            <Store className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Claim Your Business</h1>
+            <p className="text-sm text-muted-foreground">
+              Find your business on the Fieseros Marketplace and claim it to manage your profile.
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Claim Your Business</h1>
-          <p className="text-sm text-muted-foreground">
-            Find your business on the Fieseros Marketplace and claim it to manage your profile.
-          </p>
-        </div>
-      </div>
+      )}
 
       {/* ── Info banner ───────────────────────────────────────────────────── */}
       <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
