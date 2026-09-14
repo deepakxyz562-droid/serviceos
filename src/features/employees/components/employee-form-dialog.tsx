@@ -14,6 +14,7 @@
 import { Loader2, UserPlus, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -58,6 +59,8 @@ export interface EmployeeFormDialogProps {
   onCancel?: () => void;
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function EmployeeFormDialog({
   mode,
   open,
@@ -96,6 +99,15 @@ export function EmployeeFormDialog({
     ? 'Add a new team member to your organization.'
     : 'Update employee information and settings.';
 
+  const isEmailValid = EMAIL_REGEX.test(formEmail.trim());
+  const canSubmit = Boolean(
+    formName.trim() &&
+    formPhone.trim() &&
+    formEmail.trim() &&
+    isEmailValid &&
+    !saving
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
@@ -110,12 +122,26 @@ export function EmployeeFormDialog({
           </div>
           <div className="space-y-2">
             <Label>Phone Number *</Label>
-            <Input placeholder="e.g., +919876543210" value={formPhone} onChange={e => setFormPhone(e.target.value)} />
+            <PhoneInput
+              value={formPhone}
+              onChange={setFormPhone}
+              placeholder="Phone number *"
+              required
+            />
           </div>
           <div className="space-y-2">
-            <Label>Email</Label>
-            <Input type="email" placeholder="e.g., john@example.com" value={formEmail} onChange={e => setFormEmail(e.target.value)} />
-            <p className="text-xs text-muted-foreground">Required to send portal invitations</p>
+            <Label>Email Address *</Label>
+            <Input
+              type="email"
+              placeholder="e.g., john@example.com"
+              value={formEmail}
+              onChange={e => setFormEmail(e.target.value)}
+              required
+            />
+            {formEmail.trim() && !isEmailValid && (
+              <p className="text-xs text-red-500">Please enter a valid email address</p>
+            )}
+            <p className="text-xs text-muted-foreground">Required for employee notifications and portal access</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -254,9 +280,9 @@ export function EmployeeFormDialog({
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={onCancel ?? (() => onOpenChange(false))}>Cancel</Button>
           <Button
-            className="bg-emerald-600 hover:bg-emerald-700"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
             onClick={onSubmit}
-            disabled={!formName.trim() || !formPhone.trim() || saving}
+            disabled={!canSubmit}
           >
             {saving ? (
               <><Loader2 className="size-4 mr-1.5 animate-spin" /> {isAdd ? 'Adding...' : 'Saving...'}</>

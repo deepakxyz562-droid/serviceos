@@ -105,7 +105,7 @@ export function CallsTab() {
   // Phase A: Migrated from raw fetch() to the shared React Query hook.
   // Uses limit=100 + the stats data (which the endpoint returns alongside calls).
   const { data: callsData, isLoading: loading, refetch } = useReceptionistCalls(100);
-  const calls = (callsData?.calls as CallRecord[]) ?? [];
+  const calls = Array.isArray(callsData?.calls) ? (callsData.calls as CallRecord[]) : [];
   const stats = (callsData?.stats as { total: number; todayCount: number; totalDurationSec: number; totalCost: number } | null) ?? null;
   const [outcomeFilter, setOutcomeFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -359,16 +359,20 @@ function CallDetailDialog({
     fetchDetail();
   }, [callId]);
 
-  const transcript = Array.isArray(call?.transcriptJson)
+  const rawTranscript = Array.isArray(call?.transcriptJson)
     ? call.transcriptJson
     : call
       ? safeParse(call.transcriptJson, [])
       : [];
-  const functionCalls = Array.isArray(call?.functionCallsJson)
+  const transcript: Array<{ role: string; content: string; timestamp?: string }> = Array.isArray(rawTranscript) ? rawTranscript : [];
+
+  const rawFunctionCalls = Array.isArray(call?.functionCallsJson)
     ? call.functionCallsJson
     : call
       ? safeParse(call.functionCallsJson, [])
       : [];
+  const functionCalls: Array<{ toolName?: string; name?: string; status?: string; result?: string }> = Array.isArray(rawFunctionCalls) ? rawFunctionCalls : [];
+
   const analysis = typeof call?.analysisJson === 'object' && call.analysisJson
     ? call.analysisJson
     : call
@@ -507,7 +511,7 @@ function CallDetailDialog({
               {call.recordingUrl && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1.5">Recording</p>
-                  <audio controls src={`/api/vapi/calls/${call.id}/recording`} className="w-full" />
+                  <audio controls src={`/api/vapi/calls/${call.id}/recording`} className="w-full" preload="none" />
                 </div>
               )}
             </div>
@@ -538,7 +542,10 @@ function safeParse<T>(json: string | null | undefined, fallback: T): T {
   if (!json) return fallback;
   try {
     const val = JSON.parse(json);
-    return val === null ? fallback : (val as T);
+    if (val === null || val === undefined) return fallback;
+    if (Array.isArray(fallback) && !Array.isArray(val)) return fallback;
+    if (typeof fallback === 'object' && !Array.isArray(fallback) && (typeof val !== 'object' || Array.isArray(val))) return fallback;
+    return val as T;
   } catch {
     return fallback;
   }

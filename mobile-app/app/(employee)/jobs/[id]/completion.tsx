@@ -92,6 +92,7 @@ import { Input } from '@/components/ui/Input';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   useJob,
   useJobChecklist,
@@ -444,6 +445,12 @@ function InlineSignaturePad({
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<Stroke>([]);
   const [signerName, setSignerName] = useState(defaultSignerName ?? '');
+
+  useEffect(() => {
+    if (defaultSignerName && !signerName) {
+      setSignerName(defaultSignerName);
+    }
+  }, [defaultSignerName]);
 
   const svgContainerRef = useRef<View>(null);
 
@@ -1061,8 +1068,8 @@ export default function JobCompletionScreen() {
   const completeProof = useCompleteProof();
   const lifecycle = useJobLifecycle();
 
+  const user = useAuthStore((s) => s.user);
   const [notes, setNotes] = useState('');
-  const [customerName, setCustomerName] = useState('');
 
   const job = jobQuery.data;
   const allPhotos: JobPhoto[] = photosQuery.data ?? job?.photos ?? [];
@@ -1123,10 +1130,12 @@ export default function JobCompletionScreen() {
   // ── Submit ──────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!allPass || !id) return;
-    if (!customerName.trim()) {
-      show('Please confirm the customer name.', 'warning');
-      return;
-    }
+    const resolvedCustomerName = (
+      customerSignature?.signatoryName ||
+      job?.customer?.name ||
+      'Customer'
+    ).trim();
+
     try {
       // 1. Submit denormalized completion proof snapshot (photos + sig + notes
       //    + customerName). Photos and signatures are already persisted as
@@ -1140,7 +1149,7 @@ export default function JobCompletionScreen() {
           photos: allPhotos.map((p) => p.id),
           signature: customerSignature?.id,
           notes: notes.trim() || undefined,
-          customerName: customerName.trim(),
+          customerName: resolvedCustomerName,
         },
       });
 
@@ -1182,7 +1191,7 @@ export default function JobCompletionScreen() {
   }, [
     allPass,
     id,
-    customerName,
+    job,
     completeProof,
     lifecycle,
     allPhotos,
@@ -1345,6 +1354,7 @@ export default function JobCompletionScreen() {
           <InlineSignaturePad
             jobId={id}
             signerType="customer"
+            defaultSignerName={job?.customer?.name || ''}
             defaultRole="Customer"
             accentColor="#059669"
           />
@@ -1366,6 +1376,7 @@ export default function JobCompletionScreen() {
           <InlineSignaturePad
             jobId={id}
             signerType="employee"
+            defaultSignerName={user?.name || job?.employee?.name || ''}
             defaultRole="Employee"
             accentColor="#3B82F6"
           />
@@ -1404,18 +1415,6 @@ export default function JobCompletionScreen() {
           </Text>
         </Card>
 
-        {/* Customer Name Confirmation */}
-        <Card className="mb-4">
-          <Input
-            label="Customer Name Confirmation"
-            value={customerName}
-            onChangeText={setCustomerName}
-            placeholder="Re-enter the customer's full name"
-            autoCapitalize="words"
-            autoCorrect={false}
-          />
-        </Card>
-
         {!allPass ? (
           <Text
             style={{
@@ -1426,8 +1425,7 @@ export default function JobCompletionScreen() {
               marginBottom: 8,
             }}
           >
-            Resolve the red chips above and confirm the customer name to enable
-            submission.
+            Resolve the red chips above to enable submission.
           </Text>
         ) : null}
       </ScrollView>

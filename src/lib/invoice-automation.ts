@@ -25,7 +25,7 @@ import { Prisma } from '@prisma/client'
 import { sendEmail } from '@/lib/email-send'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { sendSmsMessage } from '@/lib/sms-send'
-import { getExchangeRate, convertCurrency } from '@/lib/currency'
+import { getExchangeRate, convertCurrency, formatCurrency } from '@/lib/currency'
 import { notifyOwner } from '@/lib/owner-notifications'
 import { issueCustomerMagicLink } from '@/lib/customer-magic-link'
 
@@ -792,9 +792,10 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
   const rawItems = safeParse(invoice.itemsJson, []) as Array<{ description: string; quantity: number; rate: number; unitPrice: number; amount: number }> | { items?: Array<{ description: string; quantity: number; rate: number; unitPrice: number; amount: number }> }
   // itemsJson may be a flat array OR a wrapper like {items: [...], breakdown: {...}}
   const items = Array.isArray(rawItems) ? rawItems : (rawItems?.items || [])
-  const itemsText = items.map((it, i) => `${i + 1}. ${it.description} ×${it.quantity} = $${((it.rate || it.unitPrice || 0) * it.quantity).toFixed(2)}`).join('\n')
+  const currencyCode = invoice.currency || invoice.tenant?.currency || 'USD'
+  const itemsText = items.map((it, i) => `${i + 1}. ${it.description} ×${it.quantity} = ${formatCurrency(((it.rate || it.unitPrice || 0) * it.quantity), currencyCode)}`).join('\n')
   const customerName = invoice.customer?.name || invoice.job?.customerName || 'Customer'
-  const invoiceTotal = `$${Number(invoice.total).toFixed(2)} ${invoice.currency}`
+  const invoiceTotal = formatCurrency(Number(invoice.total || 0), currencyCode)
 
   // ── Resolve recipient email & phone ──────────────────────────────
   // Prefer the linked Customer record; fall back to the job's customer
@@ -1321,7 +1322,8 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
   if (invoice.status === 'paid') return { success: false, error: 'Invoice already paid' }
 
   const customerName = invoice.customer?.name || 'Customer'
-  const invoiceTotal = `$${Number(invoice.total).toFixed(2)} ${invoice.currency}`
+  const currencyCode = invoice.currency || invoice.tenant?.currency || 'USD'
+  const invoiceTotal = formatCurrency(Number(invoice.total || 0), currencyCode)
   let emailSent = false
   let whatsappSent = false
   let smsSent = false
@@ -2132,7 +2134,7 @@ export async function notifyOwnerInvoiceCreated(invoiceId: string): Promise<void
         '',
         `*Invoice #:* ${invoice.number}`,
         `*Customer:* ${invoice.customer?.name || 'N/A'}`,
-        `*Amount:* $${Number(invoice.total).toFixed(2)} ${invoice.currency}`,
+        `*Amount:* ${formatCurrency(Number(invoice.total || 0), invoice.currency || 'USD')}`,
         invoice.dueDate ? `*Due:* ${new Date(invoice.dueDate).toLocaleDateString()}` : '',
         `*Status:* ${invoice.status}`,
       ].filter(Boolean).join('\n'),
@@ -2263,7 +2265,8 @@ export async function detectAndEmitOverdueInvoices(): Promise<{ processed: numbe
     const customerEmail = invoice.customer?.email || null
     const customerPhone = invoice.customer?.phone || null
     const customerName = invoice.customer?.name || 'Customer'
-    const invoiceTotal = `$${Number(invoice.total).toFixed(2)} ${invoice.currency}`
+    const currencyCode = invoice.currency || invoice.tenant?.currency || 'USD'
+    const invoiceTotal = formatCurrency(Number(invoice.total || 0), currencyCode)
     const dueStr = invoice.dueDate
       ? new Date(invoice.dueDate).toLocaleDateString()
       : 'recently'

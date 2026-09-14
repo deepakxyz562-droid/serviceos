@@ -198,6 +198,11 @@ async function _GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const body = await request.json()
     const {
       name,
@@ -227,8 +232,31 @@ export async function POST(request: NextRequest) {
       metadataJson,
     } = body
 
-    if (!name || !phone) {
-      return NextResponse.json({ error: 'Name and phone are required' }, { status: 400 })
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return NextResponse.json({ error: 'Full name is required' }, { status: 400 })
+    }
+    if (!phone || typeof phone !== 'string' || !phone.trim()) {
+      return NextResponse.json({ error: 'Phone number is required' }, { status: 400 })
+    }
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      return NextResponse.json({ error: 'Email address is required' }, { status: 400 })
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 })
+    }
+
+    // Resolve workspaceId from payload or authenticated session
+    let resolvedWorkspaceId = workspaceId || authUser.workspaceId || null
+    if (!resolvedWorkspaceId && authUser.tenantId) {
+      const fallbackWs = await db.workspace.findFirst({
+        where: { tenantId: authUser.tenantId },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+      if (fallbackWs) {
+        resolvedWorkspaceId = fallbackWs.id
+      }
     }
 
     let metaObj: Record<string, unknown> = {}
@@ -243,11 +271,11 @@ export async function POST(request: NextRequest) {
 
     const employee = await db.employee.create({
       data: {
-        name,
-        phone,
-        email: email || null,
-        role: role || 'driver',
-        skills: skills ? JSON.stringify(skills) : '[]',
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email.trim().toLowerCase(),
+        role: role || 'technician',
+        skills: skills ? (typeof skills === 'string' ? skills : JSON.stringify(skills)) : '[]',
         status: status || 'available',
         avatar,
         whatsappId,
@@ -256,7 +284,7 @@ export async function POST(request: NextRequest) {
         location,
         latitude,
         longitude,
-        workspaceId,
+        workspaceId: resolvedWorkspaceId,
         teamId: teamId || null,
         lastSeenAt: lastSeenAt ? new Date(lastSeenAt) : null,
         currentJobId: currentJobId || null,

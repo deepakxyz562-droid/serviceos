@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
         invitation: {
           email: invitation.email,
           name: invitation.name,
+          phone: invitation.phone,
           role: invitation.role,
           tenantName: invitation.tenant?.name,
           tenantSlug: invitation.tenant?.slug,
@@ -119,6 +120,7 @@ export async function GET(request: NextRequest) {
         invitation: {
           email: customer.email || customer.phone || '',
           name: customer.name,
+          phone: customer.phone,
           role: 'customer',
           isCustomer: true,
           tenantName,

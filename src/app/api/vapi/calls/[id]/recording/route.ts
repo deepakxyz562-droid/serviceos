@@ -132,7 +132,7 @@ export async function GET(
     // If not resolved from Vapi API, check stored DB URL
     if (!targetUrl) {
       const storedUrl = call.recordingUrl || call.stereoRecordingUrl;
-      if (storedUrl && !storedUrl.includes('api.vapi.ai')) {
+      if (storedUrl && (storedUrl.startsWith('http://') || storedUrl.startsWith('https://'))) {
         targetUrl = storedUrl;
       }
     }

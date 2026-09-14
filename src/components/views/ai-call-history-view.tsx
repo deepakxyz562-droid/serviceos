@@ -177,7 +177,7 @@ export function AiCallHistoryView() {
       const statusParam = statusFilter !== 'all' ? `&status=${statusFilter}` : '';
       const res = await fetch(`/api/vapi/calls?limit=100${statusParam}`);
       const data = await res.json();
-      setCalls(data.calls || []);
+      setCalls(Array.isArray(data.calls) ? data.calls : []);
       setStats(data.stats || { total: 0, totalDurationSec: 0, totalCost: 0, todayCount: 0 });
     } catch {
       toast.error('Failed to load call history');
@@ -442,10 +442,10 @@ export function AiCallHistoryView() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Calls</CardTitle>
-          <CardDescription>{calls.length} call{calls.length !== 1 ? 's' : ''} found</CardDescription>
+          <CardDescription>{(Array.isArray(calls) ? calls : []).length} call{(Array.isArray(calls) ? calls : []).length !== 1 ? 's' : ''} found</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          {calls.length === 0 ? (
+          {!Array.isArray(calls) || calls.length === 0 ? (
             <div className="text-center py-16">
               <div className="mx-auto mb-3 flex items-center justify-center size-12 rounded-full bg-muted">
                 <PhoneMissed className="size-6 text-muted-foreground" />
@@ -621,10 +621,10 @@ export function AiCallHistoryView() {
               <div>
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
                   <Tag className="size-3.5" />
-                  Tags {displayTags.length > 0 && `(${displayTags.length})`}
+                  Tags {(Array.isArray(displayTags) ? displayTags : []).length > 0 && `(${displayTags.length})`}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                  {displayTags.length === 0 ? (
+                  {!Array.isArray(displayTags) || displayTags.length === 0 ? (
                     <span className="text-xs text-muted-foreground italic">No tags yet.</span>
                   ) : (
                     displayTags.map((tag) => (
@@ -679,7 +679,7 @@ export function AiCallHistoryView() {
               </div>
 
               {/* ─── Function calls ────────────────────────────────── */}
-              {selectedCall.functionCalls && selectedCall.functionCalls.length > 0 && (
+              {Array.isArray(selectedCall.functionCalls) && selectedCall.functionCalls.length > 0 && (
                 <div>
                   <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
                     <Bot className="size-3.5" />
@@ -735,7 +735,7 @@ export function AiCallHistoryView() {
                   <FileText className="size-3.5" />
                   Transcript
                 </div>
-                {selectedCall.transcript && selectedCall.transcript.length > 0 ? (
+                {Array.isArray(selectedCall.transcript) && selectedCall.transcript.length > 0 ? (
                   <div className="space-y-2.5 max-h-80 overflow-y-auto">
                     {selectedCall.transcript.map((msg, i) => (
                       <div

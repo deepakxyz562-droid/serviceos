@@ -198,8 +198,15 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       )
     }
-    if (!phone) {
-      return NextResponse.json({ error: 'Phone is required' }, { status: 400 })
+    if (!phone || typeof phone !== 'string' || !phone.trim()) {
+      return NextResponse.json({ error: 'Phone number is required' }, { status: 400 })
+    }
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      return NextResponse.json({ error: 'Email address is required' }, { status: 400 })
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 })
     }
 
     // Always use the logged-in user's workspaceId — ignore any workspaceId in

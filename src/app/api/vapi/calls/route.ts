@@ -54,7 +54,14 @@ export async function GET(request: NextRequest) {
         try { vapiCall = await vapiGetCall(call.vapiCallId); } catch { /* ignore */ }
       }
 
-      const dbTranscript = JSON.parse(call.transcriptJson || '[]');
+      let dbTranscript: Array<{ role: string; content: string; timestamp?: string | null }> = [];
+      try {
+        const parsed = JSON.parse(call.transcriptJson || '[]');
+        dbTranscript = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        dbTranscript = [];
+      }
+
       const vapiTranscript = Array.isArray(vapiCall?.messages)
         ? (vapiCall.messages as Array<{ role?: string; message?: string; content?: string }>)
             .filter((m) => m.role === 'bot' || m.role === 'assistant' || m.role === 'user')
@@ -64,6 +71,22 @@ export async function GET(request: NextRequest) {
             }))
         : [];
 
+      let analysis: Record<string, unknown> = {};
+      try {
+        const parsed = JSON.parse(call.analysisJson || '{}');
+        analysis = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      } catch {
+        analysis = {};
+      }
+
+      let functionCalls: Array<{ name: string; parameters: Record<string, unknown>; result: unknown; at: string }> = [];
+      try {
+        const parsed = JSON.parse(call.functionCallsJson || '[]');
+        functionCalls = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        functionCalls = [];
+      }
+
       return NextResponse.json({
         call: {
           ...call,
@@ -72,8 +95,8 @@ export async function GET(request: NextRequest) {
           endedAt: safeDate(call.endedAt),
           createdAt: safeDate(call.createdAt),
           transcript: dbTranscript.length > 0 ? dbTranscript : vapiTranscript,
-          analysis: JSON.parse(call.analysisJson || '{}'),
-          functionCalls: JSON.parse(call.functionCallsJson || '[]'),
+          analysis,
+          functionCalls,
         },
         vapiCall,
       });

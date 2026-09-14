@@ -124,6 +124,14 @@ export function CreateCustomerDialog({
       toast.error('Phone number is required');
       return;
     }
+    if (!email.trim()) {
+      toast.error('Email address is required');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -262,8 +270,9 @@ export function CreateCustomerDialog({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
+              placeholder="Email address *"
               className="h-11 rounded-lg text-sm"
+              required
             />
           </div>
 

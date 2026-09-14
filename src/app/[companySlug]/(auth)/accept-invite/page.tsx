@@ -112,6 +112,7 @@ function AcceptInvitePageInner() {
       const inv: AcceptInviteInvitation = {
         email: data.invitation.email,
         name: data.invitation.name ?? null,
+        phone: data.invitation.phone ?? null,
         role: data.invitation.role,
         tenantName: data.invitation.tenantName ?? null,
         tenantSlug: data.invitation.tenantSlug ?? slug,

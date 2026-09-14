@@ -347,8 +347,11 @@ export function CustomerFormSheet({
     return `${on} of ${total} notifications on`;
   }, [notificationSettings]);
 
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const canSubmit =
     !!phone.trim() &&
+    !!email.trim() &&
+    isEmailValid &&
     (!!firstName.trim() || !!lastName.trim() || !!companyName.trim()) &&
     !submitting;
 
@@ -670,13 +673,16 @@ export function CustomerFormSheet({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="cust-email">Email</Label>
+                    <Label htmlFor="cust-email">
+                      Email <span className="text-destructive">*</span>
+                    </Label>
                     <Input
                       id="cust-email"
                       type="email"
                       placeholder="john@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      required
                     />
                   </div>
                 </div>

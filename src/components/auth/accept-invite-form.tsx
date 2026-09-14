@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils';
 export interface AcceptInviteInvitation {
   email: string;
   name?: string | null;
+  phone?: string | null;
   role: string;
   tenantName?: string | null;
   tenantSlug?: string | null;
@@ -117,7 +119,7 @@ export function AcceptInviteForm({
   const [fullName, setFullName] = useState(invitation.name ?? '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(invitation.phone ?? '');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -403,19 +405,13 @@ export function AcceptInviteForm({
             >
               Phone <span className="text-[10px]">(optional)</span>
             </Label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                id="ai-phone"
-                type="tel"
-                autoComplete="tel"
-                placeholder="+1 555 123 4567"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="pl-9 h-10"
-                disabled={isLoading}
-              />
-            </div>
+            <PhoneInput
+              id="ai-phone"
+              value={phone}
+              onChange={setPhone}
+              placeholder="+1 555 123 4567"
+              disabled={isLoading}
+            />
           </div>
 
           <Button

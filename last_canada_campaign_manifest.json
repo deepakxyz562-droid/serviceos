@@ -1,0 +1,356 @@
+{
+  "successCount": 50,
+  "failCount": 0,
+  "deliveryManifest": [
+    {
+      "num": 1,
+      "name": "Grand Valley Mechanical",
+      "email": "info@gvmech.ca",
+      "location": "Brandon, MB",
+      "messageId": "<784755cc-9195-83c8-08a8-516975ef3062@fieseros.com>"
+    },
+    {
+      "num": 2,
+      "name": "WHC Services Group",
+      "email": "info@whcservicesgroup.com",
+      "location": "Windsor, ON",
+      "messageId": "<6f208a16-56b0-2f4f-0de2-7df966466093@fieseros.com>"
+    },
+    {
+      "num": 3,
+      "name": "Lynk Electric Ltd.",
+      "email": "info@cahill.ca",
+      "location": "Sydney, NS",
+      "messageId": "<9cd0baec-2c86-99ed-bfb1-74473b5cd114@fieseros.com>"
+    },
+    {
+      "num": 4,
+      "name": "Ace Refrigeration and Air Conditioning",
+      "email": "info@acerefrigeration.ca",
+      "location": "Bedford, NS",
+      "messageId": "<dcf4fae5-741e-3802-620d-72b4620cd614@fieseros.com>"
+    },
+    {
+      "num": 5,
+      "name": "365 Mechanical Ltd.",
+      "email": "info@365mechanical.ca",
+      "location": "Abbotsford, BC",
+      "messageId": "<ace557e9-84e2-9a2d-64da-a80939d06e74@fieseros.com>"
+    },
+    {
+      "num": 6,
+      "name": "Triumph Heating & Air Conditioning",
+      "email": "info@triumphheatandair.com",
+      "location": "West Kelowna, BC",
+      "messageId": "<ccc695e9-0b93-c440-2108-76693702a3f3@fieseros.com>"
+    },
+    {
+      "num": 7,
+      "name": "Radian Mechanical Inc.",
+      "email": "reception@radianmechanical.com",
+      "location": "Kelowna, BC",
+      "messageId": "<c35a4569-ec94-6278-dfe9-746d0a77f612@fieseros.com>"
+    },
+    {
+      "num": 8,
+      "name": "Phillips Plumbing Heating and Air Conditioning",
+      "email": "info@phillipsplumbingandheating.ca",
+      "location": "West Kelowna, BC",
+      "messageId": "<b790c017-3307-43fd-028d-2cd44d5eef4c@fieseros.com>"
+    },
+    {
+      "num": 9,
+      "name": "Zeeco Services Ltd",
+      "email": "info@zeecoservices.com",
+      "location": "Barrie, ON",
+      "messageId": "<9759f6ad-6134-51dc-ec4d-27907a53edc6@fieseros.com>"
+    },
+    {
+      "num": 10,
+      "name": "Zoltera Mechanical Ltd.",
+      "email": "info@zolteramech.ca",
+      "location": "Kelowna, BC",
+      "messageId": "<8ce5b8da-d6ba-fc80-18f6-318ced009e77@fieseros.com>"
+    },
+    {
+      "num": 11,
+      "name": "Brent Jansen Plumbing & Heating Ltd",
+      "email": "office@brentjansenplumbing.com",
+      "location": "Victoria, BC",
+      "messageId": "<0aa6fbf9-64bd-4e19-2748-d9bac32110fa@fieseros.com>"
+    },
+    {
+      "num": 12,
+      "name": "Oasis Environments",
+      "email": "chris@oasisenvironments.ca",
+      "location": "West Kelowna, BC",
+      "messageId": "<ea7ce125-633e-5673-20c7-f9da6074df15@fieseros.com>"
+    },
+    {
+      "num": 13,
+      "name": "Accutemp Refrigeration Air Conditioning & Heating Ltd",
+      "email": "info@accutemp.ca",
+      "location": "Victoria, BC",
+      "messageId": "<6a1ddcd7-e4d2-f479-33e7-fd856d992a1b@fieseros.com>"
+    },
+    {
+      "num": 14,
+      "name": "Bree-link plumbing and Heating",
+      "email": "chris@bree-linkplumbingandheating.ca",
+      "location": "Kelowna, BC",
+      "messageId": "<37fa8c75-d7d5-04f0-b42a-80715f74d447@fieseros.com>"
+    },
+    {
+      "num": 15,
+      "name": "Coral Home Comfort",
+      "email": "service@coralhomecomfort.com",
+      "location": "Kelowna, BC",
+      "messageId": "<823143f3-0c92-f9ff-d173-1591a02ab4ce@fieseros.com>"
+    },
+    {
+      "num": 16,
+      "name": "Northern Climate",
+      "email": "service@northernclimatesudbury.com",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<a9159346-e3bb-c11b-cd92-ba933f226612@fieseros.com>"
+    },
+    {
+      "num": 17,
+      "name": "Uptown Air Conditioning Ltd.",
+      "email": "info@uptownac.ca",
+      "location": "Victoria, BC",
+      "messageId": "<3383947c-eded-cfc2-37a5-a58f43fa144a@fieseros.com>"
+    },
+    {
+      "num": 18,
+      "name": "Bridgeman Plumbing & Heating Ltd",
+      "email": "info@bridgemanplumbing.ca",
+      "location": "Victoria, BC",
+      "messageId": "<aec82625-08f8-dd0d-a7b7-627c89c8abf9@fieseros.com>"
+    },
+    {
+      "num": 19,
+      "name": "Flow Right Mechanical",
+      "email": "pete@flowright.ca",
+      "location": "Saskatoon, SK",
+      "messageId": "<96e17d53-2079-87dc-ca6b-c11027bfab67@fieseros.com>"
+    },
+    {
+      "num": 20,
+      "name": "PSL Patrick Sprack Limited",
+      "email": "info@psltd.ca",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<b4a3a2d2-d1d1-1fb5-ce4d-364dffef8fd3@fieseros.com>"
+    },
+    {
+      "num": 21,
+      "name": "Efficiency Heating & Cooling",
+      "email": "info@efficiencyheating.com",
+      "location": "Saskatoon, SK",
+      "messageId": "<d6b60897-a194-3810-b916-315077031224@fieseros.com>"
+    },
+    {
+      "num": 22,
+      "name": "Family Plumbing and Heating Inc",
+      "email": "info@familyplumbing.ca",
+      "location": "Regina, SK",
+      "messageId": "<f77856d9-74ef-eecd-a5b8-35cd90b18c39@fieseros.com>"
+    },
+    {
+      "num": 23,
+      "name": "One Source Home Services",
+      "email": "csr@onesourcehome.ca",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<a0ef0337-141a-93ef-1a00-5ece66ece589@fieseros.com>"
+    },
+    {
+      "num": 24,
+      "name": "Castle Plumbing and Heating Ltd.",
+      "email": "info@castlesudbury.com",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<b71a480f-8bf0-64c8-90d3-29d431728d3d@fieseros.com>"
+    },
+    {
+      "num": 25,
+      "name": "O'Dell HVAC Group",
+      "email": "info@odellhvac.com",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<f59bda86-2ce1-6310-c191-9b3438373be3@fieseros.com>"
+    },
+    {
+      "num": 26,
+      "name": "JAC Mechanical / 2JAC Contracting",
+      "email": "info@2jac.ca",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<5bbe3faf-f60c-4755-bf75-d9083b4d7972@fieseros.com>"
+    },
+    {
+      "num": 27,
+      "name": "The Master Group Sudbury",
+      "email": "dbushey@master.ca",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<731f93c6-768e-6559-b184-e908ad0d8a37@fieseros.com>"
+    },
+    {
+      "num": 28,
+      "name": "Mountain Peak Heating and Cooling Ltd",
+      "email": "info@mountainpeakhvac.ca",
+      "location": "Victoria, BC",
+      "messageId": "<932f8418-5c4d-7fa3-4d7c-76f59570e41c@fieseros.com>"
+    },
+    {
+      "num": 29,
+      "name": "Action Plumbing and Heating Ltd",
+      "email": "office@actionplumbing.ca",
+      "location": "Saskatoon, SK",
+      "messageId": "<a5f06185-950e-c2b1-0ef3-14b398b450e8@fieseros.com>"
+    },
+    {
+      "num": 30,
+      "name": "Excelsior Mechanical",
+      "email": "info@excelsiormechanical.com",
+      "location": "Saskatoon, SK",
+      "messageId": "<3623dea8-837f-b459-a1db-381f755c41a8@fieseros.com>"
+    },
+    {
+      "num": 31,
+      "name": "Five Star Plumbing Heating & Air Conditioning",
+      "email": "mike@fivestarheating.ca",
+      "location": "Saskatoon, SK",
+      "messageId": "<86052ec4-8222-c25e-4347-37a478384b6d@fieseros.com>"
+    },
+    {
+      "num": 32,
+      "name": "JOB Heating and Air Conditioning",
+      "email": "info@jobheating.com",
+      "location": "Saskatoon, SK",
+      "messageId": "<405e5b3b-92b6-b82d-a23f-93e71dab0687@fieseros.com>"
+    },
+    {
+      "num": 33,
+      "name": "Welldone Mechanical Services",
+      "email": "regina@welldone.com",
+      "location": "Saskatoon, SK",
+      "messageId": "<01f340a3-dc30-3e7a-e87b-1a246b8fdf35@fieseros.com>"
+    },
+    {
+      "num": 34,
+      "name": "Inland Comfort Air Conditioning Ltd.",
+      "email": "dispatch@inlandcomfort.com",
+      "location": "Kelowna, BC",
+      "messageId": "<7268d36e-6154-9a25-65b5-d667b7fd4cc1@fieseros.com>"
+    },
+    {
+      "num": 35,
+      "name": "Dun-Rite Vac Regina",
+      "email": "info@dun-ritevac.com",
+      "location": "Regina, SK",
+      "messageId": "<bf8599b8-0bd2-060d-d243-74ffc9c1b71d@fieseros.com>"
+    },
+    {
+      "num": 36,
+      "name": "CustomAir",
+      "email": "customairservice@customair.ca",
+      "location": "Kelowna, BC",
+      "messageId": "<6518a860-f74a-cdda-0ea5-28df56814247@fieseros.com>"
+    },
+    {
+      "num": 37,
+      "name": "Witherell Plumbing & Heating",
+      "email": "info@witherellplumbing.com",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<c462c528-134f-8422-00c2-d82d8f537e4b@fieseros.com>"
+    },
+    {
+      "num": 38,
+      "name": "Bisschops Industries",
+      "email": "info@bisschops.ca",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<9e5f10be-c509-6881-ccfd-21c1882626b8@fieseros.com>"
+    },
+    {
+      "num": 39,
+      "name": "John The Plumber",
+      "email": "agenda@johntheplumber.ca",
+      "location": "Kingston, ON",
+      "messageId": "<502a69c4-5109-674d-776a-0ec5ac5b274d@fieseros.com>"
+    },
+    {
+      "num": 40,
+      "name": "Pro-West Refrigeration Ltd.",
+      "email": "reception@pro-west.ca",
+      "location": "Regina, SK",
+      "messageId": "<5d30368a-e619-7e76-4c97-f25cc8d585b0@fieseros.com>"
+    },
+    {
+      "num": 41,
+      "name": "NexGen Mechanical Inc",
+      "email": "info@nexgenmechanical.ca",
+      "location": "Saskatoon, SK",
+      "messageId": "<f778b6e7-7c2d-cb3a-78af-d633a411dbf2@fieseros.com>"
+    },
+    {
+      "num": 42,
+      "name": "AOBUTEC HVAC Heating & Cooling",
+      "email": "info@aobutec.ca",
+      "location": "Whitby, ON",
+      "messageId": "<0550b31b-cf49-9066-151a-b1e95ba8cb6d@fieseros.com>"
+    },
+    {
+      "num": 43,
+      "name": "Beav-Air Mechanical Inc.",
+      "email": "garett.dillman@beav-airmechanical.com",
+      "location": "Gananoque, ON",
+      "messageId": "<f573ecb1-375a-6e9f-68a3-7f0e67219a43@fieseros.com>"
+    },
+    {
+      "num": 44,
+      "name": "OKGN Refrigeration",
+      "email": "info@okgnr.ca",
+      "location": "Kelowna, BC",
+      "messageId": "<df614d34-2481-b93c-58e5-f80031c21bd1@fieseros.com>"
+    },
+    {
+      "num": 45,
+      "name": "Kore HVAC Services",
+      "email": "sales@korehvac.ca",
+      "location": "Greater Sudbury, ON",
+      "messageId": "<fbac48d6-478d-fcff-a2dc-73b7bb7061fe@fieseros.com>"
+    },
+    {
+      "num": 46,
+      "name": "Smile HVAC",
+      "email": "email@smilehvac.ca",
+      "location": "Vaughan, ON",
+      "messageId": "<8d8db950-20cd-2990-ae4e-28952d0169d1@fieseros.com>"
+    },
+    {
+      "num": 47,
+      "name": "Neighbours Mechanical",
+      "email": "wayne@neighboursmechanical.com",
+      "location": "Regina, SK",
+      "messageId": "<7a78b1f5-a9ea-72b2-471c-7fb445a7953c@fieseros.com>"
+    },
+    {
+      "num": 48,
+      "name": "Haagsma Heating & Air Conditioning",
+      "email": "info@haagsmaheatandair.com",
+      "location": "Kingston, ON",
+      "messageId": "<fe390b76-c16c-cabe-2f65-ad4d1c0c10bd@fieseros.com>"
+    },
+    {
+      "num": 49,
+      "name": "Elite Mechanical Services",
+      "email": "info@elitemechanicalservices.ca",
+      "location": "Clarington, ON",
+      "messageId": "<25ec9e0e-7d70-1458-9498-14ee952b45ef@fieseros.com>"
+    },
+    {
+      "num": 50,
+      "name": "Denoco Energy Systems",
+      "email": "info@denoco.com",
+      "location": "Kingston, ON",
+      "messageId": "<a5172bd6-e029-5915-e751-c6d4879a091a@fieseros.com>"
+    }
+  ]
+}

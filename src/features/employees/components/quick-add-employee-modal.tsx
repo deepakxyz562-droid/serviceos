@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { UserPlus, Loader2, Phone, Mail, User, Briefcase, MapPin } from 'lucide-react';
+import { UserPlus, Loader2, Mail, User, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -45,6 +46,8 @@ const COMMON_ROLES = [
   { value: 'staff', label: 'General Staff' },
 ];
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function QuickAddEmployeeModal({
   open,
   onOpenChange,
@@ -73,6 +76,18 @@ export function QuickAddEmployeeModal({
       toast.error('Please enter employee full name');
       return;
     }
+    if (!phone.trim()) {
+      toast.error('Please enter a valid phone number');
+      return;
+    }
+    if (!email.trim()) {
+      toast.error('Please enter an email address');
+      return;
+    }
+    if (!EMAIL_REGEX.test(email.trim())) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -81,8 +96,8 @@ export function QuickAddEmployeeModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          phone: phone.trim() || undefined,
-          email: email.trim() || undefined,
+          phone: phone.trim(),
+          email: email.trim().toLowerCase(),
           role: role || 'technician',
           status: 'available',
           location: location.trim() || undefined,
@@ -98,9 +113,12 @@ export function QuickAddEmployeeModal({
       const created = await res.json();
       toast.success(`${created.name || 'Technician'} added successfully`);
 
-      // Invalidate relevant React Query caches
+      // Invalidate all relevant React Query caches
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       queryClient.invalidateQueries({ queryKey: ['pipeline', 'assignees'] });
+      queryClient.invalidateQueries({ queryKey: ['dispatch'] });
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['smart-assign'] });
 
       if (onCreated) {
         onCreated(created);
@@ -114,6 +132,14 @@ export function QuickAddEmployeeModal({
     }
   };
 
+  const canSubmit = Boolean(
+    name.trim() &&
+    phone.trim() &&
+    email.trim() &&
+    EMAIL_REGEX.test(email.trim()) &&
+    !loading
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -123,7 +149,7 @@ export function QuickAddEmployeeModal({
             Add New Technician / Employee
           </DialogTitle>
           <DialogDescription>
-            Quickly add a team member to assign jobs and manage dispatch.
+            Add a team member with required contact details for scheduling and dispatch.
           </DialogDescription>
         </DialogHeader>
 
@@ -146,21 +172,17 @@ export function QuickAddEmployeeModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="emp-phone" className="text-xs font-semibold">
-                Phone Number
+                Phone Number *
               </Label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                <Input
-                  id="emp-phone"
-                  placeholder="+1 555-0199"
-                  className="pl-9"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </div>
+              <PhoneInput
+                value={phone}
+                onChange={setPhone}
+                placeholder="Phone number *"
+                required
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -184,7 +206,7 @@ export function QuickAddEmployeeModal({
 
           <div className="space-y-1.5">
             <Label htmlFor="emp-email" className="text-xs font-semibold">
-              Email Address (Optional)
+              Email Address *
             </Label>
             <div className="relative">
               <Mail className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
@@ -195,6 +217,7 @@ export function QuickAddEmployeeModal({
                 className="pl-9"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
               />
             </div>
           </div>
@@ -226,7 +249,7 @@ export function QuickAddEmployeeModal({
             </Button>
             <Button
               type="submit"
-              disabled={loading || !name.trim()}
+              disabled={!canSubmit}
               className="bg-teal-600 hover:bg-teal-700 text-white"
             >
               {loading ? (
