@@ -376,25 +376,68 @@ function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
 
 // ─── Dynamic Follow-Up Generator ────────────────────────────────────────────
 
-function generateDynamicFollowUps(content: string): string[] {
-  const lower = content.toLowerCase();
-  const followUps: string[] = [];
+function generateDynamicFollowUps(content: string, userQuery?: string): string[] {
+  const lowerContent = content.toLowerCase();
+  const lowerQuery = (userQuery || '').toLowerCase();
+  const candidatePool: string[] = [];
 
-  if (lower.includes('invoice') || lower.includes('balance') || lower.includes('overdue') || lower.includes('revenue')) {
-    followUps.push('Which customer has the largest overdue balance?');
-    followUps.push('How much revenue was collected this month?');
-  } else if (lower.includes('job') || lower.includes('technician') || lower.includes('schedule') || lower.includes('assigned')) {
-    followUps.push('Show me unassigned jobs that need dispatch');
-    followUps.push('What are the scheduled start times for today?');
-  } else if (lower.includes('lead') || lower.includes('quote') || lower.includes('customer')) {
-    followUps.push('List all high-priority pending leads');
-    followUps.push('What is the conversion rate this month?');
-  } else {
-    followUps.push('Give me a full business snapshot for today');
-    followUps.push('Are there any urgent alerts or overdue items?');
+  // 1. Financial / Invoice questions
+  if (lowerContent.includes('invoice') || lowerContent.includes('balance') || lowerContent.includes('overdue') || lowerContent.includes('revenue') || lowerContent.includes('unpaid')) {
+    candidatePool.push(
+      'How much revenue was collected this month?',
+      'Show me unpaid invoices due this week',
+      'Which customers have outstanding balances?',
+      'Show revenue breakdown for recent months',
+    );
   }
 
-  return followUps.slice(0, 2);
+  // 2. Job / Scheduling questions
+  if (lowerContent.includes('job') || lowerContent.includes('technician') || lowerContent.includes('schedule') || lowerContent.includes('assigned') || lowerContent.includes('dispatch')) {
+    candidatePool.push(
+      'Show me unassigned jobs that need dispatch',
+      'What are the scheduled start times for today?',
+      'Which technician has the most jobs scheduled?',
+      'List all in-progress jobs',
+    );
+  }
+
+  // 3. Lead / Customer / Sales questions
+  if (lowerContent.includes('lead') || lowerContent.includes('quote') || lowerContent.includes('customer')) {
+    candidatePool.push(
+      'List all high-priority pending leads',
+      'What is our lead conversion rate this month?',
+      'Search for recently added customers',
+      'Give me an overview of our sales pipeline',
+    );
+  }
+
+  // 4. General fallback suggestions
+  candidatePool.push(
+    'Give me a full business snapshot for today',
+    'Are there any urgent alerts or overdue items?',
+    'What services do we offer and at what price?',
+    'How many active jobs are currently underway?',
+  );
+
+  // Filter out any suggestion that is identical or highly overlapping with what the user asked
+  const queryTokens = lowerQuery.split(/\s+/).filter((w) => w.length > 3);
+
+  const filtered = candidatePool.filter((q) => {
+    const qLower = q.toLowerCase();
+    if (lowerQuery && (lowerQuery.includes(qLower) || qLower.includes(lowerQuery))) {
+      return false;
+    }
+    if (queryTokens.length >= 2) {
+      const qTokens = qLower.split(/\s+/).filter((w) => w.length > 3);
+      const common = queryTokens.filter((w) => qTokens.includes(w));
+      if (common.length >= 2 && common.length / Math.min(queryTokens.length, qTokens.length) >= 0.5) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  return Array.from(new Set(filtered)).slice(0, 2);
 }
 
 // ─── Categorized Prompt Starters ─────────────────────────────────────────────
@@ -584,7 +627,7 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
         if (data.quota) setQuota(data.quota);
 
         const replyContent = data.reply ?? '(No response content)';
-        const followUps = generateDynamicFollowUps(replyContent);
+        const followUps = generateDynamicFollowUps(replyContent, question);
 
         setMessages([
           ...outgoing,

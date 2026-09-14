@@ -273,7 +273,7 @@ const getJobDetails: ChatTool = {
 
 const listOutstandingInvoices: ChatTool = {
   name: 'list_outstanding_invoices',
-  description: 'Unpaid invoices (status sent), oldest due date first, with days overdue. Optionally include drafts.',
+  description: 'Unpaid invoices (status sent), oldest due date first, with customer name and days overdue. Optionally include drafts.',
   argsSpec: '{ includeDrafts?: boolean, limit?: number }',
   async execute({ tenantId }, args) {
     const includeDrafts = args.includeDrafts === true;
@@ -284,17 +284,39 @@ const listOutstandingInvoices: ChatTool = {
     };
     const invoices = await db.invoice.findMany({
       where,
-      select: { id: true, number: true, customerId: true, total: true, currency: true, status: true, dueDate: true, sentAt: true },
+      select: {
+        id: true,
+        number: true,
+        customerId: true,
+        total: true,
+        currency: true,
+        status: true,
+        dueDate: true,
+        sentAt: true,
+        customer: { select: { id: true, name: true, companyName: true, phone: true } },
+      },
       orderBy: { dueDate: 'asc' },
       take: asLimit(args.limit, 15),
     });
     const now = Date.now();
-    const withOverdue = invoices.map((inv) => ({
-      ...inv,
-      daysOverdue: inv.dueDate && inv.status === 'sent'
-        ? Math.max(0, Math.floor((now - new Date(inv.dueDate).getTime()) / 86400000))
-        : 0,
-    }));
+    const withOverdue = invoices.map((inv) => {
+      const isPastDue = inv.dueDate && inv.status === 'sent' && (now - new Date(inv.dueDate).getTime()) > 0;
+      const daysOverdue = isPastDue
+        ? Math.floor((now - new Date(inv.dueDate).getTime()) / 86400000)
+        : 0;
+      return {
+        id: inv.id,
+        invoiceNumber: inv.number,
+        customerName: inv.customer?.name || inv.customer?.companyName || 'Unknown Customer',
+        customerPhone: inv.customer?.phone || null,
+        total: inv.total,
+        currency: inv.currency,
+        status: inv.status,
+        dueDate: inv.dueDate ? new Date(inv.dueDate).toISOString().slice(0, 10) : null,
+        isOverdue: Boolean(isPastDue),
+        daysOverdue,
+      };
+    });
     return { count: withOverdue.length, invoices: withOverdue };
   },
 };
