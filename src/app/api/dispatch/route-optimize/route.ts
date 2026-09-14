@@ -50,28 +50,29 @@ export async function POST(request: NextRequest) {
     const [employee, jobs, defaultShop] = await Promise.all([
       db.employee.findUnique({
         where: { id: employeeId },
-        select: { id: true, name: true, latitude: true, longitude: true, tenantId: true },
+        select: { id: true, name: true, latitude: true, longitude: true, workspaceId: true },
       }),
       db.job.findMany({
         where: {
           assigneeId: employeeId,
           scheduledAt: { gte: startOfDay, lte: endOfDay },
           status: { notIn: ['completed', 'cancelled'] },
-          ...(authUser.tenantId && !authUser.isSuperAdmin ? { tenantId: authUser.tenantId } : {}),
+          deletedAt: null,
+          ...(authUser.workspaceId ? { workspaceId: authUser.workspaceId } : {}),
         },
         orderBy: { scheduledAt: 'asc' },
         include: {
           customer: { select: { id: true, name: true, address: true, phone: true } },
         },
       }),
-      db.warehouse.findFirst({
+      db.inventoryLocation.findFirst({
         where: {
-          tenantId: authUser.tenantId ?? undefined,
-          type: 'main',
-          isActive: true,
+          type: 'warehouse',
+          deletedAt: null,
+          ...(authUser.workspaceId ? { workspaceId: authUser.workspaceId } : {}),
         },
         select: { id: true, name: true, address: true },
-      }),
+      }).catch(() => null),
     ]);
 
     if (!employee) {

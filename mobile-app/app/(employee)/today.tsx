@@ -53,6 +53,7 @@ import {
 } from '@/hooks/use-shift';
 import { api } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
+import { downloadAndCacheTodayJobPack } from '@/lib/offline-job-pack';
 import type { Job, ShiftWeek } from '@/types';
 
 const isToday = (iso: string | null): boolean => {
@@ -176,6 +177,7 @@ export default function TodayScreen() {
   );
 
   const refreshAll = useCallback(async () => {
+    downloadAndCacheTodayJobPack().catch(() => {});
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['shift'] }),
       queryClient.invalidateQueries({ queryKey: ['jobs'] }),

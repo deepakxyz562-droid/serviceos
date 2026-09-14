@@ -64,9 +64,7 @@ export async function GET(request: NextRequest) {
     const statusParam = searchParams.get('status'); // 'all', 'paid', 'pending'
 
     // Tenant / Workspace isolation
-    const empWhere: Record<string, unknown> = {
-      deletedAt: null,
-    };
+    const empWhere: Record<string, unknown> = {};
     if (authUser.workspaceId) {
       empWhere.workspaceId = authUser.workspaceId;
     }
