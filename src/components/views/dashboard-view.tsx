@@ -424,10 +424,34 @@ function KPISparkline({ data, color }: { data: { value: number }[]; color: strin
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { setCurrentView, setPendingCreate } = useAppStore();
+  const { setCurrentView, setPendingCreate, auth, currentWorkspaceName } = useAppStore();
   const [stats, setStats] = useState<SaaSStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Dynamic branding & personalized time-of-day greeting (Option 1)
+  const companyName = auth?.tenant?.name || auth?.tenant?.companyName || auth?.user?.companyName || auth?.user?.tenantName;
+  const dashboardTitle = companyName ? `${companyName} Dashboard` : 'Fieseros Dashboard';
+  
+  const firstName = useMemo(() => {
+    const name = auth?.user?.name || auth?.user?.firstName || '';
+    if (!name) return '';
+    return name.trim().split(' ')[0];
+  }, [auth?.user?.name, auth?.user?.firstName]);
+
+  const timeGreeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
+
+  const subtitle = useMemo(() => {
+    if (firstName) {
+      return `${timeGreeting}, ${firstName} 👋 — Here's what's happening at your business today`;
+    }
+    return `${timeGreeting} 👋 — Your business at a glance: bookings, jobs, revenue & leads`;
+  }, [firstName, timeGreeting]);
 
   // PERF-P2: Track whether this view is actually visible (not display:none
   // inside the ViewCache). The existing polling effects check
@@ -774,9 +798,16 @@ export function DashboardView() {
       {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Fieseros Dashboard</h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{dashboardTitle}</h1>
+            {currentWorkspaceName && currentWorkspaceName !== 'Default' && currentWorkspaceName !== 'Default Workspace' ? (
+              <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">
+                {currentWorkspaceName}
+              </Badge>
+            ) : null}
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Your business at a glance — bookings, jobs, revenue &amp; leads
+            {subtitle}
           </p>
         </div>
         <div className="flex items-center gap-2">
