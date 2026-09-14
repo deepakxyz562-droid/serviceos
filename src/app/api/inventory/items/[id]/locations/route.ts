@@ -38,15 +38,29 @@ export async function GET(
     }
 
     const tenantId = item.tenantId ?? authUser.tenantId;
+
+    // Resolve employee where clause safely via workspace scoping
+    const empWhere: Record<string, unknown> = {};
+    if (authUser.workspaceId) {
+      empWhere.workspaceId = authUser.workspaceId;
+    } else if (tenantId) {
+      const wsList = await db.workspace.findMany({
+        where: { tenantId },
+        select: { id: true },
+      }).catch(() => []);
+      const wsIds = wsList.map((w: { id: string }) => w.id);
+      if (wsIds.length > 0) empWhere.workspaceId = { in: wsIds };
+    }
+
     const [warehouses, employees, stockLocations] = await Promise.all([
       db.warehouse.findMany({
-        where: { tenantId, isActive: true },
+        where: { ...(tenantId ? { tenantId } : {}), isActive: true },
         orderBy: [{ type: 'asc' }, { name: 'asc' }],
       }),
       db.employee.findMany({
-        where: { tenantId, status: 'active' },
+        where: empWhere,
         select: { id: true, name: true, phone: true, role: true },
-      }),
+      }).catch(() => []),
       db.stockLocation.findMany({
         where: { inventoryItemId: id },
       }),

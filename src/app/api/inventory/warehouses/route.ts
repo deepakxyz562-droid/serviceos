@@ -63,12 +63,26 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch active employees for technician/vehicle assignments
-    const employees = authUser.tenantId
-      ? await db.employee.findMany({
-          where: { tenantId: authUser.tenantId, status: 'active' },
-          select: { id: true, name: true, phone: true, role: true },
-        })
-      : [];
+    let employees: Array<{ id: string; name: string; phone: string; role: string }> = [];
+    try {
+      const empWhere: Record<string, unknown> = {};
+      if (authUser.workspaceId) {
+        empWhere.workspaceId = authUser.workspaceId;
+      } else if (authUser.tenantId) {
+        const wsList = await db.workspace.findMany({
+          where: { tenantId: authUser.tenantId },
+          select: { id: true },
+        }).catch(() => []);
+        const wsIds = wsList.map((w: { id: string }) => w.id);
+        if (wsIds.length > 0) empWhere.workspaceId = { in: wsIds };
+      }
+      employees = await db.employee.findMany({
+        where: empWhere,
+        select: { id: true, name: true, phone: true, role: true },
+      });
+    } catch (e) {
+      log.warn({ err: e }, 'Could not fetch employees for warehouse lookup');
+    }
 
     const enrichedWarehouses = warehouses.map((w) => {
       let meta: Record<string, unknown> = {};
