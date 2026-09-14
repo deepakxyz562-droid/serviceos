@@ -164,3 +164,85 @@ export function getStatusColorToken(status: string | undefined | null): StatusCo
   if (!status) return 'slate';
   return JOB_STATUS_COLOR_MAP[status.toLowerCase()] ?? 'slate';
 }
+
+// ── Configurable Job Sub-Statuses & Hold Reasons ─────────────────────────────
+
+export interface JobSubStatusDefinition {
+  key: string;
+  label: string;
+  description?: string;
+  requiresNotes?: boolean;
+}
+
+export const JOB_HOLD_REASONS: JobSubStatusDefinition[] = [
+  { key: 'awaiting_parts', label: 'Awaiting Parts / Materials', description: 'Components ordered or on backorder' },
+  { key: 'customer_rescheduled', label: 'Customer Rescheduled', description: 'Customer requested another time window' },
+  { key: 'weather_delay', label: 'Weather / Environmental Delay', description: 'Unsafe conditions for outdoor work' },
+  { key: 'permit_pending', label: 'Permit / Inspection Pending', description: 'Awaiting municipal or building approvals' },
+  { key: 'access_denied', label: 'No Access to Property', description: 'Gate locked, occupant unavailable, or key missing' },
+  { key: 'equipment_failure', label: 'Technician Tool Failure', description: 'Specialized vehicle or tooling issue' },
+  { key: 'other', label: 'Other Reason', requiresNotes: true },
+];
+
+export const JOB_IN_PROGRESS_SUBSTATUSES: JobSubStatusDefinition[] = [
+  { key: 'diagnostics', label: 'Diagnosing / Inspecting', description: 'Running diagnostic tests on system' },
+  { key: 'repair_in_progress', label: 'Active Repair / Installation', description: 'Performing hands-on service' },
+  { key: 'part_replacement', label: 'Replacing Components', description: 'Swapping defective parts' },
+  { key: 'calibration_testing', label: 'Calibration & Safety Testing', description: 'Validating proper operation' },
+  { key: 'cleanup_wrapup', label: 'Cleanup & Site Wrap-up', description: 'Cleaning workspace & packing tools' },
+];
+
+export const JOB_COMPLETED_SUBSTATUSES: JobSubStatusDefinition[] = [
+  { key: 'first_time_fix', label: 'First-Time Fix Complete', description: 'Resolved fully on initial visit' },
+  { key: 'followup_required', label: 'Return Visit Required', description: 'Secondary service visit needed' },
+  { key: 'customer_signed', label: 'Customer Signed & Approved', description: 'Signature collected on-site' },
+  { key: 'payment_collected', label: 'Payment Collected On-Site', description: 'COD / Card / Transfer completed' },
+];
+
+export const JOB_CANCELLED_REASONS: JobSubStatusDefinition[] = [
+  { key: 'customer_cancelled', label: 'Customer Cancelled', description: 'Customer no longer needs service' },
+  { key: 'duplicate_job', label: 'Duplicate Entry', description: 'Duplicate job booking' },
+  { key: 'no_show', label: 'Customer No-Show', description: 'Customer was not present at scheduled time' },
+  { key: 'out_of_area', label: 'Out of Service Area', description: 'Location is outside operational territory' },
+  { key: 'price_rejected', label: 'Estimate Rejected', description: 'Customer declined quote on-site' },
+];
+
+/**
+ * Get available sub-statuses for a given parent job lifecycle status.
+ */
+export function getJobSubStatuses(mainStatus: string): JobSubStatusDefinition[] {
+  const norm = (mainStatus || '').toLowerCase();
+  switch (norm) {
+    case 'paused':
+    case 'on_hold':
+      return JOB_HOLD_REASONS;
+    case 'working':
+    case 'in_progress':
+      return JOB_IN_PROGRESS_SUBSTATUSES;
+    case 'completed':
+    case 'done':
+      return JOB_COMPLETED_SUBSTATUSES;
+    case 'cancelled':
+    case 'canceled':
+      return JOB_CANCELLED_REASONS;
+    default:
+      return [];
+  }
+}
+
+/**
+ * Format human-readable label for a sub-status key.
+ */
+export function formatJobSubStatusLabel(subStatusKey: string | undefined | null): string | null {
+  if (!subStatusKey) return null;
+  const allSub = [
+    ...JOB_HOLD_REASONS,
+    ...JOB_IN_PROGRESS_SUBSTATUSES,
+    ...JOB_COMPLETED_SUBSTATUSES,
+    ...JOB_CANCELLED_REASONS,
+  ];
+  const match = allSub.find((s) => s.key === subStatusKey);
+  if (match) return match.label;
+  return subStatusKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+

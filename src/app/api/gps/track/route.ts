@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
 import { getAuthUser } from '@/lib/auth';
+import { evaluateGeofenceArrival } from '@/lib/geofence-engine';
 
 /**
  * GPS Tracking
@@ -531,7 +532,25 @@ export async function POST(request: NextRequest) {
       // non-fatal — GPS ping already saved
     }
 
-    return NextResponse.json({ gps, routeUpdated });
+    // 5. Evaluate Geofence Arrival (Radial proximity ~100m)
+    let geofenceArrival: unknown = null;
+    try {
+      const geoResult = await evaluateGeofenceArrival({
+        employeeId: targetEmployeeId,
+        latitude,
+        longitude,
+        jobId: jobId ?? null,
+        tenantId: tenantId ?? null,
+        workspaceId: employee.workspaceId ?? null,
+      });
+      if (geoResult.triggered) {
+        geofenceArrival = geoResult;
+      }
+    } catch (geoErr) {
+      console.warn('[GPS POST] geofence check error (non-fatal):', geoErr);
+    }
+
+    return NextResponse.json({ gps, routeUpdated, geofenceArrival });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to record GPS ping';
     console.error('[GPS POST]', error);

@@ -156,6 +156,8 @@ export interface UseLiveTrackingOptions {
    * always uses `API_BASE_URL` directly (it can't read React props).
    */
   apiBaseUrl?: string;
+  /** Callback fired when the backend detects arrival within the geofence radius. */
+  onGeofenceArrival?: (arrival: { jobId: string; jobNumber?: string | null; jobTitle?: string; distanceMeters?: number }) => void;
 }
 
 export interface LiveTrackingState {
@@ -215,6 +217,7 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
     jobId,
     authToken = null,
     apiBaseUrl = API_BASE_URL,
+    onGeofenceArrival,
   } = options;
 
   const [state, setState] = useState<LiveTrackingState>(INITIAL_STATE);
@@ -411,6 +414,10 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
             body: JSON.stringify(payload),
           });
           if (res.ok) {
+            const data = await res.json().catch(() => ({}));
+            if (data?.geofenceArrival?.triggered && onGeofenceArrival) {
+              onGeofenceArrival(data.geofenceArrival);
+            }
             countersRef.current.pingsSent += 1;
             lastPingAtRef.current = new Date();
             setState((s) => ({
@@ -557,6 +564,10 @@ export function useLiveTracking(options: UseLiveTrackingOptions): UseLiveTrackin
           body: JSON.stringify(payload),
         });
         if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data?.geofenceArrival?.triggered && onGeofenceArrival) {
+            onGeofenceArrival(data.geofenceArrival);
+          }
           countersRef.current.pingsSent += 1;
           lastPingAtRef.current = new Date();
           setState((s) => ({

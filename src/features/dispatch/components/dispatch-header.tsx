@@ -7,7 +7,7 @@
  * actions without technical debugging noise.
  */
 
-import { Radio, RefreshCw, Plus, Sparkles } from 'lucide-react';
+import { Radio, RefreshCw, Plus, Sparkles, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { DispatchConnectionInfo } from '../hooks/use-dispatch-connection';
@@ -20,6 +20,7 @@ export interface DispatchHeaderProps {
   onRefresh: () => void;
   onOpenAssignJob: () => void;
   onOpenAutoAssign: () => void;
+  onOpenRouteOptimizer?: () => void;
 }
 
 export function DispatchHeader({
@@ -29,6 +30,7 @@ export function DispatchHeader({
   onRefresh,
   onOpenAssignJob,
   onOpenAutoAssign,
+  onOpenRouteOptimizer,
 }: DispatchHeaderProps) {
   const todayStr = new Intl.DateTimeFormat('en-US', {
     weekday: 'short',
@@ -109,6 +111,19 @@ export function DispatchHeader({
           <RefreshCw className={`size-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
+
+        {/* Route Optimizer (Modal Trigger) */}
+        {onOpenRouteOptimizer && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenRouteOptimizer}
+            className="h-8 text-xs gap-1.5 border-amber-200 text-amber-700 bg-amber-50/50 hover:bg-amber-100/60 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300"
+          >
+            <Zap className="size-3.5 fill-amber-500 text-amber-500" />
+            <span>Optimize Route</span>
+          </Button>
+        )}
 
         {/* Secondary: Auto-Assign (Modal Trigger) */}
         <Button

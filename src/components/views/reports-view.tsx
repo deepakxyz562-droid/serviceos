@@ -30,6 +30,7 @@ import { LeadsTab } from '@/features/reports/components/tabs/leads-tab';
 import { WhatsAppTab } from '@/features/reports/components/tabs/whatsapp-tab';
 import { JourneyTab } from '@/features/reports/components/tabs/journey-tab';
 import { SalesPipelineTab } from '@/features/reports/components/tabs/sales-pipeline-tab';
+import { CommissionsTab } from '@/features/reports/components/tabs/commissions-tab';
 
 // ============================================================
 // Main Component
@@ -235,6 +236,7 @@ export function ReportsView() {
           <TabsTrigger value="whatsapp" className="text-xs">WhatsApp</TabsTrigger>
           <TabsTrigger value="journey" className="text-xs">Journey</TabsTrigger>
           <TabsTrigger value="salesPipeline" className="text-xs">Sales Pipeline</TabsTrigger>
+          <TabsTrigger value="commissions" className="text-xs">Commissions</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
@@ -291,6 +293,10 @@ export function ReportsView() {
             setSalesOutcomesCustomTo={setSalesOutcomesCustomTo}
             salesOutcomesQuery={salesOutcomesQuery}
           />
+        </TabsContent>
+
+        <TabsContent value="commissions" className="mt-4">
+          <CommissionsTab dateRange={dateRange} />
         </TabsContent>
       </Tabs>
     </div>

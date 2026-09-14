@@ -55,6 +55,7 @@ import { DispatchInspectorDrawer } from '@/features/dispatch/components/dispatch
 import { AssignJobDrawer } from '@/features/dispatch/components/assign-job-drawer';
 import { AutoAssignModal } from '@/features/dispatch/components/auto-assign-modal';
 import { AttentionPanel } from '@/features/dispatch/components/attention-panel';
+import { RouteOptimizerDialog } from '@/features/dispatch/components/route-optimizer-dialog';
 
 const LiveDispatchMap = dynamic(
   () => import('@/components/dispatch/live-dispatch-map'),
@@ -93,6 +94,7 @@ export function DispatchView() {
   const [assignJobTarget, setAssignJobTarget] = useState<Job | null>(null);
 
   const [autoAssignModalOpen, setAutoAssignModalOpen] = useState(false);
+  const [routeOptimizerOpen, setRouteOptimizerOpen] = useState(false);
   const [showAttention, setShowAttention] = useState(false);
 
   // Smart match candidates for the currently inspected job
@@ -394,6 +396,7 @@ export function DispatchView() {
         onRefresh={handleRefreshAll}
         onOpenAssignJob={() => handleOpenAssignDrawer()}
         onOpenAutoAssign={() => setAutoAssignModalOpen(true)}
+        onOpenRouteOptimizer={() => setRouteOptimizerOpen(true)}
       />
 
       {/* ─── 2. Actionable KPI Strip ─────────────────────────────────── */}
@@ -549,6 +552,19 @@ export function DispatchView() {
         employees={employees}
         activeJobsByEmployee={activeJobsByEmployee}
         onAssignmentsCompleted={() => {
+          fetchJobs();
+          fetchEmployees();
+          connection.markSync();
+        }}
+      />
+
+      {/* ─── 7. Daily Route Optimizer Modal ──────────────────────────── */}
+      <RouteOptimizerDialog
+        open={routeOptimizerOpen}
+        employees={employees}
+        initialEmployeeId={selectedTechnicianId}
+        onClose={() => setRouteOptimizerOpen(false)}
+        onOptimized={() => {
           fetchJobs();
           fetchEmployees();
           connection.markSync();
