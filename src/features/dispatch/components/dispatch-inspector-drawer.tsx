@@ -33,6 +33,8 @@ export interface DispatchInspectorDrawerProps {
   onViewTech: (tech: Employee) => void;
   onRefreshMarkers: () => void;
   onAssignTech: (jobId: string, tech: Employee) => void;
+  onReassignAbsent?: (tech: Employee) => void;
+  onMarkOnLeave?: (tech: Employee) => void;
   onStartJob: (job: Job) => void;
 }
 
@@ -49,6 +51,8 @@ export function DispatchInspectorDrawer({
   onViewTech,
   onRefreshMarkers,
   onAssignTech,
+  onReassignAbsent,
+  onMarkOnLeave,
   onStartJob,
 }: DispatchInspectorDrawerProps) {
   if (!inspectTarget) return null;
@@ -71,6 +75,8 @@ export function DispatchInspectorDrawer({
               onViewJob={onViewJob}
               onDeselect={() => onOpenChange(false)}
               onRefreshMarkers={onRefreshMarkers}
+              onReassignAbsent={onReassignAbsent}
+              onMarkOnLeave={onMarkOnLeave}
             />
           ) : (
             <InspectorJob

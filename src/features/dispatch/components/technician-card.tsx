@@ -19,6 +19,7 @@ import {
   Clock,
   Briefcase,
   UserCheck,
+  UserX,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ export interface TechnicianCardProps {
   isSelected: boolean;
   onSelect: (techId: string) => void;
   onAssignJob?: (techId: string) => void;
+  onReassignAbsent?: (tech: Employee) => void;
 }
 
 export function TechnicianCard({
@@ -46,6 +48,7 @@ export function TechnicianCard({
   isSelected,
   onSelect,
   onAssignJob,
+  onReassignAbsent,
 }: TechnicianCardProps) {
   const gpsInfo = getGpsStatusInfo(e);
   const currentJob = activeJobs[0];
@@ -197,7 +200,18 @@ export function TechnicianCard({
         </span>
 
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {onAssignJob && (
+          {e.status === 'leave' && onReassignAbsent && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[10px] px-2 text-rose-700 hover:text-rose-800 hover:bg-rose-100/60 dark:text-rose-300 dark:hover:bg-rose-950/60 font-semibold"
+              onClick={() => onReassignAbsent(e)}
+              title="Technician on leave: rebalance today's assigned jobs"
+            >
+              <UserX className="size-3 mr-1 shrink-0" /> Rebalance
+            </Button>
+          )}
+          {onAssignJob && e.status !== 'leave' && (
             <Button
               variant="ghost"
               size="sm"

@@ -142,6 +142,23 @@ export function useDispatchSummary(employees: Employee[], jobs: Job[]): UseDispa
       }
     }
 
+    // Technicians on leave / sick call-out with scheduled jobs
+    for (const e of employees) {
+      if (e.status === 'leave') {
+        const empJobs = activeJobsByEmployee.get(e.id) || [];
+        if (empJobs.length > 0) {
+          items.push({
+            id: `leave-${e.id}`,
+            severity: 'amber',
+            icon: 'alert',
+            title: `${e.name} on leave (${empJobs.length} jobs to reassign)`,
+            detail: 'Sick / absent technician requires job rebalancing',
+            action: { label: 'Reassign', employeeId: e.id },
+          });
+        }
+      }
+    }
+
     return items;
   }, [employees, jobs, pendingJobs, activeJobsByEmployee]);
 
@@ -149,6 +166,7 @@ export function useDispatchSummary(employees: Employee[], jobs: Job[]): UseDispa
   const summary = useMemo<DispatchSummary>(() => {
     const teamCount = employees.length;
     const availableCount = employees.filter((e) => e.status === 'available').length;
+    const leaveCount = employees.filter((e) => e.status === 'leave').length;
 
     const enRouteCount = employees.filter((e) => {
       if (!e.currentJobId) return false;
@@ -177,6 +195,7 @@ export function useDispatchSummary(employees: Employee[], jobs: Job[]): UseDispa
       onJobCount,
       unassignedCount,
       gpsIssueCount,
+      leaveCount,
       attentionCount: attentionItems.length,
       attentionItems,
     };

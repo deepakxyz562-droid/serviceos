@@ -34,6 +34,7 @@ import {
   Play,
   MapPin,
   History,
+  AlertCircle,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -47,6 +48,7 @@ import {
   useClockOut,
   useBreakStart,
   useBreakEnd,
+  useReportTimeOff,
 } from '@/hooks/use-shift';
 import { COLORS } from '@/lib/constants';
 import { getCurrentPosition } from '@/lib/location';
@@ -232,11 +234,41 @@ export default function ShiftScreen() {
     }
   };
 
+  const reportTimeOff = useReportTimeOff();
+
+  const handleReportSick = () => {
+    Alert.alert(
+      'Report Sick / Call Out',
+      "Report sick or request absence for today? Dispatch will be alerted and today's jobs will be rebalanced.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report Sick Today',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await reportTimeOff.mutateAsync({
+                reason: 'sick',
+                note: 'Technician reported sick from mobile app',
+              });
+              toast.show(res?.message || 'Sick call-out submitted. Get well soon!', 'success');
+              refreshAll();
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Failed to report sick';
+              toast.show(msg, 'error');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const anyActionPending =
     clockIn.isPending ||
     clockOut.isPending ||
     breakStart.isPending ||
-    breakEnd.isPending;
+    breakEnd.isPending ||
+    reportTimeOff.isPending;
 
   const isLoading = todayShift.isLoading && !todayShift.data;
 
@@ -558,37 +590,73 @@ export default function ShiftScreen() {
                 </View>
               </View>
             ) : (
-              <Pressable
-                onPress={handleClockIn}
-                disabled={anyActionPending}
-                style={{
-                  backgroundColor: '#fff',
-                  borderRadius: 12,
-                  paddingVertical: 14,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: anyActionPending ? 0.6 : 1,
-                }}
-              >
-                {clockIn.isPending ? (
-                  <ActivityIndicator size="small" color="#059669" />
-                ) : (
-                  <>
-                    <LogIn size={18} color="#059669" />
-                    <Text
-                      style={{
-                        color: '#059669',
-                        fontSize: 16,
-                        fontWeight: '700',
-                        marginLeft: 8,
-                      }}
-                    >
-                      Clock In
-                    </Text>
-                  </>
-                )}
-              </Pressable>
+              <>
+                <Pressable
+                  onPress={handleClockIn}
+                  disabled={anyActionPending}
+                  style={{
+                    backgroundColor: '#fff',
+                    borderRadius: 12,
+                    paddingVertical: 14,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: anyActionPending ? 0.6 : 1,
+                  }}
+                >
+                  {clockIn.isPending ? (
+                    <ActivityIndicator size="small" color="#059669" />
+                  ) : (
+                    <>
+                      <LogIn size={18} color="#059669" />
+                      <Text
+                        style={{
+                          color: '#059669',
+                          fontSize: 16,
+                          fontWeight: '700',
+                          marginLeft: 8,
+                        }}
+                      >
+                        Clock In
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+
+                <Pressable
+                  onPress={handleReportSick}
+                  disabled={anyActionPending}
+                  style={{
+                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    borderRadius: 12,
+                    paddingVertical: 11,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.25)',
+                    opacity: anyActionPending ? 0.6 : 1,
+                  }}
+                >
+                  {reportTimeOff.isPending ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <AlertCircle size={15} color="#fff" />
+                      <Text
+                        style={{
+                          color: '#fff',
+                          fontSize: 13,
+                          fontWeight: '600',
+                          marginLeft: 6,
+                        }}
+                      >
+                        Report Sick / Call Out Today
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
+              </>
             )}
           </View>
         </View>

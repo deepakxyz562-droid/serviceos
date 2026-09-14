@@ -25,7 +25,7 @@ import {
   MapPin, Clock, User, MessageCircle, Play,
   Loader2, ArrowRight, Sparkles, Star,
   Briefcase,
-  Phone, Navigation, AlertTriangle, Gauge, Locate,
+  Phone, Navigation, AlertTriangle, Gauge, Locate, UserX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -57,6 +57,10 @@ export interface InspectorTechnicianProps {
   onDeselect: () => void;
   /** Refresh map markers (used by Follow-on-map). */
   onRefreshMarkers: () => void;
+  /** Trigger 1-click rebalance for absent technician. */
+  onReassignAbsent?: (employee: Employee) => void;
+  /** Trigger mark sick / on leave dialog. */
+  onMarkOnLeave?: (employee: Employee) => void;
 }
 
 export function InspectorTechnician({
@@ -66,6 +70,8 @@ export function InspectorTechnician({
   onViewJob,
   onDeselect,
   onRefreshMarkers,
+  onReassignAbsent,
+  onMarkOnLeave,
 }: InspectorTechnicianProps) {
   const e = employee;
   const currentJob = activeJobs[0];
@@ -125,6 +131,31 @@ export function InspectorTechnician({
               </div>
             </div>
           </div>
+
+          {/* Leave / Sick Call-Out Banner */}
+          {e.status === 'leave' && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-3 space-y-2 dark:bg-amber-950/30">
+              <div className="flex items-center gap-1.5 text-amber-900 dark:text-amber-200">
+                <AlertTriangle className="size-4 text-amber-600 shrink-0" />
+                <span className="text-xs font-bold">Technician on Sick Leave / Absent</span>
+              </div>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                {e.onLeaveUntil
+                  ? `On leave until ${formatDate(e.onLeaveUntil)}.`
+                  : "Technician called out sick / requested time off for today."}
+              </p>
+              {onReassignAbsent && (
+                <Button
+                  size="sm"
+                  className="w-full h-8 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+                  onClick={() => onReassignAbsent(e)}
+                >
+                  <Sparkles className="size-3.5" />
+                  Rebalance Today&apos;s Jobs
+                </Button>
+              )}
+            </div>
+          )}
 
           {/* GPS / tracking card */}
           <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
@@ -272,6 +303,17 @@ export function InspectorTechnician({
               </Button>
             )}
           </div>
+
+          {onMarkOnLeave && e.status !== 'leave' && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full h-8 text-xs text-rose-700 hover:bg-rose-50 border-rose-200 dark:text-rose-300 dark:hover:bg-rose-950/40"
+              onClick={() => onMarkOnLeave(e)}
+            >
+              <UserX className="size-3.5 mr-1" /> Mark Sick / Absent Today
+            </Button>
+          )}
 
           <Button
             size="sm" variant="ghost" className="w-full h-8 text-xs"

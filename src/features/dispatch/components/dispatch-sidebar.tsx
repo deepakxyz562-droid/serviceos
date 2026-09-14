@@ -52,6 +52,7 @@ export interface DispatchSidebarProps {
   onSelectJob: (job: Job) => void;
   onAssignJob: (job: Job) => void;
   onAssignToTech?: (techId: string) => void;
+  onReassignAbsent?: (tech: Employee) => void;
   onStartJob?: (job: Job) => void;
 }
 
@@ -68,6 +69,7 @@ export function DispatchSidebar({
   onSelectJob,
   onAssignJob,
   onAssignToTech,
+  onReassignAbsent,
   onStartJob,
 }: DispatchSidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -241,6 +243,7 @@ export function DispatchSidebar({
                     <SelectItem value="available">Available</SelectItem>
                     <SelectItem value="on_job">On Job</SelectItem>
                     <SelectItem value="en_route">En Route</SelectItem>
+                    <SelectItem value="leave">On Leave / Absent</SelectItem>
                     <SelectItem value="offline">Offline</SelectItem>
                   </SelectContent>
                 </Select>
@@ -363,6 +366,7 @@ export function DispatchSidebar({
                 isSelected={selectedTechnicianId === emp.id}
                 onSelect={onSelectTechnician}
                 onAssignJob={onAssignToTech}
+                onReassignAbsent={onReassignAbsent}
               />
             ))
           )}

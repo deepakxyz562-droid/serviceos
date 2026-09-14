@@ -56,6 +56,7 @@ import { AssignJobDrawer } from '@/features/dispatch/components/assign-job-drawe
 import { AutoAssignModal } from '@/features/dispatch/components/auto-assign-modal';
 import { AttentionPanel } from '@/features/dispatch/components/attention-panel';
 import { RouteOptimizerDialog } from '@/features/dispatch/components/route-optimizer-dialog';
+import { AbsenceReassignWizard } from '@/features/dispatch/components/absence-reassign-wizard';
 
 const LiveDispatchMap = dynamic(
   () => import('@/components/dispatch/live-dispatch-map'),
@@ -95,6 +96,12 @@ export function DispatchView() {
 
   const [autoAssignModalOpen, setAutoAssignModalOpen] = useState(false);
   const [routeOptimizerOpen, setRouteOptimizerOpen] = useState(false);
+  const [absenceWizardOpen, setAbsenceWizardOpen] = useState(false);
+  const [absentEmployeeTarget, setAbsentEmployeeTarget] = useState<{
+    id: string;
+    name: string;
+    affectedJobs?: any[];
+  } | null>(null);
   const [showAttention, setShowAttention] = useState(false);
 
   // Smart match candidates for the currently inspected job
@@ -365,18 +372,67 @@ export function DispatchView() {
     }
   }, [fetchJobs]);
 
+  // ─── Absence & Sick Leave Handlers ──────────────────────────────
+  const handleOpenAbsenceWizard = useCallback((employee: Employee) => {
+    const empJobs = activeJobsByEmployee.get(employee.id) || [];
+    setAbsentEmployeeTarget({
+      id: employee.id,
+      name: employee.name,
+      affectedJobs: empJobs.map((j) => ({
+        id: j.id,
+        title: j.title,
+        status: j.status,
+        scheduledAt: j.scheduledAt || null,
+        address: j.address || null,
+        priority: j.priority || null,
+      })),
+    });
+    setAbsenceWizardOpen(true);
+  }, [activeJobsByEmployee]);
+
+  const handleMarkOnLeave = useCallback(async (employee: Employee) => {
+    try {
+      const res = await fetch(apiUrl('/api/employees/time-off'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          reason: 'sick',
+          note: 'Marked on leave by dispatcher',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to mark employee on leave');
+      toast.success(`${employee.name} marked on leave`);
+      await Promise.all([fetchJobs(), fetchEmployees()]);
+      if (data.affectedJobsCount && data.affectedJobsCount > 0) {
+        handleOpenAbsenceWizard(employee);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update leave status');
+    }
+  }, [fetchJobs, fetchEmployees, handleOpenAbsenceWizard]);
+
   // KPI Filter click behavior
   const handleKpiFilterSelect = useCallback((filter: string) => {
     setActiveKpiFilter(filter);
     if (filter === 'unassigned') {
       setActiveSidebarTab('queue');
-    } else if (filter === 'available' || filter === 'en_route' || filter === 'on_job') {
+    } else if (filter === 'available' || filter === 'en_route' || filter === 'on_job' || filter === 'leave') {
       setActiveSidebarTab('roster');
     }
   }, []);
 
   // Attention item click
   const handleAttentionClick = useCallback((item: (typeof summary.attentionItems)[0]) => {
+    if (item.id.startsWith('leave-')) {
+      const emp = employees.find((e) => e.id === item.action?.employeeId);
+      if (emp) {
+        handleOpenAbsenceWizard(emp);
+        setShowAttention(false);
+        return;
+      }
+    }
     if (item.action?.jobId) {
       const job = jobs.find((j) => j.id === item.action!.jobId);
       if (job) handleInspectJob(job);
@@ -384,7 +440,7 @@ export function DispatchView() {
       handleInspectTechnician(item.action.employeeId);
     }
     setShowAttention(false);
-  }, [jobs, handleInspectJob, handleInspectTechnician]);
+  }, [jobs, employees, handleInspectJob, handleInspectTechnician, handleOpenAbsenceWizard]);
 
   return (
     <div className="h-full flex flex-col p-3 md:p-4 bg-background overflow-hidden">
@@ -451,6 +507,7 @@ export function DispatchView() {
             onSelectJob={handleInspectJob}
             onAssignJob={handleOpenAssignDrawer}
             onAssignToTech={handleAssignToTechFromSidebar}
+            onReassignAbsent={handleOpenAbsenceWizard}
             onStartJob={handleStartJob}
           />
         </div>
@@ -527,6 +584,8 @@ export function DispatchView() {
         onAssignTech={(jobId, tech) => {
           handleOpenAssignDrawer(jobs.find((j) => j.id === jobId));
         }}
+        onReassignAbsent={handleOpenAbsenceWizard}
+        onMarkOnLeave={handleMarkOnLeave}
         onStartJob={handleStartJob}
       />
 
@@ -565,6 +624,18 @@ export function DispatchView() {
         initialEmployeeId={selectedTechnicianId}
         onClose={() => setRouteOptimizerOpen(false)}
         onOptimized={() => {
+          fetchJobs();
+          fetchEmployees();
+          connection.markSync();
+        }}
+      />
+
+      {/* ─── 8. 1-Click Sick / Absence Reassignment Wizard ────────────── */}
+      <AbsenceReassignWizard
+        open={absenceWizardOpen}
+        onOpenChange={setAbsenceWizardOpen}
+        absentEmployee={absentEmployeeTarget}
+        onSuccess={() => {
           fetchJobs();
           fetchEmployees();
           connection.markSync();

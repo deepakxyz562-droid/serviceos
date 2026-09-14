@@ -331,5 +331,28 @@ export function useBreakEnd() {
   });
 }
 
+export interface ReportTimeOffVars {
+  reason: 'sick' | 'personal' | 'vacation' | 'emergency';
+  note?: string;
+  durationDays?: number;
+}
+
+export function useReportTimeOff() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: ReportTimeOffVars) =>
+      api.post<{ success: boolean; message: string; affectedJobsCount?: number }>(
+        '/api/employees/time-off',
+        vars
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['shift'] });
+      qc.invalidateQueries({ queryKey: ['jobs'] });
+      qc.invalidateQueries({ queryKey: ['employee'] });
+    },
+  });
+}
+
 // ── Backward-compat alias for the "today" endpoint ──
 export const useTodayShift = useShiftToday;
+

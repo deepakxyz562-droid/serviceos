@@ -120,6 +120,8 @@ export interface DispatchSummary {
   unassignedCount: number;
   gpsIssueCount: number;
   attentionCount: number;
+  leaveCount?: number;
   attentionItems: AttentionItem[];
 }
+
 

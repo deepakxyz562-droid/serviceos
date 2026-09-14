@@ -37,6 +37,7 @@ import {
   Bell,
   CalendarClock,
   Hourglass,
+  AlertCircle,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -50,6 +51,7 @@ import {
   useWeekShifts,
   useClockIn,
   useClockOut,
+  useReportTimeOff,
 } from '@/hooks/use-shift';
 import { api } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
@@ -225,6 +227,35 @@ export default function TodayScreen() {
     );
   }, [clockOut, queryClient, show]);
 
+  const reportTimeOff = useReportTimeOff();
+
+  const handleReportSick = useCallback(() => {
+    Alert.alert(
+      'Report Sick / Call Out',
+      "Report sick or request absence for today? Dispatch will be alerted and today's jobs will be rebalanced.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report Sick Today',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await reportTimeOff.mutateAsync({
+                reason: 'sick',
+                note: 'Technician reported sick from mobile today tab',
+              });
+              show(res?.message || 'Sick call-out submitted. Get well soon!', 'success');
+              refreshAll();
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Failed to report sick';
+              show(msg, 'error');
+            }
+          },
+        },
+      ]
+    );
+  }, [reportTimeOff, show, refreshAll]);
+
   const renderJob = ({ item }: { item: Job }) => {
     const time = item.scheduledAt ? formatTime(item.scheduledAt) : '—';
     return (
@@ -385,18 +416,34 @@ export default function TodayScreen() {
                     </View>
                   </Button>
                 ) : (
-                  <Button
-                    onPress={handleClockIn}
-                    loading={clockIn.isPending}
-                    fullWidth
-                  >
-                    <View className="flex-row items-center justify-center">
-                      <LogIn size={16} color="#fff" />
-                      <Text className="ml-2 font-semibold text-white">
-                        Clock In
-                      </Text>
-                    </View>
-                  </Button>
+                  <View className="gap-2">
+                    <Button
+                      onPress={handleClockIn}
+                      loading={clockIn.isPending}
+                      fullWidth
+                    >
+                      <View className="flex-row items-center justify-center">
+                        <LogIn size={16} color="#fff" />
+                        <Text className="ml-2 font-semibold text-white">
+                          Clock In
+                        </Text>
+                      </View>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      onPress={handleReportSick}
+                      loading={reportTimeOff.isPending}
+                      fullWidth
+                    >
+                      <View className="flex-row items-center justify-center">
+                        <AlertCircle size={15} color={COLORS.mutedForeground} />
+                        <Text className="ml-2 font-medium text-muted-foreground text-xs">
+                          Report Sick / Call Out Today
+                        </Text>
+                      </View>
+                    </Button>
+                  </View>
                 )}
               </View>
             </Card>

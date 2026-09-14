@@ -7,12 +7,12 @@
  * Allows filtering the queue directly by clicking on status pills.
  */
 
-import { Users, CircleDot, Navigation, Activity, AlertTriangle, Briefcase } from 'lucide-react';
+import { Users, CircleDot, Navigation, Activity, AlertTriangle, Briefcase, UserX } from 'lucide-react';
 import type { DispatchSummary } from '../types';
 
 export interface DispatchKpiStripProps {
   summary: DispatchSummary;
-  activeFilter: string; // 'all' | 'unassigned' | 'available' | 'en_route' | 'on_job'
+  activeFilter: string; // 'all' | 'unassigned' | 'available' | 'en_route' | 'on_job' | 'leave'
   onSelectFilter: (filter: string) => void;
   showAttention: boolean;
   onToggleAttention: () => void;
@@ -87,6 +87,25 @@ export function DispatchKpiStrip({
         <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">On Job</span>
       </button>
 
+      {/* On Leave / Sick Call-Out */}
+      {typeof summary.leaveCount === 'number' && summary.leaveCount > 0 && (
+        <button
+          type="button"
+          onClick={() => onSelectFilter(activeFilter === 'leave' ? 'all' : 'leave')}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
+            activeFilter === 'leave'
+              ? 'bg-rose-100 border-rose-400 text-rose-900 shadow-xs dark:bg-rose-950/60 dark:border-rose-600 dark:text-rose-200'
+              : 'bg-rose-50/80 border-rose-200 text-rose-700 hover:bg-rose-100/60 dark:bg-rose-950/30 dark:border-rose-800 dark:text-rose-300'
+          }`}
+        >
+          <UserX className="size-3.5 text-rose-600" />
+          <span className="font-bold">{summary.leaveCount}</span>
+          <span className="text-[10px] uppercase tracking-wider font-semibold">
+            On Leave
+          </span>
+        </button>
+      )}
+
       {/* Unassigned — Prominent Callout */}
       <button
         type="button"
@@ -130,3 +149,4 @@ export function DispatchKpiStrip({
     </div>
   );
 }
+
