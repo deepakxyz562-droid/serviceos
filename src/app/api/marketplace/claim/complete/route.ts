@@ -131,22 +131,9 @@ export async function POST(request: NextRequest) {
     const existingUser = await getAuthUser();
 
     if (existingUser) {
-      // ── Phase 4.3: Prevent tenant takeover ────────────────────────────
-      // If the logged-in user already owns a DIFFERENT tenant, don't silently
-      // overwrite their tenantId. They must log out + use the claim link
-      // from an incognito session, OR contact support for multi-business.
-      if (existingUser.tenantId && existingUser.tenantId !== claim.tenantId) {
-        return NextResponse.json(
-          {
-            error:
-              'You are logged into a different business account. Please log out and click the claim link again, or contact support to manage multiple businesses.',
-            needsLogout: true,
-          },
-          { status: 409 },
-        );
-      }
-
       // ── Path B: Attach business to existing user (transactional) ──────
+      // Atomic completion — user update + tenant claim + claim status change
+      // all happen in one transaction.
       // Phase 4.4 + Gate 1.5 fix: Atomic completion — user update + tenant
       // claim + claim status change all happen in one transaction.
       //

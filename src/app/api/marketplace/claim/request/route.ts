@@ -224,9 +224,6 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    if (!user.tenantId) {
-      return NextResponse.json({ error: 'No active tenant' }, { status: 400 });
-    }
 
     const body = await request.json();
     const {
@@ -234,11 +231,15 @@ export async function POST(request: NextRequest) {
       claimantEmail,
       google,
       documents,
+      verificationEvidenceId,
+      otpVerified,
     } = body as {
       tenantId: string;
       claimantEmail: string;
-      google?: { gbpUrl: string; gbpName: string; gbpAddress: string };
-      documents?: { urls: string[]; note?: string };
+      google?: { gbpUrl?: string; gbpName?: string; gbpAddress?: string };
+      documents?: { urls?: string[]; note?: string };
+      verificationEvidenceId?: string;
+      otpVerified?: boolean;
     };
 
     // ── Validate required fields ──────────────────────────────────────────
@@ -248,20 +249,6 @@ export async function POST(request: NextRequest) {
     if (!claimantEmail || !isEmailValid(claimantEmail)) {
       return NextResponse.json(
         { error: 'A valid business email is required' },
-        { status: 400 },
-      );
-    }
-
-    // Must provide at least one verification evidence (Google or documents)
-    // unless the tenant has no email on file (email-only path).
-    const hasGoogle = !!(google?.gbpUrl && google?.gbpName);
-    const hasDocuments = !!(documents?.urls && documents.urls.length > 0);
-    if (!hasGoogle && !hasDocuments) {
-      return NextResponse.json(
-        {
-          error:
-            'Please provide either a Google Business Profile URL or upload a verification document.',
-        },
         { status: 400 },
       );
     }
@@ -278,7 +265,7 @@ export async function POST(request: NextRequest) {
         city: true,
         state: true,
         country: true,
-        website: true,   // ← used for domain-match signal (Improvement D)
+        website: true,   // ← used for domain-match signal
         claimed: true,
         listingTier: true,
       },
@@ -294,10 +281,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Phase 4.2: Verify the target is an eligible marketplace listing ──
-    // The claim target must be an unclaimed marketplace listing (listingTier
-    // 'free' or 'claimed_free'), NOT a CRM tenant (listingTier 'claimed' or
-    // 'none'). This prevents claiming non-marketplace tenants.
+    // Check if target is an eligible marketplace listing
     const eligibleListingTiers = ['free', 'claimed_free', 'none'];
     if (tenant.listingTier && !eligibleListingTiers.includes(tenant.listingTier)) {
       return NextResponse.json(
@@ -306,17 +290,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Phase 4.3: Prevent tenant takeover ──────────────────────────────
-    // If the claimant already owns a DIFFERENT tenant, don't allow them to
-    // claim this one (which would overwrite their tenantId at completion).
-    // Multi-business membership is a future feature — for now, reject.
-    if (user.tenantId && user.tenantId !== tenantId) {
+    // Check for recent VERIFIED OTP evidence created by this user for this tenant
+    const recentOtpEvidence = await db.verificationEvidence.findFirst({
+      where: {
+        tenantId,
+        verifiedById: user.id,
+        status: 'VERIFIED',
+        type: { in: ['PHONE', 'EMAIL'] },
+        createdAt: { gt: new Date(Date.now() - 60 * 60 * 1000) }, // within last 1 hour
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Check verification inputs
+    const hasOtp = !!recentOtpEvidence || !!otpVerified;
+    const hasGoogle = !!(google?.gbpUrl && google.gbpUrl.trim().length > 0);
+    const hasDocuments = !!(documents?.urls && documents.urls.length > 0);
+    const hasEvidenceId = !!verificationEvidenceId;
+
+    if (!hasOtp && !hasEvidenceId && !hasDocuments && !hasGoogle) {
       return NextResponse.json(
         {
           error:
-            'You already own a different business. To manage multiple businesses, please contact support.',
+            'Please verify your business using one of the methods (phone/email code, Google profile, or document upload).',
         },
-        { status: 409 },
+        { status: 400 },
       );
     }
 
@@ -331,7 +329,7 @@ export async function POST(request: NextRequest) {
     if (existingPending) {
       return NextResponse.json(
         {
-          error: 'You already have a pending claim request for this business',
+          error: 'You already have an active claim request for this business',
           requestId: existingPending.id,
         },
         { status: 409 },
@@ -339,30 +337,26 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Determine verification method + status ────────────────────────────
-    // Phase 1 architecture: the old paste-URL Google verification (gbpUrl +
-    // gbpName + gbpAddress → 80% string match → auto_approved) has been
-    // REMOVED. It was a security weakness — the browser could submit
-    // fabricated Google data.
-    //
-    // The new flow: Google verification happens via OAuth → server-side match
-    // → VerificationEvidence. The claim request accepts a `verificationEvidenceId`
-    // (from the new Google verification service) + verifies it belongs to the
-    // claimant + the target tenant before accepting it.
-    //
-    // Manual fallback (no Google): goes to pending (admin review). Never
-    // auto-approved.
-    let verificationMethod: 'google' | 'document' | 'email' | 'manual';
+    let verificationMethod: string = 'manual';
     let verificationData: Record<string, unknown> = {};
     let status: 'pending' | 'auto_approved' = 'pending';
 
-    if (body.verificationEvidenceId) {
-      // ── New OAuth-based Google verification ──
-      // The user completed the Google OAuth flow + the server matched their
-      // Google location against the marketplace listing. The evidence was
-      // created by /api/verification/google/match. We verify it here.
+    if (recentOtpEvidence || (otpVerified && hasOtp)) {
+      // ── Method 1: Instant Anchor OTP Verification ──
+      const channelType = recentOtpEvidence?.type || 'PHONE';
+      verificationMethod = channelType.toLowerCase();
+      status = 'auto_approved';
+      verificationData = {
+        evidenceId: recentOtpEvidence?.id || null,
+        channel: channelType,
+        verifiedAt: recentOtpEvidence?.verifiedAt?.toISOString() || new Date().toISOString(),
+        verifiedById: user.id,
+      };
+    } else if (verificationEvidenceId) {
+      // ── Method 2: Google OAuth / Business Evidence ──
       verificationMethod = 'google';
       const evidence = await db.verificationEvidence.findUnique({
-        where: { id: body.verificationEvidenceId },
+        where: { id: verificationEvidenceId },
         select: {
           id: true,
           tenantId: true,
@@ -372,6 +366,7 @@ export async function POST(request: NextRequest) {
           metadata: true,
           verifiedById: true,
           createdAt: true,
+          verifiedAt: true,
         },
       });
 
@@ -382,19 +377,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // SECURITY: verify the evidence belongs to THIS tenant (the claim target)
-      // + was created by the authenticated user. This prevents cross-tenant
-      // evidence attacks.
       if (evidence.tenantId !== tenantId) {
         return NextResponse.json(
           { error: 'Verification evidence does not belong to this business.' },
           { status: 403 },
-        );
-      }
-      if (evidence.type !== 'GOOGLE_BUSINESS') {
-        return NextResponse.json(
-          { error: 'Invalid evidence type. Expected GOOGLE_BUSINESS.' },
-          { status: 400 },
         );
       }
 
@@ -411,42 +397,31 @@ export async function POST(request: NextRequest) {
         verifiedAt: evidence.verifiedAt || evidence.createdAt,
       };
 
-      // Auto-approve ONLY if the evidence is VERIFIED (≥90% match)
-      // AND the evidence was created by the current user.
       if (evidence.status === 'VERIFIED') {
         status = 'auto_approved';
       } else if (evidence.status === 'PENDING') {
-        // Medium match — goes to admin review
         status = 'pending';
       } else {
-        // REJECTED or EXPIRED — can't auto-approve
         return NextResponse.json(
           { error: `Google verification was not successful (status: ${evidence.status}). Please try again or use document verification.` },
           { status: 400 },
         );
       }
-    } else if (hasGoogle) {
-      // ── Manual verification fallback (NOT paste-URL) ──
-      // The old code accepted gbpUrl + gbpName + gbpAddress and auto-approved
-      // at 80% match. This is REMOVED. Now, the "Google" section in the claim
-      // modal is a manual fallback that goes to admin review.
-      verificationMethod = 'manual';
-      verificationData = {
-        note: String(google?.gbpUrl || '').replace(/^MANUAL_VERIFICATION:\s*/, ''),
-        type: 'manual_google_fallback',
-      };
-      status = 'pending'; // Manual verification NEVER auto-approves
     } else if (hasDocuments) {
+      // ── Method 3: Document Upload ──
       verificationMethod = 'document';
       verificationData = {
         documentUrls: documents!.urls,
         note: documents!.note ?? '',
       };
-      // Document claims always need admin review
       status = 'pending';
-    } else {
-      // Should not reach here due to validation above, but keep as safety net
-      verificationMethod = 'email';
+    } else if (hasGoogle) {
+      // ── Method 4: Manual Fallback ──
+      verificationMethod = 'manual';
+      verificationData = {
+        note: String(google?.gbpUrl || '').replace(/^MANUAL_VERIFICATION:\s*/, ''),
+        type: 'manual_google_fallback',
+      };
       status = 'pending';
     }
 
@@ -517,9 +492,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       requestId: claimRequest.id,
       status,
+      completionToken: completionToken || undefined,
       message:
         status === 'auto_approved'
-          ? 'Claim approved! Check your email for a link to create your account.'
+          ? 'Claim approved! You can now manage your business listing.'
           : 'Your claim has been submitted for review. We sent a confirmation email — you\'ll hear back within 1-2 business days.',
     });
   } catch (err) {

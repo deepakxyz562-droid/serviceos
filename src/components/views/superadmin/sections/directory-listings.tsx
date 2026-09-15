@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 import {
   Store, Search, Trash2, Edit3, RefreshCw, CheckCircle2, AlertTriangle,
   Database, MapPin, Star, Globe, Filter, Loader2, Plus, Crown, Clock,
-  Calendar, X, ShieldCheck, Zap, Send, Flame,
+  Calendar, X, ShieldCheck, Zap, Send, Flame, Award,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -50,6 +50,7 @@ import { SectionHeader } from '@/components/views/superadmin/_shared';
 import { INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
 import { getAllCountryOptions, getCitiesForCountry } from '@/lib/marketplace-cities';
 import { ClaimReview } from '@/components/views/superadmin/sections/claim-review';
+import { CertificationsReview } from '@/components/views/superadmin/sections/certifications-review';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -1847,6 +1848,10 @@ export function DirectoryListingsSection() {
             <ShieldCheck className="size-3.5" />
             Claims
           </TabsTrigger>
+          <TabsTrigger value="certifications" className="gap-1.5">
+            <Award className="size-3.5" />
+            Certifications
+          </TabsTrigger>
           <TabsTrigger value="seo" className="gap-1.5">
             <Zap className="size-3.5" />
             SEO & IndexNow
@@ -1860,6 +1865,9 @@ export function DirectoryListingsSection() {
         </TabsContent>
         <TabsContent value="claims" className="mt-4">
           <ClaimReview />
+        </TabsContent>
+        <TabsContent value="certifications" className="mt-4">
+          <CertificationsReview />
         </TabsContent>
         <TabsContent value="seo" className="mt-4">
           <SeoIndexNowTab />

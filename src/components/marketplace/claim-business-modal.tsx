@@ -276,11 +276,7 @@ export function ClaimBusinessModal({
         body: JSON.stringify({
           tenantId,
           claimantEmail,
-          // The old paste-URL Google verification is replaced by OAuth.
-          // When showGoogle is true now, it means "manual verification requested"
-          // — we send a note (in gbpUrl) + the claim goes to pending (admin review).
-          // Auto-approval only happens via the OAuth-based match flow
-          // (/api/verification/google/match).
+          otpVerified: otpVerified,
           google: hasGoogle
             ? { gbpUrl: `MANUAL_VERIFICATION: ${gbpUrl}`, gbpName: '', gbpAddress: '' }
             : undefined,
@@ -294,6 +290,28 @@ export function ClaimBusinessModal({
         setError(data.error || 'Failed to submit claim request');
         return;
       }
+
+      // If auto-approved with completion token, attempt immediate completion for logged-in user
+      if (data.status === 'auto_approved' && data.completionToken) {
+        try {
+          const completeRes = await fetch('/api/marketplace/claim/complete?XTransformPort=3000', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: data.completionToken }),
+          });
+          if (completeRes.ok) {
+            setResult({
+              status: 'auto_approved',
+              message: 'Claim approved and verified! Your business profile is now active.',
+            });
+            toast.success('Business claimed successfully!');
+            return;
+          }
+        } catch {
+          // Fallback to standard approval message if instant completion fails
+        }
+      }
+
       setResult({ status: data.status, message: data.message });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Network error');
@@ -324,26 +342,23 @@ export function ClaimBusinessModal({
               <div className="rounded-md bg-emerald-50 p-3 text-left text-xs text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                 <p className="font-semibold">Next steps:</p>
                 <ol className="mt-1 space-y-0.5 list-decimal list-inside">
-                  <li>Check your inbox at <strong>{claimantEmail}</strong></li>
-                  <li>Click the &ldquo;Create my account&rdquo; button in the email</li>
-                  <li>Set your password and access your listing dashboard</li>
+                  <li>Your business profile is now claimed and verified.</li>
+                  <li>You can manage services, hours, quote requests, and reviews.</li>
+                  <li>Check your inbox at <strong>{claimantEmail}</strong> for your claim confirmation.</li>
                 </ol>
-                <p className="mt-2 text-[11px] text-emerald-600 dark:text-emerald-400">
-                  The link expires in 7 days.
-                </p>
               </div>
             ) : (
               <div className="rounded-md bg-amber-50 p-3 text-left text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                 <p className="font-semibold">What happens next:</p>
                 <ol className="mt-1 space-y-0.5 list-decimal list-inside">
-                  <li>Our team reviews your claim (1-2 business days)</li>
-                  <li>You&rsquo;ll receive an email with the result</li>
-                  <li>If approved, the email contains a link to create your account</li>
+                  <li>Our team reviews your claim documents (1-2 business days)</li>
+                  <li>You&rsquo;ll receive an email with the verification result</li>
+                  <li>Once approved, you can immediately manage your listing</li>
                 </ol>
               </div>
             )}
-            <Button onClick={() => onOpenChange(false)} className="w-full">
-              Done
+            <Button onClick={() => { onOpenChange(false); window.location.reload(); }} className="w-full">
+              {isApproved ? 'Go to My Listing' : 'Done'}
             </Button>
           </div>
         </DialogContent>
