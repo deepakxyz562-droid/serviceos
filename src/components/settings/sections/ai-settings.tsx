@@ -39,6 +39,8 @@ export function AiSettings() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [tenantId, setTenantId] = useState('');
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
 
   const siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com';
 
@@ -49,7 +51,36 @@ export function AiSettings() {
         if (data?.tenant?.id) setTenantId(data.tenant.id);
       })
       .catch(() => undefined);
+
+    fetch('/api/addon-subscriptions')
+      .then((r) => r.json())
+      .then((data) => {
+        const active = Array.isArray(data?.addons) && data.addons.some(
+          (a: { addonCode: string; status: string }) => a.addonCode === 'ai_website_forms' && a.status === 'active'
+        );
+        setIsSubscribed(active);
+      })
+      .catch(() => undefined);
   }, []);
+
+  const handleSubscribeAddon = async () => {
+    setSubscribing(true);
+    try {
+      const res = await fetch('/api/addon-subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addonCode: 'ai_website_forms', billingCycle: 'monthly' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Subscription failed');
+      setIsSubscribed(true);
+      toast.success('🎉 AI Website Employee & Smart Forms activated successfully!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Subscription failed');
+    } finally {
+      setSubscribing(false);
+    }
+  };
 
   const handleCrawlWebsite = async () => {
     if (!crawlUrl.trim()) {
@@ -106,7 +137,13 @@ export function AiSettings() {
                   <div>
                     <CardTitle className="text-base flex items-center gap-2">
                       24/7 AI Website Employee &amp; Smart Forms
-                      <Badge className="bg-emerald-600 text-white text-[10px]">Add-on Active</Badge>
+                      {isSubscribed ? (
+                        <Badge className="bg-emerald-600 text-white text-[10px]">Add-on Active ($10/mo)</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-[10px]">
+                          Add-on Available ($10/mo)
+                        </Badge>
+                      )}
                     </CardTitle>
                     <CardDescription className="text-xs">
                       Answers visitor inquiries, offers real-time calendar booking slots, and creates CRM Leads automatically.
@@ -114,13 +151,25 @@ export function AiSettings() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs shadow-xs"
-                    onClick={() => setOnboardingOpen(true)}
-                  >
-                    <Sparkles className="size-3.5" /> Launch Setup Wizard
-                  </Button>
+                  {!isSubscribed ? (
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs shadow-xs font-semibold"
+                      onClick={handleSubscribeAddon}
+                      disabled={subscribing}
+                    >
+                      {subscribing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                      {subscribing ? 'Activating…' : 'Activate Add-on ($10/mo)'}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs shadow-xs"
+                      onClick={() => setOnboardingOpen(true)}
+                    >
+                      <Sparkles className="size-3.5" /> Launch Setup Wizard
+                    </Button>
+                  )}
                   {tenantId && (
                     <Button
                       variant="outline"

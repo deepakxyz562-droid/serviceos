@@ -31,7 +31,7 @@ import type {
 import {
   apiFormToFormItem, buildApiPayload, getDefaultActions,
 } from '@/features/forms/utils/form-helpers';
-import { FormEditorDialog } from '@/features/forms/components/form-editor-dialog';
+import { FormStudioBuilder } from '@/features/forms/components/form-studio-builder';
 import {
   DeleteConfirmDialog, EmbedDialog, PreviewDialog, ResponsesDialog,
   WhatsAppSendDialog,
@@ -455,6 +455,23 @@ export function FormBuilderView() {
     if (path) window.open(path, '_blank', 'noopener,noreferrer');
   };
 
+  if (showCreateDialog) {
+    return (
+      <FormStudioBuilder
+        formData={formData}
+        onFormDataChange={setFormData}
+        editMode={editMode}
+        saving={saving}
+        onSave={handleSave}
+        onExit={() => {
+          setShowCreateDialog(false);
+          resetFormData();
+        }}
+        siteOrigin={siteOrigin}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6 w-full">
       {/* ─── Header ────────────────────────────────────────────────────────── */}
@@ -684,37 +701,6 @@ export function FormBuilderView() {
         </TabsContent>
       </Tabs>
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          CREATE / EDIT FORM DIALOG (with nested AI Generate sub-dialog)
-         ═══════════════════════════════════════════════════════════════════════ */}
-      <FormEditorDialog
-        open={showCreateDialog}
-        onOpenChange={setShowCreateDialog}
-        formData={formData}
-        onFormDataChange={setFormData}
-        editMode={editMode}
-        activeTab={activeTab}
-        onActiveTabChange={setActiveTab}
-        saving={saving}
-        onSave={handleSave}
-        onCancel={() => { setShowCreateDialog(false); resetFormData(); }}
-        onAddField={addField}
-        onRemoveField={removeField}
-        onUpdateField={updateField}
-        onAddEngineField={addEngineField}
-        onMoveField={moveField}
-        aiDialogOpen={aiDialogOpen}
-        onAiDialogOpenChange={setAiDialogOpen}
-        onOpenAiDialog={handleOpenAiDialog}
-        aiPrompt={aiPrompt}
-        onAiPromptChange={setAiPrompt}
-        aiGeneratedFields={aiGeneratedFields}
-        aiLoading={aiLoading}
-        aiError={aiError}
-        onAiGenerate={handleAiGenerate}
-        onAiInsert={handleAiInsert}
-        siteOrigin={siteOrigin}
-      />
 
       {/* ─── Responses Dialog ──────────────────────────────────────────────── */}
       <ResponsesDialog

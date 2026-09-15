@@ -397,8 +397,8 @@ export default function AiEmployeeLandingPage() {
                   <li className="flex items-center gap-2">✓ Native Fieseros Calendar Booking &amp; CRM Sync</li>
                   <li className="flex items-center gap-2">✓ WordPress Plugin &amp; Universal JS Embed</li>
                 </ul>
-                <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs">
-                  <Link href="/login">Activate in Billing →</Link>
+                <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
+                  <Link href="/?tab=billing&addon=ai_website_forms">Activate in Billing ($10/mo) →</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -420,8 +420,8 @@ export default function AiEmployeeLandingPage() {
                   <li className="flex items-center gap-2">✓ Amazon SES Outbound Notifications</li>
                   <li className="flex items-center gap-2">✓ Webhook &amp; Email Lead Alerts</li>
                 </ul>
-                <Button asChild variant="outline" className="w-full text-xs">
-                  <Link href="/login">Get Started</Link>
+                <Button asChild variant="outline" className="w-full text-xs font-semibold hover:border-emerald-500 hover:text-emerald-700">
+                  <Link href="/?auth=signup&plan=standalone_starter">Get Started ($19/mo)</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -443,8 +443,8 @@ export default function AiEmployeeLandingPage() {
                   <li className="flex items-center gap-2">✓ PDF &amp; Word Knowledge Ingestion</li>
                   <li className="flex items-center gap-2">✓ Custom CSS &amp; White-labeling</li>
                 </ul>
-                <Button asChild variant="outline" className="w-full text-xs">
-                  <Link href="/login">Get Started</Link>
+                <Button asChild variant="outline" className="w-full text-xs font-semibold hover:border-emerald-500 hover:text-emerald-700">
+                  <Link href="/?auth=signup&plan=standalone_business">Get Started ($49/mo)</Link>
                 </Button>
               </CardContent>
             </Card>

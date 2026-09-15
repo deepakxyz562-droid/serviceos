@@ -574,6 +574,22 @@ export function BillingView() {
     fetchSubscription();
   }, [mergeJson]);
 
+  // Handle deep-link scrolling for ?addon=... or ?plan=...
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !isLoading) {
+      const params = new URLSearchParams(window.location.search);
+      const addonParam = params.get('addon');
+      if (addonParam) {
+        setTimeout(() => {
+          const el = document.getElementById(`addon-${addonParam}`) || document.getElementById('addons-section');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
+      }
+    }
+  }, [isLoading]);
+
   // Compute the effective plan list: prefer DB-backed catalog from the API,
   // fall back to the hardcoded FALLBACK_PLANS constant.
   const effectivePlans: Plan[] = (data.plans && data.plans.length > 0
@@ -1462,7 +1478,7 @@ export function BillingView() {
           Prices come from the DB-backed Plan catalog (addonPlansFromDb). The
           Subscribe button POSTs to /api/addon-subscriptions, which creates an
           AddonSubscription row. Active add-ons show a Cancel button. */}
-      <div className="space-y-3">
+      <div id="addons-section" className="space-y-3">
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
           <h2 className="text-lg font-semibold">Add-ons</h2>
@@ -1482,10 +1498,11 @@ export function BillingView() {
             const isSubscribing = subscribingAddonCode === addon.code;
             return (
               <Card
+                id={`addon-${addon.code}`}
                 key={addon.code}
-                className={`flex flex-col ${
+                className={`flex flex-col transition-all ${
                   activeSub
-                    ? 'border-emerald-300 dark:border-emerald-700'
+                    ? 'border-emerald-300 dark:border-emerald-700 ring-2 ring-emerald-500/20'
                     : 'hover:border-emerald-300 hover:shadow-md dark:hover:border-emerald-700'
                 }`}
               >

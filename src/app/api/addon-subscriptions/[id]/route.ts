@@ -16,6 +16,17 @@ import { getAuthUser } from '@/lib/auth';
  * Auth: any authenticated tenant user (tenantId taken from the JWT).
  */
 
+function toIso(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  if (typeof d === 'string') return d;
+  if (d instanceof Date) return d.toISOString();
+  try {
+    return new Date(d).toISOString();
+  } catch {
+    return null;
+  }
+}
+
 function serializeAddon(a: {
   id: string;
   tenantId: string;
@@ -28,12 +39,12 @@ function serializeAddon(a: {
   paymentProvider: string;
   providerSubscriptionId: string | null;
   providerProductId: string | null;
-  startDate: Date;
-  endDate: Date | null;
-  nextBillingAt: Date | null;
-  cancelledAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
+  startDate: Date | string;
+  endDate: Date | string | null;
+  nextBillingAt: Date | string | null;
+  cancelledAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }) {
   return {
     id: a.id,
@@ -47,12 +58,12 @@ function serializeAddon(a: {
     paymentProvider: a.paymentProvider,
     providerSubscriptionId: a.providerSubscriptionId,
     providerProductId: a.providerProductId,
-    startDate: a.startDate.toISOString(),
-    endDate: a.endDate ? a.endDate.toISOString() : null,
-    nextBillingAt: a.nextBillingAt ? a.nextBillingAt.toISOString() : null,
-    cancelledAt: a.cancelledAt ? a.cancelledAt.toISOString() : null,
-    createdAt: a.createdAt.toISOString(),
-    updatedAt: a.updatedAt.toISOString(),
+    startDate: toIso(a.startDate) || new Date().toISOString(),
+    endDate: toIso(a.endDate),
+    nextBillingAt: toIso(a.nextBillingAt),
+    cancelledAt: toIso(a.cancelledAt),
+    createdAt: toIso(a.createdAt) || new Date().toISOString(),
+    updatedAt: toIso(a.updatedAt) || new Date().toISOString(),
   };
 }
 
