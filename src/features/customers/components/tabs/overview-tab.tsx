@@ -15,7 +15,7 @@
  *   • `format` — the company currency formatter.
  */
 
-import { Clock, Wrench } from 'lucide-react';
+import { Clock, Wrench, Shield, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -174,6 +174,36 @@ export function OverviewTab({
             </div>
           </div>
         )}
+
+        {/* Service Passport Link */}
+        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 rounded-xl p-4 border border-emerald-200/60 dark:border-emerald-800/40">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+                <Shield className="size-4 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-foreground">Service Passport</p>
+                <p className="text-[11px] text-muted-foreground">Equipment health history for this customer</p>
+              </div>
+            </div>
+            {(() => {
+              const custId = jobs[0]?.customerId || invoices[0]?.customerId || timelineEvents[0]?.customerId;
+              return custId ? (
+                <a
+                  href={`/passport/${custId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700"
+                >
+                  View <ExternalLink className="size-3" />
+                </a>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">Unavailable</span>
+              );
+            })()}
+          </div>
+        </div>
       </div>
     </ScrollArea>
   );

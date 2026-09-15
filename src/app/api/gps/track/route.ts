@@ -550,6 +550,18 @@ export async function POST(request: NextRequest) {
       console.warn('[GPS POST] geofence check error (non-fatal):', geoErr);
     }
 
+    // 6. Delay detection — auto-SMS customer if technician is running late (fire-and-forget)
+    if (jobId) {
+      import('@/lib/eta-delay-detector').then(({ checkAndNotifyDelay }) => {
+        checkAndNotifyDelay({
+          jobId,
+          technicianLat: latitude,
+          technicianLng: longitude,
+          tenantId: tenantId ?? null,
+        }).catch(() => {/* non-fatal */});
+      }).catch(() => {/* non-fatal */});
+    }
+
     return NextResponse.json({ gps, routeUpdated, geofenceArrival });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to record GPS ping';

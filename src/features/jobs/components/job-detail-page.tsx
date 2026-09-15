@@ -83,6 +83,7 @@ import { JobExpensesSection } from '@/components/job/job-expenses-section';
 import { PhotoCapture } from '@/components/job/photo-capture';
 import { SignaturePad, type SavedSignature } from '@/components/job/signature-pad';
 import { ChecklistExecution } from '@/components/job/checklist-execution';
+import { PostJobChecklistCard } from '@/features/jobs/components/post-job-checklist-card';
 import { lineItemsSubtotal, parseLineItems } from '@/features/line-items';
 import type {
   Job,
@@ -1147,6 +1148,11 @@ export function JobDetailPage({
               </button>
             </div>
           </FormSectionCard>
+
+          {/* Post-Job Smart Checklist — shown only after job completion */}
+          {job.status === 'completed' && (
+            <PostJobChecklistCard jobId={job.id} />
+          )}
         </div>
       </div>
     </div>

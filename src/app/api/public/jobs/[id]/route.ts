@@ -159,6 +159,38 @@ export async function GET(
     const currentLat = isActive ? (techLat ?? jobLat) : null;
     const currentLng = isActive ? (techLng ?? jobLng) : null;
 
+    // ── Fetch active warranties for this job (best-effort, never fatal) ──
+    // Only returned after job completion so the portal can show a warranty card.
+    let warranties: Array<{
+      id: string;
+      title: string;
+      type: string;
+      coverage: string;
+      endDate: string | null;
+      isActive: boolean;
+    }> = [];
+    if (job.status === 'completed') {
+      try {
+        const rawWarranties = await db.warranty.findMany({
+          where: { jobId: id, isActive: true },
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            coverage: true,
+            endDate: true,
+            isActive: true,
+          },
+        });
+        warranties = rawWarranties.map((w) => ({
+          ...w,
+          endDate: w.endDate ? w.endDate.toISOString() : null,
+        }));
+      } catch {
+        // Non-fatal — warranties section simply won't appear
+      }
+    }
+
     // Return a flat, rich DTO compatible with both web portal and mobile app
     return NextResponse.json({
       id: job.id,
@@ -187,6 +219,7 @@ export async function GET(
       etaMinutes,
       distanceKm,
       branding,
+      warranties,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to fetch job';

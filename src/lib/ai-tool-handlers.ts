@@ -145,7 +145,77 @@ registerToolHandler('get_customer', async (ctx, params) => {
     return { found: false };
   }
 
-  return { found: true, customer };
+  // ── Enrich with asset health + active warranties (best-effort) ────────────
+  // This context lets the AI say things like:
+  //   "I can see your Carrier AC unit was last serviced in August and the
+  //    capacitor is under a parts & labour warranty until Aug 2027."
+  let assets: Array<{
+    name: string;
+    brand: string | null;
+    model: string | null;
+    warrantyStatus: string;
+    lastServiceDate: string | null;
+    nextServiceDate: string | null;
+    activeWarranties: Array<{ title: string; coverage: string; validUntil: string | null }>;
+  }> = [];
+
+  try {
+    const rawAssets = await db.customerAsset.findMany({
+      where: { customerId: customer.id },
+      select: {
+        id: true,
+        name: true,
+        brand: true,
+        model: true,
+        warrantyEnd: true,
+        serviceHistory: {
+          select: { serviceDate: true, nextServiceDate: true },
+          orderBy: { serviceDate: 'desc' },
+          take: 1,
+        },
+      },
+      take: 5, // cap at 5 for AI context brevity
+    });
+
+    const activeWarranties = await db.warranty.findMany({
+      where: { customerId: customer.id, isActive: true },
+      select: { title: true, coverage: true, endDate: true, jobId: true },
+    });
+
+    assets = rawAssets.map((a) => {
+      const now = new Date();
+      const warrantyExpired = a.warrantyEnd ? a.warrantyEnd < now : null;
+      const warrantyStatus =
+        warrantyExpired === null ? 'none' : warrantyExpired ? 'expired' : 'active';
+
+      const assetWarranties = activeWarranties
+        .filter((w) => !w.jobId || true) // include all active for the customer
+        .map((w) => ({
+          title: w.title,
+          coverage:
+            w.coverage === 'parts_and_labor'
+              ? 'Parts & Labour'
+              : w.coverage === 'parts_only'
+              ? 'Parts Only'
+              : 'Labour Only',
+          validUntil: w.endDate ? w.endDate.toLocaleDateString() : null,
+        }));
+
+      return {
+        name: a.name,
+        brand: a.brand,
+        model: a.model,
+        warrantyStatus,
+        lastServiceDate: a.serviceHistory[0]?.serviceDate?.toLocaleDateString() ?? null,
+        nextServiceDate: a.serviceHistory[0]?.nextServiceDate?.toLocaleDateString() ?? null,
+        activeWarranties: assetWarranties.slice(0, 3),
+      };
+    });
+  } catch {
+    // Non-fatal — customer data still returned without asset context
+  }
+
+  return { found: true, customer, assets };
 });
 
 registerToolHandler('get_customer_jobs', async (ctx, params) => {

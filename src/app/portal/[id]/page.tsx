@@ -15,7 +15,18 @@ import {
   Calendar,
   Sparkles,
   ExternalLink,
+  Shield,
+  AlertTriangle,
 } from 'lucide-react';
+
+interface WarrantyItem {
+  id: string;
+  title: string;
+  type: string;
+  coverage: string;
+  endDate: string | null;
+  isActive: boolean;
+}
 
 interface PublicJobData {
   id: string;
@@ -36,6 +47,7 @@ interface PublicJobData {
   distanceKm?: number | null;
   lineItemsJson?: string;
   quotedAmount?: number;
+  warranties?: WarrantyItem[];
   branding?: {
     businessName: string;
     logoUrl: string | null;
@@ -245,33 +257,28 @@ export default function CustomerPortalJobPage() {
                 <span className="text-xs font-semibold text-emerald-600">Live</span>
               </div>
             </div>
-            <div
-              className="relative overflow-hidden rounded-xl"
-              style={{ height: 180, backgroundColor: '#e8f5e9' }}
-            >
-              {/* Grid lines */}
-              <div className="absolute top-10 left-0 right-0 h-px bg-black/5" />
-              <div className="absolute top-20 left-0 right-0 h-px bg-black/5" />
-              <div className="absolute top-32 left-0 right-0 h-px bg-black/5" />
-              <div className="absolute top-0 bottom-0 left-1/4 w-px bg-black/5" />
-              <div className="absolute top-0 bottom-0 left-1/2 w-px bg-black/5" />
-              <div className="absolute top-0 bottom-0 left-3/4 w-px bg-black/5" />
-              {/* Pulsing marker */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-5 -translate-y-5 flex items-center justify-center" style={{ width: 40, height: 40 }}>
-                <div className="absolute h-12 w-12 rounded-full bg-emerald-200/30" />
-                <div className="absolute h-8 w-8 rounded-full bg-emerald-300/50" />
-                <MapPin className="size-7 text-emerald-600 fill-emerald-600" />
-              </div>
-              {/* Coordinates */}
-              <div className="absolute bottom-2 left-2 rounded bg-black/50 px-2 py-1">
-                <span className="text-xs font-mono text-white">
-                  {job.currentLatitude.toFixed(4)}, {job.currentLongitude.toFixed(4)}
-                </span>
-              </div>
-              {/* Technician label */}
-              <div className="absolute top-2 right-2 rounded bg-emerald-600 px-2 py-1">
+            {/* Real OpenStreetMap embed — shows technician live marker */}
+            <div className="relative overflow-hidden rounded-xl" style={{ height: 200 }}>
+              <iframe
+                title="Technician Live Location"
+                width="100%"
+                height="200"
+                style={{ border: 0 }}
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${
+                  (job.currentLongitude! - 0.01).toFixed(5)
+                },${
+                  (job.currentLatitude! - 0.008).toFixed(5)
+                },${
+                  (job.currentLongitude! + 0.01).toFixed(5)
+                },${
+                  (job.currentLatitude! + 0.008).toFixed(5)
+                }&layer=mapnik&marker=${job.currentLatitude!.toFixed(5)},${job.currentLongitude!.toFixed(5)}`}
+                loading="lazy"
+              />
+              {/* Technician name overlay */}
+              <div className="absolute top-2 right-2 rounded-lg bg-emerald-600 px-2.5 py-1 shadow-md">
                 <span className="text-xs font-semibold text-white">
-                  {job.assigneeName || 'Technician'}
+                  📍 {job.assigneeName || 'Technician'}
                 </span>
               </div>
             </div>
@@ -308,6 +315,52 @@ export default function CustomerPortalJobPage() {
                   </p>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Warranty Card — shown after job completion */}
+        {isCompleted && job.warranties && job.warranties.length > 0 && (
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-3">
+            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+              <Shield className="size-4 text-blue-600" />
+              Active Warranties
+            </h3>
+            <div className="divide-y divide-border/40">
+              {job.warranties.map((w) => {
+                const endDate = w.endDate ? new Date(w.endDate) : null;
+                const isExpired = endDate ? endDate < new Date() : false;
+                const coverageLabel =
+                  w.coverage === 'parts_and_labor'
+                    ? 'Parts & Labour'
+                    : w.coverage === 'parts_only'
+                    ? 'Parts Only'
+                    : 'Labour Only';
+                return (
+                  <div key={w.id} className="py-3 flex items-start gap-3 first:pt-0 last:pb-0">
+                    <div className={`mt-0.5 p-1.5 rounded-lg shrink-0 ${isExpired ? 'bg-red-50' : 'bg-blue-50'}`}>
+                      <Shield className={`size-3.5 ${isExpired ? 'text-red-500' : 'text-blue-500'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{w.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{coverageLabel}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {endDate ? (
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          isExpired
+                            ? 'bg-red-50 text-red-600 border border-red-200'
+                            : 'bg-blue-50 text-blue-600 border border-blue-200'
+                        }`}>
+                          {isExpired ? 'Expired' : `Until ${endDate.toLocaleDateString()}`}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No expiry</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
