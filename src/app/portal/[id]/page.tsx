@@ -316,6 +316,17 @@ export default function CustomerPortalJobPage() {
                 </div>
               ))}
             </div>
+            <div className="pt-2">
+              <a
+                href={`/pay/${job.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors shadow-xs"
+              >
+                <CreditCard className="size-4" />
+                Pay Invoice Online / Direct
+              </a>
+            </div>
           </div>
         )}
 

@@ -7,68 +7,103 @@ import { getAuthUser } from '@/lib/auth';
  *
  * Storage strategy:
  *   - NO new Prisma models. Everything lives under `Tenant.settingsJson`
- *     in a `paymentIntegrations` key, EXCEPT Stripe — which uses the
+ *     in a `paymentIntegrations` key, EXCEPT Stripe Connect — which uses the
  *     tenant's canonical `stripeConnected` / `stripeAccountId` /
  *     `stripePayoutsEnabled` columns (those already exist on Tenant).
  *   - GET reads both sources and merges them into a single response.
- *   - PUT updates the `paymentIntegrations` JSON for PayPal / Square /
- *     QuickBooks / Bank Feeds, and updates the Stripe *columns* when
- *     the user disconnects Stripe.
+ *   - PUT updates the `paymentIntegrations` JSON for Razorpay / Stripe Direct /
+ *     PayPal / Square / Direct Bank / UPI / QuickBooks / Bank Feeds.
  *
  * Secret masking:
- *   - PayPal `clientSecret` and Square `accessToken` are masked in the
- *     GET response — only the last 4 chars are returned (`****1234`).
+ *   - Secrets (Razorpay Key Secret, Stripe Secret Key, PayPal Client Secret, etc.)
+ *     are masked in the GET response — only the last 4 chars are returned (`****1234`).
  *   - When the client PUTs the masked placeholder back unchanged, we
- *     preserve the existing secret rather than overwriting it with the
- *     literal string `****1234`.
- *
- * Test connection:
- *   - PUT body `{ action: 'test', provider: 'paypal' | 'square', ...creds }`
- *     validates the supplied credentials against the provider's API
- *     WITHOUT persisting anything.
+ *     preserve the existing secret rather than overwriting it.
  */
 
-interface StripeSettings {
+export interface StripeSettings {
   connected: boolean;
   accountId: string;
   payoutsEnabled: boolean;
+  publishableKey?: string;
+  secretKey?: string;
+  webhookSecret?: string;
+  mode?: 'direct' | 'connect';
 }
-interface PayPalSettings {
+
+export interface RazorpaySettings {
+  enabled: boolean;
+  keyId: string;
+  keySecret: string;
+  webhookSecret?: string;
+}
+
+export interface PayPalSettings {
   clientId: string;
   clientSecret: string;
   sandbox: boolean;
 }
-interface SquareSettings {
+
+export interface SquareSettings {
   applicationId: string;
   accessToken: string;
   locationId: string;
 }
-interface QuickBooksSettings {
+
+export interface DirectBankSettings {
+  enabled: boolean;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  routingNumber?: string;
+  ifscCode?: string;
+  sortCode?: string;
+  bsb?: string;
+  iban?: string;
+  swiftBic?: string;
+  instructions?: string;
+}
+
+export interface UpiSettings {
+  enabled: boolean;
+  upiId: string;
+  merchantName?: string;
+}
+
+export interface QuickBooksSettings {
   connected: boolean;
   companyId: string;
 }
-interface BankFeedsSettings {
+
+export interface BankFeedsSettings {
   enabled: boolean;
 }
-interface PaymentIntegrationsSettings {
+
+export interface PaymentIntegrationsSettings {
   stripe: StripeSettings;
+  razorpay: RazorpaySettings;
   paypal: PayPalSettings;
   square: SquareSettings;
+  directBank: DirectBankSettings;
+  upi: UpiSettings;
   quickbooks: QuickBooksSettings;
   bankFeeds: BankFeedsSettings;
 }
 
 function defaultSettings(): PaymentIntegrationsSettings {
   return {
-    stripe: { connected: false, accountId: '', payoutsEnabled: false },
+    stripe: { connected: false, accountId: '', payoutsEnabled: false, publishableKey: '', secretKey: '', webhookSecret: '', mode: 'connect' },
+    razorpay: { enabled: false, keyId: '', keySecret: '', webhookSecret: '' },
     paypal: { clientId: '', clientSecret: '', sandbox: true },
     square: { applicationId: '', accessToken: '', locationId: '' },
+    directBank: { enabled: false, bankName: '', accountName: '', accountNumber: '', routingNumber: '', ifscCode: '', sortCode: '', bsb: '', iban: '', swiftBic: '', instructions: '' },
+    upi: { enabled: false, upiId: '', merchantName: '' },
     quickbooks: { connected: false, companyId: '' },
     bankFeeds: { enabled: false },
   };
 }
 
-function maskSecret(value: string): string {
+function maskSecret(value?: string): string {
   if (!value) return '';
   if (value.length <= 4) return '****';
   return '****' + value.slice(-4);
@@ -78,7 +113,7 @@ function isMaskedPlaceholder(value: unknown): boolean {
   return typeof value === 'string' && value.startsWith('****');
 }
 
-function parseSettings(raw: string | null | undefined): PaymentIntegrationsSettings {
+export function parsePaymentSettings(raw: string | null | undefined): PaymentIntegrationsSettings {
   if (!raw) return defaultSettings();
   try {
     const parsed = JSON.parse(raw);
@@ -89,6 +124,16 @@ function parseSettings(raw: string | null | undefined): PaymentIntegrationsSetti
         connected: !!payment.stripe?.connected,
         accountId: typeof payment.stripe?.accountId === 'string' ? payment.stripe.accountId : '',
         payoutsEnabled: !!payment.stripe?.payoutsEnabled,
+        publishableKey: typeof payment.stripe?.publishableKey === 'string' ? payment.stripe.publishableKey : '',
+        secretKey: typeof payment.stripe?.secretKey === 'string' ? payment.stripe.secretKey : '',
+        webhookSecret: typeof payment.stripe?.webhookSecret === 'string' ? payment.stripe.webhookSecret : '',
+        mode: payment.stripe?.mode === 'direct' ? 'direct' : 'connect',
+      },
+      razorpay: {
+        enabled: !!payment.razorpay?.enabled,
+        keyId: typeof payment.razorpay?.keyId === 'string' ? payment.razorpay.keyId : '',
+        keySecret: typeof payment.razorpay?.keySecret === 'string' ? payment.razorpay.keySecret : '',
+        webhookSecret: typeof payment.razorpay?.webhookSecret === 'string' ? payment.razorpay.webhookSecret : '',
       },
       paypal: {
         clientId: typeof payment.paypal?.clientId === 'string' ? payment.paypal.clientId : '',
@@ -99,6 +144,24 @@ function parseSettings(raw: string | null | undefined): PaymentIntegrationsSetti
         applicationId: typeof payment.square?.applicationId === 'string' ? payment.square.applicationId : '',
         accessToken: typeof payment.square?.accessToken === 'string' ? payment.square.accessToken : '',
         locationId: typeof payment.square?.locationId === 'string' ? payment.square.locationId : '',
+      },
+      directBank: {
+        enabled: !!payment.directBank?.enabled,
+        bankName: typeof payment.directBank?.bankName === 'string' ? payment.directBank.bankName : '',
+        accountName: typeof payment.directBank?.accountName === 'string' ? payment.directBank.accountName : '',
+        accountNumber: typeof payment.directBank?.accountNumber === 'string' ? payment.directBank.accountNumber : '',
+        routingNumber: typeof payment.directBank?.routingNumber === 'string' ? payment.directBank.routingNumber : '',
+        ifscCode: typeof payment.directBank?.ifscCode === 'string' ? payment.directBank.ifscCode : '',
+        sortCode: typeof payment.directBank?.sortCode === 'string' ? payment.directBank.sortCode : '',
+        bsb: typeof payment.directBank?.bsb === 'string' ? payment.directBank.bsb : '',
+        iban: typeof payment.directBank?.iban === 'string' ? payment.directBank.iban : '',
+        swiftBic: typeof payment.directBank?.swiftBic === 'string' ? payment.directBank.swiftBic : '',
+        instructions: typeof payment.directBank?.instructions === 'string' ? payment.directBank.instructions : '',
+      },
+      upi: {
+        enabled: !!payment.upi?.enabled,
+        upiId: typeof payment.upi?.upiId === 'string' ? payment.upi.upiId : '',
+        merchantName: typeof payment.upi?.merchantName === 'string' ? payment.upi.merchantName : '',
       },
       quickbooks: {
         connected: !!payment.quickbooks?.connected,
@@ -126,6 +189,16 @@ function readFullSettings(raw: string | null | undefined): Record<string, unknow
 function maskForResponse(settings: PaymentIntegrationsSettings): PaymentIntegrationsSettings {
   return {
     ...settings,
+    stripe: {
+      ...settings.stripe,
+      secretKey: maskSecret(settings.stripe.secretKey),
+      webhookSecret: maskSecret(settings.stripe.webhookSecret),
+    },
+    razorpay: {
+      ...settings.razorpay,
+      keySecret: maskSecret(settings.razorpay.keySecret),
+      webhookSecret: maskSecret(settings.razorpay.webhookSecret),
+    },
     paypal: {
       ...settings.paypal,
       clientSecret: maskSecret(settings.paypal.clientSecret),
@@ -133,6 +206,10 @@ function maskForResponse(settings: PaymentIntegrationsSettings): PaymentIntegrat
     square: {
       ...settings.square,
       accessToken: maskSecret(settings.square.accessToken),
+    },
+    directBank: {
+      ...settings.directBank,
+      accountNumber: maskSecret(settings.directBank.accountNumber),
     },
   };
 }
@@ -145,7 +222,6 @@ export async function GET() {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    // Super admins have no tenant — return masked defaults so the UI renders.
     if (!authUser.tenantId) {
       return NextResponse.json(maskForResponse(defaultSettings()));
     }
@@ -164,15 +240,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
-    const settings = parseSettings(tenant.settingsJson);
-    // Stripe status is the canonical source of truth — always sync from the
-    // dedicated tenant columns. The `paymentIntegrations.stripe` JSON copy is
-    // only kept for compatibility with the documented settings interface.
-    settings.stripe = {
-      connected: tenant.stripeConnected,
-      accountId: tenant.stripeAccountId || '',
-      payoutsEnabled: tenant.stripePayoutsEnabled,
-    };
+    const settings = parsePaymentSettings(tenant.settingsJson);
+    settings.stripe.connected = tenant.stripeConnected;
+    settings.stripe.accountId = tenant.stripeAccountId || '';
+    settings.stripe.payoutsEnabled = tenant.stripePayoutsEnabled;
 
     return NextResponse.json(maskForResponse(settings));
   } catch (error) {
@@ -185,6 +256,61 @@ export async function GET() {
 }
 
 // ─── Test connection helpers ────────────────────────────────────────────────
+async function testRazorpayConnection(creds: {
+  keyId?: string;
+  keySecret?: string;
+}): Promise<{ ok: boolean; message: string }> {
+  const keyId = (creds.keyId || '').trim();
+  const keySecret = creds.keySecret || '';
+  if (!keyId || !keySecret) {
+    return { ok: false, message: 'Razorpay Key ID and Key Secret are required.' };
+  }
+  if (isMaskedPlaceholder(keySecret) && keySecret.length <= 8) {
+    return { ok: false, message: 'Key Secret is masked. Re-enter the full secret to test.' };
+  }
+
+  const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+  try {
+    const res = await fetch('https://api.razorpay.com/v1/payments?count=1', {
+      headers: { Authorization: `Basic ${auth}` },
+    });
+    if (res.ok) {
+      return { ok: true, message: 'Razorpay credentials are valid and active.' };
+    }
+    const errData = await res.json().catch(() => ({}));
+    const description = errData?.error?.description || `HTTP ${res.status}`;
+    return { ok: false, message: `Razorpay test failed: ${description}` };
+  } catch (err) {
+    return { ok: false, message: `Network error contacting Razorpay: ${err instanceof Error ? err.message : 'unknown'}` };
+  }
+}
+
+async function testStripeConnection(creds: {
+  secretKey?: string;
+}): Promise<{ ok: boolean; message: string }> {
+  const secretKey = (creds.secretKey || '').trim();
+  if (!secretKey) {
+    return { ok: false, message: 'Stripe Secret Key is required.' };
+  }
+  if (isMaskedPlaceholder(secretKey) && secretKey.length <= 8) {
+    return { ok: false, message: 'Secret Key is masked. Re-enter the full key to test.' };
+  }
+
+  try {
+    const res = await fetch('https://api.stripe.com/v1/balance', {
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+    if (res.ok) {
+      return { ok: true, message: 'Stripe API key is valid.' };
+    }
+    const errData = await res.json().catch(() => ({}));
+    const description = errData?.error?.message || `HTTP ${res.status}`;
+    return { ok: false, message: `Stripe test failed: ${description}` };
+  } catch (err) {
+    return { ok: false, message: `Network error contacting Stripe: ${err instanceof Error ? err.message : 'unknown'}` };
+  }
+}
+
 async function testPayPalConnection(creds: {
   clientId?: string;
   clientSecret?: string;
@@ -195,7 +321,6 @@ async function testPayPalConnection(creds: {
   if (!clientId || !clientSecret) {
     return { ok: false, message: 'PayPal Client ID and Client Secret are required.' };
   }
-  // Respect the masked-placeholder: cannot test with a masked secret alone.
   if (isMaskedPlaceholder(clientSecret) && clientSecret.length <= 8) {
     return {
       ok: false,
@@ -251,7 +376,6 @@ async function testSquareConnection(creds: {
     };
   }
 
-  // Square uses different hostnames for sandbox vs production.
   const host = creds.sandbox ? 'https://connect.squareupsandbox.com' : 'https://connect.squareup.com';
   try {
     const res = await fetch(`${host}/v2/locations?limit=1`, {
@@ -292,15 +416,32 @@ export async function PUT(request: NextRequest) {
 
     const body = (await request.json()) as {
       action?: 'save' | 'test' | 'disconnect';
-      provider?: 'paypal' | 'square' | 'stripe' | 'quickbooks';
+      provider?: 'paypal' | 'square' | 'stripe' | 'razorpay' | 'quickbooks';
+      stripe?: Partial<StripeSettings>;
+      razorpay?: Partial<RazorpaySettings>;
       paypal?: Partial<PayPalSettings>;
       square?: Partial<SquareSettings>;
+      directBank?: Partial<DirectBankSettings>;
+      upi?: Partial<UpiSettings>;
       quickbooks?: Partial<QuickBooksSettings>;
       bankFeeds?: Partial<BankFeedsSettings>;
     };
 
     // ── Test connection path (no persistence) ──────────────────────────────
     if (body.action === 'test') {
+      if (body.provider === 'razorpay') {
+        const result = await testRazorpayConnection({
+          keyId: body.razorpay?.keyId,
+          keySecret: body.razorpay?.keySecret,
+        });
+        return NextResponse.json({ ok: result.ok, message: result.message });
+      }
+      if (body.provider === 'stripe') {
+        const result = await testStripeConnection({
+          secretKey: body.stripe?.secretKey,
+        });
+        return NextResponse.json({ ok: result.ok, message: result.message });
+      }
       if (body.provider === 'paypal') {
         const result = await testPayPalConnection({
           clientId: body.paypal?.clientId,
@@ -312,8 +453,6 @@ export async function PUT(request: NextRequest) {
       if (body.provider === 'square') {
         const result = await testSquareConnection({
           accessToken: body.square?.accessToken,
-          // Square sandbox is determined by which access token the merchant
-          // generated in the Square dashboard — we attempt both endpoints.
           sandbox: false,
         });
         return NextResponse.json({ ok: result.ok, message: result.message });
@@ -324,10 +463,6 @@ export async function PUT(request: NextRequest) {
     // ── Disconnect path ────────────────────────────────────────────────────
     if (body.action === 'disconnect') {
       if (body.provider === 'stripe') {
-        // Clear the canonical Stripe columns. A full OAuth deauthorize call
-        // would happen here in production (via Stripe Connect deauthorize
-        // endpoint) — left as a placeholder since the Stripe Connect OAuth
-        // route is not part of this task.
         await db.tenant.update({
           where: { id: authUser.tenantId },
           data: {
@@ -340,8 +475,8 @@ export async function PUT(request: NextRequest) {
           where: { id: authUser.tenantId },
           select: { settingsJson: true },
         });
-        const settings = parseSettings(tenant?.settingsJson);
-        settings.stripe = { connected: false, accountId: '', payoutsEnabled: false };
+        const settings = parsePaymentSettings(tenant?.settingsJson);
+        settings.stripe = { connected: false, accountId: '', payoutsEnabled: false, publishableKey: '', secretKey: '', webhookSecret: '', mode: 'connect' };
         const full = readFullSettings(tenant?.settingsJson);
         full.paymentIntegrations = settings;
         await db.tenant.update({
@@ -353,13 +488,13 @@ export async function PUT(request: NextRequest) {
           settings: maskForResponse(settings),
         });
       }
-      if (body.provider === 'quickbooks') {
+      if (body.provider === 'razorpay') {
         const tenant = await db.tenant.findUnique({
           where: { id: authUser.tenantId },
           select: { settingsJson: true },
         });
-        const settings = parseSettings(tenant?.settingsJson);
-        settings.quickbooks = { connected: false, companyId: '' };
+        const settings = parsePaymentSettings(tenant?.settingsJson);
+        settings.razorpay = { enabled: false, keyId: '', keySecret: '', webhookSecret: '' };
         const full = readFullSettings(tenant?.settingsJson);
         full.paymentIntegrations = settings;
         await db.tenant.update({
@@ -371,10 +506,9 @@ export async function PUT(request: NextRequest) {
           settings: maskForResponse(settings),
         });
       }
-      return NextResponse.json({ error: 'Unknown provider for disconnect' }, { status: 400 });
     }
 
-    // ── Save path (PayPal / Square / QuickBooks / Bank Feeds) ──────────────
+    // ── Save path ──────────────────────────────────────────────────────────
     const tenant = await db.tenant.findUnique({
       where: { id: authUser.tenantId },
       select: {
@@ -388,25 +522,50 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
-    const settings = parseSettings(tenant.settingsJson);
-    // Sync Stripe status from canonical columns before any updates.
-    settings.stripe = {
-      connected: tenant.stripeConnected,
-      accountId: tenant.stripeAccountId || '',
-      payoutsEnabled: tenant.stripePayoutsEnabled,
-    };
+    const settings = parsePaymentSettings(tenant.settingsJson);
+    settings.stripe.connected = tenant.stripeConnected;
+    settings.stripe.accountId = tenant.stripeAccountId || '';
+    settings.stripe.payoutsEnabled = tenant.stripePayoutsEnabled;
+
+    // Stripe Direct keys
+    if (body.stripe) {
+      if (typeof body.stripe.publishableKey === 'string') {
+        settings.stripe.publishableKey = body.stripe.publishableKey.trim();
+      }
+      if (typeof body.stripe.secretKey === 'string' && !isMaskedPlaceholder(body.stripe.secretKey)) {
+        settings.stripe.secretKey = body.stripe.secretKey.trim();
+      }
+      if (typeof body.stripe.webhookSecret === 'string' && !isMaskedPlaceholder(body.stripe.webhookSecret)) {
+        settings.stripe.webhookSecret = body.stripe.webhookSecret.trim();
+      }
+      if (body.stripe.mode) {
+        settings.stripe.mode = body.stripe.mode;
+      }
+    }
+
+    // Razorpay
+    if (body.razorpay) {
+      if (typeof body.razorpay.enabled === 'boolean') {
+        settings.razorpay.enabled = body.razorpay.enabled;
+      }
+      if (typeof body.razorpay.keyId === 'string') {
+        settings.razorpay.keyId = body.razorpay.keyId.trim();
+      }
+      if (typeof body.razorpay.keySecret === 'string' && !isMaskedPlaceholder(body.razorpay.keySecret)) {
+        settings.razorpay.keySecret = body.razorpay.keySecret.trim();
+      }
+      if (typeof body.razorpay.webhookSecret === 'string' && !isMaskedPlaceholder(body.razorpay.webhookSecret)) {
+        settings.razorpay.webhookSecret = body.razorpay.webhookSecret.trim();
+      }
+    }
 
     // PayPal
     if (body.paypal) {
       if (typeof body.paypal.clientId === 'string') {
         settings.paypal.clientId = body.paypal.clientId.trim();
       }
-      if (typeof body.paypal.clientSecret === 'string') {
-        // Preserve the existing secret if the client sent back the masked
-        // placeholder unchanged (e.g. user only updated the Client ID).
-        if (!isMaskedPlaceholder(body.paypal.clientSecret)) {
-          settings.paypal.clientSecret = body.paypal.clientSecret;
-        }
+      if (typeof body.paypal.clientSecret === 'string' && !isMaskedPlaceholder(body.paypal.clientSecret)) {
+        settings.paypal.clientSecret = body.paypal.clientSecret.trim();
       }
       if (typeof body.paypal.sandbox === 'boolean') {
         settings.paypal.sandbox = body.paypal.sandbox;
@@ -421,14 +580,36 @@ export async function PUT(request: NextRequest) {
       if (typeof body.square.locationId === 'string') {
         settings.square.locationId = body.square.locationId.trim();
       }
-      if (typeof body.square.accessToken === 'string') {
-        if (!isMaskedPlaceholder(body.square.accessToken)) {
-          settings.square.accessToken = body.square.accessToken;
-        }
+      if (typeof body.square.accessToken === 'string' && !isMaskedPlaceholder(body.square.accessToken)) {
+        settings.square.accessToken = body.square.accessToken.trim();
       }
     }
 
-    // QuickBooks (manualCompanyId write — typically set by OAuth callback)
+    // Direct Bank
+    if (body.directBank) {
+      if (typeof body.directBank.enabled === 'boolean') settings.directBank.enabled = body.directBank.enabled;
+      if (typeof body.directBank.bankName === 'string') settings.directBank.bankName = body.directBank.bankName.trim();
+      if (typeof body.directBank.accountName === 'string') settings.directBank.accountName = body.directBank.accountName.trim();
+      if (typeof body.directBank.accountNumber === 'string' && !isMaskedPlaceholder(body.directBank.accountNumber)) {
+        settings.directBank.accountNumber = body.directBank.accountNumber.trim();
+      }
+      if (typeof body.directBank.routingNumber === 'string') settings.directBank.routingNumber = body.directBank.routingNumber.trim();
+      if (typeof body.directBank.ifscCode === 'string') settings.directBank.ifscCode = body.directBank.ifscCode.trim();
+      if (typeof body.directBank.sortCode === 'string') settings.directBank.sortCode = body.directBank.sortCode.trim();
+      if (typeof body.directBank.bsb === 'string') settings.directBank.bsb = body.directBank.bsb.trim();
+      if (typeof body.directBank.iban === 'string') settings.directBank.iban = body.directBank.iban.trim();
+      if (typeof body.directBank.swiftBic === 'string') settings.directBank.swiftBic = body.directBank.swiftBic.trim();
+      if (typeof body.directBank.instructions === 'string') settings.directBank.instructions = body.directBank.instructions.trim();
+    }
+
+    // UPI
+    if (body.upi) {
+      if (typeof body.upi.enabled === 'boolean') settings.upi.enabled = body.upi.enabled;
+      if (typeof body.upi.upiId === 'string') settings.upi.upiId = body.upi.upiId.trim();
+      if (typeof body.upi.merchantName === 'string') settings.upi.merchantName = body.upi.merchantName.trim();
+    }
+
+    // QuickBooks
     if (body.quickbooks) {
       if (typeof body.quickbooks.companyId === 'string') {
         settings.quickbooks.companyId = body.quickbooks.companyId.trim();

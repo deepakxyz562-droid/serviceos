@@ -378,10 +378,10 @@ export function InvoiceDetailPage({
             <button
               type="button"
               onClick={() => {
-                const url = typeof window !== 'undefined' ? `${window.location.origin}/invoices/${inv.id}` : '';
+                const url = typeof window !== 'undefined' ? `${window.location.origin}/pay/${inv.id}` : '';
                 if (url) {
                   navigator.clipboard.writeText(url);
-                  toast.success('Invoice link copied to clipboard');
+                  toast.success('Customer Pay Link copied to clipboard');
                 }
               }}
               className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-background hover:bg-muted text-foreground transition-colors"

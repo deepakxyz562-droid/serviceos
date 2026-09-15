@@ -1847,14 +1847,15 @@ function InvoicesView({
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="size-7 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30"
-                                  title="Pay invoice"
+                                  className="size-7 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                  title="Pay invoice online / direct"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    toast.info('Online payment coming soon', {
-                                      description:
-                                        'Please contact us to pay this invoice, or use the Download button to print a copy for your records.',
-                                    });
+                                    window.open(
+                                      `/pay/${invoice.id}`,
+                                      '_blank',
+                                      'noopener,noreferrer'
+                                    );
                                   }}
                                 >
                                   <CreditCard className="size-3.5" />
