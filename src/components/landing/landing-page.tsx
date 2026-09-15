@@ -17,6 +17,7 @@ import {
   Check,
   ChevronRight,
   ChevronDown,
+  FileInput,
   Play,
   ArrowRight,
   Zap,
@@ -508,14 +509,18 @@ const seoFeatures = [
 const footerLinks = {
   product: [
     { label: 'Features', href: '#features' },
-    { label: 'AI Receptionist', href: '#ai-receptionist' },
+    { label: 'AI Website Employee', href: '/ai-employee' },
+    { label: 'Conversational Smart Forms', href: '/ai-forms' },
+    { label: 'AI Voice Receptionist', href: '#ai-receptionist' },
+    { label: 'Verified Marketplace', href: '/marketplace' },
     { label: 'Pricing', href: '#pricing' },
-    { label: 'Channels', href: '#channels' },
-    { label: 'Live Demo', href: '#' },
   ],
   industries: seoIndustries,
   compare: seoCompare,
   resources: [
+    { label: 'AI Website Employee', href: '/ai-employee' },
+    { label: 'Conversational Forms', href: '/ai-forms' },
+    { label: 'Contractor Marketplace', href: '/marketplace' },
     { label: 'Free Invoice Generator', href: '/invoice-generator' },
     { label: 'Contact Us', href: '/contact-us' },
     ...seoFeatures,
@@ -564,12 +569,40 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
             <span className="text-xl font-bold text-foreground tracking-tight">Fieseros</span>
           </div>
 
-          <div className="hidden md:flex items-center gap-7">
+          <div className="hidden md:flex items-center gap-6">
+            {/* AI Solutions Dropdown */}
+            <div className="relative group">
+              <button type="button" className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">
+                <Sparkles className="w-3.5 h-3.5" /> AI &amp; Forms <ChevronDown className="w-3.5 h-3.5" />
+                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">New</span>
+              </button>
+              <div className="absolute left-0 top-full pt-3 invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 z-50">
+                <div className="w-72 rounded-xl border border-border bg-white shadow-xl p-2 grid grid-cols-1 gap-1">
+                  <a href="/ai-employee" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                      <Bot className="size-4 text-emerald-600" /> AI Website Employee
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">24/7 Q&amp;A, appointment booking &amp; CRM lead capture</p>
+                  </a>
+                  <a href="/ai-forms" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                      <FileInput className="size-4 text-emerald-600" /> Conversational Forms
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">AI multi-step form builder &amp; Jotform alternative</p>
+                  </a>
+                  <a href="#ai-receptionist" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block border-t border-border/50">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                      <PhoneCall className="size-4 text-purple-600" /> Voice Receptionist
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">24/7 AI inbound phone answering &amp; emergency triage</p>
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <a href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Marketplace</a>
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Features</a>
-            <a href="#ai-receptionist" className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 transition-colors font-medium">
-              AI Receptionist
-              <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">New</span>
-            </a>
+            
             <div className="relative group">
               <button type="button" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">
                 Industries <ChevronDown className="w-3.5 h-3.5" />
@@ -621,10 +654,15 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
             className="md:hidden bg-white border-b border-border overflow-hidden"
           >
             <div className="px-4 py-4 space-y-3">
+              <div className="pb-2 border-b">
+                <p className="text-xs uppercase tracking-wider text-emerald-700 font-bold mb-1">AI &amp; Forms</p>
+                <a href="/ai-employee" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>✨ AI Website Employee</a>
+                <a href="/ai-forms" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📝 Conversational Forms</a>
+                <a href="/marketplace" className="block text-sm font-medium text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>🌐 Contractor Marketplace</a>
+              </div>
               <a href="#features" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Features</a>
-              <a href="#ai-receptionist" className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 py-2" onClick={() => setMobileMenuOpen(false)}>
-                AI Receptionist
-                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">New</span>
+              <a href="#ai-receptionist" className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700 py-2" onClick={() => setMobileMenuOpen(false)}>
+                AI Voice Receptionist
               </a>
               <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
               <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
@@ -1283,6 +1321,45 @@ function AiReceptionistSection({ onGetStarted }: { onGetStarted: () => void }) {
             <Button size="lg" onClick={onGetStarted} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-7 h-12 shadow-lg shadow-emerald-500/20 shrink-0">
               Start Free Trial<ArrowRight className="w-4 h-4 ml-2" />
             </Button>
+          </motion.div>
+
+          {/* AI Website Employee & Conversational Forms Spotlight */}
+          <motion.div variants={staggerItem} className="mt-8 grid md:grid-cols-2 gap-4">
+            <a
+              href="/ai-employee"
+              className="p-5 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-emerald-500/[0.08] hover:border-emerald-400/40 transition-all group flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-300">
+                  <Bot className="size-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors">
+                    24/7 AI Website Employee &amp; Chatbot
+                  </h4>
+                  <p className="text-xs text-slate-400">Trained on your website to answer questions &amp; book calendar slots</p>
+                </div>
+              </div>
+              <ArrowRight className="size-4 text-slate-400 group-hover:text-emerald-300 group-hover:translate-x-1 transition-all shrink-0" />
+            </a>
+
+            <a
+              href="/ai-forms"
+              className="p-5 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-emerald-500/[0.08] hover:border-emerald-400/40 transition-all group flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-lg bg-teal-500/20 flex items-center justify-center text-teal-300">
+                  <FileInput className="size-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-white group-hover:text-teal-300 transition-colors">
+                    Smart Conversational Forms &amp; Jotform Alternative
+                  </h4>
+                  <p className="text-xs text-slate-400">Generate 17-field lead capture forms with instant CRM sync</p>
+                </div>
+              </div>
+              <ArrowRight className="size-4 text-slate-400 group-hover:text-teal-300 group-hover:translate-x-1 transition-all shrink-0" />
+            </a>
           </motion.div>
         </div>
       </AnimatedSection>
