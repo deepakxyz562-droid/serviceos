@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-  Bot,
   Sparkles,
   FileInput,
   Globe,
@@ -16,7 +15,9 @@ import {
   ArrowRight,
   ShieldCheck,
   Zap,
+  Bot,
 } from 'lucide-react';
+import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -28,15 +29,23 @@ import {
 export function AiMarketingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const handleTryDemoClick = (e: React.MouseEvent) => {
+    const el = document.getElementById('demo') || document.getElementById('demo-url-input');
+    if (el) {
+      e.preventDefault();
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const input = document.getElementById('demo-url-input') as HTMLInputElement | null;
+      if (input) input.focus();
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="max-w-7xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand Logo */}
         <div className="flex items-center gap-6">
-          <Link href="/ai-employee" className="flex items-center gap-2.5">
-            <div className="size-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-sm shadow-emerald-500/20">
-              <Bot className="size-5" />
-            </div>
+          <Link href="/" className="flex items-center gap-2.5">
+            <BrandMark size={32} className="shadow-emerald-500/20" />
             <div className="flex flex-col">
               <span className="text-base font-bold tracking-tight text-foreground flex items-center gap-1.5">
                 Fieseros <span className="text-emerald-600 font-extrabold">AI</span>
@@ -173,11 +182,16 @@ export function AiMarketingHeader() {
 
         {/* Right Actions */}
         <div className="hidden sm:flex items-center gap-3">
-          <Link href="/login" className="text-xs font-semibold text-muted-foreground hover:text-foreground px-3 py-2">
+          <Link href="/?auth=signin" className="text-xs font-semibold text-muted-foreground hover:text-foreground px-3 py-2">
             Sign In
           </Link>
-          <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm gap-1.5">
-            <Link href="#demo">
+          <Button
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm gap-1.5 cursor-pointer"
+            onClick={handleTryDemoClick}
+            asChild
+          >
+            <Link href="/ai-employee#demo">
               <Sparkles className="size-3.5" /> Try Live Demo
             </Link>
           </Button>
@@ -196,21 +210,24 @@ export function AiMarketingHeader() {
       {mobileMenuOpen && (
         <div className="sm:hidden border-t bg-background p-4 space-y-3">
           <Link
-            href="#demo"
-            onClick={() => setMobileMenuOpen(false)}
+            href="/ai-employee#demo"
+            onClick={(e) => {
+              setMobileMenuOpen(false);
+              handleTryDemoClick(e);
+            }}
             className="block text-sm font-medium text-foreground py-1"
           >
             ✨ Live AI Demo
           </Link>
           <Link
-            href="#receptionist"
+            href="/ai-employee"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
           >
             AI Website Employee
           </Link>
           <Link
-            href="#forms"
+            href="/ai-forms"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
           >
@@ -224,8 +241,22 @@ export function AiMarketingHeader() {
             Pricing ($10/mo CRM add-on)
           </Link>
           <div className="pt-2 border-t flex flex-col gap-2">
-            <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs">
-              <Link href="#demo">Launch Your AI Employee</Link>
+            <Link
+              href="/?auth=signin"
+              className="text-center text-xs font-semibold text-muted-foreground hover:text-foreground py-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Sign In
+            </Link>
+            <Button
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+              onClick={(e) => {
+                setMobileMenuOpen(false);
+                handleTryDemoClick(e);
+              }}
+              asChild
+            >
+              <Link href="/ai-employee#demo">Launch Your AI Employee</Link>
             </Button>
           </div>
         </div>

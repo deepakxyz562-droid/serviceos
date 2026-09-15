@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Bot, ShieldCheck, Zap } from 'lucide-react';
+import { ShieldCheck, Zap } from 'lucide-react';
+import { BrandMark } from '@/components/brand/brand-mark';
 
 export function AiMarketingFooter() {
   return (
@@ -8,14 +9,12 @@ export function AiMarketingFooter() {
         {/* Top brand row */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-slate-800">
           <div className="space-y-2 max-w-md">
-            <div className="flex items-center gap-2.5">
-              <div className="size-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white">
-                <Bot className="size-4" />
-              </div>
+            <Link href="/" className="flex items-center gap-2.5">
+              <BrandMark size={32} className="shadow-black/20" />
               <span className="text-lg font-bold text-white tracking-tight">
                 Fieseros <span className="text-emerald-400">AI Platform</span>
               </span>
-            </div>
+            </Link>
             <p className="text-xs text-slate-400 leading-relaxed">
               Turn your website into a 24/7 AI employee. Answer customer questions, offer live calendar booking slots, generate responsive forms, and automatically sync leads into Fieseros CRM.
             </p>

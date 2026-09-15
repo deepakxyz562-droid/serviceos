@@ -126,6 +126,7 @@ export default function AiEmployeeLandingPage() {
               <div className="relative flex-1">
                 <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                 <Input
+                  id="demo-url-input"
                   type="text"
                   placeholder="Enter your website URL (e.g. https://myplumbing.com) or business type..."
                   value={demoUrl}
