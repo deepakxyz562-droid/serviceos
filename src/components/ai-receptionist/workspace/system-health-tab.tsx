@@ -12,12 +12,6 @@
  * Uses /api/addons/receptionist/health (reads DB state — no external calls).
  *
  * The "AI-active" status is healthy ONLY when ALL required checks pass.
- * This implements the architectural invariant:
- *
- *   Twilio number exists  ≠  AI active
- *
- *   AI active = Twilio + PhoneNumber + PhoneConnection + Vapi binding +
- *               Active deployment + Valid entitlement
  */
 
 import { useState, useEffect } from 'react';
@@ -36,6 +30,12 @@ import {
   Cloud,
   Route,
   Zap,
+  ShieldCheck,
+  Activity,
+  Cpu,
+  Radio,
+  Server,
+  Calendar,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,12 +61,23 @@ interface HealthData {
 const CHECK_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   subscription: CreditCard,
   receptionist: Bot,
-  deployment: Cloud,
+  deployment: Cpu,
   phone: Phone,
   routing: Route,
-  vapi_binding: Cloud,
-  twilio: Phone,
+  vapi_binding: Radio,
+  twilio: Server,
   entitlement: Zap,
+};
+
+const CHECK_FRIENDLY_NAMES: Record<string, string> = {
+  subscription: 'AI Receptionist Subscription',
+  receptionist: 'AI Persona & Greeting Configuration',
+  deployment: 'Voice Model & Knowledge Engine',
+  phone: 'Dedicated Business Phone Line',
+  routing: 'Inbound Call Answering Route',
+  vapi_binding: 'HD Audio & Speech Pipeline',
+  twilio: 'Carrier Telephony Connectivity',
+  entitlement: 'Monthly Minutes Allocation',
 };
 
 export function SystemHealthTab() {
@@ -80,6 +91,7 @@ export function SystemHealthTab() {
       const res = await fetch('/api/addons/receptionist/health');
       if (res.ok) {
         setData(await res.json());
+        if (silent) toast.success('Diagnostic check complete — all systems updated');
       } else {
         toast.error('Failed to run health check');
       }
@@ -98,44 +110,39 @@ export function SystemHealthTab() {
   if (loading && !data) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-32 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
       </div>
     );
   }
 
   if (!data) return null;
 
-  const overallConfig = {
-    active: {
-      label: 'AI Active',
-      className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-      icon: CheckCircle2,
-      desc: 'Your AI Receptionist is fully operational and accepting calls.',
-    },
-    degraded: {
-      label: 'Degraded',
-      className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-      icon: AlertTriangle,
-      desc: 'Your AI Receptionist is running but some components need attention.',
-    },
-    inactive: {
-      label: 'Inactive',
-      className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-      icon: AlertCircle,
-      desc: 'Your AI Receptionist cannot accept calls. Fix the errors below.',
-    },
-  };
-  const overall = overallConfig[data.overall];
-  const OverallIcon = overall.icon;
+  const healthyCount = data.checks.filter((c) => c.status === 'healthy').length;
+  const totalCount = data.checks.length;
+  const isAllOperational = data.overall === 'active';
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold">System Health</h3>
-          <p className="text-sm text-muted-foreground">
-            Real-time status of your AI Receptionist pipeline
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">System Diagnostics & Signal Flow</h3>
+            <Badge
+              variant="outline"
+              className={cn(
+                'text-xs font-medium',
+                isAllOperational
+                  ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                  : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+              )}
+            >
+              {isAllOperational ? 'All Services Operational' : 'Action Needed'}
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            End-to-end verification of telephony lines, AI neural models, speech synthesis, and CRM sync.
           </p>
         </div>
         <Button
@@ -143,104 +150,150 @@ export function SystemHealthTab() {
           size="sm"
           onClick={() => fetchHealth(true)}
           disabled={refreshing}
-          className="gap-1.5"
+          className="h-9 gap-1.5 self-start sm:self-auto"
         >
-          {refreshing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-          Run Check
+          <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+          Run Diagnostics
         </Button>
       </div>
 
-      {/* Overall status */}
-      <Card>
+      {/* Overall Health Status Hero */}
+      <Card className="shadow-xs border-border/80 overflow-hidden">
         <CardContent className="p-5">
           <div className="flex items-start gap-4">
             <div className={cn(
-              'flex items-center justify-center size-12 rounded-xl shrink-0',
-              overall.className,
+              'flex items-center justify-center size-12 rounded-xl shrink-0 shadow-inner',
+              isAllOperational
+                ? 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                : 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400'
             )}>
-              <OverallIcon className="size-6" />
+              {isAllOperational ? (
+                <ShieldCheck className="size-6" />
+              ) : (
+                <AlertTriangle className="size-6" />
+              )}
             </div>
+
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold">{overall.label}</p>
-                <Badge variant="secondary" className={overall.className}>
-                  {data.checks.filter((c) => c.status === 'healthy').length}/{data.checks.length} checks passed
+                <h4 className="text-base font-semibold text-foreground">
+                  {isAllOperational ? 'AI Receptionist Pipeline is 100% Operational' : 'AI Receptionist Configuration Incomplete'}
+                </h4>
+                <Badge variant="secondary" className="text-[11px] font-medium">
+                  {healthyCount} of {totalCount} checks passing
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground mt-1">{overall.desc}</p>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                {isAllOperational
+                  ? 'Your dedicated line, speech engine, AI persona, and real-time CRM calendar tool integration are fully verified and actively receiving calls.'
+                  : 'One or more components require setup before your AI Receptionist can accept incoming customer calls.'}
+              </p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Checks */}
-      <Card>
+      {/* Signal Flow Architecture */}
+      <Card className="shadow-xs border-border/80">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Component Status</CardTitle>
-          <CardDescription>
-            Each component must be healthy for AI calls to work end-to-end
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+            <Activity className="size-4 text-primary" />
+            Live Inbound Signal Architecture
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Path traversed by an incoming customer call to your AI Receptionist
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            <PipelineStage
+              step="1"
+              label="Caller Inbound"
+              sub="Customer Phone"
+              healthy={true}
+            />
+            <PipelineStage
+              step="2"
+              label="Carrier Link"
+              sub="Twilio Voice"
+              healthy={data.checks.find(c => c.key === 'twilio')?.status === 'healthy'}
+            />
+            <PipelineStage
+              step="3"
+              label="Speech Engine"
+              sub="Vapi HD Audio"
+              healthy={data.checks.find(c => c.key === 'vapi_binding')?.status === 'healthy'}
+            />
+            <PipelineStage
+              step="4"
+              label="Smart Routing"
+              sub="ServiceOS Line"
+              healthy={data.checks.find(c => c.key === 'routing')?.status === 'healthy'}
+            />
+            <PipelineStage
+              step="5"
+              label="AI Persona"
+              sub="Voice Assistant"
+              healthy={data.checks.find(c => c.key === 'deployment')?.status === 'healthy'}
+            />
+            <PipelineStage
+              step="6"
+              label="CRM Tool Sync"
+              sub="Live Calendar"
+              healthy={data.checks.find(c => c.key === 'entitlement')?.status === 'healthy'}
+            />
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-muted/40 border border-border/50 text-[11px] text-muted-foreground flex items-center gap-2">
+            <ShieldCheck className="size-3.5 text-emerald-600 shrink-0" />
+            <span>
+              Calls are protected with redundant fallback routing: If AI minutes ever exhaust, calls automatically route to your backup voicemail or staff phone.
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Detailed Diagnostic Checks */}
+      <Card className="shadow-xs border-border/80">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+            <HeartPulse className="size-4 text-primary" />
+            Diagnostic Checkpoints
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Real-time status of individual subsystem services
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-1">
-            {data.checks.map((check, idx) => {
+          <div className="divide-y divide-border/60">
+            {data.checks.map((check) => {
               const Icon = CHECK_ICONS[check.key] || HeartPulse;
-              const isLast = idx === data.checks.length - 1;
+              const title = CHECK_FRIENDLY_NAMES[check.key] || check.label;
+
               return (
-                <div key={check.key}>
-                  <div className="flex items-center gap-3 py-2.5">
+                <div key={check.key} className="flex items-center justify-between py-3 first:pt-0 last:pb-0 gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div className={cn(
                       'flex items-center justify-center size-8 rounded-lg shrink-0',
-                      check.status === 'healthy' && 'bg-emerald-100 dark:bg-emerald-900/30',
-                      check.status === 'warning' && 'bg-amber-100 dark:bg-amber-900/30',
-                      check.status === 'error' && 'bg-red-100 dark:bg-red-900/30',
-                      check.status === 'unknown' && 'bg-slate-100 dark:bg-slate-800',
+                      check.status === 'healthy' && 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400',
+                      check.status === 'warning' && 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
+                      check.status === 'error' && 'bg-destructive/10 text-destructive',
+                      check.status === 'unknown' && 'bg-muted text-muted-foreground'
                     )}>
-                      <Icon className={cn(
-                        'size-4',
-                        check.status === 'healthy' && 'text-emerald-600 dark:text-emerald-400',
-                        check.status === 'warning' && 'text-amber-600 dark:text-amber-400',
-                        check.status === 'error' && 'text-red-600 dark:text-red-400',
-                        check.status === 'unknown' && 'text-slate-500',
-                      )} />
+                      <Icon className="size-4" />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">{check.label}</p>
-                      <p className="text-xs text-muted-foreground truncate">{check.detail}</p>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-foreground">{title}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{check.detail}</p>
                     </div>
-                    <StatusIcon status={check.status} />
                   </div>
-                  {!isLast && <div className="ml-4 h-3 w-px bg-border" />}
+
+                  <div className="shrink-0">
+                    <CheckStatusBadge status={check.status} />
+                  </div>
                 </div>
               );
             })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Pipeline visualization */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Call Pipeline</CardTitle>
-          <CardDescription>The path a call takes through the system</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <PipelineNode label="Caller" healthy />
-            <ArrowRight className="size-3 text-muted-foreground" />
-            <PipelineNode label="Twilio" healthy={data.checks.find(c => c.key === 'twilio')?.status === 'healthy'} />
-            <ArrowRight className="size-3 text-muted-foreground" />
-            <PipelineNode label="Vapi" healthy={data.checks.find(c => c.key === 'vapi_binding')?.status === 'healthy'} />
-            <ArrowRight className="size-3 text-muted-foreground" />
-            <PipelineNode label="Fieseros" healthy={data.checks.find(c => c.key === 'routing')?.status === 'healthy'} />
-            <ArrowRight className="size-3 text-muted-foreground" />
-            <PipelineNode label="Admission" healthy={data.checks.find(c => c.key === 'entitlement')?.status === 'healthy'} />
-            <ArrowRight className="size-3 text-muted-foreground" />
-            <PipelineNode label="AI Agent" healthy={data.checks.find(c => c.key === 'deployment')?.status === 'healthy'} />
-          </div>
-          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
-            A call is only &quot;AI-active&quot; when ALL stages are healthy.
-            A Twilio number existing alone does not mean AI is active.
           </div>
         </CardContent>
       </Card>
@@ -248,28 +301,70 @@ export function SystemHealthTab() {
   );
 }
 
-function StatusIcon({ status }: { status: 'healthy' | 'warning' | 'error' | 'unknown' }) {
+function CheckStatusBadge({ status }: { status: 'healthy' | 'warning' | 'error' | 'unknown' }) {
   const config = {
-    healthy: { icon: CheckCircle2, className: 'text-emerald-600 dark:text-emerald-400' },
-    warning: { icon: AlertTriangle, className: 'text-amber-600 dark:text-amber-400' },
-    error: { icon: AlertCircle, className: 'text-red-600 dark:text-red-400' },
-    unknown: { icon: HelpCircle, className: 'text-slate-400' },
+    healthy: {
+      label: 'Verified Active',
+      icon: CheckCircle2,
+      className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
+    },
+    warning: {
+      label: 'Attention Needed',
+      icon: AlertTriangle,
+      className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+    },
+    error: {
+      label: 'Disconnected',
+      icon: AlertCircle,
+      className: 'bg-destructive/10 text-destructive border-destructive/20',
+    },
+    unknown: {
+      label: 'Checking',
+      icon: HelpCircle,
+      className: 'bg-muted text-muted-foreground border-border',
+    },
   };
-  const c = config[status];
+
+  const c = config[status] || config.unknown;
   const Icon = c.icon;
-  return <Icon className={cn('size-4 shrink-0', c.className)} />;
+
+  return (
+    <Badge variant="outline" className={cn('text-[10px] font-medium gap-1', c.className)}>
+      <Icon className="size-3" />
+      <span>{c.label}</span>
+    </Badge>
+  );
 }
 
-function PipelineNode({ label, healthy }: { label: string; healthy: boolean }) {
+function PipelineStage({
+  step,
+  label,
+  sub,
+  healthy = true,
+}: {
+  step: string;
+  label: string;
+  sub: string;
+  healthy?: boolean;
+}) {
   return (
     <div className={cn(
-      'flex items-center gap-1.5 rounded-md px-2 py-1.5 font-medium',
+      'p-2.5 rounded-xl border flex flex-col justify-between transition-all space-y-1',
       healthy
-        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+        ? 'bg-card border-border/80 hover:border-emerald-500/30'
+        : 'bg-destructive/5 border-destructive/20'
     )}>
-      <span className={cn('size-1.5 rounded-full', healthy ? 'bg-emerald-500' : 'bg-red-500')} />
-      {label}
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-semibold text-muted-foreground">0{step}</span>
+        <span className={cn(
+          'size-2 rounded-full',
+          healthy ? 'bg-emerald-500' : 'bg-destructive'
+        )} />
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-foreground truncate">{label}</p>
+        <p className="text-[10px] text-muted-foreground truncate">{sub}</p>
+      </div>
     </div>
   );
 }

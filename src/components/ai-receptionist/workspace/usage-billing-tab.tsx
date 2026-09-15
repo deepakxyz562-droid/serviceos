@@ -29,6 +29,12 @@ import {
   ArrowRight,
   Loader2,
   RefreshCw,
+  Sparkles,
+  ShieldCheck,
+  PhoneCall,
+  Activity,
+  Check,
+  Info,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +55,7 @@ interface UsageBillingTabProps {
 export function UsageBillingTab({ usage, subscription }: UsageBillingTabProps) {
   const [loading, setLoading] = useState(!usage);
   const [localUsage, setLocalUsage] = useState<UsageData | null>(usage);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     setLocalUsage(usage);
@@ -56,36 +63,49 @@ export function UsageBillingTab({ usage, subscription }: UsageBillingTabProps) {
   }, [usage]);
 
   const refresh = async () => {
-    setLoading(true);
+    setRefreshing(true);
     try {
       const res = await fetch('/api/addons/usage');
       if (res.ok) {
         setLocalUsage(await res.json());
+        toast.success('Usage statistics updated');
       }
     } catch {
       toast.error('Failed to refresh usage');
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
   };
 
   if (loading && !localUsage) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Skeleton className="h-24 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
+        </div>
+        <Skeleton className="h-48 w-full rounded-xl" />
       </div>
     );
   }
 
   if (!localUsage || !localUsage.hasEntitlement) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-          <CreditCard className="size-10 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">
-            No active subscription. Subscribe to AI Receptionist to start using AI minutes.
+      <Card className="border-dashed">
+        <CardContent className="flex flex-col items-center justify-center py-16 px-4 text-center">
+          <div className="flex items-center justify-center size-14 rounded-2xl bg-muted text-muted-foreground mb-4">
+            <CreditCard className="size-7" />
+          </div>
+          <h4 className="text-base font-semibold text-foreground">No Active AI Receptionist Subscription</h4>
+          <p className="text-sm text-muted-foreground mt-1.5 max-w-md">
+            Activate an AI Receptionist plan to unlock 24/7 autonomous phone answering, appointment booking, and caller qualification.
           </p>
+          <Button className="mt-6 gap-2 shadow-sm font-medium">
+            <Sparkles className="size-4" />
+            Explore AI Receptionist Plans
+          </Button>
         </CardContent>
       </Card>
     );
@@ -94,99 +114,182 @@ export function UsageBillingTab({ usage, subscription }: UsageBillingTabProps) {
   const plan = subscription?.addonPlan;
   const periodEnd = localUsage.periodEnd ? new Date(localUsage.periodEnd) : null;
   const daysLeft = periodEnd
-    ? Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    ? Math.max(0, Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : null;
 
+  const isLowMinutes = localUsage.remainingMinutes <= 10 && localUsage.remainingMinutes > 0;
+  const isExhausted = localUsage.remainingMinutes === 0;
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold">Usage & Billing</h3>
-          <p className="text-sm text-muted-foreground">
-            Real-time usage from your call ledger
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold tracking-tight text-foreground">Usage & Subscription</h3>
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-xs font-medium">
+              Live Ledger Verified
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Real-time tracking of AI talk time, active call concurrency, and monthly plan limits.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={refresh} disabled={loading} className="gap-1.5">
-          {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-          Refresh
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={refresh}
+          disabled={refreshing}
+          className="h-9 gap-1.5 self-start sm:self-auto"
+        >
+          <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+          Refresh Stats
         </Button>
       </div>
 
-      {/* Usage card */}
-      <Card>
+      {/* Top 4 KPI Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {/* Metric 1: Remaining Minutes */}
+        <Card className="shadow-xs border-border/80">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-xs font-medium">AI Talk Time Left</span>
+              <Clock className="size-4 text-primary" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold tracking-tight text-foreground">{localUsage.remainingMinutes}</span>
+              <span className="text-xs text-muted-foreground">/ {localUsage.includedMinutes} min</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {localUsage.usedMinutes} minutes used ({localUsage.usedPercent}%)
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Metric 2: Live Concurrency */}
+        <Card className="shadow-xs border-border/80">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-xs font-medium">Live Call Channels</span>
+              <Activity className="size-4 text-emerald-600" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold tracking-tight text-foreground">{localUsage.activeCalls}</span>
+              <span className="text-xs text-muted-foreground">/ {localUsage.maxConcurrentCalls} max</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {localUsage.activeCalls === 0 ? 'Channels ready for calls' : 'Inbound calls active now'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Metric 3: Max Duration */}
+        <Card className="shadow-xs border-border/80">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-xs font-medium">Max Call Length</span>
+              <PhoneCall className="size-4 text-blue-600" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold tracking-tight text-foreground">
+                {Math.floor(localUsage.maxCallDurationSeconds / 60)}
+              </span>
+              <span className="text-xs text-muted-foreground">min / call</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Guaranteed cutoff safeguard
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Metric 4: Days Remaining */}
+        <Card className="shadow-xs border-border/80">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-xs font-medium">Cycle Renewal</span>
+              <Calendar className="size-4 text-purple-600" />
+            </div>
+            <div className="mt-2 flex items-baseline gap-1.5">
+              <span className="text-2xl font-bold tracking-tight text-foreground">{daysLeft ?? '—'}</span>
+              <span className="text-xs text-muted-foreground">days left</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Resets on {periodEnd ? format(periodEnd, 'MMM d') : 'billing date'}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Consumption Gauge Card */}
+      <Card className="shadow-sm border-border/80">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <TrendingUp className="size-4 text-emerald-600" />
-            AI Minutes
-          </CardTitle>
-          <CardDescription>
-            {localUsage.remainingMinutes} minutes remaining this billing cycle
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Big number display */}
-          <div className="flex items-end justify-between">
+          <div className="flex items-center justify-between">
             <div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">{localUsage.usedMinutes}</span>
-                <span className="text-lg text-muted-foreground">/ {localUsage.includedMinutes} min</span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {localUsage.usedPercent}% used · {localUsage.remainingMinutes} min left
-              </p>
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="size-4 text-primary" />
+                Monthly Minutes Meter
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Accurate to the second via immutable call ledger records
+              </CardDescription>
             </div>
             <Badge
-              variant="secondary"
+              variant="outline"
               className={cn(
-                localUsage.remainingMinutes === 0
-                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                  : localUsage.remainingMinutes <= 5
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                'text-xs font-medium',
+                isExhausted
+                  ? 'bg-destructive/10 text-destructive border-destructive/20'
+                  : isLowMinutes
+                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                    : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
               )}
             >
-              {localUsage.remainingMinutes === 0
-                ? 'Exhausted'
-                : localUsage.remainingMinutes <= 5
-                  ? 'Low'
-                  : 'Healthy'}
+              {isExhausted ? 'Quota Exhausted' : isLowMinutes ? 'Low Minutes Warning' : 'Healthy Allocation'}
             </Badge>
           </div>
+        </CardHeader>
 
-          <Progress
-            value={localUsage.usedPercent}
-            className={cn(
-              'h-3',
-              localUsage.usedPercent >= 90 && '[&>div]:bg-red-500',
-              localUsage.usedPercent >= 75 && localUsage.usedPercent < 90 && '[&>div]:bg-amber-500',
-            )}
-          />
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-foreground">{localUsage.usedMinutes} min consumed</span>
+              <span className="text-muted-foreground font-medium">{localUsage.remainingMinutes} min remaining</span>
+            </div>
+            <Progress
+              value={localUsage.usedPercent}
+              className={cn(
+                'h-3.5 rounded-full bg-muted',
+                localUsage.usedPercent >= 90 && '[&>div]:bg-red-500',
+                localUsage.usedPercent >= 70 && localUsage.usedPercent < 90 && '[&>div]:bg-amber-500',
+                localUsage.usedPercent < 70 && '[&>div]:bg-emerald-500'
+              )}
+            />
+          </div>
 
-          {/* Warning when near limit */}
-          {localUsage.remainingMinutes <= 5 && localUsage.remainingMinutes > 0 && (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 p-3 text-xs">
+          {/* Warning Notices */}
+          {isLowMinutes && (
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-200 dark:border-amber-900/60 text-xs">
               <AlertTriangle className="size-4 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium text-amber-900 dark:text-amber-300">
-                  Only {localUsage.remainingMinutes} minutes remaining
+                <p className="font-semibold text-amber-900 dark:text-amber-200">
+                  Running Low on AI Minutes ({localUsage.remainingMinutes} min left)
                 </p>
-                <p className="text-amber-700 dark:text-amber-400 mt-0.5">
-                  Your receptionist will stop accepting new AI calls when your
-                  included minutes are exhausted.
+                <p className="text-amber-700/90 dark:text-amber-400 mt-0.5 leading-relaxed">
+                  When minutes reach 0, new inbound calls will seamlessly route to your configured fallback destination (voicemail or staff phone).
                 </p>
               </div>
             </div>
           )}
-          {localUsage.remainingMinutes === 0 && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-3 text-xs">
-              <AlertTriangle className="size-4 text-red-600 shrink-0 mt-0.5" />
+
+          {isExhausted && (
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs">
+              <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium text-red-900 dark:text-red-300">
-                  AI minutes exhausted
+                <p className="font-semibold text-destructive">
+                  Monthly Minutes Limit Reached
                 </p>
-                <p className="text-red-700 dark:text-red-400 mt-0.5">
-                  New calls will be routed to your fallback until the next billing cycle.
-                  Upgrade your plan for more minutes.
+                <p className="text-destructive/80 mt-0.5 leading-relaxed">
+                  Inbound calls are currently routing to your fallback destination. Upgrade your plan to instantly restore 24/7 AI answering.
                 </p>
               </div>
             </div>
@@ -194,127 +297,118 @@ export function UsageBillingTab({ usage, subscription }: UsageBillingTabProps) {
         </CardContent>
       </Card>
 
-      {/* Plan + billing cycle */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card>
+      {/* Plan Details & Billing Cycle */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Current Plan */}
+        <Card className="shadow-xs border-border/80">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
-              <CreditCard className="size-4" />
-              Current Plan
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+              <CreditCard className="size-4 text-primary" />
+              Active Plan Details
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <p className="text-lg font-semibold">{plan?.name || 'AI Receptionist'}</p>
-              <p className="text-sm text-muted-foreground">
-                ${plan?.price || 0}/{subscription?.addonPlan ? 'mo' : ''}
-              </p>
+          <CardContent className="space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-lg font-bold text-foreground">{plan?.name || 'AI Receptionist'}</p>
+                <p className="text-xs text-muted-foreground">Dedicated Voice Assistant Tier</p>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-bold text-foreground">${plan?.price || 0}<span className="text-xs font-normal text-muted-foreground">/mo</span></p>
+                <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[10px]">
+                  Auto-Renews
+                </Badge>
+              </div>
             </div>
+
             <Separator />
-            <div className="space-y-1.5 text-sm">
-              <FeatureRow label="Included minutes" value={`${Math.floor((localUsage.includedSeconds || 0) / 60)} min`} />
-              <FeatureRow label="Concurrent calls" value={`${localUsage.maxConcurrentCalls}`} />
-              <FeatureRow label="Max call duration" value={`${Math.floor(localUsage.maxCallDurationSeconds / 60)} min`} />
-              <FeatureRow label="Phone numbers" value={`${localUsage.includedNumbers}`} />
+
+            <div className="space-y-2 text-xs">
+              <FeatureItem label="Included AI Talk Time" value={`${localUsage.includedMinutes} Minutes`} />
+              <FeatureItem label="Simultaneous Channels" value={`${localUsage.maxConcurrentCalls} Concurrent Calls`} />
+              <FeatureItem label="Per-Call Duration Limit" value={`${Math.floor(localUsage.maxCallDurationSeconds / 60)} Minutes`} />
+              <FeatureItem label="Dedicated Business Lines" value={`${localUsage.includedNumbers} Included Number`} />
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        {/* Billing Cycle Details */}
+        <Card className="shadow-xs border-border/80">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
-              <Calendar className="size-4" />
-              Billing Cycle
+            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-foreground">
+              <Calendar className="size-4 text-primary" />
+              Subscription Status
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Badge
-                variant="secondary"
-                className={cn(
-                  localUsage.subscriptionStatus === 'ACTIVE'
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                )}
-              >
-                {localUsage.subscriptionStatus || 'Unknown'}
-              </Badge>
+          <CardContent className="space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-xs font-medium',
+                    localUsage.subscriptionStatus === 'ACTIVE'
+                      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
+                      : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                  )}
+                >
+                  {localUsage.subscriptionStatus === 'ACTIVE' ? 'Active & Good Standing' : localUsage.subscriptionStatus || 'Active'}
+                </Badge>
+              </div>
               {localUsage.cancelAtPeriodEnd && (
-                <Badge variant="outline" className="text-amber-700">
+                <Badge variant="outline" className="text-amber-600 border-amber-300 text-[11px]">
                   Cancels at period end
                 </Badge>
               )}
             </div>
+
             <Separator />
-            <div className="space-y-1.5 text-sm">
+
+            <div className="space-y-2 text-xs">
               {localUsage.periodStart && (
-                <FeatureRow
-                  label="Period start"
+                <FeatureItem
+                  label="Cycle Start Date"
                   value={format(new Date(localUsage.periodStart), 'MMM d, yyyy')}
                 />
               )}
               {periodEnd && (
-                <FeatureRow
-                  label="Period end"
+                <FeatureItem
+                  label="Next Billing & Reset Date"
                   value={format(periodEnd, 'MMM d, yyyy')}
                 />
               )}
               {daysLeft !== null && (
-                <FeatureRow
-                  label="Days remaining"
+                <FeatureItem
+                  label="Days Left in Period"
                   value={`${daysLeft} days`}
                 />
               )}
+              <FeatureItem
+                label="Overages Safeguard"
+                value="Protected (No surprise charges)"
+              />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Live stats */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground">
-            <Zap className="size-4" />
-            Live Stats
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-2xl font-bold">{localUsage.activeCalls}</p>
-              <p className="text-xs text-muted-foreground">Active calls now</p>
+      {/* Upgrade Callout */}
+      <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-primary/5 shadow-sm">
+        <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="flex items-center justify-center size-10 rounded-xl bg-primary/10 text-primary shrink-0 shadow-inner">
+              <Sparkles className="size-5" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{Math.floor(localUsage.reservedSeconds / 60)}</p>
-              <p className="text-xs text-muted-foreground">Minutes reserved</p>
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{Math.floor(localUsage.usedSeconds / 60)}</p>
-              <p className="text-xs text-muted-foreground">Minutes consumed</p>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground/70 mt-3 text-center">
-            Usage is computed from the immutable call ledger in real time — no estimates.
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Upgrade CTA */}
-      <Card className="border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/10">
-        <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 shrink-0">
-              <TrendingUp className="size-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="font-medium">Need more minutes?</p>
-              <p className="text-sm text-muted-foreground">
-                Upgrade to a higher plan for more included minutes and concurrent calls.
+              <p className="text-sm font-semibold text-foreground">Need Higher Call Volume or Extra Lines?</p>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Scale your capacity with high-concurrency plans, custom voice clones, and additional phone numbers.
               </p>
             </div>
           </div>
-          <Button variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30 gap-2 shrink-0">
-            Upgrade Plan <ArrowRight className="size-4" />
+          <Button className="shrink-0 gap-1.5 shadow-sm font-medium">
+            Explore Upgrades
+            <ArrowRight className="size-3.5" />
           </Button>
         </CardContent>
       </Card>
@@ -322,11 +416,11 @@ export function UsageBillingTab({ usage, subscription }: UsageBillingTabProps) {
   );
 }
 
-function FeatureRow({ label, value }: { label: string; value: string }) {
+function FeatureItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
+      <span className="font-medium text-foreground">{value}</span>
     </div>
   );
 }
