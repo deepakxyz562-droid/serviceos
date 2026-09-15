@@ -113,6 +113,7 @@ export async function POST(
         respondentName: respondentName || null,
         source,
         tenantId: validTenantId,
+        workspaceId: form.workspaceId,
       },
     });
 
@@ -189,9 +190,13 @@ export async function POST(
               break;
             }
 
-            // Check if customer already exists
+            // Check if customer already exists (scoped to tenant + workspace to prevent cross-tenant leaks)
             const existingCustomer = await db.customer.findFirst({
-              where: { phone },
+              where: {
+                phone,
+                ...(validTenantId ? { tenantId: validTenantId } : {}),
+                ...(form.workspaceId ? { workspaceId: form.workspaceId } : {}),
+              },
             });
 
             if (existingCustomer) {
@@ -208,6 +213,7 @@ export async function POST(
                   phone,
                   email,
                   address,
+                  tenantId: validTenantId,
                   workspaceId: form.workspaceId,
                 },
               });
@@ -234,7 +240,7 @@ export async function POST(
             // Try to find a matching customer
             let customerId: string | null = null;
             if (customerPhone) {
-              const customer = await db.customer.findFirst({ where: { phone: customerPhone } });
+              const customer = await db.customer.findFirst({ where: { phone: customerPhone, ...(validTenantId ? { tenantId: validTenantId } : {}), ...(form.workspaceId ? { workspaceId: form.workspaceId } : {}) } });
               if (customer) customerId = customer.id;
             }
 
@@ -275,7 +281,7 @@ export async function POST(
 
             let customerId: string | null = null;
             if (customerPhone) {
-              const customer = await db.customer.findFirst({ where: { phone: customerPhone } });
+              const customer = await db.customer.findFirst({ where: { phone: customerPhone, ...(validTenantId ? { tenantId: validTenantId } : {}), ...(form.workspaceId ? { workspaceId: form.workspaceId } : {}) } });
               if (customer) customerId = customer.id;
             }
 
@@ -312,7 +318,7 @@ export async function POST(
 
             let quoteCustomerId: string | null = null;
             if (customerPhone) {
-              const customer = await db.customer.findFirst({ where: { phone: customerPhone } });
+              const customer = await db.customer.findFirst({ where: { phone: customerPhone, ...(validTenantId ? { tenantId: validTenantId } : {}), ...(form.workspaceId ? { workspaceId: form.workspaceId } : {}) } });
               if (customer) quoteCustomerId = customer.id;
             }
 

@@ -48,6 +48,7 @@ const TriggersView = lazy(() => import('@/components/views/triggers-view').then(
 const VariablesView = lazy(() => import('@/components/views/variables-view').then(m => ({ default: m.VariablesView })));
 const ExecutionsView = lazy(() => import('@/components/views/executions-view').then(m => ({ default: m.ExecutionsView })));
 const FormBuilderView = lazy(() => import('@/components/views/form-builder-view').then(m => ({ default: m.FormBuilderView })));
+const FormSubmissionsView = lazy(() => import('@/components/views/form-submissions-view').then(m => ({ default: m.FormSubmissionsView })));
 const WorkflowAutomationsView = lazy(() => import('@/components/views/workflow-automations-view').then(m => ({ default: m.WorkflowAutomationsView })));
 
 // Operations
@@ -114,6 +115,8 @@ const KnowledgeBaseView = lazy(() => import('@/components/views/knowledge-base-v
 const DocumentCenterView = lazy(() => import('@/components/views/document-center-view').then(m => ({ default: m.DocumentCenterView })));
 const VersionHistoryView = lazy(() => import('@/components/views/version-history-view').then(m => ({ default: m.VersionHistoryView })));
 const SaaSDashboardView = lazy(() => import('@/components/views/saas-dashboard-view').then(m => ({ default: m.SaaSDashboardView })));
+const FormsDashboardView = lazy(() => import('@/components/views/forms-dashboard-view').then(m => ({ default: m.FormsDashboardView })));
+const FormsAnalyticsView = lazy(() => import('@/components/views/forms-analytics-view').then(m => ({ default: m.FormsAnalyticsView })));
 const OperationsView = lazy(() => import('@/components/views/operations-view').then(m => ({ default: m.OperationsView })));
 const CrmView = lazy(() => import('@/components/views/crm-view').then(m => ({ default: m.CrmView })));
 
@@ -174,6 +177,9 @@ export function MarketplaceDashboardRouter() {
 const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
   // Dashboard
   dashboard: DashboardView,
+  // Forms product dashboard (standalone AI Forms)
+  formsDashboard: FormsDashboardView,
+  formsAnalytics: FormsAnalyticsView,
   // CRM
   leads: LeadsView,
   contacts: ContactsView,
@@ -196,6 +202,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   variables: VariablesView,
   executions: ExecutionsView,
   formBuilder: FormBuilderView,
+  formSubmissions: FormSubmissionsView,
   workflowAutomations: WorkflowAutomationsView,
   // Operations
   operations: OperationsView,
@@ -437,8 +444,8 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     (auth?.tenant as any)?.plan === 'standalone_starter' ||
     (auth?.tenant as any)?.plan === 'standalone_business';
   useEffect(() => {
-    if (isStandaloneTenant && currentView === 'dashboard') {
-      setCurrentView('formBuilder');
+    if (isStandaloneTenant && (currentView === 'dashboard' || currentView === 'marketplaceDashboard')) {
+      setCurrentView('formsDashboard');
     }
   }, [isStandaloneTenant, currentView, setCurrentView]);
 

@@ -34,6 +34,7 @@ import { createHash } from 'crypto';
 
 export interface AiExecutionContext {
   tenantId: string;
+  workspaceId?: string;
   receptionistId?: string;
   agentVersionId?: string;
   deploymentId?: string;
@@ -71,6 +72,7 @@ export const AI_TOOL_CAPABILITIES: Record<string, string> = {
   cancel_job: 'CANCEL_JOB',
   send_sms: 'SEND_SMS',
   transfer_to_human: 'TRANSFER_CALL',
+  show_form: 'SHOW_FORM', // Phase 7: AI Chat → Smart Form bridge
 };
 
 // Capabilities that NEVER execute freely (require confirmation or are blocked)
@@ -109,6 +111,9 @@ export const TOOL_ACTION_TYPES: Record<string, ToolActionType> = {
   // External side effects (hardest to make idempotent)
   send_sms: 'EXTERNAL_SIDE_EFFECT',
   transfer_to_human: 'EXTERNAL_SIDE_EFFECT',
+
+  // Phase 7: AI Chat → Smart Form bridge (no side effects — just launches a UI form)
+  show_form: 'READ',
 };
 
 // Tools that require explicit confirmation before execution (Phase 9 will implement the UI)

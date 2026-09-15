@@ -72,6 +72,7 @@ import {
   Package,
   Share2,
   FileInput,
+  Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -226,17 +227,17 @@ const standaloneNavSections: NavSection[] = [
   {
     title: 'AI & Forms Suite',
     items: [
+      { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
       { view: 'formBuilder', label: 'Smart Forms', icon: FileInput },
+      { view: 'formSubmissions', label: 'Submissions', icon: Inbox },
+      { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
       { view: 'aiReceptionist', label: 'AI Employee', icon: PhoneCall },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
-      { view: 'leads', label: 'Form Leads', icon: Target },
     ],
   },
   {
-    title: 'Marketing & Embeds',
+    title: 'Distribution & Embeds',
     items: [
-      { view: 'campaigns', label: 'Email Campaigns', icon: Megaphone },
-      { view: 'socialMedia', label: 'Social Media', icon: Share2 },
       { view: 'integrations', label: 'Embeds & API', icon: Plug },
     ],
   },

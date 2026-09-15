@@ -33,11 +33,18 @@ export async function GET(
         welcomeMessage: true,
         completionMessage: true,
         tenantId: true,
+        workspaceId: true,
         tenant: {
           select: {
             name: true,
             phone: true,
             email: true,
+          },
+        },
+        workspace: {
+          select: {
+            name: true,
+            brandingJson: true,
           },
         },
       },
@@ -66,6 +73,15 @@ export async function GET(
 
     const normalizedSchema = normalizeFormSchema(schema);
 
+    // Resolve branding: prefer tenant for CRM-bound forms, fall back to
+    // workspace branding for standalone (Forms-only) forms.
+    let workspaceBranding: { productName?: string; supportEmail?: string } = {};
+    if (form.workspace?.brandingJson) {
+      try {
+        workspaceBranding = JSON.parse(form.workspace.brandingJson);
+      } catch { /* ignore */ }
+    }
+
     return NextResponse.json({
       id: form.id,
       name: form.name,
@@ -74,9 +90,13 @@ export async function GET(
       type: form.type,
       schema: normalizedSchema,
       branding: {
-        businessName: form.tenant?.name || 'Service Provider',
+        businessName:
+          form.tenant?.name ||
+          workspaceBranding.productName ||
+          form.workspace?.name ||
+          'Service Provider',
         businessPhone: form.tenant?.phone || null,
-        businessEmail: form.tenant?.email || null,
+        businessEmail: form.tenant?.email || workspaceBranding.supportEmail || null,
       },
     });
   } catch (error) {

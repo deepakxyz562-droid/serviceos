@@ -1,17 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, apiError } from '@/lib/api-auth';
 
 // ─── GET /api/forms/[id]/embed ─────────────────────────────────────────────
-// Return embed codes (script tag, iframe URL) for a form
+// Return embed codes (script tag, iframe URL) for a form.
+// AUTHENTICATED + workspace-scoped (closes metadata leak — previously unauthenticated).
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
+
   try {
     const { id } = await params;
 
-    const form = await db.form.findUnique({ where: { id } });
+    const workspaceId = user.workspaceId;
+    const tenantId = user.tenantId;
+
+    // Verify the form belongs to the caller's workspace OR tenant.
+    const formWhere: Record<string, unknown> = {
+      id,
+      OR: [
+        ...(workspaceId ? [{ workspaceId }] : []),
+        ...(tenantId ? [{ tenantId }] : []),
+      ],
+    };
+    if (!formWhere.OR.length) {
+      return apiError(403, 'No workspace or tenant access', 'FORBIDDEN');
+    }
+
+    const form = await db.form.findFirst({ where: formWhere });
     if (!form) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }

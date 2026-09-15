@@ -1236,9 +1236,12 @@ model Form {
   updatedAt           DateTime @updatedAt
 
   tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
   responses FormResponse[]
+  views     FormView[]
 
   @@index([tenantId])
+  @@index([workspaceId])
   @@index([type])
   @@index([status])
   @@index([slug])
@@ -1257,15 +1260,55 @@ model FormResponse {
   quoteId     String?  // If a quote was created
   bookingId   String?  // If a booking was created
   actionsResultsJson String @default("{}") // Results of submission actions
+  // ── Phase 6: Analytics fields ──
+  startedAt   DateTime?  // when the user started filling (for completion time)
+  completedAt DateTime?  // when the user submitted (for completion time)
+  userAgent   String?    // browser user agent (device type extraction)
+  ipAddress   String?    // visitor IP (country/region extraction)
+  country     String?    // visitor country (from IP geolocation)
+  utmSource   String?    // UTM campaign source
+  utmMedium   String?    // UTM campaign medium
+  utmCampaign String?    // UTM campaign name
+  status      String   @default("completed") // new, in_progress, approved, rejected, spam, archived
   tenantId    String?
+  workspaceId String?
   createdAt   DateTime @default(now())
 
   form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
 
   @@index([formId])
   @@index([source])
   @@index([tenantId])
+  @@index([workspaceId])
   @@index([createdAt])
+  @@index([status])
+}
+
+// ── Phase 6: Form view tracking (visitor analytics) ──────────────────────────
+model FormView {
+  id          String   @id @default(cuid())
+  formId      String
+  visitorFingerprint String?  // hash of IP + userAgent for dedup
+  userAgent   String?
+  ipAddress   String?
+  country     String?
+  referrer    String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  device      String?  // mobile, tablet, desktop
+  startedAt   DateTime @default(now())  // when the form page was loaded
+  abandonedAt String?  // field ID where the user dropped off (future)
+  tenantId    String?
+  workspaceId String?
+
+  form      Form       @relation(fields: [formId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([formId, startedAt])
+  @@index([workspaceId, startedAt])
+  @@index([tenantId, startedAt])
 }
 
 // ==========================================
@@ -1313,6 +1356,16 @@ model Workspace {
   planExpiresAt DateTime?
   ownerId       String
   tenantId      String?
+  // ── Phase 1: Workspace-first scoping for standalone AI Forms product ──
+  // 'crm'      → CRM-bound workspace (Tenant exists)
+  // 'forms'    → Standalone AI Forms product (no Tenant required)
+  // 'both'     → CRM workspace that also has the Forms add-on enabled
+  productType   String   @default("crm")
+  // Per-workspace branding for the standalone Forms product (JSON:
+  // {productName, logoUrl, primaryColor, domain, supportEmail})
+  brandingJson  String   @default("{}")
+  // Custom domain for standalone Forms hosting (e.g. "forms.acme.com")
+  customDomain  String?  @unique
   settingsJson  String   @default("{}")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -1332,8 +1385,28 @@ model Workspace {
   webhookSources WebhookSource[]
   invitations   Invitation[]
   checklists    Checklist[]
+  // ── Phase 1: Forms + AI + Knowledge back-relations ──
+  forms               Form[]
+  formResponses       FormResponse[]
+  formViews           FormView[]
+  waForms             WAForm[]
+  waFormResponses     WAFormResponse[]
+  waWebviews          WAWebview[]
+  webhookEndpoints    WebhookEndpoint[]
+  conversations       Conversation[]
+  aiAgents            AiAgent[]
+  aiReceptionists     AiReceptionist[]
+  aiCalls             AiCall[]
+  aiToolExecutions    AiToolExecution[]
+  aiKnowledgeDocuments AiKnowledgeDocument[]
+  aiKnowledgeChunks   AiKnowledgeChunk[]
+  knowledgeSources    KnowledgeSource[]
+  knowledgeDocuments  KnowledgeDocument[]
+  knowledgeChunks     KnowledgeChunk[]
+  publicChatSessions  PublicChatSession[]
 
   @@index([tenantId])
+  @@index([productType])
 }
 
 // ==========================================
@@ -2073,10 +2146,12 @@ model WebhookEndpoint {
   updatedAt     DateTime @updatedAt
 
   logs          WebhookEndpointLog[]
+  workspace     Workspace?  @relation(fields: [workspaceId], references: [id])
 
   @@index([endpointId])
   @@index([apiKeyHash])
   @@index([tenantId])
+  @@index([workspaceId])
   @@index([active])
 }
 
@@ -2204,6 +2279,14 @@ model Conversation {
   lastDirection   String?  // inbound, outbound
   messagesJson    String   @default("[]")  // Message history as JSON
   metadataJson    String   @default("{}")
+  // ── Phase 10: Human handoff state ──
+  // When a human operator takes over from the AI, aiPaused=true and
+  // tookOverById = the operator's user ID. The AI auto-reply system
+  // checks aiPaused and skips if true. Set back to false when the
+  // conversation is reassigned to AI (or closed).
+  aiPaused        Boolean  @default(false)
+  tookOverById    String?
+  tookOverAt      DateTime?
   tenantId        String?
   workspaceId     String?
   createdAt       DateTime @default(now())
@@ -2213,6 +2296,7 @@ model Conversation {
   lead     Lead?     @relation(fields: [leadId], references: [id])
   job      Job?      @relation(fields: [jobId], references: [id])
   tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
   // O1: back-relation to InboxMessage (canonical message rows).
   inboxMessages  InboxMessage[]
 
@@ -2220,8 +2304,10 @@ model Conversation {
   @@index([customerPhone])
   @@index([status])
   @@index([tenantId])
+  @@index([workspaceId])
   @@index([lastMessageAt])
   @@index([channel])
+  @@index([aiPaused])
 }
 
 // ==========================================
@@ -3144,8 +3230,11 @@ model WAForm {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id])
+
   @@index([type])
   @@index([tenantId])
+  @@index([workspaceId])
   @@index([status])
 }
 
@@ -3160,9 +3249,13 @@ model WAFormResponse {
   startedAt       DateTime @default(now())
   completedAt     DateTime?
   tenantId        String?
+  workspaceId     String?
+
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id])
 
   @@index([formId])
   @@index([respondentPhone])
+  @@index([workspaceId])
 }
 
 // --- Module 10: WhatsApp Webview Engine ---
@@ -3183,8 +3276,11 @@ model WAWebview {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id])
+
   @@index([type])
   @@index([tenantId])
+  @@index([workspaceId])
 }
 
 // --- Module 11: Click-to-WhatsApp Ads ---
@@ -4043,7 +4139,8 @@ model KnowledgeArticle {
 
 model KnowledgeSource {
   id              String              @id @default(cuid())
-  tenantId        String
+  tenantId        String?
+  workspaceId     String?
   name            String
   type            String              // website, sitemap, document, manual, notion, shopify
   sourceUrl       String?
@@ -4054,14 +4151,17 @@ model KnowledgeSource {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
+  workspace       Workspace?          @relation(fields: [workspaceId], references: [id])
   documents       KnowledgeDocument[]
   @@index([tenantId])
+  @@index([workspaceId])
 }
 
 model KnowledgeDocument {
   id              String              @id @default(cuid())
   sourceId        String
-  tenantId        String
+  tenantId        String?
+  workspaceId     String?
   title           String
   content         String              @db.Text
   url             String?
@@ -4071,22 +4171,27 @@ model KnowledgeDocument {
 
   chunks          KnowledgeChunk[]
   source          KnowledgeSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  workspace       Workspace?          @relation(fields: [workspaceId], references: [id])
   @@index([sourceId])
   @@index([tenantId])
+  @@index([workspaceId])
 }
 
 model KnowledgeChunk {
   id              String              @id @default(cuid())
   documentId      String
-  tenantId        String
+  tenantId        String?
+  workspaceId     String?
   content         String              @db.Text
   tokenCount      Int                 @default(0)
   chunkIndex      Int                 @default(0)
   metadataJson    String              @default("{}")
 
   document        KnowledgeDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  workspace       Workspace?          @relation(fields: [workspaceId], references: [id])
   @@index([documentId])
   @@index([tenantId])
+  @@index([workspaceId])
 }
 
 // ==========================================
@@ -5112,7 +5217,8 @@ model OfflineMutation {
 
 model PublicChatSession {
   id              String   @id @default(cuid())
-  tenantId        String
+  tenantId        String?
+  workspaceId     String?
   visitorName     String?
   visitorPhone    String?
   visitorEmail    String?
@@ -5126,10 +5232,13 @@ model PublicChatSession {
   updatedAt       DateTime @updatedAt
 
   tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id])
   messages        PublicChatMessage[]
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
   @@index([status, lastMessageAt])
 }
 
@@ -5158,7 +5267,8 @@ model PublicChatMessage {
 
 model AiAgent {
   id              String   @id @default(cuid())
-  tenantId        String
+  tenantId        String?
+  workspaceId     String?
   vapiAssistantId String?  // ID returned by Vapi.ai
   name            String
   description     String?
@@ -5184,10 +5294,12 @@ model AiAgent {
   updatedAt       DateTime @updatedAt
 
   tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id])
   phoneNumbers    AiPhoneNumber[]
   calls           AiCall[]
 
   @@index([tenantId])
+  @@index([workspaceId])
   @@index([status])
 }
 
@@ -5268,7 +5380,8 @@ model AiPhoneNumber {
 
 model AiCall {
   id              String   @id @default(cuid())
-  tenantId        String
+  tenantId        String?
+  workspaceId     String?
   vapiCallId      String?  @unique // Vapi call ID (Phase 7: @unique for idempotency)
   callType        String   @default("inbound")  // inbound | outbound
   status          String   @default("queued")   // queued | ringing | in_progress | ended | failed
@@ -5334,6 +5447,7 @@ model AiCall {
   updatedAt       DateTime @updatedAt
 
   tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id])
   agent           AiAgent? @relation(fields: [assistantId], references: [id], onDelete: SetNull)
   number          AiPhoneNumber? @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
   // Phase 7: new domain relations
@@ -5342,6 +5456,7 @@ model AiCall {
   deployment      AiProviderDeployment?  @relation(fields: [deploymentId], references: [id])
 
   @@index([tenantId, createdAt])
+  @@index([workspaceId, createdAt])
   @@index([assistantId])
   @@index([status])
   @@index([customerPhone])
@@ -5610,7 +5725,8 @@ model AiProviderKey {
 
 model AiKnowledgeDocument {
   id         String   @id @default(cuid())
-  tenantId   String
+  tenantId   String?
+  workspaceId String?
   title      String
   sourceType String   @default("manual") // manual | file
   mimeType   String?
@@ -5624,15 +5740,18 @@ model AiKnowledgeDocument {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
   chunks AiKnowledgeChunk[]
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
+  @@index([workspaceId, status])
 }
 
 model AiKnowledgeChunk {
   id             String              @id @default(cuid())
-  tenantId       String
+  tenantId       String?
+  workspaceId    String?
   documentId     String
   document       AiKnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
   idx            Int
@@ -5641,8 +5760,11 @@ model AiKnowledgeChunk {
   embeddingModel String              @default("local-hash-v1")
   createdAt      DateTime            @default(now())
 
+  workspace      Workspace?          @relation(fields: [workspaceId], references: [id])
+
   @@unique([documentId, idx])
   @@index([tenantId])
+  @@index([workspaceId])
 }
 
 // ==========================================
@@ -7777,7 +7899,8 @@ model AiProviderConfig {
 // The agent-level config (prompt, voice, model) lives in AiAgentVersion.
 model AiReceptionist {
   id                      String   @id @default(cuid())
-  tenantId                String
+  tenantId                String?
+  workspaceId             String?
   // ── Identity ──
   name                    String   @default("Sarah") // receptionist display name
   status                  String   @default("DRAFT")
@@ -7815,12 +7938,14 @@ model AiReceptionist {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
-  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace   Workspace?          @relation(fields: [workspaceId], references: [id])
   versions    AiAgentVersion[]
   aiCalls         AiCall[]
   currentVersion AiAgentVersion? @relation("CurrentVersion", fields: [currentVersionId], references: [id])
 
   @@index([tenantId])
+  @@index([workspaceId])
   @@index([status])
 }
 
@@ -7936,7 +8061,8 @@ model AiProviderDeployment {
 // with tenant ownership verified on every mutation.
 model AiToolExecution {
   id              String   @id @default(cuid())
-  tenantId        String
+  tenantId        String?
+  workspaceId     String?
   // ── Call context (links to the Vapi call) ──
   externalCallId  String   // Vapi call ID
   toolCallId      String?  // Vapi's toolCallId (provider-specific)
@@ -7960,7 +8086,10 @@ model AiToolExecution {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id])
+
   @@index([tenantId])
+  @@index([workspaceId])
   @@index([externalCallId])
   @@index([toolName])
   @@index([status])

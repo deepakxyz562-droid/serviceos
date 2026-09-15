@@ -35,13 +35,16 @@ export async function POST(req: NextRequest) {
       bookingData,
     } = body;
 
-    // 1. Resolve Tenant
-    let tenantId = explicitTenantId;
+    // 1. Resolve Workspace / Tenant context from the agentId or explicit IDs.
+    //    NEVER fall back to "first active tenant" — that was a security hole
+    //    (any anonymous visitor could bill AI calls to an unrelated tenant).
+    let tenantId: string | undefined = explicitTenantId;
+    let workspaceId: string | undefined;
     let tenantName = 'Service Pro';
     let tenantPhone = '';
     let tenantEmail = '';
 
-    if (agentId) {
+    if (agentId && !tenantId) {
       // Check if agentId is a Tenant id or Form id or AiAgent id
       const tenant = await db.tenant.findUnique({
         where: { id: agentId },
@@ -53,44 +56,49 @@ export async function POST(req: NextRequest) {
         tenantPhone = tenant.phone || '';
         tenantEmail = tenant.email || '';
       } else {
+        // Try resolving via Form (supports both tenant-scoped and standalone forms)
         const form = await db.form.findFirst({
           where: { OR: [{ id: agentId }, { slug: agentId }] },
-          include: { tenant: { select: { id: true, name: true, phone: true, email: true } } },
+          include: {
+            tenant: { select: { id: true, name: true, phone: true, email: true } },
+            workspace: { select: { id: true, name: true, brandingJson: true } },
+          },
         });
-        if (form && form.tenant) {
-          tenantId = form.tenant.id;
-          tenantName = form.tenant.name;
-          tenantPhone = form.tenant.phone || '';
-          tenantEmail = form.tenant.email || '';
+        if (form) {
+          workspaceId = form.workspaceId || undefined;
+          if (form.tenant) {
+            tenantId = form.tenant.id;
+            tenantName = form.tenant.name;
+            tenantPhone = form.tenant.phone || '';
+            tenantEmail = form.tenant.email || '';
+          } else if (form.workspace) {
+            // Standalone form (no CRM tenant) — branding from workspace
+            tenantName = form.workspace.name;
+            try {
+              const branding = JSON.parse(form.workspace.brandingJson || '{}');
+              if (branding.supportEmail) tenantEmail = branding.supportEmail;
+            } catch { /* ignore parse errors */ }
+          }
         }
       }
     }
 
-    if (!tenantId) {
-      // Fallback to first active tenant if testing/unspecified
-      const fallbackTenant = await db.tenant.findFirst({
-        select: { id: true, name: true, phone: true, email: true },
-      });
-      if (fallbackTenant) {
-        tenantId = fallbackTenant.id;
-        tenantName = fallbackTenant.name;
-        tenantPhone = fallbackTenant.phone || '';
-        tenantEmail = fallbackTenant.email || '';
-      } else {
-        return NextResponse.json(
-          { error: 'Tenant context could not be resolved' },
-          { status: 400, headers: CORS_HEADERS },
-        );
-      }
+    // Hard requirement: we must have EITHER a tenantId OR a workspaceId.
+    // No silent fallback — return a clear error if context is unresolved.
+    if (!tenantId && !workspaceId) {
+      return NextResponse.json(
+        { error: 'Unable to resolve agent context. Provide a valid agentId, tenantId, or form slug.' },
+        { status: 400, headers: CORS_HEADERS },
+      );
     }
 
     // ─── Direct Booking Action ──────────────────────────────────────────────
     if (action === 'confirm_booking' && bookingData) {
       const { name, phone, email, service, date, time, notes } = bookingData;
-      
+
       const newLead = await db.lead.create({
         data: {
-          tenantId,
+          tenantId: tenantId || null,
           name: name || 'Website Chat Visitor',
           phone: phone || '',
           email: email || '',
@@ -126,25 +134,32 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Query Knowledge Base for Context
+    //    Use workspaceId for standalone forms, tenantId for CRM-bound.
+    const kbScope = workspaceId || tenantId;
     let kbContext = '';
-    try {
-      const searchResults = await searchKnowledgeBase(tenantId, message, 4);
-      if (searchResults.length > 0) {
-        kbContext = searchResults
-          .map((r) => `[Document: ${r.title}]\n${r.snippet}`)
-          .join('\n\n');
+    if (kbScope) {
+      try {
+        const searchResults = await searchKnowledgeBase(kbScope, message, 4);
+        if (searchResults.length > 0) {
+          kbContext = searchResults
+            .map((r) => `[Document: ${r.title}]\n${r.snippet}`)
+            .join('\n\n');
+        }
+      } catch (e) {
+        console.warn('[agent-chat] KB search skipped/empty:', e);
       }
-    } catch (e) {
-      console.warn('[agent-chat] KB search skipped/empty:', e);
     }
 
     // 3. Fetch Existing Business Services & Today's Open Slots
+    //    (tenant-scoped only — standalone forms don't have a CRM service catalog)
     const todayStr = new Date().toISOString().split('T')[0];
-    const services = await db.serviceItem.findMany({
-      where: { tenantId },
-      select: { name: true, description: true, defaultPrice: true },
-      take: 8,
-    });
+    const services = tenantId
+      ? await db.serviceItem.findMany({
+          where: { tenantId },
+          select: { name: true, description: true, defaultPrice: true },
+          take: 8,
+        })
+      : [];
 
     const servicesList = services.length > 0
       ? services.map((s) => `- ${s.name} ($${s.defaultPrice || 'Custom Quote'}): ${s.description || ''}`).join('\n')

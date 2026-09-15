@@ -97,6 +97,9 @@ export async function POST(request: NextRequest) {
     });
 
     // Create workspace linked to tenant
+    // Phase 3: standalone Forms product gets productType='forms' so the
+    // requireCrmTenant guard can block CRM API access even though a Tenant
+    // row exists (for backward compat with billing/subscription lookups).
     const workspace = await db.workspace.create({
       data: {
         name: `${businessName} Workspace`,
@@ -104,6 +107,7 @@ export async function POST(request: NextRequest) {
         industry: industry || null,
         ownerId: '', // Will update after user creation
         tenantId: tenant.id,
+        productType: isStandalone ? 'forms' : 'crm',
       },
     });
 

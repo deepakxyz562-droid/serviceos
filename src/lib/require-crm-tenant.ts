@@ -45,22 +45,64 @@ const SIGNUP_MODE_TTL = 60_000;
 
 /**
  * Returns a 403 NextResponse if the authenticated user's tenant is on the
- * listing-only plan. Returns null if the user is allowed (CRM tenant, or
- * not authenticated — let the normal auth check handle the 401).
+ * listing-only plan OR if the user's workspace is a standalone Forms-only
+ * product (no CRM). Returns null if the user is allowed.
  *
  * Fetches the tenant's signupMode + listingTier from the DB (not the JWT)
  * so a downgrade from CRM → listing_only is immediately enforced even if
  * the user's token still carries stale tenant data. Cached for 60s to
  * avoid a DB round-trip on every CRM request.
+ *
+ * Phase 3: also blocks standalone Forms product workspaces
+ * (workspace.productType === 'forms') from accessing CRM endpoints.
  */
 export async function requireCrmTenant(
   _request: NextRequest
 ): Promise<NextResponse | null> {
   try {
     const authUser = await getAuthUser();
-    if (!authUser?.tenantId) {
-      // Not authenticated, or no tenant — let the caller's auth check
-      // return the appropriate 401.
+    if (!authUser) {
+      // Not authenticated — let the caller's auth check return 401.
+      return null;
+    }
+
+    // ── Phase 3: Block standalone Forms-only workspaces from CRM APIs ──
+    // A workspace with productType='forms' is a standalone AI Forms product
+    // user and should not access /api/leads, /api/jobs, /api/customers, etc.
+    // We check this regardless of whether tenantId exists (standalone users
+    // may have a Tenant row for billing backward-compat, but their workspace
+    // productType is 'forms').
+    if (authUser.workspaceId) {
+      const wsCacheKey = `product-type:${authUser.workspaceId}`;
+      let workspace = cache.get<{ productType: string }>(wsCacheKey);
+
+      if (!workspace) {
+        workspace = await db.workspace.findUnique({
+          where: { id: authUser.workspaceId },
+          select: { productType: true },
+        });
+        if (workspace) {
+          cache.set(wsCacheKey, workspace, SIGNUP_MODE_TTL);
+        }
+      }
+
+      if (workspace?.productType === 'forms') {
+        return NextResponse.json(
+          {
+            error:
+              'This feature requires a CRM plan. Your workspace is on the AI Forms standalone product.',
+            code: 'FORMS_ONLY_WORKSPACE',
+            upgradeUrl: '/?view=billing',
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // ── Existing: block listing-only tenants from CRM APIs ──
+    if (!authUser.tenantId) {
+      // No tenant and not a standalone Forms workspace — allow (let
+      // downstream checks handle 401 if needed).
       return null;
     }
 

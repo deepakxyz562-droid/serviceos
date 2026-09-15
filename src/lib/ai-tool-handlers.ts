@@ -784,6 +784,81 @@ registerToolHandler('search_knowledge_base', async (ctx, params) => {
   }
 });
 
+// ─── Phase 7: AI Chat → Smart Form bridge ────────────────────────────────────
+// show_form: launches a form pre-filled with data collected from the chat.
+// This is the key differentiator — "AI understands → collects → launches
+// smart form → completes the action". The AI tells the form what fields
+// are already known (from chat) and which are still missing.
+registerToolHandler('show_form', async (ctx, params) => {
+  const formId = typeof params.formId === 'string' ? params.formId : null;
+  const formSlug = typeof params.formSlug === 'string' ? params.formSlug : null;
+  const prefillData = (params.prefillData && typeof params.prefillData === 'object')
+    ? params.prefillData as Record<string, unknown>
+    : {};
+
+  if (!formId && !formSlug) {
+    return { error: 'formId or formSlug is required' };
+  }
+
+  try {
+    const { db } = await import('@/lib/db');
+    // Resolve the form by ID or slug, scoped to the caller's workspace/tenant
+    const scopeOR = [
+      ...(ctx.workspaceId ? [{ workspaceId: ctx.workspaceId }] : []),
+      ...(ctx.tenantId ? [{ tenantId: ctx.tenantId }] : []),
+    ];
+    const form = await db.form.findFirst({
+      where: {
+        OR: scopeOR,
+        ...(formId ? { id: formId } : {}),
+        ...(formSlug ? { slug: formSlug } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        type: true,
+        fieldsJson: true,
+      },
+    });
+
+    if (!form) {
+      return { error: 'Form not found' };
+    }
+
+    // Determine which required fields are missing from prefillData
+    let fields: Array<{ id?: string; label?: string; type?: string; required?: boolean }> = [];
+    try {
+      fields = JSON.parse(form.fieldsJson || '[]');
+    } catch { /* ignore */ }
+
+    const missingRequiredFields = fields
+      .filter((f) => f.required)
+      .map((f) => f.label || f.id || 'unknown')
+      .filter((label) => !Object.keys(prefillData).some(
+        (k) => k.toLowerCase().includes(label.toLowerCase()) ||
+              label.toLowerCase().includes(k.toLowerCase())
+      ));
+
+    return {
+      success: true,
+      formId: form.id,
+      formName: form.name,
+      formSlug: form.slug,
+      formType: form.type,
+      formUrl: form.slug ? `/forms/${form.slug}` : `/form/${form.id}`,
+      prefillData,
+      missingRequiredFields,
+      message: missingRequiredFields.length > 0
+        ? `Form launched. Still need: ${missingRequiredFields.join(', ')}`
+        : 'Form launched with all required fields pre-filled.',
+    };
+  } catch (err) {
+    console.error('[AiToolHandlers] show_form failed:', err);
+    return { error: 'Failed to launch form' };
+  }
+});
+
 // ─── Initialize: log available tools ───────────────────────────────────────
 
 console.log('[AiToolHandlers] registered handlers for:', Object.keys({
@@ -802,4 +877,5 @@ console.log('[AiToolHandlers] registered handlers for:', Object.keys({
   cancel_job: true,
   send_sms: true,
   transfer_to_human: true,
+  show_form: true,
 }).join(', '));

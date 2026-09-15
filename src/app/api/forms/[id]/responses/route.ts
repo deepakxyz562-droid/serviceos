@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, apiError } from '@/lib/api-auth';
 
 // ─── GET /api/forms/[id]/responses ─────────────────────────────────────────
-// List responses for a form with pagination
+// List responses for a form with pagination.
+// AUTHENTICATED + workspace-scoped (closes PII leak — previously unauthenticated).
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
+
   try {
     const { id } = await params;
     const { searchParams } = new URL(request.url);
@@ -15,7 +21,23 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '20');
     const source = searchParams.get('source');
 
-    const form = await db.form.findUnique({ where: { id } });
+    // Resolve workspace/tenant scope — never trust a client-supplied tenantId.
+    const workspaceId = user.workspaceId;
+    const tenantId = user.tenantId;
+
+    // Find the form, scoped to the caller's workspace OR tenant (backward compat).
+    const formWhere: Record<string, unknown> = {
+      id,
+      OR: [
+        ...(workspaceId ? [{ workspaceId }] : []),
+        ...(tenantId ? [{ tenantId }] : []),
+      ],
+    };
+    if (!formWhere.OR.length) {
+      return apiError(403, 'No workspace or tenant access', 'FORBIDDEN');
+    }
+
+    const form = await db.form.findFirst({ where: formWhere });
     if (!form) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
@@ -44,12 +66,17 @@ export async function GET(
 }
 
 // ─── DELETE /api/forms/[id]/responses ──────────────────────────────────────
-// Delete a specific response (query param: responseId)
+// Delete a specific response (query param: responseId).
+// AUTHENTICATED + workspace-scoped.
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
+  const user = auth.user;
+
   try {
     const { id } = await params;
     const { searchParams } = new URL(request.url);
@@ -57,6 +84,26 @@ export async function DELETE(
 
     if (!responseId) {
       return NextResponse.json({ error: 'responseId query parameter is required' }, { status: 400 });
+    }
+
+    const workspaceId = user.workspaceId;
+    const tenantId = user.tenantId;
+
+    // Verify the form belongs to the caller's workspace/tenant.
+    const formWhere: Record<string, unknown> = {
+      id,
+      OR: [
+        ...(workspaceId ? [{ workspaceId }] : []),
+        ...(tenantId ? [{ tenantId }] : []),
+      ],
+    };
+    if (!formWhere.OR.length) {
+      return apiError(403, 'No workspace or tenant access', 'FORBIDDEN');
+    }
+
+    const form = await db.form.findFirst({ where: formWhere });
+    if (!form) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
     const response = await db.formResponse.findFirst({

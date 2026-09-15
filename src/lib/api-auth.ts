@@ -122,3 +122,28 @@ export function resolveWorkspaceId(
   }
   return user.workspaceId || null;
 }
+
+/**
+ * Resolve the Forms product scope for a request.
+ *
+ * Returns an object with `workspaceId` (primary scope for the standalone
+ * Forms product) and `tenantId` (CRM scope, present when the workspace is
+ * CRM-bound). Routes should filter by workspaceId first; tenantId is used
+ * for backward compatibility with CRM-scoped queries (e.g. Service catalog,
+ * Employee roster).
+ *
+ *   const { workspaceId, tenantId } = resolveFormsScope(user);
+ *   if (!workspaceId) return apiError(403, 'No workspace access', 'FORBIDDEN');
+ *
+ *   const forms = await db.form.findMany({
+ *     where: { workspaceId, ...(tenantId ? { tenantId } : {}) },
+ *   });
+ */
+export function resolveFormsScope(
+  user: AuthUser
+): { workspaceId: string | null; tenantId: string | null } {
+  return {
+    workspaceId: user.workspaceId || null,
+    tenantId: user.tenantId || null,
+  };
+}

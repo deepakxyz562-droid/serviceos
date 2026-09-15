@@ -89,6 +89,75 @@ export const BRAND = {
 } as const;
 
 /**
+ * FORMS_BRAND — Separate brand identity for the standalone AI Forms product.
+ *
+ * When a user's workspace has productType='forms', the UI uses FORMS_BRAND
+ * instead of BRAND. This gives the standalone product its own identity
+ * (name, tagline, domain) while sharing the same codebase.
+ *
+ * Per-workspace branding overrides are stored in Workspace.brandingJson
+ * (JSON: {productName, logoUrl, primaryColor, domain, supportEmail}).
+ * Use `resolveFormsBrand(workspace)` to merge FORMS_BRAND defaults with
+ * per-workspace overrides.
+ */
+export const FORMS_BRAND = {
+  /** Display name for the standalone Forms product. */
+  name: 'Fieseros AI Forms',
+
+  /** Tagline for the standalone product. */
+  tagline: 'AI Agents + Smart Forms + Knowledge — for every business',
+
+  /** Default subdomain for the standalone product. */
+  subdomain: 'forms',
+
+  /** Default domain (subdomain of the root). */
+  domain: 'forms.fieseros.com',
+
+  /** Primary brand color (Tailwind class-compatible hex). */
+  primaryColor: '#10B981',
+
+  /** Default support email (overridden by workspace.brandingJson.supportEmail). */
+  supportEmail: 'forms-support@fieseros.com',
+
+  /** Embed script URL. */
+  embedScriptUrl: 'https://fieseros.com/embed/agent.js',
+
+  /** Universal form embed URL. */
+  formEmbedUrl: 'https://fieseros.com/embed.js',
+} as const;
+
+/**
+ * Resolve the effective Forms brand for a workspace, merging FORMS_BRAND
+ * defaults with any per-workspace overrides from brandingJson.
+ *
+ * Usage (server-side):
+ *   import { resolveFormsBrand } from '@/lib/brand';
+ *   const brand = resolveFormsBrand(workspace);
+ *   // brand.name, brand.primaryColor, brand.supportEmail, etc.
+ */
+export function resolveFormsBrand(
+  workspace: { name: string; brandingJson: string } | null
+) {
+  if (!workspace) return FORMS_BRAND;
+
+  let overrides: Record<string, unknown> = {};
+  try {
+    overrides = JSON.parse(workspace.brandingJson || '{}');
+  } catch {
+    // ignore parse errors
+  }
+
+  return {
+    ...FORMS_BRAND,
+    ...(overrides.productName ? { name: String(overrides.productName) } : {}),
+    ...(workspace.name ? { name: overrides.productName ? String(overrides.productName) : workspace.name } : {}),
+    ...(overrides.primaryColor ? { primaryColor: String(overrides.primaryColor) } : {}),
+    ...(overrides.supportEmail ? { supportEmail: String(overrides.supportEmail) } : {}),
+    ...(overrides.domain ? { domain: String(overrides.domain) } : {}),
+  };
+}
+
+/**
  * Convenience exports for the most commonly used fields.
  * Components can import { BRAND } or individual constants.
  */
