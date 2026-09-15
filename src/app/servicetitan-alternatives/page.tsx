@@ -48,16 +48,16 @@ export const metadata: Metadata = {
 };
 
 const comparisonRows: { feature: string; fieseros: string; competitor: string }[] = [
-  { feature: "24/7 AI Voice Receptionist", fieseros: "Native, 24/7 phone lead booking", competitor: "Optional third-party add-on" },
-  { feature: "Starting price", fieseros: "Free trial, from $29/mo", competitor: "Custom pricing ($1,000s/mo)" },
-  { feature: "Setup time", fieseros: "Under 30 minutes self-serve", competitor: "3–6 month implementation" },
-  { feature: "Best for business size", fieseros: "Solo → 50 technicians", competitor: "25+ techs, large enterprises" },
-  { feature: "Email & SMS messaging", fieseros: "Native, first-class", competitor: "Requires configuration" },
-  { feature: "Mobile app", fieseros: "PWA (offline-capable)", competitor: "Native iOS/Android" },
-  { feature: "Software complexity", fieseros: "Fast, modern, lightweight", competitor: "Enterprise, complex training" },
-  { feature: "Onboarding", fieseros: "Self-serve wizard", competitor: "Mandatory implementation fee" },
-  { feature: "Free trial", fieseros: "Yes, no credit card", competitor: "Limited demo only" },
-  { feature: "Multi-currency", fieseros: "Yes, 20+ currencies", competitor: "USD-centric" },
+  { feature: "24/7 Voice AI Receptionist", fieseros: "Native, 24/7 autonomous phone lead booking", competitor: "Optional add-on / third-party call center" },
+  { feature: "Starting Price", fieseros: "Free trial, from $29/mo (no per-seat penalties)", competitor: "Custom contracts ($1,000s/mo + seat fees)" },
+  { feature: "Implementation Time", fieseros: "Under 30 minutes self-serve setup", competitor: "3–6 month mandatory onboarding" },
+  { feature: "Target Business Size", fieseros: "Solo operators up to 50+ technicians", competitor: "25+ techs, large multi-location enterprises" },
+  { feature: "Sales Pipeline & Kanban", fieseros: "Visual drag-and-drop Lead → Quote → Job", competitor: "Complex nested enterprise pipeline" },
+  { feature: "Dispatch & Live GPS Map", fieseros: "Live Mapbox/Leaflet GPS + Route Optimizer", competitor: "Heavy desktop-only dispatch board" },
+  { feature: "Mobile Experience", fieseros: "Lightweight offline PWA (1-tap install)", competitor: "Heavy native app requiring extensive training" },
+  { feature: "Dynamic Checklists & Forms", fieseros: "Drag-and-drop builder with auto-attach rules", competitor: "Configurable enterprise forms" },
+  { feature: "Equipment & Warranty Logs", fieseros: "Included in customer 360° profile", competitor: "Included (enterprise asset management)" },
+  { feature: "Local Marketplace & SEO Leads", fieseros: "Built-in contractor directory & review engine", competitor: "Not included (requires outside marketing agency)" },
 ];
 
 const alternatives: {
@@ -72,18 +72,18 @@ const alternatives: {
   {
     position: 1,
     name: "Fieseros",
-    bestFor: "Small & mid-size service businesses, especially outside the US",
+    bestFor: "Growing trade contractors wanting enterprise power without enterprise cost",
     pricing: "Free trial → from $29/mo",
     url: "https://fieseros.com",
     description:
-      "A modern, multi-channel FSM built for solo operators up to ~50-technician teams. Transparent pricing, fast setup, and a PWA technician app — without the enterprise complexity or implementation cost.",
+      "A fast, modern alternative to ServiceTitan: 24/7 Voice AI Receptionist, live GPS dispatch, technician mobile PWA, interactive Good/Better/Best estimates, automated invoicing, job costing, and local marketplace lead generation — live in 30 minutes.",
     highlight: true,
   },
   {
     position: 2,
     name: "Jobber",
-    bestFor: "Small North American service businesses",
-    pricing: "$49–$199/mo",
+    bestFor: "Small service businesses wanting simple job workflows",
+    pricing: "$49–$199+/mo",
     url: "https://getjobber.com",
     description:
       "The most popular ServiceTitan alternative for small teams. Strong scheduling, invoicing, and a polished mobile app at a fraction of ServiceTitan's price.",
@@ -91,11 +91,11 @@ const alternatives: {
   {
     position: 3,
     name: "Housecall Pro",
-    bestFor: "US home service businesses (HVAC, plumbing, cleaning)",
-    pricing: "$49–$200/mo",
+    bestFor: "Mid-size US home service businesses (HVAC, plumbing, electrical)",
+    pricing: "$49–$200+/mo",
     url: "https://housecallpro.com",
     description:
-      "A direct small-business competitor to ServiceTitan with strong dispatch, invoicing, and a great mobile experience. Better suited to US-based home services than international markets.",
+      "A direct mid-market competitor to ServiceTitan with strong dispatch, invoicing, marketing tools, and a great mobile experience.",
   },
   {
     position: 4,
@@ -104,16 +104,16 @@ const alternatives: {
     pricing: "Custom quote",
     url: "https://fieldedge.com",
     description:
-      "Mature FSM positioned between Jobber and ServiceTitan in terms of complexity and price. Good for established mid-size teams that have outgrown entry-level tools.",
+      "Mature FSM positioned between Jobber and ServiceTitan in terms of complexity and price. Good for established mid-size teams with dedicated dispatchers.",
   },
   {
     position: 5,
     name: "Workiz",
-    bestFor: "Small US service businesses wanting phone + FSM",
+    bestFor: "Small service businesses wanting integrated VoIP telephony + FSM",
     pricing: "$39–$159/mo",
     url: "https://workiz.com",
     description:
-      "Combines a built-in VoIP phone system with FSM. A good ServiceTitan alternative for appliance repair, HVAC, and garage door companies that handle inbound calls.",
+      "Combines a built-in VoIP phone system with FSM. A good ServiceTitan alternative for appliance repair, locksmiths, and garage door companies.",
   },
   {
     position: 6,
@@ -126,15 +126,6 @@ const alternatives: {
   },
   {
     position: 7,
-    name: "Kickserv",
-    bestFor: "Small cleaning and handyman businesses on a budget",
-    pricing: "$29–$99/mo",
-    url: "https://kickserv.com",
-    description:
-      "Affordable and simple. A good entry-level pick for solo operators or 2–3 person teams that find even Jobber or Housecall Pro too much.",
-  },
-  {
-    position: 8,
     name: "GorillaDesk",
     bestFor: "Pest control & lawn care operators",
     pricing: "$49–$149/mo",
@@ -142,65 +133,69 @@ const alternatives: {
     description:
       "Niche FSM tuned for pest control and lawn care — chemical tracking, recurring service plans, and route optimization for high-volume recurring visits.",
   },
+  {
+    position: 8,
+    name: "Kickserv",
+    bestFor: "Small cleaning and handyman businesses on a budget",
+    pricing: "$29–$99/mo",
+    url: "https://kickserv.com",
+    description:
+      "Affordable and simple. A good entry-level pick for solo operators or 2–3 person teams looking for basic scheduling without enterprise bloat.",
+  },
 ];
 
 const switchReasons = [
   {
     icon: BadgeDollarSign,
-    title: "Pricing that fits small budgets",
+    title: "Predictable, Affordable SaaS Pricing",
     description:
-      "ServiceTitan uses custom pricing (contact for quote) and often requires annual contracts and implementation fees. Fieseros has a free tier and paid plans that scale with usage, not headcount.",
+      "ServiceTitan locks businesses into expensive annual contracts ($1,000s/mo) plus hefty implementation fees. Fieseros offers transparent monthly tiers starting at $29/mo with zero mandatory onboarding fees.",
   },
   {
     icon: Clock,
-    title: "Setup in days, not months",
+    title: "Live in 30 Minutes, Not 6 Months",
     description:
-      "ServiceTitan implementations frequently take weeks or months with dedicated project managers. Fieseros is designed to be live in under 30 minutes — no consultants required.",
+      "ServiceTitan implementations frequently take 3–6 months with mandatory training consultants. Fieseros is designed to be fully operational in under 30 minutes with an intuitive self-serve wizard.",
   },
   {
     icon: Layers,
-    title: "Right-sized feature set",
+    title: "Enterprise Power Without the Bloat",
     description:
-      "ServiceTitan's depth is impressive but includes dispatch boards, inventory, payroll, and call tracking most small teams will never use. Fieseros ships the core features that drive most of the value.",
+      "Get the critical tools that actually grow your revenue: 24/7 Voice AI Receptionist, live GPS dispatch, interactive Good/Better/Best quotes, technician mobile app, and automated Google review requests.",
   },
   {
     icon: MessageSquare,
-    title: "Email & SMS-native, not US-only",
+    title: "Autonomous 24/7 Voice AI Lead Booking",
     description:
-      "ServiceTitan is built for large North American contractors. Fieseros is built Email & SMS-first for India, LATAM, SEA, and other markets where SMS and email are how business gets done.",
+      "Never miss emergency service calls while technicians are on the roof or in the crawlspace. Fieseros answers inbound calls 24/7 and books appointments straight into your schedule.",
   },
 ];
 
 const faqs = [
   {
-    question: "How much does ServiceTitan cost?",
+    question: "Why do contractors choose Fieseros over ServiceTitan?",
     answer:
-      "ServiceTitan does not publish public pricing. Plans are negotiated per contract and typically scale with team size, add-on modules, and onboarding scope. For small or mid-size businesses, that math often does not work — which is why many teams look for ServiceTitan alternatives.",
+      "Contractors choose Fieseros because it provides modern, AI-powered field service management without the astronomical cost and multi-month implementation overhead of ServiceTitan. With Fieseros, you get an autonomous 24/7 Voice AI Receptionist, live GPS dispatch map, mobile technician PWA, interactive Good/Better/Best estimates, automated invoicing, and a local marketplace lead engine starting at $29/mo.",
   },
   {
-    question: "Is ServiceTitan too complex for a small business?",
+    question: "How much does ServiceTitan cost compared to Fieseros?",
     answer:
-      "For most small businesses — yes. ServiceTitan is built for large, multi-dispatcher operations with 20+ technicians, dedicated call centers, and complex inventory needs. A solo operator or 3-technician team will spend more time configuring the tool than running jobs. Fieseros, Jobber, and Housecall Pro are all better fits for small teams that need core FSM without the enterprise overhead.",
+      "ServiceTitan does not publish public pricing, but contracts typically start at $500–$2,000+/month with multi-thousand dollar onboarding fees and multi-year contract commitments. Fieseros publishes pricing transparently starting at $29/month with no setup fees and month-to-month flexibility.",
   },
   {
-    question: "What's the best ServiceTitan alternative for small businesses?",
+    question: "Is ServiceTitan too complex for a growing service business?",
     answer:
-      "For small service businesses, the strongest ServiceTitan alternatives are Fieseros, Jobber, and Housecall Pro. Fieseros is the best choice if Email and SMS are your primary customer channels or you operate outside the US. Jobber is the most popular all-rounder for North American teams. Housecall Pro is a strong pick for US home services. For very small or budget-conscious teams, Kickserv offers a simpler starting point.",
+      "For most businesses with under 25–50 technicians, yes. ServiceTitan is designed for large enterprise organizations with dedicated IT staff, dispatch coordinators, and call centers. Smaller teams often spend more time navigating complex menus than servicing customers. Fieseros delivers the core power you need in a fast, clean interface.",
   },
   {
-    question: "How long does ServiceTitan implementation take?",
+    question: "How long does it take to switch to Fieseros?",
     answer:
-      "ServiceTitan implementations typically require longer onboarding with dedicated project managers and training sessions. By contrast, Fieseros is designed to be live in under 30 minutes with a self-serve onboarding wizard. If you need to be operational this week, ServiceTitan is the wrong fit.",
-  },
-  {
-    question: "Can I migrate from ServiceTitan to a smaller platform?",
-    answer:
-      "Yes, but it requires planning. ServiceTitan allows CSV exports of customers, jobs, and invoices. The challenge is mapping ServiceTitan's deeply nested data structures (locations, equipment, recurring services) to a simpler platform. Fieseros onboarding support will help you map fields and clean up data at no extra cost for paid plans. Most migrations take 1–3 days depending on data volume.",
+      "While ServiceTitan onboarding takes 3–6 months, you can set up Fieseros in under 30 minutes. Import your customer contacts and service catalogs via CSV, configure your branding, activate your 24/7 AI Receptionist phone line, and start booking jobs immediately.",
   },
   {
     question: "When is ServiceTitan the right choice?",
     answer:
-      "ServiceTitan is genuinely the right choice for large, established trades contractors — typically 20+ technicians, multiple dispatchers, dedicated call center, complex inventory, and a need for advanced reporting and integrations with accounting and payroll. If your business matches that profile, ServiceTitan's depth justifies its cost. If you are smaller, simpler, or operate outside the US, the alternatives on this page will serve you better at a fraction of the price.",
+      "ServiceTitan is best suited for large commercial contractors with 50+ trucks, dedicated in-house call centers, complex enterprise inventory warehouses, and massive accounting departments. For 1–50 technician businesses, Fieseros offers a far more modern, agile, and cost-effective operational engine.",
   },
 ];
 

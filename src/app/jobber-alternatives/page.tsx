@@ -50,16 +50,18 @@ export const metadata: Metadata = {
 
 // ─── Fieseros vs Jobber comparison rows ────────────────────────────────────
 const comparisonRows: { feature: string; fieseros: boolean; competitor: boolean }[] = [
-  { feature: "24/7 AI Voice Receptionist & phone lead booking", fieseros: true, competitor: false },
-  { feature: "Email & SMS customer messaging included", fieseros: true, competitor: false },
-  { feature: "Transparent, public pricing (no hidden seat fees)", fieseros: true, competitor: false },
-  { feature: "Offline-capable technician app (PWA)", fieseros: true, competitor: true },
-  { feature: "Free invoice generator (no signup)", fieseros: true, competitor: false },
-  { feature: "Setup time under 30 minutes", fieseros: true, competitor: false },
-  { feature: "Multi-currency & global payments (Stripe/UPI/Card)", fieseros: true, competitor: true },
-  { feature: "Mobile-first PWA (no app store install required)", fieseros: true, competitor: false },
-  { feature: "Free plan & trial for trade businesses", fieseros: true, competitor: false },
-  { feature: "Workflow automations (SMS/Email triggers)", fieseros: true, competitor: false },
+  { feature: "24/7 Autonomous Voice AI Receptionist & phone booking", fieseros: true, competitor: false },
+  { feature: "Customer CRM with 360° property & equipment history", fieseros: true, competitor: true },
+  { feature: "Visual Drag-and-Drop Sales Pipeline (Lead → Quote → Job)", fieseros: true, competitor: false },
+  { feature: "Live Dispatch Map with Real-time GPS & Route Optimization", fieseros: true, competitor: true },
+  { feature: "Technician Mobile App (PWA with offline photos & e-signatures)", fieseros: true, competitor: true },
+  { feature: "Interactive Quotes with Good / Better / Best Tiers", fieseros: true, competitor: true },
+  { feature: "Automated Invoicing & Instant Online Payments (Stripe/Card)", fieseros: true, competitor: true },
+  { feature: "Job Costing, Material Expenses & GPS Timesheet Labor Tracking", fieseros: true, competitor: false },
+  { feature: "Dynamic Inspection Forms & Safety Checklists", fieseros: true, competitor: true },
+  { feature: "Automated Google Review Generation & Post-Job SMS", fieseros: true, competitor: false },
+  { feature: "Local Contractor Marketplace & Programmatic SEO Leads", fieseros: true, competitor: false },
+  { feature: "Transparent, predictable pricing (no surprise per-seat fees)", fieseros: true, competitor: false },
 ];
 
 // ─── Top 10 Jobber alternatives ─────────────────────────────────────────────
@@ -75,93 +77,93 @@ const alternatives: {
   {
     position: 1,
     name: "Fieseros",
-    bestFor: "Service businesses in India, LATAM & SEA",
+    bestFor: "Growing home & commercial service businesses wanting AI + All-in-One FSM",
     pricing: "Free trial → from $29/mo",
     url: "https://fieseros.com",
     description:
-      "A modern, multi-channel field service platform built for non-US markets. PWA technician app, free invoice generator, multi-currency, and transparent pricing without per-user surprises.",
+      "The complete full-lifecycle platform for modern trade contractors: 24/7 Voice AI Receptionist, live GPS dispatch, technician mobile PWA, interactive Good/Better/Best estimates, automated invoicing, job costing, and local marketplace lead generation.",
     highlight: true,
   },
   {
     position: 2,
     name: "Housecall Pro",
-    bestFor: "US home service businesses (HVAC, plumbing, cleaning)",
-    pricing: "$49–$200/mo",
+    bestFor: "US home service businesses wanting broad marketing & phone add-ons",
+    pricing: "$49–$200+/mo",
     url: "https://housecallpro.com",
     description:
-      "A popular all-in-one FSM for US home services with strong dispatch, invoicing, and a polished mobile app. Less suited for multi-currency, non-US markets.",
+      "A popular all-in-one FSM for US home services with strong dispatch, invoicing, and a polished mobile app. Powerful feature set, though pricing escalates quickly with seat add-ons.",
   },
   {
     position: 3,
     name: "ServiceTitan",
-    bestFor: "Large HVAC/plumbing contractors (10+ techs)",
-    pricing: "Custom pricing (contact for quote)",
+    bestFor: "Large commercial & enterprise contractors (20+ technicians)",
+    pricing: "Custom pricing ($1,000s/mo + onboarding fees)",
     url: "https://servicetitan.com",
     description:
-      "Enterprise-grade FSM built for large trades contractors. Powerful but expensive and complex — overkill for solo or small teams.",
+      "Enterprise-grade FSM built for large trades contractors. Very deep functionality but expensive and complex, requiring months of onboarding.",
   },
   {
     position: 4,
-    name: "FieldEdge",
-    bestFor: "Established US trades businesses with office staff",
-    pricing: "Custom quote",
-    url: "https://fieldedge.com",
-    description:
-      "Veteran FSM with strong dispatch, customer history, and reporting. Built for US-based mid-market service companies with dedicated dispatchers.",
-  },
-  {
-    position: 5,
     name: "Workiz",
-    bestFor: "Small US service businesses wanting phone + FSM",
+    bestFor: "Small service businesses wanting basic VoIP telephony + FSM",
     pricing: "$39–$159/mo",
     url: "https://workiz.com",
     description:
-      "Combines a VoIP phone system with field service management. Good for small teams that handle inbound calls as their primary lead channel.",
+      "Combines a VoIP phone system with job scheduling. Good for small teams handling high call volumes, though lacks autonomous voice AI scheduling.",
+  },
+  {
+    position: 5,
+    name: "FieldEdge",
+    bestFor: "Established US trades businesses with dedicated office dispatchers",
+    pricing: "Custom quote",
+    url: "https://fieldedge.com",
+    description:
+      "Veteran FSM with strong dispatch, customer history, and accounting integrations. Built primarily for mid-market service companies with office staff.",
   },
   {
     position: 6,
     name: "Jobber",
-    bestFor: "North American small service businesses (the benchmark)",
-    pricing: "$49–$199/mo",
+    bestFor: "Small North American service businesses wanting simple job workflows",
+    pricing: "$49–$199+/mo",
     url: "https://getjobber.com",
     description:
-      "The benchmark we are comparing against. Strong scheduling, good mobile app, large ecosystem — but no free tier, US-centric, and per-user pricing adds up.",
+      "The benchmark standard for simple job workflows, quotes, and client hub. Strong execution, but lacks native 24/7 voice AI answering, built-in lead marketplace, and per-user fees add up.",
   },
   {
     position: 7,
-    name: "Kickserv",
-    bestFor: "Small cleaning/handyman businesses on a budget",
-    pricing: "$29–$99/mo",
-    url: "https://kickserv.com",
-    description:
-      "Affordable FSM with simple scheduling and invoicing. Lighter on features than Jobber, but easier to learn and cheaper for solo operators.",
-  },
-  {
-    position: 8,
     name: "GorillaDesk",
     bestFor: "Pest control & lawn care operators",
     pricing: "$49–$149/mo",
     url: "https://gorilladesk.com",
     description:
-      "Niche FSM tuned for pest control and lawn care with route optimization, chemical tracking, and recurring service plans.",
+      "Niche FSM tuned specifically for pest control and lawn care with chemical tracking and recurring route optimization.",
+  },
+  {
+    position: 8,
+    name: "Kickserv",
+    bestFor: "Solo operators and handyman businesses on a budget",
+    pricing: "$29–$99/mo",
+    url: "https://kickserv.com",
+    description:
+      "Affordable entry-level FSM with simple scheduling and invoicing for solo tradesmen who don't need complex dispatch or voice AI.",
   },
   {
     position: 9,
     name: "Synchroteam",
-    bestFor: "Field teams needing strong route optimization",
+    bestFor: "Field teams prioritizing basic route mapping",
     pricing: "$25–$85/user/mo",
     url: "https://synchroteam.com",
     description:
-      "Field service software with a focus on route optimization, time tracking, and a clean mobile app. Good international footprint but limited automation builder.",
+      "Field service software focused on route optimization and time tracking, but lighter on marketing automation and AI.",
   },
   {
     position: 10,
     name: "Innovia",
-    bestFor: "SMBs looking for an affordable all-in-one",
+    bestFor: "Small service teams seeking basic scheduling",
     pricing: "Custom quote",
     url: "https://innovia.com",
     description:
-      "An emerging FSM challenger with strong scheduling, invoicing, and CRM. Pricing and onboarding are tailored per customer.",
+      "Emerging FSM challenger with scheduling, invoicing, and CRM for small service teams.",
   },
 ];
 
@@ -169,60 +171,55 @@ const alternatives: {
 const switchReasons = [
   {
     icon: BadgeDollarSign,
-    title: "Pricing transparency",
+    title: "Transparent & Predictable Pricing",
     description:
-      "Jobber's per-user pricing adds up quickly. Fieseros publishes pricing openly and includes a free tier for solo operators — no surprises on renewal.",
+      "Jobber's per-user pricing model adds up quickly as your team grows. Fieseros offers clear, predictable tiers starting at $29/month with no surprise per-seat markups.",
   },
   {
     icon: MessageSquare,
-    title: "Email & SMS included out-of-the-box",
+    title: "Autonomous 24/7 Voice AI Receptionist",
     description:
-      "If your customers prefer SMS or email — most of the world does — Fieseros ships with Email and SMS messaging included, no third-party integrations or approvals needed. Quotes, job updates, invoices, and payment links all flow through natively.",
+      "Never miss another customer call while on the job. Fieseros includes a live 24/7 Voice AI Receptionist that answers inbound phone calls, qualifies leads, and books appointments straight into your calendar.",
   },
   {
     icon: Globe,
-    title: "Built for non-US markets",
+    title: "The Complete 5-Stage Business Loop",
     description:
-      "Multi-currency, multi-language, and a UX designed for India, LATAM, SEA and Africa. Jobber is excellent, but it is unambiguously built for North America.",
+      "While Jobber only handles jobs you already have, Fieseros powers the entire lifecycle: Acquire (Local Marketplace & SEO) → Convert (Voice AI & Quotes) → Operate (Live GPS & Mobile PWA) → Get Paid (Invoices) → Retain (Reviews & Service Plans).",
   },
   {
     icon: Smartphone,
-    title: "Modern PWA, no app store",
+    title: "Modern Offline Technician PWA",
     description:
-      "Fieseros is a progressive web app. Technicians install it in one tap, work offline, and you never deal with iOS App Store updates again.",
+      "Technicians install the mobile app in one tap without dealing with app store updates. Complete safety checklists, upload before/after photos, and collect customer signatures on-site seamlessly.",
   },
 ];
 
 const faqs = [
   {
+    question: "Why do service businesses switch from Jobber to Fieseros?",
+    answer:
+      "Service businesses switch to Fieseros because it unifies job operations with lead acquisition and AI automation. While Jobber handles quotes, jobs, and invoices, Fieseros also provides an autonomous 24/7 Voice AI Receptionist to answer customer phone calls, a visual sales pipeline, dynamic checklists, job costing, automated Google review requests, and a local contractor marketplace to generate new inbound leads.",
+  },
+  {
     question: "Is Fieseros cheaper than Jobber?",
     answer:
-      "For most small teams — yes. Jobber starts around $49/mo and scales per user, which means a 5-technician team can easily pay $150+/mo. Fieseros has a free tier for solo operators and paid plans that scale with usage, not headcount. We also publish pricing openly so you know what you will pay next year, not just this month.",
+      "Yes. Jobber starts at $49/mo and charges steep per-user fees on higher tiers, meaning a 5-person team can easily pay $150–$300+/mo. Fieseros offers predictable plans starting at $29/mo, with full access to core scheduling, invoicing, and technician mobile tools without penalizing you for adding team members.",
   },
   {
-    question: "Does Fieseros support Email and SMS messaging?",
+    question: "Can I migrate my customer and job data from Jobber to Fieseros?",
     answer:
-      "Yes — Email and SMS are first-class channels in Fieseros, included out-of-the-box with no third-party integrations or approvals required. You can send quotes, job updates, invoices, and payment links directly through Email and SMS, and customer replies automatically thread into the right conversation inside Fieseros. This is the single biggest reason field service businesses in India, Latin America, and Southeast Asia switch from Jobber to Fieseros.",
+      "Yes. You can export your clients, properties, job history, and service catalogs from Jobber via CSV and import them directly into Fieseros in under 30 minutes. Our onboarding team also provides complimentary data migration assistance.",
   },
   {
-    question: "Can I migrate from Jobber to Fieseros?",
+    question: "Does Fieseros have a mobile app for field technicians?",
     answer:
-      "Yes. You can export your customers, jobs, and invoices from Jobber as CSV files and import them into Fieseros. Most small businesses complete the migration in under 30 minutes. For larger teams, our support team will help you map fields and clean up data at no extra cost during onboarding.",
+      "Yes. Fieseros provides a modern, offline-capable Progressive Web App (PWA) that technicians can install on any iOS or Android device in one tap. Technicians can view their daily schedule, get one-touch turn-by-turn navigation, update job statuses (On My Way, Started), complete inspection checklists, take before/after photos, and collect digital customer signatures on-site.",
   },
   {
-    question: "Is there a free Jobber alternative?",
+    question: "How does Fieseros's Voice AI Receptionist compare to Jobber?",
     answer:
-      "Yes — Fieseros offers a free tier designed for solo operators and very small teams. You get scheduling, invoicing, customer CRM, and a limited number of SMS messages per month. There are no time limits and no credit card required to start. When you grow, you upgrade on your terms.",
-  },
-  {
-    question: "What's the best Jobber alternative for small businesses?",
-    answer:
-      "For small service businesses (1–5 technicians), the two strongest Jobber alternatives are Fieseros and Kickserv. Fieseros is better if Email and SMS are primary customer channels or you operate outside North America. Kickserv is a good budget pick for US-based solo operators who want simple scheduling and invoicing. Housecall Pro is also popular for US home services, but pricing ramps quickly.",
-  },
-  {
-    question: "What's the best Jobber alternative for India?",
-    answer:
-      "Fieseros is purpose-built for the Indian market. It supports UPI and rupee invoicing, Email & SMS business messaging (which is how most Indian customers communicate), multi-language workflows, and Indian GST tax handling. Jobber may require third-party integrations for Indian payment rails or SMS workflows — check Jobber's current plan for India-specific options — which is why most Indian service businesses find Fieseros a better operational fit.",
+      "Jobber does not offer a native autonomous Voice AI phone receptionist. Fieseros includes an AI Receptionist with a dedicated phone line that answers calls 24/7, speaks naturally with homeowners, checks technician availability in real time, books jobs directly into your CRM, and sends instant confirmation SMS messages to both you and the customer.",
   },
 ];
 

@@ -49,16 +49,18 @@ export const metadata: Metadata = {
 };
 
 const comparisonRows: { feature: string; fieseros: boolean; competitor: boolean }[] = [
-  { feature: "24/7 AI Voice Receptionist & phone lead booking", fieseros: true, competitor: false },
-  { feature: "Email & SMS customer messaging included", fieseros: true, competitor: false },
-  { feature: "Public, transparent pricing (no hidden addons)", fieseros: true, competitor: false },
-  { feature: "Free trial, no credit card required", fieseros: true, competitor: false },
-  { feature: "Offline-capable PWA technician app (no app store)", fieseros: true, competitor: false },
-  { feature: "Native iOS & Android apps", fieseros: true, competitor: true },
-  { feature: "Multi-currency invoicing & payment methods", fieseros: true, competitor: true },
-  { feature: "Customizable workflows & digital checklists", fieseros: true, competitor: true },
-  { feature: "Setup in under 30 minutes", fieseros: true, competitor: false },
-  { feature: "Workflow automations (SMS/Email triggers)", fieseros: true, competitor: false },
+  { feature: "24/7 Autonomous Voice AI Receptionist & phone lead booking", fieseros: true, competitor: false },
+  { feature: "Visual Drag-and-Drop Sales Pipeline (Lead → Quote → Job)", fieseros: true, competitor: true },
+  { feature: "Live Dispatch Map with Real-time GPS & Route Optimization", fieseros: true, competitor: true },
+  { feature: "Technician Mobile App (PWA with offline photos & e-signatures)", fieseros: true, competitor: true },
+  { feature: "Customer CRM with 360° property & equipment history", fieseros: true, competitor: true },
+  { feature: "Interactive Quotes with Good / Better / Best Tiers", fieseros: true, competitor: true },
+  { feature: "Automated Invoicing & Instant Online Payments (Stripe/Card)", fieseros: true, competitor: true },
+  { feature: "Job Costing, Material Expenses & GPS Timesheet Labor Tracking", fieseros: true, competitor: true },
+  { feature: "Dynamic Inspection Forms & Safety Checklists", fieseros: true, competitor: true },
+  { feature: "Automated Google Review Generation & Post-Job SMS", fieseros: true, competitor: true },
+  { feature: "Local Contractor Marketplace & Programmatic SEO Leads", fieseros: true, competitor: false },
+  { feature: "Transparent, predictable pricing (no surprise per-seat fees)", fieseros: true, competitor: false },
 ];
 
 const alternatives: {
@@ -73,48 +75,48 @@ const alternatives: {
   {
     position: 1,
     name: "Fieseros",
-    bestFor: "Service businesses outside the US",
+    bestFor: "Growing home & commercial service businesses wanting AI + All-in-One FSM",
     pricing: "Free trial → from $29/mo",
     url: "https://fieseros.com",
     description:
-      "A modern, multi-channel FSM built for India, LATAM, and SEA. Transparent pricing, free tier, PWA technician app, and multi-currency support without the per-seat pricing surprises.",
+      "A complete full-lifecycle platform for modern trades: 24/7 Voice AI Receptionist, live GPS dispatch, technician mobile PWA, interactive Good/Better/Best estimates, automated invoicing, job costing, and local marketplace lead generation.",
     highlight: true,
   },
   {
     position: 2,
     name: "Jobber",
-    bestFor: "North American small service businesses",
-    pricing: "$49–$199/mo",
+    bestFor: "Small service businesses wanting simple job workflows",
+    pricing: "$49–$199+/mo",
     url: "https://getjobber.com",
     description:
-      "The closest direct competitor to Housecall Pro. Strong scheduling, polished mobile app, and a large ecosystem. Like Housecall Pro, it is US-centric and may require third-party integrations for native Email & SMS messaging.",
+      "The closest direct competitor to Housecall Pro. Strong scheduling, polished mobile app, and a large ecosystem. Like Housecall Pro, pricing increases with users and add-ons.",
   },
   {
     position: 3,
     name: "ServiceTitan",
-    bestFor: "Large HVAC & plumbing contractors (10+ techs)",
-    pricing: "Custom pricing (contact for quote)",
+    bestFor: "Large commercial & enterprise contractors (20+ technicians)",
+    pricing: "Custom pricing ($1,000s/mo + onboarding fees)",
     url: "https://servicetitan.com",
     description:
       "Enterprise-grade FSM with deep feature set for large trades contractors. Powerful, but expensive and complex — usually overkill for small teams leaving Housecall Pro.",
   },
   {
     position: 4,
-    name: "FieldEdge",
-    bestFor: "Established US mid-market service companies",
-    pricing: "Custom quote",
-    url: "https://fieldedge.com",
-    description:
-      "Mature FSM with strong dispatch, customer history, and reporting. A solid Housecall Pro alternative if you have dedicated dispatchers and want white-glove onboarding.",
-  },
-  {
-    position: 5,
     name: "Workiz",
-    bestFor: "Small US service businesses that need VoIP + FSM",
+    bestFor: "Small service businesses that need basic VoIP telephony + FSM",
     pricing: "$39–$159/mo",
     url: "https://workiz.com",
     description:
-      "Combines a built-in VoIP phone system with field service management. A great pick if inbound phone calls are your primary lead channel and you want everything in one tool.",
+      "Combines a built-in VoIP phone system with field service management. A great pick if inbound phone calls are your primary lead channel.",
+  },
+  {
+    position: 5,
+    name: "FieldEdge",
+    bestFor: "Established US mid-market service companies with office staff",
+    pricing: "Custom quote",
+    url: "https://fieldedge.com",
+    description:
+      "Mature FSM with strong dispatch, customer history, and reporting. A solid Housecall Pro alternative if you have dedicated office dispatchers.",
   },
   {
     position: 6,
@@ -123,19 +125,10 @@ const alternatives: {
     pricing: "$25–$85/user/mo",
     url: "https://synchroteam.com",
     description:
-      "Lightweight FSM with excellent route optimization and a clean mobile app. Good international footprint, though native multi-channel messaging is limited.",
+      "Lightweight FSM with route optimization and a clean mobile app. Good international footprint, though lighter on marketing automations.",
   },
   {
     position: 7,
-    name: "Kickserv",
-    bestFor: "Solo operators and small cleaning/handyman teams",
-    pricing: "$29–$99/mo",
-    url: "https://kickserv.com",
-    description:
-      "Affordable, simple scheduling and invoicing. Easier to learn than Housecall Pro and a good budget pick for very small teams that don't need the full feature set.",
-  },
-  {
-    position: 8,
     name: "GorillaDesk",
     bestFor: "Pest control & lawn care operators",
     pricing: "$49–$149/mo",
@@ -143,65 +136,69 @@ const alternatives: {
     description:
       "Niche FSM tuned for pest control and lawn care — chemical tracking, recurring service plans, and route optimization built for high-volume recurring visits.",
   },
+  {
+    position: 8,
+    name: "Kickserv",
+    bestFor: "Solo operators and small cleaning/handyman teams",
+    pricing: "$29–$99/mo",
+    url: "https://kickserv.com",
+    description:
+      "Affordable, simple scheduling and invoicing. Easier to learn than Housecall Pro and a good budget pick for very small teams.",
+  },
 ];
 
 const switchReasons = [
   {
     icon: BadgeDollarSign,
-    title: "Pricing that doesn't creep up",
+    title: "Transparent & Predictable Pricing",
     description:
-      "Housecall Pro's plan tiers and add-ons can quietly escalate as you grow. Fieseros publishes pricing openly, with a real free tier and predictable per-usage SMS credits.",
+      "Housecall Pro's plan tiers and per-seat add-ons can escalate quickly as your business grows. Fieseros publishes pricing openly starting at $29/month with no surprise per-seat fees.",
   },
   {
     icon: MessageSquare,
-    title: "Email & SMS included out-of-the-box",
+    title: "Autonomous 24/7 Voice AI Receptionist",
     description:
-      "If your customers prefer SMS or email over phone calls — which is most of the world — Fieseros ships with Email and SMS messaging included, no third-party integrations or approvals needed. Check Housecall Pro's current plan for SMS messaging options.",
+      "Never miss a lucrative emergency call or after-hours inquiry. Fieseros includes an autonomous Voice AI phone receptionist that answers calls 24/7, qualifies customer needs, and books jobs directly into your dispatch schedule.",
   },
   {
     icon: Globe,
-    title: "Built for non-US markets",
+    title: "The Complete 5-Stage Business Loop",
     description:
-      "Housecall Pro is purpose-built for American home services. Fieseros is built for India, LATAM, SEA, and other multi-channel markets with multi-currency, multi-language, and local payment rails.",
+      "Fieseros connects the entire customer journey: Acquire (Local Marketplace & SEO) → Convert (Voice AI & Quotes) → Operate (Live GPS & Mobile PWA) → Get Paid (Invoices) → Retain (Reviews & Service Plans).",
   },
   {
     icon: SlidersHorizontal,
-    title: "Customizable without consultants",
+    title: "Customizable Workflows & Dynamic Checklists",
     description:
-      "Housecall Pro customization often requires support tickets or third-party consultants. Fieseros workflows, forms, and templates are editable in-product by any admin.",
+      "Build custom inspection checklists, service agreements, and automated workflows without paying for enterprise consultants or add-on packages.",
   },
 ];
 
 const faqs = [
   {
+    question: "Why do service businesses switch from Housecall Pro to Fieseros?",
+    answer:
+      "Service businesses switch to Fieseros for the combination of all-in-one job operations with autonomous AI and lead acquisition. While Housecall Pro is a strong platform, pricing quickly creeps up as you add technicians and add-ons. Fieseros includes 24/7 Voice AI phone answering, live GPS dispatch, technician mobile PWA, interactive Good/Better/Best quotes, and local marketplace lead generation at predictable flat pricing.",
+  },
+  {
     question: "Is Fieseros cheaper than Housecall Pro?",
     answer:
-      "For most teams operating outside the US, yes. Housecall Pro starts at $49/mo and pricing increases with seats and add-ons. Fieseros offers a free tier for solo operators and paid plans that scale with usage rather than headcount. We also publish pricing openly, so there are no surprise increases at renewal.",
+      "Yes. Housecall Pro starts at $49/mo and increases sharply with additional team members and marketing add-ons. Fieseros offers transparent plans starting at $29/mo with full access to scheduling, invoicing, and mobile technician tools without per-user penalties.",
   },
   {
-    question: "Can I migrate my customers from Housecall Pro to Fieseros?",
+    question: "Can I migrate my customers and jobs from Housecall Pro to Fieseros?",
     answer:
-      "Yes. Export your customer list, job history, and invoices from Housecall Pro as CSV files, then import them into Fieseros. Most small businesses finish the migration in under 30 minutes. Our onboarding team will help map custom fields and clean up data free of charge for paid plans.",
-  },
-  {
-    question: "Why is multi-channel messaging a big deal?",
-    answer:
-      "In most of the world — India, Latin America, Southeast Asia, Africa, the Middle East — SMS and email are how customers communicate with businesses. If most of your customers prefer SMS or email over phone calls, a tool that doesn't include native messaging forces you to juggle two systems. Fieseros ships with Email and SMS included for quotes, updates, invoices, and payment links.",
-  },
-  {
-    question: "What's the best Housecall Pro alternative for small US businesses?",
-    answer:
-      "For US-based small service businesses, Jobber and Workiz are the strongest Housecall Pro alternatives. Jobber has the closest feature parity and a polished mobile app. Workiz is a great pick if you want a built-in VoIP phone system. Kickserv is the most affordable option for solo operators. Fieseros is the better choice if Email and SMS are your primary customer channels or you operate outside the US.",
+      "Yes. Export your customer list, job history, and service catalogs from Housecall Pro as CSV files, then import them directly into Fieseros. Most small businesses complete data migration in under 30 minutes with complimentary support from our team.",
   },
   {
     question: "Does Fieseros have a mobile app like Housecall Pro?",
     answer:
-      "Yes, but it is a progressive web app (PWA) rather than a native iOS/Android app. Technicians install it in one tap from the browser, it works offline in the field, and updates ship instantly without app store review delays. Most field teams find PWA more convenient than managing native app updates across dozens of technician phones.",
+      "Yes. Fieseros includes an offline-capable Progressive Web App (PWA) that technicians can install in one tap on any iOS or Android phone. It provides turn-by-turn navigation, job status updates ('On My Way', 'Started'), inspection checklists, before/after photo capture, and customer digital signatures on-site.",
   },
   {
-    question: "Is Housecall Pro still a good choice in 2026?",
+    question: "How does Fieseros's Voice AI compare to Housecall Pro?",
     answer:
-      "Absolutely. Housecall Pro remains one of the best FSM platforms for US-based home service businesses. It has a mature feature set, strong customer support, and a large ecosystem. The reasons to switch are usually market fit (you operate outside the US), pricing (you are bumping into plan limits), or multi-channel messaging (your customers prefer SMS or email). If none of those apply, Housecall Pro is genuinely a good product.",
+      "While Housecall Pro offers traditional VoIP call tracking and basic AI features, Fieseros provides a fully autonomous 24/7 Voice AI Receptionist. The AI answers calls in natural voice, identifies existing customers, checks technician calendar availability in real-time, books appointments directly into your schedule, and sends instant confirmation SMS messages.",
   },
 ];
 
