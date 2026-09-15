@@ -71,6 +71,7 @@ import {
   PenSquare,
   Package,
   Share2,
+  FileInput,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -173,6 +174,7 @@ const ownerNavSections: NavSection[] = [
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
+      { view: 'formBuilder', label: 'Smart Forms', icon: FileInput },
       // AI Assistant moved to the Top Bar (right-side drawer button) for global quick access from any page.
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
@@ -215,6 +217,35 @@ const ownerNavSections: NavSection[] = [
       // Brand Brain moved INTO the Settings page (as a settings section).
       // It was previously hidden inside this collapsed section, making it
       // hard to discover. Now accessible via Settings → Business → Brand Brain.
+    ],
+  },
+];
+
+// ─── Standalone AI Employee & Forms Navigation ──────────────────────────────
+const standaloneNavSections: NavSection[] = [
+  {
+    title: 'AI & Forms Suite',
+    items: [
+      { view: 'formBuilder', label: 'Smart Forms', icon: FileInput },
+      { view: 'aiReceptionist', label: 'AI Employee', icon: PhoneCall },
+      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+      { view: 'leads', label: 'Form Leads', icon: Target },
+    ],
+  },
+  {
+    title: 'Marketing & Embeds',
+    items: [
+      { view: 'campaigns', label: 'Email Campaigns', icon: Megaphone },
+      { view: 'socialMedia', label: 'Social Media', icon: Share2 },
+      { view: 'integrations', label: 'Embeds & API', icon: Plug },
+    ],
+  },
+  {
+    title: 'Account',
+    items: [
+      { view: 'billing', label: 'Plan & Billing', icon: CreditCard },
+      { view: 'settings', label: 'Settings', icon: Settings },
+      { view: 'helpCenter', label: 'Help & Support', icon: LifeBuoy },
     ],
   },
 ];
@@ -476,6 +507,13 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     ((auth.tenant as any)?.signupMode === 'listing_only' ||
      (auth.tenant as any)?.listingTier === 'claimed_free');
 
+  const isStandalone =
+    !isSuperAdmin &&
+    !isEmployee &&
+    ((auth.tenant as any)?.signupMode === 'standalone' ||
+     (auth.tenant as any)?.plan === 'standalone_starter' ||
+     (auth.tenant as any)?.plan === 'standalone_business');
+
   // Fetch menu visibility for non-superadmin users. Superadmin bypasses the
   // fetch entirely (the filter below ignores `disabledMenus` when isSuperAdmin),
   // so we early-return without touching state — avoids a synchronous setState
@@ -483,7 +521,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   // PERFORMANCE: ?XTransformPort=3000 is required so Caddy routes this to the
   // Next.js dev server (otherwise it 401s and pollutes the dev log).
   useEffect(() => {
-    if (isListingOnly) return;
+    if (isListingOnly || isStandalone) return;
     async function fetchMenuVisibility() {
       try {
         const res = await fetch('/api/menu-visibility?XTransformPort=3000');
@@ -496,7 +534,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       }
     }
     fetchMenuVisibility();
-  }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin, isSuperAdmin, isListingOnly]);
+  }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin, isSuperAdmin, isListingOnly, isStandalone]);
 
   // Effective collapsed state for a section: explicit user override wins,
   // otherwise fall back to the section's `defaultCollapsed` flag. Non-collapsible
@@ -523,12 +561,18 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     const plan = auth.tenant?.plan || 'starter';
     const colors: Record<string, string> = {
       starter: 'bg-slate-600/40 text-slate-300 border-slate-500/30',
+      standalone_starter: 'bg-emerald-600/30 text-emerald-300 border-emerald-500/30',
+      standalone_business: 'bg-indigo-600/30 text-indigo-300 border-indigo-500/30',
       growth: 'bg-emerald-600/30 text-emerald-300 border-emerald-500/30',
       pro: 'bg-amber-600/30 text-amber-300 border-amber-500/30',
       enterprise: 'bg-purple-600/30 text-purple-300 border-purple-500/30',
     };
+    const labels: Record<string, string> = {
+      standalone_starter: 'AI Starter',
+      standalone_business: 'AI Business',
+    };
     return {
-      label: plan.charAt(0).toUpperCase() + plan.slice(1),
+      label: labels[plan] || plan.charAt(0).toUpperCase() + plan.slice(1),
       className: colors[plan] || colors.starter,
     };
   };
@@ -545,6 +589,9 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       // Listing-only tenants get the minimal nav — no CRM features, no
       // menu-visibility filtering (the fixed set is already final).
       return listingOnlyNavSections;
+    } else if (isStandalone) {
+      // Standalone AI & Forms tenants get the focused suite nav
+      return standaloneNavSections;
     } else if (isEmployee) {
       sections = employeeNavSections;
     } else {

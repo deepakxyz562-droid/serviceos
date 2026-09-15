@@ -71,6 +71,8 @@ export async function POST(request: NextRequest) {
       ? requestedPlan
       : defaultSignupPlan;
 
+    const isStandalone = signupPlan === 'standalone_starter' || signupPlan === 'standalone_business';
+
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -88,7 +90,9 @@ export async function POST(request: NextRequest) {
         // Registered businesses created by owner are claimed by default
         claimed: true,
         listingTier: 'claimed',
-        signupMode: 'crm_trial',
+        signupMode: isStandalone ? 'standalone' : 'crm_trial',
+        onboardingCompleted: isStandalone ? true : false,
+        onboardingStep: isStandalone ? 4 : 1,
       },
     });
 

@@ -72,7 +72,7 @@ const viewLabels: Record<ViewType, string> = {
   chatbotBuilder: 'Chatbot Builder',
   aiAssistant: 'AI Assistant',
   aiCampaignGenerator: 'AI Campaign Generator',
-  formBuilder: 'Form Builder',
+  formBuilder: 'Smart Forms',
   webviewEngine: 'Webview Engine',
   adsIntegration: 'Ads Integration',
   journeyAutomation: 'Journey Automation',

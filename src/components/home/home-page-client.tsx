@@ -197,6 +197,7 @@ export default function HomePageClient() {
       const params = new URLSearchParams(window.location.search);
       const googleLogin = params.get('google_login');
       const authError = params.get('auth_error');
+      const viewParam = params.get('view') || params.get('tab');
 
       if (authError) {
         toast.error('Authentication failed', {
@@ -207,6 +208,11 @@ export default function HomePageClient() {
       }
 
       if (googleLogin === 'success') {
+        if (viewParam === 'forms' || viewParam === 'formBuilder') {
+          useAppStore.getState().setCurrentView('formBuilder');
+        } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
+          useAppStore.getState().setCurrentView('aiReceptionist');
+        }
         toast.success('Successfully signed in with Google!');
         window.history.replaceState({}, '', window.location.pathname);
       }
@@ -320,17 +326,30 @@ export default function HomePageClient() {
           } else if (isPlatformAdmin(data.user)) {
             useAppStore.getState().setCurrentView('superadmin');
           }
-          // Trigger onboarding if the tenant hasn't completed it. Decide
-          // WHICH screen based on signupMode (Step 0 / SaaS wizard / listing
-          // mini wizard). Platform admins / customers / employees skip it.
-          if (
+
+          const tenantPlan = (data.tenant as any)?.plan as string | null | undefined;
+          const sm = (data.tenant as any)?.signupMode as string | null | undefined;
+          const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business';
+
+          if (isStandalone) {
+            setShowOnboarding(false);
+            setOnboardingView(null);
+            if (typeof window !== 'undefined') {
+              const params = new URLSearchParams(window.location.search);
+              const viewParam = params.get('view') || params.get('tab');
+              if (viewParam === 'forms' || viewParam === 'formBuilder') {
+                useAppStore.getState().setCurrentView('formBuilder');
+              } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
+                useAppStore.getState().setCurrentView('aiReceptionist');
+              }
+            }
+          } else if (
             data.tenant &&
             !data.tenant.onboardingCompleted &&
             !isPlatformAdmin(data.user) &&
             data.user.role !== 'customer' &&
             data.user.role !== 'employee'
           ) {
-            const sm = (data.tenant as any)?.signupMode as string | null | undefined;
             if (sm === 'listing_only') {
               setOnboardingView('listing');
             } else if (sm === 'crm_trial') {
@@ -417,14 +436,29 @@ export default function HomePageClient() {
               } else if (isPlatformAdmin(parsed.user)) {
                 useAppStore.getState().setCurrentView('superadmin');
               }
-              if (
+              const tenantPlan = (parsed.tenant as any)?.plan as string | null | undefined;
+              const sm = (parsed.tenant as any)?.signupMode as string | null | undefined;
+              const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business';
+
+              if (isStandalone) {
+                setShowOnboarding(false);
+                setOnboardingView(null);
+                if (typeof window !== 'undefined') {
+                  const params = new URLSearchParams(window.location.search);
+                  const viewParam = params.get('view') || params.get('tab');
+                  if (viewParam === 'forms' || viewParam === 'formBuilder') {
+                    useAppStore.getState().setCurrentView('formBuilder');
+                  } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
+                    useAppStore.getState().setCurrentView('aiReceptionist');
+                  }
+                }
+              } else if (
                 parsed.tenant &&
                 !parsed.tenant.onboardingCompleted &&
                 !isPlatformAdmin(parsed.user) &&
                 parsed.user.role !== 'customer' &&
                 parsed.user.role !== 'employee'
               ) {
-                const sm = (parsed.tenant as any)?.signupMode as string | null | undefined;
                 if (sm === 'listing_only') {
                   setOnboardingView('listing');
                 } else if (sm === 'crm_trial') {
@@ -799,27 +833,41 @@ export default function HomePageClient() {
         setOnboardingView(null);
         useAppStore.getState().setCurrentView('superadmin');
         toast.success('Welcome, Super Admin!');
-      } else if (!tenant || !tenant.onboardingCompleted) {
-        // New user without a tenant — OR an existing tenant that hasn't
-        // finished onboarding yet. Decide WHICH onboarding screen to show
-        // based on the tenant's signupMode:
-        //   null / undefined → Step 0 decision screen (fresh registration)
-        //   'crm_trial'      → full 4-step SaaSOnboarding wizard
-        //   'listing_only'   → mini 1-step ListingOnboarding wizard
-        const sm = (tenant as any)?.signupMode as string | null | undefined;
-        if (sm === 'listing_only') {
-          setOnboardingView('listing');
-        } else if (sm === 'crm_trial') {
-          setOnboardingView('saas');
-        } else {
-          setOnboardingView('mode_selector');
-        }
-        setShowOnboarding(false); // we use onboardingView, not showOnboarding
-        toast.success('Welcome to Fieseros! Let\'s set up your workspace.');
       } else {
-        setShowOnboarding(false);
-        setOnboardingView(null);
-        toast.success('Welcome to Fieseros!');
+        const tenantPlan = (tenant as any)?.plan as string | null | undefined;
+        const sm = (tenant as any)?.signupMode as string | null | undefined;
+        const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business';
+
+        if (isStandalone) {
+          setShowOnboarding(false);
+          setOnboardingView(null);
+          toast.success('Welcome to Fieseros!');
+          if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const viewParam = params.get('view') || params.get('tab');
+            if (viewParam === 'forms' || viewParam === 'formBuilder') {
+              useAppStore.getState().setCurrentView('formBuilder');
+            } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
+              useAppStore.getState().setCurrentView('aiReceptionist');
+            } else {
+              useAppStore.getState().setCurrentView('formBuilder');
+            }
+          }
+        } else if (!tenant || !tenant.onboardingCompleted) {
+          if (sm === 'listing_only') {
+            setOnboardingView('listing');
+          } else if (sm === 'crm_trial') {
+            setOnboardingView('saas');
+          } else {
+            setOnboardingView('mode_selector');
+          }
+          setShowOnboarding(false);
+          toast.success('Welcome to Fieseros! Let\'s set up your workspace.');
+        } else {
+          setShowOnboarding(false);
+          setOnboardingView(null);
+          toast.success('Welcome to Fieseros!');
+        }
       }
 
       // If the user arrived via the claim-this-business sign-in gate, they

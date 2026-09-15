@@ -394,6 +394,25 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
     }
   };
 
+  const triggerGoogleAuth = (mode: 'login' | 'register') => {
+    let effectivePlan = activePlan || selectedPlan;
+    let effectiveRedirect = '';
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (!effectivePlan) {
+        effectivePlan = params.get('plan') || sessionStorage.getItem('selected_plan') || null;
+      }
+      effectiveRedirect = params.get('redirect') || '';
+    }
+    const query = new URLSearchParams({
+      mode,
+      XTransformPort: '3000',
+    });
+    if (effectivePlan) query.set('plan', effectivePlan);
+    if (effectiveRedirect) query.set('redirect', effectiveRedirect);
+    window.location.href = `/api/auth/google?${query.toString()}`;
+  };
+
   // ─── Render: Business Tab Content ───
   const renderBusinessContent = () => (
     <div className="w-full">
@@ -554,14 +573,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                   type="button"
                   variant="outline"
                   className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
-                  onClick={() => {
-                    // Do NOT pass `window.location.origin` here — the server
-                    // derives the OAuth redirect URI from NEXT_PUBLIC_APP_URL
-                    // (canonical app URL) so login always round-trips through
-                    // fieseros.com, even if the user is browsing on a stale
-                    // serviceos.cc link or a parked alias domain.
-                    window.location.href = `/api/auth/google?mode=login&XTransformPort=3000`;
-                  }}
+                  onClick={() => triggerGoogleAuth('login')}
                 >
                   <GoogleIcon />
                   Continue with Google
@@ -784,11 +796,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                   type="button"
                   variant="outline"
                   className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
-                  onClick={() => {
-                    // Do NOT pass `window.location.origin` here — see comment
-                    // on the login button above.
-                    window.location.href = `/api/auth/google?mode=register&XTransformPort=3000`;
-                  }}
+                  onClick={() => triggerGoogleAuth('register')}
                 >
                   <GoogleIcon />
                   Continue with Google

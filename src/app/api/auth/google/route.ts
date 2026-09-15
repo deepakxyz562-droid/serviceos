@@ -42,6 +42,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get('mode') || 'login'; // login or register
   const redirectTo = searchParams.get('redirect') || '';
+  const plan = searchParams.get('plan') || '';
+  const signupMode = searchParams.get('signupMode') || '';
   // NOTE: `origin` query param is intentionally ignored. Previously the
   // client passed `window.location.origin` here, which let a user on
   // serviceos.cc (or any other alias) hijack the OAuth redirect URI.
@@ -55,12 +57,12 @@ export async function GET(request: NextRequest) {
     'x-forwarded-host': request.headers.get('x-forwarded-host'),
   });
 
-  // Build state parameter to pass mode, redirect info, AND the redirect URI
+  // Build state parameter to pass mode, redirect info, plan, signupMode, AND the redirect URI
   // used so the callback can verify it matches. The callback validates that
   // `state.redirectUri` host matches BRAND.domain before using it (defense
   // against tampered state).
   const state = Buffer.from(
-    JSON.stringify({ mode, redirect: redirectTo, redirectUri })
+    JSON.stringify({ mode, redirect: redirectTo, plan, signupMode, redirectUri })
   ).toString('base64');
 
   // Google OAuth 2.0 authorization URL

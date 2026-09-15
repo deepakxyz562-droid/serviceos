@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, useCallback } from 'react';
+import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -423,14 +423,24 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const isListingOnlyTenant =
     (auth?.tenant as any)?.signupMode === 'listing_only' ||
     (auth?.tenant as any)?.listingTier === 'claimed_free';
-  const listingAllowedViews = new Set([
+  const listingAllowedViews = useMemo(() => new Set([
     'marketplaceDashboard', 'serviceCatalog', 'billing', 'helpCenter', 'claimBusiness',
-  ]);
+  ]), []);
   useEffect(() => {
     if (isListingOnlyTenant && !listingAllowedViews.has(currentView)) {
       setCurrentView('marketplaceDashboard');
     }
   }, [isListingOnlyTenant, currentView, setCurrentView, listingAllowedViews]);
+
+  const isStandaloneTenant =
+    (auth?.tenant as any)?.signupMode === 'standalone' ||
+    (auth?.tenant as any)?.plan === 'standalone_starter' ||
+    (auth?.tenant as any)?.plan === 'standalone_business';
+  useEffect(() => {
+    if (isStandaloneTenant && currentView === 'dashboard') {
+      setCurrentView('formBuilder');
+    }
+  }, [isStandaloneTenant, currentView, setCurrentView]);
 
   // Sync dark mode to <html> so that <body> (which carries `bg-background`
   // but lives outside this wrapper) also picks up the dark background vars.

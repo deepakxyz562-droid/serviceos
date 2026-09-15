@@ -21,10 +21,15 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
  * onboarding wizard triggers on the next page load. The wizard collects
  * business name, industry, address, and plan selection.
  */
-async function createTenantForGoogleUser(userId: string, userEmail: string, userName: string) {
-  // Use the Google user's name as the initial business name. The SaaS
-  // onboarding wizard will let them change it on step 1.
-  const businessName = `${userName || userEmail.split('@')[0]}'s Business`;
+async function createTenantForGoogleUser(
+  userId: string,
+  userEmail: string,
+  userName: string,
+  requestedPlan?: string,
+  requestedSignupMode?: string
+) {
+  // Use the Google user's name as the initial business name.
+  const businessName = `${userName || userEmail.split('@')[0]}'s Workspace`;
   const baseSlug = generateSlug(businessName);
   let slug = baseSlug;
   let slugCounter = 1;
@@ -33,28 +38,17 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
     slugCounter++;
   }
 
-  // Create tenant with onboardingCompleted=false so the SaaS wizard triggers.
-  //
-  // GATE H FIX: Do NOT set claimed=true or marketplaceOptIn=true here.
-  // Previously this set claimed=true immediately, which made the business
-  // show as "claimed" on the marketplace WITHOUT any verification — a Google
-  // login is NOT proof of business ownership.
-  //
-  // The user should:
-  //   1. Complete the SaaS onboarding wizard (enters business name + city)
-  //   2. The wizard calls /api/business/match to check for existing listings
-  //   3. If a match is found → the user can CLAIM the existing listing
-  //      (which sets claimed=true via the claim flow, with verification)
-  //   4. If no match → a new tenant is created (but still NOT claimed=true
-  //      until the user completes verification)
-  //
-  // signupMode='crm_trial' distinguishes this from a marketplace-only claim
-  // (signupMode='listing_only', listingTier='claimed_free').
-  //
-  // Default plan: 'launch_special' when active, otherwise 'starter' (the
-  // superadmin can deactivate the promo from Plan Catalog without breaking
-  // new signups).
-  const signupPlan = await resolveSignupDefaultPlan();
+  const defaultSignupPlan = await resolveSignupDefaultPlan();
+  const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise'];
+  const signupPlan = requestedPlan && validPlans.includes(requestedPlan)
+    ? requestedPlan
+    : defaultSignupPlan;
+
+  const isStandalone = signupPlan === 'standalone_starter' || signupPlan === 'standalone_business' || requestedSignupMode === 'standalone';
+  const isListing = requestedSignupMode === 'listing_only';
+
+  const signupMode = isStandalone ? 'standalone' : (isListing ? 'listing_only' : 'crm_trial');
+  const onboardingCompleted = isStandalone ? true : false;
 
   const tenant = await db.tenant.create({
     data: {
@@ -64,11 +58,11 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
       plan: signupPlan,
       planStatus: 'trial',
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
-      onboardingCompleted: false,
-      onboardingStep: 1,
+      onboardingCompleted,
+      onboardingStep: onboardingCompleted ? 4 : 1,
       claimed: false,
       listingTier: 'none',
-      signupMode: 'crm_trial',
+      signupMode,
       marketplaceOptIn: false,
       marketplaceTermsAcceptedAt: null,
       publicProfileEnabled: false,
@@ -94,13 +88,7 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
     },
   });
 
-  // Create default subscription (starter plan, 14-day trial).
-  // GUARD: only create if no subscription already exists for this tenant.
-  // Previously this always called .create(), which could produce duplicate
-  // subscription rows if the Google OAuth flow was re-entered (e.g. user
-  // retried after a network error). The plan picked during onboarding is
-  // written via /api/subscriptions POST, which now upserts instead of
-  // creating a new row.
+  // Create default subscription (starter / standalone plan, 14-day trial).
   const existingSub = await db.subscription.findFirst({
     where: { tenantId: tenant.id },
   });
@@ -108,24 +96,23 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
     await db.subscription.create({
       data: {
         tenantId: tenant.id,
-        // Default plan resolved above (launch_special when active, else starter).
-      plan: signupPlan,
+        plan: signupPlan,
         status: 'trial',
-        amount: 0,
+        amount: signupPlan === 'standalone_business' ? 49 : (signupPlan === 'standalone_starter' ? 19 : 0),
         currency: 'USD',
         billingCycle: 'monthly',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        maxUsers: 5,
+        maxUsers: signupPlan === 'standalone_business' ? 10 : (signupPlan === 'standalone_starter' ? 3 : 5),
         maxJobs: 200,
         maxWorkflows: 10,
         featuresJson: JSON.stringify({
-          // WhatsApp is NOT platform-provided — BYO Meta API only. See Issue 5.
           whatsappIntegration: false,
           customWorkflows: false,
           apiAccess: false,
           prioritySupport: false,
+          aiEmployee: true,
+          smartForms: true,
         }),
-        // No trial WhatsApp credits — platform provides Email + SMS + Push only.
         trialWhatsappCredits: 0,
         trialWhatsappUsed: 0,
         platformWhatsappEnabled: false,
@@ -297,7 +284,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Parse state parameter
-    let state: { mode?: string; redirect?: string; redirectUri?: string } = {};
+    let state: { mode?: string; redirect?: string; plan?: string; signupMode?: string; redirectUri?: string } = {};
     try {
       if (stateParam) {
         state = JSON.parse(Buffer.from(stateParam, 'base64').toString());
@@ -308,12 +295,6 @@ export async function GET(request: NextRequest) {
 
     // Determine the redirect URI that was used when initiating the OAuth flow.
     // This must match exactly what was sent to Google in the authorization URL.
-    //
-    // SECURITY: `state.redirectUri` is round-tripped from the initiator. We
-    // validate its host against the canonical app host before using it, and
-    // fall back to the canonical redirect URI if validation fails. This
-    // prevents a tampered `state` from redirecting the token-exchange call
-    // to an attacker-controlled host.
     const canonicalRedirectUri = `${getAppUrl()}/api/auth/google/callback`;
     const redirectUri = (state.redirectUri && isAllowedRedirectUri(state.redirectUri))
       ? state.redirectUri
@@ -322,6 +303,18 @@ export async function GET(request: NextRequest) {
       stateRedirectUri: state.redirectUri || '(none)',
       validated: redirectUri === state.redirectUri,
     });
+
+    // Helper to build canonical success redirect URL
+    const buildSuccessUrl = (baseUrl: string, isStandalone: boolean) => {
+      if (state.redirect && state.redirect.startsWith('/')) {
+        const sep = state.redirect.includes('?') ? '&' : '?';
+        return `${baseUrl}${state.redirect}${sep}google_login=success`;
+      }
+      if (isStandalone || state.plan === 'standalone_starter' || state.plan === 'standalone_business') {
+        return `${baseUrl}/?google_login=success&view=formBuilder`;
+      }
+      return `${baseUrl}/?google_login=success`;
+    };
 
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code, redirectUri);
@@ -383,15 +376,14 @@ export async function GET(request: NextRequest) {
 
       const baseUrl = getBaseUrl(request);
 
-      // If user has no tenant, create one now and route them into the standard
-      // SaaS onboarding wizard (Business → Plan → Done). This replaces the old
-      // Google-specific onboarding screen — Google users now get the SAME
-      // onboarding flow as email/password signups.
+      // If user has no tenant, create one now
       if (!existingUser.tenantId) {
         const { tenant, workspace } = await createTenantForGoogleUser(
           existingUser.id,
           userInfo.email,
           userInfo.name || userInfo.given_name || '',
+          state.plan,
+          state.signupMode
         );
         // Regenerate JWT with the new tenantId/workspaceId.
         const newToken = generateToken({
@@ -399,7 +391,8 @@ export async function GET(request: NextRequest) {
           tenantId: tenant.id,
           workspaceId: workspace.id,
         });
-        const response = NextResponse.redirect(`${baseUrl}/?google_login=success`);
+        const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
+        const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone));
         response.cookies.set({
           ...COOKIE_OPTIONS,
           value: newToken,
@@ -407,7 +400,8 @@ export async function GET(request: NextRequest) {
         return response;
       }
 
-      const response = NextResponse.redirect(`${baseUrl}/?google_login=success`);
+      const isStandalone = existingUser.tenant?.signupMode === 'standalone' || existingUser.tenant?.plan === 'standalone_starter' || existingUser.tenant?.plan === 'standalone_business';
+      const response = NextResponse.redirect(buildSuccessUrl(baseUrl, !!isStandalone));
       response.cookies.set({
         ...COOKIE_OPTIONS,
         value: token,
@@ -415,14 +409,7 @@ export async function GET(request: NextRequest) {
       return response;
     }
 
-    // ─── NEW USER: Create user + tenant immediately, then route to SaaS onboarding ───
-    // (Previously this created a temp user and redirected to GoogleOnboarding.
-    //  Now we create the full user+tenant+workspace+subscription here so the
-    //  SaaS onboarding wizard can take over — same flow as email/password.)
-    //
-    // emailVerified=true: Google already verified this email as part of the
-    // OAuth flow (Google's `email_verified` claim is checked earlier in this
-    // route). We trust Google's verification and skip our own email-link flow.
+    // ─── NEW USER: Create user + tenant immediately ───
     const tempUser = await db.user.create({
       data: {
         email: userInfo.email,
@@ -435,7 +422,6 @@ export async function GET(request: NextRequest) {
         lastLoginAt: new Date(),
         emailVerified: true,
         emailVerifiedAt: new Date(),
-        // No tenantId yet — set by createTenantForGoogleUser below.
       },
     });
 
@@ -443,6 +429,8 @@ export async function GET(request: NextRequest) {
       tempUser.id,
       userInfo.email,
       userInfo.name || userInfo.given_name || '',
+      state.plan,
+      state.signupMode
     );
 
     const authUser = {
@@ -457,7 +445,8 @@ export async function GET(request: NextRequest) {
     const token = generateToken(authUser);
 
     const baseUrl = getBaseUrl(request);
-    const response = NextResponse.redirect(`${baseUrl}/?google_login=success`);
+    const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
+    const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone));
     response.cookies.set({
       ...COOKIE_OPTIONS,
       value: token,
