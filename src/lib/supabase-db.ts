@@ -393,6 +393,12 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   ChannelConnection: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
   },
+  AiKnowledgeChunk: {
+    document: { targetTable: 'AiKnowledgeDocument', fkColumn: 'documentId' },
+  },
+  AiKnowledgeDocument: {
+    chunks: { targetTable: 'AiKnowledgeChunk', targetFkColumn: 'documentId', isMany: true },
+  },
   Lead: {
     customer: { targetTable: 'Customer', fkColumn: 'customerId' },
     job: { targetTable: 'Job', fkColumn: 'jobId' },

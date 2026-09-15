@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   FileInput, Plus, Search, Trash2, Eye, Pencil, Code, MessageCircle,
   CheckCircle2, Loader2, BarChart3, MoreVertical, TrendingUp,
-  AlertCircle,
+  AlertCircle, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -34,6 +34,7 @@ import {
   DeleteConfirmDialog, EmbedDialog, PreviewDialog, ResponsesDialog,
   WhatsAppSendDialog,
 } from '@/features/forms/components/form-action-dialogs';
+import { AiWebsiteFormDialog } from '@/features/forms/components/ai-website-form-dialog';
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ export function FormBuilderView() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showAiWebsiteDialog, setShowAiWebsiteDialog] = useState(false);
   const [selectedForm, setSelectedForm] = useState<FormItem | null>(null);
   const [showResponsesDialog, setShowResponsesDialog] = useState(false);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
@@ -463,9 +465,18 @@ export function FormBuilderView() {
             <p className="text-sm text-muted-foreground">Build forms that create leads, bookings &amp; more</p>
           </div>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleOpenCreate}>
-          <Plus className="size-4 mr-1.5" /> Create Form
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5"
+            onClick={() => setShowAiWebsiteDialog(true)}
+          >
+            <Sparkles className="size-4 text-emerald-600" /> Create with AI from Website
+          </Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleOpenCreate}>
+            <Plus className="size-4 mr-1.5" /> Create Form
+          </Button>
+        </div>
       </div>
 
       {/* ─── Stats ─────────────────────────────────────────────────────────── */}
@@ -630,9 +641,18 @@ export function FormBuilderView() {
               <FileInput className="size-12 mx-auto text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-medium mb-1">No forms found</h3>
               <p className="text-muted-foreground mb-4">{search ? 'Try adjusting your search' : 'Create your first form'}</p>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleOpenCreate}>
-                <Plus className="size-4 mr-1.5" /> Create Form
-              </Button>
+              <div className="flex items-center justify-center gap-3">
+                <Button
+                  variant="outline"
+                  className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5"
+                  onClick={() => setShowAiWebsiteDialog(true)}
+                >
+                  <Sparkles className="size-4 text-emerald-600" /> Create with AI from Website
+                </Button>
+                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleOpenCreate}>
+                  <Plus className="size-4 mr-1.5" /> Create Form
+                </Button>
+              </div>
             </div>
           )}
         </>
@@ -714,6 +734,24 @@ export function FormBuilderView() {
         onPhoneChange={setWaPhone}
         sending={waSending}
         onSend={handleSendWhatsApp}
+      />
+
+      {/* ─── AI Website Form Dialog ───────────────────────────────────────── */}
+      <AiWebsiteFormDialog
+        open={showAiWebsiteDialog}
+        onOpenChange={setShowAiWebsiteDialog}
+        onFormGenerated={(generated) => {
+          resetFormData();
+          setFormData((prev) => ({
+            ...prev,
+            name: generated.name,
+            description: generated.description,
+            fields: generated.fields.length > 0 ? generated.fields : prev.fields,
+          }));
+          setShowAiWebsiteDialog(false);
+          setShowCreateDialog(true);
+          toast.success(`Generated form "${generated.name}" with ${generated.fields.length} fields!`);
+        }}
       />
 
       {/* ─── Delete Confirm Dialog ─────────────────────────────────────────── */}

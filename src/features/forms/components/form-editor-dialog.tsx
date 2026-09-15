@@ -16,9 +16,10 @@
  * Extracted from src/components/views/form-builder-view.tsx in Phase 6A2.
  */
 
+import { useState } from 'react';
 import {
   AlertCircle, ArrowRight, Copy, FileInput, Globe, Loader2, Mail,
-  MessageCircle, Plus, Sparkles, Target, Users, Workflow, Zap,
+  MessageCircle, Plus, Sparkles, Target, Users, Workflow, Zap, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -154,6 +155,51 @@ export function FormEditorDialog(props: FormEditorDialogProps) {
     onAiInsert,
     siteOrigin,
   } = props;
+
+  const [copilotInput, setCopilotInput] = useState('');
+  const [copilotLoading, setCopilotLoading] = useState(false);
+
+  const handleCopilotApply = async () => {
+    const prompt = copilotInput.trim();
+    if (!prompt || copilotLoading) return;
+    setCopilotLoading(true);
+
+    try {
+      const res = await fetch('/api/ai/form-from-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: `Based on the user's request "${prompt}", generate the requested fields. Existing form context: "${formData.name || 'Service Form'}"`,
+        }),
+      });
+
+      if (!res.ok) throw new Error('AI Copilot request failed');
+      const data = await res.json();
+      const newFields = (data.schema?.fields || []).map((f: any) => ({
+        id: f.id || `f-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        label: f.label || 'New Field',
+        type: (f.type === 'numerical' ? 'number' : f.type === 'long_answer' ? 'textarea' : f.type === 'short_answer' ? 'text' : f.type) as FormField['type'],
+        required: !!f.required,
+        placeholder: f.placeholder || '',
+        options: Array.isArray(f.options) ? f.options.map((o: any) => typeof o === 'string' ? o : o.label || o.value) : undefined,
+      }));
+
+      if (newFields.length > 0) {
+        onFormDataChange((prev) => ({
+          ...prev,
+          fields: [...prev.fields, ...newFields],
+        }));
+        toast.success(`✨ Copilot added ${newFields.length} field${newFields.length === 1 ? '' : 's'}!`);
+        setCopilotInput('');
+      } else {
+        toast.info('No new fields generated');
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'AI Copilot failed');
+    } finally {
+      setCopilotLoading(false);
+    }
+  };
 
   return (
     <>
@@ -299,6 +345,32 @@ export function FormEditorDialog(props: FormEditorDialogProps) {
 
                 {/* ─── Engine field palette ───────────────────────────────── */}
                 <FieldPalette onAdd={onAddEngineField} />
+
+                {/* ─── In-Editor AI Copilot Bar ────────────────────────────── */}
+                <div className="flex items-center gap-2 p-2 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-300/70 dark:border-emerald-800 rounded-lg shadow-2xs">
+                  <Sparkles className="size-4 text-emerald-600 shrink-0 ml-1" />
+                  <Input
+                    placeholder="Ask AI Copilot (e.g. 'Add emergency service checkbox and photo upload')..."
+                    className="h-8 text-xs bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-800 focus-visible:ring-emerald-500"
+                    value={copilotInput}
+                    onChange={(e) => setCopilotInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleCopilotApply();
+                      }
+                    }}
+                    disabled={copilotLoading}
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 px-3 font-medium"
+                    onClick={handleCopilotApply}
+                    disabled={!copilotInput.trim() || copilotLoading}
+                  >
+                    {copilotLoading ? <Loader2 className="size-3.5 animate-spin" /> : 'Apply'}
+                  </Button>
+                </div>
 
                 {formData.fields.length === 0 && (
                   <div className="text-center py-8 border-2 border-dashed rounded-lg">

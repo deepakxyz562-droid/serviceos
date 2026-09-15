@@ -1,22 +1,25 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  Phone,
-  User,
-  FileInput,
+  ArrowRight,
   ArrowLeft,
+  Upload,
+  Calendar,
+  Star,
+  MapPin,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Select,
   SelectContent,
@@ -24,338 +27,345 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import type { FormSchema, FormField } from '@/lib/forms/form-schema-types';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-interface FormField {
-  id: string;
-  label: string;
-  type: 'text' | 'number' | 'email' | 'phone' | 'select' | 'checkbox' | 'date';
-  required: boolean;
-  options?: string[];
-}
-
-interface FormData {
-  id: string;
-  name: string;
-  description?: string;
-  type: string;
-  fieldsJson: string;
-  welcomeMessage?: string;
-  completionMessage?: string;
-  status: string;
-}
-
-// ─── Component ──────────────────────────────────────────────────────────────
-
-export default function FormPage() {
+export default function PublicFormPage() {
   const params = useParams();
-  const router = useRouter();
   const formId = params.formId as string;
 
-  const [form, setForm] = useState<FormData | null>(null);
-  const [fields, setFields] = useState<FormField[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formDescription, setFormDescription] = useState<string | null>(null);
+  const [schema, setSchema] = useState<FormSchema | null>(null);
+  const [branding, setBranding] = useState<{ businessName: string } | null>(null);
+
+  // Form State
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [completionMessage, setCompletionMessage] = useState('');
-  const [responses, setResponses] = useState<Record<string, string | boolean>>({});
+  const [successInfo, setSuccessInfo] = useState<{ title: string; message: string }>({
+    title: 'Thank you!',
+    message: 'Your submission has been received.',
+  });
 
-  // Fetch form data
   const fetchForm = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    if (!formId) return;
     try {
-      const res = await fetch(`/api/wa-forms/${formId}`);
-      if (!res.ok) {
+      const res = await fetch(`/api/public/forms/${formId}`);
+      if (res.ok) {
         const data = await res.json();
-        setError(data.error || 'Form not found');
-        return;
-      }
-      const data = await res.json();
-      setForm(data.data);
-
-      // Parse fields
-      try {
-        const parsedFields = JSON.parse(data.data.fieldsJson || '[]');
-        setFields(Array.isArray(parsedFields) ? parsedFields : []);
-      } catch {
-        setFields([]);
+        setFormName(data.name);
+        setFormDescription(data.description);
+        setSchema(data.schema);
+        setBranding(data.branding);
+      } else {
+        toast.error('Form not found or unavailable');
       }
     } catch {
-      setError('Failed to load form. Please check your connection.');
+      toast.error('Failed to load form');
     } finally {
       setLoading(false);
     }
   }, [formId]);
 
   useEffect(() => {
-    if (formId) {
-      fetchForm();
-    }
-  }, [formId, fetchForm]);
+    fetchForm();
+  }, [fetchForm]);
 
-  const handleFieldChange = (fieldId: string, value: string | boolean) => {
-    setResponses(prev => ({ ...prev, [fieldId]: value }));
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-muted/20 flex items-center justify-center p-4">
+        <div className="text-center space-y-3">
+          <Loader2 className="size-8 animate-spin text-emerald-600 mx-auto" />
+          <p className="text-xs text-muted-foreground">Loading form...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!schema) {
+    return (
+      <div className="min-h-screen bg-muted/20 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center p-6">
+          <AlertCircle className="size-10 text-amber-500 mx-auto mb-3" />
+          <h2 className="text-lg font-bold">Form Unavailable</h2>
+          <p className="text-xs text-muted-foreground mt-1">This form does not exist or has been archived.</p>
+        </Card>
+      </div>
+    );
+  }
+
+  const steps = schema.steps || [{ id: 'step_1', title: 'Details' }];
+  const currentStep = steps[currentStepIndex] || steps[0];
+  const stepFields = schema.fields.filter(
+    (f) => !f.stepId || f.stepId === currentStep.id || steps.length === 1
+  );
+
+  const handleInputChange = (fieldId: string, value: unknown) => {
+    setFormData((prev) => ({ ...prev, [fieldId]: value }));
+    if (errors[fieldId]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[fieldId];
+        return next;
+      });
+    }
+  };
+
+  const validateCurrentStep = () => {
+    const newErrors: Record<string, string> = {};
+    for (const field of stepFields) {
+      if (field.required) {
+        const val = formData[field.id];
+        if (val === undefined || val === null || val === '' || (Array.isArray(val) && val.length === 0)) {
+          newErrors[field.id] = `${field.label} is required`;
+        }
+      }
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleNext = () => {
+    if (!validateCurrentStep()) return;
+    if (currentStepIndex < steps.length - 1) {
+      setCurrentStepIndex((prev) => prev + 1);
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex((prev) => prev - 1);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validate required fields
-    for (const field of fields) {
-      if (field.required) {
-        const value = responses[field.id];
-        if (field.type === 'checkbox') {
-          if (!value) {
-            setError(`"${field.label}" is required`);
-            return;
-          }
-        } else if (!value || (typeof value === 'string' && !value.trim())) {
-          setError(`"${field.label}" is required`);
-          return;
-        }
-      }
-    }
+    if (!validateCurrentStep()) return;
 
     setSubmitting(true);
-    setError(null);
-
     try {
-      // Convert responses from field IDs to field labels
-      const labeledResponses: Record<string, string | boolean> = {};
-      for (const field of fields) {
-        const value = responses[field.id];
-        if (value !== undefined && value !== '') {
-          labeledResponses[field.label] = value;
-        }
-      }
-
-      // Try to get phone from URL params or responses
-      const urlParams = new URLSearchParams(window.location.search);
-      const phone = urlParams.get('phone') || (labeledResponses['Phone'] as string) || (labeledResponses['Full Name'] ? '' : '');
-      const name = (labeledResponses['Full Name'] as string) || (labeledResponses['Name'] as string) || '';
-
-      const res = await fetch(`/api/wa-forms/${formId}/submit`, {
+      const res = await fetch(`/api/public/forms/${formId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          respondentPhone: phone,
-          respondentName: name,
-          responses: labeledResponses,
+          data: formData,
+          source: 'hosted_form',
         }),
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || 'Failed to submit form');
-        return;
+      if (res.ok) {
+        const data = await res.json();
+        setSuccessInfo({
+          title: data.successTitle || 'Thank you!',
+          message: data.successMessage || 'Your submission has been received.',
+        });
+        setSubmitted(true);
+        if (data.redirectUrl) {
+          setTimeout(() => {
+            window.location.href = data.redirectUrl;
+          }, 1500);
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to submit form');
       }
-
-      setSubmitted(true);
-      setCompletionMessage(data.data?.completionMessage || 'Thank you for your submission!');
     } catch {
-      setError('Failed to submit form. Please try again.');
+      toast.error('Network error submitting form');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'booking': return '📅';
-      case 'lead': return '📋';
-      case 'feedback': return '💬';
-      case 'survey': return '📊';
-      case 'quote_request': return '💰';
-      default: return '📋';
-    }
-  };
-
-  // ─── Loading State ────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-emerald-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="size-10 animate-spin text-emerald-600" />
-          <p className="text-muted-foreground text-sm">Loading form...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Error State ──────────────────────────────────────────────────────────
-  if (error && !form) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-emerald-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <AlertCircle className="size-12 mx-auto text-red-400 mb-4" />
-            <h2 className="text-xl font-bold mb-2">Form Not Available</h2>
-            <p className="text-muted-foreground mb-6">{error}</p>
-            <Button variant="outline" onClick={() => router.push('/')}>
-              <ArrowLeft className="size-4 mr-2" /> Go Home
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // ─── Success State ────────────────────────────────────────────────────────
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-emerald-50 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="p-8 text-center">
-            <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="size-10 text-emerald-600" />
-            </div>
-            <h2 className="text-xl font-bold mb-2">Submitted!</h2>
-            <p className="text-muted-foreground">{completionMessage}</p>
-          </CardContent>
+      <div className="min-h-screen bg-muted/20 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center p-8 shadow-sm">
+          <CheckCircle2 className="size-12 text-emerald-600 mx-auto mb-3" />
+          <h2 className="text-xl font-bold text-foreground">{successInfo.title}</h2>
+          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{successInfo.message}</p>
         </Card>
       </div>
     );
   }
 
-  // ─── Form Render ──────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-emerald-50">
-      {/* Header */}
-      <div className="bg-emerald-600 text-white">
-        <div className="max-w-lg mx-auto px-4 py-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex items-center justify-center size-10 rounded-full bg-white/20">
-              <span className="text-xl">{getTypeIcon(form?.type || '')}</span>
-            </div>
-            <div>
-              <h1 className="text-lg font-bold">{form?.name}</h1>
-              {form?.description && (
-                <p className="text-sm text-emerald-100">{form.description}</p>
-              )}
-            </div>
+    <div className="min-h-screen bg-muted/30 py-8 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
+      <div className="max-w-xl w-full space-y-4">
+        <Card className="shadow-md border-border/80 overflow-hidden">
+          {/* Header */}
+          <div className="p-6 bg-gradient-to-r from-emerald-600 to-teal-700 text-white">
+            <p className="text-[10px] uppercase font-bold tracking-wider text-emerald-100">
+              {branding?.businessName || 'Fieseros Form'}
+            </p>
+            <h1 className="text-xl font-black mt-1">{formName}</h1>
+            {formDescription && <p className="text-xs text-emerald-100/90 mt-1">{formDescription}</p>}
+
+            {/* Progress bar if multi-step */}
+            {steps.length > 1 && (
+              <div className="mt-4">
+                <div className="flex justify-between text-[11px] text-emerald-100 font-medium mb-1">
+                  <span>
+                    Step {currentStepIndex + 1} of {steps.length}: {currentStep.title}
+                  </span>
+                  <span>{Math.round(((currentStepIndex + 1) / steps.length) * 100)}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-black/20 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-white rounded-full transition-all duration-300"
+                    style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
-          {form?.welcomeMessage && (
-            <div className="mt-3 bg-white/10 rounded-lg p-3">
-              <p className="text-sm text-emerald-50">{form.welcomeMessage}</p>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Form Body */}
-      <div className="max-w-lg mx-auto px-4 py-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {fields.map((field, idx) => (
-            <Card key={field.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center justify-center size-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
-                      {idx + 1}
-                    </span>
-                    <Label className="text-sm font-medium">
-                      {field.label}
-                      {field.required && <span className="text-red-500 ml-0.5">*</span>}
+          <CardContent className="p-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Honeypot field (hidden from users) */}
+              <input type="text" name="_hp" className="hidden" tabIndex={-1} autoComplete="off" />
+
+              <div className="space-y-4">
+                {stepFields.map((field) => (
+                  <div key={field.id} className="space-y-1.5">
+                    <Label className="text-xs font-semibold flex items-center justify-between">
+                      <span>
+                        {field.label} {field.required && <span className="text-red-500">*</span>}
+                      </span>
                     </Label>
-                  </div>
 
-                  {field.type === 'select' && field.options ? (
-                    <Select
-                      value={(responses[field.id] as string) || ''}
-                      onValueChange={(val) => handleFieldChange(field.id, val)}
-                    >
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder={`Select ${field.label}...`} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {field.options.map((opt) => (
-                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : field.type === 'checkbox' ? (
-                    <div className="flex items-center gap-3 py-1">
-                      <Checkbox
-                        checked={!!responses[field.id]}
-                        onCheckedChange={(checked) => handleFieldChange(field.id, !!checked)}
-                      />
-                      <span className="text-sm text-muted-foreground">Yes</span>
-                    </div>
-                  ) : (
-                    <div className="relative">
-                      {(field.type === 'phone' || field.type === 'email') && (
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                          {field.type === 'phone' ? (
-                            <Phone className="size-4" />
-                          ) : (
-                            <User className="size-4" />
-                          )}
-                        </div>
-                      )}
+                    {/* Short Answer / Email / Phone / Number */}
+                    {['short_answer', 'email', 'phone', 'numerical', 'date'].includes(field.type) && (
                       <Input
                         type={
-                          field.type === 'number' ? 'number' :
-                          field.type === 'date' ? 'date' :
-                          field.type === 'email' ? 'email' :
-                          field.type === 'phone' ? 'tel' :
-                          'text'
+                          field.type === 'email'
+                            ? 'email'
+                            : field.type === 'phone'
+                            ? 'tel'
+                            : field.type === 'numerical'
+                            ? 'number'
+                            : field.type === 'date'
+                            ? 'date'
+                            : 'text'
                         }
-                        placeholder={`Enter ${field.label.toLowerCase()}...`}
-                        value={(responses[field.id] as string) || ''}
-                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                        className={cn(
-                          'h-10',
-                          (field.type === 'phone' || field.type === 'email') && 'pl-10'
-                        )}
+                        placeholder={field.placeholder || ''}
+                        value={(formData[field.id] as string) || ''}
+                        onChange={(e) => handleInputChange(field.id, e.target.value)}
+                        className="text-xs"
                       />
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                    )}
 
-          {/* Validation error */}
-          {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <AlertCircle className="size-4 text-red-500 shrink-0" />
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
+                    {/* Long Answer */}
+                    {field.type === 'long_answer' && (
+                      <Textarea
+                        placeholder={field.placeholder || ''}
+                        value={(formData[field.id] as string) || ''}
+                        onChange={(e) => handleInputChange(field.id, e.target.value)}
+                        className="text-xs min-h-[80px]"
+                      />
+                    )}
 
-          <Separator />
+                    {/* Dropdown */}
+                    {field.type === 'dropdown' && (
+                      <Select
+                        value={(formData[field.id] as string) || ''}
+                        onValueChange={(val) => handleInputChange(field.id, val)}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder={field.placeholder || 'Select an option...'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(field.options || []).map((opt, i) => (
+                            <SelectItem key={i} value={opt.value || opt.label} className="text-xs">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
 
-          {/* Submit button */}
-          <Button
-            type="submit"
-            className="w-full h-12 text-base bg-emerald-600 hover:bg-emerald-700"
-            disabled={submitting}
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="size-5 mr-2 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              <>
-                <FileInput className="size-5 mr-2" />
-                Submit
-              </>
-            )}
-          </Button>
+                    {/* Radio Group */}
+                    {field.type === 'radio' && (
+                      <RadioGroup
+                        value={(formData[field.id] as string) || ''}
+                        onValueChange={(val) => handleInputChange(field.id, val)}
+                        className="space-y-2 pt-1"
+                      >
+                        {(field.options || []).map((opt, i) => (
+                          <div key={i} className="flex items-center space-x-2">
+                            <RadioGroupItem value={opt.value || opt.label} id={`${field.id}_${i}`} />
+                            <Label htmlFor={`${field.id}_${i}`} className="text-xs font-normal cursor-pointer">
+                              {opt.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    )}
 
-          {/* Footer branding */}
-          <div className="text-center pt-4 pb-8">
-            <p className="text-xs text-muted-foreground">
-              Powered by <span className="font-semibold text-emerald-600">Fieseros</span>
-            </p>
-          </div>
-        </form>
+                    {/* Checkbox */}
+                    {field.type === 'checkbox' && (
+                      <div className="flex items-center space-x-2 pt-1">
+                        <Checkbox
+                          id={field.id}
+                          checked={!!formData[field.id]}
+                          onCheckedChange={(checked) => handleInputChange(field.id, !!checked)}
+                        />
+                        <Label htmlFor={field.id} className="text-xs font-normal cursor-pointer">
+                          {field.placeholder || 'Yes, I agree'}
+                        </Label>
+                      </div>
+                    )}
+
+                    {/* Error Message */}
+                    {errors[field.id] && (
+                      <p className="text-[11px] text-red-500 font-medium">{errors[field.id]}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Navigation Buttons */}
+              <div className="flex items-center justify-between pt-4 border-t gap-3">
+                {currentStepIndex > 0 ? (
+                  <Button type="button" variant="outline" size="sm" onClick={handlePrev} className="gap-1 text-xs">
+                    <ArrowLeft className="size-3.5" /> Back
+                  </Button>
+                ) : <div />}
+
+                {currentStepIndex < steps.length - 1 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleNext}
+                    className="gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                  >
+                    Next <ArrowRight className="size-3.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={submitting}
+                    className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 shadow-xs"
+                  >
+                    {submitting ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    {schema.settings.submitButtonText || 'Submit Form'}
+                  </Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        <p className="text-center text-[10px] text-muted-foreground">
+          Powered by{' '}
+          <a href="https://fieseros.com" target="_blank" rel="noopener noreferrer" className="font-semibold hover:underline">
+            Fieseros AI Forms
+          </a>
+        </p>
       </div>
     </div>
   );

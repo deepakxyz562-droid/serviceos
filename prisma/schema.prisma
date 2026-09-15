@@ -1216,6 +1216,7 @@ model Form {
   type                String   @default("lead_capture") // lead_capture, booking, feedback, survey, quote_request, job_request, custom
   status              String   @default("active") // active, inactive, archived
   fieldsJson          String   @default("[]")     // Array of form field definitions
+  schemaJson          String   @default("{}")     // Complete Form Schema (steps, logic, theme, settings)
   submissionActions   String   @default("[]")     // Array of actions: create_lead, create_customer, create_booking, create_job, create_quote, store_response, send_whatsapp, send_email, trigger_workflow, call_webhook
   fieldMappingJson    String   @default("{}")     // Form field → CRM field mapping
   welcomeMessage      String   @default("")
@@ -4038,6 +4039,54 @@ model KnowledgeArticle {
   @@index([category])
   @@index([isActive])
   @@index([isPublic])
+}
+
+model KnowledgeSource {
+  id              String              @id @default(cuid())
+  tenantId        String
+  name            String
+  type            String              // website, sitemap, document, manual, notion, shopify
+  sourceUrl       String?
+  status          String              @default("idle") // idle, syncing, ready, error
+  lastSyncedAt    DateTime?
+  syncFrequency   String              @default("manual") // manual, daily, weekly
+  metadataJson    String              @default("{}")
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  documents       KnowledgeDocument[]
+  @@index([tenantId])
+}
+
+model KnowledgeDocument {
+  id              String              @id @default(cuid())
+  sourceId        String
+  tenantId        String
+  title           String
+  content         String              @db.Text
+  url             String?
+  status          String              @default("ready")
+  chunksCount     Int                 @default(0)
+  createdAt       DateTime            @default(now())
+
+  chunks          KnowledgeChunk[]
+  source          KnowledgeSource     @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  @@index([sourceId])
+  @@index([tenantId])
+}
+
+model KnowledgeChunk {
+  id              String              @id @default(cuid())
+  documentId      String
+  tenantId        String
+  content         String              @db.Text
+  tokenCount      Int                 @default(0)
+  chunkIndex      Int                 @default(0)
+  metadataJson    String              @default("{}")
+
+  document        KnowledgeDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  @@index([documentId])
+  @@index([tenantId])
 }
 
 // ==========================================

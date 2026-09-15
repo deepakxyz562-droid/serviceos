@@ -25,7 +25,7 @@
 import { Fragment } from 'react';
 import {
   AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Code, Copy,
-  ExternalLink, Eye, FileInput, Loader2, MessageCircle, Send, Star,
+  Download, ExternalLink, Eye, FileInput, Loader2, MessageCircle, Send, Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -89,13 +89,44 @@ export function ResponsesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Eye className="size-4 text-emerald-600" />
-            {form?.name} — Responses
-          </DialogTitle>
-          <DialogDescription>
-            {loading ? 'Loading responses…' : `${responses.length} response${responses.length === 1 ? '' : 's'} received`}
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+                <Eye className="size-4 text-emerald-600" />
+                {form?.name} — Responses
+              </DialogTitle>
+              <DialogDescription>
+                {loading ? 'Loading responses…' : `${responses.length} response${responses.length === 1 ? '' : 's'} received`}
+              </DialogDescription>
+            </div>
+            {responses.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const headers = ['Respondent Name', 'Respondent Phone', 'Submitted At', 'Source', 'Answers'];
+                  const rows = responses.map((r) => [
+                    `"${r.respondentName || ''}"`,
+                    `"${r.respondentPhone || ''}"`,
+                    `"${r.submittedAt || ''}"`,
+                    `"${r.source || ''}"`,
+                    `"${Object.entries(r.data || {}).map(([k, v]) => `${k}: ${v}`).join('; ')}"`,
+                  ]);
+                  const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+                  const encodedUri = encodeURI(csvContent);
+                  const link = document.createElement('a');
+                  link.setAttribute('href', encodedUri);
+                  link.setAttribute('download', `${form?.name || 'form'}-submissions.csv`);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="gap-1.5 text-xs"
+              >
+                <Download className="size-3.5" /> Export CSV
+              </Button>
+            )}
+          </div>
         </DialogHeader>
         <ScrollArea className="flex-1 -mx-6 px-6">
           {error ? (

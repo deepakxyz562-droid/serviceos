@@ -200,7 +200,7 @@ export async function searchKnowledgeBase(tenantId: string, query: string, k = 4
     if (score >= SEARCH_THRESHOLD) {
       scored.push({
         documentId: chunk.documentId,
-        documentTitle: chunk.document.title,
+        documentTitle: chunk.document?.title || 'Knowledge Base',
         chunkId: chunk.id,
         score,
         content: chunk.content.slice(0, SEARCH_MAX_SNIPPET_CHARS),
