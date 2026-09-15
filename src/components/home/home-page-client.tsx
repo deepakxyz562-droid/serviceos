@@ -160,10 +160,9 @@ export default function HomePageClient() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [unauthView, setUnauthView] = useState<UnauthView>('landing');
+  const [initialAuthTab, setInitialAuthTab] = useState<'login' | 'register'>('login');
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Claim completion token — when set, the page renders the ClaimCompletion
-  // component instead of the normal landing/auth/app layout. Set when the
-  // user arrives via `/?claim=complete&token=xxx` (from the approval email).
   const [claimToken, setClaimToken] = useState<string | null>(null);
 
   // Capture the `returnUrl` query param (set by the marketplace claim-this-
@@ -548,21 +547,31 @@ export default function HomePageClient() {
             }
           }
 
-          // Deep-link from marketplace "List your business" CTA, or from the
-          // claim-this-business sign-in gate → auto-open auth. The CTA links to
-          // /?auth=register (or /?auth=login); we read it here and switch to the
-          // auth view so the user lands directly on the form.
-          // The optional `returnUrl` param (set by the claim sign-in gate) is
-          // captured into a ref so onAuthSuccess can redirect back to the
-          // provider detail page after a successful login / registration.
-          if (params.get('auth') === 'register' || params.get('auth') === 'login') {
+          // Deep-link from marketplace "List your business" CTA, pricing cards,
+          // or from the AI Employee / AI Forms landing pages → auto-open auth.
+          // Supports ?auth=signup, ?auth=register, ?auth=login, ?auth=signin
+          // and optional ?plan=standalone_starter, ?plan=standalone_business, etc.
+          const authParam = params.get('auth');
+          const planParam = params.get('plan');
+          if (planParam) {
+            setSelectedPlan(planParam);
+            try {
+              sessionStorage.setItem('selected_plan', planParam);
+            } catch {}
+          }
+          if (authParam === 'register' || authParam === 'signup' || authParam === 'login' || authParam === 'signin') {
             const ru = params.get('returnUrl');
             if (ru) returnUrlRef.current = ru;
+            if (authParam === 'register' || authParam === 'signup') {
+              setInitialAuthTab('register');
+            } else {
+              setInitialAuthTab('login');
+            }
             setUnauthView('auth');
-            // Strip the auth + returnUrl params so a refresh returns to the
-            // landing page. returnUrl is already safely in the ref.
+            // Strip the auth + returnUrl + plan params so URL is clean
             params.delete('auth');
             params.delete('returnUrl');
+            params.delete('plan');
             const cleanUrl = params.toString()
               ? `${window.location.pathname}?${params.toString()}`
               : window.location.pathname;
@@ -697,7 +706,8 @@ export default function HomePageClient() {
     handleLogoutRef.current = handleLogout;
   }, [handleLogout]);
 
-  const handleShowAuth = useCallback(() => {
+  const handleShowAuth = useCallback((tab: 'login' | 'register' = 'login') => {
+    setInitialAuthTab(tab);
     setUnauthView('auth');
   }, []);
 
@@ -998,6 +1008,8 @@ export default function HomePageClient() {
         <AuthPage
           onAuthSuccess={handleAuthSuccess}
           onBackToLanding={handleShowLanding}
+          initialTab={initialAuthTab}
+          selectedPlan={selectedPlan}
         />
         <PWAInstallBanner />
         <IOSInstallBanner />
@@ -1008,8 +1020,8 @@ export default function HomePageClient() {
   return (
     <>
       <LandingPage
-        onGetStarted={handleShowAuth}
-        onSignIn={handleShowAuth}
+        onGetStarted={() => handleShowAuth('register')}
+        onSignIn={() => handleShowAuth('login')}
         onTryDemo={handleTryDemo}
       />
       <PWAInstallBanner />

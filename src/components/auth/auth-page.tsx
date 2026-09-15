@@ -66,6 +66,7 @@ interface AuthPageProps {
   onAuthSuccess: (user: any, tenant: any) => void;
   onBackToLanding?: () => void;
   initialTab?: string;
+  selectedPlan?: string | null;
 }
 
 // Business auth tab state
@@ -129,11 +130,24 @@ const formVariants = {
   exit: { opacity: 0, x: -20, transition: { duration: 0.2 } },
 };
 
-export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
+export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedPlan }: AuthPageProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  // Business Login state
-  const [businessTab, setBusinessTab] = useState<BusinessTab>('login');
+  // Business Login/Register state
+  const [businessTab, setBusinessTab] = useState<BusinessTab>(
+    initialTab === 'register' || initialTab === 'signup' ? 'register' : 'login'
+  );
+
+  const activePlan = selectedPlan || (typeof window !== 'undefined' ? sessionStorage.getItem('selected_plan') : null);
+
+  useEffect(() => {
+    if (initialTab === 'register' || initialTab === 'signup') {
+      setBusinessTab('register');
+    } else if (initialTab === 'login' || initialTab === 'signin') {
+      setBusinessTab('login');
+    }
+  }, [initialTab]);
+
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
@@ -345,6 +359,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
           phone: regPhone,
           city: regCity,
           website: regWebsite,
+          plan: activePlan || undefined,
         }),
       });
       const data = await res.json();
@@ -424,6 +439,25 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         </motion.div>
       ) : (
         <>
+          {/* Selected Plan Banner (if coming from pricing or standalone landing page) */}
+          {activePlan && businessTab === 'register' && (
+            <div className="mb-4 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-3.5 text-emerald-600 shrink-0" />
+                <span className="font-semibold text-emerald-800 dark:text-emerald-200">
+                  {activePlan === 'standalone_starter'
+                    ? 'Standalone Starter Plan ($19/mo)'
+                    : activePlan === 'standalone_business'
+                    ? 'Standalone Business Plan ($49/mo)'
+                    : `Selected Plan: ${activePlan}`}
+                </span>
+              </div>
+              <Badge variant="outline" className="text-[10px] bg-emerald-100/60 text-emerald-700 border-emerald-300">
+                14-Day Free Trial
+              </Badge>
+            </div>
+          )}
+
           {/* Business Tabs: Sign In / Create Account */}
           <div className="flex mb-6 bg-slate-100 rounded-lg p-[3px] h-10">
             <button

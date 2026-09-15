@@ -102,11 +102,25 @@ export const solutionsLinks = {
   ],
   aiAndTools: [
     {
-      label: '24/7 AI Receptionist',
-      desc: 'Autonomous voice agent answers calls & books jobs',
+      label: 'AI Website Employee',
+      desc: '24/7 AI chatbot receptionist that answers questions & books jobs',
+      href: '/ai-employee',
+      icon: Bot,
+      badge: 'New',
+    },
+    {
+      label: 'AI Smart Forms',
+      desc: '17-field responsive multi-step forms with CRM ingestion',
+      href: '/ai-forms',
+      icon: Sparkles,
+      badge: 'New',
+    },
+    {
+      label: '24/7 AI Voice Receptionist',
+      desc: 'Autonomous voice agent answers phone calls & books jobs',
       href: '/#ai-receptionist',
       icon: Bot,
-      badge: 'AI Powered',
+      badge: 'AI Voice',
     },
     {
       label: 'Free Invoice Generator',
@@ -161,13 +175,15 @@ export const solutionsLinks = {
 // Footer link groups
 export const footerLinks = {
   product: [
+    { label: 'AI Website Employee', href: '/ai-employee' },
+    { label: 'AI Smart Forms', href: '/ai-forms' },
     { label: 'CRM Overview', href: '/#crm-features' },
     { label: 'Scheduling & Dispatch', href: '/scheduling-and-dispatch' },
     { label: 'Invoicing & Payments', href: '/invoicing-and-payments' },
     { label: 'Customer CRM', href: '/customer-crm' },
     { label: 'Technician Mobile App', href: '/technician-app' },
     { label: 'Workflow Automations', href: '/automations' },
-    { label: 'AI Receptionist', href: '/#ai-receptionist' },
+    { label: 'AI Voice Receptionist', href: '/#ai-receptionist' },
     { label: 'Pricing Plans', href: '/#pricing' },
   ],
   marketplace: [

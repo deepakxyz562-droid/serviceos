@@ -64,7 +64,12 @@ export async function POST(request: NextRequest) {
     // superadmin can deactivate the Launch Special promo from Plan Catalog —
     // new signups then fall back to the standard Starter plan so registration
     // never breaks. Existing launch_special subscribers keep their plan.
-    const signupPlan = await resolveSignupDefaultPlan();
+    const requestedPlan = (body.plan || body.planCode || '').trim();
+    const defaultSignupPlan = await resolveSignupDefaultPlan();
+    const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise'];
+    const signupPlan = requestedPlan && validPlans.includes(requestedPlan)
+      ? requestedPlan
+      : defaultSignupPlan;
 
     const tenant = await db.tenant.create({
       data: {
@@ -75,7 +80,6 @@ export async function POST(request: NextRequest) {
         email,
         city: city || null,
         website: website || null,
-        // Default plan resolved above (launch_special when active, else starter).
         plan: signupPlan,
         planStatus: 'trial',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
