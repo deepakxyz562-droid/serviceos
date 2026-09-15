@@ -4,13 +4,15 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   FileInput, Plus, Search, Trash2, Eye, Pencil, Code, MessageCircle,
   CheckCircle2, Loader2, BarChart3, MoreVertical, TrendingUp,
-  AlertCircle, Sparkles,
+  AlertCircle, Sparkles, Inbox,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { FormSubmissionsView } from '@/components/views/form-submissions-view';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -44,6 +46,7 @@ export function FormBuilderView() {
   const [formsError, setFormsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'forms' | 'submissions'>('forms');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showAiWebsiteDialog, setShowAiWebsiteDialog] = useState(false);
   const [selectedForm, setSelectedForm] = useState<FormItem | null>(null);
@@ -479,8 +482,25 @@ export function FormBuilderView() {
         </div>
       </div>
 
-      {/* ─── Stats ─────────────────────────────────────────────────────────── */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+      {/* ─── Mode Switcher Tabs ────────────────────────────────────────────── */}
+      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'forms' | 'submissions')} className="w-full space-y-6">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="forms" className="gap-1.5 text-xs font-semibold">
+            <FileInput className="size-3.5" /> Form Builder
+          </TabsTrigger>
+          <TabsTrigger value="submissions" className="gap-1.5 text-xs font-semibold">
+            <Inbox className="size-3.5" /> Submissions &amp; Lead Store
+            {totalSubmissions > 0 && (
+              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">
+                {totalSubmissions}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="forms" className="space-y-6 mt-0">
+          {/* ─── Stats ─────────────────────────────────────────────────────────── */}
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         {[
           { label: 'Total Forms', value: forms.length, icon: FileInput, color: 'text-foreground' },
           { label: 'Active Forms', value: activeForms, icon: CheckCircle2, color: 'text-emerald-600' },
@@ -657,6 +677,12 @@ export function FormBuilderView() {
           )}
         </>
       )}
+        </TabsContent>
+
+        <TabsContent value="submissions" className="mt-0">
+          <FormSubmissionsView />
+        </TabsContent>
+      </Tabs>
 
       {/* ═══════════════════════════════════════════════════════════════════════
           CREATE / EDIT FORM DIALOG (with nested AI Generate sub-dialog)
