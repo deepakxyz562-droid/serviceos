@@ -287,8 +287,8 @@ export function AiReceptionistWorkspace() {
         </div>
       </div>
 
-      {/* ── Main Tab Content Container ── */}
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      {/* ── Main Tab Content Container (100% Full Width) ── */}
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* ── Guided Setup Hub Banner (Shown when setup is incomplete) ── */}
         {!isSetupComplete && (
           <Card className="border-emerald-500/30 bg-gradient-to-r from-emerald-500/5 via-teal-500/5 to-transparent shadow-sm">

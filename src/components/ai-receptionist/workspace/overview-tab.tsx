@@ -19,30 +19,19 @@ import { useReceptionistCalls } from './use-receptionist-queries';
 import {
   Phone,
   PhoneCall,
-  PhoneIncoming,
-  PhoneOutgoing,
   PhoneMissed,
   Clock,
-  CheckCircle2,
-  Settings2,
-  Activity,
-  PhoneOutgoing as TestCallIcon,
   TrendingUp,
   Zap,
   AlertTriangle,
   ArrowRight,
-  RefreshCw,
-  Loader2,
-  Sparkles,
-  Bot,
-  Copy,
   CalendarCheck,
   UserPlus,
   PhoneForwarded,
   Info,
-  ShieldCheck,
-  Headphones,
+  PhoneOutgoing as TestCallIcon,
   Sliders,
+  Activity,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,8 +39,6 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { formatDistanceToNow } from 'date-fns';
-import { toast } from 'sonner';
 import type { useAiReceptionistData } from './use-ai-receptionist-data';
 import type { TabId } from './ai-receptionist-workspace';
 import { cn } from '@/lib/utils';
@@ -65,126 +52,11 @@ interface OverviewTabProps {
   onBuyNumber?: () => void;
 }
 
-export function OverviewTab({ data, onNavigate, onTestCall, onBuyNumber }: OverviewTabProps) {
-  const { receptionist, subscription, connections, usage } = data;
-  const primaryConnection = connections[0];
-  const isAiActive = receptionist?.status === 'ACTIVE';
-
-  const copyNumber = () => {
-    if (primaryConnection?.phoneNumber?.number) {
-      navigator.clipboard.writeText(primaryConnection.phoneNumber.number);
-      toast.success('Phone number copied to clipboard');
-    }
-  };
+export function OverviewTab({ data, onNavigate, onTestCall }: OverviewTabProps) {
+  const { subscription, usage } = data;
 
   return (
     <div className="space-y-6">
-      {/* ── Status Hero Card ── */}
-      <Card className="border-border/60 shadow-sm overflow-hidden bg-gradient-to-br from-card via-card to-emerald-500/5">
-        <CardContent className="p-5 sm:p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-            {/* Left: Persona & Line info */}
-            <div className="flex items-start sm:items-center gap-4 min-w-0">
-              <div className="relative flex items-center justify-center size-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md ring-2 ring-emerald-500/20 shrink-0">
-                <Bot className="size-7" />
-                {isAiActive && (
-                  <span className="absolute -top-1 -right-1 size-3.5 rounded-full bg-emerald-400 ring-2 ring-card animate-pulse" />
-                )}
-              </div>
-
-              <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-lg font-bold text-foreground tracking-tight">
-                    {receptionist?.name || 'AI Receptionist'}
-                  </h3>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'text-xs font-semibold px-2 py-0.5 shadow-none gap-1.5',
-                      isAiActive
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                        : 'bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'size-1.5 rounded-full',
-                        isAiActive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500',
-                      )}
-                    />
-                    {isAiActive ? 'Live & Answering Inbound' : 'Setup In Progress'}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                  {primaryConnection?.phoneNumber?.number ? (
-                    <div className="flex items-center gap-1.5 font-mono text-sm font-semibold text-foreground">
-                      <Phone className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span>{primaryConnection.phoneNumber.number}</span>
-                      <button
-                        onClick={copyNumber}
-                        className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                        title="Copy phone number"
-                      >
-                        <Copy className="size-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="flex items-center gap-1 text-amber-600 font-medium">
-                      <AlertTriangle className="size-3.5" />
-                      No number assigned
-                    </span>
-                  )}
-                  <span>•</span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="size-3.5" />
-                    {receptionist?.businessHoursMode === 'use_tenant_hours'
-                      ? 'Company Business Hours'
-                      : '24/7 Always Active'}
-                  </span>
-                </div>
-
-                {receptionist?.greeting && (
-                  <p className="text-xs text-muted-foreground/90 italic line-clamp-1 mt-1 bg-muted/40 px-2.5 py-1 rounded-md border border-border/40">
-                    &ldquo;{receptionist.greeting}&rdquo;
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Right: Quick actions */}
-            <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
-              {primaryConnection ? (
-                <Button
-                  onClick={onTestCall}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 text-xs font-semibold h-9 shadow-sm"
-                >
-                  <TestCallIcon className="size-3.5" />
-                  Test Call Now
-                </Button>
-              ) : (
-                <Button
-                  onClick={onBuyNumber || (() => onNavigate('phones'))}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 text-xs font-semibold h-9 shadow-sm"
-                >
-                  <Phone className="size-3.5" />
-                  Claim Phone Number
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onNavigate('receptionist')}
-                className="gap-1.5 text-xs h-9"
-              >
-                <Sliders className="size-3.5" />
-                Customize Voice
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* ── KPI Metric Grid ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
@@ -554,12 +426,17 @@ function RecentCallRow({
             ? `${Math.floor(call.durationSec / 60)}m ${call.durationSec % 60}s`
             : '—'}
         </span>
-        {outcome && (
+        {outcome ? (
           <Badge variant="outline" className={cn('text-[10px] font-semibold gap-1 py-0.5', outcome.className)}>
             <OutcomeIcon className="size-3" />
             {outcome.label}
           </Badge>
-        )}
+        ) : isFailed ? (
+          <Badge variant="outline" className="text-[10px] font-semibold gap-1 py-0.5 bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300">
+            <PhoneMissed className="size-3" />
+            Failed
+          </Badge>
+        ) : null}
       </div>
     </div>
   );
