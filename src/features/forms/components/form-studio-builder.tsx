@@ -16,7 +16,7 @@ import {
   Hammer, Loader2, MessageCircle, Monitor, MoveDown, MoveUp,
   Plus, QrCode, Save, Settings, Share2,
   Smartphone, Sparkles, Star, Tablet, Trash2, Wand2,
-  Zap, CheckCircle2, ChevronDown,
+  Zap, CheckCircle2, ChevronDown, Phone,
   Hash, Calendar, Mail, FileText, SlidersHorizontal,
   AlignLeft, CheckSquare, CircleDot, Paperclip, PenTool, LayoutTemplate,
   EyeOff
@@ -1312,7 +1312,7 @@ export function FormStudioBuilder({
                   </CardHeader>
                   <CardContent className="flex flex-col items-center justify-center p-4 space-y-3">
                     <div className="p-3 bg-white rounded-xl shadow-inner border border-slate-200">
-                      <QRCodePlaceholder formSlug={formSlug} />
+                      <QRCodePlaceholder formId={formSlug} />
                     </div>
                     <Button
                       variant="outline"
