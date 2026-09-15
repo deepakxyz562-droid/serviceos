@@ -71,6 +71,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Ensure tenant is marked claimed for the verified owner
+    if (user.tenantId && user.role === 'owner' && user.tenant && !user.tenant.claimed) {
+      await db.tenant.update({
+        where: { id: user.tenantId },
+        data: {
+          claimed: true,
+          claimedById: user.id,
+          claimedAt: new Date(),
+          listingTier: user.tenant.listingTier === 'none' ? 'claimed' : user.tenant.listingTier,
+        },
+      });
+    }
+
     const authUser = {
       id: user.id,
       email: user.email,

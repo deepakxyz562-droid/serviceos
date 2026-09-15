@@ -81,14 +81,9 @@ export async function POST(request: NextRequest) {
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
         marketplaceOptIn: false,
         marketplaceTermsAcceptedAt: null,
-        // GATE H FIX: claimed=false + listingTier='none' — a new registration
-        // is NOT a claimed business. The user completes verification (phone
-        // OTP, Google Business Profile, etc.) before the business shows as
-        // claimed on the marketplace. The onboarding wizard will call
-        // /api/business/match to check for existing listings the user can
-        // claim instead of creating a duplicate.
-        claimed: false,
-        listingTier: 'none',
+        // Registered businesses created by owner are claimed by default
+        claimed: true,
+        listingTier: 'claimed',
         signupMode: 'crm_trial',
       },
     });
@@ -122,10 +117,17 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update workspace with correct ownerId
+    // Update workspace and tenant with correct ownerId
     await db.workspace.update({
       where: { id: workspace.id },
       data: { ownerId: user.id },
+    });
+    await db.tenant.update({
+      where: { id: tenant.id },
+      data: {
+        claimedById: user.id,
+        claimedAt: new Date(),
+      },
     });
 
     // Create default subscription (starter plan, trial status, 14-day trial)

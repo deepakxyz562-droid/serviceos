@@ -72,7 +72,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import type { PublicBusinessData } from '@/lib/public-business'
+import { formatAddressForDisplay, type PublicBusinessData } from '@/lib/public-business'
 import {
   getIndustryDisplayName,
 } from '@/lib/seo/industry-software-pages'
@@ -176,7 +176,8 @@ export function HeroActions({ business }: { business: PublicBusinessData }) {
 
   const tel = normalizePhoneForTel(business.phone)
   const hasWebsite = Boolean(business.website)
-  const hasAddress = Boolean(business.address)
+  const displayAddress = formatAddressForDisplay(business.address)
+  const hasAddress = Boolean(displayAddress)
   const hasAnyAction = tel || hasWebsite || hasAddress
   if (!hasAnyAction) return null
 
@@ -184,7 +185,7 @@ export function HeroActions({ business }: { business: PublicBusinessData }) {
   let directionsUrl: string | null = null
   if (hasAddress) {
     const addressParts = [
-      business.address,
+      displayAddress,
       business.city,
       business.state,
       business.country,
@@ -241,7 +242,8 @@ export function HeroActions({ business }: { business: PublicBusinessData }) {
 export function MobileContactCard({ business }: { business: PublicBusinessData }) {
   const tel = normalizePhoneForTel(business.phone)
   const hasWebsite = Boolean(business.website)
-  const hasAddress = Boolean(business.address)
+  const displayAddress = formatAddressForDisplay(business.address)
+  const hasAddress = Boolean(displayAddress)
   const hasEmail = Boolean(business.email)
   const hasAny = tel || hasWebsite || hasAddress || hasEmail
   if (!hasAny) return null
@@ -249,7 +251,7 @@ export function MobileContactCard({ business }: { business: PublicBusinessData }
   let directionsUrl: string | null = null
   if (hasAddress) {
     const addressParts = [
-      business.address,
+      displayAddress,
       business.city,
       business.state,
       business.country,
@@ -711,9 +713,10 @@ export function AboutBusiness({ business }: EvergreenProps) {
 export function ServiceAreaMap({ business, serviceAreas }: EvergreenProps) {
   const cityName = business.city || ''
   const countryName = countryNameFromCode(business.country)
+  const displayAddress = formatAddressForDisplay(business.address)
 
   const addressParts = [
-    business.address,
+    displayAddress,
     business.city,
     business.state,
     business.country,
@@ -723,8 +726,8 @@ export function ServiceAreaMap({ business, serviceAreas }: EvergreenProps) {
     : [cityName, countryName].filter(Boolean).join(', ')
   const mapSrc = googleMapsEmbedUrl(mapQuery)
 
-  const mapCaption = business.address
-    ? `Map showing the location of ${business.name} at ${business.address}, ${cityName}.`
+  const mapCaption = displayAddress
+    ? `Map showing the location of ${business.name} at ${displayAddress}, ${cityName}.`
     : `Map showing the approximate service area for ${business.name} in ${cityName || countryName}.`
 
   return (
@@ -763,7 +766,7 @@ export function ServiceAreaMap({ business, serviceAreas }: EvergreenProps) {
         <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground truncate">
-              {business.address || `${cityName}, ${countryName}`}
+              {displayAddress || `${cityName}, ${countryName}`}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {serviceAreas.length > 0
@@ -771,7 +774,7 @@ export function ServiceAreaMap({ business, serviceAreas }: EvergreenProps) {
                 : `Primarily serves ${cityName || countryName} and the surrounding area.`}
             </p>
           </div>
-          {business.address && (
+          {displayAddress && (
             <a
               href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(mapQuery)}`}
               target="_blank"

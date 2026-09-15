@@ -527,15 +527,20 @@ async function buildPublicBusinessData(
   // the tier directly for finer-grained control.
   const isIndexable = isIndexableByTier(profileTier) && descriptionLongEnough
 
+  const parsedAddr = parseAddressParts(tenant.address);
+  const displayCity = tenant.city || parsedAddr.city || null;
+  const displayState = tenant.state || parsedAddr.state || null;
+
   return {
     id: tenant.id,
     name: tenant.name,
     slug: tenant.slug,
+    publicSlug: tenant.publicSlug,
     industry: tenant.industry,
     industryUrlSlug: mapIndustryToUrlSlug(tenant.industry),
-    cityUrlSlug: slugifyCity(tenant.city),
-    city: tenant.city,
-    state: tenant.state,
+    cityUrlSlug: slugifyCity(displayCity),
+    city: displayCity,
+    state: displayState,
     phone: normalizePhone(tenant.phone),
     whatsappPhone: normalizePhone(tenant.whatsappPhone),
     email: tenant.email,
@@ -546,7 +551,7 @@ async function buildPublicBusinessData(
           ? tenant.website.trim()
           : `https://${tenant.website.trim()}`)
       : null,
-    address: tenant.address,
+    address: formatAddressForDisplay(tenant.address) || null,
     country: tenant.country,
     currency: tenant.currency,
     logo: tenant.logo,
