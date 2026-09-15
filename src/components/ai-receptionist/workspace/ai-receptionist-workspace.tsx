@@ -181,188 +181,194 @@ export function AiReceptionistWorkspace() {
   const setupStepCount = [hasSubscription, hasReceptionist, hasPhone, isAiActive].filter(Boolean).length;
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto">
-      {/* ── Modern Header ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-1 border-b border-border/40">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="relative flex items-center justify-center size-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm ring-1 ring-emerald-500/20 shrink-0">
-            <Bot className="size-6" />
-            {isAiActive && (
-              <span className="absolute -top-0.5 -right-0.5 size-3 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-xl font-bold text-foreground tracking-tight truncate">
-                {receptionist?.name || 'AI Receptionist'}
-              </h2>
-              <StatusBadge status={receptionist?.status || (isSetupComplete ? 'ACTIVE' : 'DRAFT')} />
-              {data.subscription?.addonPlan && (
-                <Badge variant="outline" className="text-xs font-normal bg-muted/40 border-border/60">
-                  {data.subscription.addonPlan.name}
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-              {primaryPhone?.number ? (
-                <span className="flex items-center gap-1.5 font-medium text-foreground">
-                  <Phone className="size-3 text-emerald-600 dark:text-emerald-400" />
-                  {primaryPhone.number}
-                  {primaryPhone.displayName && (
-                    <span className="text-muted-foreground font-normal">({primaryPhone.displayName})</span>
+    <div className="w-full flex flex-col min-w-0">
+      {/* ── Fixed Sticky 100% Header & Tab Bar ── */}
+      <div className="sticky top-0 z-30 w-full bg-background/95 backdrop-blur-md border-b border-border/60 shadow-2xs transition-all">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-3.5 space-y-3">
+          {/* Top Bar: Title, Live Status, Phone, Quick Actions */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="relative flex items-center justify-center size-10 sm:size-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm ring-1 ring-emerald-500/20 shrink-0">
+                <Bot className="size-5 sm:size-6" />
+                {isAiActive && (
+                  <span className="absolute -top-0.5 -right-0.5 size-2.5 sm:size-3 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg sm:text-xl font-bold text-foreground tracking-tight truncate">
+                    {receptionist?.name || 'AI Receptionist'}
+                  </h2>
+                  <StatusBadge status={receptionist?.status || (isSetupComplete ? 'ACTIVE' : 'DRAFT')} />
+                  {data.subscription?.addonPlan && (
+                    <Badge variant="outline" className="text-xs font-normal bg-muted/40 border-border/60">
+                      {data.subscription.addonPlan.name}
+                    </Badge>
                   )}
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                  <Phone className="size-3" />
-                  No phone line attached
-                </span>
-              )}
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <Clock className="size-3" />
-                24/7 Voice AI
-              </span>
+                </div>
+                <div className="flex items-center gap-2.5 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                  {primaryPhone?.number ? (
+                    <span className="flex items-center gap-1.5 font-medium text-foreground">
+                      <Phone className="size-3 text-emerald-600 dark:text-emerald-400" />
+                      {primaryPhone.number}
+                      {primaryPhone.displayName && (
+                        <span className="text-muted-foreground font-normal hidden sm:inline">({primaryPhone.displayName})</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium">
+                      <Phone className="size-3" />
+                      No phone line attached
+                    </span>
+                  )}
+                  <span className="hidden sm:inline">•</span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="size-3" />
+                    24/7 Voice AI
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncAgent}
+                disabled={syncing || !data.receptionist}
+                className="gap-2 text-xs h-8 sm:h-9"
+                title="Synchronize AI prompt, voice, and CRM tools (bookings, leads) with the voice engine"
+              >
+                {syncing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                <span>Sync Live Agent</span>
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={() => setTestCallOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 text-xs h-8 sm:h-9 shadow-sm"
+              >
+                <PhoneOutgoing className="size-3.5" />
+                <span>Test Call</span>
+              </Button>
             </div>
           </div>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncAgent}
-            disabled={syncing || !data.receptionist}
-            className="gap-2 text-xs h-9"
-            title="Synchronize AI prompt, voice, and CRM tools (bookings, leads) with the voice engine"
-          >
-            {syncing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-            <span>Sync Live Agent</span>
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={() => setTestCallOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 text-xs h-9 shadow-sm"
-          >
-            <PhoneOutgoing className="size-3.5" />
-            <span>Test Call</span>
-          </Button>
+          {/* Persistent Responsive Navigation Tab Bar */}
+          <div className="w-full overflow-x-auto pt-0.5 scrollbar-none">
+            <nav className="inline-flex p-1 bg-muted/60 dark:bg-muted/40 rounded-xl border border-border/50 gap-1 min-w-full sm:min-w-0">
+              {TABS.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleTabChange(tab.id)}
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-150',
+                      isActive
+                        ? 'bg-background text-foreground shadow-xs font-semibold'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        'size-4 shrink-0 transition-colors',
+                        isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
+                      )}
+                    />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
         </div>
       </div>
 
-      {/* ── Guided Setup Hub Banner (Shown when setup is incomplete) ── */}
-      {!isSetupComplete && (
-        <Card className="border-emerald-500/30 bg-gradient-to-r from-emerald-500/5 via-teal-500/5 to-transparent shadow-sm">
-          <CardContent className="p-4 sm:p-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <Badge className="bg-emerald-600 text-white text-[11px] font-semibold px-2 py-0.5">
-                    Setup Progress: {setupStepCount} / 4 Complete
-                  </Badge>
-                  <span className="text-xs font-semibold text-foreground">Get your AI Receptionist ready to answer</span>
+      {/* ── Main Tab Content Container ── */}
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* ── Guided Setup Hub Banner (Shown when setup is incomplete) ── */}
+        {!isSetupComplete && (
+          <Card className="border-emerald-500/30 bg-gradient-to-r from-emerald-500/5 via-teal-500/5 to-transparent shadow-sm">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-emerald-600 text-white text-[11px] font-semibold px-2 py-0.5">
+                      Setup Progress: {setupStepCount} / 4 Complete
+                    </Badge>
+                    <span className="text-xs font-semibold text-foreground">Get your AI Receptionist ready to answer</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground max-w-2xl">
+                    Complete these quick steps so your AI can answer calls, capture customer leads, and book appointments automatically.
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground max-w-2xl">
-                  Complete these quick steps so your AI can answer calls, capture customer leads, and book appointments automatically.
-                </p>
-              </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                {!hasPhone && (
-                  <Button
-                    size="sm"
-                    onClick={() => setBuyDialogOpen(true)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-8"
-                  >
-                    <Phone className="size-3" />
-                    Get Dedicated Number
-                  </Button>
-                )}
-                {!isAiActive && hasPhone && (
-                  <Button
-                    size="sm"
-                    onClick={handleSyncAgent}
-                    disabled={syncing}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-8"
-                  >
-                    {syncing ? <Loader2 className="size-3 animate-spin" /> : <Zap className="size-3" />}
-                    Activate &amp; Sync
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Step Checkpoints */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mt-4 pt-4 border-t border-border/40">
-              <SetupStep
-                num={1}
-                label="Subscription Plan"
-                desc={hasSubscription ? (data.subscription?.addonPlan?.name || 'Active') : 'Select plan'}
-                done={hasSubscription}
-                actionLabel={hasSubscription ? undefined : 'View Plans'}
-                onAction={() => handleTabChange('usage')}
-              />
-              <SetupStep
-                num={2}
-                label="Agent & Persona"
-                desc={hasReceptionist ? receptionist?.name || 'Configured' : 'Customize voice'}
-                done={hasReceptionist}
-                actionLabel={hasReceptionist ? undefined : 'Configure'}
-                onAction={() => handleTabChange('receptionist')}
-              />
-              <SetupStep
-                num={3}
-                label="Dedicated Number"
-                desc={hasPhone ? (primaryPhone?.number || 'Attached') : 'Claim your number'}
-                done={hasPhone}
-                actionLabel={hasPhone ? undefined : 'Get Number'}
-                onAction={() => setBuyDialogOpen(true)}
-              />
-              <SetupStep
-                num={4}
-                label="Live Activation"
-                desc={isAiActive ? 'Live & Answering' : 'Sync & Activate'}
-                done={isAiActive}
-                actionLabel={isAiActive ? undefined : 'Activate'}
-                onAction={handleSyncAgent}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Modern Navigation Tabs ── */}
-      <div className="space-y-6">
-        <div className="w-full overflow-x-auto pb-1 scrollbar-none">
-          <nav className="inline-flex p-1 bg-muted/60 dark:bg-muted/40 rounded-xl border border-border/50 gap-1 min-w-full sm:min-w-0">
-            {TABS.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
-                  className={cn(
-                    'flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all duration-150',
-                    isActive
-                      ? 'bg-background text-foreground shadow-sm font-semibold'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
+                <div className="flex items-center gap-2 shrink-0">
+                  {!hasPhone && (
+                    <Button
+                      size="sm"
+                      onClick={() => setBuyDialogOpen(true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-8"
+                    >
+                      <Phone className="size-3" />
+                      Get Dedicated Number
+                    </Button>
                   )}
-                >
-                  <Icon
-                    className={cn(
-                      'size-4 shrink-0 transition-colors',
-                      isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
-                    )}
-                  />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+                  {!isAiActive && hasPhone && (
+                    <Button
+                      size="sm"
+                      onClick={handleSyncAgent}
+                      disabled={syncing}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-8"
+                    >
+                      {syncing ? <Loader2 className="size-3 animate-spin" /> : <Zap className="size-3" />}
+                      Activate &amp; Sync
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Step Checkpoints */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mt-4 pt-4 border-t border-border/40">
+                <SetupStep
+                  num={1}
+                  label="Subscription Plan"
+                  desc={hasSubscription ? (data.subscription?.addonPlan?.name || 'Active') : 'Select plan'}
+                  done={hasSubscription}
+                  actionLabel={hasSubscription ? undefined : 'View Plans'}
+                  onAction={() => handleTabChange('usage')}
+                />
+                <SetupStep
+                  num={2}
+                  label="Agent & Persona"
+                  desc={hasReceptionist ? receptionist?.name || 'Configured' : 'Customize voice'}
+                  done={hasReceptionist}
+                  actionLabel={hasReceptionist ? undefined : 'Configure'}
+                  onAction={() => handleTabChange('receptionist')}
+                />
+                <SetupStep
+                  num={3}
+                  label="Dedicated Number"
+                  desc={hasPhone ? (primaryPhone?.number || 'Attached') : 'Claim your number'}
+                  done={hasPhone}
+                  actionLabel={hasPhone ? undefined : 'Get Number'}
+                  onAction={() => setBuyDialogOpen(true)}
+                />
+                <SetupStep
+                  num={4}
+                  label="Live Activation"
+                  desc={isAiActive ? 'Live & Answering' : 'Sync & Activate'}
+                  done={isAiActive}
+                  actionLabel={isAiActive ? undefined : 'Activate'}
+                  onAction={handleSyncAgent}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ── Active Tab Content ── */}
         <div className="min-w-0">

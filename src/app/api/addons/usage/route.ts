@@ -152,6 +152,24 @@ export async function GET(request: NextRequest) {
       activeCalls = 0;
     }
 
+    // Billing period normalization: safeguard against annual timestamps on monthly plans
+    let effectivePeriodEnd = entitlement.periodEnd;
+    if (entitlement.periodStart && entitlement.periodEnd) {
+      const pStart = new Date(entitlement.periodStart).getTime();
+      const pEnd = new Date(entitlement.periodEnd).getTime();
+      const diffDays = (pEnd - pStart) / (1000 * 60 * 60 * 24);
+      if (diffDays > 35) {
+        if (
+          subscription?.currentPeriodEnd &&
+          new Date(subscription.currentPeriodEnd).getTime() <= pStart + 35 * 24 * 60 * 60 * 1000
+        ) {
+          effectivePeriodEnd = subscription.currentPeriodEnd;
+        } else {
+          effectivePeriodEnd = new Date(pStart + 30 * 24 * 60 * 60 * 1000);
+        }
+      }
+    }
+
     return NextResponse.json({
       hasEntitlement: true,
       entitlementId: entitlement.id,
@@ -174,7 +192,7 @@ export async function GET(request: NextRequest) {
       includedNumbers: entitlement.includedNumbers,
       // Billing period
       periodStart: safeDate(entitlement.periodStart),
-      periodEnd: safeDate(entitlement.periodEnd),
+      periodEnd: safeDate(effectivePeriodEnd),
       // Subscription
       subscriptionStatus: subscription?.status || null,
       cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd || false,

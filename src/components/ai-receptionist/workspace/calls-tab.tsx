@@ -25,7 +25,7 @@ import {
   RefreshCw,
   Loader2,
   Clock,
-  DollarSign,
+  Timer,
   Bot,
   X,
   User,
@@ -208,10 +208,30 @@ export function CallsTab() {
       {/* KPI Stats */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <MiniStat icon={PhoneCall} label="Total Handled" value={String(stats.total)} />
-          <MiniStat icon={CalendarCheck} label="Today" value={String(stats.todayCount)} />
-          <MiniStat icon={Clock} label="Total AI Time" value={formatDuration(stats.totalDurationSec)} />
-          <MiniStat icon={DollarSign} label="Estimated Cost" value={`$${stats.totalCost.toFixed(2)}`} />
+          <MiniStat
+            icon={PhoneCall}
+            label="Lifetime Calls"
+            value={String(stats.total)}
+            sublabel="All-time recorded"
+          />
+          <MiniStat
+            icon={CalendarCheck}
+            label="Calls Today"
+            value={String(stats.todayCount)}
+            sublabel="Since midnight"
+          />
+          <MiniStat
+            icon={Clock}
+            label="Lifetime Talk Time"
+            value={formatDuration(stats.totalDurationSec)}
+            sublabel="Total voice minutes"
+          />
+          <MiniStat
+            icon={Timer}
+            label="Avg Duration"
+            value={formatDuration(Math.round((stats.totalDurationSec || 0) / Math.max(1, stats.total || 1)))}
+            sublabel="Per conversation"
+          />
         </div>
       )}
 
@@ -305,19 +325,24 @@ function MiniStat({
   icon: Icon,
   label,
   value,
+  sublabel,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
+  sublabel?: string;
 }) {
   return (
-    <Card className="border-border/60 shadow-sm">
+    <Card className="border-border/60 shadow-xs">
       <CardContent className="p-3.5 space-y-1">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Icon className="size-3.5" />
           <span className="text-xs font-medium">{label}</span>
         </div>
-        <p className="text-lg font-bold text-foreground tracking-tight">{value}</p>
+        <p className="text-xl font-bold text-foreground tracking-tight">{value}</p>
+        {sublabel && (
+          <p className="text-[11px] text-muted-foreground truncate">{sublabel}</p>
+        )}
       </CardContent>
     </Card>
   );
