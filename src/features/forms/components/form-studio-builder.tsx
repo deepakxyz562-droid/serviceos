@@ -53,34 +53,15 @@ import {
   WIDGET_REGISTRY, WIDGET_CATEGORIES, WidgetCategory,
   WidgetDefinition, searchWidgets, getWidgetById,
 } from '@/lib/forms/widgets/widget-registry';
+import {
+  PAYMENT_GATEWAYS_REGISTRY, PAYMENT_CATEGORIES, PaymentCategory,
+  PaymentGatewayDef, searchPaymentGateways, getPaymentGatewayById,
+} from '@/lib/forms/payments/payment-gateways-registry';
 import { QRCodePlaceholder } from './field-editor/qr-code-placeholder';
 import { FormImporterDialog } from './form-importer-dialog';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
 import { FormAgentStudio } from './agent-builder/form-agent-studio';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
-
-// ─── Payment Gateways Catalog ────────────────────────────────────────────────
-interface PaymentGatewayItem {
-  id: string;
-  name: string;
-  category: 'direct' | 'wallet' | 'bnpl' | 'offline';
-  description: string;
-  badge?: string;
-}
-
-const PAYMENT_GATEWAYS: PaymentGatewayItem[] = [
-  { id: 'stripe_elements', name: 'Stripe Elements', category: 'direct', description: 'Credit/Debit Cards, Link, ACH, SEPA', badge: 'POPULAR' },
-  { id: 'paypal_complete', name: 'PayPal & Venmo', category: 'wallet', description: 'PayPal, Venmo, Pay in 4', badge: 'POPULAR' },
-  { id: 'apple_google_pay', name: 'Apple Pay & Google Pay', category: 'wallet', description: '1-Click mobile express checkout', badge: 'NEW' },
-  { id: 'square_payments', name: 'Square Payments', category: 'direct', description: 'Square Web Payments SDK & Invoicing', badge: 'POPULAR' },
-  { id: 'payu_india', name: 'PayU India (UPI / QR)', category: 'direct', description: 'UPI, GooglePay, PhonePe, RuPay & Netbanking', badge: 'POPULAR' },
-  { id: 'authorize_net', name: 'Authorize.Net', category: 'direct', description: 'US Credit Card & eCheck processing' },
-  { id: 'mollie_europe', name: 'Mollie (Europe)', category: 'direct', description: 'iDEAL, Bancontact, SOFORT, EPS, Cartes Bancaires', badge: 'NEW' },
-  { id: 'afterpay_clearpay', name: 'Afterpay & Clearpay', category: 'bnpl', description: 'Buy Now Pay Later in 4 installments', badge: 'NEW' },
-  { id: 'cash_app_pay', name: 'Cash App Pay', category: 'wallet', description: 'Scan QR or tap to pay with Cash App' },
-  { id: 'gocardless', name: 'GoCardless', category: 'direct', description: 'Direct Debit bank pull (BACS, SEPA, ACH)' },
-  { id: 'purchase_order', name: 'Purchase Order / Offline', category: 'offline', description: 'Generates unpaid CRM invoice for offline remittance' },
-];
 
 // ─── Palette Catalog ─────────────────────────────────────────────────────────
 interface PaletteItem {
@@ -138,6 +119,7 @@ export function FormStudioBuilder({
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(formData.fields[0]?.id || null);
   const [paletteTab, setPaletteTab] = useState<'basic' | 'payments' | 'widgets'>('basic');
   const [selectedWidgetCategory, setSelectedWidgetCategory] = useState<WidgetCategory | 'all'>('all');
+  const [selectedPaymentCategory, setSelectedPaymentCategory] = useState<PaymentCategory>('all');
   const [paletteSearch, setPaletteSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
@@ -211,6 +193,11 @@ export function FormStudioBuilder({
     [formData.fields, selectedFieldId]
   );
 
+  // Filtered payment gateways from 33-gateway registry
+  const filteredPaymentGateways = useMemo(() => {
+    return searchPaymentGateways(paletteSearch, selectedPaymentCategory);
+  }, [paletteSearch, selectedPaymentCategory]);
+
   // Filtered widgets from registry
   const filteredWidgets = useMemo(() => {
     return searchWidgets(
@@ -268,14 +255,11 @@ export function FormStudioBuilder({
     const newField: FormField = {
       id: newId,
       label: widget.name,
-      type: 'short_answer', // base fallthrough type
+      type: 'short_answer',
       required: false,
-      placeholder: '',
+      placeholder: widget.description,
       widgetType: widget.id,
-      widgetConfig: { ...widget.defaultConfig },
-      customCss: '',
-      labelAlign: 'top',
-      align: 'left',
+      widgetConfig: { ...widget.defaultConfig, provider: 'managed' },
     };
 
     onFormDataChange((prev) => ({
@@ -287,7 +271,7 @@ export function FormStudioBuilder({
     toast.success(`✨ Added ${widget.name} widget`);
   };
 
-  const handleAddPaymentGateway = (gw: PaymentGatewayItem) => {
+  const handleAddPaymentGateway = (gw: PaymentGatewayDef) => {
     const newId = `pay-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newField: FormField = {
       id: newId,
@@ -295,7 +279,16 @@ export function FormStudioBuilder({
       type: 'short_answer',
       required: true,
       widgetType: `payment_${gw.id}`,
-      widgetConfig: { gatewayId: gw.id, currency: 'USD', amount: 0, requireBillingAddress: true },
+      widgetConfig: {
+        gatewayId: gw.id,
+        fieldType: gw.fieldType,
+        provider: gw.supportsZeroConfig ? 'managed' : 'byok',
+        currency: gw.currencies[0] || 'USD',
+        amount: 49.00,
+        pricingMode: 'fixed',
+        testMode: true,
+        requireBillingAddress: true,
+      },
     };
 
     onFormDataChange((prev) => ({
@@ -304,7 +297,7 @@ export function FormStudioBuilder({
     }));
     setSelectedFieldId(newId);
     setInspectorMode('widget_settings');
-    toast.success(`💳 Added ${gw.name}`);
+    toast.success(`💳 Added ${gw.name} Gateway`);
   };
 
   const handleUpdateField = (
@@ -630,6 +623,26 @@ export function FormStudioBuilder({
                     </SelectContent>
                   </Select>
                 )}
+
+                {paletteTab === 'payments' && (
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+                    {PAYMENT_CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSelectedPaymentCategory(cat.id)}
+                        className={cn(
+                          'px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap transition-colors shrink-0',
+                          selectedPaymentCategory === cat.id
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-muted/70 text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {cat.label} ({cat.count})
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Palette Items Scrollable List */}
@@ -661,34 +674,55 @@ export function FormStudioBuilder({
                   </div>
                 )}
 
-                {/* 2. PAYMENTS TAB */}
+                {/* 2. PAYMENTS TAB (33 Gateways & APMs) */}
                 {paletteTab === 'payments' && (
                   <div className="space-y-2">
-                    <p className="text-[10px] text-muted-foreground px-1">Connect payment gateway to collect deposits and invoice payments:</p>
+                    <p className="text-[10px] text-muted-foreground px-1">
+                      Choose from {filteredPaymentGateways.length} global gateways & instant checkout methods:
+                    </p>
                     <div className="space-y-1.5">
-                      {PAYMENT_GATEWAYS.map((gw) => (
+                      {filteredPaymentGateways.map((gw) => (
                         <button
                           key={gw.id}
                           onClick={() => handleAddPaymentGateway(gw)}
-                          className="w-full flex items-center gap-2.5 p-2.5 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group"
+                          className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group relative"
                         >
-                          <div className="size-8 rounded-md bg-emerald-50 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center shrink-0">
-                            <CreditCard className="size-4" />
-                          </div>
+                          <div
+                            className="size-8 rounded-md flex items-center justify-center p-1.5 shrink-0 shadow-xs"
+                            style={{ backgroundColor: gw.logoBg }}
+                            dangerouslySetInnerHTML={{ __html: gw.iconSvg }}
+                          />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
                                 {gw.name}
                               </p>
                               {gw.badge && (
-                                <Badge className="text-[9px] px-1 py-0 h-3.5 bg-yellow-500 text-white font-bold border-none">
+                                <Badge
+                                  className={cn(
+                                    'text-[8px] px-1 py-0 h-3.5 font-bold border-none',
+                                    gw.badge === 'POPULAR' && 'bg-emerald-600 text-white',
+                                    gw.badge === '1-CLICK' && 'bg-blue-600 text-white',
+                                    gw.badge === 'INDIA #1' && 'bg-amber-600 text-white',
+                                    gw.badge === 'EU POPULAR' && 'bg-indigo-600 text-white',
+                                    gw.badge === 'BNPL' && 'bg-purple-600 text-white',
+                                    gw.badge === 'DIRECT DEBIT' && 'bg-teal-600 text-white',
+                                    gw.badge === 'B2B INVOICE' && 'bg-slate-700 text-white'
+                                  )}
+                                >
                                   {gw.badge}
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-[10px] text-muted-foreground truncate">{gw.description}</p>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1">{gw.description}</p>
+                            <div className="flex items-center gap-1 mt-0.5 text-[9px] text-muted-foreground/80 font-mono">
+                              <span>{gw.currencies.slice(0, 3).join(', ')}{gw.currencies.length > 3 ? '...' : ''}</span>
+                              {gw.supportsZeroConfig && (
+                                <span className="text-emerald-600 font-sans font-semibold">・🚀 0-Config</span>
+                              )}
+                            </div>
                           </div>
-                          <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                         </button>
                       ))}
                     </div>
@@ -979,6 +1013,43 @@ export function FormStudioBuilder({
                                 </div>
                               )}
 
+                              {/* 5. Payment Gateway Widget Canvas Preview */}
+                              {(field.widgetType?.startsWith('payment_') || field.widgetConfig?.gatewayId) && (() => {
+                                const gw = getPaymentGatewayById(
+                                  field.widgetConfig?.gatewayId ||
+                                  field.widgetType?.replace(/^payment_/, '') ||
+                                  ''
+                                ) || PAYMENT_GATEWAYS_REGISTRY[0];
+                                const cfg = field.widgetConfig || {};
+
+                                return (
+                                  <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <div
+                                          className="size-7 rounded-md flex items-center justify-center p-1"
+                                          style={{ backgroundColor: gw.logoBg }}
+                                          dangerouslySetInnerHTML={{ __html: gw.iconSvg }}
+                                        />
+                                        <span className="text-xs font-bold text-foreground">{gw.name}</span>
+                                        {cfg.testMode && (
+                                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-amber-500/40 text-amber-700 dark:text-amber-300">
+                                            SANDBOX
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <span className="text-xs font-mono font-bold text-emerald-600">
+                                        {cfg.pricingMode === 'formula' ? 'Dynamic Calculation' : `$${(cfg.amount ?? 49).toFixed(2)} ${cfg.currency || 'USD'}`}
+                                      </span>
+                                    </div>
+                                    <div className="h-8 rounded-lg bg-background border border-dashed border-border/80 flex items-center justify-center text-[11px] text-muted-foreground font-medium">
+                                      <CreditCard className="size-3.5 mr-1.5 text-muted-foreground" />
+                                      {gw.id === 'purchase_order' ? 'PO Number & Net Terms Invoice' : `Integrated ${gw.name} Checkout Element`}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
                               {/* 5. Standard Inputs Render */}
                               {!isWidget && ['text', 'email', 'phone', 'number'].includes(field.type) && (
                                 <Input
@@ -1203,87 +1274,255 @@ export function FormStudioBuilder({
 
                         {widgetSettingsSubTab === 'general' && (
                           <div className="space-y-4">
-                            {/* 3-Way Mode Selection for API-Dependent Widgets */}
-                            <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg space-y-2">
-                              <Label className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
-                                <Sparkles className="size-3.5 text-purple-600" />
-                                <span>API Provider Mode</span>
-                              </Label>
-                              <Select
-                                value={selectedField.widgetConfig?.provider || 'managed'}
-                                onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'provider', val)}
-                              >
-                                <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="managed" className="text-xs">🚀 Fieseros Managed ($0.005 / lookup via Wallet)</SelectItem>
-                                  <SelectItem value="osm" className="text-xs">🟢 Free Built-in (OpenStreetMap / 100% Free)</SelectItem>
-                                  <SelectItem value="byok" className="text-xs">⚙️ Custom API Key (Bring Your Own Key)</SelectItem>
-                                </SelectContent>
-                              </Select>
+                            {/* PAYMENT GATEWAY SPECIFIC INSPECTOR */}
+                            {(selectedField.widgetType?.startsWith('payment_') || selectedField.widgetConfig?.gatewayId) ? (() => {
+                              const gwDef = getPaymentGatewayById(
+                                selectedField.widgetConfig?.gatewayId ||
+                                selectedField.widgetType?.replace(/^payment_/, '') ||
+                                ''
+                              ) || PAYMENT_GATEWAYS_REGISTRY[0];
 
-                              {selectedField.widgetConfig?.provider === 'managed' && (
-                                <div className="text-[10px] text-purple-700 dark:text-purple-300 space-y-1 pt-1">
-                                  <p>✓ Zero configuration required. Works instantly.</p>
-                                  <p>✓ $5.00 free monthly credits included with your plan.</p>
+                              return (
+                                <div className="space-y-4">
+                                  {/* Gateway Header Banner */}
+                                  <div className="p-3 rounded-xl border border-border/80 bg-muted/30 flex items-center gap-3">
+                                    <div
+                                      className="size-10 rounded-lg flex items-center justify-center p-2 shrink-0 shadow-xs"
+                                      style={{ backgroundColor: gwDef.logoBg }}
+                                      dangerouslySetInnerHTML={{ __html: gwDef.iconSvg }}
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5">
+                                        <p className="text-xs font-bold text-foreground truncate">{gwDef.name}</p>
+                                        {gwDef.badge && (
+                                          <Badge className="text-[9px] px-1.5 py-0 h-4 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-bold">
+                                            {gwDef.badge}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <p className="text-[10px] text-muted-foreground line-clamp-1">{gwDef.description}</p>
+                                    </div>
+                                  </div>
+
+                                  {/* Provider Mode: 0-Config vs BYOK */}
+                                  <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2">
+                                    <Label className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                                      <Sparkles className="size-3.5 text-emerald-600" />
+                                      <span>Gateway Integration Mode</span>
+                                    </Label>
+                                    <Select
+                                      value={selectedField.widgetConfig?.provider || (gwDef.supportsZeroConfig ? 'managed' : 'byok')}
+                                      onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'provider', val)}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        {gwDef.supportsZeroConfig && (
+                                          <SelectItem value="managed" className="text-xs">
+                                            🚀 Platform Zero-Config (1-Click, Zero Keys Needed)
+                                          </SelectItem>
+                                        )}
+                                        <SelectItem value="byok" className="text-xs">
+                                          ⚙️ Custom Merchant Credentials (BYOK)
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+
+                                    {selectedField.widgetConfig?.provider === 'managed' ? (
+                                      <div className="text-[10px] text-emerald-700 dark:text-emerald-300 space-y-0.5 pt-1">
+                                        <p>✓ Zero merchant setup needed. Submissions process seamlessly.</p>
+                                        <p>✓ Secure direct settlement into your linked business account.</p>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2 pt-2">
+                                        {(gwDef.configFields || [
+                                          { key: 'apiKey', label: 'API Key / Merchant Token', type: 'password', placeholder: 'Enter API Key...' },
+                                          { key: 'secretKey', label: 'Secret Key / Webhook Key', type: 'password', placeholder: 'Enter Secret Key...' },
+                                        ]).map((cf) => (
+                                          <div key={cf.key} className="space-y-1">
+                                            <Label className="text-[11px] font-semibold">{cf.label}</Label>
+                                            <Input
+                                              type={cf.type === 'password' ? 'password' : 'text'}
+                                              placeholder={cf.placeholder || `Enter ${cf.label}...`}
+                                              value={selectedField.widgetConfig?.[cf.key] || ''}
+                                              onChange={(e) => handleUpdateWidgetConfig(selectedField.id, cf.key, e.target.value)}
+                                              className="h-8 text-xs bg-background font-mono"
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Pricing & Charge Settings */}
+                                  <div className="space-y-3 p-3 border border-border/80 rounded-xl bg-card">
+                                    <p className="text-xs font-bold text-foreground">Pricing & Charge Model</p>
+
+                                    <div className="space-y-1.5">
+                                      <Label className="text-[11px] font-semibold text-muted-foreground">Charge Mode</Label>
+                                      <Select
+                                        value={selectedField.widgetConfig?.pricingMode || 'fixed'}
+                                        onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'pricingMode', val)}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="fixed" className="text-xs">Fixed Amount / Deposit</SelectItem>
+                                          <SelectItem value="formula" className="text-xs">Calculate Total from Form Fields</SelectItem>
+                                          <SelectItem value="user_input" className="text-xs">Customer Entered Amount (Donation / Invoice)</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="space-y-1">
+                                        <Label className="text-[11px] font-semibold text-muted-foreground">Currency</Label>
+                                        <Select
+                                          value={selectedField.widgetConfig?.currency || gwDef.currencies[0] || 'USD'}
+                                          onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'currency', val)}
+                                        >
+                                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                          <SelectContent>
+                                            {gwDef.currencies.map((c) => (
+                                              <SelectItem key={c} value={c} className="text-xs font-mono">{c}</SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+
+                                      {selectedField.widgetConfig?.pricingMode === 'fixed' && (
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] font-semibold text-muted-foreground">Amount</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={selectedField.widgetConfig?.amount ?? 49.00}
+                                            onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'amount', parseFloat(e.target.value) || 0)}
+                                            className="h-8 text-xs font-mono font-bold"
+                                          />
+                                        </div>
+                                      )}
+
+                                      {selectedField.widgetConfig?.pricingMode === 'formula' && (
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] font-semibold text-muted-foreground">Calculation Field</Label>
+                                          <Select
+                                            value={selectedField.widgetConfig?.amountField || ''}
+                                            onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'amountField', val)}
+                                          >
+                                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select Field" /></SelectTrigger>
+                                            <SelectContent>
+                                              {formData.fields
+                                                .filter((f) => f.id !== selectedField.id)
+                                                .map((f) => (
+                                                  <SelectItem key={f.id} value={f.id} className="text-xs">
+                                                    {f.label} ({f.widgetType || f.type})
+                                                  </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Test / Sandbox Mode */}
+                                    <div className="pt-2 border-t border-border/60 flex items-center justify-between">
+                                      <div>
+                                        <p className="text-xs font-semibold text-foreground">Sandbox Test Mode</p>
+                                        <p className="text-[10px] text-muted-foreground">Test payments without charging real credit cards</p>
+                                      </div>
+                                      <Switch
+                                        checked={selectedField.widgetConfig?.testMode ?? true}
+                                        onCheckedChange={(checked) => handleUpdateWidgetConfig(selectedField.id, 'testMode', checked)}
+                                      />
+                                    </div>
+                                  </div>
                                 </div>
-                              )}
-
-                              {selectedField.widgetConfig?.provider === 'byok' && (
-                                <div className="space-y-1.5 pt-2">
-                                  <Label className="text-[11px] font-semibold">Custom Google Maps / Twilio API Key</Label>
-                                  <Input
-                                    type="password"
-                                    placeholder="AIzaSy..."
-                                    value={selectedField.widgetConfig?.apiKey || ''}
-                                    onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'apiKey', e.target.value)}
-                                    className="h-8 text-xs bg-background"
-                                  />
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Widget-Specific Controls */}
-                            {selectedField.widgetType === 'nearest_location_finder' && (
-                              <div className="space-y-3">
-                                <div className="space-y-1.5">
-                                  <Label className="text-xs font-semibold">Distance Unit</Label>
+                              );
+                            })() : (
+                              /* Standard Non-Payment Widget Controls */
+                              <>
+                                {/* 3-Way Mode Selection for API-Dependent Widgets */}
+                                <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg space-y-2">
+                                  <Label className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                                    <Sparkles className="size-3.5 text-purple-600" />
+                                    <span>API Provider Mode</span>
+                                  </Label>
                                   <Select
-                                    value={selectedField.widgetConfig?.distanceUnit || 'miles'}
-                                    onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'distanceUnit', val)}
+                                    value={selectedField.widgetConfig?.provider || 'managed'}
+                                    onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'provider', val)}
                                   >
-                                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                    <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="miles" className="text-xs">Miles (mi)</SelectItem>
-                                      <SelectItem value="km" className="text-xs">Kilometers (km)</SelectItem>
+                                      <SelectItem value="managed" className="text-xs">🚀 Fieseros Managed ($0.005 / lookup via Wallet)</SelectItem>
+                                      <SelectItem value="osm" className="text-xs">🟢 Free Built-in (OpenStreetMap / 100% Free)</SelectItem>
+                                      <SelectItem value="byok" className="text-xs">⚙️ Custom API Key (Bring Your Own Key)</SelectItem>
                                     </SelectContent>
                                   </Select>
+
+                                  {selectedField.widgetConfig?.provider === 'managed' && (
+                                    <div className="text-[10px] text-purple-700 dark:text-purple-300 space-y-1 pt-1">
+                                      <p>✓ Zero configuration required. Works instantly.</p>
+                                      <p>✓ $5.00 free monthly credits included with your plan.</p>
+                                    </div>
+                                  )}
+
+                                  {selectedField.widgetConfig?.provider === 'byok' && (
+                                    <div className="space-y-1.5 pt-2">
+                                      <Label className="text-[11px] font-semibold">Custom Google Maps / Twilio API Key</Label>
+                                      <Input
+                                        type="password"
+                                        placeholder="AIzaSy..."
+                                        value={selectedField.widgetConfig?.apiKey || ''}
+                                        onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'apiKey', e.target.value)}
+                                        className="h-8 text-xs bg-background"
+                                      />
+                                    </div>
+                                  )}
                                 </div>
 
-                                <div className="space-y-1.5">
-                                  <Label className="text-xs font-semibold">Configured Branches / Hubs</Label>
-                                  <div className="p-2 border rounded-md bg-muted/20 text-xs space-y-1">
-                                    <p className="font-semibold">🏢 Main Austin Depot</p>
-                                    <p className="text-[10px] text-muted-foreground">100 Congress Ave, Austin, TX</p>
+                                {/* Widget-Specific Controls */}
+                                {selectedField.widgetType === 'nearest_location_finder' && (
+                                  <div className="space-y-3">
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs font-semibold">Distance Unit</Label>
+                                      <Select
+                                        value={selectedField.widgetConfig?.distanceUnit || 'miles'}
+                                        onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'distanceUnit', val)}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="miles" className="text-xs">Miles (mi)</SelectItem>
+                                          <SelectItem value="km" className="text-xs">Kilometers (km)</SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs font-semibold">Configured Branches / Hubs</Label>
+                                      <div className="p-2 border rounded-md bg-muted/20 text-xs space-y-1">
+                                        <p className="font-semibold">🏢 Main Austin Depot</p>
+                                        <p className="text-[10px] text-muted-foreground">100 Congress Ave, Austin, TX</p>
+                                      </div>
+                                      <Button size="sm" variant="outline" className="w-full text-xs h-7 gap-1">
+                                        <Plus className="size-3" /> Add Location
+                                      </Button>
+                                    </div>
                                   </div>
-                                  <Button size="sm" variant="outline" className="w-full text-xs h-7 gap-1">
-                                    <Plus className="size-3" /> Add Location
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
+                                )}
 
-                            {selectedField.widgetType === 'form_calculation' && (
-                              <div className="space-y-2">
-                                <Label className="text-xs font-semibold">Formula Expression</Label>
-                                <Textarea
-                                  value={selectedField.widgetConfig?.formula || ''}
-                                  onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'formula', e.target.value)}
-                                  placeholder="e.g. ([field_1] * 4.5) + [field_2]"
-                                  rows={3}
-                                  className="text-xs font-mono bg-muted/20"
-                                />
-                                <p className="text-[10px] text-muted-foreground">Supports +, -, *, /, parenthesis, and field tokens.</p>
-                              </div>
+                                {selectedField.widgetType === 'form_calculation' && (
+                                  <div className="space-y-2">
+                                    <Label className="text-xs font-semibold">Formula Expression</Label>
+                                    <Textarea
+                                      value={selectedField.widgetConfig?.formula || ''}
+                                      onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'formula', e.target.value)}
+                                      placeholder="e.g. ([field_1] * 4.5) + [field_2]"
+                                      rows={3}
+                                      className="text-xs font-mono bg-muted/20"
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">Supports +, -, *, /, parenthesis, and field tokens.</p>
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         )}

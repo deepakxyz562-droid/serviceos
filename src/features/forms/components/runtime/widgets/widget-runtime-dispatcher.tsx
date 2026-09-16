@@ -10,6 +10,7 @@ import { FormCalculation } from './form-calculation';
 import { SmsOtpVerification } from './sms-otp-verification';
 import { SignaturePad } from './signature-pad';
 import { VoiceRecorder } from './voice-recorder';
+import { PaymentGatewayRuntime } from './payment-gateway-runtime';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Star, Shield, Lock, CreditCard, Sparkles, CheckSquare, Plus, Trash2 } from 'lucide-react';
@@ -32,6 +33,26 @@ export function WidgetRuntimeDispatcher({
 }: WidgetRuntimeDispatcherProps) {
   const widgetType = field.widgetType || '';
   const config = field.widgetConfig || {};
+
+  // Check if this field is a payment gateway widget
+  if (
+    widgetType.startsWith('payment_') ||
+    widgetType.startsWith('control_') ||
+    field.type?.startsWith('control_') ||
+    config.gatewayId
+  ) {
+    return (
+      <PaymentGatewayRuntime
+        gatewayId={config.gatewayId || widgetType.replace(/^payment_/, '')}
+        fieldType={widgetType || field.type}
+        config={config}
+        value={value}
+        onChange={onChange}
+        allFormData={allFormData}
+        disabled={disabled}
+      />
+    );
+  }
 
   switch (widgetType) {
     case 'image_upload_with_notes':
