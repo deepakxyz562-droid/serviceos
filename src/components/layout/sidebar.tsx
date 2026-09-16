@@ -172,23 +172,22 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'AI & Forms',
+    items: [
+      { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
+      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
+    ],
+  },
+  {
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
-      { view: 'formBuilder', label: 'Smart Forms', icon: FileInput },
-      // AI Assistant moved to the Top Bar (right-side drawer button) for global quick access from any page.
-      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
       { view: 'triggers', label: 'Triggers', icon: Zap },
       { view: 'variables', label: 'Variables', icon: Variable },
       // Social Media — consolidated into one tabbed page (Accounts, Create Post, Posts, Analytics)
       { view: 'socialMedia', label: 'Social Media', icon: Share2 },
-    ],
-  },
-  {
-    title: 'AI Receptionist',
-    items: [
-      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
     ],
   },
   {
@@ -228,7 +227,7 @@ const standaloneNavSections: NavSection[] = [
     title: 'AI & Forms Suite',
     items: [
       { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { view: 'formBuilder', label: 'Smart Forms', icon: FileInput },
+      { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
       { view: 'formSubmissions', label: 'Submissions', icon: Inbox },
       { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
       { view: 'aiReceptionist', label: 'AI Employee', icon: PhoneCall },
@@ -362,20 +361,21 @@ const superadminNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'AI & Forms',
+    items: [
+      { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
+      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
+    ],
+  },
+  {
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
-      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
       { view: 'triggers', label: 'Triggers', icon: Zap },
       { view: 'variables', label: 'Variables', icon: Variable },
-    ],
-  },
-  {
-    title: 'AI Receptionist',
-    items: [
-      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
     ],
   },
   {
@@ -664,7 +664,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     const accessCheck = checkMenuAccess(
       item.view,
       planTier,
-      isSuperAdmin,
+      isSuperAdmin || isStandalone,
       auth.tenant?.planStatus
     );
 

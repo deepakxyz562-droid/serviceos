@@ -152,9 +152,9 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     live_chat: false, sms_numbers: false, ai_receptionist: false, whatsapp: false,
     email_integration: false, omnichannel_inbox: false, ai_assistant: false,
     ai_quote_generator: false, ai_job_summary: false, ai_suggested_replies: false,
-    ai_form_generator: false,
-    // Automation (workflows only — so trial users can experiment)
-    workflows: true, form_builder: false, marketing_campaigns: false, broadcast: false,
+    ai_form_generator: true,
+    // Automation (workflows + forms enabled so trial users can experiment)
+    workflows: true, form_builder: true, marketing_campaigns: false, broadcast: false,
     customer_segments: false, template_studio: false, retargeting: false, journey_automation: false,
     // Operations (all basic — route_optimization is disabled on every tier; the standalone
     // route-optimization-view.tsx was a stub and has been deleted. Real auto-dispatch lives in
@@ -180,8 +180,8 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     live_chat: false, sms_numbers: false, ai_receptionist: false, whatsapp: false,
     email_integration: false, omnichannel_inbox: false, ai_assistant: false,
     ai_quote_generator: false, ai_job_summary: false, ai_suggested_replies: false,
-    ai_form_generator: false,
-    workflows: false, form_builder: false, marketing_campaigns: false, broadcast: false,
+    ai_form_generator: true,
+    workflows: false, form_builder: true, marketing_campaigns: false, broadcast: false,
     customer_segments: false, template_studio: false, retargeting: false, journey_automation: false,
     // Starter = solo operator: no dispatch_board, no gps_tracking, no recurring_invoices
     dispatch_board: false, gps_tracking: false, customer_portal: true, employee_portal: true,

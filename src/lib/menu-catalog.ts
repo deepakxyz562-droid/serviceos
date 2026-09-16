@@ -93,7 +93,7 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   { key: 'workflows', label: 'Workflows', icon: 'Workflow', section: 'Inbox & Automation', sortOrder: 44, minPlan: 'growth', upgradeDescription: 'Automate business processes — job assignments, reminders, follow-ups, and multi-step actions.' },
   { key: 'workflowAutomations', label: 'Automations', icon: 'GitBranch', section: 'Inbox & Automation', sortOrder: 45 },
   { key: 'triggers', label: 'Triggers', icon: 'Zap', section: 'Inbox & Automation', sortOrder: 46 },
-  { key: 'formBuilder', label: 'Form Builder', icon: 'ClipboardList', section: 'Inbox & Automation', sortOrder: 47, minPlan: 'growth', upgradeDescription: 'Build custom forms for lead capture, surveys, customer intake, and service requests.' },
+  { key: 'formBuilder', label: 'AI Forms', icon: 'FileInput', section: 'Inbox & Automation', sortOrder: 47 },
   { key: 'variables', label: 'Variables', icon: 'Variable', section: 'Inbox & Automation', sortOrder: 48 },
   { key: 'executions', label: 'Executions', icon: 'Activity', section: 'Inbox & Automation', sortOrder: 49 },
 
