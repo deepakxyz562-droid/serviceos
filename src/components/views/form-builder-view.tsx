@@ -32,11 +32,18 @@ import {
   apiFormToFormItem, buildApiPayload, getDefaultActions,
 } from '@/features/forms/utils/form-helpers';
 import { FormStudioBuilder } from '@/features/forms/components/form-studio-builder';
+import { FormAgentStudio } from '@/features/forms/components/agent-builder/form-agent-studio';
+import {
+  DEFAULT_FORM_AGENT,
+  FormAgentData,
+  createAgentFromPreset,
+} from '@/features/forms/types/agent-types';
 import {
   DeleteConfirmDialog, EmbedDialog, PreviewDialog, ResponsesDialog,
   WhatsAppSendDialog,
 } from '@/features/forms/components/form-action-dialogs';
 import { AiWebsiteFormDialog } from '@/features/forms/components/ai-website-form-dialog';
+import { Bot } from 'lucide-react';
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -49,6 +56,8 @@ export function FormBuilderView() {
   const [viewMode, setViewMode] = useState<'forms' | 'submissions'>('forms');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showAiWebsiteDialog, setShowAiWebsiteDialog] = useState(false);
+  const [showAiAgentStudio, setShowAiAgentStudio] = useState(false);
+  const [agentStudioData, setAgentStudioData] = useState<FormAgentData | null>(null);
   const [selectedForm, setSelectedForm] = useState<FormItem | null>(null);
   const [showResponsesDialog, setShowResponsesDialog] = useState(false);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
@@ -455,6 +464,19 @@ export function FormBuilderView() {
     if (path) window.open(path, '_blank', 'noopener,noreferrer');
   };
 
+  if (showAiAgentStudio) {
+    return (
+      <FormAgentStudio
+        initialAgent={agentStudioData || DEFAULT_FORM_AGENT}
+        onBack={() => {
+          setShowAiAgentStudio(false);
+          setAgentStudioData(null);
+        }}
+        siteOrigin={siteOrigin}
+      />
+    );
+  }
+
   if (showCreateDialog) {
     return (
       <FormStudioBuilder
@@ -486,6 +508,16 @@ export function FormBuilderView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="border-blue-500/40 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 gap-1.5"
+            onClick={() => {
+              setAgentStudioData(DEFAULT_FORM_AGENT);
+              setShowAiAgentStudio(true);
+            }}
+          >
+            <Bot className="size-4 text-blue-600" /> AI Agent Studio
+          </Button>
           <Button
             variant="outline"
             className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5"
@@ -648,14 +680,40 @@ export function FormBuilderView() {
                       <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => handleOpenEdit(form)}>
                         <Pencil className="size-3 mr-1" /> Edit
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 h-7 text-xs border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                        onClick={() => {
+                          const formAgent: FormAgentData = {
+                            ...DEFAULT_FORM_AGENT,
+                            id: `agent_${form.id}`,
+                            name: `${form.name.split(' ')[0] || 'AI'} Assistant`,
+                            roleTitle: `${form.name} AI Agent`,
+                            connectedForms: [
+                              {
+                                id: form.id,
+                                name: form.name,
+                                description: form.description,
+                                submissionCount: form.submissions,
+                              },
+                            ],
+                            welcomeGreeting: `Hi! I am your AI Assistant for **${form.name}**. How may I help you today?`,
+                          };
+                          setAgentStudioData(formAgent);
+                          setShowAiAgentStudio(true);
+                        }}
+                      >
+                        <Bot className="size-3 mr-1 text-blue-600" /> AI Agent
+                      </Button>
                       <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => { setSelectedForm(form); setShowResponsesDialog(true); fetchResponses(form.id); }}>
                         <Eye className="size-3 mr-1" /> Responses
                       </Button>
+                    </div>
+                    <div className="flex gap-1.5">
                       <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => { setSelectedForm(form); setShowPreviewDialog(true); }}>
                         Preview
                       </Button>
-                    </div>
-                    <div className="flex gap-1.5">
                       <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => { setSelectedForm(form); setShowEmbedDialog(true); }}>
                         <Code className="size-3 mr-1" /> Embed
                       </Button>

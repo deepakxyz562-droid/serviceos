@@ -1,273 +1,165 @@
 'use client';
 
-import { useState } from 'react';
+/**
+ * ChatbotBuilderView — AI Agent & Chatbot Studio Hub
+ *
+ * Provides a multi-business conversational AI agent management hub:
+ * 1. Industry Presets (Generic Support, HVAC, Plumbing, Dental, Legal, Auto, Real Estate, Beauty, Custom)
+ * 2. Multi-Agent Directory Grid with live metrics, channel status, and connected forms
+ * 3. 1-Click Launch into the full-screen FormAgentStudio (BUILD, TRAIN, PUBLISH, 11 Channels, Multi-Device Simulator)
+ */
+
+import React, { useState, useEffect } from 'react';
 import {
-  Bot, Plus, Search, Play, Pause, Eye, Settings, Trash2,
-  MessageSquare, GitBranch, Zap, Clock, User, Globe,
-  ArrowRight, Copy, Sparkles, List, CheckCircle2, Send,
-  BarChart3, TrendingUp, Timer, Pencil, MoreVertical,
+  Bot, Plus, Search, Sparkles, MessageSquare, Phone, Globe,
+  Layers, CheckCircle2, Copy, ExternalLink, Trash2, Settings,
+  BarChart3, RefreshCw, Smartphone, Code, ShieldCheck, Share2,
+  ChevronRight, Users, MessageCircle, FileInput, Flame, ShieldAlert
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-
-// ─── Types ──────────────────────────────────────────────────────────────────
-
-interface ChatbotNode {
-  id: string;
-  type: 'message' | 'buttons' | 'list_menu' | 'condition' | 'ai_response' | 'api_call' | 'webhook' | 'delay' | 'human_handover';
-  label: string;
-  config: string;
-  x: number;
-  y: number;
-  connections: string[];
-}
-
-interface Chatbot {
-  id: string;
-  name: string;
-  status: 'active' | 'inactive' | 'draft';
-  triggerKeyword: string;
-  welcomeMessage: string;
-  totalSessions: number;
-  activeSessions: number;
-  resolutionRate: number;
-  avgResponseTime: number;
-  nodes: ChatbotNode[];
-  createdAt: string;
-}
-
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-const NODE_TYPES = [
-  { value: 'message', label: 'Message', icon: MessageSquare, color: 'bg-blue-100 text-blue-700 border-blue-300' },
-  { value: 'buttons', label: 'Buttons', icon: List, color: 'bg-purple-100 text-purple-700 border-purple-300' },
-  { value: 'list_menu', label: 'List Menu', icon: List, color: 'bg-amber-100 text-amber-700 border-amber-300' },
-  { value: 'condition', label: 'Condition', icon: GitBranch, color: 'bg-orange-100 text-orange-700 border-orange-300' },
-  { value: 'ai_response', label: 'AI Response', icon: Sparkles, color: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
-  { value: 'api_call', label: 'API Call', icon: Globe, color: 'bg-cyan-100 text-cyan-700 border-cyan-300' },
-  { value: 'webhook', label: 'Webhook', icon: Zap, color: 'bg-pink-100 text-pink-700 border-pink-300' },
-  { value: 'delay', label: 'Delay', icon: Clock, color: 'bg-slate-100 text-slate-700 border-slate-300' },
-  { value: 'human_handover', label: 'Human Handover', icon: User, color: 'bg-red-100 text-red-700 border-red-300' },
-];
-
-const FLOW_EXAMPLES = [
-  { name: 'Lead Capture', nodes: ['message', 'buttons', 'condition', 'ai_response'] },
-  { name: 'Appointment Booking', nodes: ['message', 'list_menu', 'api_call', 'message'] },
-  { name: 'Quote Request', nodes: ['message', 'buttons', 'ai_response', 'human_handover'] },
-  { name: 'Support FAQ', nodes: ['message', 'list_menu', 'condition', 'ai_response'] },
-  { name: 'Job Status Tracking', nodes: ['message', 'buttons', 'api_call', 'message'] },
-];
-
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-
-const MOCK_CHATBOTS: Chatbot[] = [
-  {
-    id: 'bot1', name: 'Lead Capture Bot', status: 'active', triggerKeyword: 'hi,hello,help',
-    welcomeMessage: 'Hi! 👋 Welcome to Fieseros. How can we help you today?',
-    totalSessions: 1245, activeSessions: 23, resolutionRate: 78, avgResponseTime: 1.2,
-    nodes: [
-      { id: 'n1', type: 'message', label: 'Welcome', config: 'Hi! How can we help you today?', x: 50, y: 50, connections: ['n2'] },
-      { id: 'n2', type: 'buttons', label: 'Main Menu', config: 'Book Service|Get Quote|Support', x: 250, y: 50, connections: ['n3', 'n4', 'n5'] },
-      { id: 'n3', type: 'ai_response', label: 'Booking AI', config: 'Help user book a service', x: 450, y: 0, connections: ['n6'] },
-      { id: 'n4', type: 'human_handover', label: 'Quote Agent', config: 'Transfer to sales', x: 450, y: 100, connections: [] },
-      { id: 'n5', type: 'list_menu', label: 'Support Menu', config: 'FAQ|Track Job|Talk to Agent', x: 450, y: 200, connections: ['n7'] },
-      { id: 'n6', type: 'api_call', label: 'Create Booking', config: 'POST /api/bookings', x: 650, y: 0, connections: ['n8'] },
-      { id: 'n7', type: 'ai_response', label: 'FAQ AI', config: 'Answer common questions', x: 650, y: 200, connections: [] },
-      { id: 'n8', type: 'message', label: 'Confirmation', config: 'Your booking is confirmed!', x: 850, y: 0, connections: [] },
-    ],
-    createdAt: '2025-01-15',
-  },
-  {
-    id: 'bot2', name: 'Support Bot', status: 'active', triggerKeyword: 'support,help,issue',
-    welcomeMessage: 'Welcome to support! 🛠️ What do you need help with?',
-    totalSessions: 892, activeSessions: 15, resolutionRate: 85, avgResponseTime: 0.8,
-    nodes: [
-      { id: 'n10', type: 'message', label: 'Greeting', config: 'Welcome to support!', x: 50, y: 50, connections: ['n11'] },
-      { id: 'n11', type: 'list_menu', label: 'Options', config: 'Track Job|FAQ|Talk to Agent', x: 250, y: 50, connections: ['n12'] },
-      { id: 'n12', type: 'condition', label: 'Router', config: 'Route based on selection', x: 450, y: 50, connections: ['n13', 'n14'] },
-      { id: 'n13', type: 'api_call', label: 'Get Status', config: 'GET /api/jobs/status', x: 650, y: 0, connections: ['n15'] },
-      { id: 'n14', type: 'ai_response', label: 'FAQ Bot', config: 'Answer from knowledge base', x: 650, y: 100, connections: [] },
-      { id: 'n15', type: 'message', label: 'Status Reply', config: 'Your job status is: {{status}}', x: 850, y: 0, connections: [] },
-    ],
-    createdAt: '2025-02-10',
-  },
-  {
-    id: 'bot3', name: 'Appointment Bot', status: 'inactive', triggerKeyword: 'book,appointment,schedule',
-    welcomeMessage: 'Book your appointment! 📅 What service do you need?',
-    totalSessions: 340, activeSessions: 0, resolutionRate: 62, avgResponseTime: 2.1,
-    nodes: [
-      { id: 'n20', type: 'message', label: 'Welcome', config: 'Book your appointment!', x: 50, y: 50, connections: ['n21'] },
-      { id: 'n21', type: 'buttons', label: 'Service Type', config: 'Cleaning|Plumbing|Packing', x: 250, y: 50, connections: ['n22'] },
-      { id: 'n22', type: 'api_call', label: 'Check Slots', config: 'GET /api/slots', x: 450, y: 50, connections: ['n23'] },
-      { id: 'n23', type: 'list_menu', label: 'Pick Time', config: 'Available time slots', x: 650, y: 50, connections: ['n24'] },
-      { id: 'n24', type: 'message', label: 'Confirm', config: 'Appointment confirmed!', x: 850, y: 50, connections: [] },
-    ],
-    createdAt: '2025-03-01',
-  },
-  {
-    id: 'bot4', name: 'Payment Bot', status: 'draft', triggerKeyword: 'pay,payment,invoice',
-    welcomeMessage: '💳 Payment assistance at your service!',
-    totalSessions: 0, activeSessions: 0, resolutionRate: 0, avgResponseTime: 0,
-    nodes: [
-      { id: 'n30', type: 'message', label: 'Welcome', config: 'Payment help', x: 50, y: 50, connections: ['n31'] },
-      { id: 'n31', type: 'list_menu', label: 'Options', config: 'Pay Now|View Invoice|Payment Issue', x: 250, y: 50, connections: [] },
-    ],
-    createdAt: '2025-03-10',
-  },
-];
-
-// ─── Component ──────────────────────────────────────────────────────────────
+import { FormAgentStudio } from '@/features/forms/components/agent-builder/form-agent-studio';
+import {
+  FormAgentData,
+  DEFAULT_FORM_AGENT,
+  INDUSTRY_AGENT_PRESETS,
+  IndustryAgentPreset,
+  createAgentFromPreset
+} from '@/features/forms/types/agent-types';
 
 export function ChatbotBuilderView() {
-  const [chatbots, setChatbots] = useState<Chatbot[]>([]);
+  // Active agents state
+  const [agents, setAgents] = useState<FormAgentData[]>([
+    DEFAULT_FORM_AGENT,
+    createAgentFromPreset('hvac_services'),
+    createAgentFromPreset('dental_medical'),
+    createAgentFromPreset('legal_intake'),
+  ]);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedBot, setSelectedBot] = useState<Chatbot | null>(null);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
-  const [showDetailDialog, setShowDetailDialog] = useState(false);
-  const [previewMessages, setPreviewMessages] = useState<{ sender: 'bot' | 'user'; text: string }[]>([]);
-  const [previewInput, setPreviewInput] = useState('');
-  const [selectedNode, setSelectedNode] = useState<ChatbotNode | null>(null);
-  const [showNodeConfig, setShowNodeConfig] = useState(false);
+  const [activeStudioAgent, setActiveStudioAgent] = useState<FormAgentData | null>(null);
+  const [presetDialogOpen, setPresetDialogOpen] = useState(false);
+  const [embedModalAgent, setEmbedModalAgent] = useState<FormAgentData | null>(null);
+  const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<FormAgentData | null>(null);
+  const [siteOrigin, setSiteOrigin] = useState('');
 
-  const [createForm, setCreateForm] = useState({
-    name: '', template: '', triggerKeyword: '', welcomeMessage: '',
-  });
-
-  const filteredBots = chatbots.filter(b => {
-    if (search && !b.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (statusFilter !== 'all' && b.status !== statusFilter) return false;
-    return true;
-  });
-
-  // Stats
-  const stats = {
-    activeBots: chatbots.filter(b => b.status === 'active').length,
-    conversationsToday: chatbots.reduce((s, b) => s + b.activeSessions, 0),
-    avgResolutionRate: chatbots.filter(b => b.resolutionRate > 0).length > 0
-      ? Math.round(chatbots.filter(b => b.resolutionRate > 0).reduce((s, b) => s + b.resolutionRate, 0) / chatbots.filter(b => b.resolutionRate > 0).length)
-      : 0,
-    avgResponseTime: chatbots.filter(b => b.avgResponseTime > 0).length > 0
-      ? (chatbots.filter(b => b.avgResponseTime > 0).reduce((s, b) => s + b.avgResponseTime, 0) / chatbots.filter(b => b.avgResponseTime > 0).length).toFixed(1)
-      : '0',
-  };
-
-  const handleToggle = (id: string) => {
-    setChatbots(prev => prev.map(b =>
-      b.id === id ? { ...b, status: b.status === 'active' ? 'inactive' as const : 'active' as const } : b
-    ));
-    toast.success('Bot status updated');
-  };
-
-  const handleCreate = () => {
-    if (!createForm.name) { toast.error('Bot name is required'); return; }
-    const templateFlow = FLOW_EXAMPLES.find(f => f.name === createForm.template);
-    const nodes: ChatbotNode[] = (templateFlow?.nodes || ['message', 'buttons', 'ai_response']).map((type, i) => ({
-      id: `n-new-${i}`, type: type as ChatbotNode['type'],
-      label: NODE_TYPES.find(n => n.value === type)?.label || type,
-      config: '', x: 50 + i * 200, y: 50, connections: i < ((templateFlow?.nodes.length || 3) - 1) ? [`n-new-${i + 1}`] : [],
-    }));
-    const newBot: Chatbot = {
-      id: `bot-${Date.now()}`, name: createForm.name, status: 'draft',
-      triggerKeyword: createForm.triggerKeyword || 'hi,hello',
-      welcomeMessage: createForm.welcomeMessage || `Hi! Welcome to ${createForm.name}.`,
-      totalSessions: 0, activeSessions: 0, resolutionRate: 0, avgResponseTime: 0,
-      nodes,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    setChatbots(prev => [newBot, ...prev]);
-    setShowCreateDialog(false);
-    setCreateForm({ name: '', template: '', triggerKeyword: '', welcomeMessage: '' });
-    toast.success('Chatbot created');
-  };
-
-  const handleDelete = (id: string) => {
-    setChatbots(prev => prev.filter(b => b.id !== id));
-    if (selectedBot?.id === id) setSelectedBot(null);
-    toast.success('Chatbot deleted');
-  };
-
-  const handlePreview = (bot: Chatbot) => {
-    setSelectedBot(bot);
-    const firstNode = bot.nodes[0];
-    if (firstNode) {
-      setPreviewMessages([{ sender: 'bot', text: firstNode.config || bot.welcomeMessage }]);
-    } else {
-      setPreviewMessages([{ sender: 'bot', text: bot.welcomeMessage }]);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setSiteOrigin(window.location.origin);
     }
-    setShowPreviewDialog(true);
+  }, []);
+
+  // Filter agents by search
+  const filteredAgents = agents.filter(
+    (a) =>
+      a.name.toLowerCase().includes(search.toLowerCase()) ||
+      a.roleTitle.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Aggregate stats
+  const totalConversations = agents.reduce((s, a) => s + (a.metrics?.totalConversations || 0), 0);
+  const totalFormSubmissions = agents.reduce((s, a) => s + (a.metrics?.totalFormSubmissions || 0), 0);
+  const activeChannelsCount = agents.reduce((s, a) => {
+    let count = 0;
+    if (a.channels?.chatbot?.enabled) count++;
+    if (a.channels?.standalone?.enabled) count++;
+    if (a.channels?.whatsapp?.enabled) count++;
+    if (a.channels?.phone?.enabled) count++;
+    if (a.channels?.sms?.enabled) count++;
+    if (a.channels?.gmail?.enabled) count++;
+    return s + count;
+  }, 0);
+
+  // Handle create from preset
+  const handleCreateFromPreset = (preset: IndustryAgentPreset) => {
+    const newAgent = createAgentFromPreset(preset.id);
+    setAgents((prev) => [newAgent, ...prev]);
+    setPresetDialogOpen(false);
+    setActiveStudioAgent(newAgent);
+    toast.success(`✨ Created ${newAgent.name} (${preset.industryName})`);
   };
 
-  const handlePreviewSend = () => {
-    if (!previewInput.trim()) return;
-    setPreviewMessages(prev => [...prev, { sender: 'user', text: previewInput }]);
-    setTimeout(() => {
-      setPreviewMessages(prev => [...prev, { sender: 'bot', text: 'Thanks for your message! This is a simulated response from the chatbot preview.' }]);
-    }, 500);
-    setPreviewInput('');
+  // Handle delete agent
+  const handleDeleteAgent = (agentId: string) => {
+    setAgents((prev) => prev.filter((a) => a.id !== agentId));
+    setDeleteConfirmAgent(null);
+    toast.success('Agent removed');
   };
 
-  const getNodeStyle = (type: string) => {
-    return NODE_TYPES.find(n => n.value === type) || NODE_TYPES[0];
-  };
-
-  const openDetail = (bot: Chatbot) => {
-    setSelectedBot(bot);
-    setShowDetailDialog(true);
-  };
+  // If studio is open for an agent, render the full-screen FormAgentStudio
+  if (activeStudioAgent) {
+    return (
+      <FormAgentStudio
+        initialAgent={activeStudioAgent}
+        onBack={() => setActiveStudioAgent(null)}
+        siteOrigin={siteOrigin}
+      />
+    );
+  }
 
   return (
-    <div className="space-y-6 w-full">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+    <div className="space-y-6 w-full max-w-7xl mx-auto pb-12">
+      {/* ─── Header ────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between flex-wrap gap-4 border-b border-border/60 pb-5">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
-            <Bot className="size-5 text-white" />
+          <div className="flex items-center justify-center size-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md">
+            <Bot className="size-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold">Chatbot Builder</h2>
-            <p className="text-sm text-muted-foreground">Design and manage WhatsApp chatbots</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-black text-foreground">AI Agent &amp; Chatbot Studio</h2>
+              <Badge className="bg-blue-600/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 text-[10px] font-bold">
+                11 CHANNELS
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Build, train, and deploy conversational AI agents for appointment booking, lead intake, customer support, and in-chat forms.
+            </p>
           </div>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
-          <Plus className="size-4 mr-1.5" /> Create Chatbot
-        </Button>
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="outline"
+            className="border-border text-xs gap-1.5 h-9"
+            onClick={() => setPresetDialogOpen(true)}
+          >
+            <Sparkles className="size-3.5 text-blue-600" /> Choose Industry Template
+          </Button>
+          <Button
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold gap-1.5 h-9 shadow-xs"
+            onClick={() => {
+              const blankAgent = createAgentFromPreset('generic_business', { name: 'New AI Agent', roleTitle: 'Custom Business Concierge' });
+              setAgents((prev) => [blankAgent, ...prev]);
+              setActiveStudioAgent(blankAgent);
+            }}
+          >
+            <Plus className="size-4" /> Create New AI Agent
+          </Button>
+        </div>
       </div>
 
-      {/* Stats */}
+      {/* ─── Quick Stats ────────────────────────────────────────────────────── */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         {[
-          { label: 'Active Bots', value: stats.activeBots, icon: Bot, color: 'text-emerald-600' },
-          { label: 'Conversations Today', value: stats.conversationsToday, icon: MessageSquare, color: 'text-blue-600' },
-          { label: 'Resolution Rate', value: `${stats.avgResolutionRate}%`, icon: TrendingUp, color: 'text-purple-600' },
-          { label: 'Avg Response Time', value: `${stats.avgResponseTime}s`, icon: Timer, color: 'text-amber-600' },
-        ].map(stat => {
+          { label: 'Active AI Agents', value: agents.length, icon: Bot, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+          { label: 'Total Conversations', value: totalConversations.toLocaleString(), icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+          { label: 'Forms Submitted in Chat', value: totalFormSubmissions.toLocaleString(), icon: FileInput, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-950/40' },
+          { label: 'Active Distribution Channels', value: activeChannelsCount, icon: Globe, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/40' },
+        ].map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.label} className="p-4">
-              <div className="flex items-center gap-2">
-                <Icon className={`size-4 ${stat.color}`} />
+            <Card key={stat.label} className="p-4 border-border/80 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className={cn('size-10 rounded-xl flex items-center justify-center shrink-0', stat.bg)}>
+                  <Icon className={cn('size-5', stat.color)} />
+                </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
+                  <p className="text-xs text-muted-foreground font-medium">{stat.label}</p>
+                  <p className={cn('text-xl font-black', stat.color)}>{stat.value}</p>
                 </div>
               </div>
             </Card>
@@ -275,342 +167,325 @@ export function ChatbotBuilderView() {
         })}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <Tabs value={statusFilter} onValueChange={setStatusFilter}>
-          <TabsList>
-            <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-            <TabsTrigger value="active" className="text-xs">Active</TabsTrigger>
-            <TabsTrigger value="inactive" className="text-xs">Inactive</TabsTrigger>
-            <TabsTrigger value="draft" className="text-xs">Draft</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input placeholder="Search chatbots..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
-        </div>
-      </div>
-
-      {/* Chatbot Cards */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {filteredBots.map(bot => (
-          <Card key={bot.id} className="hover:shadow-md transition-all">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h4 className="font-semibold text-sm">{bot.name}</h4>
-                  <Badge variant="outline" className={cn(
-                    'text-[10px] mt-1',
-                    bot.status === 'active' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
-                    bot.status === 'inactive' ? 'bg-slate-100 text-slate-600 border-slate-200' :
-                    'bg-amber-100 text-amber-700 border-amber-200'
-                  )}>
-                    {bot.status}
-                  </Badge>
-                </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handlePreview(bot)}><Eye className="size-3.5" /></Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><MoreVertical className="size-3.5" /></Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openDetail(bot)}><Settings className="size-3.5 mr-2" /> Details</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggle(bot.id)}>
-                        {bot.status === 'active' ? <Pause className="size-3.5 mr-2" /> : <Play className="size-3.5 mr-2" />}
-                        {bot.status === 'active' ? 'Deactivate' : 'Activate'}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem variant="destructive" onClick={() => handleDelete(bot.id)}>
-                        <Trash2 className="size-3.5 mr-2" /> Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-
-              {/* Trigger keyword */}
-              <div className="flex items-center gap-1 text-xs">
-                <Zap className="size-3 text-amber-500" />
-                <span className="text-muted-foreground">Trigger:</span>
-                <code className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">{bot.triggerKeyword}</code>
-              </div>
-
-              {/* Performance stats */}
-              <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t">
-                <div>
-                  <p className="text-sm font-bold text-blue-600">{bot.totalSessions.toLocaleString()}</p>
-                  <p className="text-[9px] text-muted-foreground">Sessions</p>
-                </div>
-                <div>
-                  <p className={cn('text-sm font-bold', bot.resolutionRate >= 75 ? 'text-emerald-600' : bot.resolutionRate >= 50 ? 'text-amber-600' : 'text-red-600')}>
-                    {bot.resolutionRate > 0 ? `${bot.resolutionRate}%` : '-'}
-                  </p>
-                  <p className="text-[9px] text-muted-foreground">Resolution</p>
-                </div>
-                <div>
-                  <p className="text-sm font-bold">{bot.avgResponseTime > 0 ? `${bot.avgResponseTime}s` : '-'}</p>
-                  <p className="text-[9px] text-muted-foreground">Avg Time</p>
-                </div>
-              </div>
-
-              {/* Node badges */}
-              <div className="flex flex-wrap gap-1 pt-2 border-t">
-                {bot.nodes.slice(0, 5).map(node => {
-                  const nodeType = getNodeStyle(node.type);
-                  const Icon = nodeType.icon;
-                  return (
-                    <Badge key={node.id} variant="outline" className={`${nodeType.color} text-[9px] h-5`}>
-                      <Icon className="size-2.5 mr-0.5" />{node.label}
-                    </Badge>
-                  );
-                })}
-                {bot.nodes.length > 5 && <Badge variant="secondary" className="text-[9px] h-5">+{bot.nodes.length - 5}</Badge>}
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => openDetail(bot)}>
-                  <Settings className="size-3 mr-1" /> Builder
-                </Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleToggle(bot.id)}>
-                  {bot.status === 'active' ? <Pause className="size-3" /> : <Play className="size-3" />}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Empty state */}
-      {filteredBots.length === 0 && (
-        <div className="text-center py-12">
-          <Bot className="size-12 mx-auto text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium mb-1">No chatbots found</h3>
-          <p className="text-muted-foreground mb-4">{search || statusFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first chatbot'}</p>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="size-4 mr-1.5" /> Create Chatbot
-          </Button>
-        </div>
-      )}
-
-      {/* Visual Builder (shown when bot selected from detail) */}
-      {selectedBot && showDetailDialog && (
-        <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-          <DialogContent className="sm:max-w-3xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                {selectedBot.name}
-                <Badge variant="outline" className={cn(
-                  'text-[10px]',
-                  selectedBot.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                  selectedBot.status === 'inactive' ? 'bg-slate-100 text-slate-600' :
-                  'bg-amber-100 text-amber-700'
-                )}>
-                  {selectedBot.status}
-                </Badge>
-              </DialogTitle>
-              <DialogDescription>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="flex items-center gap-1"><Zap className="size-3" />{selectedBot.triggerKeyword}</span>
-                  <span className="flex items-center gap-1"><MessageSquare className="size-3" />{selectedBot.totalSessions} sessions</span>
-                  <span className="flex items-center gap-1"><TrendingUp className="size-3" />{selectedBot.resolutionRate}% resolution</span>
-                </div>
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              {/* Welcome Message */}
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Welcome Message</h4>
-                <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100 text-sm">
-                  {selectedBot.welcomeMessage}
-                </div>
-              </div>
-
-              {/* Conversation Flow */}
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Conversation Flow</h4>
-                <ScrollArea className="w-full">
-                  <div className="flex items-start gap-4 pb-4 min-w-max">
-                    {selectedBot.nodes.map((node, idx) => {
-                      const nodeType = getNodeStyle(node.type);
-                      const Icon = nodeType.icon;
-                      return (
-                        <div key={node.id} className="flex items-center gap-4">
-                          <button
-                            className={cn(
-                              'flex flex-col items-center gap-1 p-3 rounded-lg border-2 min-w-[120px] transition-all hover:shadow-md',
-                              selectedNode?.id === node.id ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-border',
-                              nodeType.color
-                            )}
-                            onClick={() => { setSelectedNode(node); setShowNodeConfig(true); }}
-                          >
-                            <Icon className="size-5" />
-                            <span className="text-xs font-medium text-center">{node.label}</span>
-                            <span className="text-[9px] opacity-60">{nodeType.label}</span>
-                          </button>
-                          {idx < selectedBot.nodes.length - 1 && (
-                            <ArrowRight className="size-4 text-muted-foreground shrink-0" />
-                          )}
-                        </div>
-                      );
-                    })}
-                    <button className="flex flex-col items-center gap-1 p-3 rounded-lg border-2 border-dashed border-muted-foreground/30 min-w-[120px] hover:border-emerald-400 hover:bg-emerald-50 transition-colors" onClick={() => toast.info('Add node functionality coming soon')}>
-                      <Plus className="size-5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">Add Node</span>
-                    </button>
-                  </div>
-                </ScrollArea>
-              </div>
-
-              {/* Node Config Panel */}
-              {showNodeConfig && selectedNode && (
-                <div className="p-3 border rounded-lg bg-muted/30 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm">Node: {selectedNode.label}</span>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setShowNodeConfig(false)}><Trash2 className="size-3" /></Button>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Configuration</Label>
-                    <Textarea value={selectedNode.config} onChange={e => {
-                      setSelectedNode(prev => prev ? { ...prev, config: e.target.value } : null);
-                      // Also update the bot's node
-                      setChatbots(prev => prev.map(b => b.id === selectedBot.id ? {
-                        ...b,
-                        nodes: b.nodes.map(n => n.id === selectedNode.id ? { ...n, config: e.target.value } : n)
-                      } : b));
-                    }} rows={2} className="text-xs" placeholder="Configure this node..." />
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>Type: {getNodeStyle(selectedNode.type).label}</span>
-                    <span>Connections: {selectedNode.connections.length}</span>
-                  </div>
-                </div>
-              )}
-
-              <Separator />
-
-              {/* Performance */}
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Performance</h4>
-                <div className="grid grid-cols-4 gap-3">
-                  <Card className="p-2 text-center">
-                    <p className="text-sm font-bold text-blue-600">{selectedBot.totalSessions.toLocaleString()}</p>
-                    <p className="text-[9px] text-muted-foreground">Total Sessions</p>
-                  </Card>
-                  <Card className="p-2 text-center">
-                    <p className="text-sm font-bold text-emerald-600">{selectedBot.activeSessions}</p>
-                    <p className="text-[9px] text-muted-foreground">Active</p>
-                  </Card>
-                  <Card className="p-2 text-center">
-                    <p className="text-sm font-bold text-purple-600">{selectedBot.resolutionRate}%</p>
-                    <p className="text-[9px] text-muted-foreground">Resolution</p>
-                  </Card>
-                  <Card className="p-2 text-center">
-                    <p className="text-sm font-bold text-amber-600">{selectedBot.avgResponseTime}s</p>
-                    <p className="text-[9px] text-muted-foreground">Avg Time</p>
-                  </Card>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2">
-                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowDetailDialog(false); handlePreview(selectedBot); }}>
-                  <Play className="size-4 mr-1.5" /> Test Bot
-                </Button>
-                <Button variant="outline" onClick={() => handleToggle(selectedBot.id)}>
-                  {selectedBot.status === 'active' ? <><Pause className="size-4 mr-1.5" /> Deactivate</> : <><Play className="size-4 mr-1.5" /> Activate</>}
-                </Button>
-                <Button variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => { handleDelete(selectedBot.id); setShowDetailDialog(false); }}>
-                  <Trash2 className="size-4 mr-1.5" /> Delete
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Create Chatbot Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create Chatbot</DialogTitle>
-            <DialogDescription>Set up a new WhatsApp chatbot</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Chatbot Name *</Label>
-              <Input placeholder="e.g., Lead Capture Bot" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Trigger Keywords</Label>
-              <Input placeholder="e.g., hi,hello,help" value={createForm.triggerKeyword} onChange={e => setCreateForm({ ...createForm, triggerKeyword: e.target.value })} />
-              <p className="text-[10px] text-muted-foreground">Comma-separated keywords that trigger the bot</p>
-            </div>
-            <div className="space-y-2">
-              <Label>Welcome Message</Label>
-              <Textarea placeholder="e.g., Hi! How can we help you today?" value={createForm.welcomeMessage} onChange={e => setCreateForm({ ...createForm, welcomeMessage: e.target.value })} rows={2} />
-            </div>
-            <div className="space-y-2">
-              <Label>Start from Template</Label>
-              <Select value={createForm.template} onValueChange={v => setCreateForm({ ...createForm, template: v })}>
-                <SelectTrigger><SelectValue placeholder="Choose a template..." /></SelectTrigger>
-                <SelectContent>
-                  {FLOW_EXAMPLES.map(f => <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <Separator />
-            <div>
-              <Label className="text-xs mb-2 block">Available Node Types</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {NODE_TYPES.map(nt => {
-                  const Icon = nt.icon;
-                  return (
-                    <div key={nt.value} className={cn('flex items-center gap-1.5 p-2 rounded-lg border text-[10px]', nt.color)}>
-                      <Icon className="size-3.5" /><span>{nt.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+      {/* ─── Industry Presets Showcase Bar ──────────────────────────────────── */}
+      <div className="p-4 rounded-2xl border border-border/80 bg-muted/20 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-blue-600" />
+            <span className="text-xs font-bold text-foreground">Industry Starter Templates</span>
+            <span className="text-[10px] text-muted-foreground">(1-Click Instant Deployment for Any Business)</span>
           </div>
+          <button
+            type="button"
+            onClick={() => setPresetDialogOpen(true)}
+            className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5"
+          >
+            View All 8 Presets <ChevronRight className="size-3" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          {INDUSTRY_AGENT_PRESETS.slice(0, 4).map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => handleCreateFromPreset(preset)}
+              className="p-3 rounded-xl border border-border/70 bg-card hover:border-blue-500/50 hover:shadow-xs text-left transition-all group relative flex flex-col justify-between space-y-2"
+            >
+              <div className="flex items-center gap-2.5">
+                <img
+                  src={preset.avatarUrl}
+                  alt={preset.agentName}
+                  className="size-8 rounded-full object-cover ring-1 ring-border shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-foreground truncate group-hover:text-blue-600">
+                    {preset.agentName}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground truncate">{preset.industryName}</p>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground line-clamp-2 leading-relaxed">
+                {preset.description}
+              </p>
+              <div className="pt-1 border-t border-border/40 flex items-center justify-between text-[10px] font-bold text-blue-600">
+                <span>Use Template</span>
+                <Plus className="size-3 group-hover:scale-125 transition-transform" />
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── Search & Actions Bar ───────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Search agents by name or role..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 h-9 text-xs"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground font-mono">
+          Showing {filteredAgents.length} of {agents.length} agents
+        </p>
+      </div>
+
+      {/* ─── Active AI Agents Grid ──────────────────────────────────────────── */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        {filteredAgents.map((agent) => {
+          const activeChannels = [
+            agent.channels?.chatbot?.enabled && 'Embed Widget',
+            agent.channels?.standalone?.enabled && 'Web Page',
+            agent.channels?.whatsapp?.enabled && 'WhatsApp',
+            agent.channels?.phone?.enabled && 'Phone Calling',
+            agent.channels?.sms?.enabled && 'SMS',
+            agent.channels?.gmail?.enabled && 'Gmail',
+          ].filter(Boolean);
+
+          const standaloneUrl = `${siteOrigin}/chat/${agent.slug || agent.id}`;
+
+          return (
+            <Card
+              key={agent.id}
+              className="border-border/80 hover:border-blue-500/40 hover:shadow-sm transition-all overflow-hidden flex flex-col justify-between bg-card group"
+            >
+              <div>
+                {/* Agent Card Header */}
+                <div className="p-4 border-b border-border/60 bg-muted/20 flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative">
+                      <img
+                        src={agent.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl}
+                        alt={agent.name}
+                        className="size-11 rounded-2xl object-cover ring-2 ring-background shadow-xs shrink-0"
+                      />
+                      <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-500 ring-2 ring-background" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-sm font-bold text-foreground truncate">{agent.name}</h4>
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-blue-500/30 text-blue-600 font-bold">
+                          AI AGENT
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{agent.roleTitle}</p>
+                    </div>
+                  </div>
+
+                  {/* Actions Dropdown */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDeleteConfirmAgent(agent)}
+                    className="size-7 p-0 text-muted-foreground hover:text-red-600"
+                    title="Delete Agent"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+
+                {/* Agent Card Body */}
+                <div className="p-4 space-y-3 text-xs">
+                  {/* Greeting snippet */}
+                  <div className="p-2 rounded-xl bg-muted/30 border border-border/50 text-[11px] text-muted-foreground line-clamp-2 italic">
+                    &quot;{agent.welcomeGreeting.replace(/\*\*/g, '')}&quot;
+                  </div>
+
+                  {/* Connected Forms */}
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <FileInput className="size-3.5 text-blue-600" /> Connected AI Forms:
+                    </span>
+                    <span className="font-bold text-foreground font-mono">
+                      {agent.connectedForms?.length || 0} form(s)
+                    </span>
+                  </div>
+
+                  {/* Active Channels Badges */}
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Active Channels:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {activeChannels.map((ch, idx) => (
+                        <Badge
+                          key={idx}
+                          variant="secondary"
+                          className="text-[9px] px-1.5 py-0 h-4 bg-muted/60 text-foreground font-medium"
+                        >
+                          {ch}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Metrics */}
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/40 text-[11px]">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground">Conversations</span>
+                      <p className="font-bold text-foreground font-mono">
+                        {(agent.metrics?.totalConversations || 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground">Form Leads</span>
+                      <p className="font-bold text-emerald-600 font-mono">
+                        {(agent.metrics?.totalFormSubmissions || 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Agent Card Footer Actions */}
+              <div className="p-3 bg-muted/30 border-t border-border/60 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(standaloneUrl, '_blank')}
+                    className="h-8 text-xs gap-1 px-2 border-border/70"
+                    title="Open Live Standalone URL"
+                  >
+                    <ExternalLink className="size-3" /> Live Page
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setEmbedModalAgent(agent)}
+                    className="h-8 text-xs gap-1 px-2 border-border/70"
+                    title="Get 1-line Embed Code"
+                  >
+                    <Code className="size-3" /> Embed
+                  </Button>
+                </div>
+
+                <Button
+                  size="sm"
+                  onClick={() => setActiveStudioAgent(agent)}
+                  className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold gap-1 px-3 shadow-xs"
+                >
+                  <Settings className="size-3" /> Open Studio
+                </Button>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* ─── Industry Preset Selection Dialog ───────────────────────────────── */}
+      <Dialog open={presetDialogOpen} onOpenChange={setPresetDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+              <Sparkles className="size-5 text-blue-600" />
+              Choose an AI Agent Industry Template
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Select a pre-trained agent for your business type or customize from scratch.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
+            {INDUSTRY_AGENT_PRESETS.map((preset) => (
+              <div
+                key={preset.id}
+                onClick={() => handleCreateFromPreset(preset)}
+                className="p-3.5 rounded-xl border border-border/80 hover:border-blue-500/60 hover:bg-blue-50/30 dark:hover:bg-blue-950/20 cursor-pointer transition-all flex flex-col justify-between space-y-2 group"
+              >
+                <div className="flex items-start gap-3">
+                  <img
+                    src={preset.avatarUrl}
+                    alt={preset.agentName}
+                    className="size-10 rounded-xl object-cover ring-1 ring-border shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-foreground group-hover:text-blue-600">
+                        {preset.agentName}
+                      </p>
+                      {preset.badge && (
+                        <Badge className="text-[8px] px-1 py-0 h-3.5 bg-blue-600 text-white font-bold border-none">
+                          {preset.badge}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 truncate">
+                      {preset.industryName}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">
+                      {preset.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] font-bold text-blue-600">
+                  <span>Deploy {preset.agentName}</span>
+                  <Plus className="size-3.5 group-hover:scale-125 transition-transform" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Embed Code Dialog ──────────────────────────────────────────────── */}
+      <Dialog open={!!embedModalAgent} onOpenChange={(open) => !open && setEmbedModalAgent(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Code className="size-4 text-blue-600" />
+              1-Line Embed Code for {embedModalAgent?.name}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Paste this script tag into any HTML, WordPress, Shopify, or Webflow website before &lt;/body&gt;:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 bg-slate-950 text-emerald-400 font-mono text-xs rounded-xl border border-slate-800 break-all select-all">
+            {`<script src="${siteOrigin}/api/forms/agents/${embedModalAgent?.id || 'agent_1'}/embed.js" async defer></script>`}
+          </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!createForm.name}>Create Chatbot</Button>
+            <Button
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-1.5"
+              onClick={() => {
+                const code = `<script src="${siteOrigin}/api/forms/agents/${embedModalAgent?.id || 'agent_1'}/embed.js" async defer></script>`;
+                navigator.clipboard.writeText(code);
+                toast.success('Embed code copied to clipboard!');
+                setEmbedModalAgent(null);
+              }}
+            >
+              <Copy className="size-3.5" /> Copy Embed Script
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Preview Dialog */}
-      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+      {/* ─── Delete Confirm Dialog ──────────────────────────────────────────── */}
+      <Dialog open={!!deleteConfirmAgent} onOpenChange={(open) => !open && setDeleteConfirmAgent(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Bot className="size-4 text-emerald-600" />
-              Test: {selectedBot?.name}
+            <DialogTitle className="text-base font-bold text-red-600 flex items-center gap-2">
+              <Trash2 className="size-4" /> Delete AI Agent?
             </DialogTitle>
-            <DialogDescription>Simulate a chatbot conversation</DialogDescription>
+            <DialogDescription className="text-xs">
+              Are you sure you want to delete <strong>{deleteConfirmAgent?.name}</strong>? All conversation logs and webhook endpoints for this agent will be removed.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <ScrollArea className="h-64 rounded-lg border p-3 bg-slate-50">
-              <div className="space-y-2">
-                {previewMessages.map((msg, i) => (
-                  <div key={i} className={cn('flex', msg.sender === 'bot' ? '' : 'justify-end')}>
-                    <div className={cn(
-                      'max-w-[80%] rounded-lg p-2 text-sm',
-                      msg.sender === 'bot' ? 'bg-white border shadow-sm' : 'bg-emerald-600 text-white'
-                    )}>
-                      {msg.text}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-            <div className="flex gap-2">
-              <Input placeholder="Type a message..." value={previewInput} onChange={e => setPreviewInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handlePreviewSend()} />
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handlePreviewSend}><Send className="size-3.5" /></Button>
-            </div>
-          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeleteConfirmAgent(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => deleteConfirmAgent && handleDeleteAgent(deleteConfirmAgent.id)}
+            >
+              Delete Agent
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
