@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ShieldCheck, ChevronRight, LogIn, BadgeCheck, Store } from 'lucide-react';
+import { ShieldCheck, ChevronRight, LogIn, BadgeCheck, Store, Flag, AlertCircle } from 'lucide-react';
 import { ClaimBusinessModal } from './claim-business-modal';
+import { ReportListingModal } from './report-listing-modal';
 import {
   Dialog,
   DialogContent,
@@ -29,26 +30,16 @@ import { useAppStore } from '@/store/app-store';
  *   2. Claimed listing (claimed=true) → shows a small "✓ Verified owner"
  *      notice so visitors know the listing is owner-managed (not seed data).
  *
- * Previously this was a tiny text link that was too easy to miss. Now it's
- * a compact but discoverable bordered card.
- *
- * Auth state resolution
- * ----------------------
- * This component no longer takes `currentTenantId` / `isAuthenticated` as
- * props from the server. Instead it reads from the shared Zustand app-store,
- * which is hydrated by `<MarketplaceHeader>` on mount via a single cached
- * `/api/auth/me` fetch (30s TTL — Task ID 8). This lets the page drop the
- * `getAuthUser()` call that previously forced `dynamic = 'force-dynamic'`,
- * so the page can now be statically generated with `revalidate = 60` and
- * served from the data cache.
- *
- * While `authHydrated` is false (initial mount, fetch in-flight), the
- * component renders `null` — the banner pops in once auth state is known.
- * This avoids flashing the "Claim this business" CTA to a logged-in owner.
+ * Also renders a discreet "Report incorrect info or request privacy removal"
+ * link allowing anyone to request privacy data removal (PIPEDA/GDPR) or
+ * category corrections.
  */
 interface ClaimBusinessBannerProps {
   tenantId: string;
   tenantName: string;
+  tenantSlug?: string;
+  tenantPhone?: string | null;
+  tenantIndustry?: string | null;
   tenantEmail?: string | null;
   tenantCity?: string | null;
   tenantState?: string | null;
@@ -60,6 +51,9 @@ interface ClaimBusinessBannerProps {
 export function ClaimBusinessBanner({
   tenantId,
   tenantName,
+  tenantSlug = '',
+  tenantPhone = null,
+  tenantIndustry = null,
   tenantEmail,
   tenantCity,
   tenantState,
@@ -67,6 +61,7 @@ export function ClaimBusinessBanner({
 }: ClaimBusinessBannerProps) {
   const [claimOpen, setClaimOpen] = React.useState(false);
   const [signInGateOpen, setSignInGateOpen] = React.useState(false);
+  const [reportModalOpen, setReportModalOpen] = React.useState(false);
 
   // Read auth state from the shared Zustand store. The MarketplaceHeader
   // fires /api/auth/me on mount and populates this store, so we don't need
@@ -133,30 +128,53 @@ export function ClaimBusinessBanner({
     }
   }
 
-  // ── Already claimed → show "Verified owner" notice ──
+  // ── Already claimed → show "Verified owner" notice + report link ──
   if (isClaimed) {
     return (
-      <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900 dark:bg-emerald-950/40">
-        <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
-            Verified owner
-          </p>
-          <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
-            This business manages its profile on Fieseros. Contact them directly for services, availability, and enquiries.
-          </p>
+      <>
+        <div className="mb-2 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-900 dark:bg-emerald-950/40">
+          <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
+              Verified owner
+            </p>
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+              This business manages its profile on Fieseros. Contact them directly for services, availability, and enquiries.
+            </p>
+          </div>
         </div>
-      </div>
+
+        <div className="mb-3 flex items-center justify-end px-1">
+          <button
+            type="button"
+            onClick={() => setReportModalOpen(true)}
+            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <AlertCircle className="h-3 w-3 text-amber-500" />
+            <span>Report incorrect info / privacy removal</span>
+          </button>
+        </div>
+
+        <ReportListingModal
+          isOpen={reportModalOpen}
+          onClose={() => setReportModalOpen(false)}
+          tenantId={tenantId}
+          tenantName={tenantName}
+          tenantSlug={tenantSlug}
+          currentPhone={tenantPhone}
+          currentIndustry={tenantIndustry}
+        />
+      </>
     );
   }
 
-  // ── Unclaimed → show claim CTA banner ──
+  // ── Unclaimed → show claim CTA banner + report link ──
   return (
     <>
       <button
         type="button"
         onClick={handleClick}
-        className="mb-3 flex w-full items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/60"
+        className="mb-1.5 flex w-full items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/40 dark:hover:border-emerald-800 dark:hover:bg-emerald-950/60"
       >
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
           <Store className="h-4 w-4" />
@@ -173,6 +191,17 @@ export function ClaimBusinessBanner({
           Claim business <ChevronRight className="h-3.5 w-3.5" />
         </span>
       </button>
+
+      <div className="mb-3 flex items-center justify-end px-1">
+        <button
+          type="button"
+          onClick={() => setReportModalOpen(true)}
+          className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <AlertCircle className="h-3 w-3 text-amber-500" />
+          <span>Report incorrect info / privacy removal</span>
+        </button>
+      </div>
 
       {/* Full claim wizard — only for authenticated users */}
       {isAuthenticated && (
@@ -192,6 +221,17 @@ export function ClaimBusinessBanner({
         open={signInGateOpen}
         onOpenChange={setSignInGateOpen}
         tenantName={tenantName}
+      />
+
+      {/* Report & Privacy Removal Modal */}
+      <ReportListingModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        tenantId={tenantId}
+        tenantName={tenantName}
+        tenantSlug={tenantSlug}
+        currentPhone={tenantPhone}
+        currentIndustry={tenantIndustry}
       />
     </>
   );

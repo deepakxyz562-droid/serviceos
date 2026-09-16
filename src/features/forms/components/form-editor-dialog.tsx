@@ -691,8 +691,8 @@ export function FormEditorDialog(props: FormEditorDialogProps) {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {formData.fields.filter((f) => f.label.trim()).map((field) => {
-                      const currentMapping = formData.fieldMappings.find(
+                    {(Array.isArray(formData.fields) ? formData.fields : []).filter((f) => f && f.label && f.label.trim()).map((field) => {
+                      const currentMapping = (Array.isArray(formData.fieldMappings) ? formData.fieldMappings : []).find(
                         (m) => m.formFieldId === field.id,
                       );
                       return (
@@ -717,16 +717,16 @@ export function FormEditorDialog(props: FormEditorDialogProps) {
                               if (v === '__none__') {
                                 onFormDataChange((prev) => ({
                                   ...prev,
-                                  fieldMappings: prev.fieldMappings.filter(
+                                  fieldMappings: (Array.isArray(prev.fieldMappings) ? prev.fieldMappings : []).filter(
                                     (m) => m.formFieldId !== field.id,
                                   ),
                                 }));
                               } else {
                                 onFormDataChange((prev) => {
-                                  const existing = prev.fieldMappings.findIndex(
+                                  const existing = (Array.isArray(prev.fieldMappings) ? prev.fieldMappings : []).findIndex(
                                     (m) => m.formFieldId === field.id,
                                   );
-                                  const newMappings = [...prev.fieldMappings];
+                                  const newMappings = Array.isArray(prev.fieldMappings) ? [...prev.fieldMappings] : [];
                                   if (existing >= 0) {
                                     newMappings[existing] = { ...newMappings[existing], crmField: v };
                                   } else {

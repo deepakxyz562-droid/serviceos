@@ -159,15 +159,20 @@ export function FormBuilderView() {
     setEditMode(true);
     setEditFormId(form.id);
     setFormData({
-      name: form.name,
+      name: form.name || '',
       description: form.description || '',
-      type: form.type,
-      status: form.status,
-      fields: [...form.fields],
-      submissionActions: { ...form.submissionActions, additional: { ...form.submissionActions.additional } },
-      fieldMappings: [...form.fieldMappings],
-      welcomeMessage: form.welcomeMessage,
-      completionMessage: form.completionMessage,
+      type: form.type || 'lead_capture',
+      status: form.status || 'active',
+      fields: Array.isArray(form.fields) ? [...form.fields] : [],
+      submissionActions: form.submissionActions
+        ? {
+            ...form.submissionActions,
+            additional: { ...(form.submissionActions.additional || {}) },
+          }
+        : getDefaultActions(form.type || 'lead_capture'),
+      fieldMappings: Array.isArray(form.fieldMappings) ? [...form.fieldMappings] : [],
+      welcomeMessage: form.welcomeMessage || '',
+      completionMessage: form.completionMessage || '',
     });
     setActiveTab('details');
     setShowCreateDialog(true);

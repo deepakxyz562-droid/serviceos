@@ -108,12 +108,33 @@ export const safeJsonParse = safeParseJson;
 // ─── API ↔ FormItem transformation helpers ──────────────────────────────────
 
 export function apiFormToFormItem(api: ApiForm): FormItem {
-  const fields = safeJsonParse<FormField[]>(api.fieldsJson, []);
+  let fields: FormField[] = [];
+  if (Array.isArray((api as any).fields)) {
+    fields = (api as any).fields;
+  } else if (api.fieldsJson) {
+    const rawFields = safeJsonParse<any>(api.fieldsJson, []);
+    fields = Array.isArray(rawFields) ? rawFields : [];
+  }
+
   const rawActions = safeJsonParse<Partial<SubmissionActions>>(
     api.submissionActions,
     {},
   );
-  const mappings = safeJsonParse<CRMFieldMapping[]>(api.fieldMappingJson, []);
+
+  let mappings: CRMFieldMapping[] = [];
+  if (Array.isArray((api as any).fieldMappings)) {
+    mappings = (api as any).fieldMappings;
+  } else if (api.fieldMappingJson) {
+    const rawMappings = safeJsonParse<any>(api.fieldMappingJson, []);
+    if (Array.isArray(rawMappings)) {
+      mappings = rawMappings.filter(Boolean);
+    } else if (rawMappings && typeof rawMappings === 'object') {
+      mappings = Object.entries(rawMappings).map(([formFieldId, crmField]) => ({
+        formFieldId,
+        crmField: String(crmField),
+      }));
+    }
+  }
 
   // The DB submissionActions may be either:
   //  - the modern shape: { primary, additional, ... } (saved by this view)
@@ -146,30 +167,30 @@ export function apiFormToFormItem(api: ApiForm): FormItem {
     };
   } else {
     submissionActions = {
-      primary: rawActions.primary || 'store_only',
+      primary: rawActions?.primary || 'store_only',
       additional: {
-        sendWhatsAppOwner: rawActions.additional?.sendWhatsAppOwner ?? false,
-        sendWhatsAppUser: rawActions.additional?.sendWhatsAppUser ?? false,
-        sendEmail: rawActions.additional?.sendEmail ?? false,
-        addToCampaign: rawActions.additional?.addToCampaign ?? false,
-        notifySalesTeam: rawActions.additional?.notifySalesTeam ?? false,
-        callWebhook: rawActions.additional?.callWebhook ?? false,
+        sendWhatsAppOwner: rawActions?.additional?.sendWhatsAppOwner ?? false,
+        sendWhatsAppUser: rawActions?.additional?.sendWhatsAppUser ?? false,
+        sendEmail: rawActions?.additional?.sendEmail ?? false,
+        addToCampaign: rawActions?.additional?.addToCampaign ?? false,
+        notifySalesTeam: rawActions?.additional?.notifySalesTeam ?? false,
+        callWebhook: rawActions?.additional?.callWebhook ?? false,
       },
       whatsappOwnerTemplate:
-        api.whatsappOwnerTemplate || rawActions.whatsappOwnerTemplate || '',
+        api.whatsappOwnerTemplate || rawActions?.whatsappOwnerTemplate || '',
       whatsappUserTemplate:
-        api.whatsappUserTemplate || rawActions.whatsappUserTemplate || '',
+        api.whatsappUserTemplate || rawActions?.whatsappUserTemplate || '',
       aiGenerateUserMessage:
-        api.whatsappAiGenerated ?? rawActions.aiGenerateUserMessage ?? false,
-      webhookUrl: rawActions.webhookUrl || '',
+        api.whatsappAiGenerated ?? rawActions?.aiGenerateUserMessage ?? false,
+      webhookUrl: rawActions?.webhookUrl || '',
     };
   }
 
   return {
     id: api.id,
-    name: api.name,
+    name: api.name || '',
     description: api.description || undefined,
-    type: api.type as FormType,
+    type: (api.type as FormType) || 'lead_capture',
     status:
       (api.status === 'active' ||
       api.status === 'inactive' ||
@@ -198,7 +219,8 @@ export function buildApiPayload(formData: EditorFormData) {
   // Convert the modern SubmissionActions shape into the array format the API
   // route expects (matches the action switch in /api/forms/[id]/submit).
   const actionArray: string[] = [];
-  switch (formData.submissionActions.primary) {
+  const primary = formData.submissionActions?.primary || 'store_only';
+  switch (primary) {
     case 'create_lead': actionArray.push('create_lead'); break;
     case 'create_customer': actionArray.push('create_customer'); break;
     case 'create_booking': actionArray.push('create_booking'); break;
@@ -208,38 +230,29 @@ export function buildApiPayload(formData: EditorFormData) {
     case 'store_only': actionArray.push('store_response'); break;
     case 'custom_action': actionArray.push('store_response'); break;
   }
-  if (
-    formData.submissionActions.additional.sendWhatsAppOwner ||
-    formData.submissionActions.additional.sendWhatsAppUser
-  ) {
+  const additional = formData.submissionActions?.additional || {};
+  if (additional.sendWhatsAppOwner || additional.sendWhatsAppUser) {
     actionArray.push('send_whatsapp');
   }
-  if (formData.submissionActions.additional.sendEmail) actionArray.push('send_email');
-  if (formData.submissionActions.additional.callWebhook) actionArray.push('call_webhook');
+  if (additional.sendEmail) actionArray.push('send_email');
+  if (additional.callWebhook) actionArray.push('call_webhook');
+
+  const safeFields = Array.isArray(formData.fields) ? formData.fields : [];
+  const safeMappings = Array.isArray(formData.fieldMappings) ? formData.fieldMappings : [];
 
   return {
     name: formData.name,
     description: formData.description || null,
     type: formData.type,
     status: formData.status,
-    fieldsJson: JSON.stringify(formData.fields.filter((f) => f.label.trim())),
+    fieldsJson: JSON.stringify(safeFields.filter((f) => f && f.label && f.label.trim())),
     submissionActions: JSON.stringify(actionArray),
-    fieldMappingJson: JSON.stringify(
-      formData.fieldMappings
-        .filter((m) => m.crmField)
-        .reduce((acc, m) => {
-          // Convert "Lead.Name" → { "Name": "Lead.Name" } style mapping (label-based)
-          const parts = m.crmField.split('.');
-          const key = parts[parts.length - 1];
-          acc[key] = m.crmField;
-          return acc;
-        }, {} as Record<string, string>),
-    ),
-    welcomeMessage: formData.welcomeMessage,
-    completionMessage: formData.completionMessage,
-    whatsappOwnerTemplate: formData.submissionActions.whatsappOwnerTemplate,
-    whatsappUserTemplate: formData.submissionActions.whatsappUserTemplate,
-    whatsappAiGenerated: formData.submissionActions.aiGenerateUserMessage,
+    fieldMappingJson: JSON.stringify(safeMappings),
+    welcomeMessage: formData.welcomeMessage || '',
+    completionMessage: formData.completionMessage || '',
+    whatsappOwnerTemplate: formData.submissionActions?.whatsappOwnerTemplate || '',
+    whatsappUserTemplate: formData.submissionActions?.whatsappUserTemplate || '',
+    whatsappAiGenerated: formData.submissionActions?.aiGenerateUserMessage || false,
   };
 }
 

@@ -51,6 +51,7 @@ import { INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
 import { getAllCountryOptions, getCitiesForCountry } from '@/lib/marketplace-cities';
 import { ClaimReview } from '@/components/views/superadmin/sections/claim-review';
 import { CertificationsReview } from '@/components/views/superadmin/sections/certifications-review';
+import { DirectoryReports } from '@/components/views/superadmin/sections/directory-reports';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -1848,6 +1849,10 @@ export function DirectoryListingsSection() {
             <ShieldCheck className="size-3.5" />
             Claims
           </TabsTrigger>
+          <TabsTrigger value="reports" className="gap-1.5">
+            <ShieldAlert className="size-3.5 text-red-500" />
+            Reports &amp; Moderation
+          </TabsTrigger>
           <TabsTrigger value="certifications" className="gap-1.5">
             <Award className="size-3.5" />
             Certifications
@@ -1865,6 +1870,9 @@ export function DirectoryListingsSection() {
         </TabsContent>
         <TabsContent value="claims" className="mt-4">
           <ClaimReview />
+        </TabsContent>
+        <TabsContent value="reports" className="mt-4">
+          <DirectoryReports />
         </TabsContent>
         <TabsContent value="certifications" className="mt-4">
           <CertificationsReview />

@@ -303,6 +303,8 @@ model Tenant {
   // Marketplace claim requests — a tenant can have many claim attempts
   // (only one will be approved; the rest are rejected).
   claimRequests       ClaimRequest[]
+  // Marketplace directory reports & privacy takedown requests
+  listingReports      ListingReport[]
   // Phase 2: Verification evidence rows (phone/email/Google/website/document)
   verificationEvidence VerificationEvidence[]
   // Customers (tenant-scoped — mirrors Lead/Job/Invoice tenant scoping)
@@ -7050,6 +7052,37 @@ model ClaimRequest {
   @@index([claimantUserId])
   @@index([status])
   @@index([completionToken])
+}
+
+// ─── Directory Listing Reports & Privacy Requests ────────────────────────────
+// Self-service reports submitted by visitors, business owners, or individuals:
+//   - Privacy phone / data removal requests (PIPEDA, GDPR, CCPA)
+//   - Category correction requests (e.g. Landscaping -> HVAC)
+//   - Business details updates (phone, website, hours)
+//   - Permanently closed business reports
+model ListingReport {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  reportType         String    // privacy_phone_removal | category_change | details_update | permanently_closed | other
+  submittedBy        String?
+  submitterEmail     String?
+  submitterPhone     String?
+  currentDataJson    String    @default("{}")
+  suggestedDataJson  String    @default("{}")
+  reason             String?
+  status             String    @default("pending") // pending | approved | rejected
+  adminNote          String?
+  reviewedById       String?
+  reviewedAt         DateTime?
+  appliedChangesJson String    @default("{}")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([reportType])
+  @@index([status])
 }
 
 // ─── Directory Location (European country/city catalogue) ───────────────────

@@ -332,15 +332,15 @@ export function FormStudioBuilder({
 
   const handleDeleteField = (id: string) => {
     onFormDataChange((prev) => {
-      const filtered = prev.fields.filter((f) => f.id !== id);
+      const filtered = (Array.isArray(prev.fields) ? prev.fields : []).filter((f) => f.id !== id);
       return {
         ...prev,
         fields: filtered,
-        fieldMappings: prev.fieldMappings.filter((m) => m.formFieldId !== id),
+        fieldMappings: (Array.isArray(prev.fieldMappings) ? prev.fieldMappings : []).filter((m) => m.formFieldId !== id),
       };
     });
     if (selectedFieldId === id) {
-      const remaining = formData.fields.filter((f) => f.id !== id);
+      const remaining = (Array.isArray(formData.fields) ? formData.fields : []).filter((f) => f.id !== id);
       setSelectedFieldId(remaining[0]?.id || null);
     }
     toast.info('Field removed');
@@ -1236,10 +1236,10 @@ export function FormStudioBuilder({
                             <span>Auto-Map to CRM Field</span>
                           </Label>
                           <Select
-                            value={formData.fieldMappings.find((m) => m.formFieldId === selectedField.id)?.crmField || 'none'}
+                            value={(Array.isArray(formData.fieldMappings) ? formData.fieldMappings : []).find((m) => m.formFieldId === selectedField.id)?.crmField || 'none'}
                             onValueChange={(crmField) => {
                               onFormDataChange((prev) => {
-                                const without = prev.fieldMappings.filter((m) => m.formFieldId !== selectedField.id);
+                                const without = (Array.isArray(prev.fieldMappings) ? prev.fieldMappings : []).filter((m) => m.formFieldId !== selectedField.id);
                                 if (crmField === 'none') return { ...prev, fieldMappings: without };
                                 return { ...prev, fieldMappings: [...without, { formFieldId: selectedField.id, crmField }] };
                               });
