@@ -61,6 +61,15 @@ export interface FormField {
   calculation?: FieldCalculation;
   scoring?: FieldScoring;
   config?: FieldConfig;
+  // ─── Specialized Widget & Payment Extensions ─────────────────────────────
+  widgetType?: string;
+  widgetConfig?: Record<string, any>;
+  customCss?: string;
+  labelAlign?: 'top' | 'left' | 'right' | 'hidden';
+  align?: 'left' | 'center' | 'right';
+  widthPx?: number | string;
+  heightPx?: number | string;
+  readOnly?: boolean;
 }
 
 export type FormType =

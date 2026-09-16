@@ -87,9 +87,11 @@ export async function POST(request: NextRequest) {
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
         marketplaceOptIn: false,
         marketplaceTermsAcceptedAt: null,
-        // Registered businesses created by owner are claimed by default
-        claimed: true,
-        listingTier: 'claimed',
+        // Registered businesses created by owner are claimed by default for CRM,
+        // but standalone AI Forms workspaces are isolated and not listed in directory
+        claimed: isStandalone ? false : true,
+        listingTier: isStandalone ? 'none' : 'claimed',
+        publicProfileEnabled: isStandalone ? false : true,
         signupMode: isStandalone ? 'standalone' : 'crm_trial',
         onboardingCompleted: isStandalone ? true : false,
         onboardingStep: isStandalone ? 4 : 1,
@@ -205,23 +207,23 @@ export async function POST(request: NextRequest) {
       // Non-blocking — user can import manually later
     }
 
-    // Auto-seed dummy public business hub data so the new tenant has a
-    // starting point they can edit from Settings → Public Hub. This populates
-    // the public profile (tagline, description, hours, FAQs, gallery),
-    // 4 demo services, and 5 demo reviews — all industry-aware. The tenant
-    // can edit or delete any of this from their dashboard.
-    try {
-      const { seedPublicBusinessForTenant } = await import('@/lib/seed-public-business')
-      await seedPublicBusinessForTenant({
-        tenantId: tenant.id,
-        industry: tenant.industry || undefined,
-        city: tenant.city || undefined,
-        state: tenant.state || undefined,
-      })
-      console.log(`[Register] Auto-seeded public hub for tenant ${tenant.id}`)
-    } catch (seedErr) {
-      console.warn('[Register] Failed to auto-seed public business hub:', seedErr)
-      // Non-blocking — tenant can seed manually from Settings → Public Hub
+    // Auto-seed dummy public business hub data so the new CRM tenant has a
+    // starting point they can edit from Settings → Public Hub.
+    // Standalone AI Forms accounts are skipped to avoid generating marketplace directory data.
+    if (!isStandalone) {
+      try {
+        const { seedPublicBusinessForTenant } = await import('@/lib/seed-public-business')
+        await seedPublicBusinessForTenant({
+          tenantId: tenant.id,
+          industry: tenant.industry || undefined,
+          city: tenant.city || undefined,
+          state: tenant.state || undefined,
+        })
+        console.log(`[Register] Auto-seeded public hub for tenant ${tenant.id}`)
+      } catch (seedErr) {
+        console.warn('[Register] Failed to auto-seed public business hub:', seedErr)
+        // Non-blocking — tenant can seed manually from Settings → Public Hub
+      }
     }
 
     // ── Email verification ────────────────────────────────────────────────
