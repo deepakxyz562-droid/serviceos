@@ -73,6 +73,7 @@ import {
 } from 'lucide-react'
 
 import { formatAddressForDisplay, type PublicBusinessData } from '@/lib/public-business'
+import { LazyServiceAreaMap } from '@/components/marketplace/lazy-service-area-map'
 import {
   getIndustryDisplayName,
 } from '@/lib/seo/industry-software-pages'
@@ -751,42 +752,16 @@ export function ServiceAreaMap({ business, serviceAreas }: EvergreenProps) {
         </div>
       )}
 
-      <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
-        <div className="relative aspect-[16/9] sm:aspect-[2/1] bg-muted">
-          <iframe
-            src={mapSrc}
-            title={`Map showing ${business.name} location`}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            className="absolute inset-0 h-full w-full"
-            style={{ border: 0 }}
-            aria-label={mapCaption}
-          />
-        </div>
-        <div className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {displayAddress || `${cityName}, ${countryName}`}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {serviceAreas.length > 0
-                ? `Serves ${serviceAreas.length} ${serviceAreas.length === 1 ? 'area' : 'areas'} in and around ${cityName || countryName}.`
-                : `Primarily serves ${cityName || countryName} and the surrounding area.`}
-            </p>
-          </div>
-          {displayAddress && (
-            <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(mapQuery)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-            >
-              <Navigation className="h-4 w-4" />
-              Get directions
-            </a>
-          )}
-        </div>
-      </div>
+      <LazyServiceAreaMap
+        businessName={business.name}
+        displayAddress={displayAddress}
+        cityName={cityName}
+        countryName={countryName}
+        serviceAreas={serviceAreas}
+        mapSrc={mapSrc}
+        mapQuery={mapQuery}
+        mapCaption={mapCaption}
+      />
     </section>
   )
 }

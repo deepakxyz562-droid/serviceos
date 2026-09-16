@@ -901,12 +901,12 @@ export function FormStudioBuilder({
               </div>
 
               {/* Canvas Paper Card */}
-              <div className="w-full max-w-2xl bg-background rounded-xl border border-border/80 shadow-md overflow-hidden pb-12 mb-24">
+              <div className="w-full max-w-2xl min-h-[620px] flex-1 flex flex-col justify-between bg-background rounded-2xl border border-border/80 shadow-lg overflow-scroll shrink-0">
                 {/* Decorative Brand Stripe */}
-                <div className="h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
+                <div className="h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 shrink-0" />
 
                 {/* Form Header */}
-                <div className="p-6 md:p-8 border-b border-border/60 space-y-2">
+                <div className="p-6 md:p-8 border-b border-border/60 space-y-2 shrink-0">
                   <input
                     type="text"
                     value={formData.name}
@@ -924,7 +924,7 @@ export function FormStudioBuilder({
                 </div>
 
                 {/* Form Fields List */}
-                <div className="p-4 md:p-6 space-y-3">
+                <div className="p-4 md:p-6 space-y-3 flex-1">
                   {formData.fields.length === 0 ? (
                     <div className="text-center py-12 border-2 border-dashed border-border/80 rounded-xl space-y-3">
                       <div className="size-12 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center mx-auto">
@@ -1180,7 +1180,7 @@ export function FormStudioBuilder({
                 </div>
 
                 {/* Submit Button Preview */}
-                <div className="p-6 md:p-8 bg-muted/20 border-t border-border/60 flex items-center justify-between">
+                <div className="p-6 md:p-8 bg-muted/20 border-t border-border/60 flex items-center justify-between shrink-0">
                   <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-6 shadow-sm">
                     Submit Request
                   </Button>
