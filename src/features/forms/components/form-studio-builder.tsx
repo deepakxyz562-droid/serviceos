@@ -21,7 +21,8 @@ import {
   AlignLeft, CheckSquare, CircleDot, Paperclip, PenTool, LayoutTemplate,
   EyeOff, CreditCard, ShieldCheck, MapPin, Camera, DollarSign,
   ListPlus, HelpCircle, Code, ShieldAlert, Navigation, Map,
-  Sliders, Bot, Send, Search, RefreshCw, Layers, CalendarCheck
+  Sliders, Bot, Send, Search, RefreshCw, Layers, CalendarCheck,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -433,7 +434,7 @@ export function FormStudioBuilder({
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] -m-4 md:-m-6 bg-slate-50 dark:bg-slate-950 overflow-hidden select-none">
+    <div className="flex-1 min-h-0 flex flex-col w-full h-full bg-slate-50 dark:bg-slate-950 overflow-hidden select-none">
       {/* ═════════════════════════════════════════════════════════════════════════
           TOP STUDIO APP BAR (JOTFORM SIGNATURE HEADER)
          ═════════════════════════════════════════════════════════════════════════ */}
@@ -557,44 +558,59 @@ export function FormStudioBuilder({
       <div className="flex-1 flex overflow-hidden relative">
         {/* ─── 1. BUILD TAB ─────────────────────────────────────────────────── */}
         {studioTab === 'build' && !isPreviewMode && (
-          <div className="flex-1 flex overflow-hidden w-full">
+          <div className="flex-1 flex overflow-hidden w-full relative">
             {/* ── LEFT DRAWER: 3-TAB ELEMENT & WIDGET PALETTE ── */}
             <aside
               className={cn(
-                'w-72 lg:w-80 border-r border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
-                !sidebarOpen && '-ml-72 lg:-ml-80'
+                'w-64 lg:w-72 border-r border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
+                !sidebarOpen && '-ml-64 lg:-ml-72'
               )}
             >
-              {/* Palette Tabs: BASIC | PAYMENTS | WIDGETS */}
-              <div className="grid grid-cols-3 border-b border-border/80 bg-muted/40 p-1 gap-1">
-                <button
-                  onClick={() => setPaletteTab('basic')}
-                  className={cn(
-                    'py-1.5 text-xs font-bold rounded-md transition-all',
-                    paletteTab === 'basic' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  )}
+              {/* Palette Tabs: BASIC | PAYMENTS | WIDGETS + Close button */}
+              <div className="flex items-center border-b border-border/80 bg-muted/40 p-1 gap-1">
+                <div className="grid grid-cols-3 flex-1 gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setPaletteTab('basic')}
+                    className={cn(
+                      'py-1.5 text-[11px] font-bold rounded-md transition-all',
+                      paletteTab === 'basic' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    BASIC
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaletteTab('payments')}
+                    className={cn(
+                      'py-1.5 text-[11px] font-bold rounded-md transition-all',
+                      paletteTab === 'payments' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    PAYMENTS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaletteTab('widgets')}
+                    className={cn(
+                      'py-1.5 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
+                      paletteTab === 'widgets' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <span>WIDGETS</span>
+                    <span className="px-1 text-[8px] bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-full font-bold">200+</span>
+                  </button>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSidebarOpen(false)}
+                  className="size-7 text-muted-foreground hover:text-foreground shrink-0 rounded-md"
+                  title="Collapse Elements Palette"
                 >
-                  BASIC
-                </button>
-                <button
-                  onClick={() => setPaletteTab('payments')}
-                  className={cn(
-                    'py-1.5 text-xs font-bold rounded-md transition-all',
-                    paletteTab === 'payments' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  PAYMENTS
-                </button>
-                <button
-                  onClick={() => setPaletteTab('widgets')}
-                  className={cn(
-                    'py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1',
-                    paletteTab === 'widgets' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <span>WIDGETS</span>
-                  <span className="px-1 text-[9px] bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-full">200+</span>
-                </button>
+                  <PanelLeftClose className="size-3.5" />
+                </Button>
               </div>
 
               {/* Search & Category Filter */}
@@ -785,7 +801,32 @@ export function FormStudioBuilder({
             </aside>
 
             {/* ── CENTER: INTERACTIVE PAPER CANVAS ── */}
-            <main className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center bg-slate-100 dark:bg-slate-900/70">
+            <main className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center bg-slate-100 dark:bg-slate-900/70 relative">
+              {/* Floating Drawer Expand Pills (when sidebars are closed) */}
+              {!sidebarOpen && (
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  className="fixed md:absolute left-4 top-20 md:top-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/95 hover:bg-background border border-border/80 shadow-md text-xs font-semibold text-foreground backdrop-blur transition-all hover:scale-105 active:scale-95"
+                  title="Open Elements Palette"
+                >
+                  <PanelLeftOpen className="size-3.5 text-emerald-600" />
+                  <span>+ Elements</span>
+                </button>
+              )}
+
+              {!propertiesOpen && (
+                <button
+                  type="button"
+                  onClick={() => setPropertiesOpen(true)}
+                  className="fixed md:absolute right-4 top-20 md:top-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/95 hover:bg-background border border-border/80 shadow-md text-xs font-semibold text-foreground backdrop-blur transition-all hover:scale-105 active:scale-95"
+                  title="Open Properties Inspector"
+                >
+                  <PanelRightOpen className="size-3.5 text-emerald-600" />
+                  <span>Properties</span>
+                </button>
+              )}
+
               {/* AI Co-Pilot & Import Command Bar */}
               <div className="w-full max-w-2xl mb-4 space-y-2">
                 <div className="p-2 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 shadow-xs">
@@ -1107,37 +1148,51 @@ export function FormStudioBuilder({
             {/* ── RIGHT DRAWER: DUAL INSPECTOR (⚙️ Question Properties & 🪄 Widget Settings + Custom CSS) ── */}
             <aside
               className={cn(
-                'w-80 lg:w-96 border-l border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
-                !propertiesOpen && '-mr-80 lg:-mr-96'
+                'w-72 lg:w-80 border-l border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
+                !propertiesOpen && '-mr-72 lg:-mr-80'
               )}
             >
-              {/* Dual Inspector Header Switcher */}
-              <div className="p-2 border-b border-border/80 bg-muted/40 grid grid-cols-2 gap-1">
-                <button
-                  onClick={() => setInspectorMode('properties')}
-                  className={cn(
-                    'py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5',
-                    inspectorMode === 'properties' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  )}
+              {/* Dual Inspector Header Switcher + Close Button */}
+              <div className="p-2 border-b border-border/80 bg-muted/40 flex items-center gap-1">
+                <div className="grid grid-cols-2 gap-1 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => setInspectorMode('properties')}
+                    className={cn(
+                      'py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5',
+                      inspectorMode === 'properties' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Settings className="size-3.5" />
+                    <span>Properties</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectorMode('widget_settings')}
+                    className={cn(
+                      'py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5',
+                      inspectorMode === 'widget_settings' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Wand2 className="size-3.5" />
+                    <span>Widget Settings</span>
+                  </button>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setPropertiesOpen(false)}
+                  className="size-7 text-muted-foreground hover:text-foreground shrink-0 rounded-md"
+                  title="Collapse Inspector"
                 >
-                  <Settings className="size-3.5" />
-                  <span>Properties</span>
-                </button>
-                <button
-                  onClick={() => setInspectorMode('widget_settings')}
-                  className={cn(
-                    'py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5',
-                    inspectorMode === 'widget_settings' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <Wand2 className="size-3.5" />
-                  <span>Widget Settings</span>
-                </button>
+                  <PanelRightClose className="size-3.5" />
+                </Button>
               </div>
 
               <ScrollArea className="flex-1 p-4">
                 {selectedField ? (
-                  <div className="space-y-4">
+                  <div className="space-y-4 pb-28">
                     {/* ════ MODE A: QUESTION PROPERTIES (⚙️) ════ */}
                     {inspectorMode === 'properties' && (
                       <div className="space-y-4">
@@ -1559,7 +1614,7 @@ export function FormStudioBuilder({
                     )}
                   </div>
                 ) : (
-                  <div className="text-center py-16 space-y-2 text-muted-foreground">
+                  <div className="text-center py-16 pb-28 space-y-2 text-muted-foreground">
                     <SlidersHorizontal className="size-8 mx-auto opacity-30" />
                     <p className="text-xs">Select any field or widget on the canvas to configure settings.</p>
                   </div>

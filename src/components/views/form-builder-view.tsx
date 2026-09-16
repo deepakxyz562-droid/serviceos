@@ -500,7 +500,7 @@ export function FormBuilderView() {
   }
 
   return (
-    <div className="space-y-6 w-full p-4 md:p-6 lg:p-8">
+    <div className="flex-1 overflow-y-auto w-full p-4 md:p-6 lg:p-8 space-y-6">
       {/* ─── Header ────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">

@@ -103,7 +103,7 @@ export function FormAgentStudio({
   };
 
   return (
-    <div className="flex flex-col h-screen w-full bg-background text-foreground overflow-hidden select-none">
+    <div className="flex-1 min-h-0 flex flex-col w-full bg-background text-foreground overflow-hidden select-none">
       {/* ═══════════════════════════════════════════════════════════════════════
           1. TOP NAVIGATION BAR (BUILD | TRAIN | PUBLISH + DEVICE SWITCHER)
          ═══════════════════════════════════════════════════════════════════════ */}

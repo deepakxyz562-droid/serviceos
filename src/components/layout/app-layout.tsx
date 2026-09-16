@@ -484,11 +484,20 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
   // Helper: check if a view needs full-height layout (no padding).
   const isViewFullHeight = (viewId: string) =>
-    viewId === 'canvas' || viewId === 'omnichannel' || viewId === 'dispatch';
+    viewId === 'canvas' ||
+    viewId === 'omnichannel' ||
+    viewId === 'dispatch' ||
+    viewId === 'formBuilder' ||
+    viewId === 'chatbotBuilder';
 
-  // Canvas, Omnichannel, and Live Dispatch views need no padding for full-screen display.
+  // Canvas, Omnichannel, Live Dispatch, Form Builder, and Chatbot Studio views need full-height flex layout.
   const isCanvas = currentView === 'canvas';
-  const isFullHeight = isCanvas || currentView === 'omnichannel' || currentView === 'dispatch';
+  const isFullHeight =
+    isCanvas ||
+    currentView === 'omnichannel' ||
+    currentView === 'dispatch' ||
+    currentView === 'formBuilder' ||
+    currentView === 'chatbotBuilder';
 
   // ─── Full-takeover console: SuperAdmin owns the entire viewport ─────────
   // The superadmin shell has its OWN top bar + left sidebar + bottom status
