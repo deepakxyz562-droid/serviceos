@@ -43,6 +43,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
 import {
   CRM_FIELDS, FIELD_TYPES, FORM_TYPES, PRIMARY_ACTIONS,
 } from '@/features/forms/types';
@@ -198,6 +199,19 @@ export function FormStudioBuilder({
     () => formData.fields.find((f) => f.id === selectedFieldId) || null,
     [formData.fields, selectedFieldId]
   );
+
+  const authTenant = useAppStore((s) => s.auth?.tenant) as any;
+  const isStandalone = authTenant?.signupMode === 'forms_standalone';
+
+  const isApiDependentWidget = useMemo(() => {
+    if (!selectedField?.widgetType) return false;
+    const wType = selectedField.widgetType;
+    const wDef = getWidgetById(wType);
+    if (wDef?.category === 'maps') return true;
+    if (wDef?.providerType === 'managed_available') return true;
+    if (['nearest_location_finder', 'route_planner_map', 'google_places_autocomplete', 'phone_verification_sms', 'sms_otp', 'address_lookup'].includes(wType)) return true;
+    return false;
+  }, [selectedField]);
 
   // Filtered payment gateways from 33-gateway registry
   const filteredPaymentGateways = useMemo(() => {
@@ -555,19 +569,19 @@ export function FormStudioBuilder({
       {/* ═════════════════════════════════════════════════════════════════════════
           MAIN STUDIO WORKSPACE
          ═════════════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 min-h-0 flex overflow-hidden relative w-full h-full">
         {/* ─── 1. BUILD TAB ─────────────────────────────────────────────────── */}
         {studioTab === 'build' && !isPreviewMode && (
-          <div className="flex-1 flex overflow-hidden w-full relative">
+          <div className="flex-1 min-h-0 flex overflow-hidden w-full h-full relative">
             {/* ── LEFT DRAWER: 3-TAB ELEMENT & WIDGET PALETTE ── */}
             <aside
               className={cn(
-                'w-64 lg:w-72 border-r border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
+                'w-64 lg:w-72 h-full min-h-0 border-r border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
                 !sidebarOpen && '-ml-64 lg:-ml-72'
               )}
             >
               {/* Palette Tabs: BASIC | PAYMENTS | WIDGETS + Close button */}
-              <div className="flex items-center border-b border-border/80 bg-muted/40 p-1 gap-1">
+              <div className="flex items-center border-b border-border/80 bg-muted/40 p-1 gap-1 shrink-0">
                 <div className="grid grid-cols-3 flex-1 gap-0.5">
                   <button
                     type="button"
@@ -614,7 +628,7 @@ export function FormStudioBuilder({
               </div>
 
               {/* Search & Category Filter */}
-              <div className="p-3 border-b border-border/60 space-y-2">
+              <div className="p-3 border-b border-border/60 space-y-2 shrink-0">
                 <div className="relative">
                   <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                   <Input
@@ -667,7 +681,7 @@ export function FormStudioBuilder({
               </div>
 
               {/* Palette Items Scrollable List */}
-              <ScrollArea className="flex-1 p-3">
+              <ScrollArea className="flex-1 min-h-0 h-full p-3 overflow-y-auto">
                 {/* 1. BASIC TAB */}
                 {paletteTab === 'basic' && (
                   <div className="space-y-1.5">
@@ -801,7 +815,7 @@ export function FormStudioBuilder({
             </aside>
 
             {/* ── CENTER: INTERACTIVE PAPER CANVAS ── */}
-            <main className="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col items-center bg-slate-100 dark:bg-slate-900/70 relative">
+            <main className="flex-1 min-h-0 h-full overflow-y-auto p-4 md:p-8 flex flex-col items-center bg-slate-100 dark:bg-slate-900/70 relative">
               {/* Floating Drawer Expand Pills (when sidebars are closed) */}
               {!sidebarOpen && (
                 <button
@@ -1148,12 +1162,12 @@ export function FormStudioBuilder({
             {/* ── RIGHT DRAWER: DUAL INSPECTOR (⚙️ Question Properties & 🪄 Widget Settings + Custom CSS) ── */}
             <aside
               className={cn(
-                'w-72 lg:w-80 border-l border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
+                'w-72 lg:w-80 h-full min-h-0 border-l border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
                 !propertiesOpen && '-mr-72 lg:-mr-80'
               )}
             >
               {/* Dual Inspector Header Switcher + Close Button */}
-              <div className="p-2 border-b border-border/80 bg-muted/40 flex items-center gap-1">
+              <div className="p-2 border-b border-border/80 bg-muted/40 flex items-center gap-1 shrink-0">
                 <div className="grid grid-cols-2 gap-1 flex-1">
                   <button
                     type="button"
@@ -1190,7 +1204,7 @@ export function FormStudioBuilder({
                 </Button>
               </div>
 
-              <ScrollArea className="flex-1 p-4">
+              <ScrollArea className="flex-1 min-h-0 h-full p-4 overflow-y-auto">
                 {selectedField ? (
                   <div className="space-y-4 pb-28">
                     {/* ════ MODE A: QUESTION PROPERTIES (⚙️) ════ */}
@@ -1284,35 +1298,37 @@ export function FormStudioBuilder({
 
                         <Separator />
 
-                        {/* CRM Mapping */}
-                        <div className="space-y-2">
-                          <Label className="text-xs font-semibold flex items-center gap-1.5">
-                            <Zap className="size-3.5 text-amber-500" />
-                            <span>Auto-Map to CRM Field</span>
-                          </Label>
-                          <Select
-                            value={(Array.isArray(formData.fieldMappings) ? formData.fieldMappings : []).find((m) => m.formFieldId === selectedField.id)?.crmField || 'none'}
-                            onValueChange={(crmField) => {
-                              onFormDataChange((prev) => {
-                                const without = (Array.isArray(prev.fieldMappings) ? prev.fieldMappings : []).filter((m) => m.formFieldId !== selectedField.id);
-                                if (crmField === 'none') return { ...prev, fieldMappings: without };
-                                return { ...prev, fieldMappings: [...without, { formFieldId: selectedField.id, crmField }] };
-                              });
-                            }}
-                          >
-                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="-- Select CRM Column --" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none" className="text-xs text-muted-foreground">-- No Mapping --</SelectItem>
-                              {CRM_FIELDS.map((group) =>
-                                group.fields.map((field) => (
-                                  <SelectItem key={field} value={field} className="text-xs">
-                                    {field} <span className="text-muted-foreground">({group.group})</span>
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                        {/* CRM Mapping (Only shown for CRM tenants, hidden for standalone) */}
+                        {!isStandalone && (
+                          <div className="space-y-2 pt-1 border-t border-border/40">
+                            <Label className="text-xs font-semibold flex items-center gap-1.5">
+                              <Zap className="size-3.5 text-amber-500" />
+                              <span>Auto-Map to CRM Field</span>
+                            </Label>
+                            <Select
+                              value={(Array.isArray(formData.fieldMappings) ? formData.fieldMappings : []).find((m) => m.formFieldId === selectedField.id)?.crmField || 'none'}
+                              onValueChange={(crmField) => {
+                                onFormDataChange((prev) => {
+                                  const without = (Array.isArray(prev.fieldMappings) ? prev.fieldMappings : []).filter((m) => m.formFieldId !== selectedField.id);
+                                  if (crmField === 'none') return { ...prev, fieldMappings: without };
+                                  return { ...prev, fieldMappings: [...without, { formFieldId: selectedField.id, crmField }] };
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="-- Select CRM Column --" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none" className="text-xs text-muted-foreground">-- No Mapping --</SelectItem>
+                                {CRM_FIELDS.map((group) =>
+                                  group.fields.map((field) => (
+                                    <SelectItem key={field} value={field} className="text-xs">
+                                      {field} <span className="text-muted-foreground">({group.group})</span>
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1504,44 +1520,73 @@ export function FormStudioBuilder({
                             })() : (
                               /* Standard Non-Payment Widget Controls */
                               <>
-                                {/* 3-Way Mode Selection for API-Dependent Widgets */}
-                                <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg space-y-2">
-                                  <Label className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
-                                    <Sparkles className="size-3.5 text-purple-600" />
-                                    <span>API Provider Mode</span>
-                                  </Label>
-                                  <Select
-                                    value={selectedField.widgetConfig?.provider || 'managed'}
-                                    onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'provider', val)}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="managed" className="text-xs">🚀 Fieseros Managed ($0.005 / lookup via Wallet)</SelectItem>
-                                      <SelectItem value="osm" className="text-xs">🟢 Free Built-in (OpenStreetMap / 100% Free)</SelectItem>
-                                      <SelectItem value="byok" className="text-xs">⚙️ Custom API Key (Bring Your Own Key)</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                {/* 3-Way Mode Selection for API-Dependent Widgets (Only shown if widget requires external API) */}
+                                {isApiDependentWidget && (
+                                  <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg space-y-2">
+                                    <Label className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                                      <Sparkles className="size-3.5 text-purple-600" />
+                                      <span>API Provider Mode</span>
+                                    </Label>
+                                    <Select
+                                      value={selectedField.widgetConfig?.provider || 'managed'}
+                                      onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'provider', val)}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="managed" className="text-xs">🚀 Fieseros Managed ($0.005 / lookup via Wallet)</SelectItem>
+                                        <SelectItem value="osm" className="text-xs">🟢 Free Built-in (OpenStreetMap / 100% Free)</SelectItem>
+                                        <SelectItem value="byok" className="text-xs">⚙️ Custom API Key (Bring Your Own Key)</SelectItem>
+                                      </SelectContent>
+                                    </Select>
 
-                                  {selectedField.widgetConfig?.provider === 'managed' && (
-                                    <div className="text-[10px] text-purple-700 dark:text-purple-300 space-y-1 pt-1">
-                                      <p>✓ Zero configuration required. Works instantly.</p>
-                                      <p>✓ $5.00 free monthly credits included with your plan.</p>
-                                    </div>
-                                  )}
+                                    {selectedField.widgetConfig?.provider === 'managed' && (
+                                      <div className="text-[10px] text-purple-700 dark:text-purple-300 space-y-1 pt-1">
+                                        <p>✓ Zero configuration required. Works instantly.</p>
+                                        <p>✓ $5.00 free monthly credits included with your plan.</p>
+                                      </div>
+                                    )}
 
-                                  {selectedField.widgetConfig?.provider === 'byok' && (
-                                    <div className="space-y-1.5 pt-2">
-                                      <Label className="text-[11px] font-semibold">Custom Google Maps / Twilio API Key</Label>
+                                    {selectedField.widgetConfig?.provider === 'byok' && (
+                                      <div className="space-y-1.5 pt-2">
+                                        <Label className="text-[11px] font-semibold">Custom API Key</Label>
+                                        <Input
+                                          type="password"
+                                          placeholder="Enter API Key..."
+                                          value={selectedField.widgetConfig?.apiKey || ''}
+                                          onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'apiKey', e.target.value)}
+                                          className="h-8 text-xs bg-background"
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Specialized Widget: Image Upload with Notes */}
+                                {selectedField.widgetType === 'image_upload_with_notes' && (
+                                  <div className="space-y-3 p-3 bg-muted/20 border border-border/60 rounded-lg">
+                                    <div className="space-y-1.5">
+                                      <Label className="text-xs font-semibold">Max Upload Files</Label>
                                       <Input
-                                        type="password"
-                                        placeholder="AIzaSy..."
-                                        value={selectedField.widgetConfig?.apiKey || ''}
-                                        onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'apiKey', e.target.value)}
+                                        type="number"
+                                        min={1}
+                                        max={25}
+                                        value={selectedField.widgetConfig?.maxFiles ?? 10}
+                                        onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'maxFiles', parseInt(e.target.value) || 5)}
                                         className="h-8 text-xs bg-background"
                                       />
                                     </div>
-                                  )}
-                                </div>
+                                    <div className="flex items-center justify-between pt-1">
+                                      <div>
+                                        <Label className="text-xs font-semibold">Require Notes per Photo</Label>
+                                        <p className="text-[10px] text-muted-foreground">Force respondent to describe damage</p>
+                                      </div>
+                                      <Switch
+                                        checked={selectedField.widgetConfig?.requireNotes ?? true}
+                                        onCheckedChange={(v) => handleUpdateWidgetConfig(selectedField.id, 'requireNotes', v)}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
 
                                 {/* Widget-Specific Controls */}
                                 {selectedField.widgetType === 'nearest_location_finder' && (

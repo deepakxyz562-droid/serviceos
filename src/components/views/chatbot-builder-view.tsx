@@ -32,7 +32,11 @@ import {
   createAgentFromPreset
 } from '@/features/forms/types/agent-types';
 
-export function ChatbotBuilderView() {
+export interface ChatbotBuilderViewProps {
+  embedded?: boolean;
+}
+
+export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps = {}) {
   // Active agents state
   const [agents, setAgents] = useState<FormAgentData[]>([
     DEFAULT_FORM_AGENT,
@@ -102,7 +106,7 @@ export function ChatbotBuilderView() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto w-full p-4 md:p-6 lg:p-8 pb-12 space-y-6">
+    <div className={cn('w-full space-y-6', !embedded ? 'flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-12' : 'pt-2')}>
       {/* ─── Header ────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-4 border-b border-border/60 pb-5">
         <div className="flex items-center gap-3">

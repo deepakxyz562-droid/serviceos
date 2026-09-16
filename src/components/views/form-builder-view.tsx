@@ -38,11 +38,12 @@ import {
   FormAgentData,
   createAgentFromPreset,
 } from '@/features/forms/types/agent-types';
-import {
-  DeleteConfirmDialog, EmbedDialog, PreviewDialog, ResponsesDialog,
+import { DeleteConfirmDialog, EmbedDialog, PreviewDialog, ResponsesDialog,
   WhatsAppSendDialog,
 } from '@/features/forms/components/form-action-dialogs';
 import { AiWebsiteFormDialog } from '@/features/forms/components/ai-website-form-dialog';
+import { ChatbotBuilderView } from '@/components/views/chatbot-builder-view';
+import { useAppStore } from '@/store/app-store';
 import { Bot } from 'lucide-react';
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -52,9 +53,17 @@ export function FormBuilderView() {
   const [formsLoading, setFormsLoading] = useState(true);
   const [formsError, setFormsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'forms' | 'submissions'>('forms');
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [viewMode, setViewMode] = useState<'forms' | 'chatbots' | 'submissions'>('forms');
+  const authTenant = useAppStore((s) => s.auth?.tenant) as any;
+  const isStandalone = authTenant?.signupMode === 'forms_standalone';
+  const [addonPaid, setAddonPaid] = useState(false);
+  const hasAddon =
+    isStandalone ||
+    addonPaid ||
+    authTenant?.featuresJson?.aiFormsAddon === true ||
+    authTenant?.featuresJson?.aiForms === true ||
+    authTenant?.plan === 'enterprise' ||
+    authTenant?.planStatus === 'trial';
   const [showAiWebsiteDialog, setShowAiWebsiteDialog] = useState(false);
   const [showAiAgentStudio, setShowAiAgentStudio] = useState(false);
   const [agentStudioData, setAgentStudioData] = useState<FormAgentData | null>(null);
@@ -501,15 +510,52 @@ export function FormBuilderView() {
 
   return (
     <div className="flex-1 overflow-y-auto w-full p-4 md:p-6 lg:p-8 space-y-6">
+      {/* ─── Add-on Module Banner (for CRM users without active addon) ──────── */}
+      {!hasAddon && (
+        <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 p-5 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex items-center gap-2">
+              <Badge className="bg-emerald-600 text-white text-[10px] font-bold">ADD-ON MODULE</Badge>
+              <h3 className="text-base font-bold text-foreground">AI Forms &amp; Chatbot Studio Suite</h3>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Build interactive smart forms, 200+ widgets, payment checkouts (Stripe/PayPal), and 11-channel AI chatbots with instant CRM pipeline synchronization.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] font-medium text-foreground/80">
+              <span className="flex items-center gap-1"><CheckCircle2 className="size-3.5 text-emerald-600" /> Unlimited AI Forms</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="size-3.5 text-emerald-600" /> 11-Channel Chatbots</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="size-3.5 text-emerald-600" /> 33 Payment Gateways</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="size-3.5 text-emerald-600" /> 200+ Widgets</span>
+            </div>
+          </div>
+          <div className="flex flex-col items-start md:items-end gap-2 shrink-0 w-full md:w-auto">
+            <div className="text-left md:text-right">
+              <span className="text-2xl font-black text-foreground">$10</span>
+              <span className="text-xs text-muted-foreground"> / month</span>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => {
+                setAddonPaid(true);
+                toast.success('✨ $10/mo AI Forms & Chatbot Add-on activated successfully!');
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-5 shadow-sm gap-1.5 w-full md:w-auto"
+            >
+              <Sparkles className="size-3.5" /> Activate Add-on ($10/mo)
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* ─── Header ────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
-            <FileInput className="size-5 text-white" />
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 text-white">
+            <FileInput className="size-5" />
           </div>
           <div>
-            <h2 className="text-xl font-bold">Form Builder</h2>
-            <p className="text-sm text-muted-foreground">Build forms that create leads, bookings &amp; more</p>
+            <h2 className="text-xl font-bold">AI &amp; Forms Studio</h2>
+            <p className="text-sm text-muted-foreground">Smart form generation, conversational chatbots &amp; lead pipelines</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -536,14 +582,17 @@ export function FormBuilderView() {
         </div>
       </div>
 
-      {/* ─── Mode Switcher Tabs ────────────────────────────────────────────── */}
-      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'forms' | 'submissions')} className="w-full space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+      {/* ─── Mode Switcher Tabs (AI Forms | Chatbot Builder | Submissions) ── */}
+      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'forms' | 'chatbots' | 'submissions')} className="w-full space-y-6">
+        <TabsList className="grid w-full max-w-xl grid-cols-3">
           <TabsTrigger value="forms" className="gap-1.5 text-xs font-semibold">
-            <FileInput className="size-3.5" /> Form Builder
+            <FileInput className="size-3.5" /> AI Forms
+          </TabsTrigger>
+          <TabsTrigger value="chatbots" className="gap-1.5 text-xs font-semibold">
+            <Bot className="size-3.5" /> Chatbot Builder
           </TabsTrigger>
           <TabsTrigger value="submissions" className="gap-1.5 text-xs font-semibold">
-            <Inbox className="size-3.5" /> Submissions &amp; Lead Store
+            <Inbox className="size-3.5" /> Submissions
             {totalSubmissions > 0 && (
               <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">
                 {totalSubmissions}
@@ -757,6 +806,10 @@ export function FormBuilderView() {
           )}
         </>
       )}
+        </TabsContent>
+
+        <TabsContent value="chatbots" className="mt-0 space-y-6">
+          <ChatbotBuilderView embedded={true} />
         </TabsContent>
 
         <TabsContent value="submissions" className="mt-0">
