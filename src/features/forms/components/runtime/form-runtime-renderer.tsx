@@ -279,7 +279,7 @@ export function FormRuntimeRenderer({
           </Button>
           <Button
             type="button"
-            variant={activeMode === 'agent' ? 'secondary' : 'ghost'}
+            variant={(activeMode as 'paper' | 'card' | 'agent') === 'agent' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => handleModeSwitch('agent')}
             className="text-xs h-7 gap-1 text-emerald-600"

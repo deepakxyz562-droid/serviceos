@@ -22,7 +22,30 @@ export type FormFieldType =
   | 'signature'
   | 'rating'
   | 'heading'
-  | 'paragraph';
+  | 'paragraph'
+  // ── Widget & payment extensions ──
+  | 'control_widget'
+  | 'currency'
+  | 'calculated'
+  | 'image_upload_with_notes'
+  | 'route_planner'
+  | 'nearest_location'
+  | 'service_area'
+  | 'payment_gateway'
+  | 'sms_otp'
+  | 'voice_recorder'
+  | 'signature_pad'
+  | 'form_calculation'
+  | 'text_count'
+  | 'line_button'
+  | 'bsb_checker'
+  | 'codice_fiscale'
+  | 'turnstile'
+  | 'france_region'
+  | 'inventory_dropdown'
+  | 'digital_magazine'
+  | 'street_view'
+  | 'most_frequent_answer';
 
 export interface FieldOption {
   label: string;
@@ -48,6 +71,16 @@ export interface FormField {
     pattern?: string;
     allowedExtensions?: string[];
   };
+  // ─── Specialized Widget & Payment Extensions ─────────────────────────────
+  widgetType?: string;
+  widgetConfig?: Record<string, unknown>;
+  customCss?: string;
+  labelAlign?: 'top' | 'left' | 'right' | 'hidden';
+  align?: 'left' | 'center' | 'right';
+  widthPx?: number | string;
+  heightPx?: number | string;
+  readOnly?: boolean;
+  description?: string;
 }
 
 export interface FormStep {

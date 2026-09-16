@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai-client';
-import { DEFAULT_FORM_SCHEMA, FormSchema } from '@/lib/forms/form-schema-types';
+import { DEFAULT_FORM_SCHEMA, FormSchema, FormField } from '@/lib/forms/form-schema-types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -103,7 +103,7 @@ Guidelines:
           { id: 'step_2', title: 'Service Details', description: 'Tell us about your request' },
           { id: 'step_3', title: 'Confirmation & Schedule', description: 'Finalize your request' },
         ],
-        fields: [
+        fields: ([
           { id: 'f_name', type: 'short_answer', label: 'Full Name', placeholder: 'John Doe', required: true, stepId: 'step_1', width: 'half' },
           { id: 'f_email', type: 'email', label: 'Email Address', placeholder: 'john@example.com', required: true, stepId: 'step_1', width: 'half' },
           { id: 'f_phone', type: 'phone', label: 'Phone Number', placeholder: '+1 (555) 000-0000', required: true, stepId: 'step_1', width: 'full' },
@@ -148,7 +148,7 @@ Guidelines:
             stepId: 'step_3',
             width: 'full',
           },
-        ],
+        ] as FormField[]),
         rules: [],
         theme: {
           primaryColor: '#059669',

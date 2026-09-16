@@ -32,7 +32,10 @@ export function WidgetRuntimeDispatcher({
   disabled = false,
 }: WidgetRuntimeDispatcherProps) {
   const widgetType = field.widgetType || '';
-  const config = field.widgetConfig || {};
+  // Cast to Record<string, any> so property access returns `any` instead of `unknown`.
+  // The widget config is freeform JSON defined per-widget — we trust the runtime
+  // to pass the right shape based on widgetType.
+  const config: Record<string, any> = field.widgetConfig || {};
 
   // Check if this field is a payment gateway widget
   if (

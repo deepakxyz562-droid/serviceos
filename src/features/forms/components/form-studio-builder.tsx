@@ -21,7 +21,7 @@ import {
   AlignLeft, CheckSquare, CircleDot, Paperclip, PenTool, LayoutTemplate,
   EyeOff, CreditCard, ShieldCheck, MapPin, Camera, DollarSign,
   ListPlus, HelpCircle, Code, ShieldAlert, Navigation, Map,
-  Sliders, Bot, Send, Search, RefreshCw, Layers
+  Sliders, Bot, Send, Search, RefreshCw, Layers, CalendarCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ import type {
   EditorFormData, FieldType, FormField,
   FormStatus, FormType, PrimaryAction,
 } from '@/features/forms/types';
+import { DEFAULT_FORM_AGENT } from '@/features/forms/types/agent-types';
 import {
   WIDGET_REGISTRY, WIDGET_CATEGORIES, WidgetCategory,
   WidgetDefinition, searchWidgets, getWidgetById,
@@ -158,13 +159,17 @@ export function FormStudioBuilder({
       })),
       theme: {
         primaryColor: formData.primaryColor || '#059669',
+        backgroundColor: '#ffffff',
+        textColor: '#0f172a',
         borderRadius: `${formData.borderRadius || 12}px`,
-        layout: previewFormat,
+        layout: previewFormat === 'card' ? 'card' : previewFormat === 'agent' ? 'conversational' : 'classic',
       },
+      rules: [],
       settings: {
         submitButtonText: formData.submitButtonText || 'Submit',
         successTitle: 'Thank you!',
         successMessage: formData.successMessage || 'Your submission has been received.',
+        actions: {},
       },
     };
   }, [formData, previewFormat]);
@@ -1243,9 +1248,13 @@ export function FormStudioBuilder({
                             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="-- Select CRM Column --" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none" className="text-xs text-muted-foreground">-- No Mapping --</SelectItem>
-                              {CRM_FIELDS.map((cf) => (
-                                <SelectItem key={cf.value} value={cf.value} className="text-xs">{cf.label}</SelectItem>
-                              ))}
+                              {CRM_FIELDS.map((group) =>
+                                group.fields.map((field) => (
+                                  <SelectItem key={field} value={field} className="text-xs">
+                                    {field} <span className="text-muted-foreground">({group.group})</span>
+                                  </SelectItem>
+                                ))
+                              )}
                             </SelectContent>
                           </Select>
                         </div>

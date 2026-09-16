@@ -6,6 +6,12 @@ import { db } from '@/lib/db';
  *
  * Captures incomplete / drop-off form leads when a respondent enters
  * their email or phone number but abandons before final submission.
+ *
+ * Uses the existing FormResponse table with status='partial' (added in
+ * Phase 6). No separate FormSubmission model is needed — a partial lead
+ * is just a FormResponse that hasn't been completed yet. When the user
+ * eventually submits the full form, the submit route updates the
+ * existing partial row to status='completed' (matched by email/phone).
  */
 export async function POST(
   request: NextRequest,
@@ -28,6 +34,7 @@ export async function POST(
       select: {
         id: true,
         tenantId: true,
+        workspaceId: true,
         name: true,
       },
     });
@@ -36,51 +43,60 @@ export async function POST(
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
-    // Upsert or log partial lead in FormSubmission or Lead table
+    // Upsert partial lead using FormResponse with status='partial'
     try {
-      // Check if a recent partial submission exists within 15 minutes
       const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
-      const existing = await db.formSubmission.findFirst({
+
+      // Find an existing partial response from this visitor within the last 15 min
+      const existing = await db.formResponse.findFirst({
         where: {
           formId: form.id,
           status: 'partial',
           createdAt: { gte: fifteenMinsAgo },
           OR: [
-            ...(email ? [{ respondentEmail: String(email).toLowerCase().trim() }] : []),
-            ...(phone ? [{ respondentPhone: String(phone).trim() }] : []),
+            ...(email ? [{ respondent: String(email).toLowerCase().trim() }] : []),
+            ...(phone ? [{ respondent: String(phone).trim() }] : []),
           ],
         },
       });
 
+      const mergedData = {
+        ...(partialData || {}),
+        ...(email ? { email: String(email).toLowerCase().trim() } : {}),
+        ...(phone ? { phone: String(phone).trim() } : {}),
+        ...(name ? { name: String(name).trim() } : {}),
+        _isPartialDropoff: true,
+        _lastActivity: new Date().toISOString(),
+      };
+
       if (existing) {
-        // Update partial data
-        await db.formSubmission.update({
+        // Update the existing partial response with the latest data
+        const prevData = (() => {
+          try { return JSON.parse(existing.dataJson || '{}'); } catch { return {}; }
+        })();
+
+        await db.formResponse.update({
           where: { id: existing.id },
           data: {
-            dataJson: JSON.stringify({
-              ...JSON.parse(existing.dataJson || '{}'),
-              ...partialData,
-              _isPartialDropoff: true,
-              _lastActivity: new Date().toISOString(),
-            }),
+            dataJson: JSON.stringify({ ...prevData, ...mergedData }),
+            respondent: email || phone || existing.respondent,
+            respondentName: name || existing.respondentName,
+            startedAt: existing.startedAt || existing.createdAt,
           },
         });
       } else {
-        // Create new partial drop-off record
-        await db.formSubmission.create({
+        // Create a new partial response record
+        await db.formResponse.create({
           data: {
             formId: form.id,
             tenantId: form.tenantId,
+            workspaceId: form.workspaceId,
             status: 'partial',
             source: 'partial_lead_capture',
-            respondentEmail: email ? String(email).toLowerCase().trim() : null,
-            respondentPhone: phone ? String(phone).trim() : null,
-            respondentName: name ? String(name).trim() : null,
-            dataJson: JSON.stringify({
-              ...partialData,
-              _isPartialDropoff: true,
-              _capturedAt: new Date().toISOString(),
-            }),
+            respondent: email || phone || null,
+            respondentName: name || null,
+            dataJson: JSON.stringify(mergedData),
+            startedAt: new Date(),
           },
         });
       }

@@ -172,6 +172,8 @@ export type ViewType =
   | 'liveChat' | 'smsNumbers'
   // Automation
   | 'workflows' | 'canvas' | 'triggers' | 'variables' | 'executions' | 'formBuilder' | 'workflowAutomations'
+  // Forms Product (standalone AI Forms)
+  | 'formsDashboard' | 'formSubmissions' | 'formsAnalytics'
   // Operations
   | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'realtimeStatus' | 'employees' | 'employeePerformance' | 'timesheet' | 'recurringJobs'
   | 'inventory' | 'purchaseOrders'

@@ -26,10 +26,19 @@ export function VoiceRecorder({
     let interval: NodeJS.Timeout;
     if (isRecording) {
       interval = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
-    } else {
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
+
+  // Reset recording seconds when recording stops (separate effect to avoid
+  // calling setState synchronously during the main effect body).
+  useEffect(() => {
+    if (!isRecording) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRecordingSeconds(0);
     }
-    return () => clearInterval(interval);
   }, [isRecording]);
 
   const startRecording = async () => {

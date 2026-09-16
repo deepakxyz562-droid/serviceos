@@ -88,7 +88,7 @@ export function FormsAnalyticsView() {
     { label: 'Avg Completion', value: formatTime(data?.avgCompletionTimeSec ?? 0), icon: Clock, color: 'text-purple-600' },
   ];
 
-  const renderBreakdown = (title: string, data: Record<string, number> | undefined, icon: React.ElementType) => {
+  const renderBreakdown = (title: string, data: Record<string, number> | undefined, Icon: React.ElementType) => {
     const entries = data ? Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 10) : [];
     const total = entries.reduce((sum, [, count]) => sum + count, 0);
 
@@ -96,7 +96,7 @@ export function FormsAnalyticsView() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm">
-            <icon className="w-4 h-4 text-muted-foreground" />
+            <Icon className="w-4 h-4 text-muted-foreground" />
             {title}
           </CardTitle>
         </CardHeader>

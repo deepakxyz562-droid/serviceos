@@ -44,10 +44,13 @@ export function ConversationalAgentRuntime({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Initial welcome message — use hasInitialized ref to avoid cascading renders.
+  const hasInitialized = useRef(false);
   useEffect(() => {
-    // Initial welcome message
-    if (messages.length === 0 && fields.length > 0) {
+    if (!hasInitialized.current && messages.length === 0 && fields.length > 0) {
+      hasInitialized.current = true;
       const firstField = fields[0];
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages([
         {
           id: 'msg_welcome',

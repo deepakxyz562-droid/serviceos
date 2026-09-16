@@ -26,18 +26,15 @@ export async function GET(
     const tenantId = user.tenantId;
 
     // Find the form, scoped to the caller's workspace OR tenant (backward compat).
-    const formWhere: Record<string, unknown> = {
-      id,
-      OR: [
-        ...(workspaceId ? [{ workspaceId }] : []),
-        ...(tenantId ? [{ tenantId }] : []),
-      ],
-    };
-    if (!formWhere.OR.length) {
+    const scopeOR = [
+      ...(workspaceId ? [{ workspaceId }] : []),
+      ...(tenantId ? [{ tenantId }] : []),
+    ] as const;
+    if (!scopeOR.length) {
       return apiError(403, 'No workspace or tenant access', 'FORBIDDEN');
     }
 
-    const form = await db.form.findFirst({ where: formWhere });
+    const form = await db.form.findFirst({ where: { id, OR: [...scopeOR] } });
     if (!form) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
@@ -90,18 +87,15 @@ export async function DELETE(
     const tenantId = user.tenantId;
 
     // Verify the form belongs to the caller's workspace/tenant.
-    const formWhere: Record<string, unknown> = {
-      id,
-      OR: [
-        ...(workspaceId ? [{ workspaceId }] : []),
-        ...(tenantId ? [{ tenantId }] : []),
-      ],
-    };
-    if (!formWhere.OR.length) {
+    const scopeOR = [
+      ...(workspaceId ? [{ workspaceId }] : []),
+      ...(tenantId ? [{ tenantId }] : []),
+    ] as const;
+    if (!scopeOR.length) {
       return apiError(403, 'No workspace or tenant access', 'FORBIDDEN');
     }
 
-    const form = await db.form.findFirst({ where: formWhere });
+    const form = await db.form.findFirst({ where: { id, OR: [...scopeOR] } });
     if (!form) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }

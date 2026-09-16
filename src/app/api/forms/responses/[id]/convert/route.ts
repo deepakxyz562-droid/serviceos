@@ -54,14 +54,14 @@ export async function POST(
       const lead = await db.lead.create({
         data: {
           name,
-          phone: phone || null,
+          phone: phone || '',
           email: email || null,
           address: address || null,
-          notes: `Form Submission: ${response.form?.name || 'Smart Form'}\n${notes}`,
+          description: `Form Submission: ${response.form?.name || 'Smart Form'}\n${notes}`,
           source: `Form: ${response.form?.name || 'Web Form'}`,
           serviceType,
           status: 'new',
-          tenantId: effectiveTenantId,
+          ...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
           tagsJson: JSON.stringify(['form_submission', response.form?.type || 'lead_capture']),
         },
       });
@@ -104,7 +104,7 @@ export async function POST(
           status: 'scheduled',
           priority: 'medium',
           type: 'booking',
-          tenantId: effectiveTenantId,
+          ...(effectiveTenantId ? { tenantId: effectiveTenantId } : {}),
         },
       });
 

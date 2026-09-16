@@ -125,10 +125,10 @@ export async function POST(
 
         await db.lead.create({
           data: {
-            tenantId: form.tenantId,
+            ...(form.tenantId ? { tenantId: form.tenantId } : {}),
             name: respondentName || respondentEmail || 'Website Form Lead',
             email: respondentEmail || null,
-            phone: respondentPhone || null,
+            phone: respondentPhone || '',
             source: 'Website Form',
             description: `Generated via form: ${form.name}\n\n${leadNotes}`,
             status: 'new',

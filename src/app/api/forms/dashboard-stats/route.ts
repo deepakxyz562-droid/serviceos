@@ -22,15 +22,14 @@ export async function GET(_request: NextRequest) {
   const tenantId = user.tenantId;
 
   // Build the where clause — prefer workspaceId, fall back to tenantId.
-  const formWhere: Record<string, unknown> = {
-    OR: [
-      ...(workspaceId ? [{ workspaceId }] : []),
-      ...(tenantId ? [{ tenantId }] : []),
-    ],
-  };
-  if (!formWhere.OR.length) {
+  const scopeOR = [
+    ...(workspaceId ? [{ workspaceId }] : []),
+    ...(tenantId ? [{ tenantId }] : []),
+  ] as const;
+  if (!scopeOR.length) {
     return NextResponse.json({ error: 'No workspace access' }, { status: 403 });
   }
+  const formWhere = { OR: [...scopeOR] };
 
   // Total forms + active forms
   const [totalForms, activeForms] = await Promise.all([

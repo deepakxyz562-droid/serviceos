@@ -23,7 +23,9 @@ export type FormResponseStatus =
   | 'approved'
   | 'rejected'
   | 'spam'
-  | 'archived';
+  | 'archived'
+  | 'completed' // legacy default for responses created before the status field was added
+  | 'partial';  // drop-off capture (respondent started but didn't submit)
 
 export interface ApprovalTransition {
   from: FormResponseStatus;
@@ -41,6 +43,10 @@ export const VALID_TRANSITIONS: Record<FormResponseStatus, FormResponseStatus[]>
   rejected: ['archived'],
   spam: ['archived', 'new'],
   archived: ['new'],
+  // Legacy 'completed' responses behave like 'approved' (already submitted + processed)
+  completed: ['approved', 'archived'],
+  // Partial responses (drop-off capture) can be completed or archived
+  partial: ['new', 'completed', 'archived'],
 };
 
 /**

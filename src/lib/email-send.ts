@@ -24,6 +24,12 @@ export interface SendEmailOptions {
   subject: string
   html?: string
   text?: string
+  // ── Sender overrides (optional) ──
+  // When provided, overrides the provider's default from-address.
+  // Format: "Name <email@domain.com>" or just "email@domain.com"
+  from?: string
+  // Reply-To address (defaults to the from-address)
+  replyTo?: string
   // Specific EmailProvider ID (new model)
   providerId?: string
   // Specific legacy Credential ID (backward compat)

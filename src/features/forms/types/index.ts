@@ -70,6 +70,17 @@ export interface FormField {
   widthPx?: number | string;
   heightPx?: number | string;
   readOnly?: boolean;
+  // ─── Schema-compatible fields (aligned with form-schema-types.ts) ────────
+  helpText?: string;
+  width?: 'full' | 'half';
+  stepId?: string;
+  defaultValue?: string | number | boolean;
+  validation?: {
+    min?: number;
+    max?: number;
+    pattern?: string;
+    allowedExtensions?: string[];
+  };
 }
 
 export type FormType =
@@ -152,6 +163,12 @@ export interface EditorFormData {
   fieldMappings: CRMFieldMapping[];
   welcomeMessage: string;
   completionMessage: string;
+  // ── Studio builder theme + runtime extensions ──
+  primaryColor?: string;
+  borderRadius?: number;
+  submitButtonText?: string;
+  successMessage?: string;
+  id?: string;
 }
 
 /**
