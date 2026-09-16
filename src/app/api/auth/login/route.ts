@@ -145,6 +145,9 @@ export async function POST(request: NextRequest) {
               trialEndsAt: user.tenant.trialEndsAt,
               onboardingCompleted: user.tenant.onboardingCompleted,
               onboardingStep: user.tenant.onboardingStep,
+              listingTier: user.tenant.listingTier,
+              signupMode: user.tenant.signupMode,
+              marketplaceOptIn: user.tenant.marketplaceOptIn,
             }
           : null,
       },

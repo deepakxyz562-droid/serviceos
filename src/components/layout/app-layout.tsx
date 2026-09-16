@@ -442,7 +442,9 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const isStandaloneTenant =
     (auth?.tenant as any)?.signupMode === 'standalone' ||
     (auth?.tenant as any)?.plan === 'standalone_starter' ||
-    (auth?.tenant as any)?.plan === 'standalone_business';
+    (auth?.tenant as any)?.plan === 'standalone_business' ||
+    String((auth?.tenant as any)?.plan || '').startsWith('standalone') ||
+    (auth?.user as any)?.role === 'standalone_user';
   useEffect(() => {
     if (isStandaloneTenant && (currentView === 'dashboard' || currentView === 'marketplaceDashboard')) {
       setCurrentView('formsDashboard');

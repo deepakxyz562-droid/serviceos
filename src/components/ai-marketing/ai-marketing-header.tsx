@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Zap,
   Bot,
+  CreditCard,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
@@ -65,9 +66,9 @@ export function AiMarketingHeader() {
                   Products <ChevronDown className="size-3.5 opacity-60" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64 p-2">
+              <DropdownMenuContent align="start" className="w-72 p-2">
                 <DropdownMenuItem asChild>
-                  <Link href="#receptionist" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                  <Link href="/ai-employee" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <Bot className="size-4 text-emerald-600 mt-0.5" />
                     <div>
                       <p className="font-semibold text-xs text-foreground">AI Website Employee</p>
@@ -76,28 +77,28 @@ export function AiMarketingHeader() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="#forms" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                  <Link href="/ai-forms" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <FileInput className="size-4 text-teal-600 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-xs text-foreground">Conversational Forms</p>
-                      <p className="text-[11px] text-muted-foreground">Turn forms into dynamic conversations</p>
+                      <p className="font-semibold text-xs text-foreground">AI Smart Forms &amp; 200+ Widgets</p>
+                      <p className="text-[11px] text-muted-foreground">Paper, Card &amp; AI Chatbot runtime modes</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="#knowledge" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <Globe className="size-4 text-purple-600 mt-0.5" />
+                  <Link href="/ai-forms#payments" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                    <CreditCard className="size-4 text-purple-600 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-xs text-foreground">Website Knowledge Scraper</p>
-                      <p className="text-[11px] text-muted-foreground">Train AI on your website &amp; PDFs</p>
+                      <p className="font-semibold text-xs text-foreground">33 Payment Gateways (0% Fee)</p>
+                      <p className="text-[11px] text-muted-foreground">UPI QR, BNPL 4x, Cards, Invoices</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="#wordpress" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                  <Link href="/ai-employee#wordpress" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <FileCode className="size-4 text-blue-600 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-xs text-foreground">WordPress Plugin &amp; Embed</p>
+                      <p className="font-semibold text-xs text-foreground">WordPress Plugin &amp; JS Embed</p>
                       <p className="text-[11px] text-muted-foreground">1-line JS embed for any CMS</p>
                     </div>
                   </Link>
@@ -174,6 +175,12 @@ export function AiMarketingHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <Link href="/ai-employee" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
+              AI Employee
+            </Link>
+            <Link href="/ai-forms" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
+              AI Forms
+            </Link>
             <Link href="#pricing" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
               Pricing
             </Link>
