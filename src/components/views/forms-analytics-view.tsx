@@ -127,7 +127,7 @@ export function FormsAnalyticsView() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full p-4 md:p-6 lg:p-8">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
         <p className="text-sm text-muted-foreground mt-1">

@@ -244,8 +244,6 @@ const standaloneNavSections: NavSection[] = [
     title: 'Account',
     items: [
       { view: 'billing', label: 'Plan & Billing', icon: CreditCard },
-      { view: 'settings', label: 'Settings', icon: Settings },
-      { view: 'helpCenter', label: 'Help & Support', icon: LifeBuoy },
     ],
   },
 ];
@@ -793,8 +791,8 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         </div>
       )}
 
-      {/* + Create quick-action button (owner/admin only — tenant CRUD actions) */}
-      {!isSuperAdmin && !isEmployee && (
+      {/* + Create quick-action button (owner/admin only — tenant CRUD actions; hidden for standalone AI Forms) */}
+      {!isSuperAdmin && !isEmployee && !isStandalone && (
         <div className="px-3 pt-3 pb-1 shrink-0">
           <CreateMenu
             isMobile={isMobile}

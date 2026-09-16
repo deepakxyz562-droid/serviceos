@@ -133,7 +133,7 @@ export function IntegrationsView() {
     .sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || a.sortOrder - b.sortOrder);
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="space-y-6 w-full p-4 md:p-6 lg:p-8">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">

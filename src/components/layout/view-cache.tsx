@@ -159,8 +159,8 @@ export function ViewCache({
               // main scrolls). Inactive: hidden (display: none, stays mounted).
               isActive
                 ? viewIsFullHeight
-                  ? 'flex-1 min-h-0 flex flex-col'
-                  : ''
+                  ? 'flex-1 min-h-0 flex flex-col w-full'
+                  : 'w-full min-h-full'
                 : 'hidden',
               className,
             )}
