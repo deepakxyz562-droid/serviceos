@@ -53,7 +53,9 @@ export function FormBuilderView() {
   const [formsLoading, setFormsLoading] = useState(true);
   const [formsError, setFormsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'forms' | 'chatbots' | 'submissions'>('forms');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const authTenant = useAppStore((s) => s.auth?.tenant) as any;
   const isStandalone = authTenant?.signupMode === 'forms_standalone';
   const [addonPaid, setAddonPaid] = useState(false);
