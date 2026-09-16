@@ -38,6 +38,193 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'prompt is required' }, { status: 400 });
     }
 
+    // Fast heuristic check for direct comma/list prompts (e.g. "Name, Email, Service Listing (AC Repair, Plumbing), Message, Map in footer")
+    const splitOutsideParens = (str: string): string[] => {
+      const parts: string[] = [];
+      let current = '';
+      let inParens = 0;
+      for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        if (char === '(') inParens++;
+        else if (char === ')') inParens = Math.max(0, inParens - 1);
+        if ((char === ',' || char === ';' || char === '\n') && inParens === 0) {
+          if (current.trim()) parts.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      if (current.trim()) parts.push(current.trim());
+      return parts;
+    };
+
+    const parts = splitOutsideParens(prompt);
+    if (parts.length >= 2 || prompt.includes('(')) {
+      const fastFields = [];
+      let idx = 1;
+      for (const rawPart of parts) {
+        const part = rawPart.trim();
+        if (!part || /^submit$/i.test(part) || /^create\s+(a\s+)?form/i.test(part)) continue;
+        const lower = part.toLowerCase();
+
+        if (lower.includes('map') || lower.includes('route planner')) {
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'gps',
+            label: 'Interactive Route & Location Map',
+            required: false,
+            placeholder: '',
+            description: '',
+            options: [],
+            widgetType: 'route_planner_map',
+          });
+          continue;
+        }
+
+        if (lower.includes('nearest') || lower.includes('location finder')) {
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'gps',
+            label: 'Nearest Service Hub',
+            required: true,
+            placeholder: '',
+            description: '',
+            options: [],
+            widgetType: 'nearest_location_finder',
+          });
+          continue;
+        }
+
+        if (lower.includes('signature') || lower.includes('sign')) {
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'signature',
+            label: 'Authorized Signature',
+            required: true,
+            placeholder: '',
+            description: '',
+            options: [],
+            widgetType: 'e_signature',
+          });
+          continue;
+        }
+
+        if (lower.includes('photo') || lower.includes('image') || lower.includes('damage')) {
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'photo',
+            label: 'Upload Photos with Notes',
+            required: false,
+            placeholder: '',
+            description: '',
+            options: [],
+            widgetType: 'image_upload_with_notes',
+          });
+          continue;
+        }
+
+        if (lower.includes('stripe') || lower.includes('payment') || lower.includes('credit card')) {
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'short_answer',
+            label: 'Credit Card Payment (Stripe)',
+            required: true,
+            placeholder: '',
+            description: '',
+            options: [],
+            widgetType: 'stripe_checkout',
+          });
+          continue;
+        }
+
+        const optionsMatch = part.match(/\(([^)]+)\)|:\s*(.+)$/);
+        if (optionsMatch || lower.includes('service') || lower.includes('listing') || lower.includes('dropdown')) {
+          let opts: string[] = ['Standard Service', 'Emergency Repair', 'Routine Maintenance'];
+          if (optionsMatch) {
+            const optStr = optionsMatch[1] || optionsMatch[2];
+            opts = optStr.split(/[,|\/]+/).map((o) => o.trim()).filter(Boolean);
+          }
+          const labelClean = part.replace(/\([^)]+\)|:\s*.+$/g, '').trim() || 'Service Selection';
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'dropdown',
+            label: labelClean,
+            required: true,
+            placeholder: 'Select an option',
+            description: '',
+            options: opts,
+          });
+          continue;
+        }
+
+        if (lower.includes('name')) {
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'short_answer',
+            label: 'Full Name',
+            required: true,
+            placeholder: 'John Doe',
+            description: '',
+            options: [],
+          });
+          continue;
+        }
+
+        if (lower.includes('email')) {
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'short_answer',
+            label: 'Email Address',
+            required: true,
+            placeholder: 'john@example.com',
+            description: '',
+            options: [],
+          });
+          continue;
+        }
+
+        if (lower.includes('phone') || lower.includes('mobile')) {
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'short_answer',
+            label: 'Phone Number',
+            required: true,
+            placeholder: '(555) 000-0000',
+            description: '',
+            options: [],
+          });
+          continue;
+        }
+
+        if (lower.includes('message') || lower.includes('note') || lower.includes('detail')) {
+          fastFields.push({
+            id: `ai-${Date.now()}-${idx++}`,
+            type: 'long_answer',
+            label: 'Project Details / Message',
+            required: false,
+            placeholder: 'Describe your project or service request...',
+            description: '',
+            options: [],
+          });
+          continue;
+        }
+
+        fastFields.push({
+          id: `ai-${Date.now()}-${idx++}`,
+          type: 'short_answer',
+          label: part.replace(/^(add|include|insert)\s+/i, '').trim(),
+          required: false,
+          placeholder: '',
+          description: '',
+          options: [],
+        });
+      }
+
+      if (fastFields.length >= 2) {
+        return NextResponse.json({ fields: fastFields });
+      }
+    }
+
     // Build the list of valid field types for the system prompt
     const validTypes = FIELD_TYPES.map((t) => t.value).join(', ');
 

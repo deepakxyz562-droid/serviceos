@@ -22,7 +22,8 @@ import {
   EyeOff, CreditCard, ShieldCheck, MapPin, Camera, DollarSign,
   ListPlus, HelpCircle, Code, ShieldAlert, Navigation, Map,
   Sliders, Bot, Send, Search, RefreshCw, Layers, CalendarCheck,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X,
+  Wifi, Battery
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -127,8 +128,8 @@ export function FormStudioBuilder({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
 
-  // Inspector Drawer Mode: 'properties' (⚙️) vs 'widget_settings' (🪄)
-  const [inspectorMode, setInspectorMode] = useState<'properties' | 'widget_settings'>('properties');
+  // Inspector Drawer Mode: 'properties' (⚙️) vs 'widget_settings' (🪄) vs 'ai_builder' (✨)
+  const [inspectorMode, setInspectorMode] = useState<'properties' | 'widget_settings' | 'ai_builder'>('properties');
   const [widgetSettingsSubTab, setWidgetSettingsSubTab] = useState<'general' | 'custom_css'>('general');
 
   // AI Prompt, Importer & Co-Pilot state
@@ -540,8 +541,32 @@ export function FormStudioBuilder({
           </button>
         </div>
 
-        {/* Right: Multi-Format Preview, AI Co-Pilot & Save */}
+        {/* Right: AI Form Builder, Multi-Format Preview & Save */}
         <div className="flex items-center gap-2">
+          {/* AI Form Builder Panel Toggle */}
+          <Button
+            type="button"
+            variant={propertiesOpen && inspectorMode === 'ai_builder' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              if (propertiesOpen && inspectorMode === 'ai_builder') {
+                setPropertiesOpen(false);
+              } else {
+                setPropertiesOpen(true);
+                setInspectorMode('ai_builder');
+              }
+            }}
+            className={cn(
+              "h-8 gap-1.5 text-xs font-semibold shadow-xs transition-all",
+              propertiesOpen && inspectorMode === 'ai_builder'
+                ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-transparent shadow-emerald-500/20"
+                : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+            )}
+          >
+            <Sparkles className="size-3.5 text-emerald-500" />
+            <span className="hidden sm:inline">AI Form Builder</span>
+          </Button>
+
           {/* Preview Mode Toggle */}
           <div className="flex items-center gap-1.5 border border-border/80 rounded-md px-2 py-1 bg-background">
             <Eye className={cn('size-3.5', isPreviewMode ? 'text-emerald-600' : 'text-muted-foreground')} />
@@ -918,7 +943,12 @@ export function FormStudioBuilder({
                       return (
                         <div
                           key={field.id}
-                          onClick={() => { setSelectedFieldId(field.id); }}
+                          onClick={() => {
+                            setSelectedFieldId(field.id);
+                            if (inspectorMode === 'ai_builder') {
+                              setInspectorMode(field.widgetType ? 'widget_settings' : 'properties');
+                            }
+                          }}
                           className={cn(
                             'group relative p-4 rounded-xl border transition-all cursor-pointer bg-card',
                             isSelected
@@ -1159,37 +1189,51 @@ export function FormStudioBuilder({
               </div>
             </main>
 
-            {/* ── RIGHT DRAWER: DUAL INSPECTOR (⚙️ Question Properties & 🪄 Widget Settings + Custom CSS) ── */}
+            {/* ── RIGHT DRAWER: 3-MODE INSPECTOR (✨ AI Builder | ⚙️ Question Properties | 🪄 Widget Settings + Custom CSS) ── */}
             <aside
               className={cn(
                 'w-72 lg:w-80 h-full min-h-0 border-l border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
                 !propertiesOpen && '-mr-72 lg:-mr-80'
               )}
             >
-              {/* Dual Inspector Header Switcher + Close Button */}
+              {/* 3-Mode Inspector Header Switcher (✨ AI Builder | ⚙️ Properties | 🪄 Widgets) + Close Button */}
               <div className="p-2 border-b border-border/80 bg-muted/40 flex items-center gap-1 shrink-0">
-                <div className="grid grid-cols-2 gap-1 flex-1">
+                <div className="grid grid-cols-3 gap-1 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => setInspectorMode('ai_builder')}
+                    className={cn(
+                      'py-1 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
+                      inspectorMode === 'ai_builder' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                    title="AI Form Builder & Co-Pilot"
+                  >
+                    <Sparkles className="size-3 text-emerald-600" />
+                    <span>AI Builder</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setInspectorMode('properties')}
                     className={cn(
-                      'py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5',
+                      'py-1 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
                       inspectorMode === 'properties' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                     )}
+                    title="Question Properties"
                   >
-                    <Settings className="size-3.5" />
+                    <Settings className="size-3" />
                     <span>Properties</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setInspectorMode('widget_settings')}
                     className={cn(
-                      'py-1.5 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5',
+                      'py-1 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
                       inspectorMode === 'widget_settings' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                     )}
+                    title="Widget Settings"
                   >
-                    <Wand2 className="size-3.5" />
-                    <span>Widget Settings</span>
+                    <Wand2 className="size-3" />
+                    <span>Widgets</span>
                   </button>
                 </div>
                 <Button
@@ -1205,9 +1249,120 @@ export function FormStudioBuilder({
               </div>
 
               <ScrollArea className="flex-1 min-h-0 h-full p-4 overflow-y-auto">
-                {selectedField ? (
+                {/* ════ MODE A: AI FORM BUILDER & CO-PILOT (✨) ════ */}
+                {inspectorMode === 'ai_builder' ? (
                   <div className="space-y-4 pb-28">
-                    {/* ════ MODE A: QUESTION PROPERTIES (⚙️) ════ */}
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-500/30 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="size-6 rounded-md bg-emerald-600 text-white flex items-center justify-center">
+                          <Sparkles className="size-3.5" />
+                        </div>
+                        <p className="text-xs font-bold text-foreground">AI Form Builder & Co-Pilot</p>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Generate complete forms from prompt or add widgets, questions, maps in footer, and payment checkouts.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Prompt or Field List</Label>
+                      <Textarea
+                        value={aiPromptInput}
+                        onChange={(e) => setAiPromptInput(e.target.value)}
+                        placeholder="e.g. Name, Email, Phone, Service Listing (AC Repair, Plumbing, Heating), Message, Interactive Map in footer, Submit"
+                        rows={4}
+                        className="text-xs resize-none"
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleAiCopilotSubmit}
+                        disabled={aiLoading || !aiPromptInput.trim()}
+                        className="w-full h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shadow-sm"
+                      >
+                        {aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                        <span>{aiLoading ? 'Generating Form...' : 'Apply with AI'}</span>
+                      </Button>
+                    </div>
+
+                    {/* 1-Click Smart Quick Action Chips */}
+                    <div className="space-y-2 pt-2 border-t border-border/60">
+                      <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Quick Actions</Label>
+                      <div className="space-y-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAiPromptInput('Add interactive service route and location map in footer');
+                          }}
+                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
+                        >
+                          <span className="text-base">🗺️</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-foreground text-[11px]">Add Map in Footer</p>
+                            <p className="text-[10px] text-muted-foreground truncate">Interactive route map & mileage</p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAiPromptInput('Add nearest branch and location finder');
+                          }}
+                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
+                        >
+                          <span className="text-base">📍</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-foreground text-[11px]">Add Location Finder</p>
+                            <p className="text-[10px] text-muted-foreground truncate">Nearest depot / technician hub</p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAiPromptInput('Add secure Stripe payment checkout for $50 service fee');
+                          }}
+                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
+                        >
+                          <span className="text-base">💳</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-foreground text-[11px]">Add Stripe Payment Gateway</p>
+                            <p className="text-[10px] text-muted-foreground truncate">Collect deposit or upfront payment</p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAiPromptInput('Add photo upload with notes for damage inspection');
+                          }}
+                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
+                        >
+                          <span className="text-base">📸</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-foreground text-[11px]">Add Photo Upload with Notes</p>
+                            <p className="text-[10px] text-muted-foreground truncate">Multi-image capture with captions</p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAiPromptInput('Add customer e-signature at the end of form');
+                          }}
+                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
+                        >
+                          <span className="text-base">✍️</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-foreground text-[11px]">Add E-Signature Pad</p>
+                            <p className="text-[10px] text-muted-foreground truncate">Touch/mouse digital signature</p>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : selectedField ? (
+                  <div className="space-y-4 pb-28">
+                    {/* ════ MODE B: QUESTION PROPERTIES (⚙️) ════ */}
                     {inspectorMode === 'properties' && (
                       <div className="space-y-4">
                         <div className="space-y-1.5">
@@ -1272,76 +1427,160 @@ export function FormStudioBuilder({
                           </div>
                         </div>
 
-                        <Separator />
-
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label className="text-xs font-semibold">Required</Label>
-                            <p className="text-[10px] text-muted-foreground">Mandatory before submitting</p>
-                          </div>
-                          <Switch
-                            checked={selectedField.required}
-                            onCheckedChange={(v) => handleUpdateField(selectedField.id, 'required', v)}
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <Label className="text-xs font-semibold">Read Only</Label>
-                            <p className="text-[10px] text-muted-foreground">Prevent user modifications</p>
-                          </div>
-                          <Switch
-                            checked={!!selectedField.readOnly}
-                            onCheckedChange={(v) => handleUpdateField(selectedField.id, 'readOnly', v)}
-                          />
-                        </div>
-
-                        <Separator />
-
-                        {/* CRM Mapping (Only shown for CRM tenants, hidden for standalone) */}
-                        {!isStandalone && (
-                          <div className="space-y-2 pt-1 border-t border-border/40">
-                            <Label className="text-xs font-semibold flex items-center gap-1.5">
-                              <Zap className="size-3.5 text-amber-500" />
-                              <span>Auto-Map to CRM Field</span>
-                            </Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Field Width</Label>
                             <Select
-                              value={(Array.isArray(formData.fieldMappings) ? formData.fieldMappings : []).find((m) => m.formFieldId === selectedField.id)?.crmField || 'none'}
-                              onValueChange={(crmField) => {
-                                onFormDataChange((prev) => {
-                                  const without = (Array.isArray(prev.fieldMappings) ? prev.fieldMappings : []).filter((m) => m.formFieldId !== selectedField.id);
-                                  if (crmField === 'none') return { ...prev, fieldMappings: without };
-                                  return { ...prev, fieldMappings: [...without, { formFieldId: selectedField.id, crmField }] };
-                                });
-                              }}
+                              value={selectedField.width || 'full'}
+                              onValueChange={(val) => handleUpdateField(selectedField.id, 'width', val)}
                             >
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="-- Select CRM Column --" /></SelectTrigger>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="none" className="text-xs text-muted-foreground">-- No Mapping --</SelectItem>
-                                {CRM_FIELDS.map((group) =>
-                                  group.fields.map((field) => (
-                                    <SelectItem key={field} value={field} className="text-xs">
-                                      {field} <span className="text-muted-foreground">({group.group})</span>
-                                    </SelectItem>
-                                  ))
-                                )}
+                                <SelectItem value="full" className="text-xs">Full Width (100%)</SelectItem>
+                                <SelectItem value="half" className="text-xs">Half Width (50%)</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Character Limit</Label>
+                            <Input
+                              type="number"
+                              value={selectedField.charLimit || ''}
+                              onChange={(e) => handleUpdateField(selectedField.id, 'charLimit', e.target.value ? parseInt(e.target.value) : undefined)}
+                              placeholder="e.g. 100"
+                              className="h-8 text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Multiple Choice Options Editor */}
+                        {['select', 'radio', 'checkbox', 'dropdown'].includes(selectedField.type) && (
+                          <div className="space-y-2 pt-2 border-t border-border/60">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs font-semibold">Options / Choices</Label>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={handleAddOption}
+                                className="h-6 text-[10px] px-2 gap-1 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50"
+                              >
+                                <Plus className="size-3" /> Add Option
+                              </Button>
+                            </div>
+                            <div className="space-y-1.5">
+                              {(selectedField.options || []).map((opt, optIdx) => (
+                                <div key={optIdx} className="flex items-center gap-1.5">
+                                  <Input
+                                    value={opt}
+                                    onChange={(e) => handleUpdateOption(optIdx, e.target.value)}
+                                    className="h-7 text-xs flex-1"
+                                    placeholder={`Option ${optIdx + 1}`}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleRemoveOption(optIdx)}
+                                    className="size-7 text-muted-foreground hover:text-red-600 rounded shrink-0"
+                                  >
+                                    <Trash2 className="size-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         )}
+
+                        <div className="space-y-2.5 pt-3 border-t border-border/60">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="text-xs font-semibold">Required Question</Label>
+                              <p className="text-[10px] text-muted-foreground">User cannot submit without answering</p>
+                            </div>
+                            <Switch
+                              checked={selectedField.required}
+                              onCheckedChange={(checked) => handleUpdateField(selectedField.id, 'required', checked)}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="text-xs font-semibold">Hidden Field</Label>
+                              <p className="text-[10px] text-muted-foreground">Pass parameters via URL (UTMs, IDs)</p>
+                            </div>
+                            <Switch
+                              checked={selectedField.hidden || false}
+                              onCheckedChange={(checked) => handleUpdateField(selectedField.id, 'hidden', checked)}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="text-xs font-semibold">Read Only</Label>
+                              <p className="text-[10px] text-muted-foreground">Prevent respondent from editing value</p>
+                            </div>
+                            <Switch
+                              checked={selectedField.readOnly || false}
+                              onCheckedChange={(checked) => handleUpdateField(selectedField.id, 'readOnly', checked)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* CRM Field Mapping (Standalone Mode: Direct webhook/API sync notice) */}
+                        <div className="pt-3 border-t border-border/60 space-y-2">
+                          <Label className="text-xs font-semibold flex items-center gap-1.5">
+                            <Zap className="size-3.5 text-amber-500" />
+                            <span>{isStandalone ? 'Webhook & Export Key' : 'CRM Field Auto-Map'}</span>
+                          </Label>
+                          {isStandalone ? (
+                            <div className="p-2.5 rounded-lg bg-muted/40 border border-border text-[11px] text-muted-foreground space-y-1">
+                              <p className="font-semibold text-foreground">Standalone Mode Active</p>
+                              <p>Field data is automatically exported via Webhook and CSV submissions export.</p>
+                            </div>
+                          ) : (
+                            <Select
+                              value={formData.fieldMappings.find((m) => m.formFieldId === selectedField.id)?.crmField || 'none'}
+                              onValueChange={(val) => {
+                                onFormDataChange((prev) => {
+                                  const filtered = prev.fieldMappings.filter((m) => m.formFieldId !== selectedField.id);
+                                  if (val !== 'none') {
+                                    filtered.push({ formFieldId: selectedField.id, crmField: val });
+                                  }
+                                  return { ...prev, fieldMappings: filtered };
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-muted/20">
+                                <SelectValue placeholder="Do not map to CRM" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none" className="text-xs text-muted-foreground">— Do not map —</SelectItem>
+                                {CRM_FIELDS.map((crm) => (
+                                  <SelectItem key={crm.value} value={crm.value} className="text-xs">
+                                    {crm.label} ({crm.group})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
                       </div>
                     )}
 
-                    {/* ════ MODE B: WIDGET SETTINGS & CUSTOM CSS (🪄) ════ */}
+                    {/* ════ MODE C: WIDGET SETTINGS & CUSTOM CSS (🪄) ════ */}
                     {inspectorMode === 'widget_settings' && (
                       <div className="space-y-4">
-                        {/* Subtabs: General Settings vs Custom CSS */}
-                        <div className="grid grid-cols-2 p-1 bg-muted/50 rounded-lg text-xs font-semibold">
+                        {/* Sub-tab switcher: General Config vs Custom CSS */}
+                        <div className="grid grid-cols-2 gap-1 bg-muted/60 p-1 rounded-lg border border-border/60">
                           <button
+                            type="button"
                             onClick={() => setWidgetSettingsSubTab('general')}
-                            className={cn('py-1 rounded-md text-center transition-all', widgetSettingsSubTab === 'general' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground')}
+                            className={cn('py-1 rounded-md text-center transition-all flex items-center justify-center gap-1', widgetSettingsSubTab === 'general' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground')}
                           >
-                            General
+                            <Sliders className="size-3" />
+                            <span>Configuration</span>
                           </button>
                           <button
                             onClick={() => setWidgetSettingsSubTab('custom_css')}
@@ -1781,24 +2020,27 @@ export function FormStudioBuilder({
 
         {/* ─── 5. INTERACTIVE PREVIEW MODE (MULTI-FORMAT: PAPER / CARD / AGENT) ─── */}
         {isPreviewMode && (
-          <div className="flex-1 flex flex-col bg-slate-200 dark:bg-slate-900/90 overflow-hidden">
+          <div className="flex-1 min-h-0 h-full flex flex-col bg-slate-200 dark:bg-slate-900/90 overflow-hidden">
             {/* Viewport & Multi-Format Header */}
             <div className="h-12 border-b border-border/80 bg-background px-4 flex items-center justify-between shrink-0">
               {/* Multi-Format Switcher: Paper vs Card vs AI Agent */}
               <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border/60 text-xs font-semibold">
                 <button
+                  type="button"
                   onClick={() => setPreviewFormat('paper')}
                   className={cn('px-2.5 py-1 rounded-md transition-all', previewFormat === 'paper' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground')}
                 >
                   📄 Classic Paper Form
                 </button>
                 <button
+                  type="button"
                   onClick={() => setPreviewFormat('card')}
                   className={cn('px-2.5 py-1 rounded-md transition-all', previewFormat === 'card' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground')}
                 >
                   🃏 Card-by-Card Swipe
                 </button>
                 <button
+                  type="button"
                   onClick={() => setPreviewFormat('agent')}
                   className={cn('px-2.5 py-1 rounded-md transition-all flex items-center gap-1', previewFormat === 'agent' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground')}
                 >
@@ -1810,48 +2052,128 @@ export function FormStudioBuilder({
               {/* Device Switcher */}
               <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-lg">
                 <button
+                  type="button"
                   onClick={() => setPreviewDevice('desktop')}
-                  className={cn('p-1 rounded', previewDevice === 'desktop' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground')}
-                  title="Desktop View"
+                  className={cn('p-1 rounded transition-colors', previewDevice === 'desktop' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground')}
+                  title="Desktop 1080p View"
                 >
                   <Monitor className="size-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setPreviewDevice('tablet')}
-                  className={cn('p-1 rounded', previewDevice === 'tablet' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground')}
-                  title="Tablet View"
+                  className={cn('p-1 rounded transition-colors', previewDevice === 'tablet' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground')}
+                  title="Tablet 768px View"
                 >
                   <Tablet className="size-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => setPreviewDevice('mobile')}
-                  className={cn('p-1 rounded', previewDevice === 'mobile' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground')}
-                  title="Mobile View"
+                  className={cn('p-1 rounded transition-colors', previewDevice === 'mobile' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground hover:text-foreground')}
+                  title="Mobile 390px View"
                 >
                   <Smartphone className="size-4" />
                 </button>
               </div>
             </div>
 
-            {/* Preview Frame Container */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center items-start">
-              <div
-                className={cn(
-                  'bg-background rounded-2xl border border-border shadow-xl overflow-hidden transition-all duration-300 w-full',
-                  previewDevice === 'mobile' && 'max-w-sm rounded-[32px] border-8 border-slate-800 p-1 min-h-[600px]',
-                  previewDevice === 'tablet' && 'max-w-xl min-h-[700px]',
-                  previewDevice === 'desktop' && 'max-w-2xl'
-                )}
-              >
-                <FormRuntimeRenderer
-                  previewMode={true}
-                  formName={formData.name || 'Untitled Form'}
-                  formDescription={formData.description}
-                  schema={runtimeSchema}
-                  mode={previewFormat}
-                  onModeChange={setPreviewFormat}
-                />
-              </div>
+            {/* Preview Viewport Container */}
+            <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-center">
+              {/* 1. Mobile Phone Mockup */}
+              {previewDevice === 'mobile' && (
+                <div className="w-[380px] max-w-full h-[740px] max-h-[85vh] rounded-[44px] border-[10px] border-slate-900 shadow-2xl bg-background flex flex-col overflow-hidden relative shrink-0">
+                  {/* Status Bar with Dynamic Island Notch */}
+                  <div className="h-7 bg-background px-6 flex items-center justify-between text-[11px] font-semibold text-foreground/80 shrink-0 select-none z-10 border-b border-border/20">
+                    <span>9:41</span>
+                    <div className="w-20 h-4 bg-slate-900 rounded-full mx-auto" />
+                    <div className="flex items-center gap-1 text-[10px]">
+                      <Wifi className="size-3" />
+                      <Battery className="size-3.5" />
+                    </div>
+                  </div>
+                  {/* Phone Screen Internal Scrollable Content */}
+                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain pb-6">
+                    <FormRuntimeRenderer
+                      previewMode={true}
+                      formName={formData.name || 'Untitled Form'}
+                      formDescription={formData.description}
+                      schema={runtimeSchema}
+                      mode={previewFormat}
+                      onModeChange={setPreviewFormat}
+                    />
+                  </div>
+                  {/* Home Indicator */}
+                  <div className="h-4 bg-background flex items-center justify-center shrink-0">
+                    <div className="w-28 h-1 bg-foreground/20 rounded-full" />
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Tablet Mockup */}
+              {previewDevice === 'tablet' && (
+                <div className="w-[660px] max-w-full h-[800px] max-h-[88vh] rounded-[32px] border-[12px] border-slate-900 shadow-2xl bg-background flex flex-col overflow-hidden relative shrink-0">
+                  {/* Tablet Top Camera */}
+                  <div className="h-6 bg-background flex items-center justify-center shrink-0 select-none border-b border-border/20">
+                    <div className="size-2 bg-slate-900 rounded-full" />
+                  </div>
+                  {/* Tablet Screen Internal Scrollable Content */}
+                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-2 pb-8">
+                    <FormRuntimeRenderer
+                      previewMode={true}
+                      formName={formData.name || 'Untitled Form'}
+                      formDescription={formData.description}
+                      schema={runtimeSchema}
+                      mode={previewFormat}
+                      onModeChange={setPreviewFormat}
+                    />
+                  </div>
+                  {/* Tablet Home Indicator */}
+                  <div className="h-4 bg-background flex items-center justify-center shrink-0">
+                    <div className="w-36 h-1 bg-foreground/20 rounded-full" />
+                  </div>
+                </div>
+              )}
+
+              {/* 3. Desktop Mockup */}
+              {previewDevice === 'desktop' && (
+                <div className="w-full max-w-3xl h-[800px] max-h-[88vh] rounded-2xl border border-border/80 shadow-2xl bg-background flex flex-col overflow-hidden shrink-0">
+                  {/* Browser Window Bar */}
+                  <div className="h-10 bg-muted/60 border-b border-border/80 px-4 flex items-center gap-3 shrink-0 select-none">
+                    <div className="flex items-center gap-1.5">
+                      <div className="size-3 rounded-full bg-red-400" />
+                      <div className="size-3 rounded-full bg-amber-400" />
+                      <div className="size-3 rounded-full bg-emerald-400" />
+                    </div>
+                    <div className="flex-1 max-w-md mx-auto h-6 bg-background rounded-md border border-border/60 px-2.5 flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
+                      <Globe className="size-3 text-emerald-600 shrink-0" />
+                      <span className="truncate">{hostedUrl}</span>
+                    </div>
+                    <a
+                      href={hostedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1 shrink-0"
+                    >
+                      <span>Open Live</span>
+                      <ExternalLink className="size-3" />
+                    </a>
+                  </div>
+                  {/* Desktop Screen Internal Scrollable Content */}
+                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center">
+                    <div className="w-full max-w-2xl pb-16">
+                      <FormRuntimeRenderer
+                        previewMode={true}
+                        formName={formData.name || 'Untitled Form'}
+                        formDescription={formData.description}
+                        schema={runtimeSchema}
+                        mode={previewFormat}
+                        onModeChange={setPreviewFormat}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
