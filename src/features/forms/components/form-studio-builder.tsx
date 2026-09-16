@@ -448,7 +448,7 @@ export function FormStudioBuilder({
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col w-full h-full bg-slate-50 dark:bg-slate-950 overflow-hidden select-none">
+    <div className="flex-1 min-h-0 flex flex-col w-full h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
       {/* ═════════════════════════════════════════════════════════════════════════
           TOP STUDIO APP BAR (JOTFORM SIGNATURE HEADER)
          ═════════════════════════════════════════════════════════════════════════ */}
@@ -815,7 +815,7 @@ export function FormStudioBuilder({
             </aside>
 
             {/* ── CENTER: INTERACTIVE PAPER CANVAS ── */}
-            <main className="flex-1 min-h-0 h-full overflow-y-auto p-4 md:p-8 flex flex-col items-center bg-slate-100 dark:bg-slate-900/70 relative">
+            <main className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex flex-col items-center bg-slate-100 dark:bg-slate-900/70 relative">
               {/* Floating Drawer Expand Pills (when sidebars are closed) */}
               {!sidebarOpen && (
                 <button
@@ -876,7 +876,7 @@ export function FormStudioBuilder({
               </div>
 
               {/* Canvas Paper Card */}
-              <div className="w-full max-w-2xl bg-background rounded-xl border border-border/80 shadow-md overflow-hidden pb-12">
+              <div className="w-full max-w-2xl bg-background rounded-xl border border-border/80 shadow-md overflow-hidden pb-12 mb-24">
                 {/* Decorative Brand Stripe */}
                 <div className="h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500" />
 
@@ -1671,8 +1671,8 @@ export function FormStudioBuilder({
 
         {/* ─── 2. SETTINGS TAB ──────────────────────────────────────────────── */}
         {studioTab === 'settings' && (
-          <main className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center">
-            <div className="w-full max-w-3xl space-y-6 pb-20">
+          <main className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center">
+            <div className="w-full max-w-3xl space-y-6 pb-24">
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
@@ -1713,8 +1713,8 @@ export function FormStudioBuilder({
 
         {/* ─── 3. PUBLISH TAB ───────────────────────────────────────────────── */}
         {studioTab === 'publish' && (
-          <main className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center">
-            <div className="w-full max-w-3xl space-y-6 pb-20">
+          <main className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center">
+            <div className="w-full max-w-3xl space-y-6 pb-24">
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
