@@ -466,9 +466,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                 <Sparkles className="size-3.5 text-emerald-600 shrink-0" />
                 <span className="font-semibold text-emerald-800 dark:text-emerald-200">
                   {activePlan === 'standalone_starter'
-                    ? 'Standalone Starter Plan ($19/mo)'
+                    ? 'Standalone Starter Plan ($10/mo)'
                     : activePlan === 'standalone_business'
-                    ? 'Standalone Business Plan ($49/mo)'
+                    ? 'Standalone Business Plan ($19/mo)'
                     : `Selected Plan: ${activePlan}`}
                 </span>
               </div>

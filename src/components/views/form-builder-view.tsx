@@ -532,18 +532,18 @@ export function FormBuilderView() {
           </div>
           <div className="flex flex-col items-start md:items-end gap-2 shrink-0 w-full md:w-auto">
             <div className="text-left md:text-right">
-              <span className="text-2xl font-black text-foreground">$10</span>
+              <span className="text-2xl font-black text-foreground">$7</span>
               <span className="text-xs text-muted-foreground"> / month</span>
             </div>
             <Button
               size="sm"
               onClick={() => {
                 setAddonPaid(true);
-                toast.success('✨ $10/mo AI Forms & Chatbot Add-on activated successfully!');
+                toast.success('✨ $7/mo AI Forms & Chatbot Add-on activated successfully!');
               }}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-5 shadow-sm gap-1.5 w-full md:w-auto"
             >
-              <Sparkles className="size-3.5" /> Activate Add-on ($10/mo)
+              <Sparkles className="size-3.5" /> Activate Add-on ($7/mo)
             </Button>
           </div>
         </div>

@@ -352,7 +352,7 @@ export default function AiEmployeeLandingPage() {
               </tr>
               <tr>
                 <td className="p-3.5 font-medium">Pricing for CRM Users</td>
-                <td className="p-3.5 font-bold text-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20">👉 $10 / month</td>
+                <td className="p-3.5 font-bold text-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/20">👉 $7 / month</td>
                 <td className="p-3.5 text-slate-600">$49 / mo</td>
                 <td className="p-3.5 text-slate-600">$39 / mo</td>
                 <td className="p-3.5 text-slate-600">$59 / mo</td>
@@ -371,7 +371,7 @@ export default function AiEmployeeLandingPage() {
               Start Free. Upgrade As You Scale.
             </h2>
             <p className="text-sm text-muted-foreground">
-              Existing Fieseros CRM subscribers get the entire AI Website Employee &amp; Smart Forms suite for just $10/month.
+              Existing Fieseros CRM subscribers get the entire AI Website Employee &amp; Smart Forms suite for just $7/month.
             </p>
           </div>
 
@@ -385,7 +385,7 @@ export default function AiEmployeeLandingPage() {
                 <CardTitle className="text-lg font-bold">CRM Add-On</CardTitle>
                 <CardDescription className="text-xs">For active Fieseros subscribers</CardDescription>
                 <div className="pt-2">
-                  <span className="text-3xl font-extrabold">$10</span>
+                  <span className="text-3xl font-extrabold">$7</span>
                   <span className="text-xs text-muted-foreground"> / month</span>
                 </div>
               </CardHeader>
@@ -398,7 +398,7 @@ export default function AiEmployeeLandingPage() {
                   <li className="flex items-center gap-2">✓ WordPress Plugin &amp; Universal JS Embed</li>
                 </ul>
                 <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold">
-                  <Link href="/?tab=billing&addon=ai_website_forms">Activate in Billing ($10/mo) →</Link>
+                  <Link href="/?tab=billing&addon=ai_website_forms">Activate in Billing ($7/mo) →</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -409,7 +409,7 @@ export default function AiEmployeeLandingPage() {
                 <CardTitle className="text-lg font-bold">Standalone Starter</CardTitle>
                 <CardDescription className="text-xs">For WordPress / Shopify sites</CardDescription>
                 <div className="pt-2">
-                  <span className="text-3xl font-extrabold">$19</span>
+                  <span className="text-3xl font-extrabold">$10</span>
                   <span className="text-xs text-muted-foreground"> / month</span>
                 </div>
               </CardHeader>
@@ -421,7 +421,7 @@ export default function AiEmployeeLandingPage() {
                   <li className="flex items-center gap-2">✓ Webhook &amp; Email Lead Alerts</li>
                 </ul>
                 <Button asChild variant="outline" className="w-full text-xs font-semibold hover:border-emerald-500 hover:text-emerald-700">
-                  <Link href="/?auth=signup&plan=standalone_starter">Get Started ($19/mo)</Link>
+                  <Link href="/?auth=signup&plan=standalone_starter">Get Started ($10/mo)</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -432,7 +432,7 @@ export default function AiEmployeeLandingPage() {
                 <CardTitle className="text-lg font-bold">Standalone Business</CardTitle>
                 <CardDescription className="text-xs">For agencies &amp; multi-site owners</CardDescription>
                 <div className="pt-2">
-                  <span className="text-3xl font-extrabold">$49</span>
+                  <span className="text-3xl font-extrabold">$19</span>
                   <span className="text-xs text-muted-foreground"> / month</span>
                 </div>
               </CardHeader>
@@ -444,7 +444,7 @@ export default function AiEmployeeLandingPage() {
                   <li className="flex items-center gap-2">✓ Custom CSS &amp; White-labeling</li>
                 </ul>
                 <Button asChild variant="outline" className="w-full text-xs font-semibold hover:border-emerald-500 hover:text-emerald-700">
-                  <Link href="/?auth=signup&plan=standalone_business">Get Started ($49/mo)</Link>
+                  <Link href="/?auth=signup&plan=standalone_business">Get Started ($19/mo)</Link>
                 </Button>
               </CardContent>
             </Card>

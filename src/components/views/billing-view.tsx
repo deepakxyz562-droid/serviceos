@@ -202,8 +202,8 @@ const ADDON_CATALOG: AddonCatalogEntry[] = [
     code: 'ai_website_forms',
     name: 'AI Website Employee & Smart Forms',
     description:
-      '24/7 Conversational AI booking agent, automated website knowledge crawler & embeddable smart forms ($10/mo for CRM subscribers).',
-    fallbackMonthlyPrice: 10,
+      '24/7 Conversational AI booking agent, automated website knowledge crawler & embeddable smart forms ($7/mo for CRM subscribers).',
+    fallbackMonthlyPrice: 7,
     icon: <Bot className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />,
   },
   {

@@ -138,10 +138,10 @@ export function AiSettings() {
                     <CardTitle className="text-base flex items-center gap-2">
                       24/7 AI Website Employee &amp; Smart Forms
                       {isSubscribed ? (
-                        <Badge className="bg-emerald-600 text-white text-[10px]">Add-on Active ($10/mo)</Badge>
+                        <Badge className="bg-emerald-600 text-white text-[10px]">Add-on Active ($7/mo)</Badge>
                       ) : (
                         <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 text-[10px]">
-                          Add-on Available ($10/mo)
+                          Add-on Available ($7/mo)
                         </Badge>
                       )}
                     </CardTitle>
@@ -159,7 +159,7 @@ export function AiSettings() {
                       disabled={subscribing}
                     >
                       {subscribing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-                      {subscribing ? 'Activating…' : 'Activate Add-on ($10/mo)'}
+                      {subscribing ? 'Activating…' : 'Activate Add-on ($7/mo)'}
                     </Button>
                   ) : (
                     <Button

@@ -585,7 +585,7 @@ export default function AiFormsLandingPage() {
               </tr>
               <tr>
                 <td className="p-3.5 font-medium">Pricing</td>
-                <td className="p-3.5 font-bold text-emerald-600 bg-teal-50/50 dark:bg-teal-950/20">$10/mo (CRM) or $19/mo</td>
+                <td className="p-3.5 font-bold text-emerald-600 bg-teal-50/50 dark:bg-teal-950/20">$7/mo (CRM) or $10 – $19/mo</td>
                 <td className="p-3.5 text-slate-600">$39 – $129 / mo</td>
                 <td className="p-3.5 text-slate-600">$29 – $99 / mo</td>
                 <td className="p-3.5 text-slate-600">Free (Extremely basic)</td>
@@ -618,7 +618,7 @@ export default function AiFormsLandingPage() {
                 <CardTitle className="text-lg font-bold">CRM Add-On</CardTitle>
                 <CardDescription className="text-xs">For active Fieseros CRM users</CardDescription>
                 <div className="pt-2">
-                  <span className="text-3xl font-extrabold">$10</span>
+                  <span className="text-3xl font-extrabold">$7</span>
                   <span className="text-xs text-muted-foreground"> / month</span>
                 </div>
               </CardHeader>
@@ -631,7 +631,7 @@ export default function AiFormsLandingPage() {
                   <li className="flex items-center gap-2">✓ Multi-Channel AI Agent</li>
                 </ul>
                 <Button asChild className="w-full bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold">
-                  <Link href="/?tab=billing&addon=ai_website_forms">Add to CRM ($10/mo) →</Link>
+                  <Link href="/?tab=billing&addon=ai_website_forms">Add to CRM ($7/mo) →</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -642,7 +642,7 @@ export default function AiFormsLandingPage() {
                 <CardTitle className="text-lg font-bold">Standalone Starter</CardTitle>
                 <CardDescription className="text-xs">For single websites &amp; stores</CardDescription>
                 <div className="pt-2">
-                  <span className="text-3xl font-extrabold">$19</span>
+                  <span className="text-3xl font-extrabold">$10</span>
                   <span className="text-xs text-muted-foreground"> / month</span>
                 </div>
               </CardHeader>
@@ -654,7 +654,7 @@ export default function AiFormsLandingPage() {
                   <li className="flex items-center gap-2">✓ 1-Line JavaScript &amp; WordPress Embed</li>
                 </ul>
                 <Button asChild variant="outline" className="w-full text-xs font-semibold hover:border-teal-500 hover:text-teal-700">
-                  <Link href="/?auth=signup&plan=standalone_starter">Start 14-Day Free Trial</Link>
+                  <Link href="/?auth=signup&plan=standalone_starter">Start 14-Day Free Trial ($10/mo)</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -665,7 +665,7 @@ export default function AiFormsLandingPage() {
                 <CardTitle className="text-lg font-bold">Standalone Business</CardTitle>
                 <CardDescription className="text-xs">For agencies &amp; multi-brand businesses</CardDescription>
                 <div className="pt-2">
-                  <span className="text-3xl font-extrabold">$49</span>
+                  <span className="text-3xl font-extrabold">$19</span>
                   <span className="text-xs text-muted-foreground"> / month</span>
                 </div>
               </CardHeader>
@@ -677,7 +677,7 @@ export default function AiFormsLandingPage() {
                   <li className="flex items-center gap-2">✓ Twilio SMS OTP &amp; GPS Geofencing</li>
                 </ul>
                 <Button asChild variant="outline" className="w-full text-xs font-semibold hover:border-teal-500 hover:text-teal-700">
-                  <Link href="/?auth=signup&plan=standalone_business">Start 14-Day Free Trial</Link>
+                  <Link href="/?auth=signup&plan=standalone_business">Start 14-Day Free Trial ($19/mo)</Link>
                 </Button>
               </CardContent>
             </Card>

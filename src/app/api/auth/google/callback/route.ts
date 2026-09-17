@@ -98,7 +98,7 @@ async function createTenantForGoogleUser(
         tenantId: tenant.id,
         plan: signupPlan,
         status: 'trial',
-        amount: signupPlan === 'standalone_business' ? 49 : (signupPlan === 'standalone_starter' ? 19 : 0),
+        amount: signupPlan === 'standalone_business' ? 19 : (signupPlan === 'standalone_starter' ? 10 : 0),
         currency: 'USD',
         billingCycle: 'monthly',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),

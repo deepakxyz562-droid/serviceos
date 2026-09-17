@@ -245,7 +245,7 @@ export function AiMarketingHeader() {
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
           >
-            Pricing ($10/mo CRM add-on)
+            Pricing ($7/mo CRM add-on)
           </Link>
           <div className="pt-2 border-t flex flex-col gap-2">
             <Link
