@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 import {
   Store, Search, Trash2, Edit3, RefreshCw, CheckCircle2, AlertTriangle,
   Database, MapPin, Star, Globe, Filter, Loader2, Plus, Crown, Clock,
-  Calendar, X, ShieldCheck, Zap, Send, Flame, Award,
+  Calendar, X, ShieldCheck, Zap, Send, Flame, Award, ShieldAlert,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
