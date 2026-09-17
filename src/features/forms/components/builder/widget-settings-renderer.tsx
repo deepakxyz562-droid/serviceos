@@ -455,7 +455,19 @@ export function WidgetSettingsRenderer({
             )}
           >
             {tab === 'general' && 'General'}
-            {tab === 'field_specific' && `${definition.category} Settings`}
+            {tab === 'field_specific' && (
+              definition.category === 'choice' ? 'Options'
+              : definition.category === 'payment' ? 'Payment Properties'
+              : definition.category === 'signature' ? 'Signature Settings'
+              : definition.category === 'media' ? 'Media Settings'
+              : definition.category === 'maps' ? 'Map Settings'
+              : definition.category === 'security' ? 'Security Settings'
+              : definition.category === 'datetime' ? 'Date Settings'
+              : definition.category === 'survey' ? 'Survey Settings'
+              : definition.category === 'calculation' ? 'Calculation Settings'
+              : definition.category === 'file' ? 'File Settings'
+              : 'Field Settings'
+            )}
             {tab === 'advanced' && 'Advanced'}
           </button>
         ))}

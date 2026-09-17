@@ -89,10 +89,14 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     }),
     settingsSchema: [
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-      { key: 'allowOther', label: 'Allow "Other"', type: 'boolean', group: 'field_specific', default: false },
-      { key: 'multiSelect', label: 'Allow multi-select', type: 'boolean', group: 'field_specific', default: false },
-      { key: 'searchEnabled', label: 'Enable search', type: 'boolean', group: 'field_specific', default: false },
-      { key: 'randomize', label: 'Randomize order', type: 'boolean', group: 'field_specific', default: false },
+      { key: 'defaultValue', label: 'Default Value', type: 'select', group: 'field_specific', options: [], helpText: 'Choose an option to be selected by default.' },
+      { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
+      { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
+      { key: 'multiSelect', label: 'Allow multi-select', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users select more than one option.' },
+      { key: 'searchEnabled', label: 'Enable search', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add a search box for long option lists.' },
+      { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Shuffle options on each form load (great for surveys).' },
+      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add values to be used in calculations.' },
+      { key: 'showEmptyText', label: 'Show Text in Empty Option', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Use text instead of the empty option. Treated as an empty answer.' },
     ],
   },
   {
@@ -107,10 +111,12 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     }),
     settingsSchema: [
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-      { key: 'allowOther', label: 'Allow "Other"', type: 'boolean', group: 'field_specific', default: false },
-      { key: 'columns', label: 'Columns', type: 'select', group: 'field_specific', default: '1', options: [
-        { label: '1 (vertical)', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
-      ] },
+      { key: 'defaultValue', label: 'Default Value', type: 'select', group: 'field_specific', options: [], helpText: 'Choose an option to be selected by default.' },
+      { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
+      { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
+      { key: 'columns', label: 'Spread', type: 'segmented', group: 'field_specific', default: '1', options: [
+        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
+      ], helpText: 'How options are laid out visually.' },
     ],
   },
   {
@@ -125,12 +131,14 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     }),
     settingsSchema: [
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-      { key: 'allowOther', label: 'Allow "Other"', type: 'boolean', group: 'field_specific', default: false },
-      { key: 'minSelect', label: 'Min selections', type: 'number', group: 'field_specific', default: 0, min: 0 },
+      { key: 'defaultValue', label: 'Default Value', type: 'select', group: 'field_specific', options: [], helpText: 'Choose an option to be selected by default.' },
+      { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
+      { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
+      { key: 'minSelect', label: 'Min selections', type: 'number', group: 'field_specific', default: 0, min: 0, helpText: 'Minimum number of options the user must select.' },
       { key: 'maxSelect', label: 'Max selections (0 = unlimited)', type: 'number', group: 'field_specific', default: 0 },
-      { key: 'columns', label: 'Columns', type: 'select', group: 'field_specific', default: '1', options: [
-        { label: '1 (vertical)', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
-      ] },
+      { key: 'columns', label: 'Spread', type: 'segmented', group: 'field_specific', default: '1', options: [
+        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
+      ], helpText: 'How options are laid out visually.' },
     ],
   },
   {
@@ -185,8 +193,13 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       ] },
       { key: 'minDate', label: 'Min date', type: 'date', group: 'field_specific' },
       { key: 'maxDate', label: 'Max date', type: 'date', group: 'field_specific' },
-      { key: 'disableWeekends', label: 'Disable weekends', type: 'boolean', group: 'field_specific', default: false },
-      { key: 'defaultToday', label: 'Default to today', type: 'boolean', group: 'field_specific', default: false },
+      { key: 'defaultValue', label: 'Default Value', type: 'date', group: 'field_specific', helpText: 'Pre-fill the date with a specific value.' },
+      { key: 'disableWeekends', label: 'Disable weekends', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Prevent Saturday and Sunday selection.' },
+      { key: 'defaultToday', label: 'Default to today', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Pre-fill the date with today\'s date.' },
+      { key: 'disableSpecificDates', label: 'Disable Specific Dates', type: 'textarea', group: 'field_specific', placeholder: '2025-12-25\n2026-01-01', helpText: 'One date per line (YYYY-MM-DD). These dates will be disabled in the picker.' },
+      { key: 'timezone', label: 'Time zone', type: 'select', group: 'field_specific', default: 'local', options: [
+        { label: 'User\'s local timezone', value: 'local' }, { label: 'UTC', value: 'utc' },
+      ] },
     ],
   },
   {
@@ -220,8 +233,9 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     }),
     settingsSchema: [
       { key: 'maxStars', label: 'Max stars', type: 'number', group: 'field_specific', default: 5, min: 3, max: 10 },
-      { key: 'requireCommentOnLowRating', label: 'Require comment on low rating', type: 'boolean', group: 'field_specific', default: false },
-      { key: 'threshold', label: 'Threshold below which comment is required', type: 'number', group: 'field_specific', default: 3 },
+      { key: 'defaultValue', label: 'Default Value', type: 'number', group: 'field_specific', default: 0, min: 0, max: 5, helpText: 'Pre-select a number of stars (0 = no default).' },
+      { key: 'requireCommentOnLowRating', label: 'Require comment on low rating', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Force users to leave a comment when rating below threshold.' },
+      { key: 'threshold', label: 'Threshold', type: 'number', group: 'field_specific', default: 3, condition: { dependsOn: 'requireCommentOnLowRating', equals: 'true' } },
     ],
   },
   {
@@ -256,9 +270,18 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     settingsSchema: [
       { key: 'maxFiles', label: 'Max files', type: 'number', group: 'field_specific', default: 5, min: 1, max: 50 },
       { key: 'maxFileSizeMb', label: 'Max file size (MB)', type: 'number', group: 'field_specific', default: 10, min: 1, max: 100 },
-      { key: 'allowedExtensions', label: 'Allowed extensions (comma-sep)', type: 'text', group: 'field_specific', placeholder: 'pdf, jpg, png' },
-      { key: 'captureMode', label: 'Capture mode', type: 'select', group: 'field_specific', default: 'both', options: [
-        { label: 'Camera + Upload', value: 'both' }, { label: 'Camera only', value: 'camera' }, { label: 'Upload only', value: 'upload' },
+      { key: 'allowedFileTypes', label: 'Allowed File Types', type: 'multi_checkbox', group: 'field_specific',
+        default: ['PDF', 'JPG', 'PNG', 'DOCX'],
+        options: [
+          { label: 'PDF', value: 'PDF' }, { label: 'JPG', value: 'JPG' },
+          { label: 'PNG', value: 'PNG' }, { label: 'DOCX', value: 'DOCX' },
+          { label: 'XLSX', value: 'XLSX' }, { label: 'CSV', value: 'CSV' },
+          { label: 'TXT', value: 'TXT' }, { label: 'ZIP', value: 'ZIP' },
+        ],
+        helpText: 'Choose which file types respondents can upload.',
+      },
+      { key: 'captureMode', label: 'Capture mode', type: 'segmented', group: 'field_specific', default: 'both', options: [
+        { label: 'Both', value: 'both' }, { label: 'Camera', value: 'camera' }, { label: 'Upload', value: 'upload' },
       ] },
     ],
   },
