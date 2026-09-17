@@ -66,6 +66,7 @@ import { FormImporterDialog } from './form-importer-dialog';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
 import { FormAgentStudio } from './agent-builder/form-agent-studio';
+import { TemplateExplorer, type FormTemplateItem } from './builder/template-explorer';
 import { UnifiedFieldInspector } from './builder/unified-field-inspector';
 import {
   FIELD_REGISTRY,
@@ -96,7 +97,7 @@ export function FormStudioBuilder({
   siteOrigin,
 }: FormStudioBuilderProps) {
   // Studio navigation
-  const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'agent'>('build');
+  const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'agent' | 'templates'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [previewFormat, setPreviewFormat] = useState<'paper' | 'card' | 'agent'>('paper');
@@ -189,6 +190,32 @@ export function FormStudioBuilder({
         widgetConfig: f.widgetConfig,
       })),
     }));
+  };
+
+  const handleApplyTemplate = (
+    template: FormTemplateItem,
+    customTitle: string,
+    mode: 'replace' | 'append'
+  ) => {
+    const newFields: FormField[] = template.fields.map((f, idx) => ({
+      ...f,
+      id: `f-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+    }));
+
+    onFormDataChange((prev) => {
+      const updatedFields =
+        mode === 'append' ? [...(prev.fields || []), ...newFields] : newFields;
+      return {
+        ...prev,
+        name: customTitle || prev.name,
+        fields: updatedFields,
+      };
+    });
+
+    setSelectedFieldId(newFields[0]?.id || null);
+    setStudioTab('build');
+    setIsPreviewMode(false);
+    toast.success(`Loaded "${template.name}" template with ${template.fields.length} fields!`);
   };
 
   // Active field lookup
@@ -502,12 +529,12 @@ export function FormStudioBuilder({
           </div>
         </div>
 
-        {/* Center: 4-Pillar Navigation Tabs (BUILD | SETTINGS | PUBLISH | AI AGENT) */}
+        {/* Center: 5-Pillar Navigation Tabs (BUILD | SETTINGS | PUBLISH | AI AGENT | TEMPLATES) */}
         <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border/60">
           <button
             onClick={() => { setStudioTab('build'); setIsPreviewMode(false); }}
             className={cn(
-              'flex items-center gap-1.5 px-3.5 py-1 text-xs font-semibold rounded-md transition-all',
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all',
               studioTab === 'build' && !isPreviewMode
                 ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -520,7 +547,7 @@ export function FormStudioBuilder({
           <button
             onClick={() => { setStudioTab('settings'); setIsPreviewMode(false); }}
             className={cn(
-              'flex items-center gap-1.5 px-3.5 py-1 text-xs font-semibold rounded-md transition-all',
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all',
               studioTab === 'settings'
                 ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -533,7 +560,7 @@ export function FormStudioBuilder({
           <button
             onClick={() => { setStudioTab('publish'); setIsPreviewMode(false); }}
             className={cn(
-              'flex items-center gap-1.5 px-3.5 py-1 text-xs font-semibold rounded-md transition-all',
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all',
               studioTab === 'publish'
                 ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -555,6 +582,20 @@ export function FormStudioBuilder({
             <Bot className="size-3.5 text-blue-600" />
             <span>AI AGENT</span>
             <span className="px-1 text-[8px] bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded font-bold">NEW</span>
+          </button>
+
+          <button
+            onClick={() => { setStudioTab('templates'); setIsPreviewMode(false); }}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all',
+              studioTab === 'templates'
+                ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <LayoutTemplate className="size-3.5 text-emerald-600" />
+            <span>TEMPLATES</span>
+            <span className="px-1 text-[8px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded font-bold">NEW</span>
           </button>
         </div>
 
@@ -1518,7 +1559,18 @@ export function FormStudioBuilder({
           </div>
         )}
 
-        {/* ─── 5. INTERACTIVE PREVIEW MODE (MULTI-FORMAT: PAPER / CARD / AGENT) ─── */}
+        {/* ─── 5. TEMPLATE EXPLORER (FULL-PAGE CATALOG + MODAL SUBMIT) ─── */}
+        {studioTab === 'templates' && !isPreviewMode && (
+          <div className="flex-1 flex overflow-hidden w-full">
+            <TemplateExplorer
+              onBackToBuild={() => setStudioTab('build')}
+              onApplyTemplate={handleApplyTemplate}
+              currentFieldCount={formData.fields.length}
+            />
+          </div>
+        )}
+
+        {/* ─── 6. INTERACTIVE PREVIEW MODE (MULTI-FORMAT: PAPER / CARD / AGENT) ─── */}
         {isPreviewMode && (
           <div className="flex-1 min-h-0 h-full flex flex-col bg-slate-200 dark:bg-slate-900/90 overflow-hidden">
             {/* Viewport & Multi-Format Header */}
