@@ -538,16 +538,16 @@ export function PaymentPropertiesPanel({
                   <div key={map.key} className="space-y-1">
                     <Label className="text-[11px] font-semibold text-foreground">{map.label}</Label>
                     <Select
-                      value={String(widgetConfig[map.key] || '')}
-                      onValueChange={(val) => onConfigChange(map.key, val)}
+                      value={String(widgetConfig[map.key] || 'auto_detect')}
+                      onValueChange={(val) => onConfigChange(map.key, val === 'auto_detect' ? '' : val)}
                     >
                       <SelectTrigger className="h-8 text-xs bg-background">
                         <SelectValue placeholder="Auto-detect from Form" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="" className="text-xs text-muted-foreground">Auto-detect from Form</SelectItem>
+                        <SelectItem value="auto_detect" className="text-xs text-muted-foreground">Auto-detect from Form</SelectItem>
                         {allFields
-                          .filter((f) => f.id !== field.id)
+                          .filter((f) => f.id && f.id !== field.id)
                           .map((f) => (
                             <SelectItem key={f.id} value={f.id} className="text-xs">
                               {f.label || f.type || 'Field'}

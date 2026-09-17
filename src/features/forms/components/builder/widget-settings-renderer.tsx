@@ -765,7 +765,7 @@ function ConditionBuilder({
       >
         <SelectTrigger className="h-7 text-xs bg-background"><SelectValue placeholder="When field..." /></SelectTrigger>
         <SelectContent>
-          {allFields.map((f) => (
+          {allFields.filter((f) => Boolean(f.id)).map((f) => (
             <SelectItem key={f.id} value={f.id} className="text-xs">{f.label}</SelectItem>
           ))}
         </SelectContent>
