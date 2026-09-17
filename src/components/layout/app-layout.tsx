@@ -327,28 +327,50 @@ class ViewErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('View component error:', error, errorInfo);
+    const msg = error?.message || '';
+    const isChunkError =
+      msg.includes('Failed to load chunk') ||
+      msg.includes('ChunkLoadError') ||
+      error?.name === 'ChunkLoadError';
+
+    if (isChunkError && typeof window !== 'undefined') {
+      const lastReload = parseInt(sessionStorage.getItem('chunk_error_reload_ts') || '0', 10);
+      const now = Date.now();
+      // Auto-reload to fetch fresh content-hashed chunks from the latest deployment (throttled to 1 per 15s)
+      if (now - lastReload > 15000) {
+        sessionStorage.setItem('chunk_error_reload_ts', String(now));
+        console.warn('Chunk load error detected after deployment. Auto-refreshing latest bundle...');
+        window.location.reload();
+      }
+    }
   }
 
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
-      const isChunkError = this.state.error?.message?.includes('Failed to load chunk') || this.state.error?.message?.includes('ChunkLoadError');
+      const isChunkError =
+        this.state.error?.message?.includes('Failed to load chunk') ||
+        this.state.error?.message?.includes('ChunkLoadError') ||
+        this.state.error?.name === 'ChunkLoadError';
+
       return (
         <div className="flex items-center justify-center min-h-[50vh] p-4">
-          <div className="flex flex-col items-center gap-4 max-w-md text-center p-6">
+          <div className="flex flex-col items-center gap-4 max-w-md text-center p-6 bg-card rounded-xl border border-border shadow-xs">
             <div className="size-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
               <AlertTriangle className="size-6 text-amber-600" />
             </div>
-            <h3 className="text-lg font-semibold text-foreground">Something went wrong</h3>
-            <p className="text-sm text-muted-foreground">
+            <h3 className="text-lg font-semibold text-foreground">
+              {isChunkError ? 'New Version Available' : 'Something went wrong'}
+            </h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               {isChunkError
-                ? 'A resource failed to load. This usually happens when the server is restarting. Please reload the page.'
-                : 'This section failed to load. You can try refreshing it.'}
+                ? 'The application has been updated with new features. Please reload the page to get the latest version.'
+                : 'This section encountered an issue. You can try refreshing it.'}
             </p>
             {isChunkError ? (
-              <Button size="sm" onClick={() => window.location.reload()} className="gap-2">
+              <Button size="sm" onClick={() => window.location.reload()} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
                 <RefreshCw className="size-3.5" />
-                Reload Page
+                Reload Application
               </Button>
             ) : (
               <Button variant="outline" size="sm" onClick={() => this.setState({ hasError: false, error: null })} className="gap-2">
