@@ -1,7 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
 import { FormField } from '@/lib/forms/form-schema-types';
+import { getRuntimeComponent } from './widget-runtime-registry';
+import type { WidgetProps } from './widget-props';
 import { ImageUploadWithNotes } from './image-upload-with-notes';
 import { NearestLocationFinder } from './nearest-location-finder';
 import { RoutePlannerMap } from './route-planner-map';
@@ -24,6 +26,42 @@ interface WidgetRuntimeDispatcherProps {
   disabled?: boolean;
 }
 
+/**
+ * LazyWidgetRenderer — wrapper that renders a lazy component inside a Suspense
+ * boundary. Declared OUTSIDE the dispatcher's render function so the
+ * react-hooks/static-components ESLint rule is satisfied.
+ */
+function LazyWidgetRenderer({
+  component: Component,
+  value,
+  onChange,
+  config,
+  disabled,
+  allFormData,
+  field,
+}: {
+  component: React.LazyExoticComponent<React.ComponentType<WidgetProps>>;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  config: Record<string, unknown>;
+  disabled?: boolean;
+  allFormData?: Record<string, unknown>;
+  field: Record<string, unknown>;
+}) {
+  return (
+    <Suspense fallback={<div className="h-10 bg-muted/40 animate-pulse rounded" />}>
+      <Component
+        value={value}
+        onChange={onChange}
+        config={config}
+        disabled={disabled}
+        allFormData={allFormData}
+        field={field}
+      />
+    </Suspense>
+  );
+}
+
 export function WidgetRuntimeDispatcher({
   field,
   value,
@@ -36,6 +74,25 @@ export function WidgetRuntimeDispatcher({
   // The widget config is freeform JSON defined per-widget — we trust the runtime
   // to pass the right shape based on widgetType.
   const config: Record<string, any> = field.widgetConfig || {};
+
+  // ─── Phase 1 unified registry lookup (lazy) ──────────────────────────────
+  // Try the lazy registry first. If found, render via the LazyWidgetRenderer
+  // wrapper (declared outside this function so react-hooks/static-components
+  // rule is satisfied). Falls through to legacy inline cases below otherwise.
+  const RuntimeComponent = getRuntimeComponent(widgetType);
+  if (RuntimeComponent) {
+    return (
+      <LazyWidgetRenderer
+        component={RuntimeComponent}
+        value={value}
+        onChange={onChange}
+        config={config}
+        disabled={disabled}
+        allFormData={allFormData}
+        field={field as unknown as Record<string, unknown>}
+      />
+    );
+  }
 
   // Check if this field is a payment gateway widget
   if (

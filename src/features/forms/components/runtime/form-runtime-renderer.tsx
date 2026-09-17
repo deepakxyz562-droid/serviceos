@@ -31,6 +31,61 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+/**
+ * Safe calculation evaluator.
+ *
+ * Replaces {{field_id}} tokens with numeric values and evaluates the
+ * resulting arithmetic expression. Whitelisted characters only — no
+ * Math.*, no eval, no Function constructor. Returns null on any error
+ * (division by zero, missing values, invalid characters, etc.).
+ */
+function evaluateFormulaSafe(
+  formula: string,
+  values: Record<string, unknown>,
+): number | null {
+  if (!formula) return null;
+  let expr = formula.replace(/\{\{\s*([a-zA-Z0-9_-]+)\s*\}\}/g, (_m, id: string) => {
+    const v = values[id];
+    if (v === undefined || v === null || v === '') return 'NaN';
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isNaN(n) ? 'NaN' : String(n);
+  });
+  if (expr.includes('NaN')) return null;
+  if (!/^[0-9.\s+\-*/()]+$/.test(expr)) return null;
+  if (/\/\s*0(?!\.\d)/.test(expr)) return null;
+  try {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function(`"use strict"; return (${expr});`);
+    const result = fn();
+    if (typeof result !== 'number' || !Number.isFinite(result)) return null;
+    return Math.round(result * 10000) / 10000;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Evaluate a ConditionalRule against current form data.
+ * Returns true if the field should be VISIBLE (default when no rules apply).
+ */
+function evaluateConditionalRule(
+  rule: { sourceFieldId: string; operator: string; value?: string | number | boolean },
+  values: Record<string, unknown>,
+): boolean {
+  const fv = values[rule.sourceFieldId];
+  if (fv === undefined || fv === null || fv === '') return false;
+  const actual = String(fv);
+  const expected = rule.value !== undefined ? String(rule.value) : '';
+  switch (rule.operator) {
+    case 'equals': return actual === expected;
+    case 'not_equals': return actual !== expected;
+    case 'contains': return actual.toLowerCase().includes(expected.toLowerCase());
+    case 'is_empty': return actual === '';
+    case 'is_not_empty': return actual !== '';
+    default: return true;
+  }
+}
+
 export interface FormRuntimeRendererProps {
   formId?: string;
   formName: string;
@@ -81,9 +136,54 @@ export function FormRuntimeRenderer({
   const steps = schema.steps?.length ? schema.steps : [{ id: 'step_1', title: 'Details' }];
   const currentStep = steps[currentStepIndex] || steps[0];
 
-  const currentStepFields = schema.fields.filter(
-    (f) => !f.stepId || f.stepId === currentStep.id || steps.length === 1
-  );
+  // Filter to the current step's fields AND evaluate conditional rules.
+  // A field is visible when:
+  //   - it belongs to the current step (or no stepId), AND
+  //   - no rule with action:'show' targets it that doesn't match, AND
+  //   - no rule with action:'hide' targets it that does match.
+  const currentStepFields = schema.fields.filter((f) => {
+    const inStep = !f.stepId || f.stepId === currentStep.id || steps.length === 1;
+    if (!inStep) return false;
+
+    // Evaluate schema.rules (show/hide rules targeting this field).
+    const rules = schema.rules || [];
+    const targetingRules = rules.filter((r) => r.targetFieldId === f.id);
+    if (targetingRules.length === 0) return true;
+
+    const showRules = targetingRules.filter((r) => r.action === 'show');
+    const hideRules = targetingRules.filter((r) => r.action === 'hide');
+    // If any show rule exists, the field is hidden unless at least one matches.
+    if (showRules.length > 0) {
+      return showRules.some((r) => evaluateConditionalRule(r, formData));
+    }
+    // If any hide rule matches, hide the field.
+    if (hideRules.length > 0) {
+      return !hideRules.some((r) => evaluateConditionalRule(r, formData));
+    }
+    return true;
+  });
+
+  // Auto-evaluate calculation widgets and inject their result into formData.
+  // This effect runs after every formData change so dependent fields re-evaluate.
+  useEffect(() => {
+    setFormData((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const field of schema.fields) {
+        if (field.widgetType === 'form_calculation' && field.widgetConfig) {
+          const formula = String((field.widgetConfig as Record<string, unknown>).formula || '');
+          if (!formula) continue;
+          const result = evaluateFormulaSafe(formula, prev);
+          if (result !== null && result !== prev[field.id]) {
+            next[field.id] = result;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData, schema.fields]);
 
   // Ghost form partial lead capture
   const handleFieldChange = (fieldId: string, value: any) => {
@@ -343,12 +443,21 @@ export function FormRuntimeRenderer({
             <div className="space-y-4">
               {currentStepFields.map((field) => {
                 const isHalf = field.width === 'half';
+                const isThird = field.width === 'third';
+                const isQuarter = field.width === 'quarter';
+                const widthClass = isHalf
+                  ? 'sm:w-[48%] sm:inline-block sm:mr-[2%] sm:align-top'
+                  : isThird
+                    ? 'sm:w-[31%] sm:inline-block sm:mr-[2%] sm:align-top'
+                    : isQuarter
+                      ? 'sm:w-[23%] sm:inline-block sm:mr-[2%] sm:align-top'
+                      : 'w-full';
                 const hasError = errors[field.id];
 
                 return (
                   <div
                     key={field.id}
-                    className={`space-y-1.5 ${isHalf ? 'sm:w-[48%] sm:inline-block sm:mr-[4%] sm:align-top' : 'w-full'}`}
+                    className={`space-y-1.5 ${widthClass}`}
                   >
                     {/* Label */}
                     {!['heading', 'paragraph', 'divider'].includes(field.type) && (

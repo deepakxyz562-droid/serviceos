@@ -10,7 +10,7 @@
  * 4. PREVIEW — Interactive multi-format testing (📄 Paper, 🃏 Card-by-Card Swipe, 💬 AI Voice/Chat Agent) on Desktop, Tablet, and Mobile.
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   ArrowLeft, Check, Copy, ExternalLink, Eye, FileInput, Globe,
   Hammer, Loader2, MessageCircle, Monitor, MoveDown, MoveUp,
@@ -65,6 +65,12 @@ import { QRCodePlaceholder } from './field-editor/qr-code-placeholder';
 import { FormImporterDialog } from './form-importer-dialog';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
 import { FormAgentStudio } from './agent-builder/form-agent-studio';
+import { UnifiedFieldInspector } from './builder/unified-field-inspector';
+import {
+  FIELD_REGISTRY,
+  createFieldFromRegistry,
+} from '@/lib/forms/field-registry';
+import { resolveIcon } from '@/lib/forms/icon-resolver';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 
 // ─── Palette Catalog ─────────────────────────────────────────────────────────
@@ -129,7 +135,7 @@ export function FormStudioBuilder({
   const [propertiesOpen, setPropertiesOpen] = useState(true);
 
   // Inspector Drawer Mode: 'properties' (⚙️) vs 'widget_settings' (🪄) vs 'ai_builder' (✨)
-  const [inspectorMode, setInspectorMode] = useState<'properties' | 'widget_settings' | 'ai_builder'>('properties');
+  const [inspectorMode, setInspectorMode] = useState<'properties' | 'widget_settings' | 'unified' | 'ai_builder'>('properties');
   const [widgetSettingsSubTab, setWidgetSettingsSubTab] = useState<'general' | 'custom_css'>('general');
 
   // AI Prompt, Importer & Co-Pilot state
@@ -235,6 +241,54 @@ export function FormStudioBuilder({
       (p) => p.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
     );
   }, [paletteSearch]);
+
+  // Phase 1 catalog items — pulled from the unified FIELD_REGISTRY, deduped
+  // against BASIC_PALETTE_ITEMS so legacy items don't show twice.
+  const phase1CatalogItems = useMemo(() => {
+    const legacyTypes = new Set(BASIC_PALETTE_ITEMS.map((p) => p.type));
+    const skipIds = new Set([
+      'image_upload_with_notes', 'nearest_location_finder', 'route_planner_map',
+      'service_area_checker', 'form_calculation', 'currency_amount_input',
+      'sms_otp_verification', 'voice_recorder', 'configurable_list', 'cloudflare_turnstile',
+    ]);
+    const q = paletteSearch.trim().toLowerCase();
+    return FIELD_REGISTRY.filter((def) => {
+      if (legacyTypes.has(def.id)) return false;
+      if (skipIds.has(def.id)) return false;
+      if (!q) return true;
+      return (
+        def.name.toLowerCase().includes(q) ||
+        def.description.toLowerCase().includes(q) ||
+        def.id.toLowerCase().includes(q)
+      );
+    });
+  }, [paletteSearch]);
+
+  // Add a field from the unified registry (Phase 1 widgets).
+  const handleAddFromRegistry = useCallback((registryId: string) => {
+    const def = createFieldFromRegistry(registryId);
+    if (!def) {
+      toast.error(`Unknown widget: ${registryId}`);
+      return;
+    }
+    const newId = `r-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newField: FormField = {
+      id: newId,
+      label: (def.label as string) || 'New Field',
+      type: (def.type as string) || 'short_answer',
+      required: Boolean(def.required),
+      placeholder: (def.placeholder as string) || '',
+      widgetType: def.widgetType as string | undefined,
+      widgetConfig: def.widgetConfig as Record<string, unknown> | undefined,
+    };
+    onFormDataChange((prev) => ({
+      ...prev,
+      fields: [...prev.fields, newField],
+    }));
+    setSelectedFieldId(newId);
+    setInspectorMode('unified');
+    toast.success(`✨ Added ${newField.label}`);
+  }, [onFormDataChange]);
 
   // Keyboard shortcut for Cmd/Ctrl+S
   useEffect(() => {
@@ -709,28 +763,74 @@ export function FormStudioBuilder({
               <ScrollArea className="flex-1 min-h-0 h-full p-3 overflow-y-auto">
                 {/* 1. BASIC TAB */}
                 {paletteTab === 'basic' && (
-                  <div className="space-y-1.5">
-                    {filteredBasicItems.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          key={item.type}
-                          onClick={() => handleAddField(item.type, item.defaultOptions)}
-                          className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group"
-                        >
-                          <div className="size-8 rounded-md bg-muted flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0">
-                            <Icon className="size-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
-                              {item.label}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground truncate">{item.description}</p>
-                          </div>
-                          <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </button>
-                      );
-                    })}
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      {filteredBasicItems.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <button
+                            key={item.type}
+                            onClick={() => handleAddField(item.type, item.defaultOptions)}
+                            className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group"
+                          >
+                            <div className="size-8 rounded-md bg-muted flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0">
+                              <Icon className="size-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
+                                {item.label}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground truncate">{item.description}</p>
+                            </div>
+                            <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Phase 1 Catalog — additional widgets from the unified registry */}
+                    <div className="pt-2 border-t border-border/60">
+                      <div className="flex items-center gap-1.5 px-1 pb-2">
+                        <Sparkles className="size-3 text-emerald-600" />
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                          Phase 1 Widget Catalog
+                        </p>
+                        <Badge variant="outline" className="text-[9px] ml-auto">
+                          {phase1CatalogItems.length} widgets
+                        </Badge>
+                      </div>
+                      <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+                        {phase1CatalogItems.map((def) => {
+                          const Icon = resolveIcon(def.iconName);
+                          return (
+                            <button
+                              key={def.id}
+                              onClick={() => handleAddFromRegistry(def.id)}
+                              className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group"
+                              title={def.description}
+                            >
+                              <div className="size-8 rounded-md bg-muted flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0">
+                                <Icon className="size-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1">
+                                  <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
+                                    {def.name}
+                                  </p>
+                                  {def.badge && (
+                                    <Badge variant="outline" className="text-[8px] px-1 py-0 h-3">
+                                      {def.badge}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground truncate">{def.description}</p>
+                              </div>
+                              <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -1196,38 +1296,50 @@ export function FormStudioBuilder({
                 !propertiesOpen && '-mr-72 lg:-mr-80'
               )}
             >
-              {/* 3-Mode Inspector Header Switcher (✨ AI Builder | ⚙️ Properties | 🪄 Widgets) + Close Button */}
+              {/* 4-Mode Inspector Header Switcher (✨ AI Builder | ⚙️ Properties | 🎛️ Unified | 🪄 Widgets) + Close Button */}
               <div className="p-2 border-b border-border/80 bg-muted/40 flex items-center gap-1 shrink-0">
-                <div className="grid grid-cols-3 gap-1 flex-1">
+                <div className="grid grid-cols-4 gap-1 flex-1">
                   <button
                     type="button"
                     onClick={() => setInspectorMode('ai_builder')}
                     className={cn(
-                      'py-1 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
+                      'py-1 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
                       inspectorMode === 'ai_builder' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                     )}
                     title="AI Form Builder & Co-Pilot"
                   >
                     <Sparkles className="size-3 text-emerald-600" />
-                    <span>AI Builder</span>
+                    <span>AI</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setInspectorMode('properties')}
                     className={cn(
-                      'py-1 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
+                      'py-1 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
                       inspectorMode === 'properties' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                     )}
                     title="Question Properties"
                   >
                     <Settings className="size-3" />
-                    <span>Properties</span>
+                    <span>Props</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectorMode('unified')}
+                    className={cn(
+                      'py-1 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
+                      inspectorMode === 'unified' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                    title="Unified Schema-Driven Settings (NEW)"
+                  >
+                    <Sliders className="size-3" />
+                    <span>Unified</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setInspectorMode('widget_settings')}
                     className={cn(
-                      'py-1 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
+                      'py-1 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
                       inspectorMode === 'widget_settings' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                     )}
                     title="Widget Settings"
@@ -1362,6 +1474,16 @@ export function FormStudioBuilder({
                   </div>
                 ) : selectedField ? (
                   <div className="space-y-4 pb-28">
+                    {/* ════ MODE NEW: UNIFIED SCHEMA-DRIVEN SETTINGS (🎛️) ════ */}
+                    {inspectorMode === 'unified' && (
+                      <UnifiedFieldInspector
+                        field={selectedField as unknown as Record<string, any>}
+                        allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
+                        onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
+                        onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
+                      />
+                    )}
+
                     {/* ════ MODE B: QUESTION PROPERTIES (⚙️) ════ */}
                     {inspectorMode === 'properties' && (
                       <div className="space-y-4">

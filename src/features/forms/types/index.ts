@@ -72,7 +72,7 @@ export interface FormField {
   readOnly?: boolean;
   // ─── Schema-compatible fields (aligned with form-schema-types.ts) ────────
   helpText?: string;
-  width?: 'full' | 'half';
+  width?: 'full' | 'half' | 'third' | 'quarter';
   stepId?: string;
   defaultValue?: string | number | boolean;
   validation?: {

@@ -64,7 +64,7 @@ export interface FormField {
   defaultValue?: string | number | boolean;
   options?: FieldOption[];
   stepId?: string;
-  width?: 'full' | 'half';
+  width?: 'full' | 'half' | 'third' | 'quarter';
   validation?: {
     min?: number;
     max?: number;
