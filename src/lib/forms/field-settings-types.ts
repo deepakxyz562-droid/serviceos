@@ -34,7 +34,7 @@ export type SettingFieldType =
   | 'currency_search'        // searchable currency dropdown
   | 'label_with_toggle';    // Field Label text input + enable/disable toggle
 
-export type SettingGroup = 'general' | 'advanced' | 'field_specific';
+export type SettingGroup = 'general' | 'advanced' | 'field_specific' | 'survey';
 
 export interface SettingField {
   key: string;
@@ -58,10 +58,12 @@ export interface SettingField {
   action?: 'duplicate' | 'delete';
   /** For 'gateway_picker' / 'currency_search' type: placeholder for the search input. */
   searchPlaceholder?: string;
+  /** For 'segmented' type: show a 'Set as form default' checkbox below the segmented control (JotForm pattern). */
+  setAsFormDefault?: boolean;
 }
 
 export const UNIVERSAL_GENERAL_SETTINGS: SettingField[] = [
-  // ─── Field Label (with enable/disable toggle) ───────────────────────────────
+  // ─── Field Label (JotForm: plain text input, no toggle for most fields) ──────
   {
     key: 'labelEnabled',
     label: 'Field Label',
@@ -71,58 +73,22 @@ export const UNIVERSAL_GENERAL_SETTINGS: SettingField[] = [
     helpText: 'Enable/disable the field label without deleting it.',
   },
   { key: 'label', label: 'Label Text', type: 'text', group: 'general', placeholder: 'Enter label...', condition: { dependsOn: 'labelEnabled', equals: 'true' } },
-  // ─── Label Align (segmented control — JotForm style) ─────────────────────────
+  // ─── Label Alignment (segmented + "Set as form default" checkbox — JotForm) ──
   {
     key: 'labelAlign',
-    label: 'Label Align',
+    label: 'Label Alignment',
     type: 'segmented',
     group: 'general',
     default: 'top',
     options: [
-      { label: 'Top', value: 'top' },
       { label: 'Left', value: 'left' },
       { label: 'Right', value: 'right' },
+      { label: 'Top', value: 'top' },
     ],
     helpText: 'Select how the label text is aligned horizontally.',
+    setAsFormDefault: true,
   },
-  // ─── Align (segmented control — input alignment) ─────────────────────────────
-  {
-    key: 'align',
-    label: 'Align',
-    type: 'segmented',
-    group: 'general',
-    default: 'left',
-    options: [
-      { label: 'Left', value: 'left' },
-      { label: 'Center', value: 'center' },
-      { label: 'Right', value: 'right' },
-    ],
-    helpText: 'Select how the input is aligned horizontally.',
-  },
-  // ─── Width + Height (numeric inputs with PX suffix — JotForm style) ─────────
-  {
-    key: 'widthPx',
-    label: 'Width',
-    type: 'dimension',
-    group: 'general',
-    default: 350,
-    unit: 'PX',
-    min: 50,
-    max: 2000,
-    helpText: 'Field width in pixels.',
-  },
-  {
-    key: 'heightPx',
-    label: 'Height',
-    type: 'dimension',
-    group: 'general',
-    default: 100,
-    unit: 'PX',
-    min: 30,
-    max: 2000,
-    helpText: 'Field height in pixels.',
-  },
-  // ─── Required (toggle with description — JotForm style) ───────────────────────
+  // ─── Required (toggle with description — JotForm) ─────────────────────────────
   {
     key: 'required',
     label: 'Required',
@@ -131,7 +97,7 @@ export const UNIVERSAL_GENERAL_SETTINGS: SettingField[] = [
     default: false,
     description: 'Prevent submission if this field is empty.',
   },
-  // ─── Duplicate Field (inline button — JotForm style) ─────────────────────────
+  // ─── Duplicate Field (inline button — JotForm) ────────────────────────────────
   {
     key: '_duplicate',
     label: 'Duplicate Field',
@@ -146,6 +112,42 @@ export const UNIVERSAL_ADVANCED_SETTINGS: SettingField[] = [
   { key: 'placeholder', label: 'Placeholder', type: 'text', group: 'advanced', placeholder: 'Enter hint...' },
   { key: 'helpText', label: 'Sub-label / Hover Text', type: 'text', group: 'advanced' },
   { key: 'defaultValue', label: 'Default Value', type: 'text', group: 'advanced' },
+  // ─── Input Alignment + Dimensions (JotForm puts these in Advanced) ───────────
+  {
+    key: 'align',
+    label: 'Input Alignment',
+    type: 'segmented',
+    group: 'advanced',
+    default: 'left',
+    options: [
+      { label: 'Left', value: 'left' },
+      { label: 'Center', value: 'center' },
+      { label: 'Right', value: 'right' },
+    ],
+    helpText: 'Select how the input is aligned horizontally.',
+  },
+  {
+    key: 'widthPx',
+    label: 'Width',
+    type: 'dimension',
+    group: 'advanced',
+    default: 350,
+    unit: 'PX',
+    min: 50,
+    max: 2000,
+    helpText: 'Field width in pixels.',
+  },
+  {
+    key: 'heightPx',
+    label: 'Height',
+    type: 'dimension',
+    group: 'advanced',
+    default: 100,
+    unit: 'PX',
+    min: 30,
+    max: 2000,
+    helpText: 'Field height in pixels.',
+  },
   {
     key: 'readOnly',
     label: 'Read-only',

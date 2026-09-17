@@ -117,6 +117,10 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       { key: 'columns', label: 'Spread', type: 'segmented', group: 'field_specific', default: '1', options: [
         { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
       ], helpText: 'How options are laid out visually.' },
+      // ─── Surveying tab (JotForm 4th tab for choice fields) ──────────────────────
+      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign calculation values to each option for use in formulas.' },
+      { key: 'randomize', label: 'Randomize Option Order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load to reduce order bias.' },
+      { key: 'allowNone', label: 'Allow "None of the above"', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add a "None of the above" option that deselects all others.' },
     ],
   },
   {
@@ -139,6 +143,10 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       { key: 'columns', label: 'Spread', type: 'segmented', group: 'field_specific', default: '1', options: [
         { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
       ], helpText: 'How options are laid out visually.' },
+      // ─── Surveying tab (JotForm 4th tab for choice fields) ──────────────────────
+      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign calculation values to each option for use in formulas.' },
+      { key: 'randomize', label: 'Randomize Option Order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load to reduce order bias.' },
+      { key: 'allowNone', label: 'Allow "None of the above"', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add a "None of the above" option that deselects all others.' },
     ],
   },
   {

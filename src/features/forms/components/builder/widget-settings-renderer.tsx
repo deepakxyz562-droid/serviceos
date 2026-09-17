@@ -47,7 +47,7 @@ export interface WidgetSettingsRendererProps {
   onUpdate?: () => void;
 }
 
-type SubTab = 'general' | 'field_specific' | 'advanced';
+type SubTab = 'general' | 'field_specific' | 'survey' | 'advanced';
 
 export function WidgetSettingsRenderer({
   definition,
@@ -65,6 +65,7 @@ export function WidgetSettingsRenderer({
   const universalGeneral = UNIVERSAL_GENERAL_SETTINGS;
   const universalAdvanced = UNIVERSAL_ADVANCED_SETTINGS;
   const fieldSpecific = definition.settingsSchema.filter((s) => s.group === 'field_specific');
+  const surveySpecific = definition.settingsSchema.filter((s) => s.group === 'survey');
   const advancedSpecific = definition.settingsSchema.filter((s) => s.group === 'advanced');
 
   const renderControl = (setting: SettingField) => {
@@ -268,6 +269,17 @@ export function WidgetSettingsRenderer({
                 </button>
               ))}
             </div>
+            {/* "Set as form default" checkbox (JotForm pattern) */}
+            {setting.setAsFormDefault && (
+              <label className="flex items-center gap-2 text-[10px] cursor-pointer mt-1">
+                <input
+                  type="checkbox"
+                  className="size-3 accent-emerald-600"
+                  aria-label="Set as form default"
+                />
+                <span className="text-muted-foreground">Set as form default</span>
+              </label>
+            )}
             {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
           </div>
         );
@@ -434,15 +446,19 @@ export function WidgetSettingsRenderer({
   const settingsForTab = (tab: SubTab): SettingField[] => {
     if (tab === 'general') return universalGeneral;
     if (tab === 'field_specific') return fieldSpecific;
+    if (tab === 'survey') return surveySpecific;
     return [...advancedSpecific, ...universalAdvanced];
   };
 
   const currentSettings = settingsForTab(subTab);
+  const hasSurveyTab = surveySpecific.length > 0;
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-1 bg-muted/60 p-1 rounded-lg border border-border/60">
-        {(['general', 'field_specific', 'advanced'] as SubTab[]).map((tab) => (
+      <div className={cn('grid gap-1 bg-muted/60 p-1 rounded-lg border border-border/60', hasSurveyTab ? 'grid-cols-4' : 'grid-cols-3')}>
+        {(['general', 'field_specific', 'survey', 'advanced'] as SubTab[])
+          .filter((tab) => tab !== 'survey' || hasSurveyTab)
+          .map((tab) => (
           <button
             key={tab}
             type="button"
@@ -468,6 +484,7 @@ export function WidgetSettingsRenderer({
               : definition.category === 'file' ? 'File Settings'
               : 'Field Settings'
             )}
+            {tab === 'survey' && 'Surveying'}
             {tab === 'advanced' && 'Advanced'}
           </button>
         ))}
