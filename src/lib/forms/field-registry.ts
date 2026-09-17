@@ -684,8 +684,62 @@ const FIELD_REGISTRY_MAP = new Map<string, FieldDefinition>(
   FIELD_REGISTRY.map((f) => [f.id, f]),
 );
 
+export const FIELD_ALIASES: Record<string, string> = {
+  // Signature aliases
+  e_signature: 'signature',
+  signature_pad: 'signature',
+
+  // Text & Numerical aliases
+  short_answer: 'short_text',
+  text: 'short_text',
+  long_answer: 'long_text',
+  textarea: 'long_text',
+  numerical: 'number',
+  currency_amount_input: 'number',
+
+  // Choice aliases
+  radio: 'single_choice',
+  checkbox: 'multiple_choice',
+  dynamic_dropdowns: 'dropdown',
+  remote_data_dropdown: 'dropdown',
+  inventory_dropdown: 'dropdown',
+
+  // DateTime aliases
+  date: 'date_picker',
+  time: 'time_picker',
+  weekly_appointment_planner: 'weekly_planner',
+  global_countdown_timer: 'countdown_timer',
+
+  // Media aliases
+  take_photo_camera: 'take_photo',
+  image_upload_preview: 'image_preview',
+  image_upload_with_notes: 'image_upload',
+
+  // Contact aliases
+  name: 'full_name',
+  whatsapp_chat_button: 'phone',
+  email_otp_verification: 'email',
+
+  // Survey aliases
+  rating: 'star_rating',
+  matrix_dynamique: 'likert_matrix',
+
+  // Calc & Productivity aliases
+  loan_emi_calculator: 'loan_emi',
+  spreadsheet_widget: 'spreadsheet',
+  text_count_calculator: 'text_count',
+  configurable_list: 'configurable_list_v2',
+  cloudflare_turnstile: 'terms_and_conditions',
+  street_view_address_search: 'address_map_locator',
+  gps_location_coordinates: 'address_map_locator',
+};
+
 export function getFieldById(id: string): FieldDefinition | undefined {
-  return FIELD_REGISTRY_MAP.get(id);
+  const direct = FIELD_REGISTRY_MAP.get(id);
+  if (direct) return direct;
+  const canonicalId = FIELD_ALIASES[id];
+  if (canonicalId) return FIELD_REGISTRY_MAP.get(canonicalId);
+  return undefined;
 }
 
 export function getFieldsByCategory(category: FieldDefinition['category']): FieldDefinition[] {

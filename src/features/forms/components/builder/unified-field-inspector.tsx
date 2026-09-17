@@ -48,14 +48,19 @@ export function resolveFieldDefinition(field: Record<string, any>): FieldDefinit
     }
   }
 
-  // Match by gateway fieldType if present
-  const gwByFieldType = PAYMENT_GATEWAYS_REGISTRY.find((g) => g.fieldType === field.type);
-  if (gwByFieldType) {
-    return synthesizePaymentDefinition(gwByFieldType);
+  // Match by field.type in field registry (with aliases)
+  if (field.type) {
+    const defByType = getFieldById(field.type);
+    if (defByType) return defByType;
   }
 
-  const defByType = FIELD_REGISTRY.find((d) => d.id === field.type);
-  if (defByType) return defByType;
+  // Match by gateway fieldType if present (excluding generic control_widget)
+  if (field.type && field.type !== 'control_widget') {
+    const gwByFieldType = PAYMENT_GATEWAYS_REGISTRY.find((g) => g.fieldType === field.type);
+    if (gwByFieldType) {
+      return synthesizePaymentDefinition(gwByFieldType);
+    }
+  }
 
   return {
     id: 'fallback',
@@ -122,12 +127,17 @@ export function UnifiedFieldInspector({
     [allFields, field.id],
   );
 
-  // 1. If this is a payment widget, render the dedicated JotForm Payment Properties panel
+  // 1. If this is a genuine payment widget, render the dedicated JotForm Payment Properties panel
   const isPaymentWidget =
     definition.category === 'payment' ||
     Boolean(field.widgetType?.startsWith('payment_')) ||
     Boolean(widgetConfig.gatewayId) ||
-    PAYMENT_GATEWAYS_REGISTRY.some((g) => g.fieldType === field.type || g.fieldType === field.widgetType);
+    PAYMENT_GATEWAYS_REGISTRY.some(
+      (g) =>
+        g.id === field.widgetType ||
+        g.fieldType === field.widgetType ||
+        (field.type && field.type !== 'control_widget' && g.fieldType === field.type)
+    );
 
   if (isPaymentWidget) {
     return (

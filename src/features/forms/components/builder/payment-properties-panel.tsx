@@ -33,6 +33,10 @@ import {
   ChevronUp,
   KeyRound,
   ExternalLink,
+  Plus,
+  Settings2,
+  Unlink,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +54,14 @@ import {
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   PAYMENT_GATEWAYS_REGISTRY,
   ISO_CURRENCY_LABELS,
   type PaymentGatewayDef,
@@ -63,6 +75,24 @@ export interface PaymentPropertiesPanelProps {
   onConfigChange: (key: string, value: unknown) => void;
   onClose?: () => void;
   onUpdate?: () => void;
+}
+
+function getOAuthProviderName(gateway: PaymentGatewayDef): string {
+  if (['cash_app_pay', 'square_payments', 'afterpay', 'clearpay'].includes(gateway.id)) {
+    return 'Square';
+  }
+  if (['stripe_elements', 'stripe_checkout'].includes(gateway.id)) {
+    return 'Stripe';
+  }
+  if (['paypal_complete', 'venmo'].includes(gateway.id)) {
+    return 'PayPal';
+  }
+  if (gateway.id === 'razorpay') return 'Razorpay';
+  if (gateway.id === 'mollie') return 'Mollie';
+  if (gateway.id.startsWith('payu')) return 'PayU';
+  if (gateway.id === 'gocardless') return 'GoCardless';
+  if (gateway.id === 'iyzico') return 'iyzico';
+  return gateway.name;
 }
 
 export function PaymentPropertiesPanel({
@@ -88,6 +118,7 @@ export function PaymentPropertiesPanel({
   // 2. Extracted Configuration Values
   const isConnected = Boolean(widgetConfig.isConnected ?? (widgetConfig.provider === 'managed' || widgetConfig.publishableKey || widgetConfig.applicationId || widgetConfig.clientId));
   const mode = (widgetConfig.mode as 'live' | 'test') || (widgetConfig.testMode ? 'test' : 'live') || 'test';
+  const connectionName = String(widgetConfig.connectionName || `My ${gateway.name} Connection #1`);
   const paymentType = (widgetConfig.paymentType as PaymentTypeOption) || (widgetConfig.pricingMode === 'fixed' ? 'sell_products' : widgetConfig.pricingMode === 'formula' ? 'user_defined_amount' : 'sell_products');
   const currency = String(widgetConfig.currency || gateway.currencies[0] || 'USD');
   const authorizationOnly = Boolean(widgetConfig.authorizationOnly ?? false);
@@ -99,6 +130,13 @@ export function PaymentPropertiesPanel({
   const businessLocation = String(widgetConfig.businessLocation || 'default_loc');
   const fulfillmentType = String(widgetConfig.fulfillmentType || 'physical');
   const customLabelText = String(widgetConfig.customLabelText || (gateway.id === 'cash_app_pay' ? 'Cash App Pay' : 'Credit Card'));
+
+  // Connection Modal State (JotForm Flow)
+  const [isConnectionModalOpen, setIsConnectionModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'live' | 'test'>(mode);
+  const [modalConnName, setModalConnName] = useState<string>(connectionName);
+  const [modalIsConnected, setModalIsConnected] = useState<boolean>(isConnected);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   // Enabled payment methods state (array or object)
   const enabledMethods: Record<string, boolean> = widgetConfig.enabledPaymentMethods || {
@@ -113,23 +151,42 @@ export function PaymentPropertiesPanel({
     klarna: false,
   };
 
-  const handleToggleConnection = () => {
-    const nextConnected = !isConnected;
-    onConfigChange('isConnected', nextConnected);
-    if (nextConnected && !widgetConfig.provider) {
-      onConfigChange('provider', gateway.supportsZeroConfig ? 'managed' : 'byok');
-    }
+  const openAddConnectionModal = (isEdit = false) => {
+    setModalMode(mode);
+    setModalConnName(isEdit ? connectionName : `My ${gateway.name} Connection #${(widgetConfig.savedConnections?.length || 0) + 1}`);
+    setModalIsConnected(isEdit ? isConnected : false);
+    setIsConnectionModalOpen(true);
   };
 
-  const handleModeChange = (newMode: 'live' | 'test') => {
-    onConfigChange('mode', newMode);
-    onConfigChange('testMode', newMode === 'test');
+  const handleOAuthConnect = () => {
+    setIsConnecting(true);
+    setTimeout(() => {
+      setIsConnecting(false);
+      setModalIsConnected(true);
+    }, 600);
+  };
+
+  const handleSaveConnectionModal = () => {
+    onConfigChange('connectionName', modalConnName || `My ${gateway.name} Connection #1`);
+    onConfigChange('mode', modalMode);
+    onConfigChange('testMode', modalMode === 'test');
+    onConfigChange('isConnected', modalIsConnected);
+    if (modalIsConnected && !widgetConfig.provider) {
+      onConfigChange('provider', gateway.supportsZeroConfig ? 'managed' : 'byok');
+    }
+    setIsConnectionModalOpen(false);
+  };
+
+  const handleDisconnect = () => {
+    onConfigChange('isConnected', false);
   };
 
   const handleMethodToggle = (methodId: string, checked: boolean) => {
     const next = { ...enabledMethods, [methodId]: checked };
     onConfigChange('enabledPaymentMethods', next);
   };
+
+  const oauthProviderName = getOAuthProviderName(gateway);
 
   return (
     <div
@@ -165,98 +222,110 @@ export function PaymentPropertiesPanel({
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-4 space-y-5">
           
-          {/* ════ 2. GATEWAY CONNECTION CARD ════ */}
-          <div className="rounded-xl border border-border/80 bg-card p-3.5 shadow-sm space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="size-10 rounded-lg flex items-center justify-center p-1.5 shrink-0 shadow-inner"
-                  style={{ backgroundColor: gateway.logoBg || '#1e293b' }}
-                  dangerouslySetInnerHTML={{ __html: gateway.iconSvg }}
-                />
-                <div>
-                  <h4 className="font-bold text-xs text-card-foreground leading-tight flex items-center gap-1.5">
-                    {gateway.name}
-                    {gateway.badge && (
-                      <Badge variant="secondary" className="text-[9px] px-1.5 py-0 uppercase h-4">
-                        {gateway.badge}
-                      </Badge>
-                    )}
-                  </h4>
-                  {gateway.subtitle && (
-                    <p className="text-[10px] text-muted-foreground font-medium">{gateway.subtitle}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Status Pill */}
-              {isConnected ? (
-                <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] gap-1 font-semibold">
-                  <CheckCircle2 className="size-3" /> Connected
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] gap-1">
-                  <AlertTriangle className="size-3" /> Disconnected
-                </Badge>
+          {/* ════ 2. JOTFORM PAYMENT CONNECTION SECTION ════ */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold text-foreground">Payment Connection</Label>
+              {isConnected && (
+                <button
+                  type="button"
+                  onClick={() => openAddConnectionModal(false)}
+                  className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
+                >
+                  <Plus className="size-3" /> Add Connection
+                </button>
               )}
             </div>
 
-            {/* Warning / Status Note */}
-            {!isConnected ? (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                Add a <span className="font-semibold">{gateway.name}</span> connection to start collecting payments on your form.
+            {/* Connection Selector / Active Card */}
+            {isConnected ? (
+              <div className="rounded-xl border border-emerald-500/30 bg-card p-3.5 shadow-sm space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="size-10 rounded-lg flex items-center justify-center p-1.5 shrink-0 shadow-inner"
+                      style={{ backgroundColor: gateway.logoBg || '#1e293b' }}
+                      dangerouslySetInnerHTML={{ __html: gateway.iconSvg }}
+                    />
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-xs text-card-foreground leading-tight truncate">
+                        {connectionName}
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1.5 mt-0.5">
+                        <span>{gateway.name}</span>
+                        <span>•</span>
+                        <span className="capitalize">{mode === 'live' ? 'Live Mode' : 'Test Mode'}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] gap-1 font-semibold shrink-0">
+                    <CheckCircle2 className="size-3" /> Connected
+                  </Badge>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[11px]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px] gap-1 px-2.5"
+                    onClick={() => openAddConnectionModal(true)}
+                  >
+                    <Settings2 className="size-3" /> Edit Connection
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    className="text-[10px] text-red-500 hover:underline font-semibold flex items-center gap-1"
+                  >
+                    <Unlink className="size-3" /> Disconnect
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2 text-[11px] text-emerald-700 dark:text-emerald-300 leading-relaxed flex items-center justify-between">
-                <span>Account active in <strong>{mode === 'live' ? 'Live Mode' : 'Test Sandbox'}</strong></span>
-                <button
-                  type="button"
-                  onClick={handleToggleConnection}
-                  className="text-[10px] text-red-500 hover:underline font-semibold"
-                >
-                  Disconnect
-                </button>
-              </div>
-            )}
+              <div className="rounded-xl border border-border/80 bg-card p-3.5 shadow-sm space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="size-10 rounded-lg flex items-center justify-center p-1.5 shrink-0 shadow-inner"
+                      style={{ backgroundColor: gateway.logoBg || '#1e293b' }}
+                      dangerouslySetInnerHTML={{ __html: gateway.iconSvg }}
+                    />
+                    <div>
+                      <h4 className="font-bold text-xs text-card-foreground leading-tight flex items-center gap-1.5">
+                        {gateway.name}
+                        {gateway.badge && (
+                          <Badge variant="secondary" className="text-[9px] px-1.5 py-0 uppercase h-4">
+                            {gateway.badge}
+                          </Badge>
+                        )}
+                      </h4>
+                      {gateway.subtitle && (
+                        <p className="text-[10px] text-muted-foreground font-medium">{gateway.subtitle}</p>
+                      )}
+                    </div>
+                  </div>
 
-            {/* Mode Selector + Connect Button */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <div>
-                <Label className="text-[10px] text-muted-foreground mb-1 block">Environment Mode</Label>
-                <Select value={mode} onValueChange={(v) => handleModeChange(v as 'live' | 'test')}>
-                  <SelectTrigger className="h-8 text-xs bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="test" className="text-xs">Test Mode (Sandbox)</SelectItem>
-                    <SelectItem value="live" className="text-xs">Live Mode (Production)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] gap-1">
+                    <AlertTriangle className="size-3" /> Disconnected
+                  </Badge>
+                </div>
 
-              <div className="flex flex-col justify-end">
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                  Add a <span className="font-semibold">{gateway.name}</span> connection to start collecting payments on your form.
+                </div>
+
                 <Button
                   type="button"
                   size="sm"
-                  className={`h-8 text-xs font-semibold gap-1.5 transition-all ${
-                    isConnected
-                      ? 'bg-muted hover:bg-muted/80 text-foreground border border-border'
-                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-                  }`}
-                  onClick={handleToggleConnection}
+                  className="w-full h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                  onClick={() => openAddConnectionModal(false)}
                 >
-                  {isConnected ? (
-                    <>
-                      <Check className="size-3.5 text-emerald-500" /> Attached
-                    </>
-                  ) : (
-                    <>
-                      <ExternalLink className="size-3" /> Connect {gateway.name.split(' ')[0]}
-                    </>
-                  )}
+                  <Plus className="size-3.5" /> Add {gateway.name} Connection
                 </Button>
               </div>
-            </div>
+            )}
           </div>
 
           <Separator className="my-2" />
@@ -643,6 +712,153 @@ export function PaymentPropertiesPanel({
           )}
         </div>
       )}
+
+      {/* ════ 8. JOTFORM "ADD / EDIT GATEWAY CONNECTION" MODAL ════ */}
+      <Dialog open={isConnectionModalOpen} onOpenChange={setIsConnectionModalOpen}>
+        <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden border border-border/80 shadow-2xl rounded-2xl bg-card">
+          {/* Modal Header */}
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60 bg-muted/20">
+            <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              {modalIsConnected ? `Edit ${gateway.name} Connection` : `Add ${gateway.name} Connection`}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Connect with {gateway.name} to start collecting online payments
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Modal Body */}
+          <div className="p-6 space-y-5">
+            {/* Gateway Status Summary Card */}
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="size-10 rounded-lg flex items-center justify-center p-1.5 shrink-0 shadow-inner"
+                  style={{ backgroundColor: gateway.logoBg || '#1e293b' }}
+                  dangerouslySetInnerHTML={{ __html: gateway.iconSvg }}
+                />
+                <div>
+                  <h4 className="font-bold text-sm text-foreground">{gateway.name}</h4>
+                  <p className="text-[11px] text-muted-foreground">
+                    {modalIsConnected ? 'Connected and ready to process' : 'Not connected'}
+                  </p>
+                </div>
+              </div>
+
+              {modalIsConnected ? (
+                <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1 font-semibold px-2.5 py-1">
+                  <CheckCircle2 className="size-3.5" /> Connected
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs gap-1 px-2.5 py-1">
+                  <AlertTriangle className="size-3.5" /> Not connected
+                </Badge>
+              )}
+            </div>
+
+            {/* Environment Mode Tabs */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">Environment</Label>
+              <div className="grid grid-cols-2 p-1 bg-muted/60 rounded-lg border border-border/60 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setModalMode('test')}
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    modalMode === 'test'
+                      ? 'bg-background text-foreground shadow-xs border border-border/50'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Test Mode
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalMode('live')}
+                  className={`py-1.5 text-xs font-semibold rounded-md transition-all ${
+                    modalMode === 'live'
+                      ? 'bg-background text-foreground shadow-xs border border-border/50'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Live Mode
+                </button>
+              </div>
+            </div>
+
+            {/* Connection Name with 0/40 Live Counter */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="conn-name-input" className="text-xs font-semibold text-foreground">
+                  Connection Name <span className="text-red-500">*</span>
+                </Label>
+                <span className="text-[11px] text-muted-foreground font-mono">
+                  {modalConnName.length}/40
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Enter a name for your connection to reuse it in the future.
+              </p>
+              <Input
+                id="conn-name-input"
+                maxLength={40}
+                value={modalConnName}
+                onChange={(e) => setModalConnName(e.target.value)}
+                placeholder={`My ${gateway.name} Connection #1`}
+                className="h-9 text-xs bg-background"
+              />
+            </div>
+
+            {/* Connect with OAuth Provider Button */}
+            <div className="pt-2">
+              <Button
+                type="button"
+                className={`w-full h-10 text-xs font-bold gap-2 transition-all shadow-sm ${
+                  modalIsConnected
+                    ? 'bg-muted hover:bg-muted/80 text-foreground border border-border'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                }`}
+                disabled={isConnecting}
+                onClick={handleOAuthConnect}
+              >
+                {isConnecting ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" /> Connecting to {oauthProviderName}...
+                  </>
+                ) : modalIsConnected ? (
+                  <>
+                    <Check className="size-4 text-emerald-500" /> Reconnect with {oauthProviderName}
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="size-4" /> Connect with {oauthProviderName}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          {/* Modal Footer */}
+          <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20 flex flex-row items-center justify-end gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs px-4"
+              onClick={() => setIsConnectionModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 text-xs px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+              disabled={!modalConnName.trim()}
+              onClick={handleSaveConnectionModal}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

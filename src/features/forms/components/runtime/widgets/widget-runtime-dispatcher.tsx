@@ -18,6 +18,8 @@ import { Slider } from '@/components/ui/slider';
 import { Star, Shield, Lock, CreditCard, Sparkles, CheckSquare, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+import { PAYMENT_GATEWAYS_REGISTRY } from '@/lib/forms/payments/payment-gateways-registry';
+
 interface WidgetRuntimeDispatcherProps {
   field: FormField;
   value: any;
@@ -94,13 +96,19 @@ export function WidgetRuntimeDispatcher({
     );
   }
 
-  // Check if this field is a payment gateway widget
-  if (
+  // Check if this field is a genuine payment gateway widget
+  const isPaymentGateway =
+    Boolean(config.gatewayId) ||
     widgetType.startsWith('payment_') ||
-    widgetType.startsWith('control_') ||
-    field.type?.startsWith('control_') ||
-    config.gatewayId
-  ) {
+    PAYMENT_GATEWAYS_REGISTRY.some(
+      (g) =>
+        g.id === widgetType ||
+        g.id === config.gatewayId ||
+        g.fieldType === widgetType ||
+        (field.type && field.type !== 'control_widget' && g.fieldType === field.type)
+    );
+
+  if (isPaymentGateway) {
     return (
       <PaymentGatewayRuntime
         gatewayId={config.gatewayId || widgetType.replace(/^payment_/, '')}
@@ -184,6 +192,7 @@ export function WidgetRuntimeDispatcher({
     case 'signature_pad':
     case 'smooth_signature':
     case 'e_signature':
+    case 'signature':
       return (
         <SignaturePad
           value={value}

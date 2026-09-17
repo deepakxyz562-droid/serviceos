@@ -22,25 +22,38 @@ const w = (
 export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   // ─── Text & Numbers ─────────────────────────────────────────────────────────
   short_text: w(() => import('./text/short-text')),
+  short_answer: w(() => import('./text/short-text')),
+  text: w(() => import('./text/short-text')),
   long_text: w(() => import('./text/long-text')),
+  long_answer: w(() => import('./text/long-text')),
+  textarea: w(() => import('./text/long-text')),
   number: w(() => import('./text/number-input')),
+  numerical: w(() => import('./text/number-input')),
+  currency_amount_input: w(() => import('./text/number-input')),
   spinner: w(() => import('./text/spinner')),
   percentage: w(() => import('./text/percentage')),
 
   // ─── Choice ──────────────────────────────────────────────────────────────────
   dropdown: w(() => import('./choice/dropdown')),
   single_choice: w(() => import('./choice/single-choice')),
+  radio: w(() => import('./choice/single-choice')),
   multiple_choice: w(() => import('./choice/multiple-choice')),
+  checkbox: w(() => import('./choice/multiple-choice')),
   image_choice: w(() => import('./choice/image-choice')),
   autocomplete: w(() => import('./choice/autocomplete')),
   tags_input: w(() => import('./choice/tags-input')),
   mask_input: w(() => import('./choice/mask-input')),
   password: w(() => import('./choice/password')),
   rich_text: w(() => import('./choice/rich-text')),
+  dynamic_dropdowns: w(() => import('./choice/dropdown')),
+  remote_data_dropdown: w(() => import('./choice/dropdown')),
+  inventory_dropdown: w(() => import('./choice/dropdown')),
 
   // ─── DateTime ────────────────────────────────────────────────────────────────
   date_picker: w(() => import('./datetime/date-picker')),
+  date: w(() => import('./datetime/date-picker')),
   time_picker: w(() => import('./datetime/time-picker')),
+  time: w(() => import('./datetime/time-picker')),
   date_time: w(() => import('./datetime/date-time')),
   appointment: w(() => import('./datetime/appointment')),
   birth_date: w(() => import('./datetime/birth-date')),
@@ -48,19 +61,27 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   recurring_date: w(() => import('./datetime/recurring-date')),
   timezone_picker: w(() => import('./datetime/timezone-picker')),
   countdown_timer: w(() => import('./datetime/countdown-timer')),
+  global_countdown_timer: w(() => import('./datetime/countdown-timer')),
   weekly_planner: w(() => import('./datetime/weekly-planner')),
+  weekly_appointment_planner: w(() => import('./datetime/weekly-planner')),
 
   // ─── Contact ─────────────────────────────────────────────────────────────────
   email: w(() => import('./contact/email')),
   phone: w(() => import('./contact/phone')),
   full_name: w(() => import('./contact/full-name')),
+  name: w(() => import('./contact/full-name')),
   address: w(() => import('./contact/address')),
   company: w(() => import('./contact/company')),
+  whatsapp_chat_button: w(() => import('./contact/phone')),
+  email_otp_verification: w(() => import('./contact/email')),
 
   // ─── Media ────────────────────────────────────────────────────────────────────
   image_upload: w(() => import('./media/image-upload')),
+  image_upload_with_notes: w(() => import('./media/image-upload')),
   take_photo: w(() => import('./media/take-photo')),
+  take_photo_camera: w(() => import('./media/take-photo')),
   image_preview: w(() => import('./media/image-preview')),
+  image_upload_preview: w(() => import('./media/image-preview')),
   draw_on_image: w(() => import('./media/draw-on-image')),
   photo_watermark: w(() => import('./media/photo-watermark')),
   image_scanner_ocr: w(() => import('./media/image-scanner-ocr')),
@@ -71,6 +92,9 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
 
   // ─── Signature ────────────────────────────────────────────────────────────────
   smooth_signature: w(() => import('./signature/smooth-signature')),
+  e_signature: w(() => import('./signature/smooth-signature')),
+  signature: w(() => import('./signature/smooth-signature')),
+  signature_pad: w(() => import('./signature/smooth-signature')),
   signature_pad_typed: w(() => import('./signature/signature-pad-typed')),
   adobe_sign: w(() => import('./signature/adobe-sign')),
   docusign: w(() => import('./signature/docusign')),
@@ -85,9 +109,12 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
 
   // ─── Calculations ────────────────────────────────────────────────────────────
   loan_emi: w(() => import('./calc/loan-emi')),
+  loan_emi_calculator: w(() => import('./calc/loan-emi')),
   spreadsheet: w(() => import('./calc/spreadsheet')),
+  spreadsheet_widget: w(() => import('./calc/spreadsheet')),
   spreadsheet_to_form: w(() => import('./calc/spreadsheet-to-form')),
   text_count: w(() => import('./calc/text-count')),
+  text_count_calculator: w(() => import('./calc/text-count')),
   bmi_calculator: w(() => import('./calc/bmi-calculator')),
   age_calculator: w(() => import('./calc/age-calculator')),
   date_difference: w(() => import('./calc/date-difference')),
@@ -95,19 +122,24 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
 
   // ─── Survey ────────────────────────────────────────────────────────────────────
   star_rating_comments: w(() => import('./survey/star-rating-comments')),
+  star_rating: w(() => import('./survey/star-rating-comments')),
+  rating: w(() => import('./survey/star-rating-comments')),
   like_dislike: w(() => import('./survey/like-dislike')),
   nps_slider: w(() => import('./survey/nps-slider')),
   smiley_scale: w(() => import('./survey/smiley-scale')),
   csat_rating: w(() => import('./survey/csat-rating')),
   likert_matrix: w(() => import('./survey/likert-matrix')),
+  matrix_dynamique: w(() => import('./survey/likert-matrix')),
   thumb_rating: w(() => import('./survey/thumb-rating')),
 
   // ─── Productivity ────────────────────────────────────────────────────────────
   configurable_list_v2: w(() => import('./productivity/configurable-list-v2')),
+  configurable_list: w(() => import('./productivity/configurable-list-v2')),
   infinite_list: w(() => import('./productivity/infinite-list')),
   orderable_list: w(() => import('./productivity/orderable-list')),
   unique_id_generator: w(() => import('./productivity/unique-id-generator')),
   terms_and_conditions: w(() => import('./productivity/terms-and-conditions')),
+  cloudflare_turnstile: w(() => import('./productivity/terms-and-conditions')),
 
   // ─── Payment Gateways ─────────────────────────────────────────────────────────
   payment_stripe_elements: w(() => import('./payment/stripe-elements')),
