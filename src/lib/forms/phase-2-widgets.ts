@@ -24,8 +24,8 @@ type WidgetSpec = [
 const WIDGET_SPECS: WidgetSpec[] = [
   // ─── Maps & Geolocation (20) ────────────────────────────────────────────
   ['address_autocomplete_google', 'Address Autocomplete (Google)', 'maps', 'MapPin', 'Google Places address autocomplete', 'POPULAR', 'business', [
-    { key: 'provider', label: 'Provider', type: 'select', group: 'field_specific', default: 'managed', options: [
-      { label: '🚀 Fieseros Managed', value: 'managed' }, { label: 'BYOK (Bring Your Own Key)', value: 'byok' },
+    { key: 'provider', label: 'Provider', type: 'segmented', group: 'field_specific', default: 'managed', options: [
+      { label: '🚀 Fieseros Managed', value: 'managed' }, { label: 'BYOK (Your Key)', value: 'byok' },
     ] },
     { key: 'apiKey', label: 'Google API Key', type: 'text', group: 'field_specific', condition: { dependsOn: 'provider', equals: 'byok' } },
     { key: 'countryRestriction', label: 'Country Restriction (e.g. US, CA, GB)', type: 'text', group: 'field_specific' },
@@ -93,11 +93,22 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['reverse_geocode', 'Reverse Geocode', 'maps', 'MapPin', 'Lat/lng → address', 'NEW', 'pro', [
     { key: 'showFullAddress', label: 'Return Full Street Address', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
-  ['route_planner_v2', 'Route Planner Map', 'maps', 'Map', 'Interactive driving route with turn steps', 'POPULAR', 'pro', [
-    { key: 'travelMode', label: 'Travel Mode', type: 'select', group: 'field_specific', default: 'driving', options: [
-      { label: 'Driving (Car/Van)', value: 'driving' }, { label: 'Walking', value: 'walking' }, { label: 'Bicycling', value: 'cycling' },
-    ] },
-    { key: 'unit', label: 'Distance Unit', type: 'segmented', group: 'field_specific', default: 'miles', options: [{ label: 'Miles', value: 'miles' }, { label: 'KM', value: 'km' }] },
+  ['route_planner_v2', 'Route Planner Map', 'maps', 'Map', 'Interactive driving route with waypoints and route summary', 'POPULAR', 'pro', [
+    { key: 'mapProvider', label: 'Map Provider', type: 'segmented', group: 'field_specific', default: 'osm', options: [
+      { label: 'OpenStreetMap (free)', value: 'osm' }, { label: 'Google Maps', value: 'google' },
+    ], helpText: 'OpenStreetMap is free with no key; Google Maps needs your own billed API key.' },
+    { key: 'defaultTravelMode', label: 'Default Travel Mode', type: 'segmented', group: 'field_specific', default: 'driving', options: [
+      { label: '🚗 Driving', value: 'driving' }, { label: '🚶 Walking', value: 'walking' }, { label: '🚲 Bicycling', value: 'bicycling' },
+    ], helpText: 'Choose how routes are calculated by default.' },
+    { key: 'allowAdditionalStops', label: 'Allow Additional Stops', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let respondents add extra stops between the start and end locations.' },
+    { key: 'distanceUnits', label: 'Distance Units', type: 'segmented', group: 'field_specific', default: 'automatic', options: [
+      { label: 'Automatic', value: 'automatic' }, { label: 'Miles', value: 'miles' }, { label: 'Kilometers', value: 'km' },
+    ], helpText: 'Control how distance is shown in the summary.' },
+    { key: 'startLocationLabel', label: 'Start Location Label', type: 'text', group: 'field_specific', default: 'Start location', placeholder: 'Start location' },
+    { key: 'endLocationLabel', label: 'End Location Label', type: 'text', group: 'field_specific', default: 'End location', placeholder: 'End location' },
+    { key: 'showRouteSummary', label: 'Show Route Summary', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display distance and estimated travel time below the map for respondents.' },
+    { key: 'noRouteMessage', label: 'No Route Message', type: 'text', group: 'field_specific', default: 'No route could be found for those locations.', placeholder: 'No route could be found for those locations.' },
+    { key: 'addressPlaceholder', label: 'Address Placeholder', type: 'text', group: 'field_specific', default: 'Street address, city or ZIP', placeholder: 'Street address, city or ZIP' },
   ], 'maps'],
   ['service_area_checker_v2', 'Service Area Checker', 'maps', 'ShieldCheck', 'Validate postal code against radius', 'NEW', 'pro', [
     { key: 'centerLat', label: 'HQ Latitude', type: 'number', group: 'field_specific', default: 37.7749, step: 0.0001 },
@@ -179,7 +190,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ], 'otp_email'],
   ['sms_otp_confirmation', 'SMS OTP Confirmation', 'security', 'MessageSquare', '6-digit SMS verification code', 'POPULAR', 'pro', [
     { key: 'phoneFieldId', label: 'Target Phone Field', type: 'field_selector', group: 'field_specific', helpText: 'Select form phone field to send SMS to.' },
-    { key: 'codeLength', label: 'Code Length', type: 'select', group: 'field_specific', default: '6', options: [{ label: '4 Digits', value: '4' }, { label: '6 Digits', value: '6' }] },
+    { key: 'codeLength', label: 'Code Length', type: 'segmented', group: 'field_specific', default: '6', options: [{ label: '4 Digits', value: '4' }, { label: '6 Digits', value: '6' }] },
     { key: 'expiryMinutes', label: 'Code Expiration (Minutes)', type: 'number', group: 'field_specific', default: 10, min: 1, max: 60 },
   ], 'otp_sms'],
   ['friendly_captcha', 'Friendly Captcha', 'security', 'ShieldCheck', 'Friendly-captcha-style widget', 'NEW', 'free'],

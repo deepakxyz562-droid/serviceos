@@ -716,10 +716,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       widgetConfig: { theme: 'auto', size: 'flexible' }, required: false,
     }),
     settingsSchema: [
-      { key: 'theme', label: 'Theme', type: 'select', group: 'field_specific', default: 'auto', options: [
+      { key: 'theme', label: 'Theme', type: 'segmented', group: 'field_specific', default: 'auto', options: [
         { label: 'Auto', value: 'auto' }, { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' },
       ] },
-      { key: 'size', label: 'Size', type: 'select', group: 'field_specific', default: 'flexible', options: [
+      { key: 'size', label: 'Size', type: 'segmented', group: 'field_specific', default: 'flexible', options: [
         { label: 'Flexible', value: 'flexible' }, { label: 'Compact', value: 'compact' }, { label: 'Normal', value: 'normal' },
       ] },
     ],
@@ -737,10 +737,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     }),
     settingsSchema: [
       { key: 'maxDurationSeconds', label: 'Max duration (seconds)', type: 'number', group: 'field_specific', default: 180, min: 5, max: 600 },
-      { key: 'format', label: 'Audio format', type: 'select', group: 'field_specific', default: 'audio/webm', options: [
+      { key: 'format', label: 'Audio format', type: 'segmented', group: 'field_specific', default: 'audio/webm', options: [
         { label: 'WebM (recommended)', value: 'audio/webm' }, { label: 'MP3', value: 'audio/mp3' },
       ] },
-      { key: 'showPlayback', label: 'Show playback controls', type: 'toggle_with_description', group: 'field_specific', default: true },
+      { key: 'showPlayback', label: 'Show playback controls', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Show audio player after recording so respondents can review before submitting.' },
     ],
   },
   {

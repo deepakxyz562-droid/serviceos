@@ -631,7 +631,7 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#475569"/><path d="M14 11h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V13a2 2 0 0 1 2-2zm2 4v2h8v-2h-8zm0 4v2h8v-2h-8zm0 4v2h5v-2h-5z" fill="#FFF"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'user_defined_amount'],
     configFields: [
-      { key: 'requirePoNumber', label: 'Require PO Number', type: 'boolean' },
+      { key: 'requirePoNumber', label: 'Require PO Number', type: 'toggle_with_description', description: 'Require a PO number field in the billing form before submission.' },
       { key: 'paymentTerms', label: 'Payment Terms', type: 'select', options: [
         { label: 'Due on Receipt', value: 'due_on_receipt' },
         { label: 'Net 15 Days', value: 'net_15' },
