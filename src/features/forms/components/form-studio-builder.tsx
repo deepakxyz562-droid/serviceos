@@ -69,37 +69,12 @@ import { FormAgentStudio } from './agent-builder/form-agent-studio';
 import { UnifiedFieldInspector } from './builder/unified-field-inspector';
 import {
   FIELD_REGISTRY,
+  BASIC_FIELDS,
+  PHASE_1_WIDGETS,
   createFieldFromRegistry,
 } from '@/lib/forms/field-registry';
 import { resolveIcon } from '@/lib/forms/icon-resolver';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
-
-// ─── Palette Catalog ─────────────────────────────────────────────────────────
-interface PaletteItem {
-  type: FieldType;
-  label: string;
-  icon: any;
-  category: 'basic' | 'choice' | 'advanced' | 'logic';
-  description: string;
-  defaultOptions?: string[];
-}
-
-const BASIC_PALETTE_ITEMS: PaletteItem[] = [
-  { type: 'text', label: 'Short Text', icon: AlignLeft, category: 'basic', description: 'Single line text input' },
-  { type: 'textarea', label: 'Long Text', icon: FileText, category: 'basic', description: 'Multi-line paragraph text' },
-  { type: 'email', label: 'Email Address', icon: Mail, category: 'basic', description: 'Validated email input' },
-  { type: 'phone', label: 'Phone Number', icon: Phone, category: 'basic', description: 'International phone input' },
-  { type: 'number', label: 'Number / Quantity', icon: Hash, category: 'basic', description: 'Numeric values' },
-  { type: 'date', label: 'Date & Time', icon: Calendar, category: 'basic', description: 'Date and appointment picker' },
-  { type: 'select', label: 'Dropdown Menu', icon: ChevronDown, category: 'choice', description: 'Select one from list', defaultOptions: ['Option 1', 'Option 2', 'Option 3'] },
-  { type: 'radio', label: 'Single Choice (Radio)', icon: CircleDot, category: 'choice', description: 'Radio button options', defaultOptions: ['Choice A', 'Choice B', 'Choice C'] },
-  { type: 'checkbox', label: 'Multiple Choice', icon: CheckSquare, category: 'choice', description: 'Multi-select checkboxes', defaultOptions: ['Item 1', 'Item 2', 'Item 3'] },
-  { type: 'rating', label: 'Star Rating', icon: Star, category: 'advanced', description: '5-star customer rating' },
-  { type: 'scale', label: 'NPS Scale (0-10)', icon: SlidersHorizontal, category: 'advanced', description: 'Opinion scale from 0 to 10' },
-  { type: 'file', label: 'File Upload', icon: Paperclip, category: 'advanced', description: 'Customer photos and documents' },
-  { type: 'signature', label: 'E-Signature', icon: PenTool, category: 'advanced', description: 'Sign on screen with finger/mouse' },
-  { type: 'hidden', label: 'Hidden Parameter', icon: EyeOff, category: 'logic', description: 'UTM source, referrer, or lead tag' },
-];
 
 export interface FormStudioBuilderProps {
   formData: EditorFormData;
@@ -249,38 +224,31 @@ export function FormStudioBuilder({
     );
   }, [paletteSearch, selectedWidgetCategory]);
 
-  // Filtered basic items
-  const filteredBasicItems = useMemo(() => {
-    if (!paletteSearch.trim()) return BASIC_PALETTE_ITEMS;
-    const q = paletteSearch.toLowerCase();
-    return BASIC_PALETTE_ITEMS.filter(
-      (p) => p.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
-    );
-  }, [paletteSearch]);
-
-  // Phase 1 catalog items — pulled from the unified FIELD_REGISTRY, deduped
-  // against BASIC_PALETTE_ITEMS so legacy items don't show twice.
-  const phase1CatalogItems = useMemo(() => {
-    const legacyTypes = new Set(BASIC_PALETTE_ITEMS.map((p) => p.type));
-    const skipIds = new Set([
-      'image_upload_with_notes', 'nearest_location_finder', 'route_planner_map',
-      'service_area_checker', 'form_calculation', 'currency_amount_input',
-      'sms_otp_verification', 'voice_recorder', 'configurable_list', 'cloudflare_turnstile',
-    ]);
+  // Filtered basic fields from unified registry
+  const filteredBasicFields = useMemo(() => {
     const q = paletteSearch.trim().toLowerCase();
-    return FIELD_REGISTRY.filter((def) => {
-      if (legacyTypes.has(def.id)) return false;
-      if (skipIds.has(def.id)) return false;
-      if (!q) return true;
-      return (
+    if (!q) return BASIC_FIELDS;
+    return BASIC_FIELDS.filter(
+      (def) =>
         def.name.toLowerCase().includes(q) ||
         def.description.toLowerCase().includes(q) ||
         def.id.toLowerCase().includes(q)
-      );
-    });
+    );
   }, [paletteSearch]);
 
-  // Add a field from the unified registry (Phase 1 widgets).
+  // Filtered Phase 1 widgets from unified registry
+  const filteredPhase1Widgets = useMemo(() => {
+    const q = paletteSearch.trim().toLowerCase();
+    if (!q) return PHASE_1_WIDGETS;
+    return PHASE_1_WIDGETS.filter(
+      (def) =>
+        def.name.toLowerCase().includes(q) ||
+        def.description.toLowerCase().includes(q) ||
+        def.id.toLowerCase().includes(q)
+    );
+  }, [paletteSearch]);
+
+  // Add a field from the unified registry (Basic Fields & Phase 1 widgets).
   const handleAddFromRegistry = useCallback((registryId: string) => {
     const def = createFieldFromRegistry(registryId);
     if (!def) {
@@ -294,6 +262,7 @@ export function FormStudioBuilder({
       type: (def.type as string) || 'short_answer',
       required: Boolean(def.required),
       placeholder: (def.placeholder as string) || '',
+      options: (def.options as any) || undefined,
       widgetType: def.widgetType as string | undefined,
       widgetConfig: def.widgetConfig as Record<string, unknown> | undefined,
     };
@@ -319,27 +288,6 @@ export function FormStudioBuilder({
   }, [onSave]);
 
   // ─── Field CRUD Operations ──────────────────────────────────────────────────
-
-  const handleAddField = (type: FieldType, defaultOptions?: string[]) => {
-    const newId = `f-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const palItem = BASIC_PALETTE_ITEMS.find((p) => p.type === type);
-    const newField: FormField = {
-      id: newId,
-      label: palItem?.label || 'New Question',
-      type,
-      required: false,
-      placeholder: '',
-      options: defaultOptions || (['select', 'radio', 'checkbox'].includes(type) ? ['Option 1', 'Option 2', 'Option 3'] : undefined),
-    };
-
-    onFormDataChange((prev) => ({
-      ...prev,
-      fields: [...prev.fields, newField],
-    }));
-    setSelectedFieldId(newId);
-    setInspectorMode('properties');
-    toast.success(`Added ${newField.label}`);
-  };
 
   const handleAddWidget = (widget: WidgetDefinition) => {
     const newId = `w-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -721,7 +669,6 @@ export function FormStudioBuilder({
                     )}
                   >
                     <span>WIDGETS</span>
-                    <span className="px-1 text-[8px] bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-full font-bold">200+</span>
                   </button>
                 </div>
                 <Button
@@ -742,7 +689,7 @@ export function FormStudioBuilder({
                   <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                   <Input
                     type="text"
-                    placeholder={`Search ${paletteTab === 'widgets' ? '200+ widgets...' : 'elements...'}`}
+                    placeholder="Search elements & widgets..."
                     value={paletteSearch}
                     onChange={(e) => setPaletteSearch(e.target.value)}
                     className="h-8 text-xs pl-8"
@@ -793,24 +740,35 @@ export function FormStudioBuilder({
               <ScrollArea className="flex-1 min-h-0 h-full p-3 overflow-y-auto">
                 {/* 1. BASIC TAB */}
                 {paletteTab === 'basic' && (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
+                    {/* Basic / Standard Elements */}
                     <div className="space-y-1.5">
-                      {filteredBasicItems.map((item) => {
-                        const Icon = item.icon;
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground px-1">
+                        Basic Fields
+                      </p>
+                      {filteredBasicFields.map((def) => {
+                        const Icon = resolveIcon(def.iconName);
                         return (
                           <button
-                            key={item.type}
-                            onClick={() => handleAddField(item.type, item.defaultOptions)}
+                            key={def.id}
+                            onClick={() => handleAddFromRegistry(def.id)}
                             className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group"
                           >
                             <div className="size-8 rounded-md bg-muted flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0">
                               <Icon className="size-4" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
-                                {item.label}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground truncate">{item.description}</p>
+                              <div className="flex items-center gap-1">
+                                <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
+                                  {def.name}
+                                </p>
+                                {def.badge && (
+                                  <Badge variant="outline" className="text-[8px] px-1 py-0 h-3 border-emerald-500/30 text-emerald-600">
+                                    {def.badge}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-muted-foreground truncate">{def.description}</p>
                             </div>
                             <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                           </button>
@@ -818,19 +776,16 @@ export function FormStudioBuilder({
                       })}
                     </div>
 
-                    {/* Phase 1 Catalog — additional widgets from the unified registry */}
+                    {/* Advanced & Specialized Elements */}
                     <div className="pt-2 border-t border-border/60">
                       <div className="flex items-center gap-1.5 px-1 pb-2">
                         <Sparkles className="size-3 text-emerald-600" />
                         <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                          Phase 1 Widget Catalog
+                          Advanced Elements
                         </p>
-                        <Badge variant="outline" className="text-[9px] ml-auto">
-                          {phase1CatalogItems.length} widgets
-                        </Badge>
                       </div>
-                      <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
-                        {phase1CatalogItems.map((def) => {
+                      <div className="space-y-1.5">
+                        {filteredPhase1Widgets.map((def) => {
                           const Icon = resolveIcon(def.iconName);
                           return (
                             <button

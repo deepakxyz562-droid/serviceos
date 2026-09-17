@@ -16,6 +16,8 @@ import { PHASE_2_WIDGETS } from './phase-2-widgets';
 import { PHASE_3_WIDGETS } from './phase-3-widgets';
 import { PHASE_4_WIDGETS } from './phase-4-widgets';
 
+export { PHASE_1_WIDGETS, PHASE_2_WIDGETS, PHASE_3_WIDGETS, PHASE_4_WIDGETS };
+
 // ─── Basic Text & Choice Fields ─────────────────────────────────────────────
 
 export const BASIC_FIELDS: FieldDefinition[] = [
