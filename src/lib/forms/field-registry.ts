@@ -376,13 +376,65 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     createField: (label = 'Photos with Notes') => ({
       label, type: 'short_answer', widgetType: 'image_upload_with_notes',
-      widgetConfig: { maxFiles: 10, requireNotes: true, maxFileSizeMb: 10 }, required: false,
+      widgetConfig: {
+        maxFiles: 10, requireNotes: true, maxFileSizeMb: 10,
+        noteFieldTitle: 'Note', notePlaceholder: 'Add a note',
+        limitPhotos: true, minPhotos: 1, maxPhotos: 10,
+        allowedImageTypes: ['JPG', 'PNG', 'HEIC', 'WebP'],
+      },
+      required: false,
     }),
     settingsSchema: [
-      { key: 'maxFiles', label: 'Max files', type: 'number', group: 'field_specific', default: 10, min: 1, max: 50 },
-      { key: 'maxFileSizeMb', label: 'Max file size (MB)', type: 'number', group: 'field_specific', default: 10, min: 1, max: 50 },
-      { key: 'requireNotes', label: 'Require notes per file', type: 'boolean', group: 'field_specific', default: true },
-      { key: 'notePlaceholder', label: 'Note placeholder', type: 'text', group: 'field_specific', default: 'Describe damage or equipment details...' },
+      // ─── Note Section (JotForm exact match) ─────────────────────────────────
+      {
+        key: 'noteFieldTitle', label: 'Note Field Title', type: 'text', group: 'field_specific',
+        default: 'Note', helpText: 'Text shown above the note input for each photo.',
+      },
+      {
+        key: 'notePlaceholder', label: 'Note Placeholder', type: 'text', group: 'field_specific',
+        default: 'Add a note', helpText: 'Placeholder text shown inside an empty note box.',
+      },
+      {
+        key: 'requireNotes', label: 'Require Note for Each Photo', type: 'toggle_with_description',
+        group: 'field_specific', default: true,
+        description: 'Make the note field mandatory for every uploaded photo.',
+      },
+      // ─── Photo Limits Section (JotForm exact match) ──────────────────────────
+      {
+        key: 'limitPhotos', label: 'Limit Number of Photos', type: 'toggle_with_description',
+        group: 'field_specific', default: true,
+        description: 'Turn minimum and maximum photo-count validation on or off.',
+      },
+      {
+        key: 'minPhotos', label: 'Minimum Photos', type: 'number', group: 'field_specific',
+        default: 1, min: 1, max: 50,
+        helpText: 'Minimum number of photos accepted when the photo limit is enabled.',
+        condition: { dependsOn: 'limitPhotos', equals: 'true' },
+      },
+      {
+        key: 'maxPhotos', label: 'Maximum Photos', type: 'number', group: 'field_specific',
+        default: 10, min: 1, max: 50,
+        helpText: 'Maximum number of photos accepted when the photo limit is enabled.',
+        condition: { dependsOn: 'limitPhotos', equals: 'true' },
+      },
+      // ─── Allowed Image Types (JotForm multi-checkbox) ────────────────────────
+      {
+        key: 'allowedImageTypes', label: 'Allowed Image Types', type: 'multi_checkbox',
+        group: 'field_specific',
+        default: ['JPG', 'PNG', 'HEIC', 'WebP'],
+        options: [
+          { label: 'JPG', value: 'JPG' },
+          { label: 'PNG', value: 'PNG' },
+          { label: 'HEIC', value: 'HEIC' },
+          { label: 'WebP', value: 'WebP' },
+        ],
+        helpText: 'Choose which image file types respondents can upload.',
+      },
+      // ─── File Size Limit (legacy — kept for completeness) ────────────────────
+      {
+        key: 'maxFileSizeMb', label: 'Max file size (MB)', type: 'number', group: 'field_specific',
+        default: 10, min: 1, max: 50,
+      },
     ],
   },
   {
@@ -399,11 +451,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       widgetConfig: { provider: 'managed', distanceUnit: 'miles' }, required: false,
     }),
     settingsSchema: [
-      { key: 'provider', label: 'Map provider', type: 'select', group: 'field_specific', default: 'managed', options: [
-        { label: '🚀 Fieseros Managed (1-click)', value: 'managed' }, { label: 'OpenStreetMap (free)', value: 'osm' }, { label: 'Bring your own key (BYOK)', value: 'byok' },
+      { key: 'provider', label: 'Map provider', type: 'segmented', group: 'field_specific', default: 'managed', options: [
+        { label: '🚀 Managed', value: 'managed' }, { label: 'OSM (free)', value: 'osm' }, { label: 'BYOK', value: 'byok' },
       ] },
-      { key: 'distanceUnit', label: 'Distance unit', type: 'select', group: 'field_specific', default: 'miles', options: [
-        { label: 'Miles', value: 'miles' }, { label: 'Kilometers', value: 'km' },
+      { key: 'distanceUnit', label: 'Distance unit', type: 'segmented', group: 'field_specific', default: 'miles', options: [
+        { label: 'Miles', value: 'miles' }, { label: 'Km', value: 'km' },
       ] },
       { key: 'branches', label: 'Locations (one per line: name,address)', type: 'textarea', group: 'field_specific' },
     ],
@@ -422,16 +474,16 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       widgetConfig: { provider: 'managed', travelMode: 'DRIVING', unit: 'miles' }, required: false,
     }),
     settingsSchema: [
-      { key: 'provider', label: 'Map provider', type: 'select', group: 'field_specific', default: 'managed', options: [
-        { label: '🚀 Fieseros Managed', value: 'managed' }, { label: 'BYOK', value: 'byok' },
+      { key: 'provider', label: 'Map provider', type: 'segmented', group: 'field_specific', default: 'managed', options: [
+        { label: '🚀 Managed', value: 'managed' }, { label: 'BYOK', value: 'byok' },
       ] },
-      { key: 'travelMode', label: 'Travel mode', type: 'select', group: 'field_specific', default: 'DRIVING', options: [
-        { label: 'Driving', value: 'DRIVING' }, { label: 'Walking', value: 'WALKING' }, { label: 'Bicycling', value: 'BICYCLING' },
+      { key: 'travelMode', label: 'Travel mode', type: 'segmented', group: 'field_specific', default: 'DRIVING', options: [
+        { label: 'Drive', value: 'DRIVING' }, { label: 'Walk', value: 'WALKING' }, { label: 'Bike', value: 'BICYCLING' },
       ] },
-      { key: 'unit', label: 'Distance unit', type: 'select', group: 'field_specific', default: 'miles', options: [
-        { label: 'Miles', value: 'miles' }, { label: 'Kilometers', value: 'km' },
+      { key: 'unit', label: 'Distance unit', type: 'segmented', group: 'field_specific', default: 'miles', options: [
+        { label: 'Miles', value: 'miles' }, { label: 'Km', value: 'km' },
       ] },
-      { key: 'showDirectionsList', label: 'Show step-by-step directions', type: 'boolean', group: 'field_specific', default: true },
+      { key: 'showDirectionsList', label: 'Show step-by-step directions', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display turn-by-turn directions under the map.' },
     ],
   },
   {

@@ -27,24 +27,28 @@ const WIDGET_SPECS: WidgetSpec[] = [
   // ─── Choice (9) ────────────────────────────────────────────────────────────
   ['dropdown_widget', 'Dropdown', 'choice', 'ChevronDown', 'Select one from list', 'POPULAR', 'free', [
     { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-    { key: 'allowOther', label: 'Allow "Other"', type: 'boolean', group: 'field_specific', default: false },
-    { key: 'multiSelect', label: 'Allow multi-select', type: 'boolean', group: 'field_specific', default: false },
-    { key: 'searchEnabled', label: 'Enable search', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
+    { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
+    { key: 'multiSelect', label: 'Allow multi-select', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users select more than one option.' },
+    { key: 'searchEnabled', label: 'Enable search', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add a search box for long option lists.' },
+    { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Shuffle options on each form load (great for surveys).' },
   ]],
   ['single_choice_widget', 'Single Choice (Radio)', 'choice', 'CircleDot', 'Radio button options', '', 'free', [
     { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-    { key: 'allowOther', label: 'Allow "Other"', type: 'boolean', group: 'field_specific', default: false },
-    { key: 'columns', label: 'Columns', type: 'select', group: 'field_specific', default: '1', options: [
-      { label: '1 (vertical)', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
+    { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
+    { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
+    { key: 'columns', label: 'Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
+      { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
     ] },
   ]],
   ['multiple_choice_widget', 'Multiple Choice (Checkbox)', 'choice', 'CheckSquare', 'Multi-select checkboxes', '', 'free', [
     { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-    { key: 'allowOther', label: 'Allow "Other"', type: 'boolean', group: 'field_specific', default: false },
-    { key: 'minSelect', label: 'Min selections', type: 'number', group: 'field_specific', default: 0 },
-    { key: 'maxSelect', label: 'Max (0 = unlimited)', type: 'number', group: 'field_specific', default: 0 },
-    { key: 'columns', label: 'Columns', type: 'select', group: 'field_specific', default: '1', options: [
-      { label: '1 (vertical)', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
+    { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
+    { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
+    { key: 'minSelect', label: 'Min selections', type: 'number', group: 'field_specific', default: 0, min: 0, helpText: 'Minimum number of options the user must select.' },
+    { key: 'maxSelect', label: 'Max selections (0 = unlimited)', type: 'number', group: 'field_specific', default: 0, min: 0 },
+    { key: 'columns', label: 'Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
+      { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
     ] },
   ]],
   ['image_choice', 'Image Choice', 'choice', 'Image', 'Visual radio with images per option', 'NEW', 'pro', [
@@ -78,13 +82,16 @@ const WIDGET_SPECS: WidgetSpec[] = [
 
   // ─── DateTime (10) ──────────────────────────────────────────────────────────
   ['date_picker_widget', 'Date Picker', 'datetime', 'Calendar', 'Calendar date selection', 'POPULAR', 'free', [
-    { key: 'format', label: 'Display format', type: 'select', group: 'field_specific', default: 'yyyy-mm-dd', options: [
+    { key: 'format', label: 'Display format', type: 'segmented', group: 'field_specific', default: 'yyyy-mm-dd', options: [
       { label: 'YYYY-MM-DD', value: 'yyyy-mm-dd' }, { label: 'MM/DD/YYYY', value: 'mm/dd/yyyy' }, { label: 'DD/MM/YYYY', value: 'dd/mm/yyyy' },
     ] },
     { key: 'minDate', label: 'Min date', type: 'date', group: 'field_specific' },
     { key: 'maxDate', label: 'Max date', type: 'date', group: 'field_specific' },
-    { key: 'disableWeekends', label: 'Disable weekends', type: 'boolean', group: 'field_specific', default: false },
-    { key: 'defaultToday', label: 'Default to today', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'disableWeekends', label: 'Disable weekends', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Prevent Saturday and Sunday selection.' },
+    { key: 'defaultToday', label: 'Default to today', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Pre-fill the date with today\'s date.' },
+    { key: 'timezone', label: 'Time zone', type: 'select', group: 'field_specific', default: 'local', options: [
+      { label: 'User\'s local timezone', value: 'local' }, { label: 'UTC', value: 'utc' },
+    ] },
   ]],
   ['time_picker_widget', 'Time Picker', 'datetime', 'Clock', 'Time-of-day selection', '', 'free', [
     { key: 'format', label: 'Format', type: 'select', group: 'field_specific', default: '24h', options: [
@@ -160,15 +167,22 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['image_upload', 'Image Upload', 'media', 'ImagePlus', 'Multi-image upload with preview', 'POPULAR', 'free', [
     { key: 'maxFiles', label: 'Max files', type: 'number', group: 'field_specific', default: 5, min: 1, max: 50 },
     { key: 'maxFileSizeMb', label: 'Max file size (MB)', type: 'number', group: 'field_specific', default: 10, min: 1, max: 50 },
-    { key: 'allowedTypes', label: 'Allowed types (comma-sep)', type: 'text', group: 'field_specific', default: 'image/jpeg, image/png, image/webp' },
-    { key: 'autoResize', label: 'Auto-resize on upload', type: 'boolean', group: 'field_specific', default: true },
-    { key: 'resizeWidth', label: 'Resize width (px)', type: 'number', group: 'field_specific', default: 1920, min: 100 },
+    { key: 'allowedImageTypes', label: 'Allowed Image Types', type: 'multi_checkbox', group: 'field_specific',
+      default: ['JPG', 'PNG', 'HEIC', 'WebP'],
+      options: [
+        { label: 'JPG', value: 'JPG' }, { label: 'PNG', value: 'PNG' },
+        { label: 'HEIC', value: 'HEIC' }, { label: 'WebP', value: 'WebP' },
+      ],
+      helpText: 'Choose which image file types respondents can upload.',
+    },
+    { key: 'autoResize', label: 'Auto-resize on upload', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Automatically resize large images on upload.' },
+    { key: 'resizeWidth', label: 'Resize width (px)', type: 'dimension', group: 'field_specific', default: 1920, min: 100, max: 5000, unit: 'PX', condition: { dependsOn: 'autoResize', equals: 'true' } },
   ]],
   ['take_photo', 'Take Photo (Camera)', 'media', 'Camera', 'Direct camera capture', 'POPULAR', 'pro', [
-    { key: 'cameraFacing', label: 'Camera', type: 'select', group: 'field_specific', default: 'environment', options: [
+    { key: 'cameraFacing', label: 'Camera', type: 'segmented', group: 'field_specific', default: 'environment', options: [
       { label: 'Rear', value: 'environment' }, { label: 'Front', value: 'user' },
     ] },
-    { key: 'allowRetake', label: 'Allow retake', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'allowRetake', label: 'Allow retake', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let user retake the photo before submitting.' },
     { key: 'resolution', label: 'Max resolution', type: 'select', group: 'field_specific', default: '1280', options: [
       { label: 'SD (640×480)', value: '640' }, { label: 'HD (1280×720)', value: '1280' }, { label: 'FHD (1920×1080)', value: '1920' },
     ] },
@@ -201,9 +215,25 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['video_upload', 'Video Upload', 'media', 'Video', 'Video file upload', '', 'pro', [
     { key: 'maxFileSizeMb', label: 'Max file size (MB)', type: 'number', group: 'field_specific', default: 50, min: 1, max: 500 },
     { key: 'maxDuration', label: 'Max duration (seconds)', type: 'number', group: 'field_specific', default: 300, min: 5, max: 3600 },
+    { key: 'allowedVideoTypes', label: 'Allowed Video Types', type: 'multi_checkbox', group: 'field_specific',
+      default: ['MP4', 'WebM', 'MOV'],
+      options: [
+        { label: 'MP4', value: 'MP4' }, { label: 'WebM', value: 'WebM' },
+        { label: 'MOV', value: 'MOV' }, { label: 'AVI', value: 'AVI' },
+      ],
+      helpText: 'Choose which video file types respondents can upload.',
+    },
   ]],
   ['audio_upload', 'Audio Upload', 'media', 'Music', 'Audio file upload', '', 'pro', [
     { key: 'maxFileSizeMb', label: 'Max file size (MB)', type: 'number', group: 'field_specific', default: 25, min: 1, max: 100 },
+    { key: 'allowedAudioTypes', label: 'Allowed Audio Types', type: 'multi_checkbox', group: 'field_specific',
+      default: ['MP3', 'WAV', 'WebM'],
+      options: [
+        { label: 'MP3', value: 'MP3' }, { label: 'WAV', value: 'WAV' },
+        { label: 'WebM', value: 'WebM' }, { label: 'OGG', value: 'OGG' }, { label: 'M4A', value: 'M4A' },
+      ],
+      helpText: 'Choose which audio file types respondents can upload.',
+    },
   ]],
   ['drawing_board', 'Drawing Board', 'media', 'PenTool', 'Blank whiteboard for sketches', '', 'pro', [
     { key: 'canvasHeight', label: 'Canvas height (px)', type: 'number', group: 'field_specific', default: 300, min: 100, max: 800 },
@@ -218,7 +248,10 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['smooth_signature', 'Smooth Signature', 'signature', 'PenLine', 'Smooth touch-friendly signature', 'POPULAR', 'pro', [
     { key: 'penColor', label: 'Pen color', type: 'color', group: 'field_specific', default: '#0f172a' },
     { key: 'backgroundColor', label: 'Background color', type: 'color', group: 'field_specific', default: '#ffffff' },
-    { key: 'clearable', label: 'Allow clear', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'widthPx', label: 'Signature pad width', type: 'dimension', group: 'field_specific', default: 400, min: 100, max: 2000, unit: 'PX', helpText: 'Width of the signature canvas in pixels.' },
+    { key: 'heightPx', label: 'Signature pad height', type: 'dimension', group: 'field_specific', default: 150, min: 50, max: 1000, unit: 'PX', helpText: 'Height of the signature canvas in pixels.' },
+    { key: 'clearable', label: 'Allow clear', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let user clear and re-sign before submitting.' },
+    { key: 'legalText', label: 'Legal text', type: 'textarea', group: 'field_specific', placeholder: 'By signing above, I agree to the terms and conditions.' },
   ]],
   ['signature_pad_typed', 'Typed Signature', 'signature', 'Type', 'Type-to-signature with font choices', '', 'pro', [
     { key: 'font', label: 'Signature font', type: 'select', group: 'field_specific', default: 'cursive', options: [
@@ -244,7 +277,16 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['file_upload_widget', 'File Upload', 'file', 'Paperclip', 'Multi-file upload with extension filter', 'POPULAR', 'free', [
     { key: 'maxFiles', label: 'Max files', type: 'number', group: 'field_specific', default: 5, min: 1, max: 50 },
     { key: 'maxFileSizeMb', label: 'Max file size (MB)', type: 'number', group: 'field_specific', default: 10, min: 1, max: 100 },
-    { key: 'allowedExtensions', label: 'Allowed extensions (comma-sep)', type: 'text', group: 'field_specific', default: 'pdf, jpg, png, docx' },
+    { key: 'allowedFileTypes', label: 'Allowed File Types', type: 'multi_checkbox', group: 'field_specific',
+      default: ['PDF', 'JPG', 'PNG', 'DOCX', 'XLSX'],
+      options: [
+        { label: 'PDF', value: 'PDF' }, { label: 'JPG', value: 'JPG' },
+        { label: 'PNG', value: 'PNG' }, { label: 'DOCX', value: 'DOCX' },
+        { label: 'XLSX', value: 'XLSX' }, { label: 'CSV', value: 'CSV' },
+        { label: 'TXT', value: 'TXT' }, { label: 'ZIP', value: 'ZIP' },
+      ],
+      helpText: 'Choose which file types respondents can upload.',
+    },
   ]],
   ['avatar_upload', 'Avatar Upload', 'file', 'UserCircle', 'Circular avatar with crop', '', 'pro', [
     { key: 'shape', label: 'Shape', type: 'select', group: 'field_specific', default: 'circle', options: [
@@ -371,20 +413,145 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ] as WidgetSpec[]).map(([id, name, iconName, description, badge, tier]) => [
     id, name, 'payment' as const, iconName, description, badge, tier,
     [
-      { key: 'provider', label: 'Integration mode', type: 'select' as const, group: 'field_specific' as const, default: 'managed', options: [
-        { label: '🚀 Managed (1-click)', value: 'managed' },
-        { label: '⚙️ BYOK (custom keys)', value: 'byok' },
-      ] },
-      { key: 'publishableKey', label: 'Publishable key', type: 'text' as const, group: 'field_specific' as const, placeholder: 'pk_live_...', condition: { dependsOn: 'provider', equals: 'byok' } },
-      { key: 'secretKey', label: 'Secret key', type: 'text' as const, group: 'field_specific' as const, placeholder: 'sk_live_...', condition: { dependsOn: 'provider', equals: 'byok' } },
-      { key: 'pricingMode', label: 'Charge mode', type: 'select' as const, group: 'field_specific' as const, default: 'fixed', options: [
-        { label: 'Fixed amount', value: 'fixed' },
-        { label: 'Calculated from form', value: 'formula' },
-        { label: 'User-entered (donation)', value: 'user_input' },
-      ] },
-      { key: 'amount', label: 'Amount', type: 'number' as const, group: 'field_specific' as const, default: 49.0, step: 0.01, condition: { dependsOn: 'pricingMode', equals: 'fixed' } },
-      { key: 'currency', label: 'Currency', type: 'select' as const, group: 'field_specific' as const, default: 'USD', options: ['USD', 'EUR', 'GBP', 'INR', 'AUD', 'CAD', 'JPY'].map((c) => ({ label: c, value: c })) },
-      { key: 'testMode', label: 'Sandbox test mode', type: 'boolean' as const, group: 'field_specific' as const, default: true },
+      // ─── Payment Connection (JotForm exact match) ─────────────────────────────
+      {
+        key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker',
+        group: 'field_specific' as const, default: id.replace(/^payment_/, ''),
+        options: [
+          { label: 'Stripe', value: 'stripe_elements' },
+          { label: 'Stripe Checkout (Hosted)', value: 'stripe_checkout' },
+          { label: 'PayPal', value: 'paypal' },
+          { label: 'PayPal Pro', value: 'paypal_pro' },
+          { label: 'Square', value: 'square' },
+          { label: 'Apple Pay', value: 'apple_pay' },
+          { label: 'Google Pay', value: 'google_pay' },
+          { label: 'Razorpay (India)', value: 'razorpay' },
+          { label: 'PayU India', value: 'payu_india' },
+          { label: 'PayU Latam', value: 'payu_latam' },
+          { label: 'Authorize.Net', value: 'authorize_net' },
+          { label: 'Braintree', value: 'braintree' },
+          { label: 'Mollie', value: 'mollie' },
+          { label: '2Checkout', value: 'twocheckout' },
+          { label: 'Worldpay', value: 'worldpay' },
+          { label: 'BlueSnap', value: 'bluesnap' },
+          { label: 'Klarna BNPL', value: 'klarna' },
+          { label: 'Afterpay / Clearpay', value: 'afterpay' },
+          { label: 'Affirm BNPL', value: 'affirm' },
+          { label: 'Coinbase Commerce (Crypto)', value: 'coinbase_commerce' },
+        ],
+        helpText: `Connected to ${name}. Add a connection to start collecting payments.`,
+      },
+      // ─── Payment Type (JotForm exact match) ───────────────────────────────────
+      {
+        key: 'paymentType', label: 'Payment Type', type: 'select',
+        group: 'field_specific' as const, default: 'products',
+        options: [
+          { label: 'Sell Products', value: 'products' },
+          { label: 'Sell Subscriptions', value: 'subscriptions' },
+          { label: 'Sell Single Product', value: 'single' },
+          { label: 'User Defined Amount (Donation)', value: 'donation' },
+        ],
+      },
+      // ─── Currency (JotForm searchable dropdown) ───────────────────────────────
+      {
+        key: 'currency', label: 'Currency', type: 'currency_search',
+        group: 'field_specific' as const, default: 'USD',
+        searchPlaceholder: 'Search currency...',
+        options: [
+          { label: 'USD - United States Dollars', value: 'USD' },
+          { label: 'EUR - Euros', value: 'EUR' },
+          { label: 'GBP - British Pounds', value: 'GBP' },
+          { label: 'INR - Indian Rupees', value: 'INR' },
+          { label: 'AUD - Australian Dollars', value: 'AUD' },
+          { label: 'CAD - Canadian Dollars', value: 'CAD' },
+          { label: 'JPY - Japanese Yen', value: 'JPY' },
+          { label: 'BRL - Brazilian Reals', value: 'BRL' },
+          { label: 'MXN - Mexican Pesos', value: 'MXN' },
+          { label: 'CNY - Chinese Yuan', value: 'CNY' },
+          { label: 'SGD - Singapore Dollars', value: 'SGD' },
+          { label: 'AED - UAE Dirhams', value: 'AED' },
+          { label: 'ZAR - South African Rand', value: 'ZAR' },
+        ],
+      },
+      // ─── Payment Methods (JotForm multi-checkbox) ─────────────────────────────
+      {
+        key: 'paymentMethods', label: 'Payment Methods', type: 'multi_checkbox',
+        group: 'field_specific' as const,
+        default: ['card', 'paypal_checkout'],
+        options: [
+          { label: 'Debit & Credit Card', value: 'card' },
+          { label: 'PayPal Checkout', value: 'paypal_checkout' },
+          { label: 'Fastlane', value: 'fastlane' },
+          { label: 'Apple Pay', value: 'apple_pay' },
+          { label: 'Google Pay', value: 'google_pay' },
+          { label: 'Charge Customer Later', value: 'charge_later' },
+        ],
+        helpText: 'Select which payment methods to offer. "Charge Customer Later" lets you manually charge the card in 3 days after the form is submitted.',
+      },
+      // ─── Billing Address (JotForm segmented: Required | Optional | Hidden) ──
+      {
+        key: 'billingAddress', label: 'Billing Address', type: 'segmented',
+        group: 'field_specific' as const, default: 'required',
+        options: [
+          { label: 'Required', value: 'required' },
+          { label: 'Optional', value: 'optional' },
+          { label: 'Hidden', value: 'hidden' },
+        ],
+      },
+      // ─── Pay Later Message ───────────────────────────────────────────────────
+      {
+        key: 'payLaterMessage', label: 'Pay Later Message', type: 'text',
+        group: 'field_specific' as const,
+        placeholder: 'Pay in 4 interest-free installments',
+        helpText: 'Message shown to customer when Pay Later / BNPL is available.',
+        condition: { dependsOn: 'paymentMethods', equals: 'charge_later' },
+      },
+      // ─── PayPal Smart Buttons (toggle) ──────────────────────────────────────
+      {
+        key: 'paypalSmartButtons', label: 'PayPal Smart Buttons', type: 'toggle_with_description',
+        group: 'field_specific' as const, default: false,
+        description: 'Show PayPal Smart Buttons (Pay in 4, Venmo, Pay Later) on the form.',
+      },
+      // ─── Integration Mode (BYOK vs Managed) ─────────────────────────────────
+      {
+        key: 'provider', label: 'Integration Mode', type: 'segmented',
+        group: 'field_specific' as const, default: 'managed',
+        options: [
+          { label: '🚀 Managed (1-click)', value: 'managed' },
+          { label: '⚙️ BYOK', value: 'byok' },
+        ],
+      },
+      {
+        key: 'publishableKey', label: 'Publishable Key', type: 'text',
+        group: 'field_specific' as const, placeholder: 'pk_live_...',
+        condition: { dependsOn: 'provider', equals: 'byok' },
+      },
+      {
+        key: 'secretKey', label: 'Secret Key', type: 'text',
+        group: 'field_specific' as const, placeholder: 'sk_live_...',
+        condition: { dependsOn: 'provider', equals: 'byok' },
+      },
+      // ─── Charge Mode (legacy — kept for backward compat) ─────────────────────
+      {
+        key: 'pricingMode', label: 'Charge Mode', type: 'select',
+        group: 'field_specific' as const, default: 'fixed',
+        options: [
+          { label: 'Fixed amount', value: 'fixed' },
+          { label: 'Calculated from form fields', value: 'formula' },
+          { label: 'User-entered (donation)', value: 'user_input' },
+        ],
+      },
+      {
+        key: 'amount', label: 'Amount', type: 'number',
+        group: 'field_specific' as const, default: 49.0, step: 0.01,
+        condition: { dependsOn: 'pricingMode', equals: 'fixed' },
+      },
+      // ─── Sandbox Test Mode (toggle with description) ─────────────────────────
+      {
+        key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description',
+        group: 'field_specific' as const, default: true,
+        description: 'Test payments without charging real credit cards.',
+      },
     ] satisfies SettingField[],
     'payment' as const,
   ] satisfies WidgetSpec),

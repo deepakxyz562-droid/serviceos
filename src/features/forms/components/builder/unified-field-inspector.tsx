@@ -25,6 +25,12 @@ export interface UnifiedFieldInspectorProps {
   allFields: Array<{ id: string; label: string; type?: string; widgetType?: string }>;
   onFieldChange: (key: string, value: unknown) => void;
   onConfigChange: (key: string, value: unknown) => void;
+  /** Called when user clicks "Duplicate Field" in the General tab. */
+  onDuplicate?: () => void;
+  /** Called when user clicks "Close" in the sticky footer. */
+  onClose?: () => void;
+  /** Called when user clicks "Update" in the sticky footer. */
+  onUpdate?: () => void;
 }
 
 export function resolveFieldDefinition(field: Record<string, any>): FieldDefinition {
@@ -159,6 +165,9 @@ export function UnifiedFieldInspector({
   allFields,
   onFieldChange,
   onConfigChange,
+  onDuplicate,
+  onClose,
+  onUpdate,
 }: UnifiedFieldInspectorProps) {
   const definition = useMemo(() => resolveFieldDefinition(field), [field]);
 
@@ -179,6 +188,9 @@ export function UnifiedFieldInspector({
       onFieldChange={onFieldChange}
       onConfigChange={onConfigChange}
       allFields={allFieldsClean}
+      onDuplicate={onDuplicate}
+      onClose={onClose}
+      onUpdate={onUpdate}
     />
   );
 }

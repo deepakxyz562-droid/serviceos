@@ -134,8 +134,9 @@ export function FormStudioBuilder({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
 
-  // Inspector Drawer Mode: 'properties' (⚙️) vs 'widget_settings' (🪄) vs 'ai_builder' (✨)
-  const [inspectorMode, setInspectorMode] = useState<'properties' | 'widget_settings' | 'unified' | 'ai_builder'>('properties');
+  // Inspector Drawer Mode: 'ai_builder' (✨) or 'properties' (⚙️ — schema-driven Unified renderer)
+  // Phase R1: legacy 'unified' + 'widget_settings' tabs removed; 'properties' IS the unified renderer.
+  const [inspectorMode, setInspectorMode] = useState<'properties' | 'ai_builder'>('properties');
   const [widgetSettingsSubTab, setWidgetSettingsSubTab] = useState<'general' | 'custom_css'>('general');
 
   // AI Prompt, Importer & Co-Pilot state
@@ -286,7 +287,7 @@ export function FormStudioBuilder({
       fields: [...prev.fields, newField],
     }));
     setSelectedFieldId(newId);
-    setInspectorMode('unified');
+    setInspectorMode('properties');
     toast.success(`✨ Added ${newField.label}`);
   }, [onFormDataChange]);
 
@@ -342,7 +343,7 @@ export function FormStudioBuilder({
       fields: [...prev.fields, newField],
     }));
     setSelectedFieldId(newId);
-    setInspectorMode('widget_settings');
+    setInspectorMode('properties');
     toast.success(`✨ Added ${widget.name} widget`);
   };
 
@@ -371,7 +372,7 @@ export function FormStudioBuilder({
       fields: [...prev.fields, newField],
     }));
     setSelectedFieldId(newId);
-    setInspectorMode('widget_settings');
+    setInspectorMode('properties');
     toast.success(`💳 Added ${gw.name} Gateway`);
   };
 
@@ -1078,7 +1079,7 @@ export function FormStudioBuilder({
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setSelectedFieldId(field.id);
-                                    setInspectorMode('widget_settings');
+                                    setInspectorMode('properties');
                                     setPropertiesOpen(true);
                                   }}
                                   className="px-2 py-0.5 bg-purple-50 dark:bg-purple-950/40 text-purple-600 border border-purple-200 dark:border-purple-800 rounded text-[10px] font-semibold flex items-center gap-1 hover:bg-purple-100"
@@ -1296,56 +1297,32 @@ export function FormStudioBuilder({
                 !propertiesOpen && '-mr-72 lg:-mr-80'
               )}
             >
-              {/* 4-Mode Inspector Header Switcher (✨ AI Builder | ⚙️ Properties | 🎛️ Unified | 🪄 Widgets) + Close Button */}
+              {/* 2-Mode Inspector Header (✨ AI Builder | ⚙️ Properties) + Close Button */}
               <div className="p-2 border-b border-border/80 bg-muted/40 flex items-center gap-1 shrink-0">
-                <div className="grid grid-cols-4 gap-1 flex-1">
+                <div className="grid grid-cols-2 gap-1 flex-1">
                   <button
                     type="button"
                     onClick={() => setInspectorMode('ai_builder')}
                     className={cn(
-                      'py-1 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
+                      'py-1.5 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
                       inspectorMode === 'ai_builder' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                     )}
                     title="AI Form Builder & Co-Pilot"
                   >
-                    <Sparkles className="size-3 text-emerald-600" />
-                    <span>AI</span>
+                    <Sparkles className="size-3.5 text-emerald-600" />
+                    <span>AI Builder</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setInspectorMode('properties')}
                     className={cn(
-                      'py-1 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
+                      'py-1.5 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
                       inspectorMode === 'properties' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                     )}
-                    title="Question Properties"
+                    title="Field Properties (JotForm-style)"
                   >
-                    <Settings className="size-3" />
-                    <span>Props</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInspectorMode('unified')}
-                    className={cn(
-                      'py-1 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
-                      inspectorMode === 'unified' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                    title="Unified Schema-Driven Settings (NEW)"
-                  >
-                    <Sliders className="size-3" />
-                    <span>Unified</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInspectorMode('widget_settings')}
-                    className={cn(
-                      'py-1 text-[10px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
-                      inspectorMode === 'widget_settings' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                    title="Widget Settings"
-                  >
-                    <Wand2 className="size-3" />
-                    <span>Widgets</span>
+                    <Settings className="size-3.5" />
+                    <span>Properties</span>
                   </button>
                 </div>
                 <Button
@@ -1474,550 +1451,22 @@ export function FormStudioBuilder({
                   </div>
                 ) : selectedField ? (
                   <div className="space-y-4 pb-28">
-                    {/* ════ MODE NEW: UNIFIED SCHEMA-DRIVEN SETTINGS (🎛️) ════ */}
-                    {inspectorMode === 'unified' && (
+                    {/* ════ PROPERTIES PANEL (schema-driven — JotForm-style) ════ */}
+                    {inspectorMode === 'properties' && (
                       <UnifiedFieldInspector
                         field={selectedField as unknown as Record<string, any>}
                         allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
                         onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
                         onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
+                        onDuplicate={() => {
+                          const idx = formData.fields.findIndex((f) => f.id === selectedField.id);
+                          if (idx >= 0) handleDuplicateField(selectedField, idx);
+                        }}
+                        onClose={() => setPropertiesOpen(false)}
+                        onUpdate={() => { onSave(); }}
                       />
                     )}
 
-                    {/* ════ MODE B: QUESTION PROPERTIES (⚙️) ════ */}
-                    {inspectorMode === 'properties' && (
-                      <div className="space-y-4">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold">Question Label</Label>
-                          <Input
-                            value={selectedField.label}
-                            onChange={(e) => handleUpdateField(selectedField.id, 'label', e.target.value)}
-                            className="h-8 text-xs"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold">Placeholder Text</Label>
-                          <Input
-                            value={selectedField.placeholder || ''}
-                            onChange={(e) => handleUpdateField(selectedField.id, 'placeholder', e.target.value)}
-                            placeholder="e.g. Type your answer..."
-                            className="h-8 text-xs"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold">Sub-label / Helper Text</Label>
-                          <Input
-                            value={selectedField.description || ''}
-                            onChange={(e) => handleUpdateField(selectedField.id, 'description', e.target.value)}
-                            placeholder="Helper text displayed below input"
-                            className="h-8 text-xs"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3 pt-1">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Label Align</Label>
-                            <Select
-                              value={selectedField.labelAlign || 'top'}
-                              onValueChange={(val) => handleUpdateField(selectedField.id, 'labelAlign', val)}
-                            >
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="top" className="text-xs">Top</SelectItem>
-                                <SelectItem value="left" className="text-xs">Left</SelectItem>
-                                <SelectItem value="right" className="text-xs">Right</SelectItem>
-                                <SelectItem value="hidden" className="text-xs">Hidden</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Field Align</Label>
-                            <Select
-                              value={selectedField.align || 'left'}
-                              onValueChange={(val) => handleUpdateField(selectedField.id, 'align', val)}
-                            >
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="left" className="text-xs">Left</SelectItem>
-                                <SelectItem value="center" className="text-xs">Center</SelectItem>
-                                <SelectItem value="right" className="text-xs">Right</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Field Width</Label>
-                            <Select
-                              value={selectedField.width || 'full'}
-                              onValueChange={(val) => handleUpdateField(selectedField.id, 'width', val)}
-                            >
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="full" className="text-xs">Full Width (100%)</SelectItem>
-                                <SelectItem value="half" className="text-xs">Half Width (50%)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            <Label className="text-xs font-semibold">Character Limit</Label>
-                            <Input
-                              type="number"
-                              value={selectedField.charLimit || ''}
-                              onChange={(e) => handleUpdateField(selectedField.id, 'charLimit', e.target.value ? parseInt(e.target.value) : undefined)}
-                              placeholder="e.g. 100"
-                              className="h-8 text-xs"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Multiple Choice Options Editor */}
-                        {['select', 'radio', 'checkbox', 'dropdown'].includes(selectedField.type) && (
-                          <div className="space-y-2 pt-2 border-t border-border/60">
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs font-semibold">Options / Choices</Label>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={handleAddOption}
-                                className="h-6 text-[10px] px-2 gap-1 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50"
-                              >
-                                <Plus className="size-3" /> Add Option
-                              </Button>
-                            </div>
-                            <div className="space-y-1.5">
-                              {(selectedField.options || []).map((opt, optIdx) => (
-                                <div key={optIdx} className="flex items-center gap-1.5">
-                                  <Input
-                                    value={opt}
-                                    onChange={(e) => handleUpdateOption(optIdx, e.target.value)}
-                                    className="h-7 text-xs flex-1"
-                                    placeholder={`Option ${optIdx + 1}`}
-                                  />
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => handleRemoveOption(optIdx)}
-                                    className="size-7 text-muted-foreground hover:text-red-600 rounded shrink-0"
-                                  >
-                                    <Trash2 className="size-3" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="space-y-2.5 pt-3 border-t border-border/60">
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <Label className="text-xs font-semibold">Required Question</Label>
-                              <p className="text-[10px] text-muted-foreground">User cannot submit without answering</p>
-                            </div>
-                            <Switch
-                              checked={selectedField.required}
-                              onCheckedChange={(checked) => handleUpdateField(selectedField.id, 'required', checked)}
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <Label className="text-xs font-semibold">Hidden Field</Label>
-                              <p className="text-[10px] text-muted-foreground">Pass parameters via URL (UTMs, IDs)</p>
-                            </div>
-                            <Switch
-                              checked={selectedField.hidden || false}
-                              onCheckedChange={(checked) => handleUpdateField(selectedField.id, 'hidden', checked)}
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-0.5">
-                              <Label className="text-xs font-semibold">Read Only</Label>
-                              <p className="text-[10px] text-muted-foreground">Prevent respondent from editing value</p>
-                            </div>
-                            <Switch
-                              checked={selectedField.readOnly || false}
-                              onCheckedChange={(checked) => handleUpdateField(selectedField.id, 'readOnly', checked)}
-                            />
-                          </div>
-                        </div>
-
-                        {/* CRM Field Mapping (Standalone Mode: Direct webhook/API sync notice) */}
-                        <div className="pt-3 border-t border-border/60 space-y-2">
-                          <Label className="text-xs font-semibold flex items-center gap-1.5">
-                            <Zap className="size-3.5 text-amber-500" />
-                            <span>{isStandalone ? 'Webhook & Export Key' : 'CRM Field Auto-Map'}</span>
-                          </Label>
-                          {isStandalone ? (
-                            <div className="p-2.5 rounded-lg bg-muted/40 border border-border text-[11px] text-muted-foreground space-y-1">
-                              <p className="font-semibold text-foreground">Standalone Mode Active</p>
-                              <p>Field data is automatically exported via Webhook and CSV submissions export.</p>
-                            </div>
-                          ) : (
-                            <Select
-                              value={formData.fieldMappings.find((m) => m.formFieldId === selectedField.id)?.crmField || 'none'}
-                              onValueChange={(val) => {
-                                onFormDataChange((prev) => {
-                                  const filtered = prev.fieldMappings.filter((m) => m.formFieldId !== selectedField.id);
-                                  if (val !== 'none') {
-                                    filtered.push({ formFieldId: selectedField.id, crmField: val });
-                                  }
-                                  return { ...prev, fieldMappings: filtered };
-                                });
-                              }}
-                            >
-                              <SelectTrigger className="h-8 text-xs bg-muted/20">
-                                <SelectValue placeholder="Do not map to CRM" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none" className="text-xs text-muted-foreground">— Do not map —</SelectItem>
-                                {CRM_FIELDS.map((crm) => (
-                                  <SelectItem key={crm.value} value={crm.value} className="text-xs">
-                                    {crm.label} ({crm.group})
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ════ MODE C: WIDGET SETTINGS & CUSTOM CSS (🪄) ════ */}
-                    {inspectorMode === 'widget_settings' && (
-                      <div className="space-y-4">
-                        {/* Sub-tab switcher: General Config vs Custom CSS */}
-                        <div className="grid grid-cols-2 gap-1 bg-muted/60 p-1 rounded-lg border border-border/60">
-                          <button
-                            type="button"
-                            onClick={() => setWidgetSettingsSubTab('general')}
-                            className={cn('py-1 rounded-md text-center transition-all flex items-center justify-center gap-1', widgetSettingsSubTab === 'general' ? 'bg-background shadow-xs text-foreground' : 'text-muted-foreground')}
-                          >
-                            <Sliders className="size-3" />
-                            <span>Configuration</span>
-                          </button>
-                          <button
-                            onClick={() => setWidgetSettingsSubTab('custom_css')}
-                            className={cn('py-1 rounded-md text-center transition-all flex items-center justify-center gap-1', widgetSettingsSubTab === 'custom_css' ? 'bg-background shadow-xs text-purple-600' : 'text-muted-foreground')}
-                          >
-                            <Code className="size-3" />
-                            <span>Custom CSS</span>
-                          </button>
-                        </div>
-
-                        {widgetSettingsSubTab === 'general' && (
-                          <div className="space-y-4">
-                            {/* PAYMENT GATEWAY SPECIFIC INSPECTOR */}
-                            {(selectedField.widgetType?.startsWith('payment_') || selectedField.widgetConfig?.gatewayId) ? (() => {
-                              const gwDef = getPaymentGatewayById(
-                                selectedField.widgetConfig?.gatewayId ||
-                                selectedField.widgetType?.replace(/^payment_/, '') ||
-                                ''
-                              ) || PAYMENT_GATEWAYS_REGISTRY[0];
-
-                              return (
-                                <div className="space-y-4">
-                                  {/* Gateway Header Banner */}
-                                  <div className="p-3 rounded-xl border border-border/80 bg-muted/30 flex items-center gap-3">
-                                    <div
-                                      className="size-10 rounded-lg flex items-center justify-center p-2 shrink-0 shadow-xs"
-                                      style={{ backgroundColor: gwDef.logoBg }}
-                                      dangerouslySetInnerHTML={{ __html: gwDef.iconSvg }}
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-1.5">
-                                        <p className="text-xs font-bold text-foreground truncate">{gwDef.name}</p>
-                                        {gwDef.badge && (
-                                          <Badge className="text-[9px] px-1.5 py-0 h-4 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-bold">
-                                            {gwDef.badge}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <p className="text-[10px] text-muted-foreground line-clamp-1">{gwDef.description}</p>
-                                    </div>
-                                  </div>
-
-                                  {/* Provider Mode: 0-Config vs BYOK */}
-                                  <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2">
-                                    <Label className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                                      <Sparkles className="size-3.5 text-emerald-600" />
-                                      <span>Gateway Integration Mode</span>
-                                    </Label>
-                                    <Select
-                                      value={selectedField.widgetConfig?.provider || (gwDef.supportsZeroConfig ? 'managed' : 'byok')}
-                                      onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'provider', val)}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        {gwDef.supportsZeroConfig && (
-                                          <SelectItem value="managed" className="text-xs">
-                                            🚀 Platform Zero-Config (1-Click, Zero Keys Needed)
-                                          </SelectItem>
-                                        )}
-                                        <SelectItem value="byok" className="text-xs">
-                                          ⚙️ Custom Merchant Credentials (BYOK)
-                                        </SelectItem>
-                                      </SelectContent>
-                                    </Select>
-
-                                    {selectedField.widgetConfig?.provider === 'managed' ? (
-                                      <div className="text-[10px] text-emerald-700 dark:text-emerald-300 space-y-0.5 pt-1">
-                                        <p>✓ Zero merchant setup needed. Submissions process seamlessly.</p>
-                                        <p>✓ Secure direct settlement into your linked business account.</p>
-                                      </div>
-                                    ) : (
-                                      <div className="space-y-2 pt-2">
-                                        {(gwDef.configFields || [
-                                          { key: 'apiKey', label: 'API Key / Merchant Token', type: 'password', placeholder: 'Enter API Key...' },
-                                          { key: 'secretKey', label: 'Secret Key / Webhook Key', type: 'password', placeholder: 'Enter Secret Key...' },
-                                        ]).map((cf) => (
-                                          <div key={cf.key} className="space-y-1">
-                                            <Label className="text-[11px] font-semibold">{cf.label}</Label>
-                                            <Input
-                                              type={cf.type === 'password' ? 'password' : 'text'}
-                                              placeholder={cf.placeholder || `Enter ${cf.label}...`}
-                                              value={selectedField.widgetConfig?.[cf.key] || ''}
-                                              onChange={(e) => handleUpdateWidgetConfig(selectedField.id, cf.key, e.target.value)}
-                                              className="h-8 text-xs bg-background font-mono"
-                                            />
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Pricing & Charge Settings */}
-                                  <div className="space-y-3 p-3 border border-border/80 rounded-xl bg-card">
-                                    <p className="text-xs font-bold text-foreground">Pricing & Charge Model</p>
-
-                                    <div className="space-y-1.5">
-                                      <Label className="text-[11px] font-semibold text-muted-foreground">Charge Mode</Label>
-                                      <Select
-                                        value={selectedField.widgetConfig?.pricingMode || 'fixed'}
-                                        onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'pricingMode', val)}
-                                      >
-                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="fixed" className="text-xs">Fixed Amount / Deposit</SelectItem>
-                                          <SelectItem value="formula" className="text-xs">Calculate Total from Form Fields</SelectItem>
-                                          <SelectItem value="user_input" className="text-xs">Customer Entered Amount (Donation / Invoice)</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className="space-y-1">
-                                        <Label className="text-[11px] font-semibold text-muted-foreground">Currency</Label>
-                                        <Select
-                                          value={selectedField.widgetConfig?.currency || gwDef.currencies[0] || 'USD'}
-                                          onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'currency', val)}
-                                        >
-                                          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                                          <SelectContent>
-                                            {gwDef.currencies.map((c) => (
-                                              <SelectItem key={c} value={c} className="text-xs font-mono">{c}</SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-
-                                      {selectedField.widgetConfig?.pricingMode === 'fixed' && (
-                                        <div className="space-y-1">
-                                          <Label className="text-[11px] font-semibold text-muted-foreground">Amount</Label>
-                                          <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={selectedField.widgetConfig?.amount ?? 49.00}
-                                            onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'amount', parseFloat(e.target.value) || 0)}
-                                            className="h-8 text-xs font-mono font-bold"
-                                          />
-                                        </div>
-                                      )}
-
-                                      {selectedField.widgetConfig?.pricingMode === 'formula' && (
-                                        <div className="space-y-1">
-                                          <Label className="text-[11px] font-semibold text-muted-foreground">Calculation Field</Label>
-                                          <Select
-                                            value={selectedField.widgetConfig?.amountField || ''}
-                                            onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'amountField', val)}
-                                          >
-                                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select Field" /></SelectTrigger>
-                                            <SelectContent>
-                                              {formData.fields
-                                                .filter((f) => f.id !== selectedField.id)
-                                                .map((f) => (
-                                                  <SelectItem key={f.id} value={f.id} className="text-xs">
-                                                    {f.label} ({f.widgetType || f.type})
-                                                  </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    {/* Test / Sandbox Mode */}
-                                    <div className="pt-2 border-t border-border/60 flex items-center justify-between">
-                                      <div>
-                                        <p className="text-xs font-semibold text-foreground">Sandbox Test Mode</p>
-                                        <p className="text-[10px] text-muted-foreground">Test payments without charging real credit cards</p>
-                                      </div>
-                                      <Switch
-                                        checked={selectedField.widgetConfig?.testMode ?? true}
-                                        onCheckedChange={(checked) => handleUpdateWidgetConfig(selectedField.id, 'testMode', checked)}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })() : (
-                              /* Standard Non-Payment Widget Controls */
-                              <>
-                                {/* 3-Way Mode Selection for API-Dependent Widgets (Only shown if widget requires external API) */}
-                                {isApiDependentWidget && (
-                                  <div className="p-3 bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 rounded-lg space-y-2">
-                                    <Label className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
-                                      <Sparkles className="size-3.5 text-purple-600" />
-                                      <span>API Provider Mode</span>
-                                    </Label>
-                                    <Select
-                                      value={selectedField.widgetConfig?.provider || 'managed'}
-                                      onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'provider', val)}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="managed" className="text-xs">🚀 Fieseros Managed ($0.005 / lookup via Wallet)</SelectItem>
-                                        <SelectItem value="osm" className="text-xs">🟢 Free Built-in (OpenStreetMap / 100% Free)</SelectItem>
-                                        <SelectItem value="byok" className="text-xs">⚙️ Custom API Key (Bring Your Own Key)</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-
-                                    {selectedField.widgetConfig?.provider === 'managed' && (
-                                      <div className="text-[10px] text-purple-700 dark:text-purple-300 space-y-1 pt-1">
-                                        <p>✓ Zero configuration required. Works instantly.</p>
-                                        <p>✓ $5.00 free monthly credits included with your plan.</p>
-                                      </div>
-                                    )}
-
-                                    {selectedField.widgetConfig?.provider === 'byok' && (
-                                      <div className="space-y-1.5 pt-2">
-                                        <Label className="text-[11px] font-semibold">Custom API Key</Label>
-                                        <Input
-                                          type="password"
-                                          placeholder="Enter API Key..."
-                                          value={selectedField.widgetConfig?.apiKey || ''}
-                                          onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'apiKey', e.target.value)}
-                                          className="h-8 text-xs bg-background"
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Specialized Widget: Image Upload with Notes */}
-                                {selectedField.widgetType === 'image_upload_with_notes' && (
-                                  <div className="space-y-3 p-3 bg-muted/20 border border-border/60 rounded-lg">
-                                    <div className="space-y-1.5">
-                                      <Label className="text-xs font-semibold">Max Upload Files</Label>
-                                      <Input
-                                        type="number"
-                                        min={1}
-                                        max={25}
-                                        value={selectedField.widgetConfig?.maxFiles ?? 10}
-                                        onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'maxFiles', parseInt(e.target.value) || 5)}
-                                        className="h-8 text-xs bg-background"
-                                      />
-                                    </div>
-                                    <div className="flex items-center justify-between pt-1">
-                                      <div>
-                                        <Label className="text-xs font-semibold">Require Notes per Photo</Label>
-                                        <p className="text-[10px] text-muted-foreground">Force respondent to describe damage</p>
-                                      </div>
-                                      <Switch
-                                        checked={selectedField.widgetConfig?.requireNotes ?? true}
-                                        onCheckedChange={(v) => handleUpdateWidgetConfig(selectedField.id, 'requireNotes', v)}
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Widget-Specific Controls */}
-                                {selectedField.widgetType === 'nearest_location_finder' && (
-                                  <div className="space-y-3">
-                                    <div className="space-y-1.5">
-                                      <Label className="text-xs font-semibold">Distance Unit</Label>
-                                      <Select
-                                        value={selectedField.widgetConfig?.distanceUnit || 'miles'}
-                                        onValueChange={(val) => handleUpdateWidgetConfig(selectedField.id, 'distanceUnit', val)}
-                                      >
-                                        <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="miles" className="text-xs">Miles (mi)</SelectItem>
-                                          <SelectItem value="km" className="text-xs">Kilometers (km)</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                      <Label className="text-xs font-semibold">Configured Branches / Hubs</Label>
-                                      <div className="p-2 border rounded-md bg-muted/20 text-xs space-y-1">
-                                        <p className="font-semibold">🏢 Main Austin Depot</p>
-                                        <p className="text-[10px] text-muted-foreground">100 Congress Ave, Austin, TX</p>
-                                      </div>
-                                      <Button size="sm" variant="outline" className="w-full text-xs h-7 gap-1">
-                                        <Plus className="size-3" /> Add Location
-                                      </Button>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {selectedField.widgetType === 'form_calculation' && (
-                                  <div className="space-y-2">
-                                    <Label className="text-xs font-semibold">Formula Expression</Label>
-                                    <Textarea
-                                      value={selectedField.widgetConfig?.formula || ''}
-                                      onChange={(e) => handleUpdateWidgetConfig(selectedField.id, 'formula', e.target.value)}
-                                      placeholder="e.g. ([field_1] * 4.5) + [field_2]"
-                                      rows={3}
-                                      className="text-xs font-mono bg-muted/20"
-                                    />
-                                    <p className="text-[10px] text-muted-foreground">Supports +, -, *, /, parenthesis, and field tokens.</p>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Custom CSS Code Editor */}
-                        {widgetSettingsSubTab === 'custom_css' && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label className="text-xs font-semibold">Custom CSS Rules</Label>
-                              <span className="text-[10px] text-muted-foreground">CSS / SASS</span>
-                            </div>
-                            <Textarea
-                              value={selectedField.customCss || ''}
-                              onChange={(e) => handleUpdateField(selectedField.id, 'customCss', e.target.value)}
-                              placeholder={`/* Inject Custom CSS into this widget container */\n.widget-container {\n  border-radius: 12px;\n  background: #f8fafc;\n  padding: 16px;\n}`}
-                              rows={12}
-                              className="text-xs font-mono bg-slate-950 text-emerald-400 p-3 rounded-lg border-slate-800 resize-none leading-relaxed"
-                            />
-                            <p className="text-[10px] text-muted-foreground">
-                              CSS injected directly into the widget scope on desktop and mobile.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-16 pb-28 space-y-2 text-muted-foreground">

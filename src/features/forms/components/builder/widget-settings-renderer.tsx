@@ -12,7 +12,7 @@
  * — NOT touching the builder.
  */
 import { useState } from 'react';
-import { GripVertical, Plus, Trash2, X } from 'lucide-react';
+import { GripVertical, Plus, Trash2, X, Copy, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -39,6 +39,12 @@ export interface WidgetSettingsRendererProps {
   onFieldChange: (key: string, value: unknown) => void;
   onConfigChange: (key: string, value: unknown) => void;
   allFields?: Array<{ id: string; label: string }>;
+  /** Called when the user clicks the "Duplicate Field" button (universal General setting). */
+  onDuplicate?: () => void;
+  /** Called when user clicks "Close" in the sticky footer (JotForm pattern). */
+  onClose?: () => void;
+  /** Called when user clicks "Update" in the sticky footer (JotForm pattern). */
+  onUpdate?: () => void;
 }
 
 type SubTab = 'general' | 'field_specific' | 'advanced';
@@ -50,6 +56,9 @@ export function WidgetSettingsRenderer({
   onFieldChange,
   onConfigChange,
   allFields = [],
+  onDuplicate,
+  onClose,
+  onUpdate,
 }: WidgetSettingsRendererProps) {
   const [subTab, setSubTab] = useState<SubTab>('general');
 
@@ -234,6 +243,191 @@ export function WidgetSettingsRenderer({
             />
           </div>
         );
+
+      // ─── Phase R2 — JotForm-style control types ───────────────────────────────
+
+      case 'segmented':
+        return (
+          <div key={setting.key} className="space-y-1">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <div className="grid grid-flow-col auto-cols-fr gap-1 bg-muted/60 p-1 rounded-md border border-border/60">
+              {setting.options?.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => onChange(opt.value)}
+                  className={cn(
+                    'py-1.5 rounded text-[11px] font-semibold transition-all',
+                    String(value ?? '') === opt.value
+                      ? 'bg-background shadow-xs text-emerald-600'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  aria-pressed={String(value ?? '') === opt.value}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+
+      case 'dimension':
+        return (
+          <div key={setting.key} className="space-y-1">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                className="h-8 text-xs bg-background flex-1"
+                value={value === '' || value === undefined || value === null ? '' : Number(value)}
+                min={setting.min}
+                max={setting.max}
+                step={setting.step ?? 1}
+                onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+              />
+              {setting.unit && (
+                <span className="px-2.5 h-8 inline-flex items-center rounded-md border border-border/60 bg-muted/60 text-[10px] font-bold text-muted-foreground shrink-0">
+                  {setting.unit}
+                </span>
+              )}
+            </div>
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+
+      case 'multi_checkbox': {
+        const selectedValues: string[] = Array.isArray(value)
+          ? (value as unknown[]).map((v) => String(v))
+          : (typeof value === 'string' && value ? value.split(',').map((s) => s.trim()) : []);
+        const toggle = (val: string) => {
+          const next = selectedValues.includes(val)
+            ? selectedValues.filter((v) => v !== val)
+            : [...selectedValues, val];
+          onChange(next);
+        };
+        return (
+          <div key={setting.key} className="space-y-1">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <div className="grid grid-cols-2 gap-1.5 p-2 rounded-md border border-border/60 bg-background">
+              {setting.options?.map((opt) => {
+                const checked = selectedValues.includes(opt.value);
+                return (
+                  <label key={opt.value} className="flex items-center gap-1.5 text-[11px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(opt.value)}
+                      className="size-3.5 accent-emerald-600"
+                      aria-label={opt.label}
+                    />
+                    <span className={checked ? 'text-foreground font-medium' : 'text-muted-foreground'}>
+                      {opt.label}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+      }
+
+      case 'toggle_with_description':
+        return (
+          <div key={setting.key} className="flex items-center justify-between p-2 border rounded-md bg-background gap-3">
+            <div className="min-w-0 flex-1">
+              <Label className="text-[11px] font-semibold block">{setting.label}</Label>
+              {setting.description && <p className="text-[10px] text-muted-foreground mt-0.5">{setting.description}</p>}
+            </div>
+            <Switch checked={Boolean(value)} onCheckedChange={onChange} />
+          </div>
+        );
+
+      case 'duplicate_button':
+        return (
+          <div key={setting.key} className="space-y-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs w-full gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+              onClick={() => onDuplicate?.()}
+            >
+              <Copy className="size-3.5" /> Duplicate Field
+            </Button>
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+
+      case 'gateway_picker':
+        return (
+          <div key={setting.key} className="space-y-1">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <Select value={String(value ?? '')} onValueChange={onChange}>
+              <SelectTrigger className="h-9 text-xs bg-background">
+                <SelectValue placeholder={setting.searchPlaceholder ?? 'Select gateway...'} />
+              </SelectTrigger>
+              <SelectContent>
+                {setting.options?.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+
+      case 'currency_search': {
+        const query = String(value ?? '').toUpperCase();
+        const filtered = (setting.options || []).filter((o) =>
+          o.label.toUpperCase().includes(query) || o.value.toUpperCase().includes(query),
+        );
+        return (
+          <div key={setting.key} className="space-y-1">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <Input
+              className="h-8 text-xs bg-background"
+              placeholder={setting.searchPlaceholder ?? 'Search currency...'}
+              value={String(value ?? '')}
+              onChange={(e) => onChange(e.target.value.toUpperCase())}
+            />
+            {filtered.length > 0 && filtered.length < (setting.options?.length || 0) && (
+              <div className="max-h-32 overflow-y-auto border border-border/60 rounded-md bg-background">
+                {filtered.slice(0, 8).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => onChange(opt.value)}
+                    className="w-full text-left px-2 py-1 text-[11px] hover:bg-muted/60"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+      }
+
+      case 'label_with_toggle': {
+        const enabled = value === undefined ? setting.default !== false : Boolean(value);
+        return (
+          <div key={setting.key} className="flex items-center justify-between p-2 border rounded-md bg-background gap-3">
+            <div className="min-w-0 flex-1">
+              <Label className="text-[11px] font-semibold block">{setting.label}</Label>
+              {setting.helpText && <p className="text-[10px] text-muted-foreground mt-0.5">{setting.helpText}</p>}
+            </div>
+            <Switch
+              checked={enabled}
+              onCheckedChange={(v) => onChange(String(v))}
+            />
+          </div>
+        );
+      }
     }
   };
 
@@ -286,6 +480,29 @@ export function WidgetSettingsRenderer({
           )}
         </div>
       </ScrollArea>
+
+      {/* ─── Sticky Footer: Close + Update (JotForm pattern) ──────────────────────── */}
+      {(onClose || onUpdate) && (
+        <div className="sticky bottom-0 -mx-1 mt-2 pt-3 border-t border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs flex-1 gap-1.5"
+            onClick={() => onClose?.()}
+          >
+            <X className="size-3.5" /> Close
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 text-xs flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            onClick={() => onUpdate?.()}
+          >
+            <Check className="size-3.5" /> Update
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

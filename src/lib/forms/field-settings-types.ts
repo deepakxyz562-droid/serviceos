@@ -23,7 +23,16 @@ export type SettingFieldType =
   | 'date'
   | 'key_value'
   | 'condition_builder'
-  | 'json';
+  | 'json'
+  // ─── Phase R2 — JotForm-style control types ────────────────────────────────
+  | 'segmented'              // inline button group: [Left | Center | Right]
+  | 'dimension'              // numeric input + unit suffix: [350] [PX]
+  | 'multi_checkbox'         // multiple checkboxes (JPG/PNG/HEIC/WebP, Card/PayPal/Apple Pay)
+  | 'toggle_with_description'// toggle + label + description (Required → "Prevent submission if empty")
+  | 'duplicate_button'       // inline "Duplicate Field" button
+  | 'gateway_picker'         // payment gateway selector with logo + name
+  | 'currency_search'        // searchable currency dropdown
+  | 'label_with_toggle';    // Field Label text input + enable/disable toggle
 
 export type SettingGroup = 'general' | 'advanced' | 'field_specific';
 
@@ -41,44 +50,119 @@ export interface SettingField {
   step?: number;
   condition?: { dependsOn: string; equals: string };
   required?: boolean;
+  /** For 'dimension' type: the unit suffix shown next to the numeric input (e.g. 'PX'). */
+  unit?: string;
+  /** For 'toggle_with_description' type: the description text shown under the label. */
+  description?: string;
+  /** For 'duplicate_button' type: the action callback id (handled by parent). */
+  action?: 'duplicate' | 'delete';
+  /** For 'gateway_picker' / 'currency_search' type: placeholder for the search input. */
+  searchPlaceholder?: string;
 }
 
 export const UNIVERSAL_GENERAL_SETTINGS: SettingField[] = [
-  { key: 'label', label: 'Field Label', type: 'text', group: 'general', placeholder: 'Enter label...' },
-  { key: 'placeholder', label: 'Placeholder', type: 'text', group: 'general', placeholder: 'Enter hint...' },
-  { key: 'helpText', label: 'Sub-label / Hover Text', type: 'text', group: 'general' },
-  { key: 'defaultValue', label: 'Default Value', type: 'text', group: 'general' },
-  { key: 'required', label: 'Required', type: 'boolean', group: 'general', default: false },
-  { key: 'readOnly', label: 'Read-only', type: 'boolean', group: 'general', default: false },
+  // ─── Field Label (with enable/disable toggle) ───────────────────────────────
   {
-    key: 'width',
-    label: 'Field Width',
-    type: 'select',
+    key: 'labelEnabled',
+    label: 'Field Label',
+    type: 'label_with_toggle',
     group: 'general',
-    default: 'full',
-    options: [
-      { label: 'Full Width', value: 'full' },
-      { label: 'Half', value: 'half' },
-      { label: 'Third', value: 'third' },
-      { label: 'Quarter', value: 'quarter' },
-    ],
+    default: true,
+    helpText: 'Enable/disable the field label without deleting it.',
   },
+  { key: 'label', label: 'Label Text', type: 'text', group: 'general', placeholder: 'Enter label...', condition: { dependsOn: 'labelEnabled', equals: 'true' } },
+  // ─── Label Align (segmented control — JotForm style) ─────────────────────────
   {
     key: 'labelAlign',
-    label: 'Label Position',
-    type: 'select',
+    label: 'Label Align',
+    type: 'segmented',
     group: 'general',
     default: 'top',
     options: [
       { label: 'Top', value: 'top' },
       { label: 'Left', value: 'left' },
       { label: 'Right', value: 'right' },
-      { label: 'Hidden', value: 'hidden' },
     ],
+    helpText: 'Select how the label text is aligned horizontally.',
+  },
+  // ─── Align (segmented control — input alignment) ─────────────────────────────
+  {
+    key: 'align',
+    label: 'Align',
+    type: 'segmented',
+    group: 'general',
+    default: 'left',
+    options: [
+      { label: 'Left', value: 'left' },
+      { label: 'Center', value: 'center' },
+      { label: 'Right', value: 'right' },
+    ],
+    helpText: 'Select how the input is aligned horizontally.',
+  },
+  // ─── Width + Height (numeric inputs with PX suffix — JotForm style) ─────────
+  {
+    key: 'widthPx',
+    label: 'Width',
+    type: 'dimension',
+    group: 'general',
+    default: 350,
+    unit: 'PX',
+    min: 50,
+    max: 2000,
+    helpText: 'Field width in pixels.',
+  },
+  {
+    key: 'heightPx',
+    label: 'Height',
+    type: 'dimension',
+    group: 'general',
+    default: 100,
+    unit: 'PX',
+    min: 30,
+    max: 2000,
+    helpText: 'Field height in pixels.',
+  },
+  // ─── Required (toggle with description — JotForm style) ───────────────────────
+  {
+    key: 'required',
+    label: 'Required',
+    type: 'toggle_with_description',
+    group: 'general',
+    default: false,
+    description: 'Prevent submission if this field is empty.',
+  },
+  // ─── Duplicate Field (inline button — JotForm style) ─────────────────────────
+  {
+    key: '_duplicate',
+    label: 'Duplicate Field',
+    type: 'duplicate_button',
+    group: 'general',
+    action: 'duplicate',
+    helpText: 'Duplicate this field with all saved settings.',
   },
 ];
 
 export const UNIVERSAL_ADVANCED_SETTINGS: SettingField[] = [
+  { key: 'placeholder', label: 'Placeholder', type: 'text', group: 'advanced', placeholder: 'Enter hint...' },
+  { key: 'helpText', label: 'Sub-label / Hover Text', type: 'text', group: 'advanced' },
+  { key: 'defaultValue', label: 'Default Value', type: 'text', group: 'advanced' },
+  {
+    key: 'readOnly',
+    label: 'Read-only',
+    type: 'toggle_with_description',
+    group: 'advanced',
+    default: false,
+    description: 'Prevent respondent from editing value.',
+  },
+  {
+    key: 'hidden',
+    label: 'Hidden Field',
+    type: 'toggle_with_description',
+    group: 'advanced',
+    default: false,
+    description: 'Pass parameters via URL (UTMs, IDs).',
+  },
+  { key: 'fieldName', label: 'Field Name (machine)', type: 'text', group: 'advanced', helpText: 'Internal identifier for API/webhook mapping.' },
   {
     key: 'condition',
     label: 'Show if (conditional logic)',
@@ -94,7 +178,6 @@ export const UNIVERSAL_ADVANCED_SETTINGS: SettingField[] = [
     helpText: 'Use tokens like {{field_id}} to reference other field values.',
   },
   { key: 'customError', label: 'Custom error message', type: 'text', group: 'advanced' },
-  { key: 'hideLabel', label: 'Hide label', type: 'boolean', group: 'advanced', default: false },
   { key: 'timeLimit', label: 'Time limit (seconds, 0 = none)', type: 'number', group: 'advanced', default: 0, min: 0 },
   { key: 'customCss', label: 'Custom CSS', type: 'textarea', group: 'advanced', placeholder: '.field-class { ... }' },
 ];
