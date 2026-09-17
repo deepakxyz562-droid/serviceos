@@ -62,7 +62,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ]],
   ['image_choice', 'Image Choice', 'choice', 'Image', 'Visual radio with images per option', 'NEW', 'pro', [
     { key: 'options', label: 'Image Options', type: 'options_editor', group: 'field_specific' },
-    { key: 'multiSelect', label: 'Allow multi-select', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'multiSelect', label: 'Allow multi-select', type: 'toggle_with_description', group: 'field_specific', default: false },
     { key: 'imageWidth', label: 'Image Width', type: 'dimension', group: 'field_specific', default: 120, unit: 'PX' },
     { key: 'imageHeight', label: 'Image Height', type: 'dimension', group: 'field_specific', default: 120, unit: 'PX' },
   ]],
@@ -75,16 +75,16 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ]],
   ['tags_input', 'Tags Input', 'choice', 'Tag', 'Enter tags with autocomplete', '', 'pro', [
     { key: 'maxTags', label: 'Max tags', type: 'number', group: 'field_specific', default: 5, min: 1, max: 50 },
-    { key: 'allowDuplicates', label: 'Allow duplicates', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'allowDuplicates', label: 'Allow duplicates', type: 'toggle_with_description', group: 'field_specific', default: false },
   ]],
   ['mask_input', 'Masked Input', 'choice', 'AsteriskSquare', 'Phone/SSN/custom mask', '', 'pro', [
     { key: 'mask', label: 'Mask pattern (9=digit, A=letter, *=any)', type: 'text', group: 'field_specific', default: '(999) 999-9999' },
     { key: 'placeholder', label: 'Placeholder char', type: 'text', group: 'field_specific', default: '_' },
   ]],
   ['password', 'Password', 'choice', 'Lock', 'Password with strength meter', '', 'pro', [
-    { key: 'showStrength', label: 'Show strength meter', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'showStrength', label: 'Show strength meter', type: 'toggle_with_description', group: 'field_specific', default: true },
     { key: 'minLen', label: 'Min length', type: 'number', group: 'field_specific', default: 8, min: 4, max: 128 },
-    { key: 'requireSymbol', label: 'Require symbol', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'requireSymbol', label: 'Require symbol', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['rich_text', 'Rich Text Editor', 'choice', 'Bold', 'Bold/italic/link/list toolbar', 'PRO', 'business', [
     { key: 'toolbar', label: 'Toolbar (JSON)', type: 'json', group: 'field_specific' },
@@ -135,7 +135,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['date_range', 'Date Range', 'datetime', 'CalendarRange', 'Pick start and end date', '', 'pro', [
     { key: 'minNights', label: 'Min nights', type: 'number', group: 'field_specific', default: 1, min: 0 },
     { key: 'maxNights', label: 'Max nights', type: 'number', group: 'field_specific', default: 30 },
-    { key: 'disablePast', label: 'Disable past dates', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'disablePast', label: 'Disable past dates', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['recurring_date', 'Recurring Date', 'datetime', 'RefreshCw', 'RRULE-based recurrence', 'NEW', 'business', [
     { key: 'freq', label: 'Frequency', type: 'select', group: 'field_specific', default: 'weekly', options: [
@@ -144,14 +144,14 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'interval', label: 'Interval (every N)', type: 'number', group: 'field_specific', default: 1, min: 1 },
   ]],
   ['timezone_picker', 'Timezone Picker', 'datetime', 'Globe', 'Select timezone from list', '', 'free', [
-    { key: 'defaultBrowser', label: 'Default to browser TZ', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'defaultBrowser', label: 'Default to browser TZ', type: 'toggle_with_description', group: 'field_specific', default: true },
     { key: 'format', label: 'Display format', type: 'select', group: 'field_specific', default: 'full', options: [
       { label: 'Full (America/New_York)', value: 'full' }, { label: 'Abbreviated (EST)', value: 'abbrev' },
     ] },
   ]],
   ['countdown_timer', 'Countdown Timer', 'datetime', 'Timer', 'Form-wide timer that auto-submits at 0', 'NEW', 'pro', [
     { key: 'durationMinutes', label: 'Duration (minutes)', type: 'number', group: 'field_specific', default: 15, min: 1, max: 180 },
-    { key: 'autoSubmitOnExpiry', label: 'Auto-submit on expiry', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'autoSubmitOnExpiry', label: 'Auto-submit on expiry', type: 'toggle_with_description', group: 'field_specific', default: true },
     { key: 'warnAt', label: 'Warn at (minutes left)', type: 'number', group: 'field_specific', default: 1 },
   ]],
   ['weekly_planner', 'Weekly Appointment Planner', 'datetime', 'CalendarClock', 'Day-by-day time slots with limits', 'POPULAR', 'business', [
@@ -161,29 +161,29 @@ const WIDGET_SPECS: WidgetSpec[] = [
 
   // ─── Contact (5) ────────────────────────────────────────────────────────────
   ['email_widget', 'Email Address', 'contact', 'Mail', 'Validated email input', 'POPULAR', 'free', [
-    { key: 'confirmation', label: 'Require confirmation', type: 'boolean', group: 'field_specific', default: false },
-    { key: 'blockFreeDomains', label: 'Block free domains (gmail/yahoo)', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'confirmation', label: 'Require confirmation', type: 'toggle_with_description', group: 'field_specific', default: false },
+    { key: 'blockFreeDomains', label: 'Block free domains (gmail/yahoo)', type: 'toggle_with_description', group: 'field_specific', default: false },
   ]],
   ['phone_widget', 'Phone Number', 'contact', 'Phone', 'International phone input', '', 'free', [
     { key: 'defaultCountry', label: 'Default country', type: 'text', group: 'field_specific', default: 'US' },
-    { key: 'validateMobile', label: 'Validate as mobile', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'validateMobile', label: 'Validate as mobile', type: 'toggle_with_description', group: 'field_specific', default: false },
     { key: 'format', label: 'Display format', type: 'select', group: 'field_specific', default: 'international', options: [
       { label: 'International', value: 'international' }, { label: 'National', value: 'national' }, { label: 'E.164', value: 'e164' },
     ] },
   ]],
   ['full_name', 'Full Name (First/Last)', 'contact', 'User', 'First + last name combined', '', 'free', [
-    { key: 'middleName', label: 'Include middle name', type: 'boolean', group: 'field_specific', default: false },
-    { key: 'prefix', label: 'Include prefix (Mr/Ms/Dr)', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'middleName', label: 'Include middle name', type: 'toggle_with_description', group: 'field_specific', default: false },
+    { key: 'prefix', label: 'Include prefix (Mr/Ms/Dr)', type: 'toggle_with_description', group: 'field_specific', default: false },
   ]],
   ['address_widget', 'Address', 'contact', 'MapPin', 'International address with country/state', '', 'free', [
     { key: 'countryDefault', label: 'Default country', type: 'text', group: 'field_specific', default: 'US' },
     { key: 'stateMode', label: 'State field type', type: 'select', group: 'field_specific', default: 'dropdown', options: [
       { label: 'Dropdown', value: 'dropdown' }, { label: 'Free text', value: 'text' },
     ] },
-    { key: 'includeLatLon', label: 'Capture lat/long', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'includeLatLon', label: 'Capture lat/long', type: 'toggle_with_description', group: 'field_specific', default: false },
   ]],
   ['company', 'Company Name', 'contact', 'Building', 'Company name with industry suggest', '', 'free', [
-    { key: 'industrySuggest', label: 'Show industry suggestions', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'industrySuggest', label: 'Show industry suggestions', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
 
   // ─── Media (10) ──────────────────────────────────────────────────────────────
@@ -214,22 +214,22 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'previewSize', label: 'Preview size', type: 'select', group: 'field_specific', default: 'large', options: [
       { label: 'Small', value: 'small' }, { label: 'Medium', value: 'medium' }, { label: 'Large', value: 'large' },
     ] },
-    { key: 'zoomable', label: 'Enable zoom', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'zoomable', label: 'Enable zoom', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['draw_on_image', 'Draw on Image', 'media', 'Edit3', 'Annotate a base image', 'NEW', 'business', [
     { key: 'baseImage', label: 'Base image URL', type: 'text', group: 'field_specific', placeholder: 'https://...' },
     { key: 'defaultThickness', label: 'Default brush thickness', type: 'number', group: 'field_specific', default: 3, min: 1, max: 20 },
   ]],
   ['photo_watermark', 'Photo Watermark', 'media', 'Stamp', 'Auto-overlay timestamp/GPS on photos', 'PRO', 'business', [
-    { key: 'includeTimestamp', label: 'Include timestamp', type: 'boolean', group: 'field_specific', default: true },
-    { key: 'includeGps', label: 'Include GPS coords', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'includeTimestamp', label: 'Include timestamp', type: 'toggle_with_description', group: 'field_specific', default: true },
+    { key: 'includeGps', label: 'Include GPS coords', type: 'toggle_with_description', group: 'field_specific', default: true },
     { key: 'watermarkPosition', label: 'Position', type: 'select', group: 'field_specific', default: 'bottom_right', options: [
       { label: 'Top left', value: 'top_left' }, { label: 'Top right', value: 'top_right' },
       { label: 'Bottom left', value: 'bottom_left' }, { label: 'Bottom right', value: 'bottom_right' },
     ] },
   ]],
   ['image_scanner_ocr', 'Image Scanner (OCR)', 'media', 'ScanLine', 'Scan receipt/ID → auto-fill form', 'AI', 'business', [
-    { key: 'autoExtract', label: 'Auto-extract data', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'autoExtract', label: 'Auto-extract data', type: 'toggle_with_description', group: 'field_specific', default: true },
     { key: 'targetDocument', label: 'Document type', type: 'select', group: 'field_specific', default: 'any', options: [
       { label: 'Any', value: 'any' }, { label: 'Receipt', value: 'receipt' }, { label: 'ID card', value: 'id' },
       { label: 'Invoice', value: 'invoice' }, { label: 'Custom', value: 'custom' },
@@ -263,7 +263,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'backgroundColor', label: 'Background color', type: 'color', group: 'field_specific', default: '#ffffff' },
   ]],
   ['speech_to_text', 'Speech to Text', 'media', 'MicVocal', 'Real-time speech transcription', 'AI', 'business', [
-    { key: 'continuous', label: 'Continuous mode', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'continuous', label: 'Continuous mode', type: 'toggle_with_description', group: 'field_specific', default: false },
     { key: 'language', label: 'Language', type: 'text', group: 'field_specific', default: 'en-US' },
   ]],
 
@@ -331,7 +331,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['spreadsheet', 'Spreadsheet Widget', 'calculation', 'Table', 'Excel-style editable grid with formulas', '', 'business', [
     { key: 'rows', label: 'Default rows', type: 'number', group: 'field_specific', default: 5, min: 1, max: 50 },
     { key: 'columns', label: 'Default columns', type: 'number', group: 'field_specific', default: 4, min: 1, max: 20 },
-    { key: 'enableFormulas', label: 'Enable formulas (SUM/AVG/PRODUCT)', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'enableFormulas', label: 'Enable formulas (SUM/AVG/PRODUCT)', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['spreadsheet_to_form', 'Spreadsheet to Form', 'calculation', 'FileSpreadsheet', 'Upload Excel/CSV → autofill by code', 'PRO', 'business', [
     { key: 'accessCodeField', label: 'Access code column', type: 'text', group: 'field_specific', default: 'code' },
@@ -363,11 +363,11 @@ const WIDGET_SPECS: WidgetSpec[] = [
   // ─── Survey (7) ────────────────────────────────────────────────────────────────
   ['star_rating_comments', 'Star Rating + Comments', 'survey', 'Star', '5-star with required comment on low', 'POPULAR', 'pro', [
     { key: 'maxStars', label: 'Max stars', type: 'number', group: 'field_specific', default: 5, min: 3, max: 10 },
-    { key: 'requireCommentOnLowRating', label: 'Require comment below threshold', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'requireCommentOnLowRating', label: 'Require comment below threshold', type: 'toggle_with_description', group: 'field_specific', default: true },
     { key: 'threshold', label: 'Threshold', type: 'number', group: 'field_specific', default: 3 },
   ]],
   ['like_dislike', 'Like / Dislike', 'survey', 'ThumbsUp', 'Binary thumbs up/down', '', 'free', [
-    { key: 'showLiveCounts', label: 'Show live counts', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'showLiveCounts', label: 'Show live counts', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['nps_slider', 'NPS Slider (0-10)', 'survey', 'Gauge', 'Net promoter score scale', 'POPULAR', 'pro', [
     { key: 'min', label: 'Min value', type: 'number', group: 'field_specific', default: 0 },
@@ -407,8 +407,8 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ]],
   ['terms_and_conditions', 'Terms & Conditions', 'productivity', 'ScrollText', 'Scrollable legal modal + accept checkbox', 'POPULAR', 'free', [
     { key: 'termsText', label: 'Terms text', type: 'textarea', group: 'field_specific' },
-    { key: 'isMandatory', label: 'Mandatory acceptance', type: 'boolean', group: 'field_specific', default: true },
-    { key: 'requireScroll', label: 'Require scroll to bottom', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'isMandatory', label: 'Mandatory acceptance', type: 'toggle_with_description', group: 'field_specific', default: true },
+    { key: 'requireScroll', label: 'Require scroll to bottom', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
 
   // ─── Payment Gateways — Per-Gateway Schemas (JotForm-exact) ──────────────────
@@ -661,11 +661,11 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'name', label: 'Product name', type: 'text', group: 'field_specific' },
     { key: 'price', label: 'Price', type: 'number', group: 'field_specific', default: 49.0, step: 0.01 },
     { key: 'image', label: 'Image URL', type: 'text', group: 'field_specific' },
-    { key: 'qtyEditable', label: 'Allow qty edit', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'qtyEditable', label: 'Allow qty edit', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['product_multiple', 'Multiple Products', 'payment', 'Boxes', 'Grid of products with qty selectors', '', 'business', [
     { key: 'products', label: 'Products', type: 'product_editor', group: 'field_specific' },
-    { key: 'showImages', label: 'Show product images', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'showImages', label: 'Show product images', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['product_subscription', 'Subscription Plan', 'payment', 'RefreshCw', 'Plan selector with monthly/yearly toggle', 'NEW', 'business', [
     { key: 'planName', label: 'Plan name', type: 'text', group: 'field_specific' },
@@ -676,7 +676,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['product_donation', 'Donation', 'payment', 'HeartHandshake', 'Suggested amounts + custom input', '', 'free', [
     { key: 'minAmount', label: 'Min amount', type: 'number', group: 'field_specific', default: 1, min: 0 },
     { key: 'suggestedAmounts', label: 'Suggested amounts (JSON array)', type: 'json', group: 'field_specific' },
-    { key: 'allowCustom', label: 'Allow custom amount', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'allowCustom', label: 'Allow custom amount', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['product_purchase_order', 'Purchase Order (Offline)', 'payment', 'Receipt', 'PO number + terms text', '', 'free', [
     { key: 'paymentTerms', label: 'Payment terms', type: 'text', group: 'field_specific', default: 'Net 30' },
@@ -687,7 +687,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ]],
   ['product_tax_calculator', 'Tax Calculator', 'payment', 'ReceiptText', 'Auto-compute tax from rate', '', 'pro', [
     { key: 'rate', label: 'Tax rate (%)', type: 'number', group: 'field_specific', default: 8.25, step: 0.01 },
-    { key: 'includedInPrice', label: 'Included in price', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'includedInPrice', label: 'Included in price', type: 'toggle_with_description', group: 'field_specific', default: false },
   ]],
   ['product_shipping_calculator', 'Shipping Calculator', 'payment', 'Truck', 'Compute shipping (flat/per-item/free-over)', '', 'pro', [
     { key: 'flatRate', label: 'Flat rate', type: 'number', group: 'field_specific', default: 9.99, step: 0.01 },
@@ -695,7 +695,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'freeOverAmount', label: 'Free shipping over $', type: 'number', group: 'field_specific', default: 99 },
   ]],
   ['product_billing_address', 'Billing Address', 'payment', 'CreditCard', 'Address + "same as shipping" toggle', '', 'free', [
-    { key: 'sameAsShipping', label: 'Show "same as shipping" toggle', type: 'boolean', group: 'field_specific', default: true },
+    { key: 'sameAsShipping', label: 'Show "same as shipping" toggle', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['product_invoice_generator', 'Invoice Generator', 'payment', 'FileText', 'Preview invoice with line items + total', 'NEW', 'business', [
     { key: 'prefix', label: 'Invoice prefix', type: 'text', group: 'field_specific', default: 'INV-' },

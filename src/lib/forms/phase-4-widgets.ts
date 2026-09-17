@@ -96,7 +96,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ]],
   ['page_break_widget', 'Page Break', 'layout', 'SeparatorHorizontal', 'Multi-step page break', 'POPULAR', 'free'],
   ['form_collapse_widget', 'Form Collapse', 'layout', 'ChevronDown', 'Collapsible section header', '', 'free', [
-    { key: 'startCollapsed', label: 'Start collapsed', type: 'boolean', group: 'field_specific', default: false },
+    { key: 'startCollapsed', label: 'Start collapsed', type: 'toggle_with_description', group: 'field_specific', default: false },
     { key: 'headerText', label: 'Header text', type: 'text', group: 'field_specific' },
   ]],
   ['save_and_resume_widget', 'Save & Resume', 'productivity', 'Save', 'Save form state + resume later', 'NEW', 'pro'],

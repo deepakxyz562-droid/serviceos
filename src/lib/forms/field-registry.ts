@@ -57,7 +57,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     settingsSchema: [
       { key: 'rows', label: 'Visible rows', type: 'number', group: 'field_specific', default: 4, min: 2, max: 20 },
       { key: 'maxLength', label: 'Max characters', type: 'number', group: 'field_specific', default: 0 },
-      { key: 'showCounter', label: 'Show character counter', type: 'boolean', group: 'field_specific', default: false },
+      { key: 'showCounter', label: 'Show character counter', type: 'toggle_with_description', group: 'field_specific', default: false },
     ],
   },
   {
@@ -75,7 +75,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       { key: 'max', label: 'Max value', type: 'number', group: 'field_specific' },
       { key: 'step', label: 'Step', type: 'number', group: 'field_specific', default: 1, step: 0.01 },
       { key: 'decimals', label: 'Decimal places', type: 'number', group: 'field_specific', default: 0, min: 0, max: 6 },
-      { key: 'thousandsSep', label: 'Thousands separator', type: 'boolean', group: 'field_specific', default: false },
+      { key: 'thousandsSep', label: 'Thousands separator', type: 'toggle_with_description', group: 'field_specific', default: false },
     ],
   },
   {
@@ -163,8 +163,8 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       label, type: 'email', placeholder: 'name@example.com', required: false,
     }),
     settingsSchema: [
-      { key: 'confirmation', label: 'Require confirmation (re-enter)', type: 'boolean', group: 'field_specific', default: false },
-      { key: 'blockFreeDomains', label: 'Block free domains (gmail/yahoo)', type: 'boolean', group: 'field_specific', default: false },
+      { key: 'confirmation', label: 'Require confirmation (re-enter)', type: 'toggle_with_description', group: 'field_specific', default: false },
+      { key: 'blockFreeDomains', label: 'Block free domains (gmail/yahoo)', type: 'toggle_with_description', group: 'field_specific', default: false },
     ],
   },
   {
@@ -179,7 +179,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     }),
     settingsSchema: [
       { key: 'defaultCountry', label: 'Default country code', type: 'text', group: 'field_specific', default: 'US' },
-      { key: 'validateMobile', label: 'Validate as mobile only', type: 'boolean', group: 'field_specific', default: false },
+      { key: 'validateMobile', label: 'Validate as mobile only', type: 'toggle_with_description', group: 'field_specific', default: false },
       { key: 'format', label: 'Display format', type: 'select', group: 'field_specific', default: 'international', options: [
         { label: 'International (+1...)', value: 'international' }, { label: 'National', value: 'national' }, { label: 'E.164', value: 'e164' },
       ] },
@@ -322,7 +322,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     createField: (label = 'Paragraph') => ({ label: '', type: 'paragraph', widgetConfig: { text: 'Add your descriptive text here...' } }),
     settingsSchema: [
       { key: 'text', label: 'Paragraph text', type: 'textarea', group: 'field_specific' },
-      { key: 'allowHTML', label: 'Allow HTML', type: 'boolean', group: 'field_specific', default: false },
+      { key: 'allowHTML', label: 'Allow HTML', type: 'toggle_with_description', group: 'field_specific', default: false },
     ],
   },
   {
@@ -374,7 +374,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       { key: 'backgroundColor', label: 'Background color', type: 'color', group: 'field_specific', default: '#ffffff' },
       { key: 'width', label: 'Width (px)', type: 'number', group: 'field_specific', default: 400 },
       { key: 'height', label: 'Height (px)', type: 'number', group: 'field_specific', default: 150 },
-      { key: 'clearable', label: 'Allow clear', type: 'boolean', group: 'field_specific', default: true },
+      { key: 'clearable', label: 'Allow clear', type: 'toggle_with_description', group: 'field_specific', default: true },
       { key: 'legalText', label: 'Legal text shown under signature', type: 'textarea', group: 'field_specific', default: 'By signing above, I agree to the terms and conditions.' },
     ],
   },
@@ -391,7 +391,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       { key: 'stateMode', label: 'State field type', type: 'select', group: 'field_specific', default: 'dropdown', options: [
         { label: 'Dropdown', value: 'dropdown' }, { label: 'Free text', value: 'text' },
       ] },
-      { key: 'includeLatLon', label: 'Capture lat/long', type: 'boolean', group: 'field_specific', default: false },
+      { key: 'includeLatLon', label: 'Capture lat/long', type: 'toggle_with_description', group: 'field_specific', default: false },
     ],
   },
 ];
@@ -555,7 +555,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       { key: 'decimalPlaces', label: 'Decimal places', type: 'number', group: 'field_specific', default: 2, min: 0, max: 6 },
       { key: 'resultPrefix', label: 'Prefix (e.g. $)', type: 'text', group: 'field_specific', default: '$' },
       { key: 'resultSuffix', label: 'Suffix (e.g. USD)', type: 'text', group: 'field_specific' },
-      { key: 'hidden', label: 'Hidden (calculated, not shown to user)', type: 'boolean', group: 'field_specific', default: false },
+      { key: 'hidden', label: 'Hidden (calculated, not shown to user)', type: 'toggle_with_description', group: 'field_specific', default: false },
     ],
   },
   {
@@ -636,7 +636,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       { key: 'format', label: 'Audio format', type: 'select', group: 'field_specific', default: 'audio/webm', options: [
         { label: 'WebM (recommended)', value: 'audio/webm' }, { label: 'MP3', value: 'audio/mp3' },
       ] },
-      { key: 'showPlayback', label: 'Show playback controls', type: 'boolean', group: 'field_specific', default: true },
+      { key: 'showPlayback', label: 'Show playback controls', type: 'toggle_with_description', group: 'field_specific', default: true },
     ],
   },
   {
