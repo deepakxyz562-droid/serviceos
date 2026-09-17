@@ -97,26 +97,26 @@ export function AiAssistantView() {
   };
 
   return (
-    <div className="space-y-6 w-full max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+    <div className="space-y-3 sm:space-y-6 w-full max-w-7xl mx-auto">
+      {/* Header - Hidden on small mobile to maximize ChatGPT screen area */}
+      <div className="hidden sm:flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="relative flex items-center justify-center size-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
-            <Sparkles className="size-5" />
-            <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
+          <div className="relative flex items-center justify-center size-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs">
+            <Sparkles className="size-4" />
+            <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-foreground">AI Copilot & Intelligence</h2>
+              <h2 className="text-lg font-bold text-foreground">AI Copilot & Intelligence</h2>
               <Badge
                 variant="secondary"
                 className="text-[10px] font-medium h-4 px-1.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-500/20"
               >
-                Tenant-Isolated
+                Live Engine
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
-              Conversational business insights, schedule queries, and automated intelligence
+              Conversational business operations, schedule management, and instant execution
             </p>
           </div>
         </div>
@@ -124,24 +124,24 @@ export function AiAssistantView() {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="bg-emerald-50/50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 text-xs px-2.5 py-1">
             <ShieldCheck className="size-3.5 mr-1.5 text-emerald-600" />
-            Read-Only Business Engine
+            Connected to Live Database
           </Badge>
         </div>
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-3">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-2 sm:gap-3">
         <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
-          <TabsList className="bg-muted/60 p-1 rounded-xl">
-            <TabsTrigger value="chat" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+          <TabsList className="bg-muted/60 p-1 rounded-xl h-8.5">
+            <TabsTrigger value="chat" className="text-xs px-3 py-1 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
               <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
               Copilot Chat
             </TabsTrigger>
-            <TabsTrigger value="knowledge" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <TabsTrigger value="knowledge" className="text-xs px-3 py-1 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
               <BookOpen className="size-3.5 text-blue-500" />
               Knowledge Base
             </TabsTrigger>
-            <TabsTrigger value="intents" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <TabsTrigger value="intents" className="text-xs px-3 py-1 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
               <Zap className="size-3.5 text-amber-500" />
               Intent Intelligence
             </TabsTrigger>
@@ -150,7 +150,7 @@ export function AiAssistantView() {
 
         {/* ── Tab: Copilot Chat (ChatGPT Centered Full Screen View) ── */}
         <TabsContent value="chat" className="mt-0">
-          <div className="h-[calc(100vh-180px)] min-h-[600px] w-full rounded-2xl border border-border/80 overflow-hidden shadow-sm bg-background">
+          <div className="h-[calc(100dvh-130px)] sm:h-[calc(100vh-180px)] min-h-[520px] w-full rounded-2xl border border-border/80 overflow-hidden shadow-xs bg-background">
             <AiChatPanel initialPrompt={chatInjectedPrompt} />
           </div>
         </TabsContent>

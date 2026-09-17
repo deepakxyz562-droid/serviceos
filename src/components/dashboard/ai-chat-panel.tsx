@@ -600,9 +600,10 @@ export interface AiChatPanelProps {
   initialPrompt?: string;
   onNavigateToView?: (view: string) => void;
   className?: string;
+  showHeader?: boolean;
 }
 
-export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiChatPanelProps) {
+export function AiChatPanel({ initialPrompt, onNavigateToView, className, showHeader = true }: AiChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState(initialPrompt || '');
   const [loading, setLoading] = useState(false);
@@ -846,79 +847,78 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
       data-testid="ai-chat-panel"
     >
       {/* ── Top Header (Minimalist ChatGPT Style) ── */}
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5 bg-background/80 backdrop-blur-md shrink-0 sticky top-0 z-10">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs shrink-0">
-            <Sparkles className="size-4" />
-            <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-semibold text-foreground tracking-tight">
-                {BRAND.name} Copilot
-              </span>
-              <Badge
-                variant="secondary"
-                className="text-[10px] font-medium h-4 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-              >
-                Universal Actions
-              </Badge>
+      {showHeader && (
+        <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3.5 py-2 bg-background/80 backdrop-blur-md shrink-0 sticky top-0 z-10">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="relative flex size-7 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs shrink-0">
+              <Sparkles className="size-3.5" />
+              <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
             </div>
-            <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
-              Connected to database & operations engine
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0">
-          {quota && (
-            <div className="hidden sm:block w-20 mr-1" title={`${quota.used} of ${quota.quota} AI credits used`}>
-              <div className="mb-0.5 flex justify-between text-[9px] text-muted-foreground">
-                <span>Credits</span>
-                <span className="font-mono">{quota.used}/{quota.quota}</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs sm:text-sm font-semibold text-foreground tracking-tight">
+                  {BRAND.name} Copilot
+                </span>
+                <Badge
+                  variant="secondary"
+                  className="text-[9px] font-medium h-3.5 px-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                >
+                  Universal AI
+                </Badge>
               </div>
-              <Progress value={pct} className="h-1" />
             </div>
-          )}
+          </div>
 
-          {messages.length > 0 ? (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleCopyEntireChat}
-                className="size-8 text-muted-foreground hover:text-foreground"
-                title="Copy entire conversation"
-              >
-                <Copy className="size-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleExportTranscript}
-                className="size-8 text-muted-foreground hover:text-foreground"
-                title="Download transcript (.md)"
-              >
-                <Download className="size-3.5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setMessages([])}
-                className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1 rounded-full border-border/80"
-                title="Start a new conversation"
-              >
-                <PlusCircle className="size-3 text-emerald-600" />
-                <span>New Chat</span>
-              </Button>
-            </>
-          ) : (
-            <Badge variant="outline" className="text-[10px] text-muted-foreground font-mono px-2 py-0.5 border-border/60">
-              GPT-4o / Hybrid AI
-            </Badge>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {quota && (
+              <div className="hidden sm:block w-20 mr-1" title={`${quota.used} of ${quota.quota} AI credits used`}>
+                <div className="mb-0.5 flex justify-between text-[9px] text-muted-foreground">
+                  <span>Credits</span>
+                  <span className="font-mono">{quota.used}/{quota.quota}</span>
+                </div>
+                <Progress value={pct} className="h-1" />
+              </div>
+            )}
+
+            {messages.length > 0 ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleCopyEntireChat}
+                  className="size-7 text-muted-foreground hover:text-foreground"
+                  title="Copy entire conversation"
+                >
+                  <Copy className="size-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleExportTranscript}
+                  className="size-7 text-muted-foreground hover:text-foreground"
+                  title="Download transcript (.md)"
+                >
+                  <Download className="size-3" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMessages([])}
+                  className="h-6.5 px-2 text-[11px] text-muted-foreground hover:text-foreground gap-1 rounded-full border-border/80"
+                  title="Start a new conversation"
+                >
+                  <PlusCircle className="size-3 text-emerald-600" />
+                  <span>New Chat</span>
+                </Button>
+              </>
+            ) : (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground font-mono px-2 py-0.5 border-border/60">
+                GPT-4o / Hybrid AI
+              </Badge>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Messages Stream (Centered Max-W-3XL) ── */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-6 min-h-0">

@@ -103,64 +103,46 @@ export function AiAssistantDrawer({ open, onClose }: AiAssistantDrawerProps) {
         aria-label="AI Assistant"
       >
         {/* ─── Header ─────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/80 bg-muted/20 shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="relative flex items-center justify-center size-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs shrink-0">
-              <Sparkles className="size-4" />
-              <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
+        <div className="flex items-center justify-between px-3.5 py-2 border-b border-border/80 bg-muted/20 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="relative flex items-center justify-center size-7 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs shrink-0">
+              <Sparkles className="size-3.5" />
+              <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h2 className="text-sm font-semibold text-foreground tracking-tight">
-                  {BRAND.name} Copilot
-                </h2>
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] font-medium h-4 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                >
-                  Live AI
-                </Badge>
-                {activeView && (
-                  <Badge variant="outline" className="text-[10px] font-mono h-4 px-1.5 text-muted-foreground hidden sm:inline-flex">
-                    Context: {activeView}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground truncate">
-                Real-time business intelligence & automated answers
-              </p>
-            </div>
+            <h2 className="text-xs sm:text-sm font-semibold text-foreground tracking-tight truncate">
+              {BRAND.name} Copilot
+            </h2>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0">
             <Button
               variant="ghost"
               size="icon"
-              className="size-8 text-muted-foreground hover:text-foreground hidden sm:flex"
+              className="size-7 text-muted-foreground hover:text-foreground hidden sm:flex"
               onClick={toggleWidth}
               title={widthMode === 'standard' ? 'Expand to wide view' : 'Standard width'}
             >
-              <Layers className="size-4" />
+              <Layers className="size-3.5" />
               <span className="sr-only">Toggle width</span>
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="size-8 text-muted-foreground hover:text-foreground"
+              className="size-7 text-muted-foreground hover:text-foreground"
               onClick={handleOpenFullPage}
               title="Open full page view"
             >
-              <Maximize2 className="size-4" />
+              <Maximize2 className="size-3.5" />
               <span className="sr-only">Open full page</span>
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="size-8 text-muted-foreground hover:text-foreground"
+              className="size-7 text-muted-foreground hover:text-foreground"
               onClick={onClose}
               title="Close AI Assistant (Esc)"
             >
-              <X className="size-4" />
+              <X className="size-3.5" />
               <span className="sr-only">Close</span>
             </Button>
           </div>
@@ -172,35 +154,35 @@ export function AiAssistantDrawer({ open, onClose }: AiAssistantDrawerProps) {
           onValueChange={(v) => setActiveTab(v as 'chat' | 'insights' | 'kb')}
           className="flex-1 flex flex-col min-h-0"
         >
-          <div className="px-4 pt-2.5 pb-1 border-b border-border/60 shrink-0 bg-background">
-            <TabsList className="grid grid-cols-3 w-full h-8.5 bg-muted/60 p-0.5">
+          <div className="px-3 pt-2 pb-1 border-b border-border/60 shrink-0 bg-background">
+            <TabsList className="grid grid-cols-3 w-full h-7.5 bg-muted/60 p-0.5">
               <TabsTrigger
                 value="chat"
                 className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
               >
-                <Bot className="size-3.5 mr-1.5 text-emerald-600 dark:text-emerald-400" />
+                <Bot className="size-3 mr-1.5 text-emerald-600 dark:text-emerald-400" />
                 Copilot Chat
               </TabsTrigger>
               <TabsTrigger
                 value="insights"
                 className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
               >
-                <Zap className="size-3.5 mr-1.5 text-amber-500" />
+                <Zap className="size-3 mr-1.5 text-amber-500" />
                 Smart Insights
               </TabsTrigger>
               <TabsTrigger
                 value="kb"
                 className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs"
               >
-                <BookOpen className="size-3.5 mr-1.5 text-blue-500" />
+                <BookOpen className="size-3 mr-1.5 text-blue-500" />
                 Knowledge Base
               </TabsTrigger>
             </TabsList>
           </div>
 
           {/* ─── Tab Content: Copilot Chat ──────────────────────────── */}
-          <TabsContent value="chat" className="flex-1 flex flex-col min-h-0 mt-0 p-2 data-[state=inactive]:hidden">
-            <AiChatPanel initialPrompt={injectedPrompt} className="border-0 shadow-none" />
+          <TabsContent value="chat" className="flex-1 flex flex-col min-h-0 mt-0 p-1 sm:p-2 data-[state=inactive]:hidden">
+            <AiChatPanel initialPrompt={injectedPrompt} showHeader={false} className="border-0 shadow-none" />
           </TabsContent>
 
           {/* ─── Tab Content: Smart Insights ────────────────────────── */}
