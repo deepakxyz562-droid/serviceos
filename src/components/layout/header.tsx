@@ -164,6 +164,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const queryClient = useQueryClient();
 
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin');
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
 
   // Global Command+K / Ctrl+K keyboard shortcut to toggle AI Copilot Drawer
   useEffect(() => {
