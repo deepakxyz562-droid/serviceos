@@ -47,7 +47,39 @@ export function ServiceAreaChecker({
       const res = await fetch(`/api/proxy/maps/geocode?address=${encodeURIComponent(inputVal)}`);
       const geo = await res.json().catch(() => ({}));
 
-      const inArea = isZipAllowed || (geo.lat && true); // Fallback inside zone
+      // ACTUAL RADIUS CHECK: calculate Haversine distance from center
+      // If geocoding succeeded and we have center coords, check actual distance
+      // If geocoding failed, fall back to zip code check ONLY
+      let inArea = false;
+      if (geo.lat && geo.lng) {
+        // Use center address to get center coords (or use default NYC)
+        let centerLat = 40.7128; // Default NYC
+        let centerLng = -74.006;
+        try {
+          const centerRes = await fetch(`/api/proxy/maps/geocode?address=${encodeURIComponent(centerAddress)}`);
+          const centerGeo = await centerRes.json().catch(() => ({}));
+          if (centerGeo.lat) centerLat = centerGeo.lat;
+          if (centerGeo.lng) centerLng = centerGeo.lng;
+        } catch {
+          // Use default center
+        }
+
+        // Haversine formula — actual distance calculation
+        const R = 3959; // Earth radius in miles
+        const dLat = ((geo.lat - centerLat) * Math.PI) / 180;
+        const dLng = ((geo.lng - centerLng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((centerLat * Math.PI) / 180) * Math.cos((geo.lat * Math.PI) / 180) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distanceMiles = R * c;
+
+        inArea = distanceMiles <= maxRadiusMiles;
+      } else {
+        // Geocoding failed — use zip code check as fallback
+        inArea = isZipAllowed;
+      }
 
       const result: ServiceAreaResult = {
         inArea: Boolean(inArea),
@@ -60,11 +92,17 @@ export function ServiceAreaChecker({
 
       onChange(result);
     } catch {
+      // If geocoding completely fails, use zip code check as final fallback
+      const zipMatch = inputVal.match(/\b\d{5}\b/);
+      const zipCode = zipMatch ? zipMatch[0] : '';
+      const isZipAllowed = allowedZipCodes.length === 0 || allowedZipCodes.includes(zipCode);
       onChange({
-        inArea: true,
+        inArea: isZipAllowed,
         searchedAddress: inputVal,
-        matchedZone: 'Default Service Territory',
-        notes: 'Address accepted.',
+        matchedZone: isZipAllowed ? 'Zip Code Service Area' : undefined,
+        notes: isZipAllowed
+          ? 'Address accepted (zip code match).'
+          : 'Unable to verify address. Please contact us to confirm service availability.',
       });
     } finally {
       setChecking(false);

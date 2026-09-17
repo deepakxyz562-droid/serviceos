@@ -36,8 +36,8 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['employee_engagement', 'Employee Engagement', 'survey', 'Users', '5 dimensions × Likert', 'PRO', 'business'],
   ['satisfaction_emoji', 'Satisfaction Emoji', 'survey', 'Smile', '3-emoji satisfaction', '', 'free'],
   ['survey_slider', 'Survey Slider', 'survey', 'SlidersHorizontal', '0-100 slider with labels', '', 'free'],
-  ['star_rating_comments_v2', 'Star Rating + Comments (v2)', 'survey', 'Star', 'Improved star rating', 'POPULAR', 'pro'],
-  ['thumbs_up_down_v2', 'Thumbs Up/Down (v2)', 'survey', 'ThumbsUp', 'Improved thumb rating', '', 'free'],
+  ['star_rating_comments', 'Star Rating + Comments (v2)', 'survey', 'Star', 'Improved star rating', 'POPULAR', 'pro'],
+  ['thumbs_up_down', 'Thumbs Up/Down (v2)', 'survey', 'ThumbsUp', 'Improved thumb rating', '', 'free'],
   ['matrix_question', 'Matrix Question', 'survey', 'Grid3x3', 'Single matrix × 5-point', '', 'pro'],
   ['ranking_question', 'Ranking Question', 'survey', 'ArrowUpDown', 'Rank items 1-N', '', 'pro'],
   ['open_ended_question', 'Open-Ended Question', 'survey', 'FileText', 'Textarea + word count', '', 'free'],
@@ -80,14 +80,14 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['scholarship_application', 'Scholarship Application', 'contact', 'Award', 'Essays + achievements', 'PRO', 'business'],
 
   // ─── Legal (8) ──────────────────────────────────────────────────────────────
-  ['gdpr_consent_v2', 'GDPR Consent (v2)', 'security', 'ScrollText', 'Granular GDPR consent', 'POPULAR', 'free'],
-  ['privacy_policy_accept_v2', 'Privacy Policy Accept (v2)', 'security', 'FileText', 'Versioned privacy policy', '', 'free'],
+  ['gdpr_consent', 'GDPR Consent (v2)', 'security', 'ScrollText', 'Granular GDPR consent', 'POPULAR', 'free'],
+  ['privacy_policy_accept', 'Privacy Policy Accept (v2)', 'security', 'FileText', 'Versioned privacy policy', '', 'free'],
   ['nda_sign', 'NDA Sign', 'signature', 'FileSignature', 'NDA + party + signature', 'PRO', 'business'],
   ['waiver_release', 'Waiver / Release', 'signature', 'FileText', 'Liability waiver', 'PRO', 'business'],
   ['terms_of_service', 'Terms of Service', 'security', 'ScrollText', 'ToS acceptance', 'POPULAR', 'free'],
   ['cookie_consent_banner', 'Cookie Consent Banner', 'security', 'Cookie', 'Cookie categories', 'NEW', 'free'],
-  ['age_verification_v2', 'Age Verification (v2)', 'security', 'CalendarClock', 'DOB + ID upload', '', 'free'],
-  ['digital_witness_v2', 'Digital Witness (v2)', 'signature', 'Eye', 'Witness signature + statement', 'NEW', 'business'],
+  ['age_verification', 'Age Verification (v2)', 'security', 'CalendarClock', 'DOB + ID upload', '', 'free'],
+  ['digital_witness', 'Digital Witness (v2)', 'signature', 'Eye', 'Witness signature + statement', 'NEW', 'business'],
 
   // ─── E-commerce (10) ────────────────────────────────────────────────────────
   ['product_configurator', 'Product Configurator', 'payment', 'SlidersHorizontal', 'Step-by-step product config', 'NEW', 'business'],
@@ -116,7 +116,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['lead_scoring_display', 'Lead Scoring Display', 'marketing', 'Trophy', 'Read-only lead score', '', 'pro'],
   ['referral_code_input', 'Referral Code Input', 'marketing', 'Ticket', 'Referral + validate', '', 'pro'],
   ['campaign_source_tracker', 'Campaign Source Tracker', 'marketing', 'Megaphone', 'Hidden campaign tracker', '', 'free'],
-  ['social_share_buttons_v2', 'Social Share Buttons (v2)', 'marketing', 'Share2', 'Share + custom URL + title', 'POPULAR', 'free'],
+  ['social_share_buttons', 'Social Share Buttons (v2)', 'marketing', 'Share2', 'Share + custom URL + title', 'POPULAR', 'free'],
   ['email_signup_segment', 'Email Signup + Segment', 'marketing', 'Mail', 'Newsletter/promo/both', 'NEW', 'free'],
   ['promo_code_unlock', 'Promo Code Unlock', 'marketing', 'TicketPercent', 'Promo + unlock offer', 'POPULAR', 'pro'],
   ['viral_waitlist', 'Viral Waitlist', 'marketing', 'Users', 'Waitlist + referral position', 'NEW', 'pro'],

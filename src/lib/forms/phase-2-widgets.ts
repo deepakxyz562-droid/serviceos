@@ -84,16 +84,10 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['map_radius_drawer', 'Map Radius Drawer', 'maps', 'Circle', 'Draw radius on map', 'PRO', 'business', [
     { key: 'maxRadiusKm', label: 'Max Radius (KM)', type: 'number', group: 'field_specific', default: 50, min: 1 },
   ]],
-  ['nearest_location_finder_v2', 'Nearest Location Finder', 'maps', 'Navigation', 'Find closest branch or depot', 'POPULAR', 'pro', [
-    { key: 'storesJson', label: 'Locations (JSON Array)', type: 'json', group: 'field_specific', placeholder: '[{"name": "Store 1", "address": "...", "lat": 0, "lng": 0}]' },
-    { key: 'unit', label: 'Distance Unit', type: 'segmented', group: 'field_specific', default: 'miles', options: [{ label: 'Miles', value: 'miles' }, { label: 'KM', value: 'km' }] },
-    { key: 'maxResults', label: 'Max Locations Shown', type: 'number', group: 'field_specific', default: 3, min: 1, max: 10 },
-    { key: 'autoGps', label: 'Auto-detect GPS', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Automatically locate user on form load.' },
-  ], 'maps'],
   ['reverse_geocode', 'Reverse Geocode', 'maps', 'MapPin', 'Lat/lng → address', 'NEW', 'pro', [
     { key: 'showFullAddress', label: 'Return Full Street Address', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
-  ['route_planner_v2', 'Route Planner Map', 'maps', 'Map', 'Interactive driving route with waypoints and route summary', 'POPULAR', 'pro', [
+  ['route_planner_map', 'Route Planner Map', 'maps', 'Map', 'Interactive driving route with waypoints and route summary', 'POPULAR', 'pro', [
     { key: 'mapProvider', label: 'Map Provider', type: 'segmented', group: 'field_specific', default: 'osm', options: [
       { label: 'OpenStreetMap (free)', value: 'osm' }, { label: 'Google Maps', value: 'google' },
     ], helpText: 'OpenStreetMap is free with no key; Google Maps needs your own billed API key.' },
@@ -110,7 +104,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'noRouteMessage', label: 'No Route Message', type: 'text', group: 'field_specific', default: 'No route could be found for those locations.', placeholder: 'No route could be found for those locations.' },
     { key: 'addressPlaceholder', label: 'Address Placeholder', type: 'text', group: 'field_specific', default: 'Street address, city or ZIP', placeholder: 'Street address, city or ZIP' },
   ], 'maps'],
-  ['service_area_checker_v2', 'Service Area Checker', 'maps', 'ShieldCheck', 'Validate postal code against radius', 'NEW', 'pro', [
+  ['service_area_checker', 'Service Area Checker', 'maps', 'ShieldCheck', 'Validate postal code against radius', 'NEW', 'pro', [
     { key: 'centerLat', label: 'HQ Latitude', type: 'number', group: 'field_specific', default: 37.7749, step: 0.0001 },
     { key: 'centerLng', label: 'HQ Longitude', type: 'number', group: 'field_specific', default: -122.4194, step: 0.0001 },
     { key: 'radiusMiles', label: 'Service Radius (Miles)', type: 'number', group: 'field_specific', default: 25, min: 1 },
@@ -132,7 +126,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['distance_matrix', 'Distance Matrix', 'maps', 'Grid', 'Multi-origin × destination distances', 'PRO', 'business'],
 
   // ─── Inventory & Booking (15) ────────────────────────────────────────────
-  ['inventory_dropdown_v2', 'Inventory Dropdown', 'productivity', 'Package', 'Stock-aware dropdown with auto-disable', 'POPULAR', 'pro', [
+  ['inventory_dropdown', 'Inventory Dropdown', 'productivity', 'Package', 'Stock-aware dropdown with auto-disable', 'POPULAR', 'pro', [
     { key: 'items', label: 'Items Matrix (JSON: [{label, stock, price}])', type: 'json', group: 'field_specific', placeholder: '[{"label": "Item A", "stock": 10, "price": 19.99}]' },
     { key: 'lowStockThreshold', label: 'Low Stock Alert Threshold', type: 'number', group: 'field_specific', default: 3, min: 0 },
     { key: 'hideSoldOut', label: 'Hide Out of Stock Items', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Completely remove items with 0 stock instead of disabling.' },
@@ -227,11 +221,11 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['consent_log', 'Consent Log', 'security', 'FileCheck', 'Logs consent with timestamp + IP', 'PRO', 'business'],
 
   // ─── Regional & Identity (15) ─────────────────────────────────────────────
-  ['australia_bsb_checker_v2', 'Australia BSB Checker', 'regional', 'Landmark', '6-digit BSB validation with APCA registry', 'NEW', 'pro', [
+  ['australia_bsb_checker', 'Australia BSB Checker', 'regional', 'Landmark', '6-digit BSB validation with APCA registry', 'NEW', 'pro', [
     { key: 'autoFormat', label: 'Auto-format with hyphen (XXX-XXX)', type: 'toggle_with_description', group: 'field_specific', default: true },
     { key: 'showBankName', label: 'Show Bank & Branch Name on Match', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
-  ['italian_codice_fiscale_v2', 'Italian Codice Fiscale', 'regional', 'FileCheck2', '16-char tax code validation with checksum', 'NEW', 'pro', [
+  ['italian_codice_fiscale', 'Italian Codice Fiscale', 'regional', 'FileCheck2', '16-char tax code validation with checksum', 'NEW', 'pro', [
     { key: 'autoUppercase', label: 'Auto-convert to Uppercase', type: 'toggle_with_description', group: 'field_specific', default: true },
     { key: 'extractDemographics', label: 'Extract Birth Date and Gender', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
@@ -284,7 +278,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ]],
   ['pivot_table', 'Pivot Table', 'productivity', 'Table', 'Pivot table input', 'PRO', 'business'],
   ['csv_import', 'CSV Import', 'productivity', 'FileSpreadsheet', 'Parse CSV client-side', 'NEW', 'pro'],
-  ['dynamic_dropdowns_v2', 'Dynamic Dropdowns', 'productivity', 'GitMerge', 'Multi-level cascading dropdowns', 'NEW', 'pro', [
+  ['dynamic_dropdowns', 'Dynamic Dropdowns', 'productivity', 'GitMerge', 'Multi-level cascading dropdowns', 'NEW', 'pro', [
     { key: 'hierarchyData', label: 'Hierarchy Data (JSON or Indented Text)', type: 'json', group: 'field_specific', placeholder: '{"Make": {"Toyota": ["Camry", "Corolla"], "Ford": ["F-150", "Mustang"]}}' },
     { key: 'autoClearChild', label: 'Auto-clear Child on Parent Change', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Reset deeper dropdowns when a parent option changes.' },
   ]],
@@ -301,7 +295,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ]],
   ['key_value_repeater', 'Key-Value Repeater', 'productivity', 'Braces', 'Repeater of {key, value}', '', 'free'],
   ['tag_cloud_input', 'Tag Cloud Input', 'productivity', 'Tags', 'Tag cloud toggle', '', 'free'],
-  ['matrix_dynamique_v2', 'Matrix Dynamique', 'productivity', 'Grid', 'User-expandable data matrix', 'POPULAR', 'pro', [
+  ['matrix_dynamique', 'Matrix Dynamique', 'productivity', 'Grid', 'User-expandable data matrix', 'POPULAR', 'pro', [
     { key: 'rowHeaders', label: 'Row Headers (comma-separated)', type: 'text', group: 'field_specific', default: 'Row 1, Row 2, Row 3' },
     { key: 'colHeaders', label: 'Column Headers (comma-separated)', type: 'text', group: 'field_specific', default: 'Col A, Col B, Col C' },
     { key: 'cellType', label: 'Cell Input Type', type: 'segmented', group: 'field_specific', default: 'text', options: [

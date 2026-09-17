@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai-client';
 import { FormSchema, FormField } from '@/lib/forms/form-schema-types';
-import { WIDGET_REGISTRY } from '@/lib/forms/widgets/widget-registry';
+import { FIELD_REGISTRY } from '@/lib/forms/canonical-widget-registry';
 
 function splitOutsideParens(str: string): string[] {
   const parts: string[] = [];
@@ -213,12 +213,13 @@ export async function POST(request: NextRequest) {
     if (parsedListFields && (parsedListFields.length >= 3 || (!currentSchema.fields || currentSchema.fields.length === 0))) {
       updatedSchema = {
         version: 1,
-        name: currentSchema.name || 'Custom AI Generated Form',
-        description: currentSchema.description || 'Generated automatically based on your requested fields.',
         steps: [{ id: 'step_1', title: 'Details' }],
         fields: parsedListFields,
+        rules: currentSchema.rules || [],
         theme: {
           primaryColor: currentSchema.theme?.primaryColor || '#059669',
+          backgroundColor: currentSchema.theme?.backgroundColor || '#ffffff',
+          textColor: currentSchema.theme?.textColor || '#0f172a',
           borderRadius: currentSchema.theme?.borderRadius || '12px',
           layout: 'classic',
         },
@@ -226,6 +227,7 @@ export async function POST(request: NextRequest) {
           submitButtonText: 'Submit Request',
           successTitle: 'Thank you!',
           successMessage: 'Your submission has been received.',
+          actions: currentSchema.settings?.actions || {},
         },
       };
     } else if (lower.includes('map') && (lower.includes('footer') || lower.includes('bottom') || lower.includes('end') || lower.includes('add'))) {
@@ -280,7 +282,7 @@ export async function POST(request: NextRequest) {
     // ─── If LLM is available and instruction is conversational/open-ended ────────
     if (!updatedSchema) {
       try {
-        const widgetSample = WIDGET_REGISTRY.slice(0, 30).map((w) => `${w.id} (${w.name})`).join(', ');
+        const widgetSample = FIELD_REGISTRY.slice(0, 30).map((w) => `${w.id} (${w.name})`).join(', ');
 
         const systemPrompt = `You are the Fieseros AI Form Studio Co-Pilot.
 You receive a FormSchema JSON and a user prompt to build or modify form questions, options, widgets, and layout.

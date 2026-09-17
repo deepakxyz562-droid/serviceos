@@ -32,6 +32,38 @@ const DEFAULT_BRANCHES: Branch[] = [
   { id: 'b3', name: 'Brooklyn Fast Depot', address: '200 Atlantic Ave, Brooklyn, NY 11201', lat: 40.6914, lng: -73.993 },
 ];
 
+function parseBranches(config: Record<string, unknown>): Branch[] {
+  if (Array.isArray(config.branches) && config.branches.length > 0) {
+    return config.branches as Branch[];
+  }
+  if (typeof config.storesJson === 'string' && config.storesJson.trim()) {
+    try {
+      const parsed = JSON.parse(config.storesJson);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (typeof config.branches === 'string' && config.branches.trim()) {
+    const lines = config.branches.split('\n').map((l) => l.trim()).filter(Boolean);
+    const parsed: Branch[] = [];
+    lines.forEach((line, idx) => {
+      const parts = line.split(',');
+      const name = parts[0]?.trim() || `Location ${idx + 1}`;
+      const address = parts.slice(1).join(',').trim() || name;
+      parsed.push({
+        id: `b-${idx + 1}`,
+        name,
+        address,
+        lat: DEFAULT_BRANCHES[idx % DEFAULT_BRANCHES.length].lat,
+        lng: DEFAULT_BRANCHES[idx % DEFAULT_BRANCHES.length].lng,
+      });
+    });
+    if (parsed.length > 0) return parsed;
+  }
+  return DEFAULT_BRANCHES;
+}
+
 /**
  * Improved Nearest Location Finder v2.
  * - Uses Nominatim for free address geocoding (no API key).
@@ -40,11 +72,9 @@ const DEFAULT_BRANCHES: Branch[] = [
  */
 export function NearestLocationFinderV2({ value, onChange, config, disabled, field }: WidgetProps) {
   const ariaLabel = str(field?.label, 'Nearest location finder v2');
-  const unit = str(config.unit, 'km') === 'miles' ? 'miles' : 'km';
-  const branches: Branch[] = Array.isArray(config.branches) && config.branches.length > 0
-    ? (config.branches as Branch[])
-    : DEFAULT_BRANCHES;
-  const maxResults = Math.min(10, Math.max(1, num(config.maxResults, 5)));
+  const unit = str(config.unit || config.distanceUnit, 'miles') === 'km' ? 'km' : 'miles';
+  const branches = parseBranches(config);
+  const maxResults = Math.min(10, Math.max(1, num(config.maxResults, 3)));
 
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -59,6 +89,8 @@ export function NearestLocationFinderV2({ value, onChange, config, disabled, fie
       setRanked(existing.ranked);
       setOriginLabel(existing.origin);
       setQuery(existing.origin);
+    } else if (config.autoGps && typeof navigator !== 'undefined' && navigator.geolocation && !disabled) {
+      onGps();
     }
   }, [value]);
 

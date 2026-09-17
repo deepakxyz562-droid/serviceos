@@ -73,9 +73,9 @@ export function RoutePlannerMap({
     distanceMi: number;
     distanceKm: number;
   }>({
-    durationMin: value?.durationMinutes || 21,
-    distanceMi: value?.distanceValue || 10.9,
-    distanceKm: (value?.distanceValue || 10.9) * 1.60934,
+    durationMin: value?.durationMinutes || 0,
+    distanceMi: value?.distanceValue || 0,
+    distanceKm: (value?.distanceValue || 0) * 1.60934,
   });
 
   // Calculate distance display based on unitSetting
@@ -100,7 +100,7 @@ export function RoutePlannerMap({
     currentStops: RouteStop[]
   ) => {
     if (!onChange) return;
-    const duration = mode === 'walking' ? Math.round(routeStats.distanceMi * 20) : mode === 'bicycling' ? Math.round(routeStats.distanceMi * 5) : 21;
+    const duration = mode === 'walking' ? Math.round(routeStats.distanceMi * 20) : mode === 'bicycling' ? Math.round(routeStats.distanceMi * 5) : Math.round(routeStats.distanceMi * 1.5); // ~40mph avg driving
     const out: RoutePlannerData = {
       startLocation: start,
       endLocation: end,

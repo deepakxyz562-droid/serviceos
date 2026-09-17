@@ -388,7 +388,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['thumb_rating', 'Thumb Rating', 'survey', 'ThumbsUp', 'Single thumb up/down', '', 'free'],
 
   // ─── Productivity (5) ──────────────────────────────────────────────────────────
-  ['configurable_list_v2', 'Configurable List (v2)', 'productivity', 'ListOrdered', 'Dynamic repeater with custom columns', 'POPULAR', 'pro', [
+  ['configurable_list', 'Configurable List (v2)', 'productivity', 'ListOrdered', 'Dynamic repeater with custom columns', 'POPULAR', 'pro', [
     { key: 'minRows', label: 'Min rows', type: 'number', group: 'field_specific', default: 1, min: 0 },
     { key: 'maxRows', label: 'Max rows (0 = unlimited)', type: 'number', group: 'field_specific', default: 20 },
     { key: 'columns', label: 'Columns (JSON)', type: 'json', group: 'field_specific' },
@@ -415,7 +415,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   // Each gateway has its own unique settingsSchema matching JotForm's Payment Properties panel.
 
   // 1. Stripe Elements
-  ['payment_stripe_elements', 'Stripe Elements', 'CreditCard', 'Inline card fields (Visa/MC/Amex)', 'POPULAR', 'pro', [
+  ['payment_stripe_elements', 'Stripe Elements', 'payment', 'CreditCard', 'Inline card fields (Visa/MC/Amex)', 'POPULAR', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'stripe_elements',
       options: [{ label: 'Stripe', value: 'stripe_elements' }, { label: 'Stripe Checkout (Hosted)', value: 'stripe_checkout' }],
       helpText: 'Connected to Stripe. Add a Stripe connection to start collecting payments.' },
@@ -452,7 +452,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ], 'payment'],
 
   // 2. Stripe Checkout (Hosted)
-  ['payment_stripe_checkout', 'Stripe Checkout', 'CreditCard', 'Hosted Stripe payment page', 'POPULAR', 'pro', [
+  ['payment_stripe_checkout', 'Stripe Checkout', 'payment', 'CreditCard', 'Hosted Stripe payment page', 'POPULAR', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'stripe_checkout',
       options: [{ label: 'Stripe', value: 'stripe_elements' }, { label: 'Stripe Checkout (Hosted)', value: 'stripe_checkout' }],
       helpText: 'Connected to Stripe Checkout. Add a connection to start collecting payments.' },
@@ -477,7 +477,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ], 'payment'],
 
   // 3. Square
-  ['payment_square', 'Square', 'CreditCard', 'Square payment form with Cash App Pay', 'POPULAR', 'pro', [
+  ['payment_square', 'Square', 'payment', 'CreditCard', 'Square payment form with Cash App Pay', 'POPULAR', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'square',
       options: [{ label: 'Square', value: 'square' }, { label: 'Cash App Pay', value: 'cashapp' }],
       helpText: 'Connected to Square. Add a connection to start collecting payments.' },
@@ -513,7 +513,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ], 'payment'],
 
   // 4. PayPal
-  ['payment_paypal', 'PayPal', 'Wallet', 'PayPal + Venmo + Pay in 4', 'POPULAR', 'pro', [
+  ['payment_paypal', 'PayPal', 'payment', 'Wallet', 'PayPal + Venmo + Pay in 4', 'POPULAR', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'paypal',
       options: [{ label: 'PayPal', value: 'paypal' }, { label: 'PayPal Pro', value: 'paypal_pro' }],
       helpText: 'Connected to PayPal. Add a PayPal connection to start collecting payments.' },
@@ -539,7 +539,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ], 'payment'],
 
   // 5. Razorpay (India)
-  ['payment_razorpay', 'Razorpay (India)', 'CreditCard', 'Razorpay checkout (UPI/cards)', 'POPULAR', 'pro', [
+  ['payment_razorpay', 'Razorpay (India)', 'payment', 'CreditCard', 'Razorpay checkout (UPI/cards)', 'POPULAR', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'razorpay',
       options: [{ label: 'Razorpay (India)', value: 'razorpay' }],
       helpText: 'Connected to Razorpay. Add a connection to start collecting payments.' },
@@ -562,31 +562,31 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ], 'payment'],
 
   // 6-10: Remaining gateways with simplified redirect-based schema
-  ['payment_apple_pay', 'Apple Pay', 'Wallet', 'Apple Pay button (Apple devices only)', 'NEW', 'pro', [
+  ['payment_apple_pay', 'Apple Pay', 'payment', 'Wallet', 'Apple Pay button (Apple devices only)', 'NEW', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'apple_pay', options: [{ label: 'Apple Pay', value: 'apple_pay' }], helpText: 'Connected to Apple Pay.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_google_pay', 'Google Pay', 'Wallet', 'Google Pay button', 'NEW', 'pro', [
+  ['payment_google_pay', 'Google Pay', 'payment', 'Wallet', 'Google Pay button', 'NEW', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'google_pay', options: [{ label: 'Google Pay', value: 'google_pay' }], helpText: 'Connected to Google Pay.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_authorize_net', 'Authorize.Net', 'CreditCard', 'Accept.js card form', '', 'pro', [
+  ['payment_authorize_net', 'Authorize.Net', 'payment', 'CreditCard', 'Accept.js card form', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'authorize_net', options: [{ label: 'Authorize.Net', value: 'authorize_net' }], helpText: 'Connected to Authorize.Net.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }, { label: 'CAD - Canadian Dollars', value: 'CAD' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_mollie', 'Mollie', 'CreditCard', 'Mollie redirect checkout', '', 'pro', [
+  ['payment_mollie', 'Mollie', 'payment', 'CreditCard', 'Mollie redirect checkout', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'mollie', options: [{ label: 'Mollie', value: 'mollie' }], helpText: 'Connected to Mollie.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'EUR', searchPlaceholder: 'Search...', options: [{ label: 'EUR - Euros', value: 'EUR' }, { label: 'USD - United States Dollars', value: 'USD' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_coinbase_commerce', 'Coinbase Commerce', 'Wallet', 'Crypto payments', 'NEW', 'business', [
+  ['payment_coinbase_commerce', 'Coinbase Commerce', 'payment', 'Wallet', 'Crypto payments', 'NEW', 'business', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'coinbase_commerce', options: [{ label: 'Coinbase Commerce (Crypto)', value: 'coinbase_commerce' }], helpText: 'Connected to Coinbase Commerce.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
@@ -594,61 +594,61 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ], 'payment'],
 
   // 11-20: Remaining redirect-based gateways with simple schema
-  ['payment_paypal_pro', 'PayPal Pro', 'CreditCard', 'Card fields hosted by PayPal Pro', 'PRO', 'business', [
+  ['payment_paypal_pro', 'PayPal Pro', 'payment', 'CreditCard', 'Card fields hosted by PayPal Pro', 'PRO', 'business', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'paypal_pro', options: [{ label: 'PayPal Pro', value: 'paypal_pro' }], helpText: 'Connected to PayPal Pro.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_payu_india', 'PayU India', 'CreditCard', 'PayU India redirect checkout', '', 'pro', [
+  ['payment_payu_india', 'PayU India', 'payment', 'CreditCard', 'PayU India redirect checkout', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'payu_india', options: [{ label: 'PayU India', value: 'payu_india' }], helpText: 'Connected to PayU India.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'INR', searchPlaceholder: 'Search...', options: [{ label: 'INR - Indian Rupees', value: 'INR' }, { label: 'USD - United States Dollars', value: 'USD' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_payu_latam', 'PayU Latam', 'CreditCard', 'PayU Latam redirect checkout', '', 'pro', [
+  ['payment_payu_latam', 'PayU Latam', 'payment', 'CreditCard', 'PayU Latam redirect checkout', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'payu_latam', options: [{ label: 'PayU Latam', value: 'payu_latam' }], helpText: 'Connected to PayU Latam.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'BRL - Brazilian Reals', value: 'BRL' }, { label: 'MXN - Mexican Pesos', value: 'MXN' }, { label: 'COP - Colombian Pesos', value: 'COP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_braintree', 'Braintree', 'CreditCard', 'Braintree hosted fields', '', 'pro', [
+  ['payment_braintree', 'Braintree', 'payment', 'CreditCard', 'Braintree hosted fields', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'braintree', options: [{ label: 'Braintree', value: 'braintree' }], helpText: 'Connected to Braintree.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_twocheckout', '2Checkout', 'CreditCard', '2Checkout redirect', '', 'pro', [
+  ['payment_twocheckout', '2Checkout', 'payment', 'CreditCard', '2Checkout redirect', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'twocheckout', options: [{ label: '2Checkout', value: 'twocheckout' }], helpText: 'Connected to 2Checkout.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_worldpay', 'Worldpay', 'CreditCard', 'Worldpay redirect', '', 'pro', [
+  ['payment_worldpay', 'Worldpay', 'payment', 'CreditCard', 'Worldpay redirect', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'worldpay', options: [{ label: 'Worldpay', value: 'worldpay' }], helpText: 'Connected to Worldpay.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_bluesnap', 'BlueSnap', 'CreditCard', 'BlueSnap redirect', '', 'pro', [
+  ['payment_bluesnap', 'BlueSnap', 'payment', 'CreditCard', 'BlueSnap redirect', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'bluesnap', options: [{ label: 'BlueSnap', value: 'bluesnap' }], helpText: 'Connected to BlueSnap.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_klarna', 'Klarna BNPL', 'Wallet', 'Buy now pay later', 'NEW', 'business', [
+  ['payment_klarna', 'Klarna BNPL', 'payment', 'Wallet', 'Buy now pay later', 'NEW', 'business', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'klarna', options: [{ label: 'Klarna BNPL', value: 'klarna' }], helpText: 'Connected to Klarna.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_afterpay', 'Afterpay / Clearpay', 'Wallet', 'Pay in 4 installments', 'NEW', 'business', [
+  ['payment_afterpay', 'Afterpay / Clearpay', 'payment', 'Wallet', 'Pay in 4 installments', 'NEW', 'business', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'afterpay', options: [{ label: 'Afterpay / Clearpay', value: 'afterpay' }], helpText: 'Connected to Afterpay.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }, { label: 'AUD - Australian Dollars', value: 'AUD' }, { label: 'CAD - Canadian Dollars', value: 'CAD' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_affirm', 'Affirm BNPL', 'Wallet', 'Pay over time', 'NEW', 'business', [
+  ['payment_affirm', 'Affirm BNPL', 'payment', 'Wallet', 'Pay over time', 'NEW', 'business', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'affirm', options: [{ label: 'Affirm BNPL', value: 'affirm' }], helpText: 'Connected to Affirm.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'CAD - Canadian Dollars', value: 'CAD' }] },

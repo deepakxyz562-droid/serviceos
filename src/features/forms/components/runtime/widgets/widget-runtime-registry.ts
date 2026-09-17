@@ -45,9 +45,6 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   mask_input: w(() => import('./choice/mask-input')),
   password: w(() => import('./choice/password')),
   rich_text: w(() => import('./choice/rich-text')),
-  dynamic_dropdowns: w(() => import('./choice/dropdown')),
-  remote_data_dropdown: w(() => import('./choice/dropdown')),
-  inventory_dropdown: w(() => import('./choice/dropdown')),
 
   // ─── DateTime ────────────────────────────────────────────────────────────────
   date_picker: w(() => import('./datetime/date-picker')),
@@ -72,8 +69,6 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   name: w(() => import('./contact/full-name')),
   address: w(() => import('./contact/address')),
   company: w(() => import('./contact/company')),
-  whatsapp_chat_button: w(() => import('./contact/phone')),
-  email_otp_verification: w(() => import('./contact/email')),
 
   // ─── Media ────────────────────────────────────────────────────────────────────
   image_upload: w(() => import('./media/image-upload')),
@@ -121,7 +116,6 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   percentage_calculator: w(() => import('./calc/percentage-calculator')),
 
   // ─── Survey ────────────────────────────────────────────────────────────────────
-  star_rating_comments: w(() => import('./survey/star-rating-comments')),
   star_rating: w(() => import('./survey/star-rating-comments')),
   rating: w(() => import('./survey/star-rating-comments')),
   like_dislike: w(() => import('./survey/like-dislike')),
@@ -129,11 +123,9 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   smiley_scale: w(() => import('./survey/smiley-scale')),
   csat_rating: w(() => import('./survey/csat-rating')),
   likert_matrix: w(() => import('./survey/likert-matrix')),
-  matrix_dynamique: w(() => import('./survey/likert-matrix')),
   thumb_rating: w(() => import('./survey/thumb-rating')),
 
   // ─── Productivity ────────────────────────────────────────────────────────────
-  configurable_list_v2: w(() => import('./productivity/configurable-list-v2')),
   configurable_list: w(() => import('./productivity/configurable-list-v2')),
   infinite_list: w(() => import('./productivity/infinite-list')),
   orderable_list: w(() => import('./productivity/orderable-list')),
@@ -187,10 +179,10 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   map_pin_drop: w(() => import('./maps/map-pin-drop')),
   map_polygon_drawer: w(() => import('./maps/map-polygon-drawer')),
   map_radius_drawer: w(() => import('./maps/map-radius-drawer')),
-  nearest_location_finder_v2: w(() => import('./maps/nearest-location-finder-v2')),
+  nearest_location_finder: w(() => import('./maps/nearest-location-finder-v2')),
   reverse_geocode: w(() => import('./maps/reverse-geocode')),
-  route_planner_v2: w(() => import('./maps/route-planner-v2')),
-  service_area_checker_v2: w(() => import('./maps/service-area-checker-v2')),
+  route_planner_map: w(() => import('./maps/route-planner-v2')),
+  service_area_checker: w(() => import('./maps/service-area-checker-v2')),
   store_locator: w(() => import('./maps/store-locator')),
   street_view_address_search: w(() => import('./maps/street-view-address-search')),
   time_zone_from_location: w(() => import('./maps/time-zone-from-location')),
@@ -198,7 +190,7 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   distance_matrix: w(() => import('./maps/distance-matrix')),
 
   // ─── Phase 2 — Inventory & Booking (15) ────────────────────────────────────
-  inventory_dropdown_v2: w(() => import('./inventory/inventory-dropdown-v2')),
+  inventory_dropdown: w(() => import('./inventory/inventory-dropdown-v2')),
   stock_quantity_tracker: w(() => import('./inventory/stock-quantity-tracker')),
   reservation_calendar: w(() => import('./inventory/reservation-calendar')),
   time_slot_booking: w(() => import('./inventory/time-slot-booking')),
@@ -224,14 +216,11 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   password_strength_meter: w(() => import('./security/password-strength-meter')),
   whatsapp_chat_button: w(() => import('./security/whatsapp-chat-button')),
   gdpr_consent_banner: w(() => import('./security/gdpr-consent-banner')),
-  privacy_policy_accept: w(() => import('./security/privacy-policy-accept')),
-  age_verification: w(() => import('./security/age-verification')),
-  digital_witness: w(() => import('./security/digital-witness')),
   consent_log: w(() => import('./security/consent-log')),
 
   // ─── Phase 2 — Regional & Identity (15) ───────────────────────────────────
-  australia_bsb_checker_v2: w(() => import('./regional/australia-bsb-checker-v2')),
-  italian_codice_fiscale_v2: w(() => import('./regional/italian-codice-fiscale-v2')),
+  australia_bsb_checker: w(() => import('./regional/australia-bsb-checker-v2')),
+  italian_codice_fiscale: w(() => import('./regional/italian-codice-fiscale-v2')),
   france_region_map_picker: w(() => import('./regional/france-region-map-picker')),
   india_states_dropdown: w(() => import('./regional/india-states-dropdown')),
   us_state_picker: w(() => import('./regional/us-state-picker')),
@@ -253,12 +242,12 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   multi_column_matrix: w(() => import('./repeaters/multi-column-matrix')),
   pivot_table: w(() => import('./repeaters/pivot-table')),
   csv_import: w(() => import('./repeaters/csv-import')),
-  dynamic_dropdowns_v2: w(() => import('./repeaters/dynamic-dropdowns-v2')),
+  dynamic_dropdowns: w(() => import('./repeaters/dynamic-dropdowns-v2')),
   remote_data_dropdown: w(() => import('./repeaters/remote-data-dropdown')),
   repeating_section: w(() => import('./repeaters/repeating-section')),
   key_value_repeater: w(() => import('./repeaters/key-value-repeater')),
   tag_cloud_input: w(() => import('./repeaters/tag-cloud-input')),
-  matrix_dynamique_v2: w(() => import('./repeaters/matrix-dynamique-v2')),
+  matrix_dynamique: w(() => import('./repeaters/matrix-dynamique-v2')),
 
   // ─── Phase 2 — PDF & Embeds (15) ──────────────────────────────────────────
   pdf_embedder: w(() => import('./embed/pdf-embedder')),
@@ -274,7 +263,6 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   image_carousel: w(() => import('./embed/image-carousel')),
   audio_player_embed: w(() => import('./embed/audio-player-embed')),
   video_player_embed: w(() => import('./embed/video-player-embed')),
-  social_share_buttons: w(() => import('./embed/social-share-buttons')),
   qr_code_display: w(() => import('./embed/qr-code-display')),
 
   // ─── Phase 2 — Social & Integrations (15) ─────────────────────────────────
@@ -307,8 +295,8 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   employee_engagement: w(() => import('./survey-advanced/employee-engagement')),
   satisfaction_emoji: w(() => import('./survey-advanced/satisfaction-emoji')),
   survey_slider: w(() => import('./survey-advanced/survey-slider')),
-  star_rating_comments_v2: w(() => import('./survey-advanced/star-rating-comments-v2')),
-  thumbs_up_down_v2: w(() => import('./survey-advanced/thumbs-up-down-v2')),
+  star_rating_comments: w(() => import('./survey-advanced/star-rating-comments-v2')),
+  thumbs_up_down: w(() => import('./survey-advanced/thumbs-up-down-v2')),
   matrix_question: w(() => import('./survey-advanced/matrix-question')),
   ranking_question: w(() => import('./survey-advanced/ranking-question')),
   open_ended_question: w(() => import('./survey-advanced/open-ended-question')),
@@ -351,14 +339,14 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   scholarship_application: w(() => import('./education/scholarship-application')),
 
   // ─── Phase 3 — Legal (8) ──────────────────────────────────────────────────
-  gdpr_consent_v2: w(() => import('./legal/gdpr-consent-v2')),
-  privacy_policy_accept_v2: w(() => import('./legal/privacy-policy-accept-v2')),
+  gdpr_consent: w(() => import('./legal/gdpr-consent-v2')),
+  privacy_policy_accept: w(() => import('./legal/privacy-policy-accept-v2')),
   nda_sign: w(() => import('./legal/nda-sign')),
   waiver_release: w(() => import('./legal/waiver-release')),
   terms_of_service: w(() => import('./legal/terms-of-service')),
   cookie_consent_banner: w(() => import('./legal/cookie-consent-banner')),
-  age_verification_v2: w(() => import('./legal/age-verification-v2')),
-  digital_witness_v2: w(() => import('./legal/digital-witness-v2')),
+  age_verification: w(() => import('./legal/age-verification-v2')),
+  digital_witness: w(() => import('./legal/digital-witness-v2')),
 
   // ─── Phase 3 — E-commerce (10) ─────────────────────────────────────────────
   product_configurator: w(() => import('./ecommerce/product-configurator')),
@@ -387,7 +375,7 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   lead_scoring_display: w(() => import('./marketing/lead-scoring-display')),
   referral_code_input: w(() => import('./marketing/referral-code-input')),
   campaign_source_tracker: w(() => import('./marketing/campaign-source-tracker')),
-  social_share_buttons_v2: w(() => import('./marketing/social-share-buttons-v2')),
+  social_share_buttons: w(() => import('./marketing/social-share-buttons-v2')),
   email_signup_segment: w(() => import('./marketing/email-signup-segment')),
   promo_code_unlock: w(() => import('./marketing/promo-code-unlock')),
   viral_waitlist: w(() => import('./marketing/viral-waitlist')),
@@ -467,7 +455,7 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   ai_form_filler: w(() => import('./ai/ai-form-filler')),
   ai_chatbot_embed: w(() => import('./ai/ai-chatbot-embed')),
   ai_voice_clone: w(() => import('./ai/ai-voice-clone')),
-  ai_sentiment_analysis_v2: w(() => import('./ai/ai-sentiment-analysis-v2')),
+  ai_sentiment_analysis: w(() => import('./ai/ai-sentiment-analysis-v2')),
 
   // ─── Phase 4 — Utility Widgets (15) ───────────────────────────────────────
   progress_bar_widget: w(() => import('./utility/progress-bar-widget')),

@@ -54,10 +54,6 @@ import type {
 } from '@/features/forms/types';
 import { DEFAULT_FORM_AGENT } from '@/features/forms/types/agent-types';
 import {
-  WIDGET_REGISTRY, WIDGET_CATEGORIES, WidgetCategory,
-  WidgetDefinition, searchWidgets, getWidgetById,
-} from '@/lib/forms/widgets/widget-registry';
-import {
   PAYMENT_GATEWAYS_REGISTRY, PAYMENT_CATEGORIES, PaymentCategory,
   PaymentGatewayDef, searchPaymentGateways, getPaymentGatewayById,
 } from '@/lib/forms/payments/payment-gateways-registry';
@@ -70,10 +66,14 @@ import { TemplateExplorer, type FormTemplateItem } from './builder/template-expl
 import { UnifiedFieldInspector } from './builder/unified-field-inspector';
 import {
   FIELD_REGISTRY,
+  FIELD_CATEGORY_META,
   BASIC_FIELDS,
   PHASE_1_WIDGETS,
   createFieldFromRegistry,
+  getFieldById,
+  searchFields,
 } from '@/lib/forms/field-registry';
+import type { FieldDefinition } from '@/lib/forms/field-settings-types';
 import { resolveIcon } from '@/lib/forms/icon-resolver';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 
@@ -105,7 +105,7 @@ export function FormStudioBuilder({
   // Selection and Palette state
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(formData.fields[0]?.id || null);
   const [paletteTab, setPaletteTab] = useState<'basic' | 'payments' | 'widgets'>('basic');
-  const [selectedWidgetCategory, setSelectedWidgetCategory] = useState<WidgetCategory | 'all'>('all');
+  const [selectedWidgetCategory, setSelectedWidgetCategory] = useState<FieldDefinition['category'] | 'all'>('all');
   const [selectedPaymentCategory, setSelectedPaymentCategory] = useState<PaymentCategory>('all');
   const [paletteSearch, setPaletteSearch] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -230,9 +230,9 @@ export function FormStudioBuilder({
   const isApiDependentWidget = useMemo(() => {
     if (!selectedField?.widgetType) return false;
     const wType = selectedField.widgetType;
-    const wDef = getWidgetById(wType);
-    if (wDef?.category === 'maps') return true;
-    if (wDef?.providerType === 'managed_available') return true;
+    const fDef = getFieldById(wType);
+    if (fDef?.category === 'maps') return true;
+    if (fDef?.backendHandler === 'maps') return true;
     if (['nearest_location_finder', 'route_planner_map', 'google_places_autocomplete', 'phone_verification_sms', 'sms_otp', 'address_lookup'].includes(wType)) return true;
     return false;
   }, [selectedField]);
@@ -242,12 +242,19 @@ export function FormStudioBuilder({
     return searchPaymentGateways(paletteSearch, selectedPaymentCategory);
   }, [paletteSearch, selectedPaymentCategory]);
 
-  // Filtered widgets from registry
+  // Filtered widgets from the unified FIELD_REGISTRY (alias-aware searchFields).
+  // Excludes BASIC_FIELDS + PHASE_1_WIDGETS so the "Widgets" tab surfaces only
+  // the specialized widgets — those are already shown on the "Basic" tab.
   const filteredWidgets = useMemo(() => {
-    return searchWidgets(
+    const basicIds = new Set([
+      ...BASIC_FIELDS.map((f) => f.id),
+      ...PHASE_1_WIDGETS.map((f) => f.id),
+    ]);
+    const results = searchFields(
       paletteSearch,
       selectedWidgetCategory === 'all' ? undefined : selectedWidgetCategory
     );
+    return results.filter((f) => !basicIds.has(f.id));
   }, [paletteSearch, selectedWidgetCategory]);
 
   // Filtered basic fields from unified registry
@@ -285,7 +292,7 @@ export function FormStudioBuilder({
     const newField: FormField = {
       id: newId,
       label: (def.label as string) || 'New Field',
-      type: (def.type as string) || 'short_answer',
+      type: ((def.type as string) || 'short_answer') as FieldType,
       required: Boolean(def.required),
       placeholder: (def.placeholder as string) || '',
       options: (def.options as any) || undefined,
@@ -315,26 +322,10 @@ export function FormStudioBuilder({
 
   // ─── Field CRUD Operations ──────────────────────────────────────────────────
 
-  const handleAddWidget = (widget: WidgetDefinition) => {
-    const newId = `w-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const newField: FormField = {
-      id: newId,
-      label: widget.name,
-      type: 'short_answer',
-      required: false,
-      placeholder: widget.description,
-      widgetType: widget.id,
-      widgetConfig: { ...widget.defaultConfig, provider: 'managed' },
-    };
-
-    onFormDataChange((prev) => ({
-      ...prev,
-      fields: [...prev.fields, newField],
-    }));
-    setSelectedFieldId(newId);
-    setInspectorMode('properties');
-    toast.success(`✨ Added ${widget.name} widget`);
-  };
+  // Legacy `handleAddWidget(widget: WidgetDefinition)` was removed in Phase A1.
+  // The "Widgets" palette tab now uses `handleAddFromRegistry(registryId)`
+  // directly, which delegates to `createFieldFromRegistry` — the same path as
+  // the "Basic" tab. This unifies widget creation through FIELD_REGISTRY.
 
   const handleAddPaymentGateway = (gw: PaymentGatewayDef) => {
     const newId = `pay-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -739,14 +730,14 @@ export function FormStudioBuilder({
                 {paletteTab === 'widgets' && (
                   <Select
                     value={selectedWidgetCategory}
-                    onValueChange={(val) => setSelectedWidgetCategory(val as WidgetCategory | 'all')}
+                    onValueChange={(val) => setSelectedWidgetCategory(val as FieldDefinition['category'] | 'all')}
                   >
                     <SelectTrigger className="h-7 text-xs bg-muted/30">
                       <SelectValue placeholder="All Categories" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all" className="text-xs">🌐 All Categories ({WIDGET_REGISTRY.length})</SelectItem>
-                      {WIDGET_CATEGORIES.map((cat) => (
+                      <SelectItem value="all" className="text-xs">🌐 All Categories ({filteredWidgets.length})</SelectItem>
+                      {FIELD_CATEGORY_META.map((cat) => (
                         <SelectItem key={cat.id} value={cat.id} className="text-xs">
                           {cat.label}
                         </SelectItem>
@@ -914,51 +905,55 @@ export function FormStudioBuilder({
                   </div>
                 )}
 
-                {/* 3. WIDGETS TAB (200+ Widgets) */}
+                {/* 3. WIDGETS TAB — Full canonical FIELD_REGISTRY catalog.
+                    Renders every FieldDefinition not already surfaced on the
+                    "Basic" tab, grouped into the same row format as the Basic
+                    tab's "Advanced Elements" section. Icon is resolved through
+                    `resolveIcon(def.iconName)` so widgets declare their own icon. */}
                 {paletteTab === 'widgets' && (
                   <div className="space-y-1.5">
-                    {filteredWidgets.map((w) => (
-                      <button
-                        key={w.id}
-                        onClick={() => handleAddWidget(w)}
-                        className="w-full flex items-center gap-2.5 p-2.5 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group relative"
-                      >
-                        <div className="size-9 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
-                          {w.category === 'media' && <Camera className="size-4" />}
-                          {w.category === 'maps' && <MapPin className="size-4" />}
-                          {w.category === 'calculations' && <Hash className="size-4" />}
-                          {w.category === 'repeaters' && <ListPlus className="size-4" />}
-                          {w.category === 'inventory' && <CalendarCheck className="size-4" />}
-                          {w.category === 'datetime' && <Calendar className="size-4" />}
-                          {w.category === 'security' && <ShieldCheck className="size-4" />}
-                          {w.category === 'regional' && <Globe className="size-4" />}
-                          {w.category === 'ui_embeds' && <Layers className="size-4" />}
-                          {w.category === 'analytics' && <Star className="size-4" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
-                              {w.name}
-                            </p>
-                            {w.badge && (
-                              <Badge
-                                className={cn(
-                                  'text-[8px] px-1 py-0 h-3.5 font-bold border-none',
-                                  w.badge === 'NEW' && 'bg-yellow-500 text-white',
-                                  w.badge === 'AI' && 'bg-purple-600 text-white',
-                                  w.badge === 'POPULAR' && 'bg-emerald-600 text-white',
-                                  w.badge === 'PRO' && 'bg-blue-600 text-white'
-                                )}
-                              >
-                                {w.badge}
-                              </Badge>
-                            )}
+                    {filteredWidgets.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground px-1 py-2 text-center">
+                        No widgets match your search.
+                      </p>
+                    )}
+                    {filteredWidgets.map((def) => {
+                      const Icon = resolveIcon(def.iconName);
+                      return (
+                        <button
+                          key={def.id}
+                          onClick={() => handleAddFromRegistry(def.id)}
+                          className="w-full flex items-center gap-2.5 p-2.5 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group relative"
+                          title={def.description}
+                        >
+                          <div className="size-9 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
+                            <Icon className="size-4" />
                           </div>
-                          <p className="text-[10px] text-muted-foreground line-clamp-1">{w.description}</p>
-                        </div>
-                        <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </button>
-                    ))}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
+                                {def.name}
+                              </p>
+                              {def.badge && (
+                                <Badge
+                                  className={cn(
+                                    'text-[8px] px-1 py-0 h-3.5 font-bold border-none',
+                                    def.badge === 'NEW' && 'bg-yellow-500 text-white',
+                                    def.badge === 'AI' && 'bg-purple-600 text-white',
+                                    def.badge === 'POPULAR' && 'bg-emerald-600 text-white',
+                                    def.badge === 'PRO' && 'bg-blue-600 text-white'
+                                  )}
+                                >
+                                  {def.badge}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1">{def.description}</p>
+                          </div>
+                          <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </ScrollArea>
@@ -1171,9 +1166,9 @@ export function FormStudioBuilder({
                                   <WidgetRuntimeDispatcher
                                     field={{
                                       ...field,
-                                      type: field.widgetType ? 'control_widget' : field.type,
+                                      type: (field.widgetType ? 'control_widget' : field.type) as any,
                                       widgetType: field.widgetType || (field.type === 'signature' ? 'e_signature' : field.type === 'rating' ? 'star_rating' : field.type),
-                                    }}
+                                    } as any}
                                     value={null}
                                     onChange={() => {}}
                                     allFormData={{}}
@@ -1183,11 +1178,11 @@ export function FormStudioBuilder({
                               )}
 
                               {/* Standard Inputs — show a realistic disabled preview */}
-                              {!isWidget && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
+                              {!isWidget && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type as any) && (
                                 <Input
                                   disabled
                                   placeholder={field.placeholder || 'Enter text...'}
-                                  type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'numerical' ? 'number' : field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : 'text'}
+                                  type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'numerical' ? 'number' : field.type === 'date' ? 'date' : (field.type as string) === 'time' ? 'time' : 'text'}
                                   className="text-xs h-9 bg-muted/20"
                                 />
                               )}
@@ -1207,7 +1202,7 @@ export function FormStudioBuilder({
                                     <SelectValue placeholder={field.placeholder || 'Select an option'} />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {(field.options || []).map((opt, idx) => (
+                                    {(field.options || []).map((opt: any, idx) => (
                                       <SelectItem key={idx} value={typeof opt === 'string' ? opt : opt.value} className="text-xs">
                                         {typeof opt === 'string' ? opt : opt.label}
                                       </SelectItem>
@@ -1218,7 +1213,7 @@ export function FormStudioBuilder({
 
                               {!isWidget && field.type === 'radio' && (
                                 <div className="space-y-1.5 pointer-events-none">
-                                  {(field.options || []).map((opt, idx) => (
+                                  {(field.options || []).map((opt: any, idx) => (
                                     <div key={idx} className="flex items-center gap-2 text-xs">
                                       <div className="size-3.5 rounded-full border border-border/60" />
                                       <span className="text-muted-foreground">{typeof opt === 'string' ? opt : opt.label}</span>
@@ -1229,7 +1224,7 @@ export function FormStudioBuilder({
 
                               {!isWidget && field.type === 'checkbox' && (
                                 <div className="space-y-1.5 pointer-events-none">
-                                  {(field.options || []).map((opt, idx) => (
+                                  {(field.options || []).map((opt: any, idx) => (
                                     <div key={idx} className="flex items-center gap-2 text-xs">
                                       <div className="size-3.5 rounded border border-border/60" />
                                       <span className="text-muted-foreground">{typeof opt === 'string' ? opt : opt.label}</span>
@@ -1238,7 +1233,7 @@ export function FormStudioBuilder({
                                 </div>
                               )}
 
-                              {!isWidget && field.type === 'paragraph' && (
+                              {!isWidget && (field.type as string) === 'paragraph' && (
                                 <p className="text-xs text-muted-foreground">{(field as any).widgetConfig?.text || field.label || 'Paragraph text...'}</p>
                               )}
                             </div>

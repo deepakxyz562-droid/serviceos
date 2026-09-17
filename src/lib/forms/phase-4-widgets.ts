@@ -87,7 +87,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['ai_voice_clone', 'AI Voice Clone (TTS)', 'media', 'Mic', 'Voice clone TTS', 'AI', 'business', [
     { key: 'voiceId', label: 'Voice ID', type: 'text', group: 'field_specific' },
   ]],
-  ['ai_sentiment_analysis_v2', 'AI Sentiment Analysis (v2)', 'survey', 'Sparkles', 'Improved sentiment + confidence', 'AI', 'business'],
+  ['ai_sentiment_analysis', 'AI Sentiment Analysis (v2)', 'survey', 'Sparkles', 'Improved sentiment + confidence', 'AI', 'business'],
 
   // ─── Utility Widgets (15) ───────────────────────────────────────────────────
   ['progress_bar_widget', 'Progress Bar', 'layout', 'BarChart3', 'Visual progress indicator', 'POPULAR', 'free', [

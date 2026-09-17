@@ -5,9 +5,14 @@
  * with sensible widgetType + widgetConfig assignments. Emits a matching
  * FormTheme based on prompt tone keywords.
  *
+ * VALIDATION: Every generated widgetType is validated against the canonical
+ * FIELD_REGISTRY. If the widgetType doesn't exist in the registry, it's
+ * stripped (field becomes a plain text input) to prevent runtime errors.
+ *
  * TODO: integrate z-ai-web-dev-sdk LLM here for richer intent detection.
  */
 import type { FormField, FormTheme } from '@/lib/forms/form-schema-types';
+import { getFieldById } from '@/lib/forms/canonical-widget-registry';
 import { DEFAULT_FORM_THEME } from '@/lib/forms/form-schema-types';
 
 export interface GenerateFormResult {
@@ -72,23 +77,34 @@ export async function generateFormFromPrompt(prompt: string): Promise<GenerateFo
     if (seen.has(key)) continue;
     seen.add(key);
     const wt = intent.widgetType;
+
+    // ─── VALIDATION: check widgetType against canonical registry ──────────
+    // If the widgetType doesn't exist in FIELD_REGISTRY, strip it
+    // so the field becomes a plain text input instead of crashing at runtime.
+    let validatedWidgetType = wt;
+    if (wt && !getFieldById(wt)) {
+      // Widget ID not in canonical registry — strip it
+      console.warn(`AI Form Generator: widgetType '${wt}' not found in canonical registry — stripping to plain text`);
+      validatedWidgetType = undefined;
+    }
+
     let fieldType: FormField['type'] = 'short_answer';
-    if (wt?.startsWith('payment_')) fieldType = 'payment_gateway';
-    else if (wt === 'email') fieldType = 'email';
-    else if (wt === 'phone') fieldType = 'phone';
-    else if (wt === 'address') fieldType = 'address';
-    else if (wt === 'signature_pad') fieldType = 'signature';
-    else if (wt === 'image_upload_with_notes') fieldType = 'image_upload_with_notes';
-    else if (wt === 'file_upload') fieldType = 'file';
-    else if (wt === 'appointment' || wt === 'date_picker') fieldType = 'date';
-    else if (wt === 'time_picker') fieldType = 'time';
+    if (validatedWidgetType?.startsWith('payment_')) fieldType = 'payment_gateway';
+    else if (validatedWidgetType === 'email') fieldType = 'email';
+    else if (validatedWidgetType === 'phone') fieldType = 'phone';
+    else if (validatedWidgetType === 'address') fieldType = 'address';
+    else if (validatedWidgetType === 'signature_pad') fieldType = 'signature';
+    else if (validatedWidgetType === 'image_upload_with_notes') fieldType = 'image_upload_with_notes';
+    else if (validatedWidgetType === 'file_upload') fieldType = 'file';
+    else if (validatedWidgetType === 'appointment' || validatedWidgetType === 'date_picker') fieldType = 'date';
+    else if (validatedWidgetType === 'time_picker') fieldType = 'time';
     fields.push({
-      id: genId(wt || 'f', fields.length + 2),
+      id: genId(validatedWidgetType || 'f', fields.length + 2),
       type: fieldType,
       label: intent.label,
       required: intent.required ?? false,
-      widgetType: intent.widgetType,
-      widgetConfig: intent.widgetConfig,
+      widgetType: validatedWidgetType,
+      widgetConfig: validatedWidgetType ? intent.widgetConfig : undefined,
       width: 'full',
     });
   }

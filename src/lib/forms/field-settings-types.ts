@@ -220,6 +220,17 @@ export interface FieldDefinition {
   settingsSchema: SettingField[];
   backendHandler?: 'ocr' | 'otp_sms' | 'otp_email' | 'payment' | 'maps' | 'barcode' | 'kyc' | 'none';
   aiHint?: { keywords: string[] };
+  /**
+   * Explicit key into the WidgetRuntimeRegistry's WIDGET_RUNTIME_MAP.
+   *
+   * When set, this is the canonical runtime component identifier used to
+   * resolve the lazy React component that renders this field at runtime.
+   * When omitted, the dispatcher falls back to the `widgetType` (or `type`)
+   * produced by `createField`. New widgets should set this explicitly so the
+   * FieldDefinition is fully self-describing — palette + factory + settings +
+   * runtime component all live in one place.
+   */
+  runtimeComponentId?: string;
 }
 
 export type RuntimeComponentMap = Record<string, React.LazyExoticComponent<React.ComponentType<unknown>>>;

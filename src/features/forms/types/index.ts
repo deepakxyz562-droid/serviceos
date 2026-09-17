@@ -76,6 +76,7 @@ export interface FormField {
   width?: 'full' | 'half' | 'third' | 'quarter';
   stepId?: string;
   defaultValue?: string | number | boolean;
+  hidden?: boolean;
   validation?: {
     min?: number;
     max?: number;
@@ -169,6 +170,7 @@ export interface EditorFormData {
   borderRadius?: number;
   submitButtonText?: string;
   successMessage?: string;
+  rules?: any[];
   id?: string;
 }
 
