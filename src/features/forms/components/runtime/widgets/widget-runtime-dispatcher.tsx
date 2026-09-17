@@ -146,11 +146,14 @@ export function WidgetRuntimeDispatcher({
       );
 
     case 'route_planner_map':
+    case 'route_planner':
+    case 'route_planner_v2':
       return (
         <RoutePlannerMap
           value={value}
           onChange={onChange}
-          defaultOrigin={config.defaultOrigin}
+          config={config}
+          field={field}
           disabled={disabled}
         />
       );

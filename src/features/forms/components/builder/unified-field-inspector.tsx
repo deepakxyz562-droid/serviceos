@@ -21,6 +21,7 @@ import { PAYMENT_GATEWAYS_REGISTRY } from '@/lib/forms/payments/payment-gateways
 export interface UnifiedFieldInspectorProps {
   field: Record<string, any>;
   allFields: Array<{ id: string; label: string; type?: string; widgetType?: string }>;
+  mode?: 'properties' | 'widget_settings';
   onFieldChange: (key: string, value: unknown) => void;
   onConfigChange: (key: string, value: unknown) => void;
   /** Called when user clicks "Duplicate Field" in the General tab. */
@@ -110,6 +111,7 @@ function synthesizePaymentDefinition(gw: typeof PAYMENT_GATEWAYS_REGISTRY[number
 export function UnifiedFieldInspector({
   field,
   allFields,
+  mode = 'widget_settings',
   onFieldChange,
   onConfigChange,
   onDuplicate,
@@ -158,6 +160,7 @@ export function UnifiedFieldInspector({
       definition={definition}
       field={fieldRecord}
       widgetConfig={widgetConfig}
+      mode={mode}
       onFieldChange={onFieldChange}
       onConfigChange={onConfigChange}
       allFields={allFieldsClean}

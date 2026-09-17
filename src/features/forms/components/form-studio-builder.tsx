@@ -110,9 +110,8 @@ export function FormStudioBuilder({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [propertiesOpen, setPropertiesOpen] = useState(true);
 
-  // Inspector Drawer Mode: 'ai_builder' (✨) or 'properties' (⚙️ — schema-driven Unified renderer)
-  // Phase R1: legacy 'unified' + 'widget_settings' tabs removed; 'properties' IS the unified renderer.
-  const [inspectorMode, setInspectorMode] = useState<'properties' | 'ai_builder'>('properties');
+  // Inspector Drawer Mode: 'ai_builder' (✨) | 'properties' (⚙️) | 'widget_settings' (🪄)
+  const [inspectorMode, setInspectorMode] = useState<'properties' | 'widget_settings' | 'ai_builder'>('widget_settings');
   const [widgetSettingsSubTab, setWidgetSettingsSubTab] = useState<'general' | 'custom_css'>('general');
 
   // AI Prompt, Importer & Co-Pilot state
@@ -1063,7 +1062,7 @@ export function FormStudioBuilder({
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setSelectedFieldId(field.id);
-                                    setInspectorMode('properties');
+                                    setInspectorMode('widget_settings');
                                     setPropertiesOpen(true);
                                   }}
                                   className="px-2 py-0.5 bg-purple-50 dark:bg-purple-950/40 text-purple-600 border border-purple-200 dark:border-purple-800 rounded text-[10px] font-semibold flex items-center gap-1 hover:bg-purple-100"
@@ -1380,11 +1379,12 @@ export function FormStudioBuilder({
                   </div>
                 ) : selectedField ? (
                   <div className="space-y-4 pb-28">
-                    {/* ════ PROPERTIES PANEL (schema-driven — JotForm-style) ════ */}
-                    {inspectorMode === 'properties' && (
+                    {/* ════ PROPERTIES & WIDGET SETTINGS PANEL (schema-driven — JotForm-style) ════ */}
+                    {(inspectorMode === 'properties' || inspectorMode === 'widget_settings') && (
                       <UnifiedFieldInspector
                         field={selectedField as unknown as Record<string, any>}
                         allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
+                        mode={inspectorMode}
                         onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
                         onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
                         onDuplicate={() => {

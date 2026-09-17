@@ -39,6 +39,7 @@ export interface WidgetSettingsRendererProps {
   onFieldChange: (key: string, value: unknown) => void;
   onConfigChange: (key: string, value: unknown) => void;
   allFields?: Array<{ id: string; label: string }>;
+  mode?: 'properties' | 'widget_settings';
   /** Called when the user clicks the "Duplicate Field" button (universal General setting). */
   onDuplicate?: () => void;
   /** Called when user clicks "Close" in the sticky footer (JotForm pattern). */
@@ -47,7 +48,7 @@ export interface WidgetSettingsRendererProps {
   onUpdate?: () => void;
 }
 
-type SubTab = 'general' | 'field_specific' | 'survey' | 'advanced';
+type SubTab = 'general' | 'field_specific' | 'survey' | 'advanced' | 'custom_css';
 
 export function WidgetSettingsRenderer({
   definition,
@@ -56,11 +57,14 @@ export function WidgetSettingsRenderer({
   onFieldChange,
   onConfigChange,
   allFields = [],
+  mode = 'widget_settings',
   onDuplicate,
   onClose,
   onUpdate,
 }: WidgetSettingsRendererProps) {
-  const [subTab, setSubTab] = useState<SubTab>('general');
+  const isWidgetSettingsMode = mode === 'widget_settings' || (Boolean(field.widgetType) && definition.category !== 'basic');
+  const [subTab, setSubTab] = useState<SubTab>(isWidgetSettingsMode ? 'field_specific' : 'general');
+  const [widgetTab, setWidgetTab] = useState<'general' | 'custom_css'>('general');
 
   const universalGeneral = UNIVERSAL_GENERAL_SETTINGS;
   const universalAdvanced = UNIVERSAL_ADVANCED_SETTINGS;
@@ -500,70 +504,137 @@ export function WidgetSettingsRenderer({
   };
 
   const settingsForTab = (tab: SubTab): SettingField[] => {
-    if (tab === 'general') return universalGeneral;
+    if (tab === 'general') {
+      return isWidgetSettingsMode ? fieldSpecific : universalGeneral;
+    }
     if (tab === 'field_specific') return fieldSpecific;
     if (tab === 'survey') return surveySpecific;
     return [...advancedSpecific, ...universalAdvanced];
   };
 
-  const currentSettings = settingsForTab(subTab);
+  const currentSettings = isWidgetSettingsMode && widgetTab === 'general'
+    ? fieldSpecific
+    : settingsForTab(subTab);
   const hasSurveyTab = surveySpecific.length > 0;
 
   return (
     <div className="space-y-3">
-      <div className={cn('grid gap-1 bg-muted/60 p-1 rounded-lg border border-border/60', hasSurveyTab ? 'grid-cols-4' : 'grid-cols-3')}>
-        {(['general', 'field_specific', 'survey', 'advanced'] as SubTab[])
-          .filter((tab) => tab !== 'survey' || hasSurveyTab)
-          .map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setSubTab(tab)}
-            className={cn(
-              'py-1.5 rounded-md text-center text-[11px] font-semibold transition-all',
-              subTab === tab
-                ? 'bg-background shadow-xs text-foreground'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tab === 'general' && 'General'}
-            {tab === 'field_specific' && (
-              definition.category === 'choice' ? 'Options'
-              : definition.category === 'payment' ? 'Payment Properties'
-              : definition.category === 'signature' ? 'Signature Settings'
-              : definition.category === 'media' ? 'Media Settings'
-              : definition.category === 'maps' ? 'Map Settings'
-              : definition.category === 'security' ? 'Security Settings'
-              : definition.category === 'datetime' ? 'Date Settings'
-              : definition.category === 'survey' ? 'Survey Settings'
-              : definition.category === 'calculation' ? 'Calculation Settings'
-              : definition.category === 'file' ? 'File Settings'
-              : 'Field Settings'
-            )}
-            {tab === 'survey' && 'Surveying'}
-            {tab === 'advanced' && 'Advanced'}
-          </button>
-        ))}
-      </div>
+      {/* ════ JOTFORM WIDGET SETTINGS HERO CARD ════ */}
+      {isWidgetSettingsMode ? (
+        <div className="space-y-3">
+          {/* Widget Hero Card */}
+          <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5 flex items-start gap-3 shadow-xs">
+            <div className="size-9 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center p-2 shrink-0 border border-emerald-600/20">
+              <span className="font-bold text-xs">🧩</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <h4 className="font-bold text-xs text-foreground truncate">{definition.name}</h4>
+                {definition.badge && (
+                  <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 font-bold">
+                    {definition.badge}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                {definition.description}
+              </p>
+            </div>
+          </div>
 
-      <ScrollArea className="max-h-[60vh] pr-2">
-        <div className="space-y-2.5">
-          {currentSettings.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground text-center py-6 italic">
-              No {subTab === 'field_specific' ? 'type-specific' : subTab} settings for this field.
-            </p>
-          ) : (
-            currentSettings.map((setting) => renderControl(setting))
-          )}
-          {subTab === 'field_specific' && definition.badge && (
-            <>
-              <Separator className="my-2" />
-              <Badge variant="outline" className="text-[9px] w-full justify-center">
-                {definition.name} · {definition.badge}
-              </Badge>
-            </>
-          )}
+          {/* JotForm Widget Tabs: [ GENERAL ] [ CUSTOM CSS ] */}
+          <div className="grid grid-cols-2 p-1 bg-muted/60 rounded-lg border border-border/60 gap-1">
+            <button
+              type="button"
+              onClick={() => setWidgetTab('general')}
+              className={cn(
+                'py-1.5 rounded-md text-center text-xs font-semibold transition-all',
+                widgetTab === 'general'
+                  ? 'bg-background shadow-xs text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              General
+            </button>
+            <button
+              type="button"
+              onClick={() => setWidgetTab('custom_css')}
+              className={cn(
+                'py-1.5 rounded-md text-center text-xs font-semibold transition-all',
+                widgetTab === 'custom_css'
+                  ? 'bg-background shadow-xs text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Custom CSS
+            </button>
+          </div>
         </div>
+      ) : (
+        /* Standard Question Properties Tabs: [ General ] [ Options ] [ Advanced ] */
+        <div className={cn('grid gap-1 bg-muted/60 p-1 rounded-lg border border-border/60', hasSurveyTab ? 'grid-cols-4' : 'grid-cols-3')}>
+          {(['general', 'field_specific', 'survey', 'advanced'] as SubTab[])
+            .filter((tab) => tab !== 'survey' || hasSurveyTab)
+            .map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setSubTab(tab)}
+              className={cn(
+                'py-1.5 rounded-md text-center text-[11px] font-semibold transition-all',
+                subTab === tab
+                  ? 'bg-background shadow-xs text-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {tab === 'general' && 'General'}
+              {tab === 'field_specific' && (
+                definition.category === 'choice' ? 'Options'
+                : definition.category === 'payment' ? 'Payment Properties'
+                : definition.category === 'signature' ? 'Signature Settings'
+                : definition.category === 'media' ? 'Media Settings'
+                : definition.category === 'maps' ? 'Map Settings'
+                : definition.category === 'security' ? 'Security Settings'
+                : definition.category === 'datetime' ? 'Date Settings'
+                : definition.category === 'survey' ? 'Survey Settings'
+                : definition.category === 'calculation' ? 'Calculation Settings'
+                : definition.category === 'file' ? 'File Settings'
+                : 'Field Settings'
+              )}
+              {tab === 'survey' && 'Surveying'}
+              {tab === 'advanced' && 'Advanced'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ════ TAB CONTENT AREA ════ */}
+      <ScrollArea className="max-h-[60vh] pr-2">
+        {isWidgetSettingsMode && widgetTab === 'custom_css' ? (
+          <div className="space-y-2 p-1">
+            <Label className="text-[11px] font-semibold">Custom CSS Code</Label>
+            <p className="text-[10px] text-muted-foreground">
+              Add custom CSS rules to style this widget iframe / container.
+            </p>
+            <Textarea
+              className="font-mono text-xs bg-background min-h-[160px]"
+              placeholder={`/* Custom CSS for this widget */\n.widget-container {\n  border-radius: 8px;\n}`}
+              value={String(widgetConfig.customCss || '')}
+              onChange={(e) => onConfigChange('customCss', e.target.value)}
+              rows={8}
+            />
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {currentSettings.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground text-center py-6 italic">
+                No settings available for this field.
+              </p>
+            ) : (
+              currentSettings.map((setting) => renderControl(setting))
+            )}
+          </div>
+        )}
       </ScrollArea>
 
       {/* ─── Sticky Footer: Close + Update (JotForm pattern) ──────────────────────── */}
@@ -581,10 +652,10 @@ export function WidgetSettingsRenderer({
           <Button
             type="button"
             size="sm"
-            className="h-8 text-xs flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="h-8 text-xs flex-1 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
             onClick={() => onUpdate?.()}
           >
-            <Check className="size-3.5" /> Update
+            <Check className="size-3.5" /> {isWidgetSettingsMode ? 'Update Widget' : 'Update'}
           </Button>
         </div>
       )}
