@@ -64,6 +64,7 @@ import {
 import { QRCodePlaceholder } from './field-editor/qr-code-placeholder';
 import { FormImporterDialog } from './form-importer-dialog';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
+import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
 import { FormAgentStudio } from './agent-builder/form-agent-studio';
 import { UnifiedFieldInspector } from './builder/unified-field-inspector';
 import {
@@ -161,9 +162,23 @@ export function FormStudioBuilder({
         placeholder: f.placeholder,
         helpText: f.helpText,
         required: f.required,
-        stepId: 'step_1',
-        width: f.width === 'half' ? 'half' : 'full',
-        options: f.options?.map((opt) => ({ label: opt, value: opt.toLowerCase().replace(/\s+/g, '_') })),
+        stepId: f.stepId || 'step_1',
+        width: f.width || 'full',
+        // ─── Phase R2 universal settings (pass through to renderer) ────────
+        labelEnabled: f.labelEnabled,
+        widthPx: f.widthPx,
+        heightPx: f.heightPx,
+        align: f.align,
+        labelAlign: f.labelAlign,
+        description: f.description,
+        defaultValue: f.defaultValue,
+        validation: f.validation,
+        readOnly: f.readOnly,
+        hidden: f.hidden,
+        // ─── Options + widget config ────────────────────────────────────────
+        options: f.options?.map((opt) => (typeof opt === 'string'
+          ? { label: opt, value: opt.toLowerCase().replace(/\s+/g, '_') }
+          : opt as { label: string; value: string })),
         widgetType: f.widgetType,
         widgetConfig: f.widgetConfig,
       })),
@@ -174,7 +189,7 @@ export function FormStudioBuilder({
         borderRadius: `${formData.borderRadius || 12}px`,
         layout: previewFormat === 'card' ? 'card' : previewFormat === 'agent' ? 'conversational' : 'classic',
       },
-      rules: [],
+      rules: (formData.rules as any[]) || [],
       settings: {
         submitButtonText: formData.submitButtonText || 'Submit',
         successTitle: 'Thank you!',
@@ -633,6 +648,20 @@ export function FormStudioBuilder({
             />
           </div>
 
+          {/* Preview in New Tab — opens live form URL (JotForm pattern) */}
+          {editMode && (
+            <a
+              href={`${siteOrigin}/form/${formData.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 border border-border/80 rounded-md px-2 py-1 bg-background hover:bg-muted/40 transition-colors text-[11px] font-medium text-emerald-600"
+              title="Open live form in new tab"
+            >
+              <ExternalLink className="size-3.5" />
+              <span className="hidden sm:inline">Open Live</span>
+            </a>
+          )}
+
           {/* Save Button */}
           <Button
             size="sm"
@@ -1047,7 +1076,7 @@ export function FormStudioBuilder({
                           onClick={() => {
                             setSelectedFieldId(field.id);
                             if (inspectorMode === 'ai_builder') {
-                              setInspectorMode(field.widgetType ? 'widget_settings' : 'properties');
+                              setInspectorMode('properties');
                             }
                           }}
                           className={cn(
@@ -1140,137 +1169,82 @@ export function FormStudioBuilder({
 
                             {/* Realistic Field Render / Widget Previews */}
                             <div className="pt-1">
-                              {/* 1. Specialized Widget: Image Upload with Notes */}
-                              {field.widgetType === 'image_upload_with_notes' && (
-                                <div className="border border-dashed border-border rounded-lg p-3 bg-muted/10 space-y-2">
-                                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                    <span className="flex items-center gap-1.5"><Camera className="size-3.5 text-emerald-600" /> Upload Photos with Descriptions</span>
-                                    <span className="text-[10px]">Max 10 files</span>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2 pt-1">
-                                    <div className="border border-border/80 rounded-md p-2 bg-background flex flex-col items-center justify-center text-center text-[10px] text-muted-foreground h-20">
-                                      <Plus className="size-4 mb-1 text-emerald-600" /> Drop photo here
-                                    </div>
-                                    <div className="flex flex-col justify-between">
-                                      <Input disabled placeholder="Caption / Damage note..." className="h-8 text-xs bg-muted/20 text-[11px]" />
-                                      <p className="text-[9px] text-muted-foreground">Notes attached to each photo</p>
-                                    </div>
-                                  </div>
+                              {/* ─── Phase F2: WYSIWYG canvas — render actual widgets ─── */}
+                              {/* All widget types use WidgetRuntimeDispatcher in disabled mode */}
+                              {(isWidget || field.type === 'signature' || field.type === 'rating') && (
+                                <div className="pointer-events-none opacity-95">
+                                  <WidgetRuntimeDispatcher
+                                    field={{
+                                      ...field,
+                                      type: field.widgetType ? 'control_widget' : field.type,
+                                      widgetType: field.widgetType || (field.type === 'signature' ? 'e_signature' : field.type === 'rating' ? 'star_rating' : field.type),
+                                    }}
+                                    value={null}
+                                    onChange={() => {}}
+                                    allFormData={{}}
+                                    disabled={true}
+                                  />
                                 </div>
                               )}
 
-                              {/* 2. Specialized Widget: Nearest Location Finder */}
-                              {field.widgetType === 'nearest_location_finder' && (
-                                <div className="border border-border rounded-lg p-3 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
-                                  <div className="flex items-center justify-between text-xs font-semibold text-blue-900 dark:text-blue-200">
-                                    <span className="flex items-center gap-1.5"><Navigation className="size-3.5 text-blue-600" /> Nearest Location Finder</span>
-                                    <Badge variant="outline" className="text-[9px]">Google HD Proxy Active</Badge>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <Input disabled placeholder="Enter postal code or auto-detect GPS..." className="h-8 text-xs bg-background flex-1" />
-                                    <Button size="sm" variant="outline" disabled className="h-8 text-xs shrink-0 gap-1"><MapPin className="size-3 text-blue-600" /> Detect</Button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* 3. Specialized Widget: Route Planner Map */}
-                              {field.widgetType === 'route_planner_map' && (
-                                <div className="border border-border rounded-lg p-3 bg-slate-50 dark:bg-slate-900 space-y-2">
-                                  <div className="flex items-center justify-between text-xs font-semibold">
-                                    <span className="flex items-center gap-1.5"><Map className="size-3.5 text-emerald-600" /> Interactive Route Planner</span>
-                                    <span className="text-[10px] text-muted-foreground">Driving Mileage &amp; Duration</span>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <Input disabled placeholder="Origin Address..." className="h-8 text-xs bg-background" />
-                                    <Input disabled placeholder="Destination Address..." className="h-8 text-xs bg-background" />
-                                  </div>
-                                  <div className="h-24 bg-muted/40 rounded border border-dashed flex items-center justify-center text-xs text-muted-foreground">
-                                    🗺️ Interactive Route Map Preview (Distance: 14.2 mi | 28 mins)
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* 4. Specialized Widget: Form Calculation */}
-                              {field.widgetType === 'form_calculation' && (
-                                <div className="p-3 rounded-lg border border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20 flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <Hash className="size-4 text-amber-600" />
-                                    <div>
-                                      <p className="text-xs font-bold text-foreground">Formula Result Total</p>
-                                      <p className="text-[10px] text-muted-foreground font-mono">([SQFT] * $4.50) + $25.00 base fee</p>
-                                    </div>
-                                  </div>
-                                  <span className="text-sm font-bold text-amber-700 dark:text-amber-400">$250.00</span>
-                                </div>
-                              )}
-
-                              {/* 5. Payment Gateway Widget Canvas Preview */}
-                              {(field.widgetType?.startsWith('payment_') || field.widgetConfig?.gatewayId) && (() => {
-                                const gw = getPaymentGatewayById(
-                                  field.widgetConfig?.gatewayId ||
-                                  field.widgetType?.replace(/^payment_/, '') ||
-                                  ''
-                                ) || PAYMENT_GATEWAYS_REGISTRY[0];
-                                const cfg = field.widgetConfig || {};
-
-                                return (
-                                  <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2.5">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <div
-                                          className="size-7 rounded-md flex items-center justify-center p-1"
-                                          style={{ backgroundColor: gw.logoBg }}
-                                          dangerouslySetInnerHTML={{ __html: gw.iconSvg }}
-                                        />
-                                        <span className="text-xs font-bold text-foreground">{gw.name}</span>
-                                        {cfg.testMode && (
-                                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-amber-500/40 text-amber-700 dark:text-amber-300">
-                                            SANDBOX
-                                          </Badge>
-                                        )}
-                                      </div>
-                                      <span className="text-xs font-mono font-bold text-emerald-600">
-                                        {cfg.pricingMode === 'formula' ? 'Dynamic Calculation' : `$${(cfg.amount ?? 49).toFixed(2)} ${cfg.currency || 'USD'}`}
-                                      </span>
-                                    </div>
-                                    <div className="h-8 rounded-lg bg-background border border-dashed border-border/80 flex items-center justify-center text-[11px] text-muted-foreground font-medium">
-                                      <CreditCard className="size-3.5 mr-1.5 text-muted-foreground" />
-                                      {gw.id === 'purchase_order' ? 'PO Number & Net Terms Invoice' : `Integrated ${gw.name} Checkout Element`}
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-
-                              {/* 5. Standard Inputs Render */}
-                              {!isWidget && ['text', 'email', 'phone', 'number'].includes(field.type) && (
+                              {/* Standard Inputs — show a realistic disabled preview */}
+                              {!isWidget && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
                                 <Input
                                   disabled
-                                  placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
-                                  className="h-9 text-xs bg-muted/20 border-dashed"
+                                  placeholder={field.placeholder || 'Enter text...'}
+                                  type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'numerical' ? 'number' : field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : 'text'}
+                                  className="text-xs h-9 bg-muted/20"
                                 />
                               )}
 
-                              {!isWidget && field.type === 'textarea' && (
+                              {!isWidget && field.type === 'long_answer' && (
                                 <Textarea
                                   disabled
-                                  placeholder={field.placeholder || 'Write response here...'}
+                                  placeholder={field.placeholder || 'Enter detailed response...'}
                                   rows={3}
-                                  className="text-xs bg-muted/20 border-dashed resize-none"
+                                  className="text-xs resize-none bg-muted/20"
                                 />
                               )}
 
-                              {!isWidget && field.type === 'select' && (
-                                <div className="h-9 px-3 rounded-md border border-dashed border-input bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">
-                                  <span>{field.placeholder || 'Select an option...'}</span>
-                                  <ChevronDown className="size-4" />
+                              {!isWidget && field.type === 'dropdown' && (
+                                <Select disabled>
+                                  <SelectTrigger className="text-xs h-9 bg-muted/20">
+                                    <SelectValue placeholder={field.placeholder || 'Select an option'} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {(field.options || []).map((opt, idx) => (
+                                      <SelectItem key={idx} value={typeof opt === 'string' ? opt : opt.value} className="text-xs">
+                                        {typeof opt === 'string' ? opt : opt.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+
+                              {!isWidget && field.type === 'radio' && (
+                                <div className="space-y-1.5 pointer-events-none">
+                                  {(field.options || []).map((opt, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 text-xs">
+                                      <div className="size-3.5 rounded-full border border-border/60" />
+                                      <span className="text-muted-foreground">{typeof opt === 'string' ? opt : opt.label}</span>
+                                    </div>
+                                  ))}
                                 </div>
                               )}
 
-                              {!isWidget && field.type === 'signature' && (
-                                <div className="border border-border/80 rounded-lg p-3 bg-muted/10 h-20 flex flex-col justify-between">
-                                  <span className="text-[10px] text-muted-foreground">Sign above with mouse or stylus</span>
-                                  <div className="border-b border-muted-foreground/30" />
+                              {!isWidget && field.type === 'checkbox' && (
+                                <div className="space-y-1.5 pointer-events-none">
+                                  {(field.options || []).map((opt, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 text-xs">
+                                      <div className="size-3.5 rounded border border-border/60" />
+                                      <span className="text-muted-foreground">{typeof opt === 'string' ? opt : opt.label}</span>
+                                    </div>
+                                  ))}
                                 </div>
+                              )}
+
+                              {!isWidget && field.type === 'paragraph' && (
+                                <p className="text-xs text-muted-foreground">{(field as any).widgetConfig?.text || field.label || 'Paragraph text...'}</p>
                               )}
                             </div>
                           </div>

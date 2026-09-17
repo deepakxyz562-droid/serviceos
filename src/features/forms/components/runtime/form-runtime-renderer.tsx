@@ -115,6 +115,8 @@ export function FormRuntimeRenderer({
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // ─── Phase F1: Card-by-card mode state ─────────────────────────────────────
+  const [cardFieldIndex, setCardFieldIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [successInfo, setSuccessInfo] = useState<{ title: string; message: string }>({
@@ -440,6 +442,103 @@ export function FormRuntimeRenderer({
           <form onSubmit={handleSubmit} className="space-y-5">
             <input type="text" name="_hp" className="hidden" tabIndex={-1} autoComplete="off" />
 
+            {/* ─── Card-by-Card Mode: render ONE field at a time ─────────────── */}
+            {activeMode === 'card' ? (
+              <div className="space-y-4">
+                {/* Card progress indicator */}
+                {currentStepFields.length > 0 && (
+                  <div className="flex justify-between items-center text-[11px] text-muted-foreground mb-2">
+                    <span>Question {Math.min(cardFieldIndex + 1, currentStepFields.length)} of {currentStepFields.length}</span>
+                    <span>{Math.round(((cardFieldIndex + 1) / currentStepFields.length) * 100)}%</span>
+                  </div>
+                )}
+                {/* Progress bar */}
+                <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                    style={{ width: `${currentStepFields.length > 0 ? ((cardFieldIndex + 1) / currentStepFields.length) * 100 : 0}%` }}
+                  />
+                </div>
+
+                {/* Render only the current field */}
+                {currentStepFields[cardFieldIndex] && (() => {
+                  const field = currentStepFields[cardFieldIndex];
+                  const labelHidden = field.labelEnabled === false
+                    || field.labelAlign === 'hidden'
+                    || ['heading', 'paragraph', 'divider'].includes(field.type);
+                  const labelAlignClass = field.labelAlign === 'left'
+                    ? 'flex items-center gap-2'
+                    : field.labelAlign === 'right'
+                      ? 'flex items-center justify-end gap-2'
+                      : '';
+                  const inputStyle: React.CSSProperties = {
+                    ...(field.heightPx ? { height: `${field.heightPx}px` } : {}),
+                    ...(field.align ? { textAlign: field.align } : {}),
+                  };
+
+                  return (
+                    <div key={field.id} className="space-y-1.5 animate-in fade-in slide-in-from-right-4 duration-300">
+                      {!labelHidden && (
+                        <Label htmlFor={field.id} className={`text-sm font-semibold text-foreground ${labelAlignClass}`}>
+                          <span>{field.label} {field.required && <span className="text-red-500">*</span>}</span>
+                        </Label>
+                      )}
+                      {field.helpText && !['heading', 'paragraph'].includes(field.type) && (
+                        <p className="text-[11px] text-muted-foreground">{field.helpText}</p>
+                      )}
+                      {field.type === 'control_widget' && (
+                        <WidgetRuntimeDispatcher field={field} value={formData[field.id]} onChange={(val) => handleFieldChange(field.id, val)} allFormData={formData} />
+                      )}
+                      {['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
+                        <Input id={field.id} type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'numerical' ? 'number' : field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : 'text'} value={formData[field.id] || ''} onChange={(e) => handleFieldChange(field.id, e.target.value)} placeholder={field.placeholder || ''} className="text-sm" style={inputStyle} />
+                      )}
+                      {field.type === 'long_answer' && (
+                        <Textarea id={field.id} value={formData[field.id] || ''} onChange={(e) => handleFieldChange(field.id, e.target.value)} placeholder={field.placeholder || ''} rows={4} className="text-sm resize-none" style={inputStyle} />
+                      )}
+                      {field.type === 'dropdown' && (
+                        <Select value={formData[field.id] || ''} onValueChange={(val) => handleFieldChange(field.id, val)}>
+                          <SelectTrigger className="text-sm"><SelectValue placeholder={field.placeholder || 'Select an option'} /></SelectTrigger>
+                          <SelectContent>{field.options?.map((opt) => (<SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>))}</SelectContent>
+                        </Select>
+                      )}
+                      {field.type === 'radio' && (
+                        <RadioGroup value={formData[field.id] || ''} onValueChange={(val) => handleFieldChange(field.id, val)} className="space-y-2">
+                          {field.options?.map((opt) => (<div key={opt.value} className="flex items-center space-x-2"><RadioGroupItem value={opt.value} id={`${field.id}_${opt.value}`} /><Label htmlFor={`${field.id}_${opt.value}`} className="text-sm font-normal cursor-pointer">{opt.label}</Label></div>))}
+                        </RadioGroup>
+                      )}
+                      {field.type === 'checkbox' && (
+                        <div className="space-y-2">
+                          {field.options?.map((opt) => {
+                            const currentArr = Array.isArray(formData[field.id]) ? formData[field.id] : [];
+                            return (<div key={opt.value} className="flex items-center space-x-2"><Checkbox id={`${field.id}_${opt.value}`} checked={currentArr.includes(opt.value)} onCheckedChange={(isChecked) => { const updated = isChecked ? [...currentArr, opt.value] : currentArr.filter((v: string) => v !== opt.value); handleFieldChange(field.id, updated); }} /><Label htmlFor={`${field.id}_${opt.value}`} className="text-sm font-normal cursor-pointer">{opt.label}</Label></div>);
+                          })}
+                        </div>
+                      )}
+                      {field.type === 'heading' && (<h2 className="text-lg font-bold text-foreground pt-2">{field.label}</h2>)}
+                      {field.type === 'paragraph' && (<p className="text-sm text-muted-foreground">{(field.widgetConfig as any)?.text || field.label}</p>)}
+                    </div>
+                  );
+                })()}
+
+                {/* Card Navigation */}
+                <div className="flex justify-between items-center pt-6">
+                  {cardFieldIndex > 0 ? (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setCardFieldIndex((i) => i - 1)} className="text-xs gap-1">
+                      <ArrowLeft className="size-3.5" /> Back
+                    </Button>
+                  ) : <div />}
+                  {cardFieldIndex < currentStepFields.length - 1 ? (
+                    <Button type="button" size="sm" onClick={() => setCardFieldIndex((i) => i + 1)} className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
+                      Next <ArrowRight className="size-3.5" />
+                    </Button>
+                  ) : (
+                    <Button type="submit" disabled={submitting} className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 px-5 gap-2 shadow-sm">
+                      {submitting ? (<><Loader2 className="size-3.5 animate-spin" /> Submitting...</>) : (schema.settings?.submitButtonText || 'Submit')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
             <div className="space-y-4">
               {currentStepFields.map((field) => {
                 const isHalf = field.width === 'half';
@@ -454,16 +553,34 @@ export function FormRuntimeRenderer({
                       : 'w-full';
                 const hasError = errors[field.id];
 
+                // ─── Phase F1: Apply universal settings ──────────────────────
+                const labelHidden = field.labelEnabled === false
+                  || field.labelAlign === 'hidden'
+                  || ['heading', 'paragraph', 'divider'].includes(field.type);
+                const labelAlignClass = field.labelAlign === 'left'
+                  ? 'flex items-center gap-2'
+                  : field.labelAlign === 'right'
+                    ? 'flex items-center justify-end gap-2'
+                    : '';
+                const fieldStyle: React.CSSProperties = {
+                  ...(field.widthPx ? { maxWidth: `${field.widthPx}px` } : {}),
+                };
+                const inputStyle: React.CSSProperties = {
+                  ...(field.heightPx ? { height: `${field.heightPx}px` } : {}),
+                  ...(field.align ? { textAlign: field.align } : {}),
+                };
+
                 return (
                   <div
                     key={field.id}
                     className={`space-y-1.5 ${widthClass}`}
+                    style={fieldStyle}
                   >
-                    {/* Label */}
-                    {!['heading', 'paragraph', 'divider'].includes(field.type) && (
+                    {/* Label — respects labelEnabled + labelAlign */}
+                    {!labelHidden && (
                       <Label
                         htmlFor={field.id}
-                        className="text-xs font-semibold text-foreground flex items-center justify-between"
+                        className={`text-xs font-semibold text-foreground ${labelAlignClass}`}
                       >
                         <span>
                           {field.label} {field.required && <span className="text-red-500">*</span>}
@@ -506,6 +623,7 @@ export function FormRuntimeRenderer({
                         onChange={(e) => handleFieldChange(field.id, e.target.value)}
                         placeholder={field.placeholder || ''}
                         className={`text-xs ${hasError ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                        style={inputStyle}
                       />
                     )}
 
@@ -517,6 +635,7 @@ export function FormRuntimeRenderer({
                         placeholder={field.placeholder || ''}
                         rows={3}
                         className={`text-xs resize-none ${hasError ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                        style={inputStyle}
                       />
                     )}
 
@@ -617,8 +736,10 @@ export function FormRuntimeRenderer({
                 );
               })}
             </div>
+            )}
 
-            {/* Navigation / Submit Controls */}
+            {/* Navigation / Submit Controls (paper mode only — card mode has its own nav) */}
+            {activeMode !== 'card' && (
             <div className="flex justify-between items-center pt-4 border-t border-border/80">
               {steps.length > 1 && currentStepIndex > 0 ? (
                 <Button
@@ -659,6 +780,7 @@ export function FormRuntimeRenderer({
                 </Button>
               )}
             </div>
+            )}
           </form>
         </CardContent>
       </Card>

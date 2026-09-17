@@ -79,6 +79,7 @@ export interface FormField {
   align?: 'left' | 'center' | 'right';
   widthPx?: number | string;
   heightPx?: number | string;
+  labelEnabled?: boolean;
   readOnly?: boolean;
   description?: string;
 }
