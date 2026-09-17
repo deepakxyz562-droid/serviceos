@@ -165,7 +165,22 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
 
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin');
 
-  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  // Global Command+K / Ctrl+K keyboard shortcut to toggle AI Copilot Drawer
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is actively typing inside an input/textarea
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setAiDrawerOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Subscribe to the shared deferred-prompt store. Only install-prompt.tsx
   // registers the actual `beforeinstallprompt` window listener; this avoids
@@ -588,6 +603,30 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       open={aiDrawerOpen}
       onClose={() => setAiDrawerOpen(false)}
     />
+
+    {/* ─── Floating Omnipresent AI Copilot & Mic Trigger ───────────────── */}
+    {!isAiAssistantDisabled && isAuthenticated && (
+      <button
+        type="button"
+        onClick={() => setAiDrawerOpen((prev) => !prev)}
+        className={cn(
+          "fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-3.5 py-2.5 rounded-full shadow-lg transition-all cursor-pointer",
+          "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white hover:shadow-2xl hover:scale-105 active:scale-95 border border-emerald-400/40",
+          aiDrawerOpen && "ring-4 ring-emerald-500/30 scale-105 shadow-emerald-500/20"
+        )}
+        title="Open AI Copilot (⌘K)"
+        aria-label="Open AI Copilot"
+      >
+        <div className="relative flex items-center justify-center">
+          <Sparkles className="size-4 animate-pulse" />
+          <span className="absolute -top-1 -right-1 size-2 rounded-full bg-amber-400 ring-2 ring-emerald-700" />
+        </div>
+        <span className="text-xs font-semibold tracking-tight hidden sm:inline">AI Copilot</span>
+        <kbd className="hidden md:inline-flex items-center gap-0.5 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-mono text-white/90">
+          ⌘K
+        </kbd>
+      </button>
+    )}
     </>
   );
 }

@@ -1611,6 +1611,139 @@ const REGISTRY: ChatTool[] = [
       };
     },
   },
+  {
+    name: 'create_job',
+    description: 'Create and schedule a new job/work order for a customer. Auto-resolves customer and employee names, detects schedule conflicts, and assigns service details and price.',
+    argsSpec: '{ customerName: string, serviceTitle?: string, scheduledDate?: string, scheduledTime?: string, employeeName?: string, amount?: number, description?: string, address?: string, priority?: "low"|"medium"|"high"|"urgent" }',
+    async execute(ctx, args) {
+      const { executeCreateJob } = await import('./ai/assistant/action-handlers');
+      return executeCreateJob(ctx, {
+        customerName: asString(args.customerName),
+        serviceTitle: asString(args.serviceTitle),
+        scheduledDate: asString(args.scheduledDate),
+        scheduledTime: asString(args.scheduledTime),
+        employeeName: asString(args.employeeName),
+        amount: typeof args.amount === 'number' ? args.amount : undefined,
+        description: asString(args.description),
+        address: asString(args.address),
+        priority: asString(args.priority),
+      });
+    },
+  },
+  {
+    name: 'create_customer',
+    description: 'Create a new customer profile with contact information.',
+    argsSpec: '{ name: string, phone?: string, email?: string, address?: string, companyName?: string, notes?: string }',
+    async execute(ctx, args) {
+      const { executeCreateCustomer } = await import('./ai/assistant/action-handlers');
+      return executeCreateCustomer(ctx, {
+        name: asString(args.name),
+        phone: asString(args.phone),
+        email: asString(args.email),
+        address: asString(args.address),
+        companyName: asString(args.companyName),
+        notes: asString(args.notes),
+      });
+    },
+  },
+  {
+    name: 'create_lead',
+    description: 'Create a new sales lead in the CRM pipeline.',
+    argsSpec: '{ name: string, phone?: string, email?: string, serviceRequired?: string, estimatedValue?: number, source?: string, notes?: string }',
+    async execute(ctx, args) {
+      const { executeCreateLead } = await import('./ai/assistant/action-handlers');
+      return executeCreateLead(ctx, {
+        name: asString(args.name),
+        phone: asString(args.phone),
+        email: asString(args.email),
+        serviceRequired: asString(args.serviceRequired),
+        estimatedValue: typeof args.estimatedValue === 'number' ? args.estimatedValue : undefined,
+        source: asString(args.source),
+        notes: asString(args.notes),
+      });
+    },
+  },
+  {
+    name: 'create_quote',
+    description: 'Generate a new estimate/quote for a customer.',
+    argsSpec: '{ customerName: string, title?: string, totalAmount?: number, notes?: string }',
+    async execute(ctx, args) {
+      const { executeCreateQuote } = await import('./ai/assistant/action-handlers');
+      return executeCreateQuote(ctx, {
+        customerName: asString(args.customerName),
+        title: asString(args.title),
+        totalAmount: typeof args.totalAmount === 'number' ? args.totalAmount : undefined,
+        notes: asString(args.notes),
+      });
+    },
+  },
+  {
+    name: 'create_invoice',
+    description: 'Generate and record a new invoice for a customer or job.',
+    argsSpec: '{ customerName: string, amount: number, description?: string, dueDate?: string, jobId?: string }',
+    async execute(ctx, args) {
+      const { executeCreateInvoice } = await import('./ai/assistant/action-handlers');
+      return executeCreateInvoice(ctx, {
+        customerName: asString(args.customerName),
+        amount: typeof args.amount === 'number' ? args.amount : 0,
+        description: asString(args.description),
+        dueDate: asString(args.dueDate),
+        jobId: asString(args.jobId),
+      });
+    },
+  },
+  {
+    name: 'log_expense',
+    description: 'Log and categorize a business expense receipt.',
+    argsSpec: '{ amount: number, category: string, vendor?: string, description?: string, date?: string }',
+    async execute(ctx, args) {
+      const { executeLogExpense } = await import('./ai/assistant/action-handlers');
+      return executeLogExpense(ctx, {
+        amount: typeof args.amount === 'number' ? args.amount : 0,
+        category: asString(args.category, 'General'),
+        vendor: asString(args.vendor),
+        description: asString(args.description),
+        date: asString(args.date),
+      });
+    },
+  },
+  {
+    name: 'create_ai_form',
+    description: 'Instantly build and publish a new web form in the AI Form Studio.',
+    argsSpec: '{ title: string, description?: string, industry?: string, fieldNames?: string[] }',
+    async execute(ctx, args) {
+      const { executeCreateAiForm } = await import('./ai/assistant/action-handlers');
+      return executeCreateAiForm(ctx, {
+        title: asString(args.title),
+        description: asString(args.description),
+        industry: asString(args.industry),
+        fieldNames: Array.isArray(args.fieldNames) ? args.fieldNames.map(String) : undefined,
+      });
+    },
+  },
+  {
+    name: 'send_customer_message',
+    description: 'Trigger an outbound communication (WhatsApp, Email, or SMS) to a customer.',
+    argsSpec: '{ customerName: string, channel: "whatsapp" | "email" | "sms", message: string, subject?: string }',
+    async execute(ctx, args) {
+      const { executeSendMessage } = await import('./ai/assistant/action-handlers');
+      return executeSendMessage(ctx, {
+        customerName: asString(args.customerName),
+        channel: (asString(args.channel, 'whatsapp') as 'whatsapp' | 'email' | 'sms'),
+        message: asString(args.message),
+        subject: asString(args.subject),
+      });
+    },
+  },
+  {
+    name: 'get_morning_briefing',
+    description: 'Get a comprehensive morning briefing: today\'s scheduled jobs, overdue invoices, new leads, and technician workload.',
+    argsSpec: '{} (no arguments)',
+    async execute(ctx) {
+      const { executeGetMorningBriefing } = await import('./ai/assistant/action-handlers');
+      return executeGetMorningBriefing(ctx);
+    },
+  },
 ];
 
 const REGISTRY_MAP = new Map(REGISTRY.map((t) => [t.name, t]));

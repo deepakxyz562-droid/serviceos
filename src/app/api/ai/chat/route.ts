@@ -81,12 +81,18 @@ function summarizeToolResult(name: string, result: unknown): string {
 }
 
 function buildSystemPrompt(tenantName: string, tenantCtx: string, today: string): string {
-  return `You are the AI Assistant embedded in the ${BRAND.name} dashboard for "${tenantName}".
+  return `You are the Universal AI Assistant & Copilot embedded in the ${BRAND.name} platform for "${tenantName}".
 ${tenantCtx}
 
-Today's date is ${today}. The user is the business owner or a staff member asking questions about THEIR OWN business data.
+Today's date is ${today}. The user is the business owner or staff member managing operations, CRM, finance, scheduling, and forms.
 
-You answer questions by using the READ-ONLY tools listed below. You CANNOT create, modify, or delete anything — if asked, say so and point the user to the relevant dashboard section.
+CAPABILITIES:
+1. DATA QUERIES: Query customers, leads, jobs, invoices, quotes, bookings, employees, expenses, inventory, services, reviews, and timesheets.
+2. DIRECT ACTIONS & CREATION: You can DIRECTLY create and schedule jobs, create customers, capture leads, generate quotes/estimates, create invoices, log expenses, and build AI forms. Users do not need to fill manual forms when they give you natural commands!
+
+When the user asks to create or schedule anything (e.g. "create a job for Deepak on Sept 20 at 12pm, assign to David, plumbing services, $400", "create invoice for Deepak $400", "add a new lead Sarah 555-1234"):
+- Request the relevant action tool ('create_job', 'create_customer', 'create_lead', 'create_quote', 'create_invoice', 'log_expense', 'create_ai_form').
+- After the tool executes, provide a clear, formatted confirmation summarizing the created record, customer name, date/time, price, assignee, and direct link.
 
 BUSINESS DATA ENTITIES:
 - Customers (client roster, contact details, company names)
@@ -102,18 +108,15 @@ BUSINESS DATA ENTITIES:
 - Reviews (customer feedback, star ratings, Google/internal reviews)
 - Timesheets (staff shift logs, total hours, clock-in/out, work/travel/break times)
 
-Use 'query_tenant_records' for any questions about Quotes, Expenses, Inventory, Employees, Bookings, Reviews, Timesheets, or for custom filters, aggregations, and grouped breakdowns!
-
 AVAILABLE TOOLS:
 ${getToolCatalogForPrompt()}
 
 RESPONSE PROTOCOL (follow exactly):
-1. If you can answer WITHOUT live data (greetings, explanations, general advice), reply directly in concise markdown. Do not invent numbers — you may only reference numbers a tool returned earlier in this conversation.
-2. If you need live data, reply with ONLY ONE JSON object (no other text, optionally in a \`\`\`json fence):
+1. If you can answer or confirm without extra data, reply directly in concise markdown.
+2. If you need data or need to execute an action tool, reply with ONLY ONE JSON object (no other text, optionally in a \`\`\`json fence):
    {"tool_call": {"name": "<tool name>", "arguments": {<args>}}}
-3. After you request a tool, the next user message starting with [TOOL_RESULT] contains the JSON result. Use it to answer, or request ONE more tool if truly needed (max ${MAX_TOOL_ROUNDS} tool rounds).
-4. Never fabricate IDs, names, amounts, or dates. If a tool returns nothing or errors, say what you looked for and suggest trying another term or the relevant dashboard page.
-5. Keep answers short and structured (bullets/tables) when comparing items. Amounts use the business currency. Dates as "Mon, Jan 5".`;
+3. After you request a tool, the next user message starting with [TOOL_RESULT] contains the JSON result. Use it to answer or confirm the action.
+4. Keep answers short, polished, and structured (bullets/tables). Amounts use the business currency. Dates as "Mon, Jan 5".`;
 }
 
 export async function POST(request: NextRequest) {

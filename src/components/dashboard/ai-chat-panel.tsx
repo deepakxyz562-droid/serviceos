@@ -46,6 +46,13 @@ import {
   ThumbsDown,
   FileCode,
   CornerDownLeft,
+  ExternalLink,
+  FileText,
+  Receipt,
+  PlusCircle,
+  Clock,
+  MessageSquare,
+  Sun,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -324,31 +331,136 @@ function RichMarkdown({ text }: { text: string }) {
 
 // ─── Expandable Tool Call Card ────────────────────────────────────────────────
 
+function getActionInfo(toolName: string, args: Record<string, unknown>) {
+  if (toolName === 'create_job') {
+    return {
+      type: 'Job',
+      icon: Briefcase,
+      color: 'text-blue-500',
+      bgColor: 'bg-blue-500/10 border-blue-500/20',
+      label: args.serviceTitle || 'Scheduled Job',
+      sub: `${args.customerName || 'Customer'} · ${args.scheduledDate || 'Soon'} ${args.scheduledTime || ''}`,
+    };
+  }
+  if (toolName === 'create_invoice') {
+    return {
+      type: 'Invoice',
+      icon: Receipt,
+      color: 'text-emerald-500',
+      bgColor: 'bg-emerald-500/10 border-emerald-500/20',
+      label: `Invoice for ${args.customerName || 'Customer'}`,
+      sub: args.amount ? `$${args.amount}` : 'Draft invoice',
+    };
+  }
+  if (toolName === 'create_quote') {
+    return {
+      type: 'Quote',
+      icon: FileText,
+      color: 'text-purple-500',
+      bgColor: 'bg-purple-500/10 border-purple-500/20',
+      label: String(args.title || `Quote for ${args.customerName || 'Customer'}`),
+      sub: args.totalAmount ? `$${args.totalAmount}` : 'Estimate',
+    };
+  }
+  if (toolName === 'create_lead') {
+    return {
+      type: 'Lead',
+      icon: Users,
+      color: 'text-amber-500',
+      bgColor: 'bg-amber-500/10 border-amber-500/20',
+      label: `Lead: ${args.name || 'New Lead'}`,
+      sub: `${args.serviceRequired || 'Inquiry'} ${args.estimatedValue ? `· $${args.estimatedValue}` : ''}`,
+    };
+  }
+  if (toolName === 'create_customer') {
+    return {
+      type: 'Customer',
+      icon: User,
+      color: 'text-teal-500',
+      bgColor: 'bg-teal-500/10 border-teal-500/20',
+      label: `Customer: ${args.name || 'New Client'}`,
+      sub: String(args.phone || args.email || 'Added to CRM'),
+    };
+  }
+  if (toolName === 'log_expense') {
+    return {
+      type: 'Expense',
+      icon: DollarSign,
+      color: 'text-rose-500',
+      bgColor: 'bg-rose-500/10 border-rose-500/20',
+      label: `Expense: $${args.amount || 0}`,
+      sub: `${args.category || 'General'} · ${args.vendor || 'Expense Logged'}`,
+    };
+  }
+  if (toolName === 'create_ai_form') {
+    return {
+      type: 'AI Form',
+      icon: Sparkles,
+      color: 'text-indigo-500',
+      bgColor: 'bg-indigo-500/10 border-indigo-500/20',
+      label: `Form: ${args.title || 'New Smart Form'}`,
+      sub: 'Published in Form Studio',
+    };
+  }
+  if (toolName === 'send_customer_message') {
+    return {
+      type: 'Message',
+      icon: MessageSquare,
+      color: 'text-emerald-500',
+      bgColor: 'bg-emerald-500/10 border-emerald-500/20',
+      label: `Sent ${String(args.channel || 'message').toUpperCase()} to ${args.customerName || 'Customer'}`,
+      sub: `"${String(args.message || '').slice(0, 35)}..."`,
+    };
+  }
+  if (toolName === 'get_morning_briefing') {
+    return {
+      type: 'Briefing',
+      icon: Sun,
+      color: 'text-amber-500',
+      bgColor: 'bg-amber-500/10 border-amber-500/20',
+      label: '☀️ Daily Morning Operations Briefing',
+      sub: 'Jobs, Overdue Invoices & Lead Pipeline',
+    };
+  }
+  return null;
+}
+
 function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
   const [expanded, setExpanded] = useState(false);
+  const actionInfo = getActionInfo(toolCall.name, toolCall.arguments);
+  const isAction = !!actionInfo;
+  const IconComponent = actionInfo?.icon || Database;
 
   return (
-    <div className="rounded-lg border border-border/70 bg-background/80 overflow-hidden text-xs transition-all shadow-2xs">
+    <div className={cn(
+      "rounded-lg border overflow-hidden text-xs transition-all shadow-2xs",
+      isAction && toolCall.ok ? (actionInfo?.bgColor || 'border-emerald-500/30 bg-emerald-500/5') : 'border-border/70 bg-background/80'
+    )}>
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-2.5 py-1.5 bg-muted/40 hover:bg-muted/70 text-left transition-colors cursor-pointer"
+        className="w-full flex items-center justify-between px-2.5 py-1.5 bg-muted/30 hover:bg-muted/60 text-left transition-colors cursor-pointer"
       >
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Database className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-          <span className="font-mono font-medium text-[11px] text-foreground truncate">
-            {toolCall.name}
-          </span>
-          <span className="text-muted-foreground text-[11px] truncate">
-            · {toolCall.summary}
-          </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <IconComponent className={cn("size-3.5 shrink-0", actionInfo ? actionInfo.color : "text-emerald-600 dark:text-emerald-400")} />
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-mono font-medium text-[11px] text-foreground truncate">
+              {actionInfo ? actionInfo.label : toolCall.name}
+            </span>
+            <span className="text-muted-foreground text-[10.5px] truncate">
+              · {actionInfo ? actionInfo.sub : toolCall.summary}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-1 shrink-0 ml-2">
           <Badge
             variant={toolCall.ok ? 'outline' : 'destructive'}
-            className="text-[9px] px-1.5 py-0 h-4 uppercase font-semibold"
+            className={cn(
+              "text-[9px] px-1.5 py-0 h-4 uppercase font-semibold",
+              toolCall.ok && isAction ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" : ""
+            )}
           >
-            {toolCall.ok ? 'Completed' : 'Failed'}
+            {toolCall.ok ? (isAction ? 'Action Executed' : 'Completed') : 'Failed'}
           </Badge>
           {expanded ? (
             <ChevronUp className="size-3.5 text-muted-foreground" />
@@ -450,27 +562,34 @@ interface PromptCategory {
 
 const CATEGORIZED_PROMPTS: PromptCategory[] = [
   {
-    category: 'Overview',
-    icon: TrendingUp,
+    category: '⚡ Instant Actions & Creation',
+    icon: Zap,
     prompts: [
-      { label: 'Business Snapshot', text: 'Give me an overview of the business today' },
-      { label: 'Monthly Revenue', text: 'How much revenue have we generated this month?' },
+      { label: 'Create & Assign Job', text: 'Please create the job for Deepak - 20 September 12pm and assign to David - plumbing services job - cost is 400$' },
+      { label: 'Capture New Lead', text: 'Create new lead for Sarah Miller, phone 555-0199, Emergency Pipe Leak, value $650' },
+      { label: 'Draft Estimate / Quote', text: 'Create a draft quote for John Doe: Roof Inspection and Tile Replacement $450' },
+      { label: 'Log Material Expense', text: 'Log $85 expense for plumbing parts from Home Depot' },
+      { label: 'Send WhatsApp Notification', text: 'Send WhatsApp message to Deepak with appointment confirmation for his plumbing job' },
     ],
   },
   {
-    category: 'Jobs & Schedule',
+    category: '📊 Overview & Daily Briefings',
+    icon: TrendingUp,
+    prompts: [
+      { label: '☀️ Morning Briefing', text: 'Give me my morning briefing for today' },
+      { label: 'Business Snapshot', text: 'Give me an overview of the business today' },
+      { label: 'Monthly Revenue', text: 'How much revenue have we generated this month?' },
+      { label: 'Overdue Invoices', text: 'Which invoices are currently overdue and need follow-up?' },
+    ],
+  },
+  {
+    category: '📅 Operations & Schedule',
     icon: Calendar,
     prompts: [
       { label: "Today's Schedule", text: "What's on the schedule for today and who is assigned?" },
       { label: 'Unassigned Jobs', text: 'Are there any unassigned jobs that need technicians?' },
-    ],
-  },
-  {
-    category: 'Invoices & Leads',
-    icon: DollarSign,
-    prompts: [
-      { label: 'Overdue Invoices', text: 'Which invoices are currently overdue and need follow-up?' },
-      { label: 'Hot Leads', text: 'Show me high-priority leads waiting for quote responses' },
+      { label: 'Employee Workload', text: 'List our technicians and how many jobs each has scheduled' },
+      { label: 'Inventory Status', text: 'Show inventory items with low stock or needing reorder' },
     ],
   },
 ];
@@ -742,11 +861,11 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
                 variant="outline"
                 className="text-[10px] font-medium h-4 px-1.5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
               >
-                Read-Only Tools
+                Universal Copilot & Actions
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground truncate">
-              Business intelligence, schedule lookups & invoice analytics
+              Manage jobs, CRM, billing, schedules & natural language actions
             </p>
           </div>
         </div>
