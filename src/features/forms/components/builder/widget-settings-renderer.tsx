@@ -440,6 +440,62 @@ export function WidgetSettingsRenderer({
           </div>
         );
       }
+
+      // ─── Phase P2 — Payment & Choice specific control types ──────────────────────────
+
+      case 'field_selector': {
+        const rawVal = String(value ?? '');
+        const currentVal = rawVal === '' ? '__none__' : rawVal;
+        return (
+          <div key={setting.key} className="space-y-1">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <Select
+              value={currentVal}
+              onValueChange={(val) => onChange(val === '__none__' ? '' : val)}
+            >
+              <SelectTrigger className="h-9 text-xs bg-background">
+                <SelectValue placeholder={setting.helpText || 'Select a form field...'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__" className="text-xs text-muted-foreground">— None —</SelectItem>
+                {allFields.filter((f) => Boolean(f.id)).map((f) => (
+                  <SelectItem key={f.id} value={f.id} className="text-xs">
+                    {f.label || 'Unnamed'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+      }
+
+      case 'calculation_values_editor':
+        return (
+          <CalculationValuesEditor
+            key={setting.key}
+            setting={setting}
+            value={value}
+            options={
+              Array.isArray(widgetConfig.options)
+                ? (widgetConfig.options as Array<{ label: string; value: string } | string>)
+                : Array.isArray(field.options)
+                  ? (field.options as Array<{ label: string; value: string } | string>)
+                  : []
+            }
+            onChange={onChange}
+          />
+        );
+
+      case 'bulk_options_editor':
+        return (
+          <BulkOptionsEditor
+            key={setting.key}
+            setting={setting}
+            value={value}
+            onChange={onChange}
+          />
+        );
     }
   };
 
@@ -539,49 +595,197 @@ export function WidgetSettingsRenderer({
 function OptionsEditor({
   setting, value, onChange,
 }: { setting: SettingField; value: unknown; onChange: (v: unknown) => void }) {
+  const [bulkMode, setBulkMode] = useState(false);
   const opts: Array<{ label: string; value: string }> = Array.isArray(value)
     ? (value as unknown[]).map((o) => (typeof o === 'string' ? { label: o, value: o } : (o as { label: string; value: string })))
     : [];
-  const update = (next: Array<{ label: string; value: string }>) => onChange(next);
+  const [bulkText, setBulkText] = useState(() => opts.map((o) => o.label).join('\n'));
+
+  const update = (next: Array<{ label: string; value: string }>) => {
+    onChange(next);
+    setBulkText(next.map((o) => o.label).join('\n'));
+  };
+
+  const handleApplyBulk = () => {
+    const lines = bulkText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const next = lines.map((l, i) => ({ label: l, value: `option_${i + 1}_${l.toLowerCase().replace(/\s+/g, '_').slice(0, 16)}` }));
+    onChange(next);
+    setBulkMode(false);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-[11px] font-semibold">{setting.label}</Label>
+        <button
+          type="button"
+          onClick={() => {
+            if (!bulkMode) setBulkText(opts.map((o) => o.label).join('\n'));
+            setBulkMode(!bulkMode);
+          }}
+          className="text-[10px] text-emerald-600 hover:text-emerald-700 font-medium cursor-pointer"
+        >
+          {bulkMode ? 'Standard Mode' : 'Bulk Edit / Paste'}
+        </button>
+      </div>
+
+      {bulkMode ? (
+        <div className="space-y-1.5 p-2 border rounded-md bg-background">
+          <p className="text-[10px] text-muted-foreground">Enter each option on a new line:</p>
+          <Textarea
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            className="text-xs font-mono min-h-[120px] bg-background"
+            placeholder="Option 1&#10;Option 2&#10;Option 3"
+            rows={5}
+          />
+          <div className="flex items-center gap-1.5 justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setBulkMode(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handleApplyBulk}
+            >
+              Save Options
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {opts.map((opt, idx) => (
+            <div key={idx} className="flex items-center gap-1.5">
+              <GripVertical className="size-3 text-muted-foreground shrink-0" />
+              <Input
+                className="h-7 text-xs bg-background flex-1"
+                value={opt.label}
+                placeholder="Label"
+                onChange={(e) => {
+                  const next = [...opts];
+                  next[idx] = { ...next[idx], label: e.target.value, value: e.target.value };
+                  update(next);
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-red-500 shrink-0"
+                onClick={() => update(opts.filter((_, i) => i !== idx))}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs w-full gap-1"
+            onClick={() => update([...opts, { label: `Option ${opts.length + 1}`, value: `option_${opts.length + 1}` }])}
+          >
+            <Plus className="size-3" /> Add Option
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalculationValuesEditor({
+  setting,
+  value,
+  options,
+  onChange,
+}: {
+  setting: SettingField;
+  value: unknown;
+  options: Array<{ label: string; value: string } | string>;
+  onChange: (v: unknown) => void;
+}) {
+  const valuesMap: Record<string, number> =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, number>)
+      : {};
+
+  const normalizedOpts = options.map((o, idx) =>
+    typeof o === 'string' ? { label: o, value: `option_${idx}` } : o,
+  );
+
+  const handleValueChange = (optKey: string, val: string) => {
+    const num = val === '' ? 0 : Number(val);
+    onChange({
+      ...valuesMap,
+      [optKey]: isNaN(num) ? 0 : num,
+    });
+  };
+
+  return (
+    <div className="space-y-1.5 p-2 rounded-md border border-border/60 bg-muted/20">
+      <div className="flex items-center justify-between">
+        <Label className="text-[11px] font-semibold">{setting.label}</Label>
+        <span className="text-[10px] text-muted-foreground font-mono">Scores / Values</span>
+      </div>
+      {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+      
+      {normalizedOpts.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground italic py-2">Add options above first to set calculation values.</p>
+      ) : (
+        <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+          {normalizedOpts.map((opt) => (
+            <div key={opt.value || opt.label} className="grid grid-cols-12 gap-1.5 items-center">
+              <span className="col-span-8 text-[11px] truncate text-foreground font-medium" title={opt.label}>
+                {opt.label}
+              </span>
+              <Input
+                type="number"
+                step="any"
+                className="col-span-4 h-7 text-xs bg-background font-mono text-right"
+                placeholder="0"
+                value={valuesMap[opt.value || opt.label] ?? ''}
+                onChange={(e) => handleValueChange(opt.value || opt.label, e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BulkOptionsEditor({
+  setting,
+  value,
+  onChange,
+}: {
+  setting: SettingField;
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const text = typeof value === 'string' ? value : Array.isArray(value) ? value.join('\n') : '';
 
   return (
     <div className="space-y-1">
       <Label className="text-[11px] font-semibold">{setting.label}</Label>
-      <div className="space-y-1.5">
-        {opts.map((opt, idx) => (
-          <div key={idx} className="flex items-center gap-1.5">
-            <GripVertical className="size-3 text-muted-foreground shrink-0" />
-            <Input
-              className="h-7 text-xs bg-background flex-1"
-              value={opt.label}
-              placeholder="Label"
-              onChange={(e) => {
-                const next = [...opts];
-                next[idx] = { ...next[idx], label: e.target.value, value: e.target.value };
-                update(next);
-              }}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-7 text-muted-foreground hover:text-red-500 shrink-0"
-              onClick={() => update(opts.filter((_, i) => i !== idx))}
-            >
-              <X className="size-3" />
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs w-full gap-1"
-          onClick={() => update([...opts, { label: `Option ${opts.length + 1}`, value: `option_${opts.length + 1}` }])}
-        >
-          <Plus className="size-3" /> Add Option
-        </Button>
-      </div>
+      <Textarea
+        className="text-xs bg-background min-h-[80px]"
+        placeholder={setting.placeholder || 'One option per line...'}
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+        rows={4}
+      />
+      {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
     </div>
   );
 }
