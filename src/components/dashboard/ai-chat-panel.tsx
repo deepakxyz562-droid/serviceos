@@ -840,40 +840,40 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
   return (
     <div
       className={cn(
-        'flex h-full flex-col overflow-hidden rounded-xl border border-border/80 bg-card shadow-sm',
+        'flex h-full flex-col overflow-hidden bg-background',
         className,
       )}
       data-testid="ai-chat-panel"
     >
-      {/* ── Top Header ── */}
-      <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3 bg-muted/20 shrink-0">
+      {/* ── Top Header (Minimalist ChatGPT Style) ── */}
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-2.5 bg-background/80 backdrop-blur-md shrink-0 sticky top-0 z-10">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs shrink-0">
+          <div className="relative flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xs shrink-0">
             <Sparkles className="size-4" />
             <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="text-sm font-semibold text-foreground tracking-tight">
                 {BRAND.name} Copilot
               </span>
               <Badge
-                variant="outline"
-                className="text-[10px] font-medium h-4 px-1.5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                variant="secondary"
+                className="text-[10px] font-medium h-4 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
               >
-                Universal Copilot & Actions
+                Universal Actions
               </Badge>
             </div>
-            <p className="text-[11px] text-muted-foreground truncate">
-              Manage jobs, CRM, billing, schedules & natural language actions
+            <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
+              Connected to database & operations engine
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {quota && (
-            <div className="hidden sm:block w-24 mr-1" title={`${quota.used} of ${quota.quota} AI credits used`}>
-              <div className="mb-0.5 flex justify-between text-[10px] text-muted-foreground">
+            <div className="hidden sm:block w-20 mr-1" title={`${quota.used} of ${quota.quota} AI credits used`}>
+              <div className="mb-0.5 flex justify-between text-[9px] text-muted-foreground">
                 <span>Credits</span>
                 <span className="font-mono">{quota.used}/{quota.quota}</span>
               </div>
@@ -881,13 +881,13 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
             </div>
           )}
 
-          {messages.length > 0 && (
+          {messages.length > 0 ? (
             <>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleCopyEntireChat}
-                className="size-7 text-muted-foreground hover:text-foreground"
+                className="size-8 text-muted-foreground hover:text-foreground"
                 title="Copy entire conversation"
               >
                 <Copy className="size-3.5" />
@@ -896,74 +896,75 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
                 variant="ghost"
                 size="icon"
                 onClick={handleExportTranscript}
-                className="size-7 text-muted-foreground hover:text-foreground"
+                className="size-8 text-muted-foreground hover:text-foreground"
                 title="Download transcript (.md)"
               >
                 <Download className="size-3.5" />
               </Button>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => setMessages([])}
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                className="h-7 px-2.5 text-xs text-muted-foreground hover:text-foreground gap-1 rounded-full border-border/80"
                 title="Start a new conversation"
               >
-                <RotateCcw className="size-3 mr-1" />
-                <span>Reset</span>
+                <PlusCircle className="size-3 text-emerald-600" />
+                <span>New Chat</span>
               </Button>
             </>
+          ) : (
+            <Badge variant="outline" className="text-[10px] text-muted-foreground font-mono px-2 py-0.5 border-border/60">
+              GPT-4o / Hybrid AI
+            </Badge>
           )}
         </div>
       </div>
 
-      {/* ── Messages Stream ── */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 min-h-0 space-y-4">
+      {/* ── Messages Stream (Centered Max-W-3XL) ── */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-6 min-h-0">
         {isEmpty ? (
-          <div className="flex h-full flex-col items-center justify-center text-center px-4 py-8 max-w-lg mx-auto space-y-6">
-            <div className="size-14 rounded-2xl bg-gradient-to-br from-emerald-500/15 to-teal-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
-              <Sparkles className="size-7" />
+          <div className="flex h-full flex-col items-center justify-center text-center px-2 py-6 max-w-2xl mx-auto space-y-6">
+            <div className="relative">
+              <div className="size-16 rounded-3xl bg-gradient-to-br from-emerald-500/20 via-teal-500/15 to-emerald-500/5 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-md">
+                <Sparkles className="size-8 animate-pulse" />
+              </div>
+              <span className="absolute -bottom-1 -right-1 size-4 rounded-full bg-emerald-500 ring-4 ring-background" />
             </div>
 
-            <div className="space-y-1.5">
-              <h3 className="text-base font-semibold text-foreground">
+            <div className="space-y-2">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
                 How can I assist your business today?
-              </h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Ask about customer history, active jobs, technician schedules, revenue metrics, or overdue invoices.
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                Speak or type natural commands to create jobs, capture leads, generate quotes, log expenses, or ask anything about your operations.
               </p>
             </div>
 
-            {/* Categorized Starters */}
-            <div className="w-full space-y-3 pt-2 text-left">
-              {CATEGORIZED_PROMPTS.map((cat, idx) => {
-                const IconComponent = cat.icon;
-                return (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                      <IconComponent className="size-3 text-emerald-600 dark:text-emerald-400" />
-                      <span>{cat.category}</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                      {cat.prompts.map((p, pIdx) => (
-                        <button
-                          key={pIdx}
-                          type="button"
-                          onClick={() => void send(p.text)}
-                          disabled={loading}
-                          className="flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-background/60 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 hover:border-emerald-500/40 text-xs font-medium text-foreground text-left transition-all group cursor-pointer shadow-2xs"
-                        >
-                          <span className="truncate">{p.label}</span>
-                          <ArrowRight className="size-3 text-muted-foreground group-hover:text-emerald-600 transition-transform group-hover:translate-x-0.5 shrink-0 ml-1.5" />
-                        </button>
-                      ))}
-                    </div>
+            {/* ChatGPT-Style 2x2 Suggestion Grid */}
+            <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 text-left">
+              {CATEGORIZED_PROMPTS.flatMap((cat) => cat.prompts).slice(0, 4).map((p, pIdx) => (
+                <button
+                  key={pIdx}
+                  type="button"
+                  onClick={() => void send(p.text)}
+                  disabled={loading}
+                  className="flex flex-col justify-between p-3.5 rounded-2xl border border-border/80 bg-card hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 hover:border-emerald-500/40 transition-all text-left group cursor-pointer shadow-xs"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-xs font-semibold text-foreground group-hover:text-emerald-600 transition-colors">
+                      {p.label}
+                    </span>
+                    <ArrowRight className="size-3.5 text-muted-foreground group-hover:text-emerald-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
                   </div>
-                );
-              })}
+                  <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                    "{p.text}"
+                  </p>
+                </button>
+              ))}
             </div>
           </div>
         ) : (
-          <div className="space-y-4 max-w-3xl mx-auto">
+          <div className="space-y-5 max-w-3xl mx-auto w-full pb-6">
             {messages.map((msg, i) => (
               <div
                 key={i}
@@ -974,7 +975,7 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
               >
                 {/* Assistant Avatar */}
                 {msg.role === 'assistant' && (
-                  <div className="size-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5">
+                  <div className="size-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5">
                     <Sparkles className="size-4" />
                   </div>
                 )}
@@ -982,12 +983,12 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
                 {/* Message Bubble */}
                 <div
                   className={cn(
-                    'max-w-[88%] rounded-2xl p-3.5 space-y-2.5 text-sm shadow-2xs',
+                    'max-w-[88%] sm:max-w-[82%] rounded-2xl p-4 space-y-3 text-sm shadow-xs',
                     msg.role === 'user'
                       ? 'bg-emerald-600 text-white rounded-tr-xs'
                       : msg.failed
                         ? 'bg-destructive/10 border border-destructive/30 text-destructive rounded-tl-xs'
-                        : 'bg-muted/70 border border-border/60 text-foreground rounded-tl-xs',
+                        : 'bg-muted/50 dark:bg-muted/30 border border-border/70 text-foreground rounded-tl-xs',
                   )}
                 >
                   {/* Tool Call Cards if any */}
@@ -995,7 +996,7 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
                     <div className="space-y-1.5 mb-2">
                       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                         <Wrench className="size-3 text-emerald-500" />
-                        <span>Executed Tools ({msg.toolCalls.length})</span>
+                        <span>Executed Actions ({msg.toolCalls.length})</span>
                       </div>
                       {msg.toolCalls.map((tc, tcIdx) => (
                         <ToolCallCard key={tcIdx} toolCall={tc} />
@@ -1094,7 +1095,7 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
 
                 {/* User Avatar */}
                 {msg.role === 'user' && (
-                  <div className="size-8 rounded-lg bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center justify-center shadow-xs shrink-0 mt-0.5">
+                  <div className="size-8 rounded-full bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center justify-center shadow-xs shrink-0 mt-0.5">
                     <User className="size-4" />
                   </div>
                 )}
@@ -1104,13 +1105,13 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
             {/* In-Flight Thinking Indicator */}
             {loading && (
               <div className="flex items-start gap-3">
-                <div className="size-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5 animate-pulse">
+                <div className="size-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-xs shrink-0 mt-0.5 animate-pulse">
                   <Sparkles className="size-4" />
                 </div>
-                <div className="rounded-2xl rounded-tl-xs bg-muted/70 border border-border/60 p-3.5 space-y-2">
+                <div className="rounded-2xl rounded-tl-xs bg-muted/60 border border-border/60 p-4 space-y-2">
                   <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <Loader2 className="size-3.5 animate-spin text-emerald-600" />
-                    <span>Analyzing business data...</span>
+                    <span>Executing requested actions...</span>
                   </div>
                   <div className="flex gap-1.5 py-1">
                     <span className="size-2 rounded-full bg-emerald-500/70 animate-bounce [animation-delay:0ms]" />
@@ -1124,18 +1125,18 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
         )}
       </div>
 
-      {/* ── Input Composer ── */}
-      <div className="border-t border-border/70 p-3.5 bg-background shrink-0">
+      {/* ── ChatGPT-Style Floating Pill Bottom Composer ── */}
+      <div className="p-3 sm:p-4 bg-background/90 backdrop-blur-md shrink-0">
         <div className="max-w-3xl mx-auto space-y-2">
-          <div className="relative flex items-end gap-2 rounded-xl border border-border/80 bg-muted/30 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all p-1.5">
+          <div className="relative flex items-end gap-2 rounded-3xl border border-border/80 bg-muted/30 dark:bg-muted/20 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all p-1.5 pl-3.5 shadow-md">
             <Textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask about jobs, invoices, customers, schedule..."
+              placeholder="Ask anything or create jobs, leads, invoices..."
               rows={1}
-              className="flex-1 max-h-32 min-h-[40px] border-0 bg-transparent resize-none text-sm focus-visible:ring-0 focus-visible:ring-offset-0 p-2 shadow-none"
+              className="flex-1 max-h-36 min-h-[40px] border-0 bg-transparent resize-none text-sm focus-visible:ring-0 focus-visible:ring-offset-0 py-2.5 px-0 shadow-none"
               disabled={loading}
             />
 
@@ -1145,8 +1146,8 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
               variant="ghost"
               size="icon"
               className={cn(
-                'size-8 text-muted-foreground hover:text-foreground shrink-0 mb-1',
-                isListening && 'text-red-500 bg-red-50 dark:bg-red-950/40 animate-pulse',
+                'size-8.5 rounded-full text-muted-foreground hover:text-foreground shrink-0 mb-0.5 transition-all',
+                isListening && 'text-red-500 bg-red-100 dark:bg-red-950/60 ring-2 ring-red-500 animate-pulse',
               )}
               onClick={toggleVoiceInput}
               title={isListening ? 'Stop listening' : 'Voice dictation'}
@@ -1154,25 +1155,18 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
               {isListening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
             </Button>
 
-            {input.trim() && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-8 text-muted-foreground hover:text-foreground shrink-0 mb-1"
-                onClick={() => setInput('')}
-                title="Clear input"
-              >
-                <X className="size-3.5" />
-              </Button>
-            )}
-
+            {/* Send Button (ChatGPT Rounded Circle) */}
             <Button
               type="button"
               onClick={() => void send()}
               disabled={loading || !input.trim()}
               size="icon"
-              className="size-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shrink-0 mb-0.5 shadow-xs"
+              className={cn(
+                "size-8.5 rounded-full shrink-0 mb-0.5 transition-all shadow-xs",
+                input.trim()
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white scale-100"
+                  : "bg-muted text-muted-foreground opacity-50 scale-95"
+              )}
               title="Send message (Enter)"
             >
               {loading ? (
@@ -1184,16 +1178,9 @@ export function AiChatPanel({ initialPrompt, onNavigateToView, className }: AiCh
             </Button>
           </div>
 
-          <div className="flex items-center justify-between px-1 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <CornerDownLeft className="size-3" />
-              <span>Press <kbd className="font-mono bg-muted px-1 rounded border border-border/60">Enter ↵</kbd> to send, <kbd className="font-mono bg-muted px-1 rounded border border-border/60">Shift+Enter</kbd> for newline</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <Zap className="size-3 text-emerald-500" />
-              Encrypted & Tenant-Isolated
-            </span>
-          </div>
+          <p className="text-center text-[10.5px] text-muted-foreground">
+            Fieseros AI executes business operations & scheduling directly. Verify key details.
+          </p>
         </div>
       </div>
     </div>

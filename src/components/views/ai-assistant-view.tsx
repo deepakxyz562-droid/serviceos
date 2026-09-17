@@ -130,110 +130,28 @@ export function AiAssistantView() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-4">
-        <TabsList className="flex-wrap h-auto bg-muted/60 p-1 rounded-xl">
-          <TabsTrigger value="chat" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-            Copilot Chat
-          </TabsTrigger>
-          <TabsTrigger value="knowledge" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <BookOpen className="size-3.5 text-blue-500" />
-            Knowledge Base
-          </TabsTrigger>
-          <TabsTrigger value="intents" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <Zap className="size-3.5 text-amber-500" />
-            Intent Intelligence
-          </TabsTrigger>
-          <TabsTrigger value="suggestions" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <MessageSquare className="size-3.5 text-purple-500" />
-            Suggested Replies
-          </TabsTrigger>
-          <TabsTrigger value="summaries" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
-            <Brain className="size-3.5 text-indigo-500" />
-            Summaries
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+          <TabsList className="bg-muted/60 p-1 rounded-xl">
+            <TabsTrigger value="chat" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+              <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              Copilot Chat
+            </TabsTrigger>
+            <TabsTrigger value="knowledge" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+              <BookOpen className="size-3.5 text-blue-500" />
+              Knowledge Base
+            </TabsTrigger>
+            <TabsTrigger value="intents" className="text-xs px-3.5 py-1.5 gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+              <Zap className="size-3.5 text-amber-500" />
+              Intent Intelligence
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        {/* ── Tab: Copilot Chat (Split View) ── */}
+        {/* ── Tab: Copilot Chat (ChatGPT Centered Full Screen View) ── */}
         <TabsContent value="chat" className="mt-0">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-            {/* Primary Interactive Chat Stream */}
-            <div className="h-[calc(100vh-250px)] min-h-[560px]">
-              <AiChatPanel initialPrompt={chatInjectedPrompt} />
-            </div>
-
-            {/* Quick Actions & Copilot Launchpad Sidebar */}
-            <div className="space-y-4">
-              <Card className="border-border/80 shadow-2xs">
-                <CardContent className="p-4 space-y-3">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <Zap className="size-3.5 text-amber-500" />
-                    Quick Launchpad
-                  </span>
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => handleTriggerChatPrompt('Give me a full overview of today’s business performance, jobs, and revenue.')}
-                      className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-background/60 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs font-medium text-foreground text-left transition-all group cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <TrendingUp className="size-3.5 text-emerald-600 shrink-0" />
-                        <span className="truncate">Today&apos;s Business Snapshot</span>
-                      </div>
-                      <ArrowRight className="size-3 text-muted-foreground group-hover:text-emerald-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleTriggerChatPrompt('Which jobs are scheduled for today, and are any technicians running late?')}
-                      className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-background/60 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-xs font-medium text-foreground text-left transition-all group cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Calendar className="size-3.5 text-blue-600 shrink-0" />
-                        <span className="truncate">Schedule & Dispatch Review</span>
-                      </div>
-                      <ArrowRight className="size-3 text-muted-foreground group-hover:text-blue-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleTriggerChatPrompt('List all overdue invoices with customer names, contact numbers, and total balance.')}
-                      className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-background/60 hover:bg-purple-50/50 dark:hover:bg-purple-950/20 text-xs font-medium text-foreground text-left transition-all group cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <DollarSign className="size-3.5 text-purple-600 shrink-0" />
-                        <span className="truncate">Overdue Invoice Tracker</span>
-                      </div>
-                      <ArrowRight className="size-3 text-muted-foreground group-hover:text-purple-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleTriggerChatPrompt('Show me recent leads that have not been contacted or converted yet.')}
-                      className="w-full flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-background/60 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 text-xs font-medium text-foreground text-left transition-all group cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Users className="size-3.5 text-amber-600 shrink-0" />
-                        <span className="truncate">Pending Leads Check</span>
-                      </div>
-                      <ArrowRight className="size-3 text-muted-foreground group-hover:text-amber-600 transition-transform group-hover:translate-x-0.5 shrink-0" />
-                    </button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/80 shadow-2xs">
-                <CardContent className="p-4 space-y-2">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <ShieldCheck className="size-3.5 text-emerald-600" />
-                    Security & Data Privacy
-                  </span>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    All queries run securely against your tenant database. The AI cannot modify records or expose confidential credentials.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+          <div className="h-[calc(100vh-180px)] min-h-[600px] w-full rounded-2xl border border-border/80 overflow-hidden shadow-sm bg-background">
+            <AiChatPanel initialPrompt={chatInjectedPrompt} />
           </div>
         </TabsContent>
 

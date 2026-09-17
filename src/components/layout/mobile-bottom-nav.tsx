@@ -13,6 +13,7 @@ import {
   Target,
   Settings,
   Calendar,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { checkMenuAccess } from '@/components/layout/upgrade-modal';
@@ -24,19 +25,10 @@ interface MobileNavItem {
   icon: React.ElementType;
 }
 
-// Full candidate list for owner/admin mobile nav. Items are filtered by the
-// superadmin "disabled menus" config (same /api/menu-visibility source the
-// desktop sidebar uses) so the mobile bottom nav respects the same hide rules.
-// Calendar is included as a fallback so the nav stays 4 slots wide when
-// Omnichannel is disabled.
-//
-// NOTE: the `omnichannel` item keeps its short "Inbox" label (space is tight on
-// a 4-slot bottom nav) but uses the `RadioTower` icon to visually match the
-// desktop sidebar — previously this used the `Inbox` tray icon, which made
-// mobile and desktop look like different features.
 const ownerNavCandidates: MobileNavItem[] = [
   { view: 'dashboard', label: 'Home', icon: LayoutDashboard },
   { view: 'jobs', label: 'Jobs', icon: Briefcase },
+  { view: 'aiAssistant', label: 'AI Copilot', icon: Sparkles },
   { view: 'omnichannel', label: 'Inbox', icon: RadioTower },
   { view: 'contacts', label: 'People', icon: Users },
   { view: 'calendar', label: 'Calendar', icon: Calendar },
@@ -46,6 +38,7 @@ const ownerNavCandidates: MobileNavItem[] = [
 const superadminNavItems: MobileNavItem[] = [
   { view: 'superadmin', label: 'Admin', icon: ShieldCheck },
   { view: 'dashboard', label: 'Home', icon: LayoutDashboard },
+  { view: 'aiAssistant', label: 'AI Copilot', icon: Sparkles },
   { view: 'leads', label: 'Leads', icon: Target },
   { view: 'settings', label: 'Settings', icon: Settings },
 ];
