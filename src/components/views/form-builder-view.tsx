@@ -92,7 +92,7 @@ export function FormBuilderView() {
     description: '',
     type: 'lead_capture',
     status: 'active',
-    fields: [{ id: `f-${Date.now()}`, label: '', type: 'text', required: false, placeholder: '' }],
+    fields: [],
     submissionActions: getDefaultActions('lead_capture'),
     fieldMappings: [],
     welcomeMessage: '',
@@ -151,7 +151,7 @@ export function FormBuilderView() {
   const resetFormData = useCallback(() => {
     setFormData({
       name: '', description: '', type: 'lead_capture', status: 'active',
-      fields: [{ id: `f-${Date.now()}`, label: '', type: 'text', required: false, placeholder: '' }],
+      fields: [],
       submissionActions: getDefaultActions('lead_capture'),
       fieldMappings: [],
       welcomeMessage: '', completionMessage: '',
@@ -255,7 +255,7 @@ export function FormBuilderView() {
   const addField = () => {
     setFormData((prev) => ({
       ...prev,
-      fields: [...prev.fields, { id: `f-${Date.now()}`, label: '', type: 'text', required: false, placeholder: '' }],
+      fields: [...prev.fields, { id: `f-${Date.now()}`, label: `Question ${prev.fields.length + 1}`, type: 'short_answer', required: false, placeholder: 'Enter answer...' }],
     }));
   };
 

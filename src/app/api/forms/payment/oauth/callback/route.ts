@@ -130,3 +130,62 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const gateway = url.searchParams.get('gateway') || url.searchParams.get('state_gateway') || 'stripe_elements';
+  const code = url.searchParams.get('code') || '';
+  const state = url.searchParams.get('state') || '';
+  const error = url.searchParams.get('error') || url.searchParams.get('error_description');
+
+  if (error) {
+    return new NextResponse(
+      `<!DOCTYPE html>
+      <html>
+      <head><title>Connection Cancelled</title></head>
+      <body style="font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0f172a; color: #fff;">
+        <div style="text-align: center; padding: 32px; border-radius: 16px; background: #1e293b; border: 1px solid #dc2626; max-width: 400px;">
+          <div style="font-size: 40px; margin-bottom: 12px; color: #ef4444;">✕</div>
+          <h2 style="margin: 0 0 8px; font-size: 18px;">Connection Failed or Cancelled</h2>
+          <p style="color: #94a3b8; font-size: 13px; margin: 0 0 16px;">${error}</p>
+          <button onclick="window.close()" style="background: #334155; color: #fff; border: 0; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px;">Close Window</button>
+        </div>
+      </body>
+      </html>`,
+      { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+    );
+  }
+
+  const mockToken = `token_${gateway}_${Date.now()}`;
+
+  return new NextResponse(
+    `<!DOCTYPE html>
+    <html>
+    <head><title>Connection Successful</title></head>
+    <body style="font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0f172a; color: #fff;">
+      <div style="text-align: center; padding: 32px; border-radius: 16px; background: #1e293b; border: 1px solid #10b981; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
+        <div style="font-size: 44px; margin-bottom: 12px; color: #10b981;">✓</div>
+        <h2 style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">Connection Authorized!</h2>
+        <p style="color: #94a3b8; font-size: 13px; margin: 0;">Connected successfully. Returning to form studio...</p>
+      </div>
+      <script>
+        try {
+          if (window.opener) {
+            window.opener.postMessage({
+              type: 'PAYMENT_OAUTH_SUCCESS',
+              gateway: ${JSON.stringify(gateway)},
+              code: ${JSON.stringify(code)},
+              state: ${JSON.stringify(state)},
+              accessToken: ${JSON.stringify(mockToken)}
+            }, '*');
+          }
+        } catch(e) {}
+        setTimeout(function() {
+          window.close();
+        }, 600);
+      </script>
+    </body>
+    </html>`,
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+  );
+}

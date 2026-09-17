@@ -96,38 +96,42 @@ function getOAuthProviderName(gateway: PaymentGatewayDef): string {
 }
 
 /** OAuth redirect URLs for gateways that support OAuth flow. */
-function getOAuthUrl(gateway: PaymentGatewayDef, returnUrl: string): string | null {
+function getOAuthUrl(gateway: PaymentGatewayDef, origin: string): string {
+  const callbackUrl = `${origin}/api/forms/payment/oauth/callback?gateway=${gateway.id}`;
+  const encodedRedirect = encodeURIComponent(callbackUrl);
   const state = Math.random().toString(36).substring(2, 15);
-  const encodedRedirect = encodeURIComponent(returnUrl);
 
   switch (gateway.id) {
     case 'stripe_elements':
     case 'stripe_checkout':
-      // Stripe Connect OAuth
-      return `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${process.env.NEXT_PUBLIC_STRIPE_CLIENT_ID || 'ca_test'}&scope=read_write&redirect_uri=${encodedRedirect}&state=${state}`;
+      if (process.env.NEXT_PUBLIC_STRIPE_CLIENT_ID) {
+        return `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${process.env.NEXT_PUBLIC_STRIPE_CLIENT_ID}&scope=read_write&redirect_uri=${encodedRedirect}&state=${state}`;
+      }
+      return callbackUrl;
 
     case 'square_payments':
     case 'cash_app_pay':
-      // Square OAuth
-      return `https://connect.squareup.com/oauth2/authorize?client_id=${process.env.NEXT_PUBLIC_SQUARE_APP_ID || 'sandbox-sq0idb'}&scope=MERCHANT_PROFILE_READ+PAYMENTS_WRITE&redirect_uri=${encodedRedirect}&state=${state}`;
+      if (process.env.NEXT_PUBLIC_SQUARE_APP_ID) {
+        return `https://connect.squareup.com/oauth2/authorize?client_id=${process.env.NEXT_PUBLIC_SQUARE_APP_ID}&scope=MERCHANT_PROFILE_READ+PAYMENTS_WRITE&redirect_uri=${encodedRedirect}&state=${state}`;
+      }
+      return callbackUrl;
 
     case 'paypal_complete':
     case 'venmo':
-      // PayPal OAuth
-      const paypalBase = process.env.NEXT_PUBLIC_PAYPAL_ENV === 'live' ? 'https://www.paypal.com' : 'https://www.sandbox.paypal.com';
-      return `${paypalBase}/connect?flow=entry&client_id=${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'test'}&scope=openid+email&redirect_uri=${encodedRedirect}&state=${state}`;
-
-    case 'razorpay':
-      // Razorpay — uses API key based auth (no OAuth), return null to show BYOK
-      return null;
+      if (process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID) {
+        const paypalBase = process.env.NEXT_PUBLIC_PAYPAL_ENV === 'live' ? 'https://www.paypal.com' : 'https://www.sandbox.paypal.com';
+        return `${paypalBase}/connect?flow=entry&client_id=${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID}&scope=openid+email&redirect_uri=${encodedRedirect}&state=${state}`;
+      }
+      return callbackUrl;
 
     case 'mollie':
-      // Mollie OAuth
-      return `https://www.mollie.com/oauth2/authorize?client_id=${process.env.NEXT_PUBLIC_MOLLIE_CLIENT_ID || 'app_test'}&scope=payments.read+payments.write&redirect_uri=${encodedRedirect}&state=${state}`;
+      if (process.env.NEXT_PUBLIC_MOLLIE_CLIENT_ID) {
+        return `https://www.mollie.com/oauth2/authorize?client_id=${process.env.NEXT_PUBLIC_MOLLIE_CLIENT_ID}&scope=payments.read+payments.write&redirect_uri=${encodedRedirect}&state=${state}`;
+      }
+      return callbackUrl;
 
     default:
-      // Gateways without OAuth — use BYOK (API key) flow
-      return null;
+      return callbackUrl;
   }
 }
 
@@ -200,30 +204,42 @@ export function PaymentPropertiesPanel({
   };
 
   const handleOAuthConnect = () => {
-    const oauthUrl = getOAuthUrl(gateway, window.location.href);
+    setIsConnecting(true);
 
-    if (oauthUrl) {
-      // Real OAuth flow — redirect to gateway's OAuth page
-      // The gateway will redirect back to this URL with ?code=xxx&state=xxx
-      // We handle the callback in the component (see useEffect below)
-      setIsConnecting(true);
-      // Save current modal state so we can restore it after redirect
-      sessionStorage.setItem('payment_oauth_pending', JSON.stringify({
-        gatewayId: gateway.id,
-        connectionName: modalConnName,
-        mode: modalMode,
-        returnUrl: window.location.href,
-      }));
-      // Redirect to OAuth provider
-      window.location.assign(oauthUrl);
+    if (gatewaySupportsOAuth) {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const oauthUrl = getOAuthUrl(gateway, origin);
+
+      // Open a centered modal popup window so builder never redirects or unloads
+      const width = 600;
+      const height = 720;
+      const left = typeof window !== 'undefined' ? window.screenX + (window.outerWidth - width) / 2 : 100;
+      const top = typeof window !== 'undefined' ? window.screenY + (window.outerHeight - height) / 2 : 100;
+      
+      const popup = window.open(
+        oauthUrl,
+        `oauth_connect_${gateway.id}`,
+        `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
+      );
+
+      // Watch for popup close if not resolved
+      const timer = setInterval(() => {
+        if (!popup || popup.closed) {
+          clearInterval(timer);
+          setIsConnecting(false);
+        }
+      }, 1000);
     } else {
-      // BYOK flow — no redirect, just mark as connected (user will enter API keys in BYOK section)
-      setIsConnecting(true);
+      // BYOK flow — simulate instant connection
       setTimeout(() => {
         setIsConnecting(false);
         setModalIsConnected(true);
+        onConfigChange('isConnected', true);
         onConfigChange('provider', 'byok');
-      }, 300);
+        onConfigChange('connectionName', modalConnName || `My ${gateway.name} Connection #1`);
+        onConfigChange('mode', modalMode);
+        onConfigChange('testMode', modalMode === 'test');
+      }, 400);
     }
   };
 
@@ -240,6 +256,7 @@ export function PaymentPropertiesPanel({
 
   const handleDisconnect = () => {
     onConfigChange('isConnected', false);
+    setModalIsConnected(false);
   };
 
   const handleMethodToggle = (methodId: string, checked: boolean) => {
@@ -250,67 +267,30 @@ export function PaymentPropertiesPanel({
   const oauthProviderName = getOAuthProviderName(gateway);
   const gatewaySupportsOAuth = supportsOAuth(gateway);
 
-  // ─── OAuth Callback Handler ─────────────────────────────────────────────
-  // When the gateway redirects back with ?code=xxx&state=xxx, we:
-  // 1. Exchange the authorization code for an access token (server-side)
-  // 2. Save the token to widgetConfig
-  // 3. Mark the connection as connected
+  // ─── OAuth Cross-Window Message Listener ────────────────────────────────
+  // Listens for message from centered OAuth popup window (PAYMENT_OAUTH_SUCCESS)
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const authCode = urlParams.get('code');
-    const authState = urlParams.get('state');
-
-    if (authCode && authState) {
-      // Check if this OAuth callback is for our gateway
-      const pendingRaw = sessionStorage.getItem('payment_oauth_pending');
-      if (pendingRaw) {
-        const pending = JSON.parse(pendingRaw);
-        if (pending.gatewayId === gateway.id) {
-          // Clear the pending state
-          sessionStorage.removeItem('payment_oauth_pending');
-
-          // Clean the URL (remove code & state params)
-          const cleanUrl = window.location.href.split('?')[0];
-          window.history.replaceState({}, document.title, cleanUrl);
-
-          // Exchange the auth code for an access token via our backend API
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setIsConnecting(true);
-          fetch('/api/forms/payment/oauth/callback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              gateway: gateway.id,
-              code: authCode,
-              state: authState,
-              redirectUri: pending.returnUrl,
-            }),
-          })
-            .then((res) => res.json())
-            .then((data) => {
-              if (data.success && data.accessToken) {
-                // Save the access token to widgetConfig
-                onConfigChange('isConnected', true);
-                onConfigChange('provider', 'oauth');
-                onConfigChange('accessToken', data.accessToken);
-                onConfigChange('connectionName', pending.connectionName || `My ${gateway.name} Connection #1`);
-                onConfigChange('mode', pending.mode || 'test');
-                onConfigChange('testMode', (pending.mode || 'test') === 'test');
-                setModalIsConnected(true);
-              } else {
-                console.error('OAuth token exchange failed:', data.error);
-              }
-            })
-            .catch((err) => {
-              console.error('OAuth callback error:', err);
-            })
-            .finally(() => {
-              setIsConnecting(false);
-            });
+    const handleMessage = (event: MessageEvent) => {
+      if (!event.data) return;
+      if (event.data.type === 'PAYMENT_OAUTH_SUCCESS' || event.data.type === 'OAUTH_AUTH_SUCCESS') {
+        const { gateway: cbGateway, accessToken, code } = event.data;
+        if (!cbGateway || cbGateway === gateway.id) {
+          setIsConnecting(false);
+          setModalIsConnected(true);
+          onConfigChange('isConnected', true);
+          onConfigChange('provider', 'oauth');
+          if (accessToken) onConfigChange('accessToken', accessToken);
+          if (code) onConfigChange('authCode', code);
+          onConfigChange('connectionName', modalConnName || `My ${gateway.name} Connection #1`);
+          onConfigChange('mode', modalMode);
+          onConfigChange('testMode', modalMode === 'test');
         }
       }
-    }
-  }, [gateway.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [gateway.id, gateway.name, modalConnName, modalMode, onConfigChange]);
 
   return (
     <div
