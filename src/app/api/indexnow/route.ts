@@ -85,21 +85,38 @@ export async function POST(request: NextRequest) {
       const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
       const rootSitemapUrl = `${siteUrl}/sitemap.xml`;
 
-      // 1. Fetch root sitemap
-      const rootRes = await fetch(rootSitemapUrl, {
-        signal: AbortSignal.timeout(15_000),
-      });
+      // ─── P3: Also fetch the templates sitemap (20K+ template URLs) ────────
+      // The root /sitemap.xml only contains tenant/business URLs. The template
+      // URLs live in /templates/sitemap.xml (declared in robots.txt). Without
+      // this, IndexNow never learns about the 20K template detail pages.
+      const templatesSitemapUrl = `${siteUrl}/templates/sitemap.xml`;
+
+      // 1. Fetch root sitemap + templates sitemap concurrently
+      const [rootRes, templatesRes] = await Promise.all([
+        fetch(rootSitemapUrl, { signal: AbortSignal.timeout(15_000) }),
+        fetch(templatesSitemapUrl, { signal: AbortSignal.timeout(15_000) }).catch(() => null),
+      ]);
+
       if (!rootRes.ok) {
         return NextResponse.json(
-          { error: `Failed to fetch sitemap: ${rootRes.status}` },
+          { error: `Failed to fetch root sitemap: ${rootRes.status}` },
           { status: 502 },
         );
       }
+
       const rootXml = await rootRes.text();
-      const locMatches = rootXml.match(/<loc>([^<]+)<\/loc>/g) || [];
-      const extractedLocs = locMatches
-        .map((m) => m.replace(/<\/?loc>/g, '').trim())
-        .filter((u) => u.startsWith('http'));
+      const templatesXml = templatesRes?.ok ? await templatesRes.text() : '';
+
+      // Extract <loc> URLs from both sitemaps
+      const extractLocs = (xml: string): string[] => {
+        const matches = xml.match(/<loc>([^<]+)<\/loc>/g) || [];
+        return matches
+          .map((m) => m.replace(/<\/?loc>/g, '').trim())
+          .filter((u) => u.startsWith('http'));
+      };
+
+      const rootLocs = extractLocs(rootXml);
+      const templateLocs = extractLocs(templatesXml);
 
       const isSitemapIndex = rootXml.includes('<sitemapindex') || rootXml.includes('<sitemap>');
 
@@ -107,17 +124,13 @@ export async function POST(request: NextRequest) {
 
       if (isSitemapIndex) {
         // It's a sitemap index containing sub-sitemap URLs (/sitemap/0.xml, /sitemap/1.xml).
-        // Fetch all sub-sitemaps concurrently to extract the actual content page URLs.
         const subSitemapResults = await Promise.all(
-          extractedLocs.map(async (subUrl) => {
+          rootLocs.map(async (subUrl) => {
             try {
               const res = await fetch(subUrl, { signal: AbortSignal.timeout(15_000) });
               if (!res.ok) return [];
               const subXml = await res.text();
-              const subLocs = subXml.match(/<loc>([^<]+)<\/loc>/g) || [];
-              return subLocs
-                .map((m) => m.replace(/<\/?loc>/g, '').trim())
-                .filter((u) => u.startsWith('http'));
+              return extractLocs(subXml);
             } catch {
               return [];
             }
@@ -125,9 +138,12 @@ export async function POST(request: NextRequest) {
         );
         pageUrls = Array.from(new Set(subSitemapResults.flat())).filter((u) => !u.endsWith('.xml'));
       } else {
-        // Standard urlset — direct content page URLs.
-        pageUrls = Array.from(new Set(extractedLocs)).filter((u) => !u.endsWith('.xml'));
+        pageUrls = Array.from(new Set(rootLocs)).filter((u) => !u.endsWith('.xml'));
       }
+
+      // Merge in the template URLs
+      const templateUrls = Array.from(new Set(templateLocs)).filter((u) => !u.endsWith('.xml'));
+      pageUrls = Array.from(new Set([...pageUrls, ...templateUrls]));
 
       if (pageUrls.length === 0) {
         return NextResponse.json({ error: 'No content page URLs found in sitemaps' }, { status: 400 });
@@ -136,7 +152,7 @@ export async function POST(request: NextRequest) {
       // IndexNow allows up to 10k URLs per request; we batch at 1000 to be safe.
       const BATCH = 1000;
       const results = [];
-      for (let i = 0; i < pageUrls.length; i += BATCH) {
+      for (let i =  0; i < pageUrls.length; i += BATCH) {
         const batch = pageUrls.slice(i, i + BATCH);
         const r = await submitToIndexNow(batch);
         results.push(r);
@@ -144,12 +160,19 @@ export async function POST(request: NextRequest) {
       const totalSubmitted = results.reduce((sum, r) => sum + r.submitted, 0);
       const allOk = results.every((r) => r.ok);
       logger.info(
-        { component: 'api-indexnow', totalUrls: pageUrls.length, totalSubmitted, allOk },
-        'Bulk IndexNow submission (recursive sitemap index traversal)',
+        {
+          component: 'api-indexnow',
+          totalUrls: pageUrls.length,
+          templateUrls: templateUrls.length,
+          totalSubmitted,
+          allOk,
+        },
+        'Bulk IndexNow submission (root + templates sitemap)',
       );
       return NextResponse.json({
         ok: allOk,
         totalUrls: pageUrls.length,
+        templateUrls: templateUrls.length,
         submitted: totalSubmitted,
         batches: results,
       });
@@ -157,6 +180,59 @@ export async function POST(request: NextRequest) {
       logger.error({ component: 'api-indexnow', err }, 'Bulk sitemap submission failed');
       return NextResponse.json(
         { error: 'Failed to fetch/parse sitemaps', detail: err instanceof Error ? err.message : 'Unknown' },
+        { status: 500 },
+      );
+    }
+  }
+
+  // ── Option B2: submit ONLY template URLs (from /templates/sitemap.xml) ────
+  // Useful for re-pinging IndexNow after adding new templates without
+  // re-submitting the entire root sitemap.
+  if (body.submitTemplates === true) {
+    try {
+      const siteUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
+      const templatesSitemapUrl = `${siteUrl}/templates/sitemap.xml`;
+
+      const res = await fetch(templatesSitemapUrl, { signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) {
+        return NextResponse.json(
+          { error: `Failed to fetch templates sitemap: ${res.status}` },
+          { status: 502 },
+        );
+      }
+      const xml = await res.text();
+      const locMatches = xml.match(/<loc>([^<]+)<\/loc>/g) || [];
+      const templateUrls = locMatches
+        .map((m) => m.replace(/<\/?loc>/g, '').trim())
+        .filter((u) => u.startsWith('http') && !u.endsWith('.xml'));
+
+      if (templateUrls.length === 0) {
+        return NextResponse.json({ error: 'No template URLs found in /templates/sitemap.xml' }, { status: 400 });
+      }
+
+      const BATCH = 1000;
+      const results = [];
+      for (let i = 0; i < templateUrls.length; i += BATCH) {
+        const batch = templateUrls.slice(i, i + BATCH);
+        const r = await submitToIndexNow(batch);
+        results.push(r);
+      }
+      const totalSubmitted = results.reduce((sum, r) => sum + r.submitted, 0);
+      const allOk = results.every((r) => r.ok);
+      logger.info(
+        { component: 'api-indexnow', templateUrls: templateUrls.length, totalSubmitted, allOk },
+        'Template-only IndexNow submission',
+      );
+      return NextResponse.json({
+        ok: allOk,
+        totalUrls: templateUrls.length,
+        submitted: totalSubmitted,
+        batches: results,
+      });
+    } catch (err) {
+      logger.error({ component: 'api-indexnow', err }, 'Template-only submission failed');
+      return NextResponse.json(
+        { error: 'Failed to submit template URLs', detail: err instanceof Error ? err.message : 'Unknown' },
         { status: 500 },
       );
     }

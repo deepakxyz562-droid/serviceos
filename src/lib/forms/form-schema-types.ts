@@ -83,6 +83,14 @@ export interface FormField {
   labelEnabled?: boolean;
   readOnly?: boolean;
   description?: string;
+  // ─── P2: Elementor-style per-field styling ────────────────────────────────
+  padding?: string;            // CSS padding, e.g. "12px 16px"
+  fontSize?: string;           // CSS font-size, e.g. "15px" or "inherit"
+  backgroundColor?: string;    // CSS color, e.g. "#f8fafc"
+  borderStyle?: string;        // 'inherit' | 'none' | 'solid' | 'dashed' | 'dotted'
+  borderColor?: string;        // CSS color
+  textColor?: string;          // CSS color for input text
+  inputHeight?: string;        // 'inherit' | 'compact' | 'medium' | 'large'
 }
 
 export interface FormStep {

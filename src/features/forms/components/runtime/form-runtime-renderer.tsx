@@ -523,6 +523,14 @@ export function FormRuntimeRenderer({
                   const inputStyle: React.CSSProperties = {
                     ...(field.heightPx ? { height: `${field.heightPx}px` } : {}),
                     ...(field.align ? { textAlign: field.align } : {}),
+                    // ─── P2 fix: apply field-level borderRadius (was missing in card mode) ──
+                    borderRadius: field.borderRadius && field.borderRadius !== 'inherit'
+                      ? field.borderRadius
+                      : (schema.theme?.inputBorderRadius || '12px'),
+                    // ─── P2 fix: apply field-level padding, fontSize, backgroundColor ──
+                    ...(field.padding ? { padding: field.padding } : {}),
+                    ...(field.fontSize ? { fontSize: field.fontSize } : {}),
+                    ...(field.backgroundColor ? { backgroundColor: field.backgroundColor } : {}),
                   };
 
                   return (
@@ -611,6 +619,48 @@ export function FormRuntimeRenderer({
                       )}
                       {field.type === 'heading' && (<h2 className="text-lg font-bold text-foreground pt-2">{field.label}</h2>)}
                       {field.type === 'paragraph' && (<p className="text-sm text-muted-foreground leading-relaxed">{(field.widgetConfig as any)?.text || field.label}</p>)}
+
+                      {/* ─── P1 fix: handle ALL remaining field types so preview shows every field ───
+                          Previously these types were invisible (no render branch). Now they route
+                          through WidgetRuntimeDispatcher (which has the 3-layer resolver from R1)
+                          or render an appropriate input. Fixes "preview not showing all fields". */}
+                      {[
+                        'address', 'photo', 'file', 'currency', 'calculated',
+                        'image_upload_with_notes', 'route_planner', 'nearest_location',
+                        'service_area', 'payment_gateway', 'sms_otp', 'voice_recorder',
+                        'signature_pad', 'form_calculation', 'text_count', 'line_button',
+                        'bsb_checker', 'codice_fiscale', 'turnstile', 'france_region',
+                        'inventory_dropdown', 'digital_magazine', 'street_view',
+                        'most_frequent_answer',
+                      ].includes(field.type) && (
+                        <WidgetRuntimeDispatcher
+                          field={{ ...field, widgetType: field.widgetType || field.type }}
+                          value={formData[field.id]}
+                          onChange={(val) => handleFieldChange(field.id, val)}
+                          allFormData={formData}
+                        />
+                      )}
+
+                      {/* ─── P1 fix: fallback for truly unknown field types ───
+                          Renders a labeled placeholder so the field is visible (not invisible). */}
+                      {!field.widgetType && ![
+                        'short_answer', 'long_answer', 'email', 'phone', 'numerical', 'date', 'time',
+                        'dropdown', 'radio', 'checkbox', 'signature', 'rating', 'heading', 'paragraph',
+                        'control_widget', 'address', 'photo', 'file', 'currency', 'calculated',
+                        'image_upload_with_notes', 'route_planner', 'nearest_location', 'service_area',
+                        'payment_gateway', 'sms_otp', 'voice_recorder', 'signature_pad', 'form_calculation',
+                        'text_count', 'line_button', 'bsb_checker', 'codice_fiscale', 'turnstile',
+                        'france_region', 'inventory_dropdown', 'digital_magazine', 'street_view',
+                        'most_frequent_answer',
+                      ].includes(field.type) && (
+                        <div
+                          className="p-3 rounded-xl border border-dashed border-border/60 bg-muted/30 text-xs text-muted-foreground"
+                          style={inputStyle}
+                        >
+                          <span className="font-medium">{field.label}</span>
+                          {field.placeholder && <span className="block text-[10px] mt-0.5 opacity-70">{field.placeholder}</span>}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -680,7 +730,23 @@ export function FormRuntimeRenderer({
                   ...(field.heightPx ? { height: `${field.heightPx}px` } : {}),
                   ...(field.align ? { textAlign: field.align } : {}),
                   borderRadius: fieldRadius,
+                  // ─── P2: Elementor-style per-field styling ──────────────────
+                  ...(field.padding ? { padding: field.padding } : {}),
+                  ...(field.fontSize && field.fontSize !== 'inherit' ? { fontSize: field.fontSize } : {}),
+                  ...(field.backgroundColor ? { backgroundColor: field.backgroundColor } : {}),
+                  ...(field.borderStyle && field.borderStyle !== 'inherit'
+                    ? { borderStyle: field.borderStyle, borderWidth: '1px' }
+                    : {}),
+                  ...(field.borderColor ? { borderColor: field.borderColor } : {}),
+                  ...(field.textColor ? { color: field.textColor } : {}),
                 };
+
+                // ─── P2: Apply inputHeight preset (compact/medium/large) ───────
+                const inputHeightClass =
+                  field.inputHeight === 'compact' ? 'h-9'
+                  : field.inputHeight === 'medium' ? 'h-11'
+                  : field.inputHeight === 'large' ? 'h-13'
+                  : defaultInputHeightCls;
 
                 return (
                   <div
@@ -734,7 +800,7 @@ export function FormRuntimeRenderer({
                         value={formData[field.id] || ''}
                         onChange={(e) => handleFieldChange(field.id, e.target.value)}
                         placeholder={field.placeholder || ''}
-                        className={`${defaultInputHeightCls} bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 shadow-2xs ${
+                        className={`${inputHeightClass} bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 shadow-2xs ${
                           hasError ? 'border-rose-500 ring-1 ring-rose-500' : ''
                         }`}
                         style={inputStyle}
@@ -761,8 +827,8 @@ export function FormRuntimeRenderer({
                         onValueChange={(val) => handleFieldChange(field.id, val)}
                       >
                         <SelectTrigger
-                          className={`${defaultInputHeightCls} bg-slate-50/50 dark:bg-slate-900 border-border/80 shadow-2xs ${hasError ? 'border-rose-500' : ''}`}
-                          style={{ borderRadius: fieldRadius }}
+                          className={`${inputHeightClass} bg-slate-50/50 dark:bg-slate-900 border-border/80 shadow-2xs ${hasError ? 'border-rose-500' : ''}`}
+                          style={inputStyle}
                         >
                           <SelectValue placeholder={field.placeholder || 'Select an option'} />
                         </SelectTrigger>
@@ -864,6 +930,46 @@ export function FormRuntimeRenderer({
                       <p className="text-xs text-muted-foreground leading-relaxed w-full">
                         {field.label}
                       </p>
+                    )}
+
+                    {/* ─── P1 fix: handle ALL remaining field types (non-card mode) ───
+                        Same as card mode — route unhandled types through WidgetRuntimeDispatcher
+                        so they render instead of being invisible. */}
+                    {[
+                      'address', 'photo', 'file', 'currency', 'calculated',
+                      'image_upload_with_notes', 'route_planner', 'nearest_location',
+                      'service_area', 'payment_gateway', 'sms_otp', 'voice_recorder',
+                      'signature_pad', 'form_calculation', 'text_count', 'line_button',
+                      'bsb_checker', 'codice_fiscale', 'turnstile', 'france_region',
+                      'inventory_dropdown', 'digital_magazine', 'street_view',
+                      'most_frequent_answer',
+                    ].includes(field.type) && (
+                      <WidgetRuntimeDispatcher
+                        field={{ ...field, widgetType: field.widgetType || field.type }}
+                        value={formData[field.id]}
+                        onChange={(val) => handleFieldChange(field.id, val)}
+                        allFormData={formData}
+                      />
+                    )}
+
+                    {/* ─── P1 fix: fallback for truly unknown field types ─── */}
+                    {!field.widgetType && ![
+                      'short_answer', 'long_answer', 'email', 'phone', 'numerical', 'date', 'time',
+                      'dropdown', 'radio', 'checkbox', 'signature', 'rating', 'heading', 'paragraph',
+                      'control_widget', 'address', 'photo', 'file', 'currency', 'calculated',
+                      'image_upload_with_notes', 'route_planner', 'nearest_location', 'service_area',
+                      'payment_gateway', 'sms_otp', 'voice_recorder', 'signature_pad', 'form_calculation',
+                      'text_count', 'line_button', 'bsb_checker', 'codice_fiscale', 'turnstile',
+                      'france_region', 'inventory_dropdown', 'digital_magazine', 'street_view',
+                      'most_frequent_answer',
+                    ].includes(field.type) && (
+                      <div
+                        className="p-3 rounded-xl border border-dashed border-border/60 bg-muted/30 text-xs text-muted-foreground"
+                        style={inputStyle}
+                      >
+                        <span className="font-medium">{field.label}</span>
+                        {field.placeholder && <span className="block text-[10px] mt-0.5 opacity-70">{field.placeholder}</span>}
+                      </div>
                     )}
 
                     {/* Error message */}

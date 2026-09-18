@@ -214,6 +214,16 @@ export function FormStudioBuilder({
         validation: f.validation,
         readOnly: f.readOnly,
         hidden: f.hidden,
+        // ─── P2: Elementor-style per-field styling (pass through) ────────────
+        borderRadius: f.borderRadius,
+        padding: f.padding,
+        fontSize: f.fontSize,
+        backgroundColor: f.backgroundColor,
+        borderStyle: f.borderStyle,
+        borderColor: f.borderColor,
+        textColor: f.textColor,
+        inputHeight: f.inputHeight,
+        customCss: f.customCss,
         // ─── Options + widget config ────────────────────────────────────────
         options: f.options?.map((opt) => (typeof opt === 'string'
           ? { label: opt, value: opt.toLowerCase().replace(/\s+/g, '_') }
