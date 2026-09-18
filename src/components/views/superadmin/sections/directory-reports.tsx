@@ -50,7 +50,7 @@ import {
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
-import { INDUSTRY_CATALOG } from '@/lib/marketplace-taxonomies';
+import { INDUSTRY_CATALOG } from '@/lib/industry-catalog';
 
 interface ReportRecord {
   id: string;
