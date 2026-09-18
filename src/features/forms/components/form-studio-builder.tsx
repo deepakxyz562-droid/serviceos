@@ -16,7 +16,7 @@ import {
   Hammer, Loader2, MessageCircle, Monitor, MoveDown, MoveUp,
   Plus, QrCode, Save, Settings, Share2,
   Smartphone, Sparkles, Star, Tablet, Trash2, Wand2,
-  Zap, CheckCircle2, ChevronDown, Phone,
+  Zap, CheckCircle2, ChevronDown, Phone, Palette,
   Hash, Calendar, Mail, FileText, SlidersHorizontal,
   AlignLeft, CheckSquare, CircleDot, Paperclip, PenTool, LayoutTemplate,
   EyeOff, CreditCard, ShieldCheck, MapPin, Camera, DollarSign,
@@ -160,11 +160,15 @@ export function FormStudioBuilder({
     toast.success(`Applied theme: ${preset.name}`);
   };
 
-  // Convert editor formData to FormSchema for runtime rendering
+  // Convert editor formData to FormSchema for runtime rendering with 100% fidelity
   const runtimeSchema: FormSchema = useMemo(() => {
+    const steps = formData.isMultiStep && formData.steps && formData.steps.length > 0
+      ? formData.steps.map((s, idx) => ({ id: s.id || `step_${idx + 1}`, title: s.title || `Step ${idx + 1}` }))
+      : [{ id: 'step_1', title: formData.name || 'Form Details' }];
+
     return {
       version: 1,
-      steps: [{ id: 'step_1', title: formData.name || 'Form Details' }],
+      steps,
       fields: formData.fields.map((f) => ({
         id: f.id,
         type: f.widgetType ? 'control_widget' : (f.type as any),
@@ -174,7 +178,7 @@ export function FormStudioBuilder({
         required: f.required,
         stepId: f.stepId || 'step_1',
         width: f.width || 'full',
-        // ─── Phase R2 universal settings (pass through to renderer) ────────
+        // ─── Universal settings (pass through to renderer) ────────
         labelEnabled: f.labelEnabled,
         widthPx: f.widthPx,
         heightPx: f.heightPx,
@@ -193,10 +197,14 @@ export function FormStudioBuilder({
         widgetConfig: f.widgetConfig,
       })),
       theme: {
-        primaryColor: formData.primaryColor || '#059669',
-        backgroundColor: '#ffffff',
-        textColor: '#0f172a',
+        primaryColor: formData.primaryColor || formData.theme?.primaryColor || '#059669',
+        backgroundColor: formData.theme?.backgroundColor || '#ffffff',
+        cardBackground: formData.theme?.cardBackground || '#ffffff',
+        textColor: formData.theme?.textColor || '#0f172a',
+        fontFamily: formData.theme?.fontFamily || 'Inter, sans-serif',
         borderRadius: `${formData.borderRadius || 12}px`,
+        buttonColor: formData.theme?.buttonColor || formData.primaryColor || '#059669',
+        buttonTextColor: formData.theme?.buttonTextColor || '#ffffff',
         layout: previewFormat === 'card' ? 'card' : previewFormat === 'agent' ? 'conversational' : 'classic',
       },
       rules: (formData.rules as any[]) || [],
@@ -569,14 +577,26 @@ export function FormStudioBuilder({
             onClick={onExit}
             className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground shrink-0"
           >
+      {/* ═════════════════════════════════════════════════════════════════════════
+          TIER 1: GLOBAL STUDIO HEADER & LIFECYCLE BAR (Uncluttered, High Polish)
+         ═════════════════════════════════════════════════════════════════════════ */}
+      <header className="h-14 border-b border-border/80 bg-background/95 backdrop-blur px-3 sm:px-5 flex items-center justify-between gap-3 shrink-0 z-30 select-none">
+        {/* Left: Back + Form Name + Status */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="h-8 px-2 text-xs font-semibold gap-1 text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+          >
             <ArrowLeft className="size-3.5" />
-            <span className="hidden sm:inline">All Forms</span>
+            <span className="hidden sm:inline">Forms</span>
           </Button>
 
           <Separator orientation="vertical" className="h-5" />
 
           <div className="flex items-center gap-2 min-w-0">
-            <div className="size-7 rounded-md bg-emerald-600/10 dark:bg-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
+            <div className="size-7 rounded-lg bg-emerald-600/10 dark:bg-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
               <FileInput className="size-4" />
             </div>
             <input
@@ -584,226 +604,103 @@ export function FormStudioBuilder({
               value={formData.name}
               onChange={(e) => onFormDataChange((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Untitled Form"
-              className="font-bold text-sm bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1.5 py-0.5 max-w-[200px] md:max-w-xs truncate"
+              className="font-bold text-sm bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1.5 py-0.5 max-w-[160px] md:max-w-xs truncate"
             />
-            <Badge variant="outline" className="text-[10px] hidden md:inline-flex bg-muted/40 font-normal">
+            <Badge variant="outline" className="text-[10px] hidden md:inline-flex bg-muted/40 font-medium">
               {FORM_TYPES.find((t) => t.value === formData.type)?.label || 'Lead Capture'}
             </Badge>
           </div>
         </div>
 
-        {/* Center: 5-Pillar Navigation Tabs (BUILD | SETTINGS | PUBLISH | AI AGENT | TEMPLATES) */}
-        <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border/60">
+        {/* Center: 5 Core Lifecycle Tabs (BUILD | DESIGN | AI AGENT | SETTINGS | PUBLISH) */}
+        <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-border/60">
           <button
+            type="button"
             onClick={() => { setStudioTab('build'); setIsPreviewMode(false); }}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all',
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
               studioTab === 'build' && !isPreviewMode
-                ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-sm'
+                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <Hammer className="size-3.5" />
-            <span>BUILD</span>
+            <span>Build</span>
           </button>
 
           <button
+            type="button"
+            onClick={() => setThemeModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+          >
+            <Palette className="size-3.5" />
+            <span>Design</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setStudioTab('agent'); setIsPreviewMode(false); }}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
+              studioTab === 'agent'
+                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Bot className="size-3.5" />
+            <span>AI Agent</span>
+            <span className="px-1 text-[8px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-full font-bold">2026</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => { setStudioTab('settings'); setIsPreviewMode(false); }}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all',
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
               studioTab === 'settings'
-                ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-sm'
+                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <Settings className="size-3.5" />
-            <span>SETTINGS</span>
+            <span>Settings</span>
           </button>
 
           <button
+            type="button"
             onClick={() => { setStudioTab('publish'); setIsPreviewMode(false); }}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all',
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
               studioTab === 'publish'
-                ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-sm'
+                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <Share2 className="size-3.5" />
-            <span>PUBLISH</span>
-          </button>
-
-          <button
-            onClick={() => { setStudioTab('agent'); setIsPreviewMode(false); }}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all',
-              studioTab === 'agent'
-                ? 'bg-background text-blue-600 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Bot className="size-3.5 text-blue-600" />
-            <span>AI AGENT</span>
-            <span className="px-1 text-[8px] bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded font-bold">NEW</span>
-          </button>
-
-          <button
-            onClick={() => { setStudioTab('templates'); setIsPreviewMode(false); }}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all',
-              studioTab === 'templates'
-                ? 'bg-background text-emerald-600 dark:text-emerald-400 shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <LayoutTemplate className="size-3.5 text-emerald-600" />
-            <span>TEMPLATES</span>
-            <span className="px-1 text-[8px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded font-bold">NEW</span>
+            <span>Publish</span>
           </button>
         </div>
 
-        {/* Right: Universal Mode, Stepper Mode, Theme Design, Panel Toggles, Preview & Save */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {studioTab === 'build' && !isPreviewMode && (
-            <>
-              {/* Universal View Mode Switcher */}
-              <div className="hidden md:flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/60">
-                <button
-                  type="button"
-                  onClick={() => setViewMode('focus')}
-                  className={cn(
-                    'px-2 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer',
-                    viewMode === 'focus' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  title="Card-by-card focus flow (Typeform style)"
-                >
-                  <span>🃏 Focus</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('paper')}
-                  className={cn(
-                    'px-2 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer',
-                    viewMode === 'paper' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  title="Classic paper document (Jotform style)"
-                >
-                  <span>📄 Paper</span>
-                </button>
-              </div>
+        {/* Right: Templates Button, Preview Switch, and Save CTA */}
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => { setStudioTab('templates'); setIsPreviewMode(false); }}
+            className={cn(
+              'h-8 gap-1.5 text-xs font-semibold rounded-xl border-slate-200 dark:border-slate-800 cursor-pointer hidden md:flex',
+              studioTab === 'templates' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40' : ''
+            )}
+          >
+            <LayoutTemplate className="size-3.5 text-emerald-600" />
+            <span>Templates</span>
+          </Button>
 
-              {/* Multi-Step Stepper Switcher */}
-              <div className="hidden xl:flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/60">
-                <button
-                  type="button"
-                  onClick={() => onFormDataChange((prev) => ({ ...prev, isMultiStep: false }))}
-                  className={cn(
-                    'px-2 py-1 text-[11px] font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer',
-                    !formData.isMultiStep ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  title="Single Continuous Page"
-                >
-                  <span>📄 Single Page</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onFormDataChange((prev) => ({
-                    ...prev,
-                    isMultiStep: true,
-                    steps: (!prev.steps || prev.steps.length === 0)
-                      ? [{ id: 'step_1', title: 'Step 1: Contact Info' }, { id: 'step_2', title: 'Step 2: Service Details' }]
-                      : prev.steps,
-                  }))}
-                  className={cn(
-                    'px-2 py-1 text-[11px] font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer',
-                    formData.isMultiStep ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  title="Multi-Step Stepper"
-                >
-                  <span>📑 Stepper</span>
-                </button>
-              </div>
-
-              {/* 🎨 Theme Gallery Modal Trigger */}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setThemeModalOpen(true)}
-                className="h-8 gap-1.5 text-xs font-semibold border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
-              >
-                <span>🎨 Design</span>
-              </Button>
-
-              {/* 4 Panel Show / Hide Toggle Buttons */}
-              <div className="hidden lg:flex items-center gap-0.5 border border-border/80 rounded-lg p-0.5 bg-muted/40">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowWidgetPalette((v) => !v)}
-                  className={cn(
-                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
-                    showWidgetPalette ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground'
-                  )}
-                  title="Toggle Widget Palette"
-                >
-                  <Plus className="size-3 text-emerald-600" />
-                  <span>Widgets</span>
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowPagesTree((v) => !v)}
-                  className={cn(
-                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
-                    showPagesTree ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
-                  )}
-                  title="Toggle Pages & Steps"
-                >
-                  <Layers className="size-3" />
-                  <span>Steps</span>
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAiCopilot((v) => !v)}
-                  className={cn(
-                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
-                    showAiCopilot ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground'
-                  )}
-                  title="Toggle AI Copilot Sidebar"
-                >
-                  <Sparkles className="size-3 text-emerald-600" />
-                  <span>AI</span>
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowInspector((v) => !v)}
-                  className={cn(
-                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
-                    showInspector ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
-                  )}
-                  title="Toggle Field Inspector"
-                >
-                  <Settings className="size-3" />
-                  <span>Settings</span>
-                </Button>
-              </div>
-            </>
-          )}
-
-          {/* Preview Mode Toggle */}
-          <div className="flex items-center gap-1.5 border border-border/80 rounded-md px-2 py-1 bg-background">
+          {/* Preview Toggle */}
+          <div className="flex items-center gap-1.5 border border-border/80 rounded-xl px-2.5 py-1 bg-slate-50/60 dark:bg-slate-900/60">
             <Eye className={cn('size-3.5', isPreviewMode ? 'text-emerald-600' : 'text-muted-foreground')} />
-            <span className="text-[11px] font-medium hidden sm:inline">Preview</span>
+            <span className="text-[11px] font-semibold hidden sm:inline">Preview</span>
             <Switch
               checked={isPreviewMode}
               onCheckedChange={setIsPreviewMode}
@@ -811,30 +708,155 @@ export function FormStudioBuilder({
             />
           </div>
 
-          {/* Preview in New Tab — opens live form URL (JotForm pattern) */}
-          {editMode && (
-            <a
-              href={`${siteOrigin}/form/${formData.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 border border-border/80 rounded-md px-2 py-1 bg-background hover:bg-muted/40 transition-colors text-[11px] font-medium text-emerald-600"
-              title="Open live form in new tab"
-            >
-              <ExternalLink className="size-3.5" />
-              <span className="hidden sm:inline">Open Live</span>
-            </a>
-          )}
-
           {/* Save Button */}
           <Button
             size="sm"
             onClick={onSave}
             disabled={saving}
-            className="h-8 gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-semibold shadow-sm shadow-emerald-600/20 cursor-pointer"
+            className="h-8 gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-md shadow-emerald-600/25 rounded-xl px-3.5 cursor-pointer"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-            <span>{saving ? 'Saving...' : 'Save Form'}</span>
+            <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save Form'}</span>
+            <span className="sm:hidden">{saving ? '...' : 'Save'}</span>
           </Button>
+        </div>
+      </header>
+
+      {/* ═════════════════════════════════════════════════════════════════════════
+          TIER 2: CONTEXTUAL CANVAS SUB-TOOLBAR (Build Tab Workspace Manager)
+         ═════════════════════════════════════════════════════════════════════════ */}
+      {studioTab === 'build' && !isPreviewMode && (
+        <div className="h-10 border-b border-border/70 bg-slate-50/80 dark:bg-slate-950/80 px-4 flex items-center justify-between gap-3 shrink-0 select-none z-20">
+          {/* Left: Layout View + Stepper Mode Switchers */}
+          <div className="flex items-center gap-2">
+            {/* Focus (Typeform) vs Paper (Jotform) */}
+            <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-border/80 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => setViewMode('focus')}
+                className={cn(
+                  'px-2 py-0.5 rounded-md transition-all cursor-pointer',
+                  viewMode === 'focus' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Typeform-style Focus Card flow"
+              >
+                🃏 Focus Flow
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('paper')}
+                className={cn(
+                  'px-2 py-0.5 rounded-md transition-all cursor-pointer',
+                  viewMode === 'paper' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Jotform-style Classic Document"
+              >
+                📄 Document
+              </button>
+            </div>
+
+            <Separator orientation="vertical" className="h-4" />
+
+            {/* Single Page vs Stepper */}
+            <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-border/80 text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => onFormDataChange((prev) => ({ ...prev, isMultiStep: false }))}
+                className={cn(
+                  'px-2 py-0.5 rounded-md transition-all cursor-pointer',
+                  !formData.isMultiStep ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                📄 Single Page
+              </button>
+              <button
+                type="button"
+                onClick={() => onFormDataChange((prev) => ({
+                  ...prev,
+                  isMultiStep: true,
+                  steps: (!prev.steps || prev.steps.length === 0)
+                    ? [{ id: 'step_1', title: 'Step 1: Contact Info' }, { id: 'step_2', title: 'Step 2: Service Details' }]
+                    : prev.steps,
+                }))}
+                className={cn(
+                  'px-2 py-0.5 rounded-md transition-all cursor-pointer',
+                  formData.isMultiStep ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                📑 Stepper
+              </button>
+            </div>
+          </div>
+
+          {/* Right: Workspace Panels Segmented Toggles */}
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground mr-1 hidden sm:inline">
+              Panels:
+            </span>
+            <div className="flex items-center bg-white dark:bg-slate-900 border border-border/80 rounded-lg p-0.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowWidgetPalette((v) => !v)}
+                className={cn(
+                  'h-6 px-2 text-[10.5px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
+                  showWidgetPalette ? 'bg-emerald-100/70 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold' : 'text-muted-foreground'
+                )}
+                title="Toggle Elements & Widgets Palette"
+              >
+                <Plus className="size-3" />
+                <span>Elements</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowPagesTree((v) => !v)}
+                className={cn(
+                  'h-6 px-2 text-[10.5px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
+                  showPagesTree ? 'bg-emerald-100/70 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold' : 'text-muted-foreground'
+                )}
+                title="Toggle Pages & Steps Tree"
+              >
+                <Layers className="size-3" />
+                <span>Steps</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAiCopilot((v) => !v)}
+                className={cn(
+                  'h-6 px-2 text-[10.5px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
+                  showAiCopilot ? 'bg-emerald-100/70 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold' : 'text-muted-foreground'
+                )}
+                title="Toggle AI Copilot"
+              >
+                <Sparkles className="size-3" />
+                <span>AI Copilot</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowInspector((v) => !v)}
+                className={cn(
+                  'h-6 px-2 text-[10.5px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
+                  showInspector ? 'bg-emerald-100/70 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold' : 'text-muted-foreground'
+                )}
+                title="Toggle Field Inspector"
+              >
+                <Settings className="size-3" />
+                <span>Inspector</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
       </header>
 
