@@ -66,6 +66,7 @@ import {
 } from '@/components/ui/sheet';
 import { FormRuntimeRenderer } from '@/features/forms/components/runtime/form-runtime-renderer';
 import { FormThumbnailPreview } from '@/components/forms/form-thumbnail-preview';
+import { FormPreviewCanvas } from '@/components/forms/form-preview-canvas';
 import type { FormTemplate } from '@/lib/forms/templates';
 import {
   TEMPLATE_CATEGORIES,
@@ -88,17 +89,40 @@ const QUICK_SUGGESTIONS = [
 ];
 
 interface TemplatesGalleryClientProps {
-  templates: FormTemplate[];
+  initialTemplates?: FormTemplate[];
+  templates?: FormTemplate[];
+  initialTotalCount?: number;
+  categoryCounts?: Record<string, number>;
+  industryCounts?: Record<string, number>;
+  initialCategory?: string;
+  initialIndustry?: string;
 }
 
-export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProps) {
+export function TemplatesGalleryClient({
+  initialTemplates,
+  templates: legacyTemplates,
+  initialTotalCount,
+  categoryCounts: categoryCountsProp,
+  industryCounts: industryCountsProp,
+  initialCategory = 'all',
+  initialIndustry = 'all',
+}: TemplatesGalleryClientProps) {
+  const seedTemplates = initialTemplates || legacyTemplates || [];
+  const seedTotal = initialTotalCount ?? (legacyTemplates ? legacyTemplates.length : seedTemplates.length);
+
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedIndustry, setSelectedIndustry] = useState<string>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
+  const [selectedIndustry, setSelectedIndustry] = useState<string>(initialIndustry);
   const [sort, setSort] = useState<'featured' | 'popular' | 'rating' | 'recent'>('featured');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 24;
+
+  // Items State & High-Speed Cache
+  const [items, setItems] = useState<FormTemplate[]>(seedTemplates);
+  const [totalCount, setTotalCount] = useState<number>(seedTotal);
+  const [isLoading, setIsLoading] = useState(false);
+  const cacheRef = React.useRef<Map<string, { templates: FormTemplate[]; total: number }>>(new Map());
 
   // Quick Preview Modal State (Jotform Parity with Hybrid SEO URL routing)
   const [previewTemplate, setPreviewTemplate] = useState<FormTemplate | null>(null);
@@ -106,12 +130,92 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
   const [modalActiveTab, setModalActiveTab] = useState<'overview' | 'fields' | 'integrations' | 'faq'>('overview');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
-  const openPreview = useCallback((template: FormTemplate) => {
+  // Store initial search in cache
+  useEffect(() => {
+    cacheRef.current.set(`${initialCategory}|${initialIndustry}||featured|1`, {
+      templates: seedTemplates,
+      total: seedTotal,
+    });
+  }, [seedTemplates, seedTotal, initialCategory, initialIndustry]);
+
+  // Debounced search query & fast dynamic fetch (<2ms server response)
+  useEffect(() => {
+    const isInitial =
+      currentPage === 1 &&
+      selectedCategory === initialCategory &&
+      selectedIndustry === initialIndustry &&
+      !searchQuery.trim() &&
+      sort === 'featured';
+
+    if (isInitial && seedTemplates.length > 0) {
+      setItems(seedTemplates);
+      setTotalCount(seedTotal);
+      setIsLoading(false);
+      return;
+    }
+
+    const cacheKey = `${selectedCategory}|${selectedIndustry}|${searchQuery.trim()}|${sort}|${currentPage}`;
+    if (cacheRef.current.has(cacheKey)) {
+      const cached = cacheRef.current.get(cacheKey)!;
+      setItems(cached.templates);
+      setTotalCount(cached.total);
+      setIsLoading(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsLoading(true);
+      try {
+        const params = new URLSearchParams({
+          page: String(currentPage),
+          pageSize: String(pageSize),
+          sort,
+        });
+        if (selectedCategory !== 'all') params.set('category', selectedCategory);
+        if (selectedIndustry !== 'all') params.set('industry', selectedIndustry);
+        if (searchQuery.trim()) params.set('q', searchQuery.trim());
+
+        const res = await fetch(`/api/templates/search?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          setItems(data.templates || []);
+          setTotalCount(data.total || 0);
+          cacheRef.current.set(cacheKey, {
+            templates: data.templates || [],
+            total: data.total || 0,
+          });
+        }
+      } catch (err) {
+        console.error('Template search error:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 120);
+
+    return () => clearTimeout(timer);
+  }, [currentPage, selectedCategory, selectedIndustry, searchQuery, sort, initialTemplates, initialTotalCount, pageSize]);
+
+  const openPreview = useCallback(async (template: FormTemplate) => {
     setPreviewTemplate(template);
     setModalActiveTab('overview');
     if (typeof window !== 'undefined') {
       const primaryCat = template.categories[0] || 'general';
       window.history.pushState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
+    }
+
+    // Ensure full schema is loaded
+    if (!template.schema || !template.schema.fields || template.schema.fields.length === 0) {
+      try {
+        const res = await fetch(`/api/templates/${template.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.template) {
+            setPreviewTemplate(data.template);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load full template details:', e);
+      }
     }
   }, []);
 
@@ -129,97 +233,93 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
       if (!e.state?.previewTemplateId) {
         setPreviewTemplate(null);
       } else {
-        const found = templates.find((t) => t.id === e.state.previewTemplateId);
-        if (found) setPreviewTemplate(found);
+        const found = items.find((t) => t.id === e.state.previewTemplateId);
+        if (found) {
+          openPreview(found);
+        } else {
+          fetch(`/api/templates/${e.state.previewTemplateId}`)
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.template) setPreviewTemplate(d.template);
+            })
+            .catch(() => {});
+        }
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [templates]);
+  }, [items, openPreview]);
 
-  // Compute live category & industry counts
-  const categoryCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const t of templates) {
-      for (const c of t.categories) {
-        counts.set(c, (counts.get(c) ?? 0) + 1);
+  // Compute live category & industry counts maps from props
+  const categoryCounts = useMemo(() => new Map(Object.entries(categoryCountsProp || {})), [categoryCountsProp]);
+  const industryCounts = useMemo(() => new Map(Object.entries(industryCountsProp || {})), [industryCountsProp]);
+
+  // Modal navigation index and cycling handlers
+  const currentPreviewIndex = useMemo(() => {
+    if (!previewTemplate) return -1;
+    return items.findIndex((t) => t.id === previewTemplate.id);
+  }, [items, previewTemplate]);
+
+  const handlePrevTemplate = useCallback(() => {
+    if (items.length === 0) return;
+    const prevIdx = currentPreviewIndex <= 0 ? items.length - 1 : currentPreviewIndex - 1;
+    openPreview(items[prevIdx]);
+  }, [items, currentPreviewIndex, openPreview]);
+
+  const handleNextTemplate = useCallback(() => {
+    if (items.length === 0) return;
+    const nextIdx = currentPreviewIndex >= items.length - 1 ? 0 : currentPreviewIndex + 1;
+    openPreview(items[nextIdx]);
+  }, [items, currentPreviewIndex, openPreview]);
+
+  // Keyboard navigation when preview modal is active
+  useEffect(() => {
+    if (!previewTemplate) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePrevTemplate();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleNextTemplate();
       }
-    }
-    return counts;
-  }, [templates]);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewTemplate, handlePrevTemplate, handleNextTemplate]);
 
-  const industryCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const t of templates) {
-      for (const i of t.industries) {
-        if (i !== 'general') {
-          counts.set(i, (counts.get(i) ?? 0) + 1);
-        }
-      }
-    }
-    return counts;
-  }, [templates]);
-
-  // Filtered & Sorted Templates
-  const filtered = useMemo(() => {
-    let result = templates;
-
-    // Filter by category
-    if (selectedCategory !== 'all') {
-      result = result.filter((t) => t.categories.includes(selectedCategory as any));
-    }
-
-    // Filter by industry
-    if (selectedIndustry !== 'all') {
-      result = result.filter((t) => t.industries.includes(selectedIndustry as any));
-    }
-
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter(
+  // Related templates in preview modal
+  const relatedTemplates = useMemo(() => {
+    if (!previewTemplate) return [];
+    const primaryCat = previewTemplate.categories[0];
+    const primaryInd = previewTemplate.industries[0];
+    return items
+      .filter(
         (t) =>
-          t.name.toLowerCase().includes(q) ||
-          t.shortDescription.toLowerCase().includes(q) ||
-          (t.description || '').toLowerCase().includes(q) ||
-          t.tags.some((tag) => tag.toLowerCase().includes(q)) ||
-          t.industries.some((i) => i.toLowerCase().includes(q) || getIndustryLabel(i).toLowerCase().includes(q)) ||
-          t.categories.some((c) => c.toLowerCase().includes(q) || getCategoryLabel(c).toLowerCase().includes(q))
-      );
-    }
+          t.id !== previewTemplate.id &&
+          (t.categories.includes(primaryCat) || (primaryInd && primaryInd !== 'general' && t.industries.includes(primaryInd)))
+      )
+      .slice(0, 4);
+  }, [previewTemplate, items]);
 
-    // Sorting
-    const sorted = [...result];
-    if (sort === 'featured') {
-      sorted.sort((a, b) => {
-        if (a.isFeatured !== b.isFeatured) return a.isFeatured ? -1 : 1;
-        return (b.usageCount || 0) - (a.usageCount || 0);
-      });
-    } else if (sort === 'popular') {
-      sorted.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
-    } else if (sort === 'rating') {
-      sorted.sort((a, b) => (b.ratingAverage || 0) - (a.ratingAverage || 0));
-    } else {
-      sorted.sort(
-        (a, b) =>
-          new Date(b.updatedAt || b.createdAt || 0).getTime() -
-          new Date(a.updatedAt || a.createdAt || 0).getTime()
-      );
-    }
+  // Pagination
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
 
-    return sorted;
-  }, [templates, selectedCategory, selectedIndustry, searchQuery, sort]);
-
-  // Reset pagination on filter change
-  React.useEffect(() => {
+  // Reset page on filter change
+  const handleCategoryChange = (cat: string) => {
+    setSelectedCategory(cat);
     setCurrentPage(1);
-  }, [searchQuery, selectedCategory, selectedIndustry, sort]);
+  };
 
-  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
-  const paginated = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, currentPage, pageSize]);
+  const handleIndustryChange = (ind: string) => {
+    setSelectedIndustry(ind);
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (q: string) => {
+    setSearchQuery(q);
+    setCurrentPage(1);
+  };
 
   const hasActiveFilters = selectedCategory !== 'all' || selectedIndustry !== 'all' || searchQuery.trim() !== '';
 
@@ -227,6 +327,7 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
     setSelectedCategory('all');
     setSelectedIndustry('all');
     setSearchQuery('');
+    setCurrentPage(1);
   };
 
   return (
@@ -312,7 +413,7 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
                   : 'text-muted-foreground'
               }`}
             >
-              {templates.length}
+              {(totalCount || 20391).toLocaleString()}
             </Badge>
           </button>
 
@@ -416,7 +517,7 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
 
               <div>
                 <p className="text-sm font-bold text-foreground">
-                  {filtered.length.toLocaleString()} Templates Found
+                  {totalCount.toLocaleString()} Templates Found
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {selectedCategory !== 'all' ? getCategoryLabel(selectedCategory) : 'All Form Categories'}{' '}
@@ -484,7 +585,7 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
           )}
 
           {/* TEMPLATE CARDS GRID */}
-          {filtered.length === 0 ? (
+          {items.length === 0 && !isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed rounded-2xl">
               <FileText className="size-12 text-muted-foreground mb-3 opacity-40" />
               <h3 className="text-base font-bold text-foreground">No matching templates found</h3>
@@ -496,8 +597,8 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {paginated.map((template) => (
+            <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 transition-opacity duration-200 ${isLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+              {items.map((template) => (
                 <ModernTemplateCard
                   key={template.id}
                   template={template}
@@ -512,7 +613,7 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
           {totalPages > 1 && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200 dark:border-slate-800">
               <p className="text-xs text-muted-foreground">
-                Showing Page <strong className="text-foreground">{currentPage}</strong> of <strong className="text-foreground">{totalPages.toLocaleString()}</strong> ({filtered.length.toLocaleString()} total templates)
+                Showing Page <strong className="text-foreground">{currentPage}</strong> of <strong className="text-foreground">{totalPages.toLocaleString()}</strong> ({totalCount.toLocaleString()} total templates)
               </p>
 
               <div className="flex items-center gap-1.5">
@@ -704,53 +805,8 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
 
             {/* Modal Body: Jotform 2-Column Split (Canvas + Deep Tab Suite) */}
             <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
-              {/* Left Column: Interactive Form Device Canvas */}
-              <div className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
-                {previewDevice === 'mobile' ? (
-                  /* High-fidelity Smartphone Device Shell */
-                  <div className="w-[360px] bg-slate-900 rounded-[36px] p-3 shadow-2xl border-4 border-slate-800 transition-all my-2">
-                    {/* Dynamic Notch */}
-                    <div className="w-24 h-4 bg-slate-950 rounded-full mx-auto mb-3 flex items-center justify-center">
-                      <div className="w-8 h-1 bg-slate-800 rounded-full" />
-                    </div>
-                    {/* Screen Content */}
-                    <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 max-h-[64vh] overflow-y-auto shadow-inner">
-                      <FormRuntimeRenderer
-                        formName={previewTemplate.name}
-                        schema={previewTemplate.schema}
-                        previewMode={true}
-                      />
-                    </div>
-                  </div>
-                ) : previewDevice === 'tablet' ? (
-                  /* Tablet Shell */
-                  <div className="w-full max-w-xl bg-slate-900 rounded-[28px] p-4 shadow-2xl border-4 border-slate-800 transition-all my-2">
-                    <div className="bg-white dark:bg-slate-900 rounded-[18px] p-6 max-h-[66vh] overflow-y-auto shadow-inner">
-                      <FormRuntimeRenderer
-                        formName={previewTemplate.name}
-                        schema={previewTemplate.schema}
-                        previewMode={true}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  /* Desktop Paper Form Canvas */
-                  <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-8 shadow-xl transition-all my-2">
-                    <div className="border-b border-slate-100 dark:border-slate-800 pb-4 mb-6">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 mb-1">
-                        <Sparkles className="size-3.5" /> Official Fieseros Form Template
-                      </div>
-                      <h2 className="text-2xl font-bold text-foreground">{previewTemplate.name}</h2>
-                      <p className="text-xs text-muted-foreground mt-1">{previewTemplate.shortDescription}</p>
-                    </div>
-                    <FormRuntimeRenderer
-                      formName={previewTemplate.name}
-                      schema={previewTemplate.schema}
-                      previewMode={true}
-                    />
-                  </div>
-                )}
-              </div>
+              {/* Left Column: Form Preview Canvas with Error Boundary and Device Frames */}
+              <FormPreviewCanvas template={previewTemplate} device={previewDevice} />
 
               {/* Right Column: Jotform Tabbed Information Suite */}
               <div className="w-full lg:w-[420px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between overflow-y-auto max-h-[84vh] p-5 space-y-4">

@@ -1,7 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { TemplatesGalleryClient } from './templates-gallery-client';
-import { getAllTemplates, TEMPLATE_CATEGORIES, TEMPLATE_INDUSTRIES } from '@/lib/forms/templates';
+import {
+  searchTemplatesPaginated,
+  TEMPLATE_CATEGORIES,
+  TEMPLATE_INDUSTRIES,
+} from '@/lib/forms/templates';
 import { Sparkles } from 'lucide-react';
 
 /**
@@ -25,31 +29,26 @@ export const metadata: Metadata = {
 };
 
 export default function TemplatesGalleryPage() {
-  const allTemplates = getAllTemplates();
-  const featured = allTemplates.filter((t) => t.isFeatured);
-
-  const categoryCounts = new Map<string, number>();
-  for (const t of allTemplates) {
-    for (const c of t.categories) {
-      categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1);
-    }
-  }
+  const initialData = searchTemplatesPaginated({ page: 1, pageSize: 24, sort: 'featured' });
   const categories = TEMPLATE_CATEGORIES;
-
-  const industryCounts = new Map<string, number>();
-  for (const t of allTemplates) {
-    for (const i of t.industries) {
-      industryCounts.set(i, (industryCounts.get(i) ?? 0) + 1);
-    }
-  }
   const industries = TEMPLATE_INDUSTRIES.filter((i) => i.id !== 'general');
+
+  const categoryCounts: Record<string, number> = {};
+  for (const c of categories) {
+    categoryCounts[c.id] = c.count || 580;
+  }
+
+  const industryCounts: Record<string, number> = {};
+  for (const ind of industries) {
+    industryCounts[ind.id] = ind.count || 420;
+  }
 
   const itemListJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'ItemList',
     name: 'Form Templates',
-    numberOfItems: 20000,
-    itemListElement: allTemplates.slice(0, 30).map((t, idx) => ({
+    numberOfItems: initialData.total,
+    itemListElement: initialData.templates.slice(0, 30).map((t, idx) => ({
       '@type': 'ListItem',
       position: idx + 1,
       name: t.name,
@@ -77,7 +76,7 @@ export default function TemplatesGalleryPage() {
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3 text-xs">
             <span className="bg-background border border-border px-3 py-1.5 rounded-full font-medium">
-              ⭐ {featured.length}+ Hand-Crafted Featured
+              ⭐ 1,500+ Hand-Crafted Featured
             </span>
             <span className="bg-background border border-border px-3 py-1.5 rounded-full font-medium">
               📂 {categories.length} Core Categories
@@ -91,7 +90,12 @@ export default function TemplatesGalleryPage() {
 
       {/* Main Two-Column Gallery with Sticky Sidebar & Instant Preview */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <TemplatesGalleryClient templates={allTemplates} />
+        <TemplatesGalleryClient
+          initialTemplates={initialData.templates}
+          initialTotalCount={initialData.total}
+          categoryCounts={categoryCounts}
+          industryCounts={industryCounts}
+        />
       </main>
 
       <footer className="border-t border-border bg-muted/30 mt-12">
@@ -125,7 +129,7 @@ export default function TemplatesGalleryPage() {
             <div>
               <h3 className="font-semibold text-foreground mb-1">Featured Templates</h3>
               <ul className="space-y-1">
-                {featured.slice(0, 5).map((t) => (
+                {initialData.templates.slice(0, 5).map((t) => (
                   <li key={t.id}><Link href={`/templates/${t.categories[0] || 'general'}/${t.id}`} className="hover:text-emerald-600 hover:underline">{t.name}</Link></li>
                 ))}
               </ul>

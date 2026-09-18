@@ -151,7 +151,11 @@ export default async function CategoryPage({
 
       {/* Template grid */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <TemplatesGalleryClient templates={templates} />
+        <TemplatesGalleryClient
+          initialTemplates={templates.slice(0, 24)}
+          initialTotalCount={templates.length}
+          initialCategory={category}
+        />
       </main>
     </div>
   );
