@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Eye,
   Layers,
+  ChevronLeft,
   ChevronRight,
   Filter,
   Flame,
@@ -38,6 +39,13 @@ import {
   ExternalLink,
   ShieldCheck,
   Lock,
+  HelpCircle,
+  Share2,
+  Bot,
+  Database,
+  Globe,
+  Workflow,
+  Sparkle,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -95,10 +103,12 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
   // Quick Preview Modal State (Jotform Parity with Hybrid SEO URL routing)
   const [previewTemplate, setPreviewTemplate] = useState<FormTemplate | null>(null);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [modalActiveTab, setModalActiveTab] = useState<'overview' | 'fields' | 'integrations' | 'faq'>('overview');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   const openPreview = useCallback((template: FormTemplate) => {
     setPreviewTemplate(template);
+    setModalActiveTab('overview');
     if (typeof window !== 'undefined') {
       const primaryCat = template.categories[0] || 'general';
       window.history.pushState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
@@ -592,21 +602,45 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
         </div>
       </div>
 
-      {/* JOTFORM-STYLE INTERACTIVE 1200PX PREVIEW MODAL WITH HYBRID SEO URL */}
+      {/* JOTFORM-PARITY RICH INTERACTIVE 1200PX+ PREVIEW MODAL WITH SLIDER & TAB SUITE */}
       {previewTemplate && (
         <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && closePreview()}>
-          <DialogContent className="max-w-[1240px] w-[96vw] max-h-[92vh] flex flex-col p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900">
-            {/* Modal Header: Jotform Top App Bar (Breadcrumb + Device Switcher + Actions) */}
-            <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+          <DialogContent
+            showCloseButton={false}
+            style={{ paddingTop: 0 }}
+            className="!max-w-[1280px] sm:!max-w-[1280px] lg:!max-w-[1320px] w-[96vw] max-h-[94vh] flex flex-col !p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 relative"
+          >
+            {/* Jotform Floating Navigation Arrows (Desktop Fixed / Lateral) */}
+            <button
+              type="button"
+              onClick={handlePrevTemplate}
+              aria-label="Previous Template"
+              title="Previous Template (Left Arrow)"
+              className="hidden lg:flex fixed left-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-slate-100 hover:bg-white dark:hover:bg-slate-800 hover:scale-110 shadow-2xl border border-slate-200 dark:border-slate-700 items-center justify-center transition-all z-50 group cursor-pointer"
+            >
+              <ChevronLeft className="size-6 text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 transition-colors" />
+            </button>
+            <button
+              type="button"
+              onClick={handleNextTemplate}
+              aria-label="Next Template"
+              title="Next Template (Right Arrow)"
+              className="hidden lg:flex fixed right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-slate-100 hover:bg-white dark:hover:bg-slate-800 hover:scale-110 shadow-2xl border border-slate-200 dark:border-slate-700 items-center justify-center transition-all z-50 group cursor-pointer"
+            >
+              <ChevronRight className="size-6 text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 transition-colors" />
+            </button>
+
+            {/* Modal Header: Jotform App Bar (Breadcrumb + Device Switcher + Actions) */}
+            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
               <div className="min-w-0 flex items-center gap-2">
                 <nav className="flex items-center gap-1.5 text-xs text-muted-foreground truncate">
-                  <Link href="/templates" className="hover:text-foreground font-medium">Templates</Link>
+                  <Link href="/templates" className="hover:text-foreground font-medium">Form Templates</Link>
                   <ChevronRight className="size-3 shrink-0" />
                   <span className="text-emerald-700 dark:text-emerald-400 font-semibold truncate">
                     {getCategoryLabel(previewTemplate.categories[0] || 'general')}
                   </span>
                   <ChevronRight className="size-3 shrink-0" />
-                  <span className="text-foreground font-bold truncate max-w-[180px] sm:max-w-[260px]">
+                  <span className="text-foreground font-bold truncate max-w-[180px] sm:max-w-[280px]">
                     {previewTemplate.name}
                   </span>
                 </nav>
@@ -622,7 +656,7 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
                         ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
-                    title="Desktop Preview (Full Width)"
+                    title="Desktop Preview"
                   >
                     <Monitor className="size-3.5" /> <span className="hidden sm:inline">Desktop</span>
                   </button>
@@ -633,7 +667,7 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
                         ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
-                    title="Tablet Preview (iPad Frame)"
+                    title="Tablet Preview"
                   >
                     <Tablet className="size-3.5" /> <span className="hidden sm:inline">Tablet</span>
                   </button>
@@ -644,7 +678,7 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
                         ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
-                    title="Mobile Preview (Phone Frame)"
+                    title="Mobile Preview"
                   >
                     <Smartphone className="size-3.5" /> <span className="hidden sm:inline">Mobile</span>
                   </button>
@@ -656,17 +690,26 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
                 >
                   <Sparkles className="size-3.5" /> Use Template
                 </Button>
+
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1"
+                  title="Close preview (Esc)"
+                >
+                  <X className="size-4" />
+                </button>
               </div>
             </div>
 
-            {/* Modal Body: 2-Column Jotform Parity Layout (Left Canvas + Right Info Sidebar) */}
+            {/* Modal Body: Jotform 2-Column Split (Canvas + Deep Tab Suite) */}
             <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
               {/* Left Column: Interactive Form Device Canvas */}
               <div className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
                 {previewDevice === 'mobile' ? (
                   /* High-fidelity Smartphone Device Shell */
                   <div className="w-[360px] bg-slate-900 rounded-[36px] p-3 shadow-2xl border-4 border-slate-800 transition-all my-2">
-                    {/* Speaker & Dynamic Notch */}
+                    {/* Dynamic Notch */}
                     <div className="w-24 h-4 bg-slate-950 rounded-full mx-auto mb-3 flex items-center justify-center">
                       <div className="w-8 h-1 bg-slate-800 rounded-full" />
                     </div>
@@ -709,10 +752,10 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
                 )}
               </div>
 
-              {/* Right Column: Jotform-Parity Template Details & Field Breakdown Sidebar */}
-              <div className="w-full lg:w-[380px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between overflow-y-auto max-h-[80vh] p-5 space-y-5">
+              {/* Right Column: Jotform Tabbed Information Suite */}
+              <div className="w-full lg:w-[420px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between overflow-y-auto max-h-[84vh] p-5 space-y-4">
                 <div className="space-y-4">
-                  {/* Title & Badge */}
+                  {/* Top Meta Header */}
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
@@ -734,71 +777,229 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
                     </p>
                   </div>
 
-                  {/* Categories & Industries */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {previewTemplate.categories.map((c) => (
-                      <Badge key={c} variant="outline" className="text-[10px] font-medium bg-slate-50 dark:bg-slate-800">
-                        {getCategoryLabel(c)}
-                      </Badge>
-                    ))}
-                    {previewTemplate.industries.filter((i) => i !== 'general').map((i) => (
-                      <Badge key={i} variant="outline" className="text-[10px] font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border-blue-200">
-                        {getIndustryLabel(i)}
-                      </Badge>
-                    ))}
+                  {/* Jotform Tab Buttons Bar */}
+                  <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setModalActiveTab('overview')}
+                      className={`py-1.5 text-[11px] font-bold rounded-lg transition-all ${
+                        modalActiveTab === 'overview'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Overview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalActiveTab('fields')}
+                      className={`py-1.5 text-[11px] font-bold rounded-lg transition-all ${
+                        modalActiveTab === 'fields'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Fields ({previewTemplate.schema.fields?.length || 0})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalActiveTab('integrations')}
+                      className={`py-1.5 text-[11px] font-bold rounded-lg transition-all ${
+                        modalActiveTab === 'integrations'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Integrations
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalActiveTab('faq')}
+                      className={`py-1.5 text-[11px] font-bold rounded-lg transition-all ${
+                        modalActiveTab === 'faq'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      FAQ
+                    </button>
                   </div>
 
-                  {/* Smart Capabilities Checklist (Jotform Parity) */}
-                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                      Included Smart Capabilities:
-                    </p>
-                    <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
-                      <div className="flex items-center gap-1.5">
-                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
-                        <span>200+ Smart Widgets &amp; Conditional Logic</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
-                        <span>33 Payment Gateways (0% Platform Commission)</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
-                        <span>Photo Upload with Drawing Annotations</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
-                        <span>Digital Signature &amp; Legal Audit Trail</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
-                        <span>100% Mobile, Tablet &amp; Web Responsive</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Form Questions & Fields Breakdown List */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-foreground">Form Questions ({previewTemplate.schema.fields?.length || 0})</span>
-                      <span className="text-muted-foreground text-[11px]">Ready to customize</span>
-                    </div>
-                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
-                      {(previewTemplate.schema.fields || []).map((field, idx) => (
-                        <div
-                          key={field.id || idx}
-                          className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-xs flex items-center justify-between gap-2"
-                        >
-                          <span className="font-medium text-slate-800 dark:text-slate-200 truncate">
-                            {idx + 1}. {field.label}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground capitalize shrink-0 font-mono bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border">
-                            {field.type.replace(/_/g, ' ')}
-                          </span>
+                  {/* Tab 1: Overview */}
+                  {modalActiveTab === 'overview' && (
+                    <div className="space-y-4 text-xs">
+                      {/* Stats grid */}
+                      <div className="grid grid-cols-2 gap-2 text-center">
+                        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold">Clones &amp; Uses</p>
+                          <p className="text-sm font-extrabold text-foreground mt-0.5">
+                            {(previewTemplate.usageCount || 1240).toLocaleString()}+
+                          </p>
                         </div>
-                      ))}
+                        <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700">
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold">Created By</p>
+                          <p className="text-sm font-extrabold text-emerald-600 mt-0.5 truncate">
+                            Fieseros Official
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Categories & Industries */}
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-bold text-foreground">Categories &amp; Tags</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {previewTemplate.categories.map((c) => (
+                            <Badge key={c} variant="outline" className="text-[10px] font-medium bg-slate-50 dark:bg-slate-800">
+                              {getCategoryLabel(c)}
+                            </Badge>
+                          ))}
+                          {previewTemplate.industries.filter((i) => i !== 'general').map((i) => (
+                            <Badge key={i} variant="outline" className="text-[10px] font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border-blue-200">
+                              {getIndustryLabel(i)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Capabilities Checklist */}
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                          Smart Template Capabilities:
+                        </p>
+                        <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+                          <div className="flex items-center gap-1.5">
+                            <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                            <span>200+ Smart Widgets &amp; Conditional Logic</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                            <span>33 Payment Gateways (0% Platform Fee)</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                            <span>Photo Upload with Drawing Annotations</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                            <span>Digital Signature &amp; Legal Audit Trail</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                            <span>Instant Voice &amp; Chatbot AI Employee Link</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {/* Tab 2: Fields Breakdown */}
+                  {modalActiveTab === 'fields' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-foreground">Questions ({previewTemplate.schema.fields?.length || 0})</span>
+                        <span className="text-muted-foreground text-[11px]">Ready to customize</span>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+                        {(previewTemplate.schema.fields || []).map((field, idx) => (
+                          <div
+                            key={field.id || idx}
+                            className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-xs flex items-center justify-between gap-2"
+                          >
+                            <span className="font-medium text-slate-800 dark:text-slate-200 truncate">
+                              {idx + 1}. {field.label}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground capitalize shrink-0 font-mono bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border">
+                              {field.type.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab 3: Connected Integrations */}
+                  {modalActiveTab === 'integrations' && (
+                    <div className="space-y-3 text-xs">
+                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider">
+                        Built-in 1-Click Connected Assets
+                      </p>
+                      <div className="space-y-2">
+                        <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-start gap-2.5">
+                          <Bot className="size-4 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-foreground">GPTSite AI Agent Sync</p>
+                            <p className="text-[11px] text-muted-foreground">Voice &amp; chatbot assistants can fill or trigger this form automatically.</p>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-start gap-2.5">
+                          <CreditCard className="size-4 text-blue-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-foreground">33 Payment Gateways</p>
+                            <p className="text-[11px] text-muted-foreground">Stripe, PayPal, Square, Razorpay, Authorize.net with 0% extra fees.</p>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-start gap-2.5">
+                          <Database className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-foreground">Google Sheets &amp; Webhooks</p>
+                            <p className="text-[11px] text-muted-foreground">Stream submissions directly to CRM, Airtable, Slack, or webhook endpoints.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab 4: FAQ */}
+                  {modalActiveTab === 'faq' && (
+                    <div className="space-y-2.5 text-xs">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                        <p className="font-bold text-foreground mb-1">How do I customize this template?</p>
+                        <p className="text-muted-foreground text-[11px] leading-relaxed">
+                          Clicking &ldquo;Use Template&rdquo; copies this template into your visual drag-and-drop form builder where you can add questions, change branding, and set up conditional logic.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                        <p className="font-bold text-foreground mb-1">Can I accept payments?</p>
+                        <p className="text-muted-foreground text-[11px] leading-relaxed">
+                          Yes, connect Stripe, PayPal, or any of our 33 supported payment gateways with 0% platform commission.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
+                        <p className="font-bold text-foreground mb-1">Is it mobile friendly &amp; secure?</p>
+                        <p className="text-muted-foreground text-[11px] leading-relaxed">
+                          All templates feature 100% responsive viewport scaling, SSL 256-bit encryption, and GDPR compliance.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Related Templates Slider / Suggestions */}
+                  {relatedTemplates.length > 0 && (
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider">
+                        More Templates Like This
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {relatedTemplates.slice(0, 2).map((rel) => (
+                          <button
+                            key={rel.id}
+                            type="button"
+                            onClick={() => openPreview(rel)}
+                            className="p-2 rounded-xl bg-slate-50 hover:bg-emerald-50/60 dark:bg-slate-800/70 dark:hover:bg-emerald-950/40 border border-slate-200/60 dark:border-slate-700 text-left transition-colors"
+                          >
+                            <p className="text-xs font-bold text-foreground truncate">{rel.name}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              ⭐ {rel.ratingAverage || 4.9} · {rel.usageCount || 300}+ uses
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Sticky Sidebar CTA Card */}

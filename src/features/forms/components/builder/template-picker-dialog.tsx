@@ -157,7 +157,10 @@ export function TemplatePickerDialog({ open, onOpenChange, onPick }: TemplatePic
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl h-[90vh] p-0 gap-0 flex flex-col rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl">
+      <DialogContent
+        style={{ paddingTop: 0 }}
+        className="!max-w-6xl sm:!max-w-6xl w-[95vw] h-[90vh] p-0 gap-0 flex flex-col rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl"
+      >
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
           <div className="flex items-center justify-between gap-4">
