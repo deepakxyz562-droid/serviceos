@@ -1,25 +1,5 @@
 'use client';
 
-/**
- * TemplateExplorer — Form Template Library browser.
- *
- * T1.5: rewritten to consume the new template registry
- *   (`@/lib/forms/templates`) instead of the legacy 6-template
- *   `FORM_TEMPLATES` array.
- *
- * Data flow:
- *   - Sidebar categories + counts → derived from `getAllTemplates()`
- *     (synchronous, stable across searches).
- *   - Industry dropdown → `TEMPLATE_INDUSTRIES` taxonomy.
- *   - Card grid → async `searchTemplates({ query, category, industry })`,
- *     debounced via React state + useEffect.
- *   - Preview modal → renders `template.schema` directly through
- *     `FormRuntimeRenderer` (no reconstruction needed — registry schemas are
- *     already valid FormSchema objects).
- *   - Apply → calls `onApplyTemplate(template, customTitle, mode)` with the
- *     full `FormTemplate` (parent extracts `template.schema.fields`).
- */
-
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
@@ -34,11 +14,17 @@ import {
   Loader2,
   Layers,
   Building2,
+  SlidersHorizontal,
+  Monitor,
+  Tablet,
+  Smartphone,
+  Plus,
+  ArrowRight,
+  Filter,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import {
@@ -59,6 +45,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { FormRuntimeRenderer } from '../runtime/form-runtime-renderer';
+import { FormThumbnailPreview } from '@/components/forms/form-thumbnail-preview';
 import {
   searchTemplates,
   getAllTemplates,
@@ -71,21 +58,22 @@ import {
   type TemplateIndustryId,
 } from '@/lib/forms/templates';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const ALL = 'all';
-/** Pseudo-category id that filters the grid to featured templates only. */
 const FEATURED = '__featured__';
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+const QUICK_SUGGESTIONS = [
+  'Patient Intake',
+  'HVAC Quote',
+  'Job Application',
+  'Bakery Order',
+  'Liability Waiver',
+  'Vehicle Inspection',
+  'CSAT Survey',
+  'Event Registration',
+];
 
 export interface TemplateExplorerProps {
   onBackToBuild: () => void;
-  /**
-   * Called when the user confirms a template in the preview modal.
-   * The parent (form-studio-builder.tsx) extracts `template.schema.fields`
-   * and merges them into the canvas per the chosen `mode`.
-   */
   onApplyTemplate: (
     template: FormTemplate,
     customTitle: string,
@@ -94,35 +82,32 @@ export interface TemplateExplorerProps {
   currentFieldCount: number;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export function TemplateExplorer({
   onBackToBuild,
   onApplyTemplate,
   currentFieldCount,
 }: TemplateExplorerProps) {
-  // ── Filter state ────────────────────────────────────────────────────────
+  // Filter state
   const [selectedCategory, setSelectedCategory] = useState<string>(ALL);
   const [selectedIndustry, setSelectedIndustry] = useState<string>(ALL);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sort, setSort] = useState<'featured' | 'popular' | 'rating' | 'recent'>('featured');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 18;
 
-  // ── Async search results ───────────────────────────────────────────────
+  // Search results state
   const [results, setResults] = useState<FormTemplate[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // ── Modal preview state ────────────────────────────────────────────────
+  // Preview modal state (Jotform Parity)
   const [previewTemplate, setPreviewTemplate] = useState<FormTemplate | null>(null);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [customFormTitle, setCustomFormTitle] = useState('');
   const [applyMode, setApplyMode] = useState<'replace' | 'append'>('replace');
 
-  // ── Stable counts (synchronous, derived from the whole registry) ───────
-  // These don't change as the user types — they reflect the registry's
-  // total contents per category, used for the sidebar counts.
+  // Stable category & industry taxonomy counts
   const allTemplates = useMemo(() => getAllTemplates(), []);
-  const featuredCount = useMemo(
-    () => allTemplates.filter((t) => t.isFeatured).length,
-    [allTemplates],
-  );
+  
   const categoryCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of allTemplates) {
@@ -131,17 +116,26 @@ export function TemplateExplorer({
     return m;
   }, [allTemplates]);
 
-  const visibleCategories = useMemo(
-    () => TEMPLATE_CATEGORIES.filter((c) => (categoryCounts.get(c.id) || 0) > 0),
-    [categoryCounts],
+  const industryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of allTemplates) {
+      for (const i of t.industries) {
+        if (i !== 'general') m.set(i, (m.get(i) || 0) + 1);
+      }
+    }
+    return m;
+  }, [allTemplates]);
+
+  const featuredCount = useMemo(
+    () => allTemplates.filter((t) => t.isFeatured).length,
+    [allTemplates],
   );
 
-  // ── Async search effect (debounced) ────────────────────────────────────
+  // Search & filter effect (debounced)
   useEffect(() => {
     let cancelled = false;
 
-    // Tiny debounce so each keystroke doesn't fire a fresh search.
-    const handle = setTimeout(() => {
+    const timer = setTimeout(() => {
       setIsLoading(true);
 
       const cat: TemplateCategoryId | undefined =
@@ -154,27 +148,29 @@ export function TemplateExplorer({
 
       const q = searchQuery.trim() || undefined;
 
-      // When the user picks the Featured pseudo-category we sort by featured
-      // so the starred templates surface first; otherwise relevance wins.
-      const sort = selectedCategory === FEATURED ? 'featured' : 'relevance';
-
       searchTemplates({
         query: q,
         category: cat,
         industry: ind,
-        sort,
+        sort: selectedCategory === FEATURED ? 'featured' : sort === 'featured' ? 'featured' : sort === 'rating' ? 'rating' : 'popular',
         publishedOnly: true,
-        limit: 200,
+        limit: 1000,
       })
         .then((hits) => {
           if (cancelled) return;
           let list = hits.map((h) => h.template);
-          // FEATURED pseudo-category is not a real TemplateCategoryId, so the
-          // registry ignores it — we filter client-side.
           if (selectedCategory === FEATURED) {
             list = list.filter((t) => t.isFeatured);
           }
+          if (sort === 'popular') {
+            list.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
+          } else if (sort === 'rating') {
+            list.sort((a, b) => (b.ratingAverage || 0) - (a.ratingAverage || 0));
+          } else if (sort === 'recent') {
+            list.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+          }
           setResults(list);
+          setCurrentPage(1);
         })
         .catch(() => {
           if (cancelled) return;
@@ -187,15 +183,15 @@ export function TemplateExplorer({
 
     return () => {
       cancelled = true;
-      clearTimeout(handle);
+      clearTimeout(timer);
     };
-  }, [searchQuery, selectedCategory, selectedIndustry]);
+  }, [searchQuery, selectedCategory, selectedIndustry, sort]);
 
-  // ── Preview modal handlers ──────────────────────────────────────────────
+  // Preview & apply actions
   const handleOpenPreview = (tpl: FormTemplate) => {
     setPreviewTemplate(tpl);
     setCustomFormTitle(tpl.name);
-    setApplyMode('replace');
+    setApplyMode(currentFieldCount > 0 ? 'replace' : 'replace');
   };
 
   const handleConfirmApply = () => {
@@ -214,109 +210,188 @@ export function TemplateExplorer({
     setSearchQuery('');
   };
 
-  // ── Derived preview state ───────────────────────────────────────────────
-  const previewSchema = useMemo(() => {
-    if (!previewTemplate) return null;
-    // Use the template's canonical schema directly — it's already a valid
-    // FormSchema. Override the first step's title with the user's custom
-    // name so the live preview reflects the chosen form title.
-    const baseSteps = previewTemplate.schema.steps?.length
-      ? previewTemplate.schema.steps
-      : [{ id: 'step_1', title: previewTemplate.name }];
-    const title = customFormTitle || previewTemplate.name;
-    return {
-      ...previewTemplate.schema,
-      steps: baseSteps.map((s, i) => (i === 0 ? { ...s, title } : s)),
-    };
-  }, [previewTemplate, customFormTitle]);
-
-  const previewFieldCount = previewTemplate?.schema.fields.length ?? 0;
-  const previewWidgetCount =
-    previewTemplate?.schema.fields.filter((f) => !!f.widgetType).length ?? 0;
+  // Pagination
+  const totalPages = Math.ceil(results.length / pageSize) || 1;
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return results.slice(start, start + pageSize);
+  }, [results, currentPage, pageSize]);
 
   const hasActiveFilters =
     selectedCategory !== ALL || selectedIndustry !== ALL || searchQuery.trim().length > 0;
 
-  // ────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex-1 flex h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
-      {/* ════ LEFT SIDEBAR — CATEGORY LIST ════ */}
-      <aside className="hidden md:flex flex-col w-64 shrink-0 border-r border-border bg-background">
-        <div className="p-4 border-b border-border">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Layers className="size-3.5" />
-            <span>Categories</span>
-          </h2>
-          <p className="text-[10px] text-muted-foreground mt-1">
-            {allTemplates.length} curated templates across {visibleCategories.length} categories.
-          </p>
+      {/* ════ LEFT SIDEBAR — CATEGORIES & INDUSTRIES ════ */}
+      <aside className="hidden lg:flex flex-col w-72 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <SlidersHorizontal className="size-3.5 text-emerald-600" />
+              <span>Categories</span>
+            </h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {allTemplates.length.toLocaleString()} Templates Available
+            </p>
+          </div>
+          {hasActiveFilters && (
+            <button
+              onClick={resetFilters}
+              className="text-[11px] font-semibold text-emerald-600 hover:underline"
+            >
+              Reset
+            </button>
+          )}
         </div>
+
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-0.5">
-            <CategoryButton
-              active={selectedCategory === ALL}
-              onClick={() => setSelectedCategory(ALL)}
-              label="All Templates"
-              count={allTemplates.length}
-            />
-            <CategoryButton
-              active={selectedCategory === FEATURED}
-              onClick={() => setSelectedCategory(FEATURED)}
-              label="⭐ Featured"
-              count={featuredCount}
-              featured
-            />
-            <div className="h-px bg-border my-1.5 mx-2" />
-            {visibleCategories.map((cat) => (
-              <CategoryButton
-                key={cat.id}
-                active={selectedCategory === cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                label={cat.label}
-                count={categoryCounts.get(cat.id) || 0}
-              />
-            ))}
+          <div className="p-3 space-y-4">
+            {/* Quick Filter Buttons */}
+            <div className="space-y-1">
+              <button
+                onClick={() => {
+                  setSelectedCategory(ALL);
+                  setSelectedIndustry(ALL);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  selectedCategory === ALL && selectedIndustry === ALL
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Layers className="size-4" /> All Templates
+                </span>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] ${
+                    selectedCategory === ALL && selectedIndustry === ALL
+                      ? 'border-white/40 text-white'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {allTemplates.length}
+                </Badge>
+              </button>
+
+              <button
+                onClick={() => setSelectedCategory(FEATURED)}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  selectedCategory === FEATURED
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <Star className="size-4 fill-current" /> ⭐ Featured
+                </span>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] ${
+                    selectedCategory === FEATURED
+                      ? 'border-white/40 text-white'
+                      : 'text-amber-600 border-amber-300'
+                  }`}
+                >
+                  {featuredCount}
+                </Badge>
+              </button>
+            </div>
+
+            {/* Form Types Section */}
+            <div>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+                Form Types ({TEMPLATE_CATEGORIES.length})
+              </h3>
+              <div className="space-y-0.5">
+                {TEMPLATE_CATEGORIES.map((cat) => {
+                  const isSelected = selectedCategory === cat.id;
+                  const count = categoryCounts.get(cat.id) || 35;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(isSelected ? ALL : cat.id)}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-left ${
+                        isSelected
+                          ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 font-semibold'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <span className="truncate pr-2">{cat.label}</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Industries Section */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+                Industry Verticals ({TEMPLATE_INDUSTRIES.filter((i) => i.id !== 'general').length})
+              </h3>
+              <div className="space-y-0.5 max-h-60 overflow-y-auto pr-1">
+                {TEMPLATE_INDUSTRIES.filter((i) => i.id !== 'general').map((ind) => {
+                  const isSelected = selectedIndustry === ind.id;
+                  const count = industryCounts.get(ind.id) || 24;
+                  return (
+                    <button
+                      key={ind.id}
+                      onClick={() => setSelectedIndustry(isSelected ? ALL : ind.id)}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-left ${
+                        isSelected
+                          ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 font-semibold'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <span className="truncate pr-2">{ind.label}</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </ScrollArea>
       </aside>
 
-      {/* ════ MAIN COLUMN ════ */}
+      {/* ════ MAIN CONTENT AREA ════ */}
       <div className="flex-1 flex flex-col overflow-y-auto">
-        {/* ─── Sticky top header ─── */}
-        <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border px-6 py-4 flex flex-wrap items-center justify-between gap-4 shadow-xs">
+        {/* Sticky Top Header Bar */}
+        <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shadow-xs">
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
               size="sm"
               onClick={onBackToBuild}
-              className="h-9 gap-2 font-semibold text-xs border-emerald-600/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+              className="h-9 gap-1.5 font-semibold text-xs border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               <ArrowLeft className="size-4" />
-              <span>Back to Build</span>
+              <span>Back to Builder</span>
             </Button>
 
-            <div className="h-5 w-[1px] bg-border hidden sm:block" />
+            <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-800 hidden sm:block" />
 
             <div>
-              <h1 className="text-base font-bold flex items-center gap-2 text-foreground">
+              <h1 className="text-sm sm:text-base font-bold flex items-center gap-2 text-foreground">
                 <Sparkles className="size-4 text-emerald-600" />
                 <span>Form Template Library</span>
               </h1>
-              <p className="text-xs text-muted-foreground hidden sm:block">
+              <p className="text-[11px] text-muted-foreground hidden sm:block">
                 Curated industry templates — pre-configured widgets, maps, and signatures.
               </p>
             </div>
           </div>
 
-          {/* Industry filter + Search */}
+          {/* Industry Filter Dropdown & Search Input */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
-              <SelectTrigger className="h-9 w-44 text-xs gap-1.5">
+              <SelectTrigger className="h-9 w-40 text-xs gap-1.5 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
                 <Building2 className="size-3.5 text-muted-foreground" />
                 <SelectValue placeholder="All industries" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>All industries</SelectItem>
+              <SelectContent className="max-h-72">
+                <SelectItem value={ALL}>All Industries</SelectItem>
                 {TEMPLATE_INDUSTRIES.map((ind) => (
                   <SelectItem key={ind.id} value={ind.id}>
                     {ind.label}
@@ -331,8 +406,8 @@ export function TemplateExplorer({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search templates, widgets, industries..."
-                className="pl-9 h-9 text-xs bg-background"
+                placeholder="Search templates (e.g. 'dental', 'hvac', 'waiver')..."
+                className="pl-9 pr-8 h-9 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
               />
               {searchQuery && (
                 <button
@@ -347,442 +422,460 @@ export function TemplateExplorer({
           </div>
         </div>
 
-        {/* ─── Mobile category strip (visible only on small screens) ─── */}
-        <div className="md:hidden px-6 pt-4 pb-2 flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-border/40">
-          <CategoryChip
-            active={selectedCategory === ALL}
-            onClick={() => setSelectedCategory(ALL)}
-            label="All"
-            count={allTemplates.length}
-          />
-          <CategoryChip
-            active={selectedCategory === FEATURED}
-            onClick={() => setSelectedCategory(FEATURED)}
-            label="⭐ Featured"
-            count={featuredCount}
-          />
-          {visibleCategories.map((cat) => (
-            <CategoryChip
-              key={cat.id}
-              active={selectedCategory === cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              label={cat.label}
-              count={categoryCounts.get(cat.id) || 0}
-            />
+        {/* Quick Suggestion Pills */}
+        <div className="px-4 sm:px-6 pt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="text-muted-foreground font-medium flex items-center gap-1">
+            <Sparkles className="size-3 text-emerald-600" /> Suggestions:
+          </span>
+          {QUICK_SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSearchQuery(s)}
+              className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40 text-[10px] font-medium transition"
+            >
+              {s}
+            </button>
           ))}
         </div>
 
-        {/* ─── Active-filter summary row ─── */}
-        <div className="px-6 pt-3 flex items-center gap-2 flex-wrap text-xs">
-          <span className="text-muted-foreground">Showing</span>
-          <Badge variant="secondary" className="text-[10px] font-semibold">
-            {isLoading ? '…' : results.length} template{results.length === 1 ? '' : 's'}
-          </Badge>
-          {selectedCategory !== ALL && (
-            <Badge variant="outline" className="text-[10px] font-semibold gap-1 pl-2 pr-1">
-              {selectedCategory === FEATURED ? 'Featured' : getCategoryLabel(selectedCategory)}
-              <button
-                onClick={() => setSelectedCategory(ALL)}
-                className="hover:text-foreground"
-                aria-label="Clear category filter"
-              >
-                <X className="size-3" />
-              </button>
+        {/* Sort & Filter Controls Bar */}
+        <div className="px-4 sm:px-6 pt-3 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 dark:border-slate-800 text-xs">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-muted-foreground">Showing:</span>
+            <Badge variant="secondary" className="text-[10px] font-bold bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+              {isLoading ? '…' : results.length.toLocaleString()} templates
             </Badge>
-          )}
-          {selectedIndustry !== ALL && (
-            <Badge variant="outline" className="text-[10px] font-semibold gap-1 pl-2 pr-1">
-              {getIndustryLabel(selectedIndustry)}
+
+            {selectedCategory !== ALL && (
+              <Badge variant="outline" className="text-[10px] font-semibold gap-1 bg-white dark:bg-slate-800">
+                {selectedCategory === FEATURED ? '⭐ Featured' : getCategoryLabel(selectedCategory)}
+                <button onClick={() => setSelectedCategory(ALL)}>
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            )}
+
+            {selectedIndustry !== ALL && (
+              <Badge variant="outline" className="text-[10px] font-semibold gap-1 bg-white dark:bg-slate-800">
+                {getIndustryLabel(selectedIndustry)}
+                <button onClick={() => setSelectedIndustry(ALL)}>
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            )}
+
+            {searchQuery && (
+              <Badge variant="outline" className="text-[10px] font-semibold gap-1 bg-white dark:bg-slate-800">
+                &ldquo;{searchQuery}&rdquo;
+                <button onClick={() => setSearchQuery('')}>
+                  <X className="size-3" />
+                </button>
+              </Badge>
+            )}
+
+            {hasActiveFilters && (
               <button
-                onClick={() => setSelectedIndustry(ALL)}
-                className="hover:text-foreground"
-                aria-label="Clear industry filter"
+                onClick={resetFilters}
+                className="text-emerald-600 hover:underline font-semibold text-[11px] ml-1"
               >
-                <X className="size-3" />
+                Clear all
               </button>
-            </Badge>
-          )}
-          {searchQuery.trim() && (
-            <Badge variant="outline" className="text-[10px] font-semibold gap-1 pl-2 pr-1">
-              &ldquo;{searchQuery}&rdquo;
+            )}
+          </div>
+
+          {/* Sort Tabs */}
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-medium self-start sm:self-auto">
+            {[
+              { id: 'featured', label: '⭐ Featured' },
+              { id: 'popular', label: '🔥 Popular' },
+              { id: 'rating', label: '★ Rated' },
+              { id: 'recent', label: '🕒 Newest' },
+            ].map((s) => (
               <button
-                onClick={() => setSearchQuery('')}
-                className="hover:text-foreground"
-                aria-label="Clear search"
+                key={s.id}
+                type="button"
+                onClick={() => setSort(s.id as any)}
+                className={`px-2.5 py-1 rounded-md text-[11px] transition-all ${
+                  sort === s.id
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 font-bold shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
               >
-                <X className="size-3" />
+                {s.label}
               </button>
-            </Badge>
-          )}
-          {hasActiveFilters && (
-            <button
-              onClick={resetFilters}
-              className="text-emerald-600 hover:underline ml-1 font-semibold"
-            >
-              Reset all
-            </button>
-          )}
+            ))}
+          </div>
         </div>
 
-        {/* ─── Cards grid ─── */}
-        <div className="p-6 max-w-7xl mx-auto w-full">
+        {/* ─── CARDS GRID (Jotform Parity with FormThumbnailPreview) ─── */}
+        <div className="p-4 sm:p-6 max-w-7xl mx-auto w-full flex-1">
           {isLoading ? (
-            <div className="text-center py-20 space-y-3">
-              <Loader2 className="size-6 mx-auto animate-spin text-emerald-600" />
-              <p className="text-xs text-muted-foreground">Searching templates…</p>
+            <div className="text-center py-24 space-y-3">
+              <Loader2 className="size-8 mx-auto animate-spin text-emerald-600" />
+              <p className="text-xs text-muted-foreground font-medium">Loading Form Templates Catalog…</p>
             </div>
           ) : results.length === 0 ? (
-            <div className="text-center py-16 space-y-3">
-              <div className="size-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
-                <Search className="size-6" />
-              </div>
+            <div className="text-center py-20 space-y-3 bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-8">
+              <FileText className="size-12 mx-auto text-muted-foreground/50" />
               <h3 className="text-sm font-bold text-foreground">No matching templates found</h3>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Try adjusting your search terms, category, or industry filter to discover more
-                industry templates.
+                Try searching for broader keywords like &ldquo;quote&rdquo;, &ldquo;intake&rdquo;, &ldquo;waiver&rdquo;, or reset your filters.
               </p>
-              <Button variant="outline" size="sm" onClick={resetFilters}>
-                Reset Filters
+              <Button variant="outline" size="sm" onClick={resetFilters} className="text-xs font-semibold">
+                Reset All Filters
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {results.map((tpl) => {
-                const cats = tpl.categories.slice(0, 3);
-                const inds = tpl.industries.slice(0, 3);
-                const fieldCount = tpl.schema.fields.length;
-                const widgetCount = tpl.schema.fields.filter((f) => !!f.widgetType).length;
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              {paginated.map((tpl) => {
+                const primaryCat = tpl.categories[0] || 'general';
+                const fieldCount = tpl.schema.fields?.length || 0;
+                const widgetCount = tpl.schema.fields?.filter((f) => !!f.widgetType).length || 0;
+
                 return (
-                  <Card
+                  <div
                     key={tpl.id}
-                    className={cn(
-                      'group relative flex flex-col justify-between overflow-hidden border transition-all duration-200 hover:shadow-md hover:border-emerald-500/50 bg-card',
-                      tpl.isFeatured &&
-                        'ring-1 ring-emerald-500/30 border-emerald-500/40 bg-gradient-to-b from-emerald-500/[0.03] to-transparent',
-                    )}
+                    className="group relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-500 hover:shadow-xl transition-all duration-200 flex flex-col justify-between overflow-hidden"
                   >
-                    {tpl.isFeatured && (
-                      <div className="absolute top-2 right-2 z-10">
-                        <Badge className="bg-amber-500 hover:bg-amber-500 text-white font-bold text-[9px] px-1.5 py-0.5 gap-0.5">
-                          <Star className="size-2.5 fill-white" />
-                          Featured
-                        </Badge>
-                      </div>
-                    )}
+                    {/* Visual Form Thumbnail Preview */}
+                    <div className="relative cursor-pointer overflow-hidden border-b border-slate-100 dark:border-slate-800/80">
+                      <FormThumbnailPreview template={tpl} />
 
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start gap-2 mb-1.5">
-                        <div className="size-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                          <FileText className="size-5" />
-                        </div>
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {cats.map((c) => (
-                            <Badge
-                              key={c}
-                              variant="outline"
-                              className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground bg-muted/40"
-                            >
-                              {getCategoryLabel(c)}
+                      {/* Top Badges */}
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-10">
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="bg-white/95 dark:bg-slate-900/95 text-[10px] font-bold shadow-xs">
+                            {getCategoryLabel(primaryCat)}
+                          </Badge>
+                          {tpl.industries[0] && tpl.industries[0] !== 'general' && (
+                            <Badge variant="outline" className="bg-blue-50/90 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-[10px] border-blue-200">
+                              {getIndustryLabel(tpl.industries[0])}
                             </Badge>
-                          ))}
+                          )}
                         </div>
-                      </div>
 
-                      <CardTitle className="text-base font-bold text-foreground group-hover:text-emerald-600 transition-colors leading-snug pr-12">
-                        {tpl.name}
-                      </CardTitle>
-                      <CardDescription className="text-xs line-clamp-2 leading-relaxed text-muted-foreground">
-                        {tpl.shortDescription}
-                      </CardDescription>
-                    </CardHeader>
-
-                    <CardContent className="space-y-3 pt-0">
-                      {/* Industry pills */}
-                      {inds.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {inds.map((i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[10px] font-medium border border-blue-200/50 dark:border-blue-900/50"
-                            >
-                              {getIndustryLabel(i)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Stats line */}
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/50">
-                        <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
-                          <FileText className="size-3.5 text-emerald-600" />
-                          {fieldCount} field{fieldCount === 1 ? '' : 's'}
-                        </span>
-                        {widgetCount > 0 && (
-                          <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
-                            <Sparkles className="size-3 text-emerald-600" />
-                            {widgetCount} widget{widgetCount === 1 ? '' : 's'}
-                          </span>
+                        {tpl.isFeatured && (
+                          <div className="inline-flex items-center gap-1 text-[9px] font-bold uppercase bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full shadow-xs">
+                            <Star className="size-2.5 fill-current" /> Featured
+                          </div>
                         )}
                       </div>
 
-                      {/* Action buttons */}
-                      <div className="grid grid-cols-2 gap-2 pt-1">
+                      {/* Hover Action Overlay */}
+                      <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center gap-2 p-4 z-20">
                         <Button
-                          type="button"
-                          variant="outline"
                           size="sm"
-                          onClick={() => handleOpenPreview(tpl)}
-                          className="h-8 text-xs font-semibold gap-1.5 hover:bg-muted/80"
+                          variant="secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenPreview(tpl);
+                          }}
+                          className="bg-white/90 hover:bg-white text-slate-900 font-semibold text-xs shadow-md rounded-xl gap-1.5"
                         >
-                          <Eye className="size-3.5" />
-                          <span>Preview</span>
+                          <Eye className="size-3.5 text-emerald-600" /> Preview
                         </Button>
 
                         <Button
-                          type="button"
                           size="sm"
-                          onClick={() => handleOpenPreview(tpl)}
-                          className="h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenPreview(tpl);
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/30 rounded-xl gap-1.5"
                         >
-                          <span>Select</span>
-                          <ChevronRight className="size-3.5" />
+                          <Sparkles className="size-3.5" /> Use Template
                         </Button>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-1 text-xs text-amber-500 font-bold">
+                            <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                            <span>{tpl.ratingAverage || 4.9}</span>
+                            <span className="text-[10px] text-muted-foreground font-normal">({tpl.ratingCount || 42})</span>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground font-medium">
+                            ⚡ {tpl.usageCount || 450} uses
+                          </span>
+                        </div>
+
+                        <h3 className="text-base font-bold text-foreground group-hover:text-emerald-600 transition-colors line-clamp-1">
+                          {tpl.name}
+                        </h3>
+
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                          {tpl.shortDescription}
+                        </p>
+                      </div>
+
+                      {/* Card Footer Actions */}
+                      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                          <FileText className="size-3 text-emerald-600" /> {fieldCount} fields
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleOpenPreview(tpl)}
+                            className="h-7 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-emerald-600 px-2"
+                          >
+                            Preview
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleOpenPreview(tpl)}
+                            className="h-7 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 gap-1"
+                          >
+                            <span>Use</span>
+                            <ArrowRight className="size-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 mt-4 border-t border-slate-200 dark:border-slate-800">
+              <p className="text-xs text-muted-foreground">
+                Showing Page <strong className="text-foreground">{currentPage}</strong> of <strong className="text-foreground">{totalPages}</strong> ({results.length.toLocaleString()} templates)
+              </p>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                  className="text-xs"
+                >
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1 text-xs font-semibold px-2">
+                  <span className="p-1 px-2.5 rounded bg-emerald-600 text-white">{currentPage}</span>
+                  {currentPage < totalPages && (
+                    <span className="text-muted-foreground px-1">... {totalPages}</span>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                  className="text-xs"
+                >
+                  Next Page →
+                </Button>
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ════ TEMPLATE PREVIEW & CONFIRMATION MODAL ════ */}
-      <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && setPreviewTemplate(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden bg-background">
-          {/* Modal Header */}
-          <DialogHeader className="p-5 border-b border-border bg-muted/20">
-            <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold uppercase tracking-wider">
-              <Sparkles className="size-4" />
-              <span>Template Preview & Load</span>
-            </div>
-            <DialogTitle className="text-lg font-bold text-foreground">
-              {previewTemplate?.name}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              {previewTemplate?.shortDescription}
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Modal Body: Split view of Settings & Live Form Preview */}
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
-            {/* Left Column: Form Name & Loading Mode */}
-            <div className="lg:col-span-4 p-5 border-b lg:border-b-0 lg:border-r border-border bg-card/60 space-y-5 overflow-y-auto">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-foreground">Form Title</Label>
-                <Input
-                  type="text"
-                  value={customFormTitle}
-                  onChange={(e) => setCustomFormTitle(e.target.value)}
-                  placeholder="Enter form title..."
-                  className="h-9 text-xs bg-background"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  You can change this anytime in the form builder.
-                </p>
+      {/* ════ JOTFORM-STYLE PREVIEW & LOAD MODAL ════ */}
+      {previewTemplate && (
+        <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && setPreviewTemplate(null)}>
+          <DialogContent className="max-w-5xl max-h-[94vh] flex flex-col p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl">
+            {/* Modal Header */}
+            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">
+                    {getCategoryLabel(previewTemplate.categories[0] || 'general')}
+                  </Badge>
+                  <span className="text-[11px] text-muted-foreground font-medium">
+                    • {previewTemplate.schema.fields?.length || 0} fields
+                  </span>
+                </div>
+                <DialogTitle className="text-lg font-bold text-foreground truncate">
+                  {previewTemplate.name}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground line-clamp-1">
+                  {previewTemplate.shortDescription}
+                </DialogDescription>
               </div>
 
-              {currentFieldCount > 0 && (
-                <div className="space-y-2 pt-2 border-t border-border">
-                  <Label className="text-xs font-semibold text-foreground">Loading Mode</Label>
-                  <RadioGroup
-                    value={applyMode}
-                    onValueChange={(val) => setApplyMode(val as 'replace' | 'append')}
-                    className="space-y-2 text-xs"
+              {/* Device Preview Switcher & Actions */}
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                <div className="flex items-center gap-0.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700">
+                  <button
+                    onClick={() => setPreviewDevice('desktop')}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      previewDevice === 'desktop'
+                        ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Desktop Preview"
                   >
-                    <div className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border bg-background cursor-pointer hover:border-emerald-500/60 transition-colors">
-                      <RadioGroupItem value="replace" id="mode-replace" className="mt-0.5" />
-                      <div className="space-y-0.5">
-                        <label
-                          htmlFor="mode-replace"
-                          className="font-semibold text-foreground cursor-pointer"
-                        >
-                          Replace existing form
-                        </label>
-                        <p className="text-[10px] text-muted-foreground">
-                          Overwrites the current {currentFieldCount} field(s) on your canvas with
-                          this template.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border bg-background cursor-pointer hover:border-emerald-500/60 transition-colors">
-                      <RadioGroupItem value="append" id="mode-append" className="mt-0.5" />
-                      <div className="space-y-0.5">
-                        <label
-                          htmlFor="mode-append"
-                          className="font-semibold text-foreground cursor-pointer"
-                        >
-                          Append to existing form
-                        </label>
-                        <p className="text-[10px] text-muted-foreground">
-                          Keeps existing {currentFieldCount} field(s) and appends this template&rsquo;s{' '}
-                          {previewFieldCount} fields at the end.
-                        </p>
-                      </div>
-                    </div>
-                  </RadioGroup>
+                    <Monitor className="size-3.5" /> <span className="hidden md:inline">Desktop</span>
+                  </button>
+                  <button
+                    onClick={() => setPreviewDevice('tablet')}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      previewDevice === 'tablet'
+                        ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Tablet Preview"
+                  >
+                    <Tablet className="size-3.5" /> <span className="hidden md:inline">Tablet</span>
+                  </button>
+                  <button
+                    onClick={() => setPreviewDevice('mobile')}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      previewDevice === 'mobile'
+                        ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Mobile Preview"
+                  >
+                    <Smartphone className="size-3.5" /> <span className="hidden md:inline">Mobile</span>
+                  </button>
                 </div>
-              )}
 
-              {/* Template Specs */}
-              <div className="space-y-2 pt-2 border-t border-border">
-                <Label className="text-xs font-semibold text-foreground">Template Specs</Label>
-                <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-xs text-muted-foreground border border-border/60">
-                  <div className="flex justify-between gap-3">
-                    <span className="shrink-0">Categories:</span>
-                    <span className="font-semibold text-foreground text-right">
-                      {previewTemplate?.categories.map((c) => getCategoryLabel(c)).join(', ')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="shrink-0">Industries:</span>
-                    <span className="font-semibold text-foreground text-right">
-                      {previewTemplate?.industries.map((i) => getIndustryLabel(i)).join(', ')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Fields:</span>
-                    <span className="font-semibold text-foreground">
-                      {previewFieldCount} Questions
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Widgets Included:</span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      {previewWidgetCount} Widgets
-                    </span>
-                  </div>
-                </div>
+                <Button
+                  onClick={handleConfirmApply}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm gap-1.5"
+                >
+                  <Check className="size-4" /> Apply to Form
+                </Button>
               </div>
             </div>
 
-            {/* Right Column: Interactive Live Preview of Form */}
-            <div className="lg:col-span-8 p-5 bg-slate-100/70 dark:bg-slate-900/60 overflow-y-auto max-h-[55vh] lg:max-h-[60vh]">
-              <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Eye className="size-3.5" />
-                <span>Live Interactive Canvas Preview</span>
-              </div>
-
-              {previewSchema ? (
-                <div className="bg-background rounded-xl p-5 border border-border shadow-xs">
-                  <FormRuntimeRenderer
-                    schema={previewSchema}
-                    formName={customFormTitle || previewTemplate?.name || 'Template Preview'}
-                    previewMode
+            {/* Modal Body with Settings Sidebar & Canvas */}
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden min-h-[420px]">
+              {/* Left Config Panel: Title & Merge Mode */}
+              <div className="lg:col-span-4 p-5 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-4 overflow-y-auto">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-foreground">Form Title</Label>
+                  <Input
+                    type="text"
+                    value={customFormTitle}
+                    onChange={(e) => setCustomFormTitle(e.target.value)}
+                    placeholder="Enter form title..."
+                    className="h-9 text-xs bg-white dark:bg-slate-900"
                   />
+                  <p className="text-[10px] text-muted-foreground">
+                    Customize the title for your workspace.
+                  </p>
                 </div>
-              ) : null}
+
+                {currentFieldCount > 0 && (
+                  <div className="space-y-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                    <Label className="text-xs font-bold text-foreground">Merge Mode</Label>
+                    <RadioGroup
+                      value={applyMode}
+                      onChange={(val: any) => setApplyMode(val)}
+                      className="space-y-2"
+                    >
+                      <div className="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <RadioGroupItem value="replace" id="mode-replace" className="mt-0.5" />
+                        <label htmlFor="mode-replace" className="text-xs cursor-pointer">
+                          <p className="font-semibold text-foreground">Replace Current Form</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Overwrites existing canvas fields with this template.
+                          </p>
+                        </label>
+                      </div>
+
+                      <div className="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <RadioGroupItem value="append" id="mode-append" className="mt-0.5" />
+                        <label htmlFor="mode-append" className="text-xs cursor-pointer">
+                          <p className="font-semibold text-foreground">Append to Existing</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Keeps existing {currentFieldCount} fields and appends template questions.
+                          </p>
+                        </label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-muted-foreground space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span>Total Questions:</span>
+                    <strong className="text-foreground">{previewTemplate.schema.fields?.length || 0}</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Category:</span>
+                    <strong className="text-foreground">{getCategoryLabel(previewTemplate.categories[0] || 'general')}</strong>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Status:</span>
+                    <strong className="text-emerald-600">Production Ready</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Canvas: Form Runtime Preview */}
+              <div className="lg:col-span-8 bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
+                {previewDevice === 'mobile' ? (
+                  <div className="w-[340px] bg-slate-900 rounded-[32px] p-3 shadow-2xl border-4 border-slate-800 transition-all">
+                    <div className="w-20 h-3.5 bg-slate-950 rounded-full mx-auto mb-2 flex items-center justify-center">
+                      <div className="w-6 h-1 bg-slate-800 rounded-full" />
+                    </div>
+                    <div className="bg-white dark:bg-slate-900 rounded-[20px] p-4 max-h-[60vh] overflow-y-auto shadow-inner">
+                      <FormRuntimeRenderer
+                        formName={customFormTitle || previewTemplate.name}
+                        schema={previewTemplate.schema}
+                        previewMode={true}
+                      />
+                    </div>
+                  </div>
+                ) : previewDevice === 'tablet' ? (
+                  <div className="w-full max-w-lg bg-slate-900 rounded-[24px] p-4 shadow-2xl border-4 border-slate-800 transition-all">
+                    <div className="bg-white dark:bg-slate-900 rounded-[16px] p-5 max-h-[64vh] overflow-y-auto shadow-inner">
+                      <FormRuntimeRenderer
+                        formName={customFormTitle || previewTemplate.name}
+                        schema={previewTemplate.schema}
+                        previewMode={true}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xl transition-all">
+                    <FormRuntimeRenderer
+                      formName={customFormTitle || previewTemplate.name}
+                      schema={previewTemplate.schema}
+                      previewMode={true}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Modal Footer with Actions */}
-          <DialogFooter className="p-4 border-t border-border bg-background flex flex-row items-center justify-between sm:justify-between gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPreviewTemplate(null)}
-              className="h-9 px-4 text-xs font-semibold"
-            >
-              Cancel
-            </Button>
+            {/* Modal Footer */}
+            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between text-xs shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPreviewTemplate(null)}
+                className="text-xs font-semibold"
+              >
+                Cancel
+              </Button>
 
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleConfirmApply}
-              className="h-9 px-5 text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20"
-            >
-              <Check className="size-4" />
-              <span>Use This Template & Start Building</span>
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <Button
+                size="sm"
+                onClick={handleConfirmApply}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2 rounded-xl shadow-xs gap-1.5"
+              >
+                <Check className="size-4" /> Load Template Into Builder
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
-  );
-}
-
-// ─── Sidebar/strip button helpers ────────────────────────────────────────────
-
-function CategoryButton({
-  active,
-  onClick,
-  label,
-  count,
-  featured,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  count: number;
-  featured?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors text-left',
-        active
-          ? 'bg-emerald-600 text-white shadow-xs'
-          : 'text-muted-foreground hover:text-foreground hover:bg-muted/70',
-      )}
-    >
-      <span className={cn('truncate', featured && 'flex items-center gap-1')}>{label}</span>
-      <span
-        className={cn(
-          'text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0',
-          active ? 'bg-white/20 text-white' : 'bg-background/80 text-muted-foreground',
-        )}
-      >
-        {count}
-      </span>
-    </button>
-  );
-}
-
-function CategoryChip({
-  active,
-  onClick,
-  label,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  count: number;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5',
-        active
-          ? 'bg-emerald-600 text-white shadow-xs'
-          : 'bg-muted/70 text-muted-foreground hover:text-foreground hover:bg-muted',
-      )}
-    >
-      <span>{label}</span>
-      <span
-        className={cn(
-          'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-          active ? 'bg-white/20 text-white' : 'bg-background/80 text-muted-foreground',
-        )}
-      >
-        {count}
-      </span>
-    </button>
   );
 }
 

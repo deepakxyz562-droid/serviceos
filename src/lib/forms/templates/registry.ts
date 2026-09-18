@@ -47,22 +47,44 @@ export function registerTemplates(templates: FormTemplate[]): void {
   for (const t of templates) registerTemplate(t);
 }
 
+import { synthesizeTemplate, generateTemplateBatch } from './generators/mass-template-synthesizer';
+import { TEMPLATE_INDUSTRIES } from './taxonomy/industries';
+import { TEMPLATE_CATEGORIES } from './taxonomy/categories';
+
+let isCatalogPopulated = false;
+
+function ensureCatalogPopulated() {
+  if (isCatalogPopulated) return;
+  isCatalogPopulated = true;
+  try {
+    const batch = generateTemplateBatch(1000);
+    for (const t of batch) {
+      if (!REGISTRY.has(t.id)) {
+        REGISTRY.set(t.id, t);
+      }
+    }
+  } catch (e) {
+    console.error('[registry] Failed to populate mass templates:', e);
+  }
+}
+
 /**
  * Get ALL registered templates (sorted by name). Prefer `searchTemplates`
  * for any user-facing call — this is mainly for tooling/tests.
  */
 export function getAllTemplates(): FormTemplate[] {
+  ensureCatalogPopulated();
   return Array.from(REGISTRY.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
-
-import { synthesizeTemplate } from './generators/mass-template-synthesizer';
-import { TEMPLATE_INDUSTRIES } from './taxonomy/industries';
-import { TEMPLATE_CATEGORIES } from './taxonomy/categories';
 
 /**
  * Synchronous lookup by id. Returns curated template or synthesizes on-demand.
  */
 export function getTemplateSync(id: string): FormTemplate | undefined {
+  if (REGISTRY.has(id)) {
+    return REGISTRY.get(id);
+  }
+  ensureCatalogPopulated();
   if (REGISTRY.has(id)) {
     return REGISTRY.get(id);
   }
@@ -114,6 +136,7 @@ export async function getTemplate(id: string): Promise<FormTemplate | undefined>
 export async function searchTemplates(
   query: TemplateSearchQuery,
 ): Promise<TemplateSearchResult[]> {
+  ensureCatalogPopulated();
   let candidates = Array.from(REGISTRY.values());
 
   // Filter by status
