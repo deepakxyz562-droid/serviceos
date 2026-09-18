@@ -426,11 +426,13 @@ export function FormRuntimeRenderer({
           color: textColor,
         }}
       >
-        {/* Top Accent Bar */}
-        <div
-          className="h-1.5 w-full transition-all"
-          style={{ backgroundColor: primaryColor }}
-        />
+        {/* Top Accent Bar (Optional per theme) */}
+        {schema.theme?.showTopBorder && (
+          <div
+            className="h-1.5 w-full transition-all"
+            style={{ backgroundColor: primaryColor }}
+          />
+        )}
 
         {/* Header */}
         <div className="p-6 sm:p-8 pb-4 border-b border-border/40">

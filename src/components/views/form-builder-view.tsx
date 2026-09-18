@@ -268,10 +268,10 @@ export function FormBuilderView() {
     setShowCreateDialog(true);
   };
 
-  const handleSave = async () => {
-    if (!formData.name.trim()) { toast.error('Form name is required'); return; }
+  const handleSave = async (): Promise<{ id: string; slug?: string } | null> => {
+    if (!formData.name.trim()) { toast.error('Form name is required'); return null; }
     const hasFields = formData.fields.some((f) => f.label.trim());
-    if (!hasFields) { toast.error('At least one field with a label is required'); return; }
+    if (!hasFields) { toast.error('At least one field with a label is required'); return null; }
 
     setSaving(true);
     try {
@@ -292,6 +292,7 @@ export function FormBuilderView() {
         setForms((prev) => prev.map((f) => (f.id === editFormId ? updated : f)));
         setFormData((prev) => ({ ...prev, id: updated.id, slug: updated.slug }));
         toast.success('Form updated');
+        return { id: updated.id, slug: updated.slug };
       } else {
         const res = await authFetch('/api/forms', {
           method: 'POST',
@@ -309,9 +310,11 @@ export function FormBuilderView() {
         setEditFormId(newForm.id);
         setFormData((prev) => ({ ...prev, id: newForm.id, slug: newForm.slug }));
         toast.success('Form created');
+        return { id: newForm.id, slug: newForm.slug };
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save form');
+      return null;
     } finally {
       setSaving(false);
     }

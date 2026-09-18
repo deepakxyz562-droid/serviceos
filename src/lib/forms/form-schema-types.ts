@@ -124,6 +124,7 @@ export interface FormTheme {
   cardBackground?: string;
   fontFamily?: string;
   logoUrl?: string | null;
+  showTopBorder?: boolean; // Accent top border/line
   layout?: 'classic' | 'card' | 'multi_step' | 'conversational';
 }
 
@@ -178,6 +179,7 @@ export const DEFAULT_FORM_THEME: FormTheme = {
   inputHeight: 'medium',
   buttonColor: '#059669',
   buttonTextColor: '#ffffff',
+  showTopBorder: false,
   layout: 'card',
 };
 
@@ -248,9 +250,35 @@ export const DEFAULT_FORM_SCHEMA: FormSchema = {
 
 /**
  * Normalizes and validates incoming JSON into a valid FormSchema.
+ * Accepts an optional fallbackFields array so forms without schemaJson
+ * reconstruct their real schema from fieldsJson rather than dummy defaults.
  */
-export function normalizeFormSchema(raw: unknown): FormSchema {
+export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormSchema {
+  const fallbackList: FormField[] = Array.isArray(fallbackFields) && fallbackFields.length > 0
+    ? fallbackFields.map((f, idx) => ({
+        id: f.id || `f_${idx + 1}`,
+        label: f.label || `Field ${idx + 1}`,
+        type: f.type || 'short_answer',
+        placeholder: f.placeholder,
+        helpText: f.helpText || f.description,
+        required: !!f.required,
+        stepId: f.stepId || 'step_1',
+        width: f.width || 'full',
+        widgetType: f.widgetType,
+        widgetConfig: f.widgetConfig,
+        options: f.options,
+        borderRadius: f.borderRadius,
+        inputHeight: f.inputHeight,
+      }))
+    : [];
+
   if (!raw || typeof raw !== 'object') {
+    if (fallbackList.length > 0) {
+      return {
+        ...DEFAULT_FORM_SCHEMA,
+        fields: fallbackList,
+      };
+    }
     return DEFAULT_FORM_SCHEMA;
   }
   const s = raw as Partial<FormSchema> & { steps?: Array<FormStep & { fields?: FormField[] }> };
@@ -278,7 +306,7 @@ export function normalizeFormSchema(raw: unknown): FormSchema {
     }
   }
   if (resolvedFields.length === 0) {
-    resolvedFields = DEFAULT_FORM_SCHEMA.fields;
+    resolvedFields = fallbackList.length > 0 ? fallbackList : DEFAULT_FORM_SCHEMA.fields;
   }
 
   // Ensure every field has a valid stepId so it is never dropped or filtered out

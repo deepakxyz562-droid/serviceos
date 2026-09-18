@@ -88,7 +88,7 @@ export interface FormStudioBuilderProps {
   onFormDataChange: React.Dispatch<React.SetStateAction<EditorFormData>>;
   editMode: boolean;
   saving: boolean;
-  onSave: () => Promise<void>;
+  onSave: () => Promise<{ id?: string; slug?: string } | void | null>;
   onExit: () => void;
   siteOrigin: string;
 }
@@ -238,8 +238,11 @@ export function FormStudioBuilder({
         textColor: formData.theme?.textColor || '#0f172a',
         fontFamily: formData.theme?.fontFamily || 'Inter, sans-serif',
         borderRadius: `${formData.borderRadius || 12}px`,
+        inputBorderRadius: formData.theme?.inputBorderRadius || '12px',
+        inputHeight: formData.theme?.inputHeight || 'medium',
         buttonColor: formData.theme?.buttonColor || formData.primaryColor || '#059669',
         buttonTextColor: formData.theme?.buttonTextColor || '#ffffff',
+        showTopBorder: formData.theme?.showTopBorder ?? false,
         layout: previewFormat === 'card' ? 'card' : previewFormat === 'agent' ? 'conversational' : (formData.settings?.formLayout === 'single_question' ? 'card' : 'paper'),
       },
       rules: (formData.rules as any[]) || [],
@@ -605,12 +608,17 @@ export function FormStudioBuilder({
 
   const handleOpenLive = async () => {
     toast.info('Synchronizing live form...');
+    let savedResult: { id?: string; slug?: string } | void | null = null;
     try {
-      await onSave();
+      savedResult = await onSave();
     } catch {
       // continue
     }
-    const currentId = formData.id || canonicalFormId;
+    const currentId = savedResult?.id || savedResult?.slug || formData.id || (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : null);
+    if (!currentId) {
+      toast.error('Please name and save your form first');
+      return;
+    }
     const targetUrl = `${resolvedOrigin}/form/${currentId}`;
     window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
@@ -2380,6 +2388,16 @@ export function FormStudioBuilder({
         open={themeModalOpen}
         onOpenChange={setThemeModalOpen}
         currentThemeId={currentThemeId}
+        showTopBorder={formData.theme?.showTopBorder ?? false}
+        onToggleTopBorder={(enabled) => {
+          onFormDataChange((prev) => ({
+            ...prev,
+            theme: {
+              ...(prev.theme || {}),
+              showTopBorder: enabled,
+            } as any,
+          }));
+        }}
         onSelectTheme={handleSelectTheme}
       />
     </div>

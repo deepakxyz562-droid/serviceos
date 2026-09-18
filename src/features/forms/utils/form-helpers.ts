@@ -270,6 +270,7 @@ export function buildApiPayload(formData: EditorFormData) {
       inputHeight: formData.theme?.inputHeight || 'medium',
       buttonColor: formData.theme?.buttonColor || formData.primaryColor || '#059669',
       buttonTextColor: formData.theme?.buttonTextColor || '#ffffff',
+      showTopBorder: formData.theme?.showTopBorder ?? false,
       layout: formData.theme?.layout || (formData.settings?.formLayout === 'single_question' ? 'card' : 'paper'),
     },
     rules: formData.rules || [],

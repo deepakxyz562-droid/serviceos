@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Sparkles, Check, Palette, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 
 export interface FormThemePreset {
   id: string;
@@ -124,6 +125,8 @@ interface StudioThemeGalleryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentThemeId?: string;
+  showTopBorder?: boolean;
+  onToggleTopBorder?: (enabled: boolean) => void;
   onSelectTheme: (theme: FormThemePreset) => void;
 }
 
@@ -131,6 +134,8 @@ export function StudioThemeGalleryModal({
   open,
   onOpenChange,
   currentThemeId = 'fieseros-emerald',
+  showTopBorder = false,
+  onToggleTopBorder,
   onSelectTheme,
 }: StudioThemeGalleryModalProps) {
   const [activeTab, setActiveTab] = useState<'gallery' | 'my_themes'>('gallery');
@@ -153,6 +158,18 @@ export function StudioThemeGalleryModal({
             </div>
           </div>
         </DialogHeader>
+
+        {/* Quick Style Options */}
+        <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-muted/20 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-foreground">Top Accent Border</p>
+            <p className="text-[10px] text-muted-foreground">Show colored accent bar line at the top of the form</p>
+          </div>
+          <Switch
+            checked={showTopBorder}
+            onCheckedChange={(checked) => onToggleTopBorder?.(checked)}
+          />
+        </div>
 
         {/* Gallery Grid */}
         <div className="p-6 max-h-[70vh] overflow-y-auto">

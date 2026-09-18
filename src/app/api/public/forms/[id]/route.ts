@@ -71,7 +71,15 @@ export async function GET(
       schema = null;
     }
 
-    const normalizedSchema = normalizeFormSchema(schema);
+    let rawFields: any[] = [];
+    if (form.fieldsJson) {
+      try {
+        const parsed = typeof form.fieldsJson === 'string' ? JSON.parse(form.fieldsJson) : form.fieldsJson;
+        if (Array.isArray(parsed)) rawFields = parsed;
+      } catch { /* ignore */ }
+    }
+
+    const normalizedSchema = normalizeFormSchema(schema, rawFields);
 
     // Resolve branding: prefer tenant for CRM-bound forms, fall back to
     // workspace branding for standalone (Forms-only) forms.
