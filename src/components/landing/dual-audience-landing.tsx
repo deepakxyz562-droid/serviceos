@@ -2874,6 +2874,56 @@ function CrmThreeBidMarketplace({ onGetStarted }: { onGetStarted?: () => void })
             </div>
           </div>
         </div>
+
+        {/* Curated Trade Categories Grid */}
+        <div className="rounded-2xl border border-amber-200/60 dark:border-amber-900/40 bg-card p-6 sm:p-8 shadow-xs">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-5 border-b border-border/70">
+            <div>
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <Search className="h-4.5 w-4.5 text-amber-600" /> Browse Verified Pros by Trade
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Direct access to top-rated, background-checked contractors across every major trade.
+              </p>
+            </div>
+            <Link href="/marketplace" className="text-xs font-bold text-amber-600 hover:underline">
+              View All 25+ Trades &rarr;
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-5">
+            {[
+              { name: 'Plumbing', icon: Wrench, href: '/plumbing-contractors' },
+              { name: 'Electrical', icon: Zap, href: '/electrical-contractors' },
+              { name: 'HVAC & Heating', icon: Thermometer, href: '/hvac-contractors' },
+              { name: 'Roofing', icon: Home, href: '/roofing-contractors' },
+              { name: 'Cleaning', icon: Sparkles, href: '/cleaning-contractors' },
+              { name: 'Landscaping', icon: Trees, href: '/landscaping-contractors' },
+              { name: 'Pest Control', icon: Bug, href: '/pest-control-contractors' },
+              { name: 'Painting', icon: Paintbrush, href: '/painting-contractors' },
+              { name: 'Handyman', icon: Hammer, href: '/handyman-contractors' },
+              { name: 'Appliance Repair', icon: Plug, href: '/marketplace?search=Appliance' },
+              { name: 'Garage Door', icon: Key, href: '/garage-door-contractors' },
+              { name: 'Pet Care', icon: PawPrint, href: '/pet-services-contractors' },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className="group flex items-center gap-2.5 rounded-xl border border-border/80 bg-background/60 p-3 text-left transition-all hover:border-amber-400 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 hover:shadow-xs"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <span className="text-xs font-semibold text-foreground group-hover:text-amber-700 dark:group-hover:text-amber-300 truncate">
+                    {item.name}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -3006,68 +3056,31 @@ function StickyCta({
       <div className="mx-auto max-w-6xl flex items-center gap-2 sm:gap-3">
         <div className="flex-1 min-w-0 hidden sm:block">
           <p className="text-xs text-muted-foreground truncate">
-            {audience === 'crm'
-              ? 'Fieseros CRM — run your business from lead to invoice'
-              : audience === 'forms'
-              ? 'Fieseros AI Form Studio — 20,391 templates with 200+ smart widgets'
-              : 'Fieseros Marketplace — 3 upfront bids with escrow protection'}
+            Fieseros AI Operating System &bull; CRM &bull; AI Voice Receptionist &bull; 20,391 Templates &bull; 3-Bid Marketplace
           </p>
         </div>
-        {audience === 'crm' ? (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPick('marketplace')}
-              className="gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 hidden sm:inline-flex min-h-11"
-            >
-              <Search className="h-3.5 w-3.5" /> I need a service
+        <div className="flex items-center gap-2 flex-1 sm:flex-none justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 text-xs min-h-10"
+          >
+            <Link href="/request">
+              <Store className="h-3.5 w-3.5" /> Post Request
+            </Link>
+          </Button>
+          {onGetStarted ? (
+            <Button size="sm" onClick={onGetStarted} className="gap-1 bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-semibold min-h-10 px-4">
+              Start Free Trial <ArrowRight className="h-3.5 w-3.5" />
             </Button>
-            {onGetStarted ? (
-              <Button size="sm" onClick={onGetStarted} className="gap-1 bg-emerald-600 text-white hover:bg-emerald-700 min-h-11 flex-1 sm:flex-none w-full sm:w-auto">
-                Start free <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            ) : null}
-          </>
-        ) : audience === 'forms' ? (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPick('crm')}
-              className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hidden sm:inline-flex min-h-11"
-            >
-              <Briefcase className="h-3.5 w-3.5" /> I run a business
-            </Button>
-            <Button asChild size="sm" className="gap-1 bg-teal-600 text-white hover:bg-teal-700 min-h-11 flex-1 sm:flex-none w-full sm:w-auto">
-              <Link href="/gptform">
-                AI Form Builder <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPick('crm')}
-              className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hidden sm:inline-flex min-h-11"
-            >
-              <Briefcase className="h-3.5 w-3.5" /> I run a business
-            </Button>
-            <a
-              href="/request"
-              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-amber-600 px-4 py-2 min-h-11 text-sm font-semibold text-white hover:bg-amber-700 flex-1 sm:flex-none w-full sm:w-auto"
-            >
-              Post 3-Bid Request <ArrowRight className="h-3.5 w-3.5" />
-            </a>
-          </>
-        )}
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={() => setHidden(true)}
           aria-label="Dismiss"
-          className="ml-1 inline-flex items-center justify-center min-h-11 min-w-11 p-2 rounded-lg text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+          className="ml-1 inline-flex items-center justify-center min-h-10 min-w-10 p-2 rounded-lg text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
         >
           <X className="h-4 w-4" />
         </button>
@@ -3085,60 +3098,50 @@ export function DualAudienceLanding({
 }: DualAudienceLandingProps) {
   const [audience, setAudience] = React.useState<Audience>('crm');
 
-  // Smooth-scroll to top when audience switches
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    // Don't scroll on first mount
-    return;
-  }, [audience]);
+  const handleAudiencePick = (a: Audience) => {
+    setAudience(a);
+    if (typeof window !== 'undefined') {
+      if (a === 'crm') {
+        const el = document.getElementById('crm-features');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (a === 'forms') {
+        const el = document.getElementById('ai-forms');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (a === 'marketplace') {
+        const el = document.getElementById('marketplace-3bid');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <Navbar onGetStarted={onGetStarted} onSignIn={onSignIn} audience={audience} onPick={setAudience} />
+      <Navbar onGetStarted={onGetStarted} onSignIn={onSignIn} audience={audience} onPick={handleAudiencePick} />
 
       <main className="flex-1">
-        <HeroFork audience={audience} onPick={setAudience} onTryDemo={onTryDemo} onGetStarted={onGetStarted} />
+        <HeroFork audience={audience} onPick={handleAudiencePick} onTryDemo={onTryDemo} onGetStarted={onGetStarted} />
 
         <TrustBar />
-
-        {audience === 'crm' ? (
-          <>
-            <CrmProblem />
-            <CrmHowItWorks />
-            <CrmFeatures />
-            <CrmAiFormShowcase />
-            <CrmThreeBidMarketplace onGetStarted={onGetStarted} />
-            <CrmChannels />
-            <CrmAiReceptionist onGetStarted={onGetStarted} />
-            <CrmRoiMetrics />
-            <CrmVsCompetitors onGetStarted={onGetStarted} />
-            <CrmTestimonials />
-            <CrmPersonas />
-            <CrmBuiltFor />
-            <CrmPricing onGetStarted={onGetStarted} />
-            <CrmResources />
-            <CrmFaq />
-            <CrmForProviders onGetStarted={onGetStarted} />
-          </>
-        ) : audience === 'forms' ? (
-          <>
-            <CrmAiFormShowcase />
-            <CrmFeatures />
-            <CrmPricing onGetStarted={onGetStarted} />
-            <CrmResources />
-            <CrmFaq />
-          </>
-        ) : (
-          <>
-            <CrmThreeBidMarketplace onGetStarted={onGetStarted} />
-            <MarketplaceCompact onGetStarted={onGetStarted} onSignIn={onSignIn} />
-            <CrmForProviders onGetStarted={onGetStarted} />
-          </>
-        )}
+        <CrmProblem />
+        <CrmHowItWorks />
+        <CrmFeatures />
+        <CrmAiFormShowcase />
+        <CrmThreeBidMarketplace onGetStarted={onGetStarted} />
+        <CrmChannels />
+        <CrmAiReceptionist onGetStarted={onGetStarted} />
+        <CrmRoiMetrics />
+        <CrmVsCompetitors onGetStarted={onGetStarted} />
+        <CrmTestimonials />
+        <CrmPersonas />
+        <CrmBuiltFor />
+        <CrmPricing onGetStarted={onGetStarted} />
+        <CrmResources />
+        <CrmFaq />
+        <CrmForProviders onGetStarted={onGetStarted} />
       </main>
 
       <LandingFooter />
-      <StickyCta audience={audience} onPick={setAudience} onGetStarted={onGetStarted} />
+      <StickyCta audience={audience} onPick={handleAudiencePick} onGetStarted={onGetStarted} />
     </div>
   );
 }
