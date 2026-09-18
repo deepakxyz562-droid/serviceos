@@ -155,7 +155,20 @@ export async function POST(req: NextRequest) {
       suggestedData = {};
     }
 
-    const tenant = report.tenant;
+    let currentSnapshot: any = {};
+    try {
+      currentSnapshot = JSON.parse(report.currentDataJson || '{}');
+    } catch {
+      currentSnapshot = {};
+    }
+
+    let tenant = report.tenant;
+    if (!tenant && report.tenantId) {
+      tenant = await db.tenant.findUnique({
+        where: { id: report.tenantId },
+      });
+    }
+
     const appliedChanges: any = {};
     const tenantUpdateData: any = {};
 
@@ -173,9 +186,11 @@ export async function POST(req: NextRequest) {
       if (targetCategory) {
         tenantUpdateData.industry = targetCategory;
         tenantUpdateData.businessCategoriesJson = JSON.stringify([targetCategory]);
-        tenantUpdateData.tagline = `${tenant.name} — ${targetCategory} in ${tenant.city || 'local area'}`;
+        const tenantName = tenant?.name || currentSnapshot.name || 'Business';
+        const tenantCity = tenant?.city || currentSnapshot.city || 'local area';
+        tenantUpdateData.tagline = `${tenantName} — ${targetCategory} in ${tenantCity}`;
         appliedChanges.categoryChanged = {
-          from: tenant.industry,
+          from: tenant?.industry || currentSnapshot.industry || 'Unknown',
           to: targetCategory,
         };
       }
@@ -184,28 +199,47 @@ export async function POST(req: NextRequest) {
       tenantUpdateData.listingTier = 'none';
       appliedChanges.permanentlyClosed = true;
     } else if (report.reportType === 'details_update') {
-      if (suggestedData.newPhone !== undefined) {
-        tenantUpdateData.phone = suggestedData.newPhone;
-        appliedChanges.phone = suggestedData.newPhone;
+      const newName = suggestedData.newName || suggestedData.name || suggestedData.businessName;
+      if (newName && typeof newName === 'string') {
+        tenantUpdateData.name = newName.trim();
+        appliedChanges.name = newName.trim();
       }
-      if (suggestedData.newWebsite !== undefined) {
-        tenantUpdateData.website = suggestedData.newWebsite;
-        appliedChanges.website = suggestedData.newWebsite;
+      const newPhone = suggestedData.newPhone !== undefined ? suggestedData.newPhone : suggestedData.phone;
+      if (newPhone !== undefined) {
+        tenantUpdateData.phone = newPhone;
+        appliedChanges.phone = newPhone;
       }
-      if (suggestedData.newAddress !== undefined) {
-        tenantUpdateData.address = suggestedData.newAddress;
-        appliedChanges.address = suggestedData.newAddress;
+      const newWebsite = suggestedData.newWebsite !== undefined ? suggestedData.newWebsite : suggestedData.website;
+      if (newWebsite !== undefined) {
+        tenantUpdateData.website = newWebsite;
+        appliedChanges.website = newWebsite;
+      }
+      const newAddress = suggestedData.newAddress !== undefined ? suggestedData.newAddress : suggestedData.address;
+      if (newAddress !== undefined) {
+        tenantUpdateData.address = newAddress;
+        appliedChanges.address = newAddress;
+      }
+      const newCategory = suggestedData.targetCategory || suggestedData.newCategory || suggestedData.category;
+      if (newCategory && typeof newCategory === 'string') {
+        const cat = newCategory.toLowerCase().trim();
+        tenantUpdateData.industry = cat;
+        tenantUpdateData.businessCategoriesJson = JSON.stringify([cat]);
+        appliedChanges.industry = cat;
       }
     }
 
     tenantUpdateData.updatedAt = new Date();
 
-    // Execute tenant update
-    if (Object.keys(tenantUpdateData).length > 0) {
-      await db.tenant.update({
-        where: { id: tenant.id },
-        data: tenantUpdateData,
-      });
+    // Execute tenant update if tenant exists in database
+    if (tenant && tenant.id) {
+      if (Object.keys(tenantUpdateData).length > 1) { // includes updatedAt
+        await db.tenant.update({
+          where: { id: tenant.id },
+          data: tenantUpdateData,
+        });
+      }
+    } else {
+      appliedChanges.note = 'Report approved (no linked active tenant record in database)';
     }
 
     // Update report state
@@ -223,11 +257,16 @@ export async function POST(req: NextRequest) {
     // Optional email confirmation to submitter
     if (report.submitterEmail) {
       try {
-        const pluralSlug = mapIndustryToPluralSlug(tenantUpdateData.industry || tenant.industry);
-        const citySlug = (tenant.city || 'city').toLowerCase().replace(/\s+/g, '-');
-        const listingUrl = `https://fieseros.com/${pluralSlug}/${citySlug}/${tenant.slug}`;
+        const businessName = tenant?.name || currentSnapshot.name || 'Business Listing';
+        const industry = tenantUpdateData.industry || tenant?.industry || currentSnapshot.industry || 'services';
+        const pluralSlug = mapIndustryToPluralSlug(industry);
+        const citySlug = (tenant?.city || currentSnapshot.city || 'city').toLowerCase().replace(/\s+/g, '-');
+        const tenantSlug = tenant?.slug || currentSnapshot.slug;
+        const listingUrl = tenantSlug
+          ? `https://fieseros.com/${pluralSlug}/${citySlug}/${tenantSlug}`
+          : `https://fieseros.com/marketplace`;
 
-        let subject = `Update regarding your request for ${tenant.name} on Fieseros`;
+        let subject = `Update regarding your request for ${businessName} on Fieseros`;
         let htmlBody = `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b; line-height: 1.6;">
             <div style="background-color: #10b981; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
@@ -235,7 +274,7 @@ export async function POST(req: NextRequest) {
             </div>
             <div style="border: 1px solid #e2e8f0; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
               <p>Hello ${report.submittedBy || 'there'},</p>
-              <p>We are writing to confirm that your request regarding <strong>${tenant.name}</strong> has been reviewed and successfully processed by our team.</p>
+              <p>We are writing to confirm that your request regarding <strong>${businessName}</strong> has been reviewed and successfully processed by our team.</p>
               <div style="background-color: #f8fafc; border-left: 4px solid #10b981; padding: 12px 16px; margin: 20px 0;">
                 <p style="margin: 0; font-size: 14px;"><strong>Action Taken:</strong> ${report.reportType.replace(/_/g, ' ').toUpperCase()}</p>
                 ${adminNote ? `<p style="margin: 8px 0 0; font-size: 13px; color: #64748b;"><strong>Note:</strong> ${adminNote}</p>` : ''}

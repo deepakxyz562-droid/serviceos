@@ -281,9 +281,29 @@ export function DirectoryReports() {
               suggested = {};
             }
 
-            const pluralSlug = mapIndustryToPluralSlug(report.tenant?.industry);
-            const citySlug = (report.tenant?.city || 'city').toLowerCase().replace(/\s+/g, '-');
-            const publicUrl = `/${pluralSlug}/${citySlug}/${report.tenant?.slug}`;
+            let currentSnapshot: any = {};
+            try {
+              currentSnapshot = JSON.parse(report.currentDataJson || '{}');
+            } catch {
+              currentSnapshot = {};
+            }
+
+            const businessName = report.tenant?.name || currentSnapshot.name || 'Business Listing';
+            const businessIndustry = report.tenant?.industry || currentSnapshot.industry || 'services';
+            const businessPhone = report.tenant?.phone || currentSnapshot.phone || null;
+            const businessAddress =
+              report.tenant?.address ||
+              currentSnapshot.address ||
+              (report.tenant?.city
+                ? `${report.tenant?.city}, ${report.tenant?.state || ''}`
+                : currentSnapshot.city
+                ? `${currentSnapshot.city}, ${currentSnapshot.state || ''}`
+                : 'Location not specified');
+            const businessSlug = report.tenant?.slug || currentSnapshot.slug;
+
+            const pluralSlug = mapIndustryToPluralSlug(businessIndustry);
+            const citySlug = (report.tenant?.city || currentSnapshot.city || 'city').toLowerCase().replace(/\s+/g, '-');
+            const publicUrl = businessSlug ? `/${pluralSlug}/${citySlug}/${businessSlug}` : `/marketplace`;
 
             return (
               <Card key={report.id} className="overflow-hidden border-border/80 shadow-sm">
@@ -331,17 +351,17 @@ export function DirectoryReports() {
                       </div>
 
                       <div className="space-y-1">
-                        <p className="text-sm font-bold text-foreground">{report.tenant?.name || 'Unknown Business'}</p>
+                        <p className="text-sm font-bold text-foreground">{businessName}</p>
                         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                           <MapPin className="size-3 text-muted-foreground shrink-0" />
-                          {report.tenant?.address || `${report.tenant?.city || ''}, ${report.tenant?.state || ''}`}
+                          {businessAddress}
                         </p>
                         <div className="flex items-center gap-3 pt-1 text-xs">
                           <span className="text-muted-foreground">
-                            Category: <strong className="text-foreground">{report.tenant?.industry || 'None'}</strong>
+                            Category: <strong className="text-foreground">{businessIndustry || 'None'}</strong>
                           </span>
                           <span className="text-muted-foreground">
-                            Phone: <strong className="text-foreground">{report.tenant?.phone || 'None'}</strong>
+                            Phone: <strong className="text-foreground">{businessPhone || 'None'}</strong>
                           </span>
                         </div>
                       </div>
@@ -358,14 +378,14 @@ export function DirectoryReports() {
                         {report.reportType === 'privacy_phone_removal' && (
                           <div className="p-2 rounded bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-300">
                             <strong>Action:</strong> Permanently remove phone{' '}
-                            <code>{suggested.phoneToRemove || report.tenant?.phone}</code> and set{' '}
+                            <code>{suggested.phoneToRemove || businessPhone || 'on file'}</code> and set{' '}
                             <code>outreachDisabled = true</code>.
                           </div>
                         )}
 
                         {report.reportType === 'category_change' && (
                           <div className="p-2 rounded bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                            <span>From: <strong>{report.tenant?.industry}</strong></span>
+                            <span>From: <strong>{businessIndustry}</strong></span>
                             <ArrowRight className="size-3" />
                             <span>To: <strong>{suggested.targetCategory}</strong></span>
                           </div>
@@ -373,8 +393,12 @@ export function DirectoryReports() {
 
                         {report.reportType === 'details_update' && (
                           <div className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-200 space-y-1">
-                            {suggested.newPhone && <div>New Phone: <strong>{suggested.newPhone}</strong></div>}
-                            {suggested.newWebsite && <div>New Website: <strong>{suggested.newWebsite}</strong></div>}
+                            {(suggested.newName || suggested.name || suggested.businessName) && (
+                              <div>New Business Name: <strong>{suggested.newName || suggested.name || suggested.businessName}</strong></div>
+                            )}
+                            {(suggested.newPhone || suggested.phone) && <div>New Phone: <strong>{suggested.newPhone || suggested.phone}</strong></div>}
+                            {(suggested.newWebsite || suggested.website) && <div>New Website: <strong>{suggested.newWebsite || suggested.website}</strong></div>}
+                            {(suggested.newAddress || suggested.address) && <div>New Address: <strong>{suggested.newAddress || suggested.address}</strong></div>}
                           </div>
                         )}
 
