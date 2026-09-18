@@ -65,6 +65,10 @@ import { FormAgentStudio } from './agent-builder/form-agent-studio';
 import { TemplateExplorer } from './builder/template-explorer';
 import type { FormTemplate } from '@/lib/forms/templates';
 import { UnifiedFieldInspector } from './builder/unified-field-inspector';
+import { StudioThemeGalleryModal, THEME_GALLERY_PRESETS, FormThemePreset } from './builder/studio-theme-gallery-modal';
+import { StudioAiCopilotSidebar } from './builder/studio-ai-copilot-sidebar';
+import { StudioPagesTree } from './builder/studio-pages-tree';
+import { StudioFocusCanvas } from './builder/studio-focus-canvas';
 import {
   FIELD_REGISTRY,
   FIELD_CATEGORY_META,
@@ -125,6 +129,34 @@ export function FormStudioBuilder({
   // Live test preview answers
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, any>>({});
   const [previewSubmitted, setPreviewSubmitted] = useState(false);
+
+  // 2026 AI Studio & Multi-Step Panel Collapse States
+  const [showAiCopilot, setShowAiCopilot] = useState(true);
+  const [showPagesTree, setShowPagesTree] = useState(true);
+  const [showInspector, setShowInspector] = useState(true);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [viewMode, setViewMode] = useState<'focus' | 'paper'>('focus');
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
+  const [currentThemeId, setCurrentThemeId] = useState('washed-purple');
+
+  const handleSelectTheme = (preset: FormThemePreset) => {
+    setCurrentThemeId(preset.id);
+    onFormDataChange((prev) => ({
+      ...prev,
+      primaryColor: preset.primaryColor,
+      borderRadius: parseInt(preset.borderRadius, 10) || 12,
+      theme: {
+        ...(prev.theme || {}),
+        primaryColor: preset.primaryColor,
+        backgroundColor: preset.backgroundColor,
+        cardBackground: preset.cardBackground,
+        textColor: preset.textColor,
+        fontFamily: preset.fontFamily,
+        borderRadius: preset.borderRadius,
+      } as any,
+    }));
+    toast.success(`Applied theme: ${preset.name}`);
+  };
 
   // Convert editor formData to FormSchema for runtime rendering
   const runtimeSchema: FormSchema = useMemo(() => {
@@ -611,31 +643,96 @@ export function FormStudioBuilder({
           </button>
         </div>
 
-        {/* Right: AI Form Builder, Multi-Format Preview & Save */}
-        <div className="flex items-center gap-2">
-          {/* AI Form Builder Panel Toggle */}
-          <Button
-            type="button"
-            variant={propertiesOpen && inspectorMode === 'ai_builder' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => {
-              if (propertiesOpen && inspectorMode === 'ai_builder') {
-                setPropertiesOpen(false);
-              } else {
-                setPropertiesOpen(true);
-                setInspectorMode('ai_builder');
-              }
-            }}
-            className={cn(
-              "h-8 gap-1.5 text-xs font-semibold shadow-xs transition-all",
-              propertiesOpen && inspectorMode === 'ai_builder'
-                ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-transparent shadow-emerald-500/20"
-                : "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-            )}
-          >
-            <Sparkles className="size-3.5 text-emerald-500" />
-            <span className="hidden sm:inline">AI Form Builder</span>
-          </Button>
+        {/* Right: Universal Mode, Theme Design, Panel Toggles, Preview & Save */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {studioTab === 'build' && !isPreviewMode && (
+            <>
+              {/* Universal View Mode Switcher */}
+              <div className="hidden md:flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/60">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('focus')}
+                  className={cn(
+                    'px-2 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1',
+                    viewMode === 'focus' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Card-by-card focus flow (Typeform style)"
+                >
+                  <span>🃏 Focus</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('paper')}
+                  className={cn(
+                    'px-2 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1',
+                    viewMode === 'paper' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Classic paper document (Jotform style)"
+                >
+                  <span>📄 Paper</span>
+                </button>
+              </div>
+
+              {/* 🎨 Theme Gallery Modal Trigger */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setThemeModalOpen(true)}
+                className="h-8 gap-1.5 text-xs font-semibold border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+              >
+                <span>🎨 Design</span>
+              </Button>
+
+              {/* Panel Show / Hide Toggle Buttons */}
+              <div className="hidden lg:flex items-center gap-0.5 border border-border/80 rounded-lg p-0.5 bg-muted/40">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAiCopilot((v) => !v)}
+                  className={cn(
+                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1',
+                    showAiCopilot ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground'
+                  )}
+                  title="Toggle AI Copilot Sidebar"
+                >
+                  <Sparkles className="size-3 text-purple-600" />
+                  <span>AI</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowPagesTree((v) => !v)}
+                  className={cn(
+                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1',
+                    showPagesTree ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
+                  )}
+                  title="Toggle Multi-Step Pages Tree"
+                >
+                  <Layers className="size-3" />
+                  <span>Pages</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowInspector((v) => !v)}
+                  className={cn(
+                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1',
+                    showInspector ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
+                  )}
+                  title="Toggle Field Inspector"
+                >
+                  <Settings className="size-3" />
+                  <span>Settings</span>
+                </Button>
+              </div>
+            </>
+          )}
 
           {/* Preview Mode Toggle */}
           <div className="flex items-center gap-1.5 border border-border/80 rounded-md px-2 py-1 bg-background">
@@ -667,7 +764,7 @@ export function FormStudioBuilder({
             size="sm"
             onClick={onSave}
             disabled={saving}
-            className="h-8 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm"
+            className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-sm"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
             <span>{saving ? 'Saving...' : 'Save Form'}</span>
@@ -679,805 +776,91 @@ export function FormStudioBuilder({
           MAIN STUDIO WORKSPACE
          ═════════════════════════════════════════════════════════════════════════ */}
       <div className="flex-1 min-h-0 flex overflow-hidden relative w-full h-full">
-        {/* ─── 1. BUILD TAB ─────────────────────────────────────────────────── */}
+        {/* ─── 1. BUILD TAB (2026 AI-NATIVE 4-PANEL MULTI-STEP STUDIO) ──────── */}
         {studioTab === 'build' && !isPreviewMode && (
           <div className="flex-1 min-h-0 flex overflow-hidden w-full h-full relative">
-            {/* ── LEFT DRAWER: 3-TAB ELEMENT & WIDGET PALETTE ── */}
-            <aside
-              className={cn(
-                'w-64 lg:w-72 h-full min-h-0 border-r border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
-                !sidebarOpen && '-ml-64 lg:-ml-72'
-              )}
-            >
-              {/* Palette Tabs: BASIC | PAYMENTS | WIDGETS + Close button */}
-              <div className="flex items-center border-b border-border/80 bg-muted/40 p-1 gap-1 shrink-0">
-                <div className="grid grid-cols-3 flex-1 gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setPaletteTab('basic')}
-                    className={cn(
-                      'py-1.5 text-[11px] font-bold rounded-md transition-all',
-                      paletteTab === 'basic' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    BASIC
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaletteTab('payments')}
-                    className={cn(
-                      'py-1.5 text-[11px] font-bold rounded-md transition-all',
-                      paletteTab === 'payments' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    PAYMENTS
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaletteTab('widgets')}
-                    className={cn(
-                      'py-1.5 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-0.5',
-                      paletteTab === 'widgets' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    <span>WIDGETS</span>
-                  </button>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSidebarOpen(false)}
-                  className="size-7 text-muted-foreground hover:text-foreground shrink-0 rounded-md"
-                  title="Collapse Elements Palette"
-                >
-                  <PanelLeftClose className="size-3.5" />
-                </Button>
-              </div>
+            {/* Left Panel 1: AI Copilot Sidebar */}
+            {showAiCopilot && (
+              <StudioAiCopilotSidebar
+                formData={formData}
+                onFormDataChange={onFormDataChange}
+                onClose={() => setShowAiCopilot(false)}
+                className="w-80 border-r border-border/80 bg-background z-20 shrink-0"
+              />
+            )}
 
-              {/* Search & Category Filter */}
-              <div className="p-3 border-b border-border/60 space-y-2 shrink-0">
-                <div className="relative">
-                  <Search className="size-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    placeholder="Search elements & widgets..."
-                    value={paletteSearch}
-                    onChange={(e) => setPaletteSearch(e.target.value)}
-                    className="h-8 text-xs pl-8"
-                  />
-                </div>
+            {/* Left Panel 2: Multi-Step Pages & Question Tree */}
+            {showPagesTree && (
+              <StudioPagesTree
+                formData={formData}
+                onFormDataChange={onFormDataChange}
+                currentStepIndex={currentStepIndex}
+                onSelectStep={setCurrentStepIndex}
+                selectedFieldId={selectedFieldId}
+                onSelectField={(id) => {
+                  setSelectedFieldId(id);
+                  setShowInspector(true);
+                }}
+                onOpenAddWidgetDialog={(stepIdx) => {
+                  const newField: FormField = {
+                    id: `f-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                    type: 'short_answer',
+                    label: 'New Question',
+                    placeholder: 'Type your answer here...',
+                    stepId: `step_${stepIdx + 1}`,
+                  };
+                  onFormDataChange((prev) => ({
+                    ...prev,
+                    fields: [...prev.fields, newField],
+                  }));
+                  setSelectedFieldId(newField.id);
+                  setShowInspector(true);
+                  toast.success(`Added new question to Step ${stepIdx + 1}`);
+                }}
+                onClose={() => setShowPagesTree(false)}
+                className="w-64 border-r border-border/80 bg-background z-20 shrink-0"
+              />
+            )}
 
-                {paletteTab === 'widgets' && (
-                  <Select
-                    value={selectedWidgetCategory}
-                    onValueChange={(val) => setSelectedWidgetCategory(val as FieldDefinition['category'] | 'all')}
-                  >
-                    <SelectTrigger className="h-7 text-xs bg-muted/30">
-                      <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-xs">🌐 All Categories ({filteredWidgets.length})</SelectItem>
-                      {FIELD_CATEGORY_META.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id} className="text-xs">
-                          {cat.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+            {/* Center: Live Focus WYSIWYG split canvas with Enter-to-continue & floating pill triggers */}
+            <StudioFocusCanvas
+              formData={formData}
+              onFormDataChange={onFormDataChange}
+              currentStepIndex={currentStepIndex}
+              onStepChange={setCurrentStepIndex}
+              selectedFieldId={selectedFieldId}
+              onSelectField={(id) => {
+                setSelectedFieldId(id);
+                setShowInspector(true);
+              }}
+              viewMode={viewMode}
+              isAiCopilotCollapsed={!showAiCopilot}
+              onToggleAiCopilot={() => setShowAiCopilot((v) => !v)}
+              isPagesTreeCollapsed={!showPagesTree}
+              onTogglePagesTree={() => setShowPagesTree((v) => !v)}
+              isInspectorCollapsed={!showInspector}
+              onToggleInspector={() => setShowInspector((v) => !v)}
+              className="flex-1 min-h-0 h-full"
+            />
 
-                {paletteTab === 'payments' && (
-                  <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
-                    {PAYMENT_CATEGORIES.map((cat) => (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => setSelectedPaymentCategory(cat.id)}
-                        className={cn(
-                          'px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap transition-colors shrink-0',
-                          selectedPaymentCategory === cat.id
-                            ? 'bg-emerald-600 text-white shadow-xs'
-                            : 'bg-muted/70 text-muted-foreground hover:text-foreground'
-                        )}
-                      >
-                        {cat.label} ({cat.count})
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Palette Items Scrollable List */}
-              <ScrollArea className="flex-1 min-h-0 h-full p-3 overflow-y-auto">
-                {/* 1. BASIC TAB */}
-                {paletteTab === 'basic' && (
-                  <div className="space-y-4">
-                    {/* Basic / Standard Elements */}
-                    <div className="space-y-1.5">
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground px-1">
-                        Basic Fields
-                      </p>
-                      {filteredBasicFields.map((def) => {
-                        const Icon = resolveIcon(def.iconName);
-                        return (
-                          <button
-                            key={def.id}
-                            onClick={() => handleAddFromRegistry(def.id)}
-                            className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group"
-                          >
-                            <div className="size-8 rounded-md bg-muted flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0">
-                              <Icon className="size-4" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-1">
-                                <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
-                                  {def.name}
-                                </p>
-                                {def.badge && (
-                                  <Badge variant="outline" className="text-[8px] px-1 py-0 h-3 border-emerald-500/30 text-emerald-600">
-                                    {def.badge}
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-muted-foreground truncate">{def.description}</p>
-                            </div>
-                            <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Advanced & Specialized Elements */}
-                    <div className="pt-2 border-t border-border/60">
-                      <div className="flex items-center gap-1.5 px-1 pb-2">
-                        <Sparkles className="size-3 text-emerald-600" />
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                          Advanced Elements
-                        </p>
-                      </div>
-                      <div className="space-y-1.5">
-                        {filteredPhase1Widgets.map((def) => {
-                          const Icon = resolveIcon(def.iconName);
-                          return (
-                            <button
-                              key={def.id}
-                              onClick={() => handleAddFromRegistry(def.id)}
-                              className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group"
-                              title={def.description}
-                            >
-                              <div className="size-8 rounded-md bg-muted flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0">
-                                <Icon className="size-4" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1">
-                                  <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
-                                    {def.name}
-                                  </p>
-                                  {def.badge && (
-                                    <Badge variant="outline" className="text-[8px] px-1 py-0 h-3">
-                                      {def.badge}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-[10px] text-muted-foreground truncate">{def.description}</p>
-                              </div>
-                              <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. PAYMENTS TAB (33 Gateways & APMs) */}
-                {paletteTab === 'payments' && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] text-muted-foreground px-1">
-                      Choose from {filteredPaymentGateways.length} global gateways & instant checkout methods:
-                    </p>
-                    <div className="space-y-1.5">
-                      {filteredPaymentGateways.map((gw) => (
-                        <button
-                          key={gw.id}
-                          onClick={() => handleAddPaymentGateway(gw)}
-                          className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group relative"
-                        >
-                          <div
-                            className="size-8 rounded-md flex items-center justify-center p-1.5 shrink-0 shadow-xs"
-                            style={{ backgroundColor: gw.logoBg }}
-                            dangerouslySetInnerHTML={{ __html: gw.iconSvg }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
-                                {gw.name}
-                              </p>
-                              {gw.badge && (
-                                <Badge
-                                  className={cn(
-                                    'text-[8px] px-1 py-0 h-3.5 font-bold border-none',
-                                    gw.badge === 'POPULAR' && 'bg-emerald-600 text-white',
-                                    gw.badge === '1-CLICK' && 'bg-blue-600 text-white',
-                                    gw.badge === 'INDIA #1' && 'bg-amber-600 text-white',
-                                    gw.badge === 'EU POPULAR' && 'bg-indigo-600 text-white',
-                                    gw.badge === 'BNPL' && 'bg-purple-600 text-white',
-                                    gw.badge === 'DIRECT DEBIT' && 'bg-teal-600 text-white',
-                                    gw.badge === 'B2B INVOICE' && 'bg-slate-700 text-white'
-                                  )}
-                                >
-                                  {gw.badge}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-muted-foreground line-clamp-1">{gw.description}</p>
-                            <div className="flex items-center gap-1 mt-0.5 text-[9px] text-muted-foreground/80 font-mono">
-                              <span>{gw.currencies.slice(0, 3).join(', ')}{gw.currencies.length > 3 ? '...' : ''}</span>
-                              {gw.supportsZeroConfig && (
-                                <span className="text-emerald-600 font-sans font-semibold">・🚀 0-Config</span>
-                              )}
-                            </div>
-                          </div>
-                          <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. WIDGETS TAB — Full canonical FIELD_REGISTRY catalog.
-                    Renders every FieldDefinition not already surfaced on the
-                    "Basic" tab, grouped into the same row format as the Basic
-                    tab's "Advanced Elements" section. Icon is resolved through
-                    `resolveIcon(def.iconName)` so widgets declare their own icon. */}
-                {paletteTab === 'widgets' && (
-                  <div className="space-y-1.5">
-                    {filteredWidgets.length === 0 && (
-                      <p className="text-[10px] text-muted-foreground px-1 py-2 text-center">
-                        No widgets match your search.
-                      </p>
-                    )}
-                    {filteredWidgets.map((def) => {
-                      const Icon = resolveIcon(def.iconName);
-                      return (
-                        <button
-                          key={def.id}
-                          onClick={() => handleAddFromRegistry(def.id)}
-                          className="w-full flex items-center gap-2.5 p-2.5 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all group relative"
-                          title={def.description}
-                        >
-                          <div className="size-9 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0">
-                            <Icon className="size-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-semibold text-foreground truncate group-hover:text-emerald-600">
-                                {def.name}
-                              </p>
-                              {def.badge && (
-                                <Badge
-                                  className={cn(
-                                    'text-[8px] px-1 py-0 h-3.5 font-bold border-none',
-                                    def.badge === 'NEW' && 'bg-yellow-500 text-white',
-                                    def.badge === 'AI' && 'bg-purple-600 text-white',
-                                    def.badge === 'POPULAR' && 'bg-emerald-600 text-white',
-                                    def.badge === 'PRO' && 'bg-blue-600 text-white'
-                                  )}
-                                >
-                                  {def.badge}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-muted-foreground line-clamp-1">{def.description}</p>
-                          </div>
-                          <Plus className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </ScrollArea>
-            </aside>
-
-            {/* ── CENTER: INTERACTIVE PAPER CANVAS ── */}
-            <main className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex flex-col items-center bg-slate-100 dark:bg-slate-900/70 relative">
-              {/* Floating Drawer Expand Pills (when sidebars are closed) */}
-              {!sidebarOpen && (
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(true)}
-                  className="fixed md:absolute left-4 top-20 md:top-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/95 hover:bg-background border border-border/80 shadow-md text-xs font-semibold text-foreground backdrop-blur transition-all hover:scale-105 active:scale-95"
-                  title="Open Elements Palette"
-                >
-                  <PanelLeftOpen className="size-3.5 text-emerald-600" />
-                  <span>+ Elements</span>
-                </button>
-              )}
-
-              {!propertiesOpen && (
-                <button
-                  type="button"
-                  onClick={() => setPropertiesOpen(true)}
-                  className="fixed md:absolute right-4 top-20 md:top-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-background/95 hover:bg-background border border-border/80 shadow-md text-xs font-semibold text-foreground backdrop-blur transition-all hover:scale-105 active:scale-95"
-                  title="Open Properties Inspector"
-                >
-                  <PanelRightOpen className="size-3.5 text-emerald-600" />
-                  <span>Properties</span>
-                </button>
-              )}
-
-              {/* AI Co-Pilot & Import Command Bar */}
-              <div className="w-full max-w-2xl mb-4 space-y-2">
-                <div className="p-2 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-500/30 rounded-xl flex items-center gap-2 shadow-xs">
-                  <Sparkles className="size-4 text-emerald-600 shrink-0 ml-1" />
-                  <input
-                    type="text"
-                    value={aiPromptInput}
-                    onChange={(e) => setAiPromptInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleAiCopilotSubmit(); }}
-                    placeholder="Ask AI: 'Add photo upload with notes', 'Add GPS route map', 'Translate to Spanish'..."
-                    className="flex-1 text-xs bg-transparent border-none focus:outline-none text-foreground placeholder:text-muted-foreground/80"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={handleAiCopilotSubmit}
-                    disabled={aiLoading || !aiPromptInput.trim()}
-                    className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
-                  >
-                    {aiLoading ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
-                    <span className="ml-1 hidden sm:inline">Apply AI</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setImporterOpen(true)}
-                    className="h-7 px-2 text-xs border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 shrink-0 gap-1"
-                    title="Import from URL, Paper Form Photo, or PDF"
-                  >
-                    <FileInput className="size-3 text-emerald-600" />
-                    <span className="hidden sm:inline">Import Form</span>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Canvas Paper Card */}
-              <div className="w-full max-w-2xl min-h-[620px] flex-1 flex flex-col justify-between bg-background rounded-2xl border border-border/80 shadow-lg overflow-scroll shrink-0">
-                {/* Decorative Brand Stripe */}
-                <div className="h-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 shrink-0" />
-
-                {/* Form Header */}
-                <div className="p-6 md:p-8 border-b border-border/60 space-y-2 shrink-0">
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => onFormDataChange((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder="Form Title (e.g. Damage Inspection & Quote Request)"
-                    className="text-2xl md:text-3xl font-bold w-full bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1 -mx-1"
-                  />
-                  <textarea
-                    value={formData.description || ''}
-                    onChange={(e) => onFormDataChange((prev) => ({ ...prev, description: e.target.value }))}
-                    placeholder="Add a sub-heading or instructions for your respondents..."
-                    rows={2}
-                    className="text-xs md:text-sm text-muted-foreground w-full bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1 -mx-1 resize-none"
-                  />
-                </div>
-
-                {/* Form Fields List */}
-                <div className="p-4 md:p-6 space-y-3 flex-1">
-                  {formData.fields.length === 0 ? (
-                    <div className="text-center py-12 border-2 border-dashed border-border/80 rounded-xl space-y-3">
-                      <div className="size-12 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center mx-auto">
-                        <Plus className="size-6" />
-                      </div>
-                      <h4 className="text-sm font-semibold">Your form has no fields yet</h4>
-                      <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                        Click elements on the left palette to add questions, or use the AI Co-Pilot command bar above.
-                      </p>
-                    </div>
-                  ) : (
-                    formData.fields.map((field, index) => {
-                      const isSelected = selectedFieldId === field.id;
-                      const isWidget = !!field.widgetType;
-
-                      return (
-                        <div
-                          key={field.id}
-                          onClick={() => {
-                            setSelectedFieldId(field.id);
-                            if (inspectorMode === 'ai_builder' || !field.widgetType) {
-                              setInspectorMode(field.widgetType ? 'widget_settings' : 'properties');
-                            }
-                          }}
-                          className={cn(
-                            'group relative p-4 rounded-xl border transition-all cursor-pointer bg-card',
-                            isSelected
-                              ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm'
-                              : 'border-border/60 hover:border-emerald-500/40 hover:shadow-xs'
-                          )}
-                        >
-                          {/* Top Action Bar on Element */}
-                          <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-border/40">
-                            <div className="flex items-center gap-1.5 text-muted-foreground">
-                              <span className="text-[10px] font-mono text-muted-foreground/80">#{index + 1}</span>
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal">
-                                {isWidget ? `🧩 ${field.widgetType}` : (FIELD_TYPES.find((t) => t.value === field.type)?.label || field.type)}
-                              </Badge>
-                              {field.required && (
-                                <Badge className="text-[9px] px-1 py-0 h-4 bg-red-100 dark:bg-red-950 text-red-600 border-none">
-                                  Required *
-                                </Badge>
-                              )}
-                            </div>
-
-                            {/* Floating Toolbar (🪄 Widget Settings | ⚙️ Question Properties | 🗑️ Delete) */}
-                            <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
-                              {isWidget && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedFieldId(field.id);
-                                    setInspectorMode('widget_settings');
-                                    setPropertiesOpen(true);
-                                  }}
-                                  className="px-2 py-0.5 bg-purple-50 dark:bg-purple-950/40 text-purple-600 border border-purple-200 dark:border-purple-800 rounded text-[10px] font-semibold flex items-center gap-1 hover:bg-purple-100"
-                                  title="Widget Settings"
-                                >
-                                  <Wand2 className="size-3" />
-                                  <span>Settings</span>
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedFieldId(field.id);
-                                  setInspectorMode('properties');
-                                  setPropertiesOpen(true);
-                                }}
-                                className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-border rounded text-[10px] font-semibold flex items-center gap-1 hover:bg-slate-200"
-                                title="Question Properties"
-                              >
-                                <Settings className="size-3" />
-                                <span>Properties</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleDuplicateField(field, index); }}
-                                className="p-1 hover:bg-muted rounded text-muted-foreground hover:text-foreground"
-                                title="Duplicate"
-                              >
-                                <Copy className="size-3" />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleDeleteField(field.id); }}
-                                className="p-1 hover:bg-red-50 dark:hover:bg-red-950/40 rounded text-muted-foreground hover:text-red-600"
-                                title="Delete"
-                              >
-                                <Trash2 className="size-3" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Field Label */}
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="text"
-                                value={field.label}
-                                onChange={(e) => handleUpdateField(field.id, 'label', e.target.value)}
-                                placeholder="Type question label here..."
-                                className="font-semibold text-xs md:text-sm w-full bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1 -mx-1"
-                              />
-                              {field.required && <span className="text-red-500 text-sm font-bold">*</span>}
-                            </div>
-
-                            {/* Realistic Field Render / Widget Previews */}
-                            <div className="pt-1">
-                              {/* ─── Phase F2: WYSIWYG canvas — render actual widgets ─── */}
-                              {/* All widget types use WidgetRuntimeDispatcher in disabled mode */}
-                              {(isWidget || field.type === 'signature' || field.type === 'rating') && (
-                                <div className="pointer-events-none opacity-95">
-                                  <WidgetRuntimeDispatcher
-                                    field={{
-                                      ...field,
-                                      type: (field.widgetType ? 'control_widget' : field.type) as any,
-                                      widgetType: field.widgetType || (field.type === 'signature' ? 'e_signature' : field.type === 'rating' ? 'star_rating' : field.type),
-                                    } as any}
-                                    value={null}
-                                    onChange={() => {}}
-                                    allFormData={{}}
-                                    disabled={true}
-                                  />
-                                </div>
-                              )}
-
-                              {/* Standard Inputs — show a realistic disabled preview */}
-                              {!isWidget && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type as any) && (
-                                <Input
-                                  disabled
-                                  placeholder={field.placeholder || 'Enter text...'}
-                                  type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'numerical' ? 'number' : field.type === 'date' ? 'date' : (field.type as string) === 'time' ? 'time' : 'text'}
-                                  className="text-xs h-9 bg-muted/20"
-                                />
-                              )}
-
-                              {!isWidget && field.type === 'long_answer' && (
-                                <Textarea
-                                  disabled
-                                  placeholder={field.placeholder || 'Enter detailed response...'}
-                                  rows={3}
-                                  className="text-xs resize-none bg-muted/20"
-                                />
-                              )}
-
-                              {!isWidget && field.type === 'dropdown' && (
-                                <Select disabled>
-                                  <SelectTrigger className="text-xs h-9 bg-muted/20">
-                                    <SelectValue placeholder={field.placeholder || 'Select an option'} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {(field.options || []).map((opt: any, idx) => (
-                                      <SelectItem key={idx} value={typeof opt === 'string' ? opt : opt.value} className="text-xs">
-                                        {typeof opt === 'string' ? opt : opt.label}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
-
-                              {!isWidget && field.type === 'radio' && (
-                                <div className="space-y-1.5 pointer-events-none">
-                                  {(field.options || []).map((opt: any, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 text-xs">
-                                      <div className="size-3.5 rounded-full border border-border/60" />
-                                      <span className="text-muted-foreground">{typeof opt === 'string' ? opt : opt.label}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {!isWidget && field.type === 'checkbox' && (
-                                <div className="space-y-1.5 pointer-events-none">
-                                  {(field.options || []).map((opt: any, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 text-xs">
-                                      <div className="size-3.5 rounded border border-border/60" />
-                                      <span className="text-muted-foreground">{typeof opt === 'string' ? opt : opt.label}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {!isWidget && (field.type as string) === 'paragraph' && (
-                                <p className="text-xs text-muted-foreground">{(field as any).widgetConfig?.text || field.label || 'Paragraph text...'}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                {/* Submit Button Preview */}
-                <div className="p-6 md:p-8 bg-muted/20 border-t border-border/60 flex items-center justify-between shrink-0">
-                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-6 shadow-sm">
-                    Submit Request
-                  </Button>
-                  <span className="text-[10px] text-muted-foreground">🔒 Powered by Fieseros AI Form Studio</span>
-                </div>
-              </div>
-            </main>
-
-            {/* ── RIGHT DRAWER: 3-MODE INSPECTOR (✨ AI Builder | ⚙️ Question Properties | 🪄 Widget Settings + Custom CSS) ── */}
-            <aside
-              className={cn(
-                'w-72 lg:w-80 h-full min-h-0 border-l border-border/80 bg-background flex flex-col shrink-0 transition-all duration-200 z-20',
-                !propertiesOpen && '-mr-72 lg:-mr-80'
-              )}
-            >
-              {/* Dynamic Multi-Mode Inspector Header (🪄 Widget Settings | ⚙️ Properties | ✨ AI Builder) */}
-              <div className="p-2 border-b border-border/80 bg-muted/40 flex items-center gap-1 shrink-0">
-                <div className={cn(
-                  'grid gap-1 flex-1',
-                  selectedField?.widgetType ? 'grid-cols-3' : 'grid-cols-2'
-                )}>
-                  {selectedField?.widgetType && (
-                    <button
-                      type="button"
-                      onClick={() => setInspectorMode('widget_settings')}
-                      className={cn(
-                        'py-1.5 text-[10px] sm:text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
-                        inspectorMode === 'widget_settings' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                      )}
-                      title="Widget Settings (JotForm-style)"
-                    >
-                      <Wand2 className="size-3.5 text-purple-600" />
-                      <span>Settings</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setInspectorMode('properties')}
-                    className={cn(
-                      'py-1.5 text-[10px] sm:text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
-                      inspectorMode === 'properties' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                    title="Field Properties (JotForm-style)"
-                  >
-                    <Settings className="size-3.5" />
-                    <span>Properties</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInspectorMode('ai_builder')}
-                    className={cn(
-                      'py-1.5 text-[10px] sm:text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
-                      inspectorMode === 'ai_builder' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                    title="AI Form Builder & Co-Pilot"
-                  >
-                    <Sparkles className="size-3.5 text-emerald-600" />
-                    <span>AI Builder</span>
-                  </button>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setPropertiesOpen(false)}
-                  className="size-7 text-muted-foreground hover:text-foreground shrink-0 rounded-md"
-                  title="Collapse Inspector"
-                >
-                  <PanelRightClose className="size-3.5" />
-                </Button>
-              </div>
-
-              {/* Inspector Body */}
-              {inspectorMode === 'ai_builder' ? (
-                <ScrollArea className="flex-1 min-h-0 h-full p-4 overflow-y-auto">
-                  <div className="space-y-4 pb-28">
-                    <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-500/30 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="size-6 rounded-md bg-emerald-600 text-white flex items-center justify-center">
-                          <Sparkles className="size-3.5" />
-                        </div>
-                        <p className="text-xs font-bold text-foreground">AI Form Builder & Co-Pilot</p>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        Generate complete forms from prompt or add widgets, questions, maps in footer, and payment checkouts.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-xs font-semibold">Prompt or Field List</Label>
-                      <Textarea
-                        value={aiPromptInput}
-                        onChange={(e) => setAiPromptInput(e.target.value)}
-                        placeholder="e.g. Name, Email, Phone, Service Listing (AC Repair, Plumbing, Heating), Message, Interactive Map in footer, Submit"
-                        rows={4}
-                        className="text-xs resize-none"
-                      />
-                      <Button
-                        type="button"
-                        onClick={handleAiCopilotSubmit}
-                        disabled={aiLoading || !aiPromptInput.trim()}
-                        className="w-full h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shadow-sm"
-                      >
-                        {aiLoading ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-                        <span>{aiLoading ? 'Generating Form...' : 'Apply with AI'}</span>
-                      </Button>
-                    </div>
-
-                    {/* 1-Click Smart Quick Action Chips */}
-                    <div className="space-y-2 pt-2 border-t border-border/60">
-                      <Label className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Quick Actions</Label>
-                      <div className="space-y-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAiPromptInput('Add interactive service route and location map in footer');
-                          }}
-                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
-                        >
-                          <span className="text-base">🗺️</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-foreground text-[11px]">Add Map in Footer</p>
-                            <p className="text-[10px] text-muted-foreground truncate">Interactive route map & mileage</p>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAiPromptInput('Add nearest branch and location finder');
-                          }}
-                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
-                        >
-                          <span className="text-base">📍</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-foreground text-[11px]">Add Location Finder</p>
-                            <p className="text-[10px] text-muted-foreground truncate">Nearest depot / technician hub</p>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAiPromptInput('Add secure Stripe payment checkout for $50 service fee');
-                          }}
-                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
-                        >
-                          <span className="text-base">💳</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-foreground text-[11px]">Add Stripe Payment Gateway</p>
-                            <p className="text-[10px] text-muted-foreground truncate">Collect deposit or upfront payment</p>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAiPromptInput('Add photo upload with notes for damage inspection');
-                          }}
-                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
-                        >
-                          <span className="text-base">📸</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-foreground text-[11px]">Add Photo Upload with Notes</p>
-                            <p className="text-[10px] text-muted-foreground truncate">Multi-image capture with captions</p>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAiPromptInput('Add customer e-signature at the end of form');
-                          }}
-                          className="w-full text-left p-2 rounded-lg border border-border/60 hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-xs flex items-center gap-2 transition-all"
-                        >
-                          <span className="text-base">✍️</span>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-foreground text-[11px]">Add E-Signature Pad</p>
-                            <p className="text-[10px] text-muted-foreground truncate">Touch/mouse digital signature</p>
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </ScrollArea>
-              ) : selectedField ? (
-                <div className="flex-1 min-h-0 flex flex-col h-full">
-                  {/* ════ PROPERTIES & WIDGET SETTINGS PANEL (schema-driven — JotForm-style) ════ */}
-                  {(inspectorMode === 'properties' || inspectorMode === 'widget_settings') && (
-                    <UnifiedFieldInspector
-                      field={selectedField as unknown as Record<string, any>}
-                      allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
-                      mode={inspectorMode}
-                      onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
-                      onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
-                      onDuplicate={() => {
-                        const idx = formData.fields.findIndex((f) => f.id === selectedField.id);
-                        if (idx >= 0) handleDuplicateField(selectedField, idx);
-                      }}
-                      onClose={() => setPropertiesOpen(false)}
-                      onUpdate={() => { onSave(); }}
-                    />
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-16 px-4 space-y-2 text-muted-foreground">
-                  <SlidersHorizontal className="size-8 mx-auto opacity-30" />
-                  <p className="text-xs">Select any field or widget on the canvas to configure settings.</p>
-                </div>
-              )}
-            </aside>
+            {/* Right Panel: Unified Field Inspector & Widget Settings */}
+            {showInspector && selectedField && (
+              <aside className="w-80 lg:w-96 border-l border-border/80 bg-background flex flex-col shrink-0 z-20 h-full overflow-hidden">
+                <UnifiedFieldInspector
+                  field={selectedField as unknown as Record<string, any>}
+                  allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
+                  mode={selectedField.widgetType ? 'widget_settings' : 'properties'}
+                  onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
+                  onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
+                  onDuplicate={() => {
+                    const idx = formData.fields.findIndex((f) => f.id === selectedField.id);
+                    if (idx >= 0) handleDuplicateField(selectedField, idx);
+                  }}
+                  onClose={() => setShowInspector(false)}
+                  onUpdate={() => { onSave(); }}
+                />
+              </aside>
+            )}
           </div>
         )}
 
@@ -1768,6 +1151,14 @@ export function FormStudioBuilder({
         open={importerOpen}
         onOpenChange={setImporterOpen}
         onImportSuccess={handleImportSuccess}
+      />
+
+      {/* 2026 Studio Theme Gallery Modal */}
+      <StudioThemeGalleryModal
+        open={themeModalOpen}
+        onOpenChange={setThemeModalOpen}
+        currentThemeId={currentThemeId}
+        onSelectTheme={handleSelectTheme}
       />
     </div>
   );
