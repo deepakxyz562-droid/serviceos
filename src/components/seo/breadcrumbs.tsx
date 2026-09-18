@@ -15,23 +15,27 @@ export function Breadcrumbs({ items }: { items?: BreadcrumbItem[] }) {
     <>
       <nav aria-label="Breadcrumb" className="text-sm">
         <ol className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
-          {safeItems.map((item, i) => (
-            <li key={item.url} className="flex items-center gap-1.5">
-              {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />}
-              {i === safeItems.length - 1 ? (
-                <span className="font-medium text-foreground" aria-current="page">
-                  {item.name}
-                </span>
-              ) : (
-                <Link
-                  href={item.url}
-                  className="hover:text-foreground transition-colors"
-                >
-                  {item.name}
-                </Link>
-              )}
-            </li>
-          ))}
+          {safeItems.map((item, i) => {
+            const name = item.name || item.label || "Page";
+            const url = item.url || item.href || "/";
+            return (
+              <li key={url + i} className="flex items-center gap-1.5">
+                {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />}
+                {i === safeItems.length - 1 ? (
+                  <span className="font-medium text-foreground" aria-current="page">
+                    {name}
+                  </span>
+                ) : (
+                  <Link
+                    href={url}
+                    className="hover:text-foreground transition-colors"
+                  >
+                    {name}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
         </ol>
       </nav>
       <StructuredData data={getBreadcrumbSchema(safeItems)} />

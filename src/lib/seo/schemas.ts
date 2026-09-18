@@ -90,28 +90,16 @@ export function getWebsiteSchema() {
   };
 }
 
-// ─── BreadcrumbList schema ────────────────────────────────────────────────────
-
 export interface BreadcrumbItem {
-  name: string;
-  url: string;
+  name?: string;
+  url?: string;
+  label?: string;
+  href?: string;
 }
 
-/**
- * Convert a relative URL to an absolute one using the canonical Fieseros
- * origin. Google's BreadcrumbList structured data REQUIRES absolute URLs
- * (relative URLs produce "Missing field 'item'" warnings in Search Console),
- * but the visible breadcrumb links should stay relative so they work on any
- * host (localhost in dev, fieseros.com in prod, custom domains).
- *
- * Pass relative URLs to <Breadcrumbs>; this function absolutizes them only
- * for the JSON-LD payload. Already-absolute URLs (http://, https://) are
- * returned unchanged.
- */
-function absolutizeUrl(url: string): string {
+function absolutizeUrl(url?: string): string {
+  if (!url) return SITE_URL;
   if (/^https?:\/\//i.test(url)) return url;
-  // Ensure the path starts with "/" so we don't accidentally produce
-  // "https://fieseros.commarketplace" when a caller passes "marketplace".
   const path = url.startsWith("/") ? url : `/${url}`;
   return `${SITE_URL}${path}`;
 }
@@ -121,12 +109,16 @@ export function getBreadcrumbSchema(items?: BreadcrumbItem[]) {
   return {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: safeItems.map((item, i) => ({
-      "@type": "ListItem",
-      position: i + 1,
-      name: item.name,
-      item: absolutizeUrl(item.url),
-    })),
+    itemListElement: safeItems.map((item, i) => {
+      const name = item.name || item.label || "Page";
+      const url = item.url || item.href || "/";
+      return {
+        "@type": "ListItem",
+        position: i + 1,
+        name,
+        item: absolutizeUrl(url),
+      };
+    }),
   };
 }
 
@@ -137,11 +129,12 @@ export interface FaqItem {
   answer: string;
 }
 
-export function getFaqSchema(faqs: FaqItem[]) {
+export function getFaqSchema(faqs?: FaqItem[]) {
+  const safeFaqs = Array.isArray(faqs) ? faqs : [];
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: faqs.map((f) => ({
+    mainEntity: safeFaqs.map((f) => ({
       "@type": "Question",
       name: f.question,
       acceptedAnswer: {
@@ -154,30 +147,36 @@ export function getFaqSchema(faqs: FaqItem[]) {
 
 // ─── SoftwareApplication schema (for product/feature pages) ──────────────────
 
-export function getSoftwareApplicationSchema(opts: {
-  name: string;
-  description: string;
-  url: string;
+export function getSoftwareApplicationSchema(opts?: {
+  name?: string;
+  description?: string;
+  url?: string;
   applicationCategory?: string;
   operatingSystem?: string;
   offers?: { price: string; priceCurrency: string };
   aggregateRating?: { ratingValue: string; reviewCount: string };
 }) {
+  const name = opts?.name ?? "Fieseros";
+  const description =
+    opts?.description ??
+    "Fieseros is the all-in-one operating platform for service businesses with AI receptionist, smart dispatch, CRM, and payments.";
+  const url = opts?.url ?? SITE_URL;
+
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: opts.name,
-    description: opts.description,
-    url: opts.url,
-    applicationCategory: opts.applicationCategory ?? "BusinessApplication",
-    operatingSystem: opts.operatingSystem ?? "Web",
+    name,
+    description,
+    url,
+    applicationCategory: opts?.applicationCategory ?? "BusinessApplication",
+    operatingSystem: opts?.operatingSystem ?? "Web",
     browserRequirements: "Requires JavaScript. Requires HTML5.",
     offers: {
       "@type": "Offer",
-      price: opts.offers?.price ?? "0",
-      priceCurrency: opts.offers?.priceCurrency ?? "USD",
+      price: opts?.offers?.price ?? "0",
+      priceCurrency: opts?.offers?.priceCurrency ?? "USD",
     },
-    ...(opts.aggregateRating
+    ...(opts?.aggregateRating
       ? {
           aggregateRating: {
             "@type": "AggregateRating",

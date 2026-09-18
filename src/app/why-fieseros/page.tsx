@@ -347,13 +347,17 @@ const FAQS = [
 ];
 
 export default function WhyFieserosPage() {
-  const softwareSchema = getSoftwareApplicationSchema();
+  const softwareSchema = getSoftwareApplicationSchema({
+    name: "Fieseros Field Service & CRM Platform",
+    description: "All-in-one field service management platform with 24/7 AI Receptionist, smart dispatch, customer 360, truck inventory, and contractor marketplace.",
+    url: "https://fieseros.com/why-fieseros",
+  });
   const faqSchema = getFaqSchema(FAQS);
 
   const breadcrumbs = [
-    { label: "Home", href: "/" },
-    { label: "Features", href: "/features" },
-    { label: "Why Fieseros Comparison", href: "/why-fieseros" },
+    { name: "Home", url: "/" },
+    { name: "Features", url: "/features" },
+    { name: "Why Fieseros Comparison", url: "/why-fieseros" },
   ];
 
   return (
