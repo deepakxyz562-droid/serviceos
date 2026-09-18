@@ -22,9 +22,13 @@ import { UseTemplateCTAButton } from './use-template-cta-button';
  * Server-rendered for crawlers. The FormRuntimeRenderer is a client component
  * but receives the schema as a prop, so the initial HTML is SSR'd.
  */
+export const dynamicParams = true;
+
 export async function generateStaticParams() {
   const all = getAllTemplates();
-  return all.map((t) => ({
+  // Prerender the top 1,000 canonical templates at build time for fast SSG,
+  // and dynamically render all remaining 20,000+ templates on demand.
+  return all.slice(0, 1000).map((t) => ({
     category: t.categories[0] || 'general',
     slug: t.id,
   }));

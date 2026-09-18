@@ -57,7 +57,7 @@ function ensureCatalogPopulated() {
   if (isCatalogPopulated) return;
   isCatalogPopulated = true;
   try {
-    const batch = generateTemplateBatch(1000);
+    const batch = generateTemplateBatch(21000);
     for (const t of batch) {
       if (!REGISTRY.has(t.id)) {
         REGISTRY.set(t.id, t);

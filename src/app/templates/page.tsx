@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { TemplatesGalleryClient } from './templates-gallery-client';
 import { getAllTemplates, TEMPLATE_CATEGORIES, TEMPLATE_INDUSTRIES } from '@/lib/forms/templates';
-import { generateTemplateBatch } from '@/lib/forms/templates/generators/mass-template-synthesizer';
 import { Sparkles } from 'lucide-react';
 
 /**
@@ -26,18 +25,7 @@ export const metadata: Metadata = {
 };
 
 export default function TemplatesGalleryPage() {
-  const curated = getAllTemplates();
-  // Combine curated templates with synthesized vertical matrix (1,000 base batch for fast initial render)
-  const synthesized = generateTemplateBatch(1000);
-  
-  // Merge uniquely by slug
-  const templateMap = new Map<string, any>();
-  curated.forEach((t) => templateMap.set(t.id, t));
-  synthesized.forEach((t) => {
-    if (!templateMap.has(t.id)) templateMap.set(t.id, t);
-  });
-
-  const allTemplates = Array.from(templateMap.values());
+  const allTemplates = getAllTemplates();
   const featured = allTemplates.filter((t) => t.isFeatured);
 
   const categoryCounts = new Map<string, number>();

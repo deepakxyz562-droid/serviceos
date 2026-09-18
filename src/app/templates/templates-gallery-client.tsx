@@ -502,33 +502,89 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
           {totalPages > 1 && (
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-slate-200 dark:border-slate-800">
               <p className="text-xs text-muted-foreground">
-                Showing Page <strong className="text-foreground">{currentPage}</strong> of <strong className="text-foreground">{totalPages}</strong> ({filtered.length.toLocaleString()} total templates)
+                Showing Page <strong className="text-foreground">{currentPage}</strong> of <strong className="text-foreground">{totalPages.toLocaleString()}</strong> ({filtered.length.toLocaleString()} total templates)
               </p>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                  className="text-xs"
+                  onClick={() => {
+                    setCurrentPage((p) => Math.max(p - 1, 1));
+                    window.scrollTo({ top: 250, behavior: 'smooth' });
+                  }}
+                  className="text-xs h-8"
                 >
-                  Previous
+                  ← Prev
                 </Button>
-                <div className="flex items-center gap-1 text-xs font-semibold px-2">
-                  <span className="p-1 px-2.5 rounded bg-emerald-600 text-white">{currentPage}</span>
-                  {currentPage < totalPages && (
-                    <span className="text-muted-foreground px-1">... {totalPages}</span>
-                  )}
-                </div>
+
+                {/* Page number buttons */}
+                {currentPage > 2 && (
+                  <button
+                    onClick={() => {
+                      setCurrentPage(1);
+                      window.scrollTo({ top: 250, behavior: 'smooth' });
+                    }}
+                    className="size-8 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  >
+                    1
+                  </button>
+                )}
+                {currentPage > 3 && <span className="text-xs text-muted-foreground px-0.5">...</span>}
+
+                {currentPage > 1 && (
+                  <button
+                    onClick={() => {
+                      setCurrentPage(currentPage - 1);
+                      window.scrollTo({ top: 250, behavior: 'smooth' });
+                    }}
+                    className="size-8 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  >
+                    {currentPage - 1}
+                  </button>
+                )}
+
+                <span className="size-8 rounded-lg bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shadow-xs">
+                  {currentPage}
+                </span>
+
+                {currentPage < totalPages && (
+                  <button
+                    onClick={() => {
+                      setCurrentPage(currentPage + 1);
+                      window.scrollTo({ top: 250, behavior: 'smooth' });
+                    }}
+                    className="size-8 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  >
+                    {currentPage + 1}
+                  </button>
+                )}
+
+                {currentPage < totalPages - 2 && <span className="text-xs text-muted-foreground px-0.5">...</span>}
+                {currentPage < totalPages - 1 && (
+                  <button
+                    onClick={() => {
+                      setCurrentPage(totalPages);
+                      window.scrollTo({ top: 250, behavior: 'smooth' });
+                    }}
+                    className="size-8 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  >
+                    {totalPages.toLocaleString()}
+                  </button>
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                  className="text-xs"
+                  onClick={() => {
+                    setCurrentPage((p) => Math.min(p + 1, totalPages));
+                    window.scrollTo({ top: 250, behavior: 'smooth' });
+                  }}
+                  className="text-xs h-8"
                 >
-                  Next Page →
+                  Next →
                 </Button>
               </div>
             </div>
