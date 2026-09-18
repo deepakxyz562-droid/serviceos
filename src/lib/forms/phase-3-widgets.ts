@@ -80,13 +80,30 @@ const WIDGET_SPECS: WidgetSpec[] = [
 
   // ─── Legal (8) ──────────────────────────────────────────────────────────────
   ['gdpr_consent', 'GDPR Consent (v2)', 'security', 'ScrollText', 'Granular GDPR consent', 'POPULAR', 'free'],
-  ['privacy_policy_accept', 'Privacy Policy Accept (v2)', 'security', 'FileText', 'Versioned privacy policy', '', 'free'],
+  ['privacy_policy_accept', 'Privacy Policy Accept (v2)', 'security', 'FileText', 'Versioned privacy policy', '', 'free', [
+    { key: 'policyTitle', label: 'Policy Title', type: 'text', group: 'field_specific', default: 'Privacy Policy' },
+    { key: 'policyUrl', label: 'Policy URL', type: 'text', group: 'field_specific', default: '/privacy-policy' },
+    { key: 'policyBody', label: 'Policy Text / Summary', type: 'textarea', group: 'field_specific', default: 'Please review and accept our Privacy Policy regarding personal data handling.' },
+    { key: 'version', label: 'Policy Version', type: 'text', group: 'field_specific', default: '2.0.0' },
+    { key: 'requireScroll', label: 'Require Scroll to Bottom', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Require user to review text before accepting.' },
+    { key: 'agreeLabel', label: 'Consent Checkbox Label', type: 'text', group: 'field_specific', default: 'I have read and agree to the Privacy Policy' },
+  ]],
   ['nda_sign', 'NDA Sign', 'signature', 'FileSignature', 'NDA + party + signature', 'PRO', 'business'],
   ['waiver_release', 'Waiver / Release', 'signature', 'FileText', 'Liability waiver', 'PRO', 'business'],
   ['terms_of_service', 'Terms of Service', 'security', 'ScrollText', 'ToS acceptance', 'POPULAR', 'free'],
   ['cookie_consent_banner', 'Cookie Consent Banner', 'security', 'Cookie', 'Cookie categories', 'NEW', 'free'],
-  ['age_verification', 'Age Verification (v2)', 'security', 'CalendarClock', 'DOB + ID upload', '', 'free'],
-  ['digital_witness', 'Digital Witness (v2)', 'signature', 'Eye', 'Witness signature + statement', 'NEW', 'business'],
+  ['age_verification', 'Age Verification (v2)', 'security', 'CalendarClock', 'DOB + ID upload', '', 'free', [
+    { key: 'minimumAge', label: 'Minimum Age', type: 'number', group: 'field_specific', default: 21, min: 13, max: 100 },
+    { key: 'requireDateOfBirth', label: 'Require Date of Birth', type: 'toggle_with_description', group: 'field_specific', default: true },
+    { key: 'requireIdUpload', label: 'Require Government ID Photo Upload', type: 'toggle_with_description', group: 'field_specific', default: false },
+    { key: 'confirmationText', label: 'Confirmation Statement', type: 'textarea', group: 'field_specific', default: 'I confirm that I meet the minimum age requirement and all information provided is accurate.' },
+  ]],
+  ['digital_witness', 'Digital Witness (v2)', 'signature', 'Eye', 'Witness signature + statement', 'NEW', 'business', [
+    { key: 'documentTitle', label: 'Document / Agreement Title', type: 'text', group: 'field_specific', default: 'Service Agreement' },
+    { key: 'requireSignature', label: 'Require Witness Signature', type: 'toggle_with_description', group: 'field_specific', default: true },
+    { key: 'requireName', label: 'Require Witness Full Name', type: 'toggle_with_description', group: 'field_specific', default: true },
+    { key: 'statementPreset', label: 'Witness Attestation Statement', type: 'textarea', group: 'field_specific', default: 'I, the undersigned, hereby attest that to the best of my knowledge the events described above are true and accurate, and that I witnessed them personally.' },
+  ]],
 
   // ─── E-commerce (10) ────────────────────────────────────────────────────────
   ['product_configurator', 'Product Configurator', 'payment', 'SlidersHorizontal', 'Step-by-step product config', 'NEW', 'business'],
@@ -115,18 +132,36 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['lead_scoring_display', 'Lead Scoring Display', 'marketing', 'Trophy', 'Read-only lead score', '', 'pro'],
   ['referral_code_input', 'Referral Code Input', 'marketing', 'Ticket', 'Referral + validate', '', 'pro'],
   ['campaign_source_tracker', 'Campaign Source Tracker', 'marketing', 'Megaphone', 'Hidden campaign tracker', '', 'free'],
-  ['social_share_buttons', 'Social Share Buttons (v2)', 'marketing', 'Share2', 'Share + custom URL + title', 'POPULAR', 'free'],
+  ['social_share_buttons', 'Social Share Buttons (v2)', 'marketing', 'Share2', 'Share + custom URL + title', 'POPULAR', 'free', [
+    { key: 'url', label: 'Share URL (leave blank for current page)', type: 'text', group: 'field_specific', placeholder: 'https://example.com' },
+    { key: 'title', label: 'Share Title / Message', type: 'text', group: 'field_specific', default: 'Check this out' },
+    { key: 'showLabels', label: 'Show Platform Labels', type: 'toggle_with_description', group: 'field_specific', default: true },
+    { key: 'allowEdit', label: 'Allow Respondent to Edit URL', type: 'toggle_with_description', group: 'field_specific', default: false },
+  ]],
   ['email_signup_segment', 'Email Signup + Segment', 'marketing', 'Mail', 'Newsletter/promo/both', 'NEW', 'free'],
   ['promo_code_unlock', 'Promo Code Unlock', 'marketing', 'TicketPercent', 'Promo + unlock offer', 'POPULAR', 'pro'],
   ['viral_waitlist', 'Viral Waitlist', 'marketing', 'Users', 'Waitlist + referral position', 'NEW', 'pro'],
 
   // ─── Analytics (10) ─────────────────────────────────────────────────────────
-  ['google_analytics_4_widget', 'Google Analytics 4', 'analytics', 'BarChart3', 'GA4 event tracker', 'POPULAR', 'pro'],
-  ['facebook_pixel_widget', 'Facebook Pixel', 'analytics', 'Activity', 'FB pixel tracker', '', 'pro'],
+  ['google_analytics_4_widget', 'Google Analytics 4', 'analytics', 'BarChart3', 'GA4 event tracker', 'POPULAR', 'pro', [
+    { key: 'measurementId', label: 'Google Analytics Measurement ID', type: 'text', group: 'field_specific', default: 'G-XXXXXXXXXX', placeholder: 'G-XXXXXXXXXX' },
+    { key: 'eventName', label: 'Event Name on Submit', type: 'text', group: 'field_specific', default: 'form_submit' },
+    { key: 'debug', label: 'Debug Mode', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Log GA4 event payloads to console.' },
+  ]],
+  ['facebook_pixel_widget', 'Facebook Pixel', 'analytics', 'Activity', 'FB pixel tracker', '', 'pro', [
+    { key: 'pixelId', label: 'Facebook Pixel ID', type: 'text', group: 'field_specific', default: '000000000000000', placeholder: '123456789012345' },
+    { key: 'eventName', label: 'Event Name on Submit', type: 'text', group: 'field_specific', default: 'Lead' },
+    { key: 'debug', label: 'Debug Mode', type: 'toggle_with_description', group: 'field_specific', default: false },
+  ]],
   ['mixpanel_event_widget', 'Mixpanel Event', 'analytics', 'Activity', 'Mixpanel tracker', '', 'pro'],
   ['hotjar_heatmap_widget', 'Hotjar Heatmap', 'analytics', 'MousePointerClick', 'Hotjar integration', '', 'business'],
   ['form_abandonment_tracker', 'Form Abandonment Tracker', 'analytics', 'Timer', 'Time + fields before abandon', 'NEW', 'pro'],
-  ['conversion_goal_tracker', 'Conversion Goal Tracker', 'analytics', 'Target', 'Fire conversion on submit', '', 'pro'],
+  ['conversion_goal_tracker', 'Conversion Goal Tracker', 'analytics', 'Target', 'Fire conversion on submit', '', 'pro', [
+    { key: 'goalId', label: 'Goal ID', type: 'text', group: 'field_specific', default: 'goal_primary' },
+    { key: 'goalName', label: 'Goal Name', type: 'text', group: 'field_specific', default: 'Form Submission' },
+    { key: 'value', label: 'Goal Conversion Value ($)', type: 'number', group: 'field_specific', default: 10 },
+    { key: 'currency', label: 'Currency Code', type: 'text', group: 'field_specific', default: 'USD' },
+  ]],
   ['time_on_field', 'Time on Field', 'analytics', 'Clock', 'Read-only per-field timings', '', 'pro'],
   ['scroll_depth_tracker', 'Scroll Depth Tracker', 'analytics', 'MoveVertical', 'How far user scrolled', '', 'pro'],
   ['submission_source_attribution', 'Submission Source Attribution', 'analytics', 'Link', 'Referrer + UTM hidden', 'NEW', 'free'],

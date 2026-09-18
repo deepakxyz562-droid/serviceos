@@ -318,11 +318,15 @@ const WIDGET_SPECS: WidgetSpec[] = [
   // ─── Survey (7) ────────────────────────────────────────────────────────────────
   ['star_rating_comments', 'Star Rating + Comments', 'survey', 'Star', '5-star with required comment on low', 'POPULAR', 'pro', [
     { key: 'maxStars', label: 'Max stars', type: 'number', group: 'field_specific', default: 5, min: 3, max: 10 },
-    { key: 'requireCommentOnLowRating', label: 'Require comment below threshold', type: 'toggle_with_description', group: 'field_specific', default: true },
-    { key: 'threshold', label: 'Threshold', type: 'number', group: 'field_specific', default: 3 },
+    { key: 'allowHalf', label: 'Allow half stars', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Allow respondents to select 0.5 ratings.' },
+    { key: 'requireCommentBelow', label: 'Require comment below threshold', type: 'number', group: 'field_specific', default: 3, description: 'Require respondent to leave an explanation when rating is at or below this score.' },
+    { key: 'placeholder', label: 'Comment placeholder', type: 'text', group: 'field_specific', default: 'Tell us more about your experience…' },
+    { key: 'maxChars', label: 'Max comment length (characters)', type: 'number', group: 'field_specific', default: 600 },
   ]],
   ['like_dislike', 'Like / Dislike', 'survey', 'ThumbsUp', 'Binary thumbs up/down', '', 'free', [
-    { key: 'showLiveCounts', label: 'Show live counts', type: 'toggle_with_description', group: 'field_specific', default: true },
+    { key: 'showCounts', label: 'Show Vote Counters', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display count badges next to each button.' },
+    { key: 'baseLikes', label: 'Initial Likes Count', type: 'number', group: 'field_specific', default: 0, description: 'Baseline positive votes shown.' },
+    { key: 'baseDislikes', label: 'Initial Dislikes Count', type: 'number', group: 'field_specific', default: 0, description: 'Baseline negative votes shown.' },
   ]],
   ['nps_slider', 'NPS Slider (0-10)', 'survey', 'Gauge', 'Net promoter score scale', 'POPULAR', 'pro', [
     { key: 'min', label: 'Min value', type: 'number', group: 'field_specific', default: 0 },

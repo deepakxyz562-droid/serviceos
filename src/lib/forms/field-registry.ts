@@ -1045,9 +1045,13 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     runtimeComponentId: 'google_analytics_4_widget',
     createField: (label = 'GA4 Tracking') => ({
       label: '', type: 'short_answer', widgetType: 'google_analytics_4',
-      widgetConfig: { measurementId: '' }, required: false,
+      widgetConfig: { measurementId: 'G-XXXXXXXXXX', eventName: 'form_submit', debug: false }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'measurementId', label: 'Google Analytics Measurement ID', type: 'text', group: 'field_specific', default: 'G-XXXXXXXXXX', placeholder: 'G-XXXXXXXXXX', helpText: 'Your GA4 data stream measurement ID.' },
+      { key: 'eventName', label: 'Event Name on Submit', type: 'text', group: 'field_specific', default: 'form_submit', helpText: 'Custom event name sent to GA4 upon submission.' },
+      { key: 'debug', label: 'Debug Mode', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Log GA4 event payloads to the browser console.' },
+    ],
   },
   {
     id: 'image_scanner_ocr',
@@ -1131,9 +1135,13 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     runtimeComponentId: 'like_dislike',
     createField: (label = 'Like / Dislike') => ({
       label, type: 'short_answer', widgetType: 'like_dislike_feedback',
-      widgetConfig: { showLiveCounts: true }, required: false,
+      widgetConfig: { showCounts: true, baseLikes: 0, baseDislikes: 0 }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'showCounts', label: 'Show Vote Counters', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display count badges next to each button.' },
+      { key: 'baseLikes', label: 'Initial Likes Count', type: 'number', group: 'field_specific', default: 0, description: 'Baseline positive votes shown.' },
+      { key: 'baseDislikes', label: 'Initial Dislikes Count', type: 'number', group: 'field_specific', default: 0, description: 'Baseline negative votes shown.' },
+    ],
   },
   {
     id: 'most_frequent_answer',

@@ -227,6 +227,29 @@ describe('Canonical Widget Registry & Form Architecture Tests', () => {
       expect(typeof w.createField).toBe('function');
     }
   });
+
+  it('R3-f: verifies high-impact widgets have rich widget-specific settings schemas', () => {
+    const widgetsToVerify = [
+      { id: 'like_dislike_feedback', requiredKeys: ['showCounts', 'baseLikes', 'baseDislikes'] },
+      { id: 'star_rating_comments', requiredKeys: ['maxStars', 'requireCommentBelow', 'placeholder'] },
+      { id: 'social_share_buttons', requiredKeys: ['url', 'title', 'showLabels', 'allowEdit'] },
+      { id: 'age_verification', requiredKeys: ['minimumAge', 'requireDateOfBirth', 'confirmationText'] },
+      { id: 'privacy_policy_accept', requiredKeys: ['policyTitle', 'policyUrl', 'policyBody', 'agreeLabel'] },
+      { id: 'digital_witness', requiredKeys: ['documentTitle', 'requireSignature', 'statementPreset'] },
+      { id: 'google_analytics_4', requiredKeys: ['measurementId', 'eventName'] },
+      { id: 'facebook_pixel_widget', requiredKeys: ['pixelId', 'eventName'] },
+      { id: 'conversion_goal_tracker', requiredKeys: ['goalId', 'value', 'currency'] },
+    ];
+
+    for (const { id, requiredKeys } of widgetsToVerify) {
+      const def = getFieldById(id);
+      expect(def, `Widget '${id}' must be present in registry`).toBeDefined();
+      const schemaKeys = def?.settingsSchema.map((s) => s.key) || [];
+      for (const key of requiredKeys) {
+        expect(schemaKeys, `Widget '${id}' settingsSchema must include '${key}'`).toContain(key);
+      }
+    }
+  });
 });
 
 /**
