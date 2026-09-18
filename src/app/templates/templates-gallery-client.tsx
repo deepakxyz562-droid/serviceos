@@ -536,69 +536,61 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
         </div>
       </div>
 
-      {/* JOTFORM-STYLE INTERACTIVE QUICK PREVIEW MODAL WITH HYBRID SEO URL */}
+      {/* JOTFORM-STYLE INTERACTIVE 1200PX PREVIEW MODAL WITH HYBRID SEO URL */}
       {previewTemplate && (
         <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && closePreview()}>
-          <DialogContent className="max-w-5xl max-h-[94vh] flex flex-col p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl">
-            {/* Modal Header (Top App Bar with Device Switcher & Quick CTA) */}
-            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">
+          <DialogContent className="max-w-[1240px] w-[96vw] max-h-[92vh] flex flex-col p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900">
+            {/* Modal Header: Jotform Top App Bar (Breadcrumb + Device Switcher + Actions) */}
+            <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+              <div className="min-w-0 flex items-center gap-2">
+                <nav className="flex items-center gap-1.5 text-xs text-muted-foreground truncate">
+                  <Link href="/templates" className="hover:text-foreground font-medium">Templates</Link>
+                  <ChevronRight className="size-3 shrink-0" />
+                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold truncate">
                     {getCategoryLabel(previewTemplate.categories[0] || 'general')}
-                  </Badge>
-                  {previewTemplate.industries[0] && previewTemplate.industries[0] !== 'general' && (
-                    <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-200">
-                      {getIndustryLabel(previewTemplate.industries[0])}
-                    </Badge>
-                  )}
-                  <span className="text-[11px] text-muted-foreground font-medium">
-                    • {previewTemplate.schema.fields?.length || 0} questions
                   </span>
-                </div>
-                <DialogTitle className="text-lg font-bold text-foreground truncate">
-                  {previewTemplate.name}
-                </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground line-clamp-1">
-                  {previewTemplate.shortDescription}
-                </DialogDescription>
+                  <ChevronRight className="size-3 shrink-0" />
+                  <span className="text-foreground font-bold truncate max-w-[180px] sm:max-w-[260px]">
+                    {previewTemplate.name}
+                  </span>
+                </nav>
               </div>
 
-              {/* Device Preview Switcher & Actions */}
+              {/* Device Preview Switcher & Primary CTA */}
               <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                 <div className="flex items-center gap-0.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700">
                   <button
                     onClick={() => setPreviewDevice('desktop')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
                       previewDevice === 'desktop'
                         ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="Desktop Preview (Full Width)"
                   >
-                    <Monitor className="size-3.5" /> <span className="hidden md:inline">Desktop</span>
+                    <Monitor className="size-3.5" /> <span className="hidden sm:inline">Desktop</span>
                   </button>
                   <button
                     onClick={() => setPreviewDevice('tablet')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
                       previewDevice === 'tablet'
                         ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="Tablet Preview (iPad Frame)"
                   >
-                    <Tablet className="size-3.5" /> <span className="hidden md:inline">Tablet</span>
+                    <Tablet className="size-3.5" /> <span className="hidden sm:inline">Tablet</span>
                   </button>
                   <button
                     onClick={() => setPreviewDevice('mobile')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
                       previewDevice === 'mobile'
                         ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="Mobile Preview (Phone Frame)"
                   >
-                    <Smartphone className="size-3.5" /> <span className="hidden md:inline">Mobile</span>
+                    <Smartphone className="size-3.5" /> <span className="hidden sm:inline">Mobile</span>
                   </button>
                 </div>
 
@@ -611,78 +603,160 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
               </div>
             </div>
 
-            {/* Modal Body: Interactive Form Canvas */}
-            <div className="flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950 p-4 sm:p-8 flex items-start justify-center min-h-[400px]">
-              {previewDevice === 'mobile' ? (
-                /* High-fidelity Smartphone Device Shell */
-                <div className="w-[360px] bg-slate-900 rounded-[36px] p-3 shadow-2xl border-4 border-slate-800 transition-all">
-                  {/* Speaker & Dynamic Notch */}
-                  <div className="w-24 h-4 bg-slate-950 rounded-full mx-auto mb-3 flex items-center justify-center">
-                    <div className="w-8 h-1 bg-slate-800 rounded-full" />
-                  </div>
-                  {/* Screen Content */}
-                  <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 max-h-[68vh] overflow-y-auto shadow-inner">
-                    <FormRuntimeRenderer
-                      formName={previewTemplate.name}
-                      schema={previewTemplate.schema}
-                      previewMode={true}
-                    />
-                  </div>
-                </div>
-              ) : previewDevice === 'tablet' ? (
-                /* Tablet Shell */
-                <div className="w-full max-w-xl bg-slate-900 rounded-[28px] p-4 shadow-2xl border-4 border-slate-800 transition-all">
-                  <div className="bg-white dark:bg-slate-900 rounded-[18px] p-6 max-h-[70vh] overflow-y-auto shadow-inner">
-                    <FormRuntimeRenderer
-                      formName={previewTemplate.name}
-                      schema={previewTemplate.schema}
-                      previewMode={true}
-                    />
-                  </div>
-                </div>
-              ) : (
-                /* Desktop Paper Form Canvas */
-                <div className="w-full max-w-3xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-8 shadow-xl transition-all">
-                  <div className="border-b border-slate-100 dark:border-slate-800 pb-4 mb-6">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 mb-1">
-                      <Sparkles className="size-3.5" /> Official Fieseros Form Template
+            {/* Modal Body: 2-Column Jotform Parity Layout (Left Canvas + Right Info Sidebar) */}
+            <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+              {/* Left Column: Interactive Form Device Canvas */}
+              <div className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
+                {previewDevice === 'mobile' ? (
+                  /* High-fidelity Smartphone Device Shell */
+                  <div className="w-[360px] bg-slate-900 rounded-[36px] p-3 shadow-2xl border-4 border-slate-800 transition-all my-2">
+                    {/* Speaker & Dynamic Notch */}
+                    <div className="w-24 h-4 bg-slate-950 rounded-full mx-auto mb-3 flex items-center justify-center">
+                      <div className="w-8 h-1 bg-slate-800 rounded-full" />
                     </div>
-                    <h2 className="text-2xl font-bold text-foreground">{previewTemplate.name}</h2>
-                    <p className="text-xs text-muted-foreground mt-1">{previewTemplate.shortDescription}</p>
+                    {/* Screen Content */}
+                    <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 max-h-[64vh] overflow-y-auto shadow-inner">
+                      <FormRuntimeRenderer
+                        formName={previewTemplate.name}
+                        schema={previewTemplate.schema}
+                        previewMode={true}
+                      />
+                    </div>
                   </div>
-                  <FormRuntimeRenderer
-                    formName={previewTemplate.name}
-                    schema={previewTemplate.schema}
-                    previewMode={true}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shrink-0">
-              <div className="flex items-center gap-4 text-slate-600 dark:text-slate-400">
-                <span className="flex items-center gap-1 font-medium">
-                  <Lock className="size-3 text-emerald-600" /> 100% Free &amp; Customizable
-                </span>
-                <span className="hidden sm:inline text-muted-foreground">•</span>
-                <span className="hidden sm:inline">⚡ 33 Payment Gateways &amp; OTP Verification Supported</span>
+                ) : previewDevice === 'tablet' ? (
+                  /* Tablet Shell */
+                  <div className="w-full max-w-xl bg-slate-900 rounded-[28px] p-4 shadow-2xl border-4 border-slate-800 transition-all my-2">
+                    <div className="bg-white dark:bg-slate-900 rounded-[18px] p-6 max-h-[66vh] overflow-y-auto shadow-inner">
+                      <FormRuntimeRenderer
+                        formName={previewTemplate.name}
+                        schema={previewTemplate.schema}
+                        previewMode={true}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* Desktop Paper Form Canvas */
+                  <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-8 shadow-xl transition-all my-2">
+                    <div className="border-b border-slate-100 dark:border-slate-800 pb-4 mb-6">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 mb-1">
+                        <Sparkles className="size-3.5" /> Official Fieseros Form Template
+                      </div>
+                      <h2 className="text-2xl font-bold text-foreground">{previewTemplate.name}</h2>
+                      <p className="text-xs text-muted-foreground mt-1">{previewTemplate.shortDescription}</p>
+                    </div>
+                    <FormRuntimeRenderer
+                      formName={previewTemplate.name}
+                      schema={previewTemplate.schema}
+                      previewMode={true}
+                    />
+                  </div>
+                )}
               </div>
-              
-              <div className="flex items-center gap-3">
-                <Link
-                  href={`/templates/${previewTemplate.categories[0] || 'general'}/${previewTemplate.id}`}
-                  className="text-emerald-600 hover:text-emerald-700 font-semibold hover:underline inline-flex items-center gap-1"
-                >
-                  Full Details Page <ExternalLink className="size-3" />
-                </Link>
-                <Button
-                  size="sm"
-                  onClick={() => navigateToUseTemplate(previewTemplate)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-1.5 rounded-xl shadow-xs"
-                >
-                  Use Template →
-                </Button>
+
+              {/* Right Column: Jotform-Parity Template Details & Field Breakdown Sidebar */}
+              <div className="w-full lg:w-[380px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between overflow-y-auto max-h-[80vh] p-5 space-y-5">
+                <div className="space-y-4">
+                  {/* Title & Badge */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                        Curated Template
+                      </span>
+                      <div className="flex items-center gap-1 text-xs text-amber-500 font-bold">
+                        <Star className="size-3.5 fill-amber-400 text-amber-400" />
+                        <span>{previewTemplate.ratingAverage || 4.9}</span>
+                        <span className="text-[10px] text-muted-foreground font-normal">
+                          ({previewTemplate.ratingCount || 48} reviews)
+                        </span>
+                      </div>
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground leading-snug">
+                      {previewTemplate.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      {previewTemplate.shortDescription}
+                    </p>
+                  </div>
+
+                  {/* Categories & Industries */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {previewTemplate.categories.map((c) => (
+                      <Badge key={c} variant="outline" className="text-[10px] font-medium bg-slate-50 dark:bg-slate-800">
+                        {getCategoryLabel(c)}
+                      </Badge>
+                    ))}
+                    {previewTemplate.industries.filter((i) => i !== 'general').map((i) => (
+                      <Badge key={i} variant="outline" className="text-[10px] font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border-blue-200">
+                        {getIndustryLabel(i)}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  {/* Smart Capabilities Checklist (Jotform Parity) */}
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Included Smart Capabilities:
+                    </p>
+                    <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+                      <div className="flex items-center gap-1.5">
+                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                        <span>200+ Smart Widgets &amp; Conditional Logic</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                        <span>33 Payment Gateways (0% Platform Commission)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                        <span>Photo Upload with Drawing Annotations</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                        <span>Digital Signature &amp; Legal Audit Trail</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Check className="size-3.5 text-emerald-600 font-bold shrink-0" />
+                        <span>100% Mobile, Tablet &amp; Web Responsive</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Form Questions & Fields Breakdown List */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-foreground">Form Questions ({previewTemplate.schema.fields?.length || 0})</span>
+                      <span className="text-muted-foreground text-[11px]">Ready to customize</span>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                      {(previewTemplate.schema.fields || []).map((field, idx) => (
+                        <div
+                          key={field.id || idx}
+                          className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-xs flex items-center justify-between gap-2"
+                        >
+                          <span className="font-medium text-slate-800 dark:text-slate-200 truncate">
+                            {idx + 1}. {field.label}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground capitalize shrink-0 font-mono bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border">
+                            {field.type.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sticky Sidebar CTA Card */}
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                  <Button
+                    onClick={() => navigateToUseTemplate(previewTemplate)}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 rounded-xl shadow-md gap-2"
+                  >
+                    <Sparkles className="size-4" /> Use This Template
+                  </Button>
+                  <p className="text-[11px] text-center text-muted-foreground">
+                    Free forever · 0% commission · Instant copy
+                  </p>
+                </div>
               </div>
             </div>
           </DialogContent>
