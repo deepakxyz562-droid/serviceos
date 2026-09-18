@@ -10,24 +10,13 @@ import {
   CheckSquare,
   Star,
   ShieldCheck,
-  Camera,
   PenTool,
   Clock,
-  Sparkles,
-  Layers,
   HeartPulse,
   Wrench,
-  CheckCircle2,
   DollarSign,
-  Building2,
-  MapPin,
   Upload,
-  QrCode,
-  Tag,
   Briefcase,
-  Smile,
-  ShieldAlert,
-  Sliders,
   Check,
 } from 'lucide-react';
 import type { FormTemplate, TemplateCategoryId, TemplateIndustryId } from '@/lib/forms/templates';
@@ -207,43 +196,45 @@ const DEFAULT_THEME = {
 };
 
 /**
- * FormThumbnailPreview — 12 Domain-Differentiated Visual Mockup Engines (Jotform Parity).
- * Generates an authentic, domain-tailored visual mockup for every template.
+/**
+ * FormThumbnailPreview — Live Scaled Form Micro-Canvas (Method 2).
+ * Reads the actual fields and theme from the template schema and renders
+ * a miniature, authentic paper form document with live field types.
  */
 export function FormThumbnailPreview({
   template,
   className = '',
 }: FormThumbnailPreviewProps) {
   const primaryCat = template.categories[0] || 'general';
-  const primaryInd = template.industries[0] || 'general';
   const theme = CATEGORY_THEMES[primaryCat] || DEFAULT_THEME;
   const CategoryIcon = theme.icon;
 
-  const fields = template.schema.fields || [];
+  const rawFields = template.schema?.fields || [];
+  const primaryColor = template.schema?.theme?.primaryColor || '#10b981';
+  const submitText = template.schema?.settings?.submitButtonText || theme.actionLabel;
 
-  // Determine which specific visual blueprint to render
-  const isHealthcare = primaryCat.includes('consent') || primaryInd === 'dental' || primaryInd === 'healthcare' || template.id.includes('medical') || template.id.includes('patient');
-  const isOrderOrPayment = primaryCat.includes('order') || primaryCat.includes('payment') || primaryInd === 'bakery' || primaryInd === 'restaurant' || template.id.includes('checkout') || template.id.includes('order');
-  const isTradeOrHvac = primaryInd === 'hvac' || primaryInd === 'plumbing' || primaryInd === 'electrical' || primaryInd === 'roofing' || primaryInd === 'contractor' || primaryCat.includes('quote');
-  const isInspection = primaryCat.includes('inspection') || primaryCat.includes('checklist') || template.id.includes('audit');
-  const isWaiver = primaryCat.includes('waiver') || template.id.includes('liability') || template.id.includes('release') || template.id.includes('nda') || template.id.includes('agreement');
-  const isSurveyOrFeedback = primaryCat.includes('survey') || primaryCat.includes('feedback') || template.id.includes('csat') || template.id.includes('nps') || template.id.includes('review');
-  const isBookingOrSchedule = primaryCat.includes('booking') || primaryCat.includes('appointment') || template.id.includes('schedule') || template.id.includes('reservation');
-  const isJobOrHR = primaryCat.includes('application') || primaryCat.includes('registration') || template.id.includes('job') || template.id.includes('hiring') || template.id.includes('volunteer');
-  const isDonation = primaryCat.includes('donation') || template.id.includes('nonprofit') || template.id.includes('charity');
+  // Display top 3-4 fields from the actual template schema
+  const displayFields = rawFields.slice(0, 4);
 
   return (
     <div
       className={`relative w-full h-44 sm:h-48 overflow-hidden bg-gradient-to-b from-slate-100 to-slate-200/90 dark:from-slate-950 dark:to-slate-900/90 flex flex-col justify-end p-2.5 sm:p-3 select-none ${className}`}
     >
-      {/* Background Dot Pattern */}
+      {/* Background Dot Grid Matrix */}
       <div className="absolute inset-0 opacity-40 dark:opacity-20 pointer-events-none bg-[radial-gradient(#94a3b8_1px,transparent_1px)] [background-size:12px_12px]" />
 
       {/* Realistic Paper Form Card Mockup */}
       <div className="relative w-full h-[95%] bg-white dark:bg-slate-900 rounded-t-xl border-t border-x border-slate-200/90 dark:border-slate-700/80 shadow-[0_-4px_18px_rgba(0,0,0,0.08)] dark:shadow-[0_-4px_18px_rgba(0,0,0,0.5)] flex flex-col overflow-hidden">
         
-        {/* Form Header Gradient Ribbon */}
-        <div className={`h-2.5 w-full bg-gradient-to-r ${theme.gradient} shrink-0`} />
+        {/* Form Header Accent Ribbon */}
+        <div
+          className="h-2 w-full shrink-0"
+          style={{
+            background: primaryColor.startsWith('#')
+              ? `linear-gradient(90deg, ${primaryColor}, ${primaryColor}dd)`
+              : undefined,
+          }}
+        />
 
         {/* Paper Form Body */}
         <div className="p-2.5 sm:p-3 space-y-2 flex-1 flex flex-col justify-between overflow-hidden">
@@ -255,245 +246,141 @@ export function FormThumbnailPreview({
                 <CategoryIcon className="size-3" />
               </div>
               <div className="min-w-0">
-                <div className="h-2 w-20 sm:w-28 bg-slate-800 dark:bg-slate-200 rounded-full font-bold truncate text-[8px] leading-none text-transparent">
+                <p className="text-[9px] font-bold text-slate-900 dark:text-slate-100 truncate max-w-[130px] sm:max-w-[180px] leading-tight">
                   {template.name}
-                </div>
-                <div className="h-1.5 w-12 sm:w-16 bg-slate-300 dark:bg-slate-700 rounded-full mt-0.5" />
+                </p>
+                <p className="text-[7.5px] text-slate-500 dark:text-slate-400 truncate max-w-[130px] sm:max-w-[180px] leading-none mt-0.5">
+                  {template.shortDescription}
+                </p>
               </div>
             </div>
 
-            <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
-              {fields.length || 8} fields
+            <span className="text-[8.5px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shrink-0">
+              {rawFields.length || 6} fields
             </span>
           </div>
 
-          {/* ════ DOMAIN-SPECIFIC VISUAL BLUEPRINT ════ */}
+          {/* ════ LIVE SCALED SCHEMA FIELDS (METHOD 2) ════ */}
           <div className="space-y-1.5 flex-1 min-h-0">
-            {isHealthcare ? (
-              /* 1. HEALTHCARE / DENTAL / MEDICAL INTAKE BLUEPRINT */
-              <>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div className="h-5 rounded border border-rose-200 dark:border-rose-900/40 bg-rose-50/40 dark:bg-rose-950/20 px-1.5 flex items-center gap-1">
-                    <User className="size-2.5 text-rose-500" />
-                    <span className="text-[8px] text-rose-700 dark:text-rose-300 font-medium">Patient Name</span>
+            {displayFields.length > 0 ? (
+              displayFields.map((field, idx) => {
+                const type = field.type || 'text';
+                const label = field.label || 'Field';
+
+                if (type === 'rating') {
+                  return (
+                    <div key={field.id || idx} className="h-5 rounded border border-amber-200/90 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 px-1.5 flex items-center justify-between">
+                      <span className="text-[7.5px] font-bold text-amber-800 dark:text-amber-300 truncate max-w-[55%]">{label}</span>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star key={s} className="size-2 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (type === 'radio' || type === 'select' || type === 'dropdown') {
+                  const options = field.options || [];
+                  return (
+                    <div key={field.id || idx} className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[7.5px]">
+                      <span className="text-slate-600 dark:text-slate-300 font-medium truncate max-w-[50%]">{label}</span>
+                      <span className="text-[7px] text-slate-500 font-semibold bg-white dark:bg-slate-700 px-1 rounded border border-slate-200 dark:border-slate-600 truncate max-w-[45%]">
+                        {options[0]?.label || 'Select option ▼'}
+                      </span>
+                    </div>
+                  );
+                }
+
+                if (type === 'checkbox') {
+                  return (
+                    <div key={field.id || idx} className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center gap-1.5 text-[7.5px]">
+                      <div className="size-2.5 rounded bg-emerald-500 flex items-center justify-center text-white shrink-0">
+                        <Check className="size-2" />
+                      </div>
+                      <span className="text-slate-600 dark:text-slate-300 font-medium truncate">{label}</span>
+                    </div>
+                  );
+                }
+
+                if (type === 'signature') {
+                  return (
+                    <div key={field.id || idx} className="h-5 rounded border border-dashed border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 px-1.5 flex items-center justify-between text-[7.5px]">
+                      <span className="text-slate-600 dark:text-slate-300 font-semibold flex items-center gap-1 truncate max-w-[50%]">
+                        <PenTool className="size-2 text-slate-400" /> {label}
+                      </span>
+                      <svg className="w-14 h-2.5 text-slate-600 dark:text-slate-300" viewBox="0 0 60 12" fill="none">
+                        <path d="M2 9 C 8 2, 16 11, 26 4 C 36 -2, 42 10, 56 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                      </svg>
+                    </div>
+                  );
+                }
+
+                if (type === 'date' || type === 'time') {
+                  return (
+                    <div key={field.id || idx} className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[7.5px]">
+                      <span className="text-slate-600 dark:text-slate-300 font-medium truncate max-w-[55%]">{label}</span>
+                      <span className="flex items-center gap-0.5 text-slate-400 font-mono text-[7px]">
+                        <Calendar className="size-2 text-slate-400" /> YYYY-MM-DD
+                      </span>
+                    </div>
+                  );
+                }
+
+                if (type === 'file' || type === 'image') {
+                  return (
+                    <div key={field.id || idx} className="h-5 rounded border border-dashed border-blue-300 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/20 px-1.5 flex items-center justify-between text-[7.5px] text-blue-800 dark:text-blue-300">
+                      <span className="flex items-center gap-1 font-semibold truncate max-w-[65%]">
+                        <Upload className="size-2 text-blue-500" /> {label}
+                      </span>
+                      <span className="text-[7px] text-blue-600">Browse</span>
+                    </div>
+                  );
+                }
+
+                if (type === 'textarea') {
+                  return (
+                    <div key={field.id || idx} className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[7.5px]">
+                      <span className="text-slate-600 dark:text-slate-300 font-medium truncate max-w-[60%]">{label}</span>
+                      <div className="h-1 w-12 bg-slate-300 dark:bg-slate-600 rounded-full" />
+                    </div>
+                  );
+                }
+
+                // Default short_answer / text / email / phone
+                const Icon = type === 'email' ? Mail : type === 'phone' ? Clock : User;
+                return (
+                  <div key={field.id || idx} className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[7.5px]">
+                    <div className="flex items-center gap-1 min-w-0 max-w-[60%]">
+                      <Icon className="size-2 text-slate-400 shrink-0" />
+                      <span className="text-slate-600 dark:text-slate-300 font-medium truncate">{label}</span>
+                    </div>
+                    <div className="h-1.5 w-10 bg-slate-200 dark:bg-slate-700 rounded-full" />
                   </div>
-                  <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center gap-1">
-                    <Calendar className="size-2.5 text-slate-400" />
-                    <span className="text-[8px] text-slate-500">DOB: YYYY-MM-DD</span>
-                  </div>
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between">
-                  <span className="text-[8px] text-slate-600 dark:text-slate-300 font-medium flex items-center gap-1">
-                    <HeartPulse className="size-2.5 text-rose-500" /> Primary Insurance
-                  </span>
-                  <span className="text-[7px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/50 px-1 rounded">Verified</span>
+                );
+              })
+            ) : (
+              /* Fallback Mockup */
+              <div className="space-y-1.5">
+                <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center gap-1">
+                  <User className="size-2.5 text-slate-400" />
+                  <span className="text-[8px] text-slate-600">Full Name</span>
                 </div>
                 <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center gap-1">
-                  <CheckCircle2 className="size-2.5 text-emerald-500 shrink-0" />
-                  <span className="text-[7.5px] text-slate-500 truncate">I confirm medical history &amp; HIPAA consent</span>
+                  <Mail className="size-2.5 text-slate-400" />
+                  <span className="text-[8px] text-slate-600">Email Address</span>
                 </div>
-              </>
-            ) : isOrderOrPayment ? (
-              /* 2. ORDER / BAKERY / RESTAURANT / PAYMENT BLUEPRINT */
-              <>
-                <div className="h-5 rounded border border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/20 px-1.5 flex items-center justify-between">
-                  <span className="text-[8px] text-indigo-800 dark:text-indigo-300 font-semibold">Custom Order Item</span>
-                  <div className="flex items-center gap-1 text-[8px] font-bold text-slate-700 dark:text-slate-300">
-                    <span className="bg-slate-200 dark:bg-slate-700 px-1 rounded">-</span>
-                    <span>2</span>
-                    <span className="bg-slate-200 dark:bg-slate-700 px-1 rounded">+</span>
-                  </div>
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[8px]">
-                  <span className="text-slate-500">Subtotal + Tax (0% Fee):</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">$148.50</span>
-                </div>
-                <div className="h-5 rounded border border-purple-200 dark:border-purple-900/40 bg-purple-50/40 dark:bg-purple-950/20 px-1.5 flex items-center justify-between">
-                  <span className="text-[8px] font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1">
-                    <CreditCard className="size-2.5" /> 33 Gateways
-                  </span>
-                  <span className="text-[7px] font-bold text-purple-600 dark:text-purple-400">Apple Pay · UPI · Card</span>
-                </div>
-              </>
-            ) : isTradeOrHvac ? (
-              /* 3. HVAC / PLUMBING / ELECTRICAL / TRADE BLUEPRINT */
-              <>
-                <div className="h-5 rounded border border-amber-200 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20 px-1.5 flex items-center justify-between">
-                  <span className="text-[8px] text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1">
-                    <Wrench className="size-2.5" /> System: Central AC / Heat Pump
-                  </span>
-                  <span className="text-[7px] text-amber-700 bg-amber-100 dark:bg-amber-900/60 px-1 rounded font-bold">HVAC</span>
-                </div>
-                <div className="grid grid-cols-3 gap-1">
-                  {['No Cool', 'Leaking', 'Noise'].map((tag, idx) => (
-                    <div key={tag} className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1 flex items-center gap-1 text-[7px]">
-                      <Check className={`size-2.5 ${idx === 0 ? 'text-emerald-500' : 'text-slate-400'}`} />
-                      <span className="truncate text-slate-600 dark:text-slate-300 font-medium">{tag}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="h-5 rounded border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[8px] text-slate-500">
-                  <span className="flex items-center gap-1"><Camera className="size-2.5 text-slate-400" /> Photo with Drawing Notes</span>
-                  <span className="text-[7px] text-slate-400">Attach JPG/PNG</span>
-                </div>
-              </>
-            ) : isInspection ? (
-              /* 4. INSPECTION & SAFETY CHECKLIST BLUEPRINT */
-              <>
-                <div className="grid grid-cols-3 gap-1">
-                  {['Exterior', 'Electrical', 'Plumbing'].map((item, idx) => (
-                    <div key={item} className="h-5 rounded border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 px-1 flex items-center gap-1 text-[7px] font-bold text-emerald-800 dark:text-emerald-300">
-                      <CheckCircle2 className="size-2.5 text-emerald-600" />
-                      <span className="truncate">{item}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[8px]">
-                  <span className="text-slate-600 dark:text-slate-300 font-medium">Multi-Point Diagnostic Score:</span>
-                  <span className="font-bold text-emerald-600 bg-emerald-100 dark:bg-emerald-900/60 px-1.5 rounded text-[7.5px]">100% PASS</span>
-                </div>
-                <div className="h-5 rounded border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[7.5px] text-slate-500">
-                  <span className="flex items-center gap-1"><PenTool className="size-2 text-slate-400" /> Inspector Sign-off</span>
-                  <span className="font-mono text-[7px] text-slate-400">Timestamped</span>
-                </div>
-              </>
-            ) : isWaiver ? (
-              /* 5. LEGAL WAIVER & LIABILITY RELEASE BLUEPRINT */
-              <>
-                <div className="h-5 rounded border border-slate-300 dark:border-slate-700 bg-slate-100/60 dark:bg-slate-800/60 px-1.5 flex items-center justify-between">
-                  <span className="text-[8px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                    <ShieldCheck className="size-2.5 text-slate-700 dark:text-slate-300" /> Binding Legal Agreement
-                  </span>
-                  <span className="text-[7px] bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1 rounded font-mono">E-SIGN</span>
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center gap-1 text-[7px] text-slate-500">
-                  <div className="h-1 w-full bg-slate-300 dark:bg-slate-600 rounded-full" />
-                </div>
-                <div className="h-5 rounded border border-dashed border-slate-400 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 px-2 flex items-center justify-between">
-                  <span className="text-[7.5px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-0.5">
-                    <PenTool className="size-2 text-slate-500" /> Signature:
-                  </span>
-                  <svg className="w-16 h-3 text-slate-700 dark:text-slate-200" viewBox="0 0 70 15" fill="none">
-                    <path d="M2 11 C 10 2, 20 14, 32 5 C 44 -2, 50 12, 68 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </div>
-              </>
-            ) : isSurveyOrFeedback ? (
-              /* 6. SURVEYS & CSAT FEEDBACK BLUEPRINT */
-              <>
-                <div className="h-5 rounded border border-amber-200 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 px-2 flex items-center justify-between">
-                  <span className="text-[8px] font-bold text-amber-700 dark:text-amber-400">Satisfaction Rating:</span>
-                  <div className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star key={s} className="size-2.5 fill-amber-400 text-amber-400" />
-                    ))}
-                  </div>
-                </div>
-                <div className="h-5 rounded border border-sky-200 dark:border-sky-900/40 bg-sky-50/40 dark:bg-sky-950/20 px-1.5 flex items-center justify-between text-[7px]">
-                  <span className="text-sky-700 dark:text-sky-300 font-semibold">Net Promoter:</span>
-                  <div className="flex items-center gap-0.5 font-bold">
-                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                      <span key={n} className={`px-0.5 rounded text-[6.5px] ${n >= 9 ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600'}`}>{n}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center gap-1 text-[7.5px] text-slate-500">
-                  <Smile className="size-2.5 text-amber-500" />
-                  <span>How can we improve our service?</span>
-                </div>
-              </>
-            ) : isBookingOrSchedule ? (
-              /* 7. BOOKING & APPOINTMENT SCHEDULER BLUEPRINT */
-              <>
-                <div className="h-5 rounded border border-teal-200 dark:border-teal-900/40 bg-teal-50/40 dark:bg-teal-950/20 px-1.5 flex items-center justify-between">
-                  <span className="text-[8px] font-bold text-teal-800 dark:text-teal-300 flex items-center gap-1">
-                    <Calendar className="size-2.5" /> Select Date: Oct 24, 2026
-                  </span>
-                  <span className="text-[7px] bg-teal-100 text-teal-800 font-bold px-1 rounded">Open</span>
-                </div>
-                <div className="grid grid-cols-3 gap-1">
-                  {['09:00 AM', '01:30 PM', '04:00 PM'].map((slot, idx) => (
-                    <div key={slot} className={`h-5 rounded border px-1 flex items-center justify-center text-[7px] font-semibold ${idx === 1 ? 'border-teal-500 bg-teal-600 text-white' : 'border-slate-200 dark:border-slate-700 bg-slate-50 text-slate-600'}`}>
-                      {slot}
-                    </div>
-                  ))}
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center gap-1 text-[7.5px] text-slate-500">
-                  <MapPin className="size-2.5 text-slate-400" />
-                  <span>Service Address Autocomplete</span>
-                </div>
-              </>
-            ) : isJobOrHR ? (
-              /* 8. JOB APPLICATION & HR BLUEPRINT */
-              <>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center gap-1">
-                    <User className="size-2.5 text-slate-400" />
-                    <span className="text-[8px] text-slate-600">Full Legal Name</span>
-                  </div>
-                  <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center gap-1">
-                    <Mail className="size-2.5 text-slate-400" />
-                    <span className="text-[8px] text-slate-600">Email Address</span>
-                  </div>
-                </div>
-                <div className="h-5 rounded border border-dashed border-blue-300 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/20 px-1.5 flex items-center justify-between text-[8px] text-blue-800 dark:text-blue-300">
-                  <span className="flex items-center gap-1 font-semibold"><Upload className="size-2.5" /> Upload Resume (PDF)</span>
-                  <span className="text-[7px] text-blue-600">Browse</span>
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[7.5px] text-slate-500">
-                  <span>Years of Experience:</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300">5+ Years ▼</span>
-                </div>
-              </>
-            ) : isDonation ? (
-              /* 9. DONATION & NON-PROFIT BLUEPRINT */
-              <>
-                <div className="grid grid-cols-4 gap-1">
-                  {['$25', '$50', '$100', 'Custom'].map((amt, idx) => (
-                    <div key={amt} className={`h-5 rounded border px-1 flex items-center justify-center text-[7.5px] font-bold ${idx === 2 ? 'border-pink-500 bg-pink-600 text-white' : 'border-slate-200 dark:border-slate-700 bg-slate-50 text-slate-600'}`}>
-                      {amt}
-                    </div>
-                  ))}
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[8px]">
-                  <span className="text-slate-600 font-medium">Make this donation monthly:</span>
-                  <span className="text-[7px] font-bold text-pink-600 bg-pink-50 px-1 rounded">Recurring ✓</span>
-                </div>
-                <div className="h-5 rounded border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 px-1.5 flex items-center justify-between text-[8px] text-emerald-800 dark:text-emerald-300 font-bold">
-                  <span className="flex items-center gap-1"><ShieldCheck className="size-2.5" /> 501(c)(3) Tax Deductible</span>
-                  <span className="text-[7px]">0% Fee</span>
-                </div>
-              </>
-            ) : (
-              /* 10. GENERAL / SMART INTAKE BLUEPRINT */
-              <>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <div className="h-5 rounded border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-800/50 px-1.5 flex items-center gap-1">
-                    <User className="size-2.5 text-slate-400" />
-                    <div className="h-1.5 w-12 bg-slate-300 dark:bg-slate-600 rounded-full" />
-                  </div>
-                  <div className="h-5 rounded border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-800/50 px-1.5 flex items-center gap-1">
-                    <Mail className="size-2.5 text-slate-400" />
-                    <div className="h-1.5 w-14 bg-slate-300 dark:bg-slate-600 rounded-full" />
-                  </div>
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-800/50 px-1.5 flex items-center justify-between">
-                  <span className="text-[8px] text-slate-600 dark:text-slate-300 font-medium">Service Selection:</span>
-                  <div className="h-1.5 w-16 bg-slate-300 dark:bg-slate-600 rounded-full" />
-                </div>
-                <div className="h-5 rounded border border-slate-200 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-800/50 px-1.5 flex items-center gap-1">
-                  <div className="h-1.5 w-28 bg-slate-300 dark:bg-slate-600 rounded-full" />
-                </div>
-              </>
+              </div>
             )}
           </div>
 
           {/* Mini Submit Button */}
           <div className="pt-0.5 shrink-0">
             <div
-              className={`w-full h-5 rounded-md text-[8px] font-bold flex items-center justify-center gap-1 shadow-xs ${theme.buttonBg}`}
+              className="w-full h-5 rounded-md text-[8px] font-bold flex items-center justify-center gap-1 shadow-xs text-white"
+              style={{ backgroundColor: primaryColor }}
             >
-              <span>{theme.actionLabel}</span>
+              <span className="truncate px-2">{submitText}</span>
             </div>
           </div>
 
