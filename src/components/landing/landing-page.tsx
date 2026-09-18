@@ -509,8 +509,9 @@ const seoFeatures = [
 const footerLinks = {
   product: [
     { label: 'Features', href: '#features' },
-    { label: 'AI Website Employee', href: '/ai-employee' },
-    { label: 'Conversational Smart Forms', href: '/ai-forms' },
+    { label: 'GPTSite™ AI Employee', href: '/gptsite' },
+    { label: 'GPTForm™ Smart Forms', href: '/gptform' },
+    { label: '20,000+ Form Templates', href: '/templates' },
     { label: 'AI Voice Receptionist', href: '#ai-receptionist' },
     { label: 'Verified Marketplace', href: '/marketplace' },
     { label: 'Pricing', href: '#pricing' },
@@ -518,8 +519,9 @@ const footerLinks = {
   industries: seoIndustries,
   compare: seoCompare,
   resources: [
-    { label: 'AI Website Employee', href: '/ai-employee' },
-    { label: 'Conversational Forms', href: '/ai-forms' },
+    { label: 'GPTSite™ AI Employee', href: '/gptsite' },
+    { label: 'GPTForm™ Smart Forms', href: '/gptform' },
+    { label: '20,000+ Form Templates', href: '/templates' },
     { label: 'Contractor Marketplace', href: '/marketplace' },
     { label: 'Free Invoice Generator', href: '/invoice-generator' },
     { label: 'Contact Us', href: '/contact-us' },
@@ -578,17 +580,23 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
               </button>
               <div className="absolute left-0 top-full pt-3 invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 z-50">
                 <div className="w-72 rounded-xl border border-border bg-white shadow-xl p-2 grid grid-cols-1 gap-1">
-                  <a href="/ai-employee" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
+                  <a href="/gptsite" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
                     <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
-                      <Bot className="size-4 text-emerald-600" /> AI Website Employee
+                      <Bot className="size-4 text-emerald-600" /> GPTSite™ AI Employee
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5">24/7 Q&amp;A, appointment booking &amp; CRM lead capture</p>
                   </a>
-                  <a href="/ai-forms" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
+                  <a href="/gptform" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
                     <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
-                      <FileInput className="size-4 text-emerald-600" /> Conversational Forms
+                      <FileInput className="size-4 text-emerald-600" /> GPTForm™ Smart Forms
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">AI multi-step form builder &amp; Jotform alternative</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">200+ widgets, photo drawing notes &amp; 33 gateways</p>
+                  </a>
+                  <a href="/templates" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                      <FileText className="size-4 text-emerald-600" /> 20,000+ Form Templates
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Jotform-parity templates with instant previews</p>
                   </a>
                   <a href="#ai-receptionist" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block border-t border-border/50">
                     <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
@@ -600,6 +608,7 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
               </div>
             </div>
 
+            <a href="/templates" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Templates</a>
             <a href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Marketplace</a>
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Features</a>
             
@@ -656,8 +665,9 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
             <div className="px-4 py-4 space-y-3">
               <div className="pb-2 border-b">
                 <p className="text-xs uppercase tracking-wider text-emerald-700 font-bold mb-1">AI &amp; Forms</p>
-                <a href="/ai-employee" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>✨ AI Website Employee</a>
-                <a href="/ai-forms" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📝 Conversational Forms</a>
+                <a href="/gptsite" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>✨ GPTSite™ AI Employee</a>
+                <a href="/gptform" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📝 GPTForm™ Smart Forms</a>
+                <a href="/templates" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📋 20,000+ Templates</a>
                 <a href="/marketplace" className="block text-sm font-medium text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>🌐 Contractor Marketplace</a>
               </div>
               <a href="#features" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Features</a>
@@ -1326,7 +1336,7 @@ function AiReceptionistSection({ onGetStarted }: { onGetStarted: () => void }) {
           {/* AI Website Employee & Conversational Forms Spotlight */}
           <motion.div variants={staggerItem} className="mt-8 grid md:grid-cols-2 gap-4">
             <a
-              href="/ai-employee"
+              href="/gptsite"
               className="p-5 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-emerald-500/[0.08] hover:border-emerald-400/40 transition-all group flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
@@ -1335,7 +1345,7 @@ function AiReceptionistSection({ onGetStarted }: { onGetStarted: () => void }) {
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors">
-                    24/7 AI Website Employee &amp; Chatbot
+                    24/7 GPTSite™ AI Employee &amp; Chatbot
                   </h4>
                   <p className="text-xs text-slate-400">Trained on your website to answer questions &amp; book calendar slots</p>
                 </div>
@@ -1344,7 +1354,7 @@ function AiReceptionistSection({ onGetStarted }: { onGetStarted: () => void }) {
             </a>
 
             <a
-              href="/ai-forms"
+              href="/gptform"
               className="p-5 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-emerald-500/[0.08] hover:border-emerald-400/40 transition-all group flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
@@ -1353,9 +1363,9 @@ function AiReceptionistSection({ onGetStarted }: { onGetStarted: () => void }) {
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-white group-hover:text-teal-300 transition-colors">
-                    Smart Conversational Forms &amp; Jotform Alternative
+                    GPTForm™ Smart Forms &amp; Jotform Alternative
                   </h4>
-                  <p className="text-xs text-slate-400">Generate 17-field lead capture forms with instant CRM sync</p>
+                  <p className="text-xs text-slate-400">Generate 200+ widget lead capture forms with 33 direct pay gateways</p>
                 </div>
               </div>
               <ArrowRight className="size-4 text-slate-400 group-hover:text-teal-300 group-hover:translate-x-1 transition-all shrink-0" />

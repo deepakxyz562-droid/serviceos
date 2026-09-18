@@ -66,19 +66,25 @@ const nextConfig: NextConfig = {
     "127.0.0.1",
     "localhost",
   ],
+  async redirects() {
+    return [
+      {
+        source: '/ai-forms',
+        destination: '/gptform',
+        permanent: true,
+      },
+      {
+        source: '/ai-employee',
+        destination: '/gptsite',
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {
         source: '/app',
         destination: '/',
-      },
-      {
-        source: '/gptform',
-        destination: '/ai-forms',
-      },
-      {
-        source: '/gptsite',
-        destination: '/ai-employee',
       },
       {
         source: '/webhook-test/:path*',

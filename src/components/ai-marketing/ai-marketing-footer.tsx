@@ -33,13 +33,13 @@ export function AiMarketingFooter() {
           <div className="space-y-3">
             <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Products</h4>
             <ul className="space-y-2 text-slate-400">
-              <li><Link href="#receptionist" className="hover:text-emerald-400 transition">AI Website Receptionist</Link></li>
-              <li><Link href="#forms" className="hover:text-emerald-400 transition">Conversational Smart Forms</Link></li>
-              <li><Link href="#builder" className="hover:text-emerald-400 transition">Visual 17-Field Form Builder</Link></li>
-              <li><Link href="#knowledge" className="hover:text-emerald-400 transition">Website Knowledge Scraper</Link></li>
-              <li><Link href="#wordpress" className="hover:text-emerald-400 transition">WordPress Connector Plugin</Link></li>
-              <li><Link href="#embed" className="hover:text-emerald-400 transition">Universal 1-Line Embed</Link></li>
-              <li><Link href="/pay/demo" className="hover:text-emerald-400 transition">Direct Pay Checkout</Link></li>
+              <li><Link href="/gptsite" className="hover:text-emerald-400 transition">GPTSite™ AI Employee</Link></li>
+              <li><Link href="/gptform" className="hover:text-emerald-400 transition">GPTForm™ Smart Forms</Link></li>
+              <li><Link href="/templates" className="hover:text-emerald-400 transition">20,000+ Form Templates</Link></li>
+              <li><Link href="/gptsite#knowledge" className="hover:text-emerald-400 transition">Website Knowledge Scraper</Link></li>
+              <li><Link href="/gptsite#wordpress" className="hover:text-emerald-400 transition">WordPress Connector Plugin</Link></li>
+              <li><Link href="/gptform#runtime" className="hover:text-emerald-400 transition">Universal 1-Line Embed</Link></li>
+              <li><Link href="/gptform#payments" className="hover:text-emerald-400 transition">33 Direct Pay Gateways</Link></li>
             </ul>
           </div>
 

@@ -102,18 +102,25 @@ export const solutionsLinks = {
   ],
   aiAndTools: [
     {
-      label: 'AI Website Employee',
+      label: 'GPTSite™ AI Employee',
       desc: '24/7 AI chatbot receptionist that answers questions & books jobs',
-      href: '/ai-employee',
+      href: '/gptsite',
       icon: Bot,
       badge: 'New',
     },
     {
-      label: 'AI Smart Forms',
-      desc: '17-field responsive multi-step forms with CRM ingestion',
-      href: '/ai-forms',
+      label: 'GPTForm™ Smart Forms',
+      desc: '200+ responsive widgets, photo drawing notes & 33 gateways',
+      href: '/gptform',
       icon: Sparkles,
       badge: 'New',
+    },
+    {
+      label: '20,000+ Form Templates',
+      desc: 'Jotform-parity template library with instant SEO previews',
+      href: '/templates',
+      icon: FileText,
+      badge: '20K+',
     },
     {
       label: '24/7 AI Voice Receptionist',
@@ -175,8 +182,9 @@ export const solutionsLinks = {
 // Footer link groups
 export const footerLinks = {
   product: [
-    { label: 'AI Website Employee', href: '/ai-employee' },
-    { label: 'AI Smart Forms', href: '/ai-forms' },
+    { label: 'GPTSite™ AI Employee', href: '/gptsite' },
+    { label: 'GPTForm™ Smart Forms', href: '/gptform' },
+    { label: '20,000+ Form Templates', href: '/templates' },
     { label: 'CRM Overview', href: '/#crm-features' },
     { label: 'Scheduling & Dispatch', href: '/scheduling-and-dispatch' },
     { label: 'Invoicing & Payments', href: '/invoicing-and-payments' },

@@ -68,25 +68,25 @@ export function AiMarketingHeader() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-72 p-2">
                 <DropdownMenuItem asChild>
-                  <Link href="/ai-employee" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                  <Link href="/gptsite" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <Bot className="size-4 text-emerald-600 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-xs text-foreground">AI Website Employee</p>
+                      <p className="font-semibold text-xs text-foreground">GPTSite™ AI Employee</p>
                       <p className="text-[11px] text-muted-foreground">Answers FAQs &amp; books appointments 24/7</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/ai-forms" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                  <Link href="/gptform" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <FileInput className="size-4 text-teal-600 mt-0.5" />
                     <div>
-                      <p className="font-semibold text-xs text-foreground">AI Smart Forms &amp; 200+ Widgets</p>
+                      <p className="font-semibold text-xs text-foreground">GPTForm™ Smart Forms &amp; 200+ Widgets</p>
                       <p className="text-[11px] text-muted-foreground">Paper, Card &amp; AI Chatbot runtime modes</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/ai-forms#payments" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                  <Link href="/gptform#payments" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <CreditCard className="size-4 text-purple-600 mt-0.5" />
                     <div>
                       <p className="font-semibold text-xs text-foreground">33 Payment Gateways (0% Fee)</p>
@@ -95,7 +95,7 @@ export function AiMarketingHeader() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/ai-employee#wordpress" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                  <Link href="/gptsite#wordpress" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <FileCode className="size-4 text-blue-600 mt-0.5" />
                     <div>
                       <p className="font-semibold text-xs text-foreground">WordPress Plugin &amp; JS Embed</p>
@@ -178,13 +178,13 @@ export function AiMarketingHeader() {
             <Link href="/templates" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
               20,000+ Templates
             </Link>
-            <Link href="/ai-forms" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
+            <Link href="/gptform" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
               GPTForm (AI Forms)
             </Link>
-            <Link href="/ai-employee" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
+            <Link href="/gptsite" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
               GPTSite (AI Agent)
             </Link>
-            <Link href="/ai-forms#pricing" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
+            <Link href="/gptform#pricing" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
               Pricing
             </Link>
           </nav>
@@ -201,7 +201,7 @@ export function AiMarketingHeader() {
             onClick={handleTryDemoClick}
             asChild
           >
-            <Link href="/ai-employee#demo">
+            <Link href="/gptsite#demo">
               <Sparkles className="size-3.5" /> Try Live Demo
             </Link>
           </Button>
@@ -220,7 +220,7 @@ export function AiMarketingHeader() {
       {mobileMenuOpen && (
         <div className="sm:hidden border-t bg-background p-4 space-y-3">
           <Link
-            href="/ai-employee#demo"
+            href="/gptsite#demo"
             onClick={(e) => {
               setMobileMenuOpen(false);
               handleTryDemoClick(e);
@@ -230,21 +230,28 @@ export function AiMarketingHeader() {
             ✨ Live AI Demo
           </Link>
           <Link
-            href="/ai-employee"
+            href="/gptsite"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
           >
-            AI Website Employee
+            GPTSite™ AI Employee
           </Link>
           <Link
-            href="/ai-forms"
+            href="/gptform"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
           >
-            Conversational Forms
+            GPTForm™ Smart Forms
           </Link>
           <Link
-            href="#pricing"
+            href="/templates"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
+          >
+            20,000+ Form Templates
+          </Link>
+          <Link
+            href="/gptform#pricing"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
           >
@@ -266,7 +273,7 @@ export function AiMarketingHeader() {
               }}
               asChild
             >
-              <Link href="/ai-employee#demo">Launch Your AI Employee</Link>
+              <Link href="/gptsite#demo">Launch Your AI Employee</Link>
             </Button>
           </div>
         </div>
