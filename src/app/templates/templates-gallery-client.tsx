@@ -19,6 +19,8 @@ import { getCategoryLabel, getIndustryLabel } from '@/lib/forms/templates';
 export function TemplatesGalleryClient({ templates }: { templates: FormTemplate[] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sort, setSort] = useState<'popular' | 'recent' | 'featured'>('featured');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 24;
 
   const filtered = useMemo(() => {
     let result = templates;
@@ -52,6 +54,17 @@ export function TemplatesGalleryClient({ templates }: { templates: FormTemplate[
     return sorted;
   }, [templates, searchQuery, sort]);
 
+  // Reset page when search or sort changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, sort]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const paginated = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, currentPage, pageSize]);
+
   return (
     <div>
       {/* Search + sort bar */}
@@ -61,7 +74,7 @@ export function TemplatesGalleryClient({ templates }: { templates: FormTemplate[
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search templates by name, industry, or use case..."
+            placeholder="Search 20,000+ templates by keyword, industry, or use case..."
             className="pl-9 text-sm h-10"
           />
           {searchQuery && (
@@ -87,9 +100,30 @@ export function TemplatesGalleryClient({ templates }: { templates: FormTemplate[
       </div>
 
       {/* Results count */}
-      <p className="text-xs text-muted-foreground mb-4">
-        Showing {filtered.length} of {templates.length} templates
-      </p>
+      <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
+        <p>
+          Showing {paginated.length} of {filtered.length} templates (Page {currentPage} of {totalPages})
+        </p>
+        {filtered.length > pageSize && (
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              className="px-2.5 py-1 border rounded bg-background disabled:opacity-40 hover:bg-muted"
+            >
+              Previous
+            </button>
+            <span className="font-semibold text-foreground">{currentPage}</span>
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              className="px-2.5 py-1 border rounded bg-background disabled:opacity-40 hover:bg-muted"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Template grid */}
       {filtered.length === 0 ? (
@@ -97,14 +131,37 @@ export function TemplatesGalleryClient({ templates }: { templates: FormTemplate[
           <FileText className="size-10 text-muted-foreground mb-3 opacity-50" />
           <p className="text-sm font-medium text-foreground">No templates found</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Try a different search term.
+            Try a different search term or category.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((template) => (
+          {paginated.map((template) => (
             <TemplateCard key={template.id} template={template} />
           ))}
+        </div>
+      )}
+
+      {/* Bottom Pagination Bar */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-8 pt-6 border-t border-border">
+          <button
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+            className="px-3 py-1.5 border rounded-lg bg-background text-xs font-medium disabled:opacity-40 hover:bg-muted transition"
+          >
+            ← Previous Page
+          </button>
+          <span className="text-xs font-medium text-muted-foreground px-2">
+            Page <strong className="text-foreground">{currentPage}</strong> of {totalPages}
+          </span>
+          <button
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+            className="px-3 py-1.5 border rounded-lg bg-background text-xs font-medium disabled:opacity-40 hover:bg-muted transition"
+          >
+            Next Page →
+          </button>
         </div>
       )}
     </div>
