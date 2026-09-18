@@ -100,7 +100,14 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'headerText', label: 'Header text', type: 'text', group: 'field_specific' },
   ]],
   ['save_and_resume_widget', 'Save & Resume', 'productivity', 'Save', 'Save form state + resume later', 'NEW', 'pro'],
-  ['form_tabs_widget', 'Form Tabs', 'layout', 'PanelTop', 'Tabbed multi-section form', 'NEW', 'pro'],
+  ['form_tabs_widget', 'Form Tabs', 'layout', 'PanelTop', 'Tabbed multi-section form', 'NEW', 'pro', [
+    { key: 'tabTitles', label: 'Tab Titles', type: 'textarea', group: 'field_specific', default: 'Personal\nContact\nPreferences', placeholder: 'One tab title per line', helpText: 'Enter one tab title per line. Each line becomes a clickable tab.' },
+    { key: 'allowNavWithoutValidation', label: 'Allow Navigation Without Validation', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let respondents switch tabs even if required fields on the current tab are empty.' },
+    { key: 'showHeading', label: 'Show Form Heading Above Tabs', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display the field label as a heading above the tab bar.' },
+    { key: 'theme', label: 'Theme', type: 'segmented', group: 'field_specific', default: 'default', options: [
+      { label: 'Default', value: 'default' }, { label: 'Pill', value: 'pill' }, { label: 'Underline', value: 'underline' }, { label: 'Boxed', value: 'boxed' },
+    ], helpText: 'Visual style for the tab bar.' },
+  ]],
   ['language_selector', 'Language Selector', 'layout', 'Languages', 'Form language picker', 'NEW', 'free', [
     { key: 'languages', label: 'Languages (comma-sep)', type: 'text', group: 'field_specific', default: 'en, es, fr, de, pt, hi, zh, ar, ja, ko' },
   ]],

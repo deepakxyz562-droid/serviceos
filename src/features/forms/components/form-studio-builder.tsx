@@ -254,14 +254,15 @@ export function FormStudioBuilder({
       paletteSearch,
       selectedWidgetCategory === 'all' ? undefined : selectedWidgetCategory
     );
-    return results.filter((f) => !basicIds.has(f.id));
+    return results.filter((f) => !basicIds.has(f.id) && !f.unavailable);
   }, [paletteSearch, selectedWidgetCategory]);
 
-  // Filtered basic fields from unified registry
+  // Filtered basic fields from unified registry (unavailable widgets hidden)
   const filteredBasicFields = useMemo(() => {
     const q = paletteSearch.trim().toLowerCase();
-    if (!q) return BASIC_FIELDS;
-    return BASIC_FIELDS.filter(
+    const base = BASIC_FIELDS.filter((def) => !def.unavailable);
+    if (!q) return base;
+    return base.filter(
       (def) =>
         def.name.toLowerCase().includes(q) ||
         def.description.toLowerCase().includes(q) ||
@@ -269,11 +270,12 @@ export function FormStudioBuilder({
     );
   }, [paletteSearch]);
 
-  // Filtered Phase 1 widgets from unified registry
+  // Filtered Phase 1 widgets from unified registry (unavailable widgets hidden)
   const filteredPhase1Widgets = useMemo(() => {
     const q = paletteSearch.trim().toLowerCase();
-    if (!q) return PHASE_1_WIDGETS;
-    return PHASE_1_WIDGETS.filter(
+    const base = PHASE_1_WIDGETS.filter((def) => !def.unavailable);
+    if (!q) return base;
+    return base.filter(
       (def) =>
         def.name.toLowerCase().includes(q) ||
         def.description.toLowerCase().includes(q) ||

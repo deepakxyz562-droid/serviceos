@@ -784,14 +784,30 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     name: 'Address Map Locator',
     category: 'maps',
     iconName: 'MapPin',
-    description: 'Draggable map pin for pinpointing exact drop-off and service work locations.',
+    description: 'Interactive map with search, draggable marker, and zoom for pinpointing exact locations.',
     tier: 'pro',
     runtimeComponentId: 'address_map_locator',
     createField: (label = 'Address Map Locator') => ({
       label, type: 'short_answer', widgetType: 'address_map_locator',
-      widgetConfig: { provider: 'managed', defaultZoom: 14 }, required: false,
+      widgetConfig: {
+        defaultLat: 40.7128,
+        defaultLng: -74.006,
+        defaultZoom: 13,
+        draggableMarker: true,
+        showSearch: true,
+        showCoordinates: true,
+        showGpsButton: true,
+      }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'showSearch', label: 'Show Address Search', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let respondents type an address to search instead of clicking the map.' },
+      { key: 'draggableMarker', label: 'Draggable Marker', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Allow respondents to drag the pin for fine-tuning the location.' },
+      { key: 'showCoordinates', label: 'Show Coordinate Inputs', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Show manual latitude/longitude input fields below the map.' },
+      { key: 'showGpsButton', label: 'Show GPS Button', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Add a button to detect the respondent’s current location.' },
+      { key: 'defaultLat', label: 'Default Latitude', type: 'number', group: 'field_specific', default: 40.7128, step: 0.000001, helpText: 'Initial map center latitude (e.g. 40.7128 for New York).' },
+      { key: 'defaultLng', label: 'Default Longitude', type: 'number', group: 'field_specific', default: -74.006, step: 0.000001, helpText: 'Initial map center longitude (e.g. -74.006 for New York).' },
+      { key: 'defaultZoom', label: 'Default Zoom Level', type: 'number', group: 'field_specific', default: 13, min: 1, max: 19, helpText: 'Initial zoom (1 = world, 13 = city, 19 = street).' },
+    ],
   },
   {
     id: 'adobe_sign',
@@ -994,14 +1010,26 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     name: 'Infinite List',
     category: 'productivity',
     iconName: 'ListPlus',
-    description: 'Add-as-many rows itemizer for dynamic list entries and attendee names.',
+    description: 'Multi-column repeating rows for dynamic list entries — add as many as you need.',
     tier: 'pro',
     runtimeComponentId: 'infinite_list',
     createField: (label = 'Infinite List') => ({
       label, type: 'short_answer', widgetType: 'infinite_list',
-      widgetConfig: { placeholder: 'Enter item...', addButtonText: '+ Add Another' }, required: false,
+      widgetConfig: {
+        columnNames: 'Item\nQuantity\nNotes',
+        addButtonText: '+ Add Another',
+        removeButtonText: 'Remove',
+        showRowCount: true,
+        placeholder: 'Enter value...',
+      }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'columnNames', label: 'Column Names', type: 'textarea', group: 'field_specific', default: 'Item\nQuantity\nNotes', placeholder: 'Item\nQuantity\nNotes', helpText: 'One column name per line. Each line becomes a column in the repeating row.' },
+      { key: 'addButtonText', label: 'Add Button Label', type: 'text', group: 'field_specific', default: '+ Add Another', placeholder: '+ Add Another' },
+      { key: 'removeButtonText', label: 'Remove Button Label', type: 'text', group: 'field_specific', default: 'Remove', placeholder: 'Remove' },
+      { key: 'showRowCount', label: 'Show Row Counter', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display "X filled · Y total" below the list.' },
+      { key: 'placeholder', label: 'Input Placeholder', type: 'text', group: 'field_specific', default: 'Enter value...', placeholder: 'Enter value...' },
+    ],
   },
   {
     id: 'italian_codice_fiscale',
@@ -1041,7 +1069,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     description: 'Live social proof displaying trending choices based on real-time form submissions.',
     badge: 'AI',
     tier: 'business',
-    // No runtime entry yet — dispatcher falls back to default Input for saved forms.
+    // Runtime component not yet implemented. Marked unavailable so users
+    // cannot add it to new forms (it would render as a plain <Input>).
+    // The definition stays in FIELD_REGISTRY so any saved forms using
+    // this widgetType still render via the dispatcher's fallback.
+    unavailable: 'Runtime component not yet implemented — coming soon.',
     runtimeComponentId: 'most_frequent_answer',
     createField: (label = 'Most Frequent Answer') => ({
       label: '', type: 'short_answer', widgetType: 'most_frequent_answer',
@@ -1218,6 +1250,28 @@ export const FIELD_ALIASES: Record<string, string> = {
   dynamic_dropdowns: 'dropdown',
   remote_data_dropdown: 'dropdown',
   inventory_dropdown: 'dropdown',
+
+  // ─── Phase-1 *_widget aliases (legacy IDs → canonical runtime map keys) ──
+  // These IDs exist as Phase-1 FieldDefinitions (so the builder shows their
+  // rich settingsSchema), but the runtime WIDGET_RUNTIME_MAP only has the
+  // non-suffixed canonical key. The dispatcher's resolveRuntimeComponent()
+  // consults FIELD_ALIASES when the direct map lookup misses, so these
+  // aliases make saved forms using `dropdown_widget` etc. render the real
+  // `dropdown` component instead of degrading to <Input>.
+  dropdown_widget: 'dropdown',
+  single_choice_widget: 'single_choice',
+  multiple_choice_widget: 'multiple_choice',
+  date_picker_widget: 'date_picker',
+  time_picker_widget: 'time_picker',
+  email_widget: 'email',
+  phone_widget: 'phone',
+  address_widget: 'address',
+  file_upload_widget: 'file_upload',
+
+  // SMS OTP Confirmation → reuse the existing sms_otp_verification runtime
+  // component (per backward-compat + DRY). The two IDs are aliases of the
+  // same OTP-confirmation UX; we do NOT duplicate the component.
+  sms_otp_confirmation: 'sms_otp_verification',
 
   // DateTime aliases
   date: 'date_picker',

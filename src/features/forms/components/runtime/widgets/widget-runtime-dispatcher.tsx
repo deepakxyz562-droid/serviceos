@@ -3,6 +3,7 @@
 import React, { Suspense } from 'react';
 import { FormField } from '@/lib/forms/form-schema-types';
 import { getRuntimeComponent } from './widget-runtime-registry';
+import { getFieldById, FIELD_ALIASES } from '@/lib/forms/canonical-widget-registry';
 import type { WidgetProps } from './widget-props';
 import { ImageUploadWithNotes } from './image-upload-with-notes';
 import { NearestLocationFinder } from './nearest-location-finder';
@@ -64,6 +65,50 @@ function LazyWidgetRenderer({
   );
 }
 
+/**
+ * Resolve a widgetType string to a lazily-loaded runtime component.
+ *
+ * Resolution order (first match wins):
+ *  1. FieldDefinition.runtimeComponentId — explicit override declared in the
+ *     canonical registry (e.g. legacy id `color_picker` declares
+ *     `runtimeComponentId: 'color_picker_widget'`).
+ *  2. Direct map lookup — widgetType is itself a key in WIDGET_RUNTIME_MAP.
+ *  3. FIELD_ALIASES — legacy/alternate IDs (e.g. `dropdown_widget` → `dropdown`,
+ *     `*_v2` → canonical, `like_dislike_feedback` → `like_dislike`).
+ *
+ * Returns undefined when no component can be found — the dispatcher then falls
+ * through to the legacy switch statement and finally the `<Input>` fallback.
+ */
+function resolveRuntimeComponent(
+  widgetType: string,
+): React.LazyExoticComponent<React.ComponentType<WidgetProps>> | undefined {
+  // 1. Explicit runtimeComponentId override from the canonical FieldDefinition.
+  const def = getFieldById(widgetType);
+  if (def?.runtimeComponentId) {
+    const override = getRuntimeComponent(def.runtimeComponentId);
+    if (override) return override;
+  }
+
+  // 2. Direct lookup.
+  const direct = getRuntimeComponent(widgetType);
+  if (direct) return direct;
+
+  // 3. Alias chain — legacy/alternate ID → canonical ID → map.
+  const alias = FIELD_ALIASES[widgetType];
+  if (alias && alias !== widgetType) {
+    const aliased = getRuntimeComponent(alias);
+    if (aliased) return aliased;
+    // Recurse one level deep in case the alias itself maps via runtimeComponentId.
+    const aliasDef = getFieldById(alias);
+    if (aliasDef?.runtimeComponentId) {
+      const override = getRuntimeComponent(aliasDef.runtimeComponentId);
+      if (override) return override;
+    }
+  }
+
+  return undefined;
+}
+
 export function WidgetRuntimeDispatcher({
   field,
   value,
@@ -77,11 +122,16 @@ export function WidgetRuntimeDispatcher({
   // to pass the right shape based on widgetType.
   const config: Record<string, any> = field.widgetConfig || {};
 
-  // ─── Phase 1 unified registry lookup (lazy) ──────────────────────────────
-  // Try the lazy registry first. If found, render via the LazyWidgetRenderer
-  // wrapper (declared outside this function so react-hooks/static-components
-  // rule is satisfied). Falls through to legacy inline cases below otherwise.
-  const RuntimeComponent = getRuntimeComponent(widgetType);
+  // ─── Unified runtime resolution ────────────────────────────────────────────
+  // Resolve the widgetType through THREE layers before falling back to the
+  // legacy switch statement:
+  //   1. FieldDefinition.runtimeComponentId (explicit override)
+  //   2. Direct WIDGET_RUNTIME_MAP[widgetType]
+  //   3. FIELD_ALIASES[widgetType] → canonical map key
+  // This single resolution chain makes legacy IDs (`dropdown_widget`,
+  // `*_v2`, `like_dislike_feedback`, `color_picker`, etc.) render their
+  // proper runtime component instead of silently degrading to `<Input>`.
+  const RuntimeComponent = resolveRuntimeComponent(widgetType);
   if (RuntimeComponent) {
     return (
       <LazyWidgetRenderer

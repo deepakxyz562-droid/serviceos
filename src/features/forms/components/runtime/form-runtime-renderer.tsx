@@ -486,10 +486,15 @@ export function FormRuntimeRenderer({
                       {field.helpText && !['heading', 'paragraph'].includes(field.type) && (
                         <p className="text-[11px] text-muted-foreground">{field.helpText}</p>
                       )}
-                      {field.type === 'control_widget' && (
+                      {/* Fire the dispatcher for control_widget fields AND for
+                          backward-compat: legacy saved forms where phase widgets
+                          set type='short_answer' + widgetType (the dispatcher's
+                          resolveRuntimeComponent handles the alias/override chain).
+                          'hidden' is excluded — it should stay invisible. */}
+                      {(field.type === 'control_widget' || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
                         <WidgetRuntimeDispatcher field={field} value={formData[field.id]} onChange={(val) => handleFieldChange(field.id, val)} allFormData={formData} />
                       )}
-                      {['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
+                      {!field.widgetType && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
                         <Input id={field.id} type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'numerical' ? 'number' : field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : 'text'} value={formData[field.id] || ''} onChange={(e) => handleFieldChange(field.id, e.target.value)} placeholder={field.placeholder || ''} className="text-sm" style={inputStyle} />
                       )}
                       {field.type === 'long_answer' && (
@@ -592,8 +597,11 @@ export function FormRuntimeRenderer({
                       <p className="text-[11px] text-muted-foreground">{field.helpText}</p>
                     )}
 
-                    {/* Specialized Control Widgets */}
-                    {field.type === 'control_widget' && (
+                    {/* Specialized Control Widgets — fires for control_widget
+                        fields AND backward-compat for legacy saved forms where
+                        phase widgets set type='short_answer' + widgetType.
+                        'hidden' is excluded to stay invisible. */}
+                    {(field.type === 'control_widget' || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
                       <WidgetRuntimeDispatcher
                         field={field}
                         value={formData[field.id]}
@@ -602,8 +610,9 @@ export function FormRuntimeRenderer({
                       />
                     )}
 
-                    {/* Standard Inputs */}
-                    {['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
+                    {/* Standard Inputs — only for fields WITHOUT a widgetType
+                        (widget fields are handled by the dispatcher above) */}
+                    {!field.widgetType && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
                       <Input
                         id={field.id}
                         type={

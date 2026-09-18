@@ -37,22 +37,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'countrycodes', label: 'Country Codes (comma-sep)', type: 'text', group: 'field_specific', placeholder: 'us, ca, gb' },
     { key: 'placeholder', label: 'Search Placeholder', type: 'text', group: 'field_specific', default: 'Start typing an address...' },
   ]],
-  ['address_map_locator', 'Address Map Locator', 'maps', 'MapPin', 'Draggable pin for pinpoint location', '', 'pro', [
-    { key: 'defaultLat', label: 'Default Latitude', type: 'number', group: 'field_specific', default: 37.7749, step: 0.0001 },
-    { key: 'defaultLng', label: 'Default Longitude', type: 'number', group: 'field_specific', default: -122.4194, step: 0.0001 },
-    { key: 'defaultZoom', label: 'Default Zoom Level', type: 'number', group: 'field_specific', default: 13, min: 1, max: 20 },
-    { key: 'draggableMarker', label: 'Allow Draggable Pin', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let user drag pin to exact location.' },
-    { key: 'showSearch', label: 'Show Address Search Box', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Include search input above the map.' },
-  ]],
-  ['driving_distance_calculator', 'Driving Distance Calculator', 'maps', 'Milestone', 'Direct driving distance + duration', '', 'pro', [
-    { key: 'originField', label: 'Origin Address Field', type: 'field_selector', group: 'field_specific', helpText: 'Field containing the start address.' },
-    { key: 'destinationField', label: 'Destination Address Field', type: 'field_selector', group: 'field_specific', helpText: 'Field containing destination address.' },
-    { key: 'ratePerUnit', label: 'Rate per Mile/KM ($)', type: 'number', group: 'field_specific', default: 0.65, step: 0.01 },
-    { key: 'baseFee', label: 'Base Travel Fee ($)', type: 'number', group: 'field_specific', default: 0, step: 0.01 },
-    { key: 'unit', label: 'Distance Unit', type: 'segmented', group: 'field_specific', default: 'miles', options: [
-      { label: 'Miles', value: 'miles' }, { label: 'Kilometers', value: 'km' },
-    ] },
-  ]],
   ['elevation_lookup', 'Elevation Lookup', 'maps', 'Mountain', 'Get elevation for lat/lng', 'NEW', 'pro', [
     { key: 'unit', label: 'Elevation Unit', type: 'segmented', group: 'field_specific', default: 'feet', options: [
       { label: 'Feet (ft)', value: 'feet' }, { label: 'Meters (m)', value: 'meters' },
@@ -87,30 +71,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['reverse_geocode', 'Reverse Geocode', 'maps', 'MapPin', 'Lat/lng → address', 'NEW', 'pro', [
     { key: 'showFullAddress', label: 'Return Full Street Address', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
-  ['route_planner_map', 'Route Planner Map', 'maps', 'Map', 'Interactive driving route with waypoints and route summary', 'POPULAR', 'pro', [
-    { key: 'mapProvider', label: 'Map Provider', type: 'segmented', group: 'field_specific', default: 'osm', options: [
-      { label: 'OpenStreetMap (free)', value: 'osm' }, { label: 'Google Maps', value: 'google' },
-    ], helpText: 'OpenStreetMap is free with no key; Google Maps needs your own billed API key.' },
-    { key: 'defaultTravelMode', label: 'Default Travel Mode', type: 'segmented', group: 'field_specific', default: 'driving', options: [
-      { label: '🚗 Driving', value: 'driving' }, { label: '🚶 Walking', value: 'walking' }, { label: '🚲 Bicycling', value: 'bicycling' },
-    ], helpText: 'Choose how routes are calculated by default.' },
-    { key: 'allowAdditionalStops', label: 'Allow Additional Stops', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let respondents add extra stops between the start and end locations.' },
-    { key: 'distanceUnits', label: 'Distance Units', type: 'segmented', group: 'field_specific', default: 'automatic', options: [
-      { label: 'Automatic', value: 'automatic' }, { label: 'Miles', value: 'miles' }, { label: 'Kilometers', value: 'km' },
-    ], helpText: 'Control how distance is shown in the summary.' },
-    { key: 'startLocationLabel', label: 'Start Location Label', type: 'text', group: 'field_specific', default: 'Start location', placeholder: 'Start location' },
-    { key: 'endLocationLabel', label: 'End Location Label', type: 'text', group: 'field_specific', default: 'End location', placeholder: 'End location' },
-    { key: 'showRouteSummary', label: 'Show Route Summary', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display distance and estimated travel time below the map for respondents.' },
-    { key: 'noRouteMessage', label: 'No Route Message', type: 'text', group: 'field_specific', default: 'No route could be found for those locations.', placeholder: 'No route could be found for those locations.' },
-    { key: 'addressPlaceholder', label: 'Address Placeholder', type: 'text', group: 'field_specific', default: 'Street address, city or ZIP', placeholder: 'Street address, city or ZIP' },
-  ], 'maps'],
-  ['service_area_checker', 'Service Area Checker', 'maps', 'ShieldCheck', 'Validate postal code against radius', 'NEW', 'pro', [
-    { key: 'centerLat', label: 'HQ Latitude', type: 'number', group: 'field_specific', default: 37.7749, step: 0.0001 },
-    { key: 'centerLng', label: 'HQ Longitude', type: 'number', group: 'field_specific', default: -122.4194, step: 0.0001 },
-    { key: 'radiusMiles', label: 'Service Radius (Miles)', type: 'number', group: 'field_specific', default: 25, min: 1 },
-    { key: 'blockSubmission', label: 'Block Out-of-Area Submissions', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Prevent submission if address is beyond service area.' },
-    { key: 'outOfAreaMessage', label: 'Out of Area Error Message', type: 'text', group: 'field_specific', default: 'Sorry, we do not currently service your area.' },
-  ], 'maps'],
   ['store_locator', 'Store Locator', 'maps', 'Store', 'Find nearest store via Haversine', 'POPULAR', 'pro', [
     { key: 'searchRadiusKm', label: 'Search Radius (KM)', type: 'number', group: 'field_specific', default: 50 },
   ]],
@@ -210,41 +170,9 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'privacyUrl', label: 'Privacy Policy URL', type: 'text', group: 'field_specific' },
     { key: 'isMandatory', label: 'Mandatory Acceptance', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
-  ['privacy_policy_accept', 'Privacy Policy Accept', 'security', 'FileText', 'Privacy policy modal acceptance', '', 'free', [
-    { key: 'policyUrl', label: 'Policy URL', type: 'text', group: 'field_specific' },
-  ]],
-  ['age_verification', 'Age Verification', 'security', 'CalendarClock', 'Age confirmation (18+ / 21+)', '', 'free', [
-    { key: 'minAge', label: 'Minimum Age Required', type: 'number', group: 'field_specific', default: 21, min: 13, max: 100 },
-    { key: 'errorMessage', label: 'Underage Error Message', type: 'text', group: 'field_specific', default: 'You must be at least 21 years old to submit this form.' },
-  ]],
-  ['digital_witness', 'Digital Witness', 'security', 'Eye', 'Witness signature + timestamp', 'NEW', 'business'],
   ['consent_log', 'Consent Log', 'security', 'FileCheck', 'Logs consent with timestamp + IP', 'PRO', 'business'],
 
   // ─── Regional & Identity (15) ─────────────────────────────────────────────
-  ['australia_bsb_checker', 'Australia BSB Checker', 'regional', 'Landmark', '6-digit BSB validation with APCA registry', 'NEW', 'pro', [
-    { key: 'autoFormat', label: 'Auto-format with hyphen (XXX-XXX)', type: 'toggle_with_description', group: 'field_specific', default: true },
-    { key: 'showBankName', label: 'Show Bank & Branch Name on Match', type: 'toggle_with_description', group: 'field_specific', default: true },
-  ]],
-  ['italian_codice_fiscale', 'Italian Codice Fiscale', 'regional', 'FileCheck2', '16-char tax code validation with checksum', 'NEW', 'pro', [
-    { key: 'autoUppercase', label: 'Auto-convert to Uppercase', type: 'toggle_with_description', group: 'field_specific', default: true },
-    { key: 'extractDemographics', label: 'Extract Birth Date and Gender', type: 'toggle_with_description', group: 'field_specific', default: true },
-  ]],
-  ['france_region_map_picker', 'France Region Map Picker', 'regional', 'Map', 'Clickable interactive French regions map', '', 'free', [
-    { key: 'multiSelect', label: 'Allow Multiple Region Selections', type: 'toggle_with_description', group: 'field_specific', default: false },
-    { key: 'theme', label: 'Map Theme', type: 'segmented', group: 'field_specific', default: 'emerald', options: [
-      { label: 'Emerald', value: 'emerald' }, { label: 'Blue', value: 'blue' }, { label: 'Slate', value: 'slate' },
-    ] },
-  ]],
-  ['india_states_dropdown', 'India States Dropdown', 'regional', 'Building', '28 states + 8 Union Territories', '', 'free', [
-    { key: 'includeUnionTerritories', label: 'Include Union Territories (8 UTs)', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Include Delhi, J&K, Ladakh, Chandigarh, etc.' },
-    { key: 'showCodes', label: 'Show 2-Letter State Codes (e.g. DL, MH)', type: 'toggle_with_description', group: 'field_specific', default: false },
-  ]],
-  ['us_state_picker', 'US State & Territory Picker', 'regional', 'Flag', '50 US states + territories', '', 'free', [
-    { key: 'includeTerritories', label: 'Include US Territories (PR, GU, VI, AS, MP)', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Include Puerto Rico, Guam, USVI, etc.' },
-    { key: 'displayFormat', label: 'Display Format', type: 'segmented', group: 'field_specific', default: 'name', options: [
-      { label: 'Full State Name', value: 'name' }, { label: '2-Letter Code (CA, NY)', value: 'code' },
-    ] },
-  ]],
   ['canada_provinces', 'Canada Provinces', 'regional', 'Flag', '10 provinces + 3 territories', '', 'free', [
     { key: 'includeTerritories', label: 'Include Territories (YT, NT, NU)', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
@@ -306,42 +234,10 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ]],
 
   // ─── PDF & Embeds (15) ────────────────────────────────────────────────────
-  ['pdf_embedder', 'PDF Embedder', 'embed', 'FileCode', 'In-form PDF document viewer', 'POPULAR', 'free', [
-    { key: 'pdfUrl', label: 'PDF Document URL', type: 'text', group: 'field_specific', placeholder: 'https://example.com/document.pdf' },
-    { key: 'heightPx', label: 'Viewer Height', type: 'dimension', group: 'field_specific', default: 500, unit: 'PX', min: 200, max: 1200 },
-    { key: 'showToolbar', label: 'Show PDF Toolbar & Download Button', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display zoom and save controls.' },
-    { key: 'defaultZoom', label: 'Default Zoom', type: 'segmented', group: 'field_specific', default: 'fit', options: [
-      { label: 'Fit to Page', value: 'fit' }, { label: '100% Actual Size', value: '100' }, { label: '150%', value: '150' },
-    ] },
-  ]],
-  ['digital_magazine_maker', 'Digital Magazine Maker', 'embed', 'BookOpen', 'Interactive flipbook reader', 'NEW', 'business', [
-    { key: 'flipbookUrl', label: 'Flipbook / PDF Document URL', type: 'text', group: 'field_specific', placeholder: 'https://...' },
-    { key: 'soundEffects', label: 'Page Flip Sound Effects', type: 'toggle_with_description', group: 'field_specific', default: true },
-    { key: 'heightPx', label: 'Viewer Height', type: 'dimension', group: 'field_specific', default: 450, unit: 'PX' },
-  ]],
-  ['youtube_video_embed', 'YouTube Embed', 'embed', 'Video', 'Embed YouTube instructions or demos', 'POPULAR', 'free', [
-    { key: 'videoUrl', label: 'YouTube Video URL', type: 'text', group: 'field_specific', placeholder: 'https://www.youtube.com/watch?v=...' },
-    { key: 'autoPlay', label: 'Autoplay Video', type: 'toggle_with_description', group: 'field_specific', default: false },
-    { key: 'showControls', label: 'Show Player Controls', type: 'toggle_with_description', group: 'field_specific', default: true },
-    { key: 'loop', label: 'Loop Video', type: 'toggle_with_description', group: 'field_specific', default: false },
-    { key: 'aspectRatio', label: 'Aspect Ratio', type: 'segmented', group: 'field_specific', default: '16:9', options: [
-      { label: '16:9', value: '16:9' }, { label: '4:3', value: '4:3' }, { label: '1:1', value: '1:1' },
-    ] },
-  ]],
   ['vimeo_embed', 'Vimeo Embed', 'embed', 'Video', 'Embed Vimeo video player', '', 'free', [
     { key: 'videoUrl', label: 'Vimeo Video URL', type: 'text', group: 'field_specific', placeholder: 'https://vimeo.com/...' },
     { key: 'autoPlay', label: 'Autoplay', type: 'toggle_with_description', group: 'field_specific', default: false },
     { key: 'loop', label: 'Loop', type: 'toggle_with_description', group: 'field_specific', default: false },
-  ]],
-  ['comparison_slider', 'Comparison Slider', 'embed', 'SlidersHorizontal', 'Before & After split image comparison', 'NEW', 'pro', [
-    { key: 'beforeImageUrl', label: 'Before Image URL', type: 'text', group: 'field_specific', placeholder: 'https://...' },
-    { key: 'afterImageUrl', label: 'After Image URL', type: 'text', group: 'field_specific', placeholder: 'https://...' },
-    { key: 'beforeLabel', label: 'Before Label', type: 'text', group: 'field_specific', default: 'Before' },
-    { key: 'afterLabel', label: 'After Label', type: 'text', group: 'field_specific', default: 'After' },
-    { key: 'initialPosition', label: 'Initial Divider Position (%)', type: 'number', group: 'field_specific', default: 50, min: 0, max: 100 },
-    { key: 'orientation', label: 'Slider Orientation', type: 'segmented', group: 'field_specific', default: 'horizontal', options: [
-      { label: 'Horizontal', value: 'horizontal' }, { label: 'Vertical', value: 'vertical' },
-    ] },
   ]],
   ['color_picker_widget', 'Color Picker', 'embed', 'Palette', 'Visual color swatch and HEX picker', '', 'free', [
     { key: 'defaultColor', label: 'Default Color', type: 'color', group: 'field_specific', default: '#059669' },
@@ -376,10 +272,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'videoUrl', label: 'Video File URL (MP4/WebM)', type: 'text', group: 'field_specific' },
     { key: 'posterUrl', label: 'Poster Thumbnail Image URL', type: 'text', group: 'field_specific' },
     { key: 'controls', label: 'Show Player Controls', type: 'toggle_with_description', group: 'field_specific', default: true },
-  ]],
-  ['social_share_buttons', 'Social Share Buttons', 'embed', 'Share2', 'Facebook, Twitter, LinkedIn, WhatsApp', 'POPULAR', 'free', [
-    { key: 'shareUrl', label: 'URL to Share', type: 'text', group: 'field_specific', placeholder: 'https://...' },
-    { key: 'shareText', label: 'Default Share Text', type: 'text', group: 'field_specific' },
   ]],
   ['qr_code_display', 'QR Code Display', 'embed', 'QrCode', 'Dynamic QR code generator', 'POPULAR', 'free', [
     { key: 'data', label: 'Data to Encode (Text / URL)', type: 'text', group: 'field_specific', placeholder: 'https://...' },

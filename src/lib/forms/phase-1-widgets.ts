@@ -216,25 +216,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
     ] },
     { key: 'zoomable', label: 'Enable zoom', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
-  ['draw_on_image', 'Draw on Image', 'media', 'Edit3', 'Annotate a base image', 'NEW', 'business', [
-    { key: 'baseImage', label: 'Base image URL', type: 'text', group: 'field_specific', placeholder: 'https://...' },
-    { key: 'defaultThickness', label: 'Default brush thickness', type: 'number', group: 'field_specific', default: 3, min: 1, max: 20 },
-  ]],
-  ['photo_watermark', 'Photo Watermark', 'media', 'Stamp', 'Auto-overlay timestamp/GPS on photos', 'PRO', 'business', [
-    { key: 'includeTimestamp', label: 'Include timestamp', type: 'toggle_with_description', group: 'field_specific', default: true },
-    { key: 'includeGps', label: 'Include GPS coords', type: 'toggle_with_description', group: 'field_specific', default: true },
-    { key: 'watermarkPosition', label: 'Position', type: 'select', group: 'field_specific', default: 'bottom_right', options: [
-      { label: 'Top left', value: 'top_left' }, { label: 'Top right', value: 'top_right' },
-      { label: 'Bottom left', value: 'bottom_left' }, { label: 'Bottom right', value: 'bottom_right' },
-    ] },
-  ]],
-  ['image_scanner_ocr', 'Image Scanner (OCR)', 'media', 'ScanLine', 'Scan receipt/ID → auto-fill form', 'AI', 'business', [
-    { key: 'autoExtract', label: 'Auto-extract data', type: 'toggle_with_description', group: 'field_specific', default: true },
-    { key: 'targetDocument', label: 'Document type', type: 'select', group: 'field_specific', default: 'any', options: [
-      { label: 'Any', value: 'any' }, { label: 'Receipt', value: 'receipt' }, { label: 'ID card', value: 'id' },
-      { label: 'Invoice', value: 'invoice' }, { label: 'Custom', value: 'custom' },
-    ] },
-  ], 'ocr'],
   ['video_upload', 'Video Upload', 'media', 'Video', 'Video file upload', '', 'pro', [
     { key: 'maxFileSizeMb', label: 'Max file size (MB)', type: 'number', group: 'field_specific', default: 50, min: 1, max: 500 },
     { key: 'maxDuration', label: 'Max duration (seconds)', type: 'number', group: 'field_specific', default: 300, min: 5, max: 3600 },
@@ -258,14 +239,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
       helpText: 'Choose which audio file types respondents can upload.',
     },
   ]],
-  ['drawing_board', 'Drawing Board', 'media', 'PenTool', 'Blank whiteboard for sketches', '', 'pro', [
-    { key: 'canvasHeight', label: 'Canvas height (px)', type: 'number', group: 'field_specific', default: 300, min: 100, max: 800 },
-    { key: 'backgroundColor', label: 'Background color', type: 'color', group: 'field_specific', default: '#ffffff' },
-  ]],
-  ['speech_to_text', 'Speech to Text', 'media', 'MicVocal', 'Real-time speech transcription', 'AI', 'business', [
-    { key: 'continuous', label: 'Continuous mode', type: 'toggle_with_description', group: 'field_specific', default: false },
-    { key: 'language', label: 'Language', type: 'text', group: 'field_specific', default: 'en-US' },
-  ]],
 
   // ─── Signature (5) ────────────────────────────────────────────────────────────
   ['smooth_signature', 'Smooth Signature', 'signature', 'PenLine', 'Smooth touch-friendly signature', 'POPULAR', 'pro', [
@@ -282,14 +255,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
       { label: 'Serif', value: 'serif' }, { label: 'Sans-serif', value: 'sans-serif' },
     ] },
     { key: 'legalText', label: 'Legal text', type: 'textarea', group: 'field_specific' },
-  ]],
-  ['adobe_sign', 'Adobe Sign', 'signature', 'FileSignature', 'Enterprise e-signature workflow', 'PRO', 'business', [
-    { key: 'embedUrl', label: 'Adobe Sign embed URL', type: 'text', group: 'field_specific' },
-    { key: 'templateId', label: 'Template ID', type: 'text', group: 'field_specific' },
-  ]],
-  ['docusign', 'DocuSign', 'signature', 'FileCheck', 'DocuSign envelope integration', 'PRO', 'business', [
-    { key: 'embedUrl', label: 'DocuSign embed URL', type: 'text', group: 'field_specific' },
-    { key: 'templateId', label: 'Template ID', type: 'text', group: 'field_specific' },
   ]],
   ['hellosign', 'HelloSign', 'signature', 'FilePlus', 'HelloSign signature integration', 'PRO', 'business', [
     { key: 'embedUrl', label: 'HelloSign embed URL', type: 'text', group: 'field_specific' },
@@ -332,9 +297,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'rows', label: 'Default rows', type: 'number', group: 'field_specific', default: 5, min: 1, max: 50 },
     { key: 'columns', label: 'Default columns', type: 'number', group: 'field_specific', default: 4, min: 1, max: 20 },
     { key: 'enableFormulas', label: 'Enable formulas (SUM/AVG/PRODUCT)', type: 'toggle_with_description', group: 'field_specific', default: true },
-  ]],
-  ['spreadsheet_to_form', 'Spreadsheet to Form', 'calculation', 'FileSpreadsheet', 'Upload Excel/CSV → autofill by code', 'PRO', 'business', [
-    { key: 'accessCodeField', label: 'Access code column', type: 'text', group: 'field_specific', default: 'code' },
   ]],
   ['text_count', 'Text Count Calculator', 'calculation', 'FileText', 'Word/character counter with thresholds', '', 'pro', [
     { key: 'minWords', label: 'Min words', type: 'number', group: 'field_specific', default: 10, min: 0 },
@@ -388,23 +350,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['thumb_rating', 'Thumb Rating', 'survey', 'ThumbsUp', 'Single thumb up/down', '', 'free'],
 
   // ─── Productivity (5) ──────────────────────────────────────────────────────────
-  ['configurable_list', 'Configurable List (v2)', 'productivity', 'ListOrdered', 'Dynamic repeater with custom columns', 'POPULAR', 'pro', [
-    { key: 'minRows', label: 'Min rows', type: 'number', group: 'field_specific', default: 1, min: 0 },
-    { key: 'maxRows', label: 'Max rows (0 = unlimited)', type: 'number', group: 'field_specific', default: 20 },
-    { key: 'columns', label: 'Columns (JSON)', type: 'json', group: 'field_specific' },
-  ]],
-  ['infinite_list', 'Infinite List', 'productivity', 'ListPlus', 'Add-as-many rows itemizer', '', 'free', [
-    { key: 'placeholder', label: 'Placeholder', type: 'text', group: 'field_specific', default: 'Enter item...' },
-    { key: 'addButtonText', label: 'Add button text', type: 'text', group: 'field_specific', default: '+ Add Another' },
-  ]],
-  ['orderable_list', 'Orderable List', 'productivity', 'ArrowUpDown', 'Drag-and-drop ranking', '', 'pro', [
-    { key: 'items', label: 'Items (JSON array of strings)', type: 'json', group: 'field_specific' },
-  ]],
-  ['unique_id_generator', 'Unique ID Generator', 'productivity', 'Barcode', 'Sequential prefix-coded IDs', '', 'pro', [
-    { key: 'prefix', label: 'Prefix', type: 'text', group: 'field_specific', default: 'REF-' },
-    { key: 'startNumber', label: 'Start number', type: 'number', group: 'field_specific', default: 1001, min: 1 },
-    { key: 'padding', label: 'Zero-pad length', type: 'number', group: 'field_specific', default: 5, min: 1, max: 10 },
-  ]],
   ['terms_and_conditions', 'Terms & Conditions', 'productivity', 'ScrollText', 'Scrollable legal modal + accept checkbox', 'POPULAR', 'free', [
     { key: 'termsText', label: 'Terms text', type: 'textarea', group: 'field_specific' },
     { key: 'isMandatory', label: 'Mandatory acceptance', type: 'toggle_with_description', group: 'field_specific', default: true },

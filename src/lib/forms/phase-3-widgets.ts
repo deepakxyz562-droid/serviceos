@@ -36,7 +36,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['employee_engagement', 'Employee Engagement', 'survey', 'Users', '5 dimensions × Likert', 'PRO', 'business'],
   ['satisfaction_emoji', 'Satisfaction Emoji', 'survey', 'Smile', '3-emoji satisfaction', '', 'free'],
   ['survey_slider', 'Survey Slider', 'survey', 'SlidersHorizontal', '0-100 slider with labels', '', 'free'],
-  ['star_rating_comments', 'Star Rating + Comments (v2)', 'survey', 'Star', 'Improved star rating', 'POPULAR', 'pro'],
   ['thumbs_up_down', 'Thumbs Up/Down (v2)', 'survey', 'ThumbsUp', 'Improved thumb rating', '', 'free'],
   ['matrix_question', 'Matrix Question', 'survey', 'Grid3x3', 'Single matrix × 5-point', '', 'pro'],
   ['ranking_question', 'Ranking Question', 'survey', 'ArrowUpDown', 'Rank items 1-N', '', 'pro'],

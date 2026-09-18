@@ -231,6 +231,19 @@ export interface FieldDefinition {
    * runtime component all live in one place.
    */
   runtimeComponentId?: string;
+  /**
+   * Mark this widget as temporarily unavailable in the Form Studio palette.
+   *
+   * When truthy (boolean true or a reason string), the widget is hidden from
+   * all palette tabs — users cannot add it to new forms. The definition
+   * stays in FIELD_REGISTRY so saved forms using the widgetType still render
+   * (via the dispatcher's `<Input>` fallback if no runtime component exists).
+   *
+   * Use a string to document WHY it's unavailable (e.g. 'Runtime component
+   * not yet implemented'). The string is shown in dev tooling but not in the
+   * palette (the widget is simply hidden).
+   */
+  unavailable?: boolean | string;
 }
 
 export type RuntimeComponentMap = Record<string, React.LazyExoticComponent<React.ComponentType<unknown>>>;

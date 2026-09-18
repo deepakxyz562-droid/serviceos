@@ -208,6 +208,10 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
 
   // ─── Phase 2 — Security & Verification (13) ─────────────────────────────────
   email_otp_verification: w(() => import('./security/email-otp-verification')),
+  // sms_otp_verification is the canonical key; sms_otp_confirmation is an
+  // alias (FIELD_ALIASES) that also resolves here. The wrapper adapts
+  // WidgetProps → SmsOtpVerificationProps without duplicating the component.
+  sms_otp_verification: w(() => import('./security/sms-otp-confirmation')),
   friendly_captcha: w(() => import('./security/friendly-captcha')),
   math_captcha: w(() => import('./security/math-captcha')),
   image_captcha_slider: w(() => import('./security/image-captcha-slider')),
