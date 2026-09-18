@@ -96,6 +96,9 @@ export async function PUT(
     if (body.fieldsJson !== undefined) {
       updateData.fieldsJson = typeof body.fieldsJson === 'string' ? body.fieldsJson : JSON.stringify(body.fieldsJson);
     }
+    if (body.schemaJson !== undefined) {
+      updateData.schemaJson = typeof body.schemaJson === 'string' ? body.schemaJson : JSON.stringify(body.schemaJson);
+    }
     if (body.submissionActions !== undefined) {
       updateData.submissionActions = typeof body.submissionActions === 'string' ? body.submissionActions : JSON.stringify(body.submissionActions);
     }

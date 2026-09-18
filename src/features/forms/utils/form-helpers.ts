@@ -240,12 +240,40 @@ export function buildApiPayload(formData: EditorFormData) {
   const safeFields = Array.isArray(formData.fields) ? formData.fields : [];
   const safeMappings = Array.isArray(formData.fieldMappings) ? formData.fieldMappings : [];
 
+  const schemaObj = {
+    version: 1,
+    steps: formData.isMultiStep && formData.steps && formData.steps.length > 0
+      ? formData.steps
+      : [{ id: 'step_1', title: formData.name || 'Form Details' }],
+    fields: safeFields,
+    theme: {
+      primaryColor: formData.primaryColor || formData.theme?.primaryColor || '#059669',
+      backgroundColor: formData.theme?.backgroundColor || '#ffffff',
+      cardBackground: formData.theme?.cardBackground || '#ffffff',
+      textColor: formData.theme?.textColor || '#0f172a',
+      fontFamily: formData.theme?.fontFamily || 'Inter, sans-serif',
+      borderRadius: `${formData.borderRadius || 12}px`,
+      buttonColor: formData.theme?.buttonColor || formData.primaryColor || '#059669',
+      buttonTextColor: formData.theme?.buttonTextColor || '#ffffff',
+      layout: formData.theme?.layout || (formData.settings?.formLayout === 'single_question' ? 'card' : 'paper'),
+    },
+    rules: formData.rules || [],
+    settings: {
+      submitButtonText: formData.submitButtonText || 'Submit',
+      successTitle: 'Thank you!',
+      successMessage: formData.completionMessage || formData.successMessage || 'Your submission has been received.',
+      actions: formData.submissionActions || {},
+      ...(formData.settings || {}),
+    },
+  };
+
   return {
     name: formData.name,
     description: formData.description || null,
     type: formData.type,
     status: formData.status,
     fieldsJson: JSON.stringify(safeFields.filter((f) => f && f.label && f.label.trim())),
+    schemaJson: JSON.stringify(schemaObj),
     submissionActions: JSON.stringify(actionArray),
     fieldMappingJson: JSON.stringify(safeMappings),
     welcomeMessage: formData.welcomeMessage || '',

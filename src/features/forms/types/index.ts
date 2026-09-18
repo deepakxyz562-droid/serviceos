@@ -151,6 +151,31 @@ export interface FormResponse {
   actionsResults: Record<string, string>;
 }
 
+export interface FormSettingsConfig {
+  formStatus?: 'enabled' | 'disabled' | 'disabled_date' | 'disabled_limit';
+  statusExpirationDate?: string;
+  submissionLimit?: number;
+  encryptData?: boolean;
+  draftMode?: boolean;
+  formWarnings?: Record<string, string>;
+  primaryLanguage?: string;
+  additionalLanguages?: string[];
+  passwordProtection?: { enabled: boolean; password?: string };
+  autoDeleteSubmissions?: 'disabled' | '30d' | '60d' | '90d' | '365d';
+  saveAndContinueLater?: boolean;
+  requireSso?: boolean;
+  uniqueSubmission?: 'no_check' | 'cookies_only' | 'cookies_ip';
+  uniqueField?: string;
+  accessibility?: { enabled: boolean; showBadge: boolean };
+  pageTitle?: string;
+  clearHiddenValues?: 'clear_when_hidden' | 'clear_when_submitted' | 'dont_clear';
+  highlightEffect?: boolean;
+  formLayout?: 'all_questions' | 'single_question';
+  showErrorNavigation?: boolean;
+  preventCloning?: boolean;
+  allowBrowserAutocomplete?: boolean;
+}
+
 /**
  * Editor form-state shape — used by the Create/Edit dialog and the parent
  * view's `formData` state.
@@ -172,6 +197,7 @@ export interface EditorFormData {
   successMessage?: string;
   rules?: any[];
   id?: string;
+  slug?: string;
   isMultiStep?: boolean;
   steps?: Array<{ id: string; title: string; description?: string }>;
   theme?: {
@@ -183,6 +209,7 @@ export interface EditorFormData {
     borderRadius?: string | number;
     layout?: string;
   };
+  settings?: FormSettingsConfig;
 }
 
 /**

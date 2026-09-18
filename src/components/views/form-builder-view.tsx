@@ -247,6 +247,8 @@ export function FormBuilderView() {
     setEditMode(true);
     setEditFormId(form.id);
     setFormData({
+      id: form.id,
+      slug: form.slug,
       name: form.name || '',
       description: form.description || '',
       type: form.type || 'lead_capture',
@@ -288,6 +290,7 @@ export function FormBuilderView() {
         const data = await res.json();
         const updated = apiFormToFormItem(data.form as ApiForm);
         setForms((prev) => prev.map((f) => (f.id === editFormId ? updated : f)));
+        setFormData((prev) => ({ ...prev, id: updated.id, slug: updated.slug }));
         toast.success('Form updated');
       } else {
         const res = await authFetch('/api/forms', {
@@ -302,10 +305,11 @@ export function FormBuilderView() {
         const data = await res.json();
         const newForm = apiFormToFormItem(data.form as ApiForm);
         setForms((prev) => [newForm, ...prev]);
+        setEditMode(true);
+        setEditFormId(newForm.id);
+        setFormData((prev) => ({ ...prev, id: newForm.id, slug: newForm.slug }));
         toast.success('Form created');
       }
-      setShowCreateDialog(false);
-      resetFormData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save form');
     } finally {

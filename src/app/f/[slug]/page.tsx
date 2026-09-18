@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { HostedFormClient } from './hosted-form-client'
 import { loadTenantPublicBranding } from '@/lib/tenant-branding'
 
@@ -13,17 +13,14 @@ async function getForm(slug: string) {
     // falls back to form.id when slug is null). Try the slug column first,
     // then fall back to id lookup so both `/f/booking-request` and
     // `/f/cmqmokssc004m...` resolve to the right form.
-    const bySlug = await db.form.findUnique({
-      where: { slug },
+    const bySlug = await db.form.findFirst({
+      where: {
+        OR: [{ slug }, { id: slug }],
+        status: { not: 'archived' },
+      },
       include: { _count: { select: { responses: true } } },
     })
-    if (bySlug) return bySlug
-
-    const byId = await db.form.findUnique({
-      where: { id: slug },
-      include: { _count: { select: { responses: true } } },
-    })
-    return byId
+    return bySlug
   } catch {
     return null
   }
@@ -33,9 +30,12 @@ export default async function HostedFormPage({ params }: { params: Promise<{ slu
   const { slug } = await params
   const form = await getForm(slug)
 
-  if (!form || (form.status !== 'active' && form.status !== 'paused')) {
+  if (!form || form.status === 'archived') {
     notFound()
   }
+
+  // Seamlessly forward to the modern /form/[id] runtime renderer with full 200+ widgets & themes
+  redirect(`/form/${form.id}`)
 
   const fields = typeof form.fieldsJson === 'string'
     ? JSON.parse(form.fieldsJson)

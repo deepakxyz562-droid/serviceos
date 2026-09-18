@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { Loader2, AlertCircle } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { Loader2, AlertCircle, Lock, ArrowRight } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 import { FormRuntimeRenderer } from '@/features/forms/components/runtime/form-runtime-renderer';
@@ -18,6 +20,11 @@ export default function PublicFormPage() {
   const [schema, setSchema] = useState<FormSchema | null>(null);
   const [branding, setBranding] = useState<{ businessName: string; logoUrl?: string } | null>(null);
 
+  // Password protection state
+  const [passwordInput, setPasswordInput] = useState('');
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [passwordError, setPasswordError] = useState(false);
+
   const fetchForm = useCallback(async () => {
     if (!formId) return;
     try {
@@ -28,6 +35,19 @@ export default function PublicFormPage() {
         setFormDescription(data.description);
         setSchema(data.schema);
         setBranding(data.branding);
+
+        // Check password protection
+        const pwdConfig = data.schema?.settings?.passwordProtection;
+        if (!pwdConfig?.enabled || !pwdConfig?.password) {
+          setIsUnlocked(true);
+        }
+
+        // Set document page title if provided
+        if (data.schema?.settings?.pageTitle) {
+          document.title = data.schema.settings.pageTitle;
+        } else if (data.name) {
+          document.title = `${data.name} | Fieseros`;
+        }
       } else {
         toast.error('Form not found or unavailable');
       }
@@ -42,12 +62,25 @@ export default function PublicFormPage() {
     fetchForm();
   }, [fetchForm]);
 
+  const handleUnlock = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetPassword = schema?.settings?.passwordProtection?.password;
+    if (passwordInput === targetPassword) {
+      setIsUnlocked(true);
+      setPasswordError(false);
+      toast.success('Access granted');
+    } else {
+      setPasswordError(true);
+      toast.error('Incorrect password');
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-muted/20 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
         <div className="text-center space-y-3">
           <Loader2 className="size-8 animate-spin text-emerald-600 mx-auto" />
-          <p className="text-xs text-muted-foreground">Loading form...</p>
+          <p className="text-xs font-semibold text-muted-foreground">Loading form...</p>
         </div>
       </div>
     );
@@ -55,13 +88,56 @@ export default function PublicFormPage() {
 
   if (!schema) {
     return (
-      <div className="min-h-screen bg-muted/20 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full text-center p-6 rounded-2xl border-border/80 shadow-sm">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center p-6 rounded-2xl border-border/80 shadow-md">
           <AlertCircle className="size-10 text-amber-500 mx-auto mb-3" />
           <h2 className="text-lg font-bold text-foreground">Form Unavailable</h2>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
             This form does not exist, has been paused, or has been archived.
           </p>
+        </Card>
+      </div>
+    );
+  }
+
+  // Password Lock Screen
+  if (!isUnlocked) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+        <Card className="max-w-sm w-full rounded-2xl border-border/80 shadow-xl overflow-hidden">
+          <CardHeader className="text-center pb-2 bg-gradient-to-b from-muted/30 to-background">
+            <div className="size-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center mx-auto mb-2 shadow-xs">
+              <Lock className="size-6" />
+            </div>
+            <CardTitle className="text-base font-bold text-foreground">Protected Form</CardTitle>
+            <CardDescription className="text-xs">
+              This form requires a password to view and complete
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-5 pt-3">
+            <form onSubmit={handleUnlock} className="space-y-3">
+              <Input
+                type="password"
+                placeholder="Enter password..."
+                value={passwordInput}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  if (passwordError) setPasswordError(false);
+                }}
+                className={`h-9 text-xs ${passwordError ? 'border-rose-500 focus-visible:ring-rose-500' : ''}`}
+                autoFocus
+              />
+              {passwordError && (
+                <p className="text-[11px] text-rose-500 font-medium">Incorrect password. Please try again.</p>
+              )}
+              <Button
+                type="submit"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 rounded-xl gap-1.5 shadow-xs cursor-pointer"
+              >
+                Unlock Form <ArrowRight className="size-3.5" />
+              </Button>
+            </form>
+          </CardContent>
         </Card>
       </div>
     );
