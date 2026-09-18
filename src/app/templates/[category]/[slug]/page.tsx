@@ -10,6 +10,7 @@ import {
 } from '@/lib/forms/templates';
 import { FormRuntimeRenderer } from '@/features/forms/components/runtime/form-runtime-renderer';
 import { ChevronRight, Star, FileText, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { UseTemplateCTAButton } from './use-template-cta-button';
 
 /**
  * /templates/[category]/[slug] — template detail page.
@@ -177,13 +178,7 @@ export default async function TemplateDetailPage({
                 ))}
               </div>
               <div className="mt-6 flex flex-wrap gap-3">
-                <a
-                  href={`/app?templateId=${template.id}`}
-                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition"
-                >
-                  <Sparkles className="size-4" />
-                  Use this template
-                </a>
+                <UseTemplateCTAButton template={template} />
                 <a
                   href="#preview"
                   className="inline-flex items-center gap-2 bg-background border border-border hover:bg-muted text-sm font-medium px-5 py-2.5 rounded-lg transition"
@@ -292,12 +287,7 @@ export default async function TemplateDetailPage({
             <p className="mt-1 text-xs text-muted-foreground">
               Open in the form builder, customize fields, colors, and integrations, then publish.
             </p>
-            <a
-              href={`/app?templateId=${template.id}`}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
-            >
-              Use this template <ArrowRight className="size-4" />
-            </a>
+            <UseTemplateCTAButton template={template} variant="sidebar" />
           </div>
 
           {/* Template info */}

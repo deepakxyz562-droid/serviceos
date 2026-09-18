@@ -668,13 +668,31 @@ export default function HomePageClient() {
 
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view');
-    if (!view) return;
+    const templateId = params.get('templateId') || params.get('template');
+
+    if (templateId) {
+      try {
+        sessionStorage.setItem('pendingTemplateId', templateId);
+      } catch {}
+      useAppStore.getState().setCurrentView('formBuilder');
+    } else if (view) {
+      useAppStore.getState().setCurrentView(view);
+    } else {
+      // Check if a template was picked prior to login/redirect
+      try {
+        const storedPending = sessionStorage.getItem('pendingTemplateId');
+        if (storedPending) {
+          useAppStore.getState().setCurrentView('formBuilder');
+        }
+      } catch {}
+    }
 
     // Apply + strip. Use replaceState so we don't create a new history entry
     // (pressing browser-back should leave the app, not re-strip the param).
-    useAppStore.getState().setCurrentView(view);
     const paramsCopy = new URLSearchParams(params);
     paramsCopy.delete('view');
+    paramsCopy.delete('templateId');
+    paramsCopy.delete('template');
     const remaining = paramsCopy.toString();
     const newUrl = remaining
       ? `${window.location.pathname}?${remaining}`

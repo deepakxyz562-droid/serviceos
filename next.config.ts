@@ -69,6 +69,10 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
+        source: '/app',
+        destination: '/',
+      },
+      {
         source: '/webhook-test/:path*',
         destination: '/api/webhook-test/:path*',
       },

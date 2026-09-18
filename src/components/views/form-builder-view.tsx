@@ -174,21 +174,41 @@ export function FormBuilderView() {
   // already loaded.
   useEffect(() => {
     try {
-      const pendingId = sessionStorage.getItem('pendingTemplateId');
+      let pendingId = sessionStorage.getItem('pendingTemplateId');
+      if (!pendingId && typeof window !== 'undefined') {
+        const sp = new URLSearchParams(window.location.search);
+        pendingId = sp.get('templateId') || sp.get('template');
+      }
+      if (!pendingId && typeof window !== 'undefined') {
+        const storedId = localStorage.getItem('fieseros_pending_template_id');
+        if (storedId) pendingId = storedId;
+      }
       if (!pendingId) return;
-      // Consume the id immediately so a refresh doesn't re-apply it.
+
+      // Consume the id so a refresh doesn't re-apply it endlessly
       sessionStorage.removeItem('pendingTemplateId');
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('fieseros_pending_template_id');
+      }
 
       // Dynamically import to avoid pulling the registry into the bundle
-      // for users who never use templates.
       import('@/lib/forms/templates').then(({ getTemplateSync }) => {
-        const template = getTemplateSync(pendingId);
+        let template = getTemplateSync(pendingId);
+        if (!template && typeof window !== 'undefined') {
+          const rawPending = localStorage.getItem('fieseros_pending_template');
+          if (rawPending) {
+            try {
+              const parsed = JSON.parse(rawPending);
+              if (parsed?.schema) template = parsed;
+            } catch {}
+          }
+        }
         if (!template) {
           console.warn(`[form-builder-view] Template '${pendingId}' not found in registry.`);
           return;
         }
         // Map template FormField[] → builder FormField[] (same as handleApplyTemplate)
-        const templateFields = template.schema.fields.map((f, idx) => ({
+        const templateFields = (template.schema.fields || []).map((f: any, idx: number) => ({
           id: `tpl-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
           label: f.label,
           type: f.widgetType ? 'control_widget' : f.type,
@@ -198,20 +218,20 @@ export function FormBuilderView() {
           width: f.width || 'full',
           widgetType: f.widgetType,
           widgetConfig: f.widgetConfig as Record<string, unknown> | undefined,
-          options: f.options?.map((opt) =>
+          options: f.options?.map((opt: any) =>
             typeof opt === 'string' ? opt : opt.label,
           ),
         }));
         setFormData({
           name: template.name,
-          description: template.shortDescription,
+          description: template.shortDescription || template.description || '',
           type: 'lead_capture',
           status: 'active',
           fields: templateFields,
           submissionActions: getDefaultActions('lead_capture'),
           fieldMappings: [],
           welcomeMessage: '',
-          completionMessage: template.schema.settings.successMessage || '',
+          completionMessage: template.schema.settings?.successMessage || 'Thank you for your submission!',
         });
         setEditMode(false);
         setEditFormId(null);
