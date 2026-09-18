@@ -85,8 +85,13 @@ const features: {
   },
 ];
 
-// ─── Comparison pages (matches the 4 cornerstone comparison routes) ──────────
+// ─── Comparison pages (matches cornerstone comparison routes) ──────────
 const comparisons: { href: string; title: string; description: string }[] = [
+  {
+    href: "/why-fieseros",
+    title: "Why Fieseros (4-Way Comparison)",
+    description: "In-depth operational audit: Dynamics 365 vs Jobber vs Housecall Pro vs Fieseros.",
+  },
   {
     href: "/best-field-service-software",
     title: "Best Field Service Software",
