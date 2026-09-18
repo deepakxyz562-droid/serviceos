@@ -93,8 +93,8 @@ export default async function TemplateDetailPage({
     .slice(0, 4)
     .map((r) => r.template);
 
-  const fieldCount = template.schema.fields.length;
-  const stepCount = template.schema.steps.length;
+  const fieldCount = template.schema.fields?.length || 0;
+  const stepCount = template.schema.steps?.length || 1;
 
   // JSON-LD structured data (FAQ + SoftwareApplication)
   const faqJsonLd = template.seo.faq && template.seo.faq.length > 0
@@ -245,7 +245,7 @@ export default async function TemplateDetailPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {template.schema.fields.map((field) => (
+                  {(template.schema.fields || []).map((field) => (
                     <tr key={field.id} className="hover:bg-muted/30">
                       <td className="p-3 text-foreground font-medium">{field.label}</td>
                       <td className="p-3 text-muted-foreground">{field.type.replace(/_/g, ' ')}</td>
@@ -343,7 +343,7 @@ export default async function TemplateDetailPage({
                   </h3>
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{t.shortDescription}</p>
                   <p className="text-[10px] text-muted-foreground mt-2">
-                    {t.schema.fields.length} fields
+                    {t.schema.fields?.length || 0} fields
                   </p>
                 </Link>
               ))}
