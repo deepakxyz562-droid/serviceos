@@ -46,6 +46,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { FormRuntimeRenderer } from '../runtime/form-runtime-renderer';
 import { FormThumbnailPreview } from '@/components/forms/form-thumbnail-preview';
+import { FormPreviewCanvas } from '@/components/forms/form-preview-canvas';
 import {
   searchTemplates,
   getAllTemplates,
@@ -102,6 +103,7 @@ export function TemplateExplorer({
   // Preview modal state (Jotform Parity)
   const [previewTemplate, setPreviewTemplate] = useState<FormTemplate | null>(null);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [modalActiveTab, setModalActiveTab] = useState<'overview' | 'fields' | 'integrations' | 'faq'>('overview');
   const [customFormTitle, setCustomFormTitle] = useState('');
   const [applyMode, setApplyMode] = useState<'replace' | 'append'>('replace');
 
@@ -681,27 +683,26 @@ export function TemplateExplorer({
         </div>
       </div>
 
-      {/* ════ JOTFORM-STYLE PREVIEW & LOAD MODAL ════ */}
+      {/* ════ JOTFORM-STYLE RICH 1280PX PREVIEW & LOAD MODAL ════ */}
       {previewTemplate && (
         <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && setPreviewTemplate(null)}>
-          <DialogContent className="max-w-5xl max-h-[94vh] flex flex-col p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl">
+          <DialogContent
+            showCloseButton={false}
+            style={{ paddingTop: 0 }}
+            className="!max-w-[1280px] sm:!max-w-[1280px] lg:!max-w-[1320px] w-[96vw] max-h-[94vh] flex flex-col !p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 relative"
+          >
             {/* Modal Header */}
             <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">
-                    {getCategoryLabel(previewTemplate.categories[0] || 'general')}
-                  </Badge>
-                  <span className="text-[11px] text-muted-foreground font-medium">
-                    • {previewTemplate.schema.fields?.length || 0} fields
-                  </span>
-                </div>
-                <DialogTitle className="text-lg font-bold text-foreground truncate">
+              <div className="min-w-0 flex items-center gap-2">
+                <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[10px] font-bold">
+                  {getCategoryLabel(previewTemplate.categories[0] || 'general')}
+                </Badge>
+                <DialogTitle className="text-base font-bold text-foreground truncate max-w-sm sm:max-w-md">
                   {previewTemplate.name}
                 </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground line-clamp-1">
-                  {previewTemplate.shortDescription}
-                </DialogDescription>
+                <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                  • {previewTemplate.schema.fields?.length || 0} questions
+                </span>
               </div>
 
               {/* Device Preview Switcher & Actions */}
@@ -709,168 +710,268 @@ export function TemplateExplorer({
                 <div className="flex items-center gap-0.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700">
                   <button
                     onClick={() => setPreviewDevice('desktop')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       previewDevice === 'desktop'
                         ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="Desktop Preview"
                   >
-                    <Monitor className="size-3.5" /> <span className="hidden md:inline">Desktop</span>
+                    <Monitor className="size-3.5" /> <span className="hidden sm:inline">Desktop</span>
                   </button>
                   <button
                     onClick={() => setPreviewDevice('tablet')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       previewDevice === 'tablet'
                         ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="Tablet Preview"
                   >
-                    <Tablet className="size-3.5" /> <span className="hidden md:inline">Tablet</span>
+                    <Tablet className="size-3.5" /> <span className="hidden sm:inline">Tablet</span>
                   </button>
                   <button
                     onClick={() => setPreviewDevice('mobile')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    className={`flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       previewDevice === 'mobile'
                         ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     title="Mobile Preview"
                   >
-                    <Smartphone className="size-3.5" /> <span className="hidden md:inline">Mobile</span>
+                    <Smartphone className="size-3.5" /> <span className="hidden sm:inline">Mobile</span>
                   </button>
                 </div>
 
                 <Button
                   onClick={handleConfirmApply}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm gap-1.5"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm gap-1.5 cursor-pointer"
                 >
-                  <Check className="size-4" /> Apply to Form
+                  <Sparkles className="size-3.5" /> Use Template
                 </Button>
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewTemplate(null)}
+                  className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1 cursor-pointer"
+                  title="Close preview"
+                >
+                  <X className="size-4" />
+                </button>
               </div>
             </div>
 
-            {/* Modal Body with Settings Sidebar & Canvas */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden min-h-[420px]">
-              {/* Left Config Panel: Title & Merge Mode */}
-              <div className="lg:col-span-4 p-5 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-4 overflow-y-auto">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-foreground">Form Title</Label>
-                  <Input
-                    type="text"
-                    value={customFormTitle}
-                    onChange={(e) => setCustomFormTitle(e.target.value)}
-                    placeholder="Enter form title..."
-                    className="h-9 text-xs bg-white dark:bg-slate-900"
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    Customize the title for your workspace.
-                  </p>
-                </div>
+            {/* Modal Body: 2-Column Split (FormPreviewCanvas + Tabbed Suite) */}
+            <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+              {/* Left Column: Form Preview Canvas with Device Frame */}
+              <FormPreviewCanvas template={previewTemplate} device={previewDevice} />
 
-                {currentFieldCount > 0 && (
-                  <div className="space-y-2 pt-3 border-t border-slate-200 dark:border-slate-800">
-                    <Label className="text-xs font-bold text-foreground">Merge Mode</Label>
-                    <RadioGroup
-                      value={applyMode}
-                      onChange={(val: any) => setApplyMode(val)}
-                      className="space-y-2"
+              {/* Right Column: Tabbed Suite & Setup */}
+              <div className="w-full lg:w-[420px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between overflow-y-auto max-h-[84vh] p-5 space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground leading-snug">
+                      {previewTemplate.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      {previewTemplate.shortDescription}
+                    </p>
+                  </div>
+
+                  {/* Tab Switcher */}
+                  <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/60 dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setModalActiveTab('overview')}
+                      className={`py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                        modalActiveTab === 'overview'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
                     >
-                      <div className="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <RadioGroupItem value="replace" id="mode-replace" className="mt-0.5" />
-                        <label htmlFor="mode-replace" className="text-xs cursor-pointer">
-                          <p className="font-semibold text-foreground">Replace Current Form</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            Overwrites existing canvas fields with this template.
-                          </p>
-                        </label>
+                      Overview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalActiveTab('fields')}
+                      className={`py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                        modalActiveTab === 'fields'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Fields ({previewTemplate.schema.fields?.length || 0})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalActiveTab('integrations')}
+                      className={`py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                        modalActiveTab === 'integrations'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Setup
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalActiveTab('faq')}
+                      className={`py-1.5 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                        modalActiveTab === 'faq'
+                          ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      FAQ
+                    </button>
+                  </div>
+
+                  {/* Tab 1: Overview */}
+                  {modalActiveTab === 'overview' && (
+                    <div className="space-y-4 text-xs">
+                      {/* Form Title Override */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-foreground">Form Title in Builder</Label>
+                        <Input
+                          type="text"
+                          value={customFormTitle}
+                          onChange={(e) => setCustomFormTitle(e.target.value)}
+                          placeholder={previewTemplate.name}
+                          className="h-9 text-xs bg-slate-50 dark:bg-slate-800"
+                        />
                       </div>
 
-                      <div className="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                        <RadioGroupItem value="append" id="mode-append" className="mt-0.5" />
-                        <label htmlFor="mode-append" className="text-xs cursor-pointer">
-                          <p className="font-semibold text-foreground">Append to Existing</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            Keeps existing {currentFieldCount} fields and appends template questions.
-                          </p>
-                        </label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                )}
+                      {/* Merge Mode */}
+                      {currentFieldCount > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                          <Label className="text-xs font-bold text-foreground">Merge Mode</Label>
+                          <RadioGroup
+                            value={applyMode}
+                            onChange={(val: any) => setApplyMode(val)}
+                            className="space-y-2"
+                          >
+                            <div className="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                              <RadioGroupItem value="replace" id="mode-replace" className="mt-0.5" />
+                              <label htmlFor="mode-replace" className="text-xs cursor-pointer">
+                                <p className="font-semibold text-foreground">Replace Current Form</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  Overwrites existing canvas fields with this template.
+                                </p>
+                              </label>
+                            </div>
 
-                <div className="pt-3 border-t border-slate-200 dark:border-slate-800 text-xs text-muted-foreground space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span>Total Questions:</span>
-                    <strong className="text-foreground">{previewTemplate.schema.fields?.length || 0}</strong>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Category:</span>
-                    <strong className="text-foreground">{getCategoryLabel(previewTemplate.categories[0] || 'general')}</strong>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Status:</span>
-                    <strong className="text-emerald-600">Production Ready</strong>
-                  </div>
+                            <div className="flex items-start gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                              <RadioGroupItem value="append" id="mode-append" className="mt-0.5" />
+                              <label htmlFor="mode-append" className="text-xs cursor-pointer">
+                                <p className="font-semibold text-foreground">Append to Existing</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  Keeps existing {currentFieldCount} fields and appends template questions.
+                                </p>
+                              </label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      )}
+
+                      {/* Tags */}
+                      <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <p className="text-[11px] font-bold text-foreground">Categories &amp; Industries</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {previewTemplate.categories.map((c) => (
+                            <Badge key={c} variant="outline" className="text-[10px] font-medium bg-slate-50 dark:bg-slate-800">
+                              {getCategoryLabel(c)}
+                            </Badge>
+                          ))}
+                          {previewTemplate.industries.filter((i) => i !== 'general').map((i) => (
+                            <Badge key={i} variant="outline" className="text-[10px] font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border-blue-200">
+                              {getIndustryLabel(i)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab 2: Fields List */}
+                  {modalActiveTab === 'fields' && (
+                    <div className="space-y-2 text-xs max-h-[48vh] overflow-y-auto">
+                      {(previewTemplate.schema.fields || []).map((f, idx) => (
+                        <div
+                          key={f.id || idx}
+                          className="p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-semibold text-foreground truncate">
+                              {f.label || `Field ${idx + 1}`}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground capitalize">
+                              Type: {f.type} {f.widgetType ? `• Widget: ${f.widgetType}` : ''}
+                            </p>
+                          </div>
+                          {f.required && (
+                            <Badge variant="outline" className="text-[9px] text-rose-600 border-rose-200">
+                              Required
+                            </Badge>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Tab 3: Setup */}
+                  {modalActiveTab === 'integrations' && (
+                    <div className="space-y-3 text-xs">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2">
+                        <p className="font-bold text-foreground">Included Features:</p>
+                        <div className="space-y-1.5 text-muted-foreground">
+                          <p>✓ Instant AI Copilot &amp; Logic generation</p>
+                          <p>✓ 33 Payment Gateways (Stripe, PayPal, Square, etc.)</p>
+                          <p>✓ Multi-step Stepper flow support</p>
+                          <p>✓ Responsive mobile, tablet, and desktop layouts</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab 4: FAQ */}
+                  {modalActiveTab === 'faq' && (
+                    <div className="space-y-3 text-xs">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 space-y-1">
+                        <p className="font-bold text-foreground">Can I customize all questions?</p>
+                        <p className="text-muted-foreground text-[11px]">
+                          Yes! Once loaded into the builder, you can add, remove, edit, and re-order all questions, widgets, and themes.
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 space-y-1">
+                        <p className="font-bold text-foreground">Is this template mobile responsive?</p>
+                        <p className="text-muted-foreground text-[11px]">
+                          Yes, 100% optimized for mobile screens, tablets, and desktop browsers.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Apply CTA */}
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewTemplate(null)}
+                    className="text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    onClick={handleConfirmApply}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2 rounded-xl shadow-xs gap-1.5 cursor-pointer"
+                  >
+                    <Check className="size-4" /> Load Into Form Studio
+                  </Button>
                 </div>
               </div>
-
-              {/* Right Canvas: Form Runtime Preview */}
-              <div className="lg:col-span-8 bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
-                {previewDevice === 'mobile' ? (
-                  <div className="w-[340px] bg-slate-900 rounded-[32px] p-3 shadow-2xl border-4 border-slate-800 transition-all">
-                    <div className="w-20 h-3.5 bg-slate-950 rounded-full mx-auto mb-2 flex items-center justify-center">
-                      <div className="w-6 h-1 bg-slate-800 rounded-full" />
-                    </div>
-                    <div className="bg-white dark:bg-slate-900 rounded-[20px] p-4 max-h-[60vh] overflow-y-auto shadow-inner">
-                      <FormRuntimeRenderer
-                        formName={customFormTitle || previewTemplate.name}
-                        schema={previewTemplate.schema}
-                        previewMode={true}
-                      />
-                    </div>
-                  </div>
-                ) : previewDevice === 'tablet' ? (
-                  <div className="w-full max-w-lg bg-slate-900 rounded-[24px] p-4 shadow-2xl border-4 border-slate-800 transition-all">
-                    <div className="bg-white dark:bg-slate-900 rounded-[16px] p-5 max-h-[64vh] overflow-y-auto shadow-inner">
-                      <FormRuntimeRenderer
-                        formName={customFormTitle || previewTemplate.name}
-                        schema={previewTemplate.schema}
-                        previewMode={true}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xl transition-all">
-                    <FormRuntimeRenderer
-                      formName={customFormTitle || previewTemplate.name}
-                      schema={previewTemplate.schema}
-                      previewMode={true}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between text-xs shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPreviewTemplate(null)}
-                className="text-xs font-semibold"
-              >
-                Cancel
-              </Button>
-
-              <Button
-                size="sm"
-                onClick={handleConfirmApply}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-5 py-2 rounded-xl shadow-xs gap-1.5"
-              >
-                <Check className="size-4" /> Load Template Into Builder
-              </Button>
             </div>
           </DialogContent>
         </Dialog>

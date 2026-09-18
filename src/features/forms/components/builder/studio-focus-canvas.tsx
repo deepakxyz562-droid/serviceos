@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Sparkles,
   Play,
@@ -23,11 +23,28 @@ import {
   Lock,
   Smartphone,
   Monitor,
-  Maximize2
+  Maximize2,
+  Trash2,
+  Copy,
+  ArrowUp,
+  ArrowDown,
+  Columns,
+  Sliders,
+  MoveRight,
+  Edit2,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 import type { EditorFormData, FormField } from '@/features/forms/types';
 
 interface StudioFocusCanvasProps {
@@ -39,12 +56,15 @@ interface StudioFocusCanvasProps {
   onSelectField: (fieldId: string) => void;
   viewMode: 'focus' | 'paper';
   // Collapsed sidebars state & toggle triggers
+  isWidgetPaletteCollapsed?: boolean;
+  onToggleWidgetPalette?: () => void;
   isAiCopilotCollapsed: boolean;
   onToggleAiCopilot: () => void;
   isPagesTreeCollapsed: boolean;
   onTogglePagesTree: () => void;
   isInspectorCollapsed: boolean;
   onToggleInspector: () => void;
+  onOpenAddWidgetDialog?: (stepIndex: number, stepId?: string) => void;
   className?: string;
 }
 
@@ -56,41 +76,48 @@ export function StudioFocusCanvas({
   selectedFieldId,
   onSelectField,
   viewMode,
+  isWidgetPaletteCollapsed = false,
+  onToggleWidgetPalette,
   isAiCopilotCollapsed,
   onToggleAiCopilot,
   isPagesTreeCollapsed,
   onTogglePagesTree,
   isInspectorCollapsed,
   onToggleInspector,
+  onOpenAddWidgetDialog,
   className = '',
 }: StudioFocusCanvasProps) {
   const fields = formData.fields || [];
-  const primaryColor = formData.theme?.primaryColor || '#9333ea';
+  const isMultiStep = formData.isMultiStep ?? true;
+  const primaryColor = formData.theme?.primaryColor || formData.primaryColor || '#9333ea';
   const backgroundColor = formData.theme?.backgroundColor || '#faf5ff';
   const textColor = formData.theme?.textColor || '#581c87';
 
-  // Group fields into multi-step pages (3 fields per page by default)
-  const chunkSize = 3;
-  const steps = React.useMemo(() => {
-    if (fields.length === 0) {
-      return [{ id: 'step-1', title: 'Get Started', fields: [] as FormField[] }];
+  // Normalize steps
+  const steps = useMemo(() => {
+    if (!isMultiStep) {
+      return [{ id: 'all_fields', title: formData.name || 'Form Questions', fields }];
     }
-    const result: Array<{ id: string; title: string; fields: FormField[] }> = [];
-    for (let i = 0; i < fields.length; i += chunkSize) {
-      const stepIdx = Math.floor(i / chunkSize) + 1;
-      result.push({
-        id: `step-${stepIdx}`,
-        title: stepIdx === 1 ? 'Contact Information' : stepIdx === 2 ? 'Service Requirements' : 'Confirmation & Signature',
-        fields: fields.slice(i, i + chunkSize),
-      });
-    }
-    return result;
-  }, [fields]);
+    const rawSteps = formData.steps && formData.steps.length > 0
+      ? formData.steps
+      : [{ id: 'step_1', title: 'Step 1: Contact Details' }];
 
-  const activeStep = steps[currentStepIndex] || steps[0] || { id: 'step-1', title: 'Step 1', fields: [] };
+    return rawSteps.map((step, idx) => {
+      const stepFields = fields.filter((f) => {
+        if (!f.stepId) return idx === 0;
+        return f.stepId === step.id;
+      });
+      return {
+        ...step,
+        fields: stepFields,
+      };
+    });
+  }, [formData.steps, formData.name, fields, isMultiStep]);
+
+  const activeStep = steps[currentStepIndex] || steps[0] || { id: 'step_1', title: 'Step 1', fields: [] };
   const progressPercent = Math.round(((currentStepIndex + 1) / Math.max(steps.length, 1)) * 100);
 
-  const [hasMedia, setHasMedia] = useState(true);
+  const [hasMedia, setHasMedia] = useState(false);
 
   // Field inline updater
   const handleUpdateField = (fieldId: string, updates: Partial<FormField>) => {
@@ -100,21 +127,88 @@ export function StudioFocusCanvas({
     }));
   };
 
+  // Field column width updater (1-col, 2-col, 3-col, 4-col)
+  const handleSetFieldWidth = (fieldId: string, width: 'full' | 'half' | 'third' | 'quarter') => {
+    handleUpdateField(fieldId, { width });
+    const label = width === 'full' ? '100% (1 Col)' : width === 'half' ? '50% (2 Col)' : width === 'third' ? '33% (3 Col)' : '25% (4 Col)';
+    toast.success(`Set field width to ${label}`);
+  };
+
+  // Move Field Up/Down within list
+  const handleMoveField = (fieldId: string, direction: 'up' | 'down') => {
+    const idx = fields.findIndex((f) => f.id === fieldId);
+    if (idx === -1) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= fields.length) return;
+
+    onFormDataChange((prev) => {
+      const copy = [...prev.fields];
+      const temp = copy[idx];
+      copy[idx] = copy[targetIdx];
+      copy[targetIdx] = temp;
+      return { ...prev, fields: copy };
+    });
+  };
+
+  // Duplicate Field
+  const handleDuplicateField = (field: FormField) => {
+    const newField: FormField = {
+      ...field,
+      id: `f-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      label: `${field.label} (Copy)`,
+    };
+    onFormDataChange((prev) => ({
+      ...prev,
+      fields: [...prev.fields, newField],
+    }));
+    onSelectField(newField.id);
+    toast.success('Field duplicated');
+  };
+
+  // Delete Field
+  const handleDeleteField = (fieldId: string) => {
+    onFormDataChange((prev) => ({
+      ...prev,
+      fields: prev.fields.filter((f) => f.id !== fieldId),
+    }));
+    toast.info('Field removed');
+  };
+
+  // Move Field to Another Step
+  const handleMoveFieldToStep = (fieldId: string, targetStepId: string) => {
+    handleUpdateField(fieldId, { stepId: targetStepId });
+    toast.success('Question moved to new step');
+  };
+
+  // Width Class Resolver for CSS Grid / Flex
+  const getWidthClasses = (width?: string) => {
+    switch (width) {
+      case 'half':
+        return 'w-full md:w-[calc(50%-0.5rem)]';
+      case 'third':
+        return 'w-full md:w-[calc(33.333%-0.67rem)]';
+      case 'quarter':
+        return 'w-full md:w-[calc(25%-0.75rem)]';
+      default:
+        return 'w-full';
+    }
+  };
+
   return (
     <div
-      className={`relative flex-1 flex flex-col items-center justify-between overflow-y-auto p-4 sm:p-8 select-none transition-all ${className}`}
+      className={`relative flex-1 flex flex-col items-center justify-between overflow-y-auto p-4 sm:p-6 lg:p-8 select-none transition-all ${className}`}
       style={{ backgroundColor }}
     >
       {/* ─── Floating Edge Panels Re-Open Triggers ─── */}
       <div className="absolute top-4 left-4 flex items-center gap-2 z-30">
-        {isAiCopilotCollapsed && (
+        {isWidgetPaletteCollapsed && onToggleWidgetPalette && (
           <Button
             size="sm"
             variant="outline"
-            onClick={onToggleAiCopilot}
-            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 shadow-md gap-1.5 rounded-xl hover:bg-purple-50"
+            onClick={onToggleWidgetPalette}
+            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 shadow-md gap-1.5 rounded-xl hover:bg-emerald-50 cursor-pointer"
           >
-            <Sparkles className="size-3.5 text-purple-600" /> AI Copilot
+            <Plus className="size-3.5 text-emerald-600" /> Widgets Palette
           </Button>
         )}
         {isPagesTreeCollapsed && (
@@ -122,9 +216,19 @@ export function StudioFocusCanvas({
             size="sm"
             variant="outline"
             onClick={onTogglePagesTree}
-            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 shadow-md gap-1.5 rounded-xl"
+            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 shadow-md gap-1.5 rounded-xl cursor-pointer"
           >
-            <Layers className="size-3.5" /> Pages Tree
+            <Layers className="size-3.5" /> Pages &amp; Stepper
+          </Button>
+        )}
+        {isAiCopilotCollapsed && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onToggleAiCopilot}
+            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 shadow-md gap-1.5 rounded-xl hover:bg-emerald-50 cursor-pointer"
+          >
+            <Sparkles className="size-3.5 text-emerald-600" /> AI Copilot
           </Button>
         )}
       </div>
@@ -135,40 +239,42 @@ export function StudioFocusCanvas({
             size="sm"
             variant="outline"
             onClick={onToggleInspector}
-            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 shadow-md gap-1.5 rounded-xl"
+            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 shadow-md gap-1.5 rounded-xl cursor-pointer"
           >
             <PanelRightOpen className="size-3.5" /> Field Settings
           </Button>
         )}
       </div>
 
-      {/* ─── Top Step Progress Bar (Typeform Style) ─── */}
-      <div className="w-full max-w-4xl pt-2 pb-6 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <Badge
-            variant="outline"
-            className="text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs border-purple-300 text-purple-800 dark:text-purple-300 bg-white/80 dark:bg-slate-900/80"
-          >
-            Step {currentStepIndex + 1} of {steps.length}
-          </Badge>
-          <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-            {activeStep.title}
-          </span>
-        </div>
+      {/* ─── Top Stepper Progress Bar (Shown in Multi-Step mode) ─── */}
+      {isMultiStep && (
+        <div className="w-full max-w-4xl pt-2 pb-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className="text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs border-emerald-300 text-emerald-800 dark:text-emerald-300 bg-white/80 dark:bg-slate-900/80"
+            >
+              Step {currentStepIndex + 1} of {steps.length}
+            </Badge>
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-xs">
+              {activeStep.title}
+            </span>
+          </div>
 
-        {/* Smooth Top Progress Bar */}
-        <div className="w-48 sm:w-64 h-2 bg-slate-200/80 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-          <div
-            className="h-full transition-all duration-300 rounded-full"
-            style={{
-              width: `${progressPercent}%`,
-              backgroundColor: primaryColor,
-            }}
-          />
+          {/* Stepper Progress Bar */}
+          <div className="w-44 sm:w-64 h-2 bg-slate-200/80 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
+            <div
+              className="h-full transition-all duration-300 rounded-full"
+              style={{
+                width: `${progressPercent}%`,
+                backgroundColor: primaryColor,
+              }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* ─── MAIN WYSIWYG FOCUS CANVAS (Split Media & Question Box) ─── */}
+      {/* ─── MAIN WYSIWYG CANVAS ─── */}
       <div className="w-full max-w-4xl my-auto flex flex-col items-center">
         {viewMode === 'focus' ? (
           /* ════ 1. FOCUS CARD MULTI-STEP VIEW (Typeform Parity) ════ */
@@ -176,20 +282,20 @@ export function StudioFocusCanvas({
             {/* Left Media Block */}
             {hasMedia && (
               <div className="md:col-span-5 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 p-6 flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[260px]">
-                <div className="size-12 rounded-2xl bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-md mb-3">
+                <div className="size-12 rounded-2xl bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-md mb-3">
                   <Video className="size-6" />
                 </div>
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
                   Media &amp; Video Hero
                 </h4>
                 <p className="text-[11px] text-muted-foreground mt-1 max-w-xs">
-                  Upload video, add Loom/YouTube link, or select Unsplash photography
+                  Upload video or image hero for this step
                 </p>
 
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="mt-4 text-xs font-bold gap-1.5 rounded-xl shadow-xs bg-white dark:bg-slate-900 hover:bg-purple-50 hover:text-purple-700"
+                  className="mt-4 text-xs font-bold gap-1.5 rounded-xl shadow-xs bg-white dark:bg-slate-900 hover:bg-emerald-50 hover:text-emerald-700"
                 >
                   <Plus className="size-3.5" /> Add Video / Media
                 </Button>
@@ -202,153 +308,323 @@ export function StudioFocusCanvas({
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span
-                    className="size-5 rounded-md text-white text-[10px] font-bold flex items-center justify-center shadow-xs"
+                    className="size-6 rounded-lg text-white text-xs font-bold flex items-center justify-center shadow-xs shrink-0"
                     style={{ backgroundColor: primaryColor }}
                   >
-                    {currentStepIndex + 1}
+                    {isMultiStep ? currentStepIndex + 1 : '1'}
                   </span>
                   <input
                     value={activeStep.title}
                     onChange={(e) => {
-                      // Update step title in live view
+                      const newTitle = e.target.value;
+                      if (!isMultiStep) {
+                        onFormDataChange((prev) => ({ ...prev, name: newTitle }));
+                      } else {
+                        onFormDataChange((prev) => ({
+                          ...prev,
+                          steps: (prev.steps || steps).map((s, idx) =>
+                            idx === currentStepIndex ? { ...s, title: newTitle } : s
+                          ),
+                        }));
+                      }
                     }}
                     className="text-lg sm:text-xl font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 w-full"
-                    placeholder="Your question or title here*"
+                    placeholder="Step Title or Question..."
                   />
                 </div>
-                <p className="text-xs text-muted-foreground pl-7">
-                  Please fill in the required fields below to proceed.
+                <p className="text-xs text-muted-foreground pl-8">
+                  {isMultiStep ? 'Complete the questions in this step to proceed.' : 'Fill in the information below.'}
                 </p>
               </div>
 
-              {/* Step Sub-Fields Render */}
-              <div className="space-y-4 pl-0 sm:pl-7">
+              {/* Step Sub-Fields Render with Multi-Column Flex Grid */}
+              <div className="flex flex-wrap gap-3 pl-0 sm:pl-8">
                 {activeStep.fields.length > 0 ? (
                   activeStep.fields.map((field, fIdx) => {
                     const isSelected = selectedFieldId === field.id;
-                    const letters = ['A', 'B', 'C', 'D'];
+                    const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
                     const letter = letters[fIdx % letters.length];
+                    const widthCls = getWidthClasses(field.width);
 
                     return (
                       <div
                         key={field.id}
                         onClick={() => onSelectField(field.id)}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2 ${
+                        className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
                           isSelected
-                            ? 'border-purple-600 dark:border-purple-400 bg-purple-50/20 dark:bg-purple-950/20 ring-2 ring-purple-600/10'
-                            : 'border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
+                            ? 'border-emerald-600 dark:border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 ring-2 ring-emerald-600/20 shadow-sm'
+                            : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                            <span className="size-4 rounded bg-slate-200 dark:bg-slate-700 text-[9px] font-bold flex items-center justify-center text-slate-700 dark:text-slate-300">
+                        {/* Top Card Bar: Label + Width Pills + Actions */}
+                        <div className="flex items-center justify-between gap-1">
+                          <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 min-w-0">
+                            <span className="size-4 rounded bg-slate-200 dark:bg-slate-700 text-[9px] font-bold flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0">
                               {letter}
                             </span>
-                            <span>{field.label}</span>
+                            <span className="truncate">{field.label || 'Question'}</span>
                             {field.required && <span className="text-rose-500 font-bold">*</span>}
                           </label>
 
-                          {field.helpText && (
-                            <span className="text-[10px] text-muted-foreground">{field.helpText}</span>
-                          )}
+                          {/* Quick Column Width & Action Toolbar */}
+                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {/* Width Selector Pills */}
+                            <div className="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5 text-[9px] font-bold">
+                              <button
+                                type="button"
+                                onClick={() => handleSetFieldWidth(field.id, 'full')}
+                                className={`px-1.5 py-0.5 rounded ${
+                                  !field.width || field.width === 'full'
+                                    ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-2xs font-extrabold'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                title="100% Full Width (1 Column)"
+                              >
+                                1C
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetFieldWidth(field.id, 'half')}
+                                className={`px-1.5 py-0.5 rounded ${
+                                  field.width === 'half'
+                                    ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-2xs font-extrabold'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                title="50% Width (2 Columns)"
+                              >
+                                2C
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetFieldWidth(field.id, 'third')}
+                                className={`px-1.5 py-0.5 rounded ${
+                                  field.width === 'third'
+                                    ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-2xs font-extrabold'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                title="33% Width (3 Columns)"
+                              >
+                                3C
+                              </button>
+                            </div>
+
+                            {/* More Actions Menu */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800">
+                                  <Sliders className="size-3" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="text-xs w-44">
+                                <DropdownMenuItem onClick={() => handleDuplicateField(field)} className="gap-1.5">
+                                  <Copy className="size-3.5" /> Duplicate Field
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleMoveField(field.id, 'up')} className="gap-1.5">
+                                  <ArrowUp className="size-3.5" /> Move Up
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleMoveField(field.id, 'down')} className="gap-1.5">
+                                  <ArrowDown className="size-3.5" /> Move Down
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleDeleteField(field.id)} className="gap-1.5 text-rose-600">
+                                  <Trash2 className="size-3.5" /> Delete Field
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
                         </div>
 
-                        {/* Input Type Specific Render */}
-                        {field.type === 'phone' ? (
-                          <div className="flex items-center gap-2 border-b-2 border-purple-300 dark:border-purple-800 py-1 text-sm text-foreground">
-                            <span className="flex items-center gap-1 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                              🇺🇸 +1 <ChevronDown className="size-3" />
-                            </span>
-                            <span className="text-muted-foreground font-mono text-xs">(201) 555-0123</span>
-                          </div>
-                        ) : field.type === 'signature' ? (
-                          <div className="h-16 rounded-xl border-2 border-dashed border-purple-300 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-950/20 flex items-center justify-center text-xs font-semibold text-purple-700 dark:text-purple-300 gap-2">
-                            <PenTool className="size-4" /> Draw Digital E-Signature Here
-                          </div>
-                        ) : field.type === 'rating' ? (
-                          <div className="flex items-center gap-1.5 pt-1">
-                            {[1, 2, 3, 4, 5].map((s) => (
-                              <button key={s} type="button" className="p-1.5 hover:scale-110 transition-transform">
-                                <Star className="size-5 fill-amber-400 text-amber-400" />
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="border-b-2 border-slate-200 dark:border-slate-700 py-1 text-xs text-muted-foreground">
-                            {field.placeholder || 'Type your answer here...'}
-                          </div>
-                        )}
+                        {/* Input Type Preview */}
+                        <div className="border-b-2 border-slate-200 dark:border-slate-700 py-1 text-xs text-muted-foreground">
+                          {field.placeholder || `Enter ${field.label || 'value'}...`}
+                        </div>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="p-8 border-2 border-dashed rounded-2xl text-center text-muted-foreground text-xs">
-                    No questions on this step yet. Click &ldquo;+ Add Content&rdquo; from the Pages panel.
+                  <div className="w-full p-8 border-2 border-dashed rounded-2xl text-center text-muted-foreground text-xs space-y-2">
+                    <p>No questions on this step yet.</p>
+                    {onOpenAddWidgetDialog && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onOpenAddWidgetDialog(currentStepIndex, activeStep.id)}
+                        className="text-xs font-semibold gap-1"
+                      >
+                        <Plus className="size-3.5" /> Add Question / Widget
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
 
               {/* Step Navigation Controls (Typeform Enter to Continue) */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 pl-0 sm:pl-7">
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={currentStepIndex === 0}
-                    onClick={() => onStepChange(Math.max(0, currentStepIndex - 1))}
-                    className="text-xs h-9 rounded-xl gap-1"
-                  >
-                    <ArrowLeft className="size-3.5" /> Back
-                  </Button>
+              {isMultiStep && (
+                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 pl-0 sm:pl-8">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={currentStepIndex === 0}
+                      onClick={() => onStepChange(Math.max(0, currentStepIndex - 1))}
+                      className="text-xs h-9 rounded-xl gap-1"
+                    >
+                      <ArrowLeft className="size-3.5" /> Back
+                    </Button>
 
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (currentStepIndex < steps.length - 1) {
-                        onStepChange(currentStepIndex + 1);
-                      }
-                    }}
-                    className="text-xs h-9 rounded-xl font-bold text-white shadow-md gap-1.5 px-4"
-                    style={{ backgroundColor: primaryColor }}
-                  >
-                    <span>{currentStepIndex === steps.length - 1 ? 'Complete & Submit' : 'OK · Continue'}</span>
-                    <ArrowRight className="size-3.5" />
-                  </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (currentStepIndex < steps.length - 1) {
+                          onStepChange(currentStepIndex + 1);
+                        }
+                      }}
+                      className="text-xs h-9 rounded-xl font-bold text-white shadow-md gap-1.5 px-4 cursor-pointer"
+                      style={{ backgroundColor: primaryColor }}
+                    >
+                      <span>{currentStepIndex === steps.length - 1 ? 'Complete & Submit' : 'OK · Continue'}</span>
+                      <ArrowRight className="size-3.5" />
+                    </Button>
+                  </div>
+
+                  <p className="text-[11px] text-muted-foreground hidden sm:inline-flex items-center gap-1">
+                    press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono border">Enter ↵</kbd>
+                  </p>
                 </div>
-
-                <p className="text-[11px] text-muted-foreground hidden sm:inline-flex items-center gap-1">
-                  press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono border">Enter ↵</kbd>
-                </p>
-              </div>
+              )}
             </div>
           </div>
         ) : (
-          /* ════ 2. CLASSIC PAPER DOCUMENT VIEW (Jotform Parity) ════ */
+          /* ════ 2. CLASSIC PAPER DOCUMENT VIEW (Jotform Parity with Multi-Column) ════ */
           <div className="w-full space-y-6">
             {steps.map((step, sIdx) => (
               <div
                 key={step.id}
-                className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-md p-6 sm:p-8 space-y-4"
+                className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-md p-6 sm:p-8 space-y-5"
               >
-                <div className="flex items-center gap-2 border-b pb-3">
-                  <span
-                    className="size-6 rounded-lg text-white text-xs font-bold flex items-center justify-center shadow-xs"
-                    style={{ backgroundColor: primaryColor }}
-                  >
-                    {sIdx + 1}
-                  </span>
-                  <h3 className="text-base font-bold text-foreground">{step.title}</h3>
+                {/* Step / Section Header */}
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="size-6 rounded-lg text-white text-xs font-bold flex items-center justify-center shadow-xs"
+                      style={{ backgroundColor: primaryColor }}
+                    >
+                      {sIdx + 1}
+                    </span>
+                    <h3 className="text-base font-bold text-foreground">{step.title}</h3>
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                      {step.fields.length} {step.fields.length === 1 ? 'question' : 'questions'}
+                    </Badge>
+                  </div>
+
+                  {onOpenAddWidgetDialog && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onOpenAddWidgetDialog(sIdx, step.id)}
+                      className="h-7 text-[11px] font-semibold gap-1 text-emerald-600 border-emerald-200 dark:border-emerald-800"
+                    >
+                      <Plus className="size-3" /> Add Widget
+                    </Button>
+                  )}
                 </div>
 
-                <div className="space-y-3">
-                  {step.fields.map((f) => (
-                    <div key={f.id} className="p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
-                      <label className="text-xs font-bold block mb-1">
-                        {f.label} {f.required && <span className="text-rose-500">*</span>}
-                      </label>
-                      <div className="text-xs text-muted-foreground">{f.placeholder || 'Input field'}</div>
-                    </div>
-                  ))}
+                {/* Multi-Column Field Grid */}
+                <div className="flex flex-wrap gap-4 items-start">
+                  {step.fields.map((f, fIdx) => {
+                    const isSelected = selectedFieldId === f.id;
+                    const widthCls = getWidthClasses(f.width);
+
+                    return (
+                      <div
+                        key={f.id}
+                        onClick={() => onSelectField(f.id)}
+                        className={`group relative p-4 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
+                          isSelected
+                            ? 'border-emerald-600 dark:border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 ring-2 ring-emerald-600/20 shadow-sm'
+                            : 'border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 hover:border-slate-300'
+                        }`}
+                      >
+                        {/* Header & Column Selector */}
+                        <div className="flex items-center justify-between gap-1">
+                          <label className="text-xs font-bold text-foreground flex items-center gap-1.5 truncate">
+                            <span className="truncate">{f.label || 'Question'}</span>
+                            {f.required && <span className="text-rose-500">*</span>}
+                          </label>
+
+                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            {/* Width Selector Pills */}
+                            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md p-0.5 text-[9px] font-bold">
+                              <button
+                                type="button"
+                                onClick={() => handleSetFieldWidth(f.id, 'full')}
+                                className={`px-1.5 py-0.5 rounded ${
+                                  !f.width || f.width === 'full'
+                                    ? 'bg-emerald-600 text-white shadow-2xs'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                title="100% Full Width (1 Column)"
+                              >
+                                100%
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetFieldWidth(f.id, 'half')}
+                                className={`px-1.5 py-0.5 rounded ${
+                                  f.width === 'half'
+                                    ? 'bg-emerald-600 text-white shadow-2xs'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                title="50% Half Width (2 Columns)"
+                              >
+                                50%
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSetFieldWidth(f.id, 'third')}
+                                className={`px-1.5 py-0.5 rounded ${
+                                  f.width === 'third'
+                                    ? 'bg-emerald-600 text-white shadow-2xs'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                title="33% Third Width (3 Columns)"
+                              >
+                                33%
+                              </button>
+                            </div>
+
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-1 rounded text-muted-foreground hover:text-foreground">
+                                  <Sliders className="size-3" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="text-xs w-44">
+                                <DropdownMenuItem onClick={() => handleDuplicateField(f)} className="gap-1.5">
+                                  <Copy className="size-3.5" /> Duplicate Field
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleMoveField(f.id, 'up')} className="gap-1.5">
+                                  <ArrowUp className="size-3.5" /> Move Up
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleMoveField(f.id, 'down')} className="gap-1.5">
+                                  <ArrowDown className="size-3.5" /> Move Down
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleDeleteField(f.id)} className="gap-1.5 text-rose-600">
+                                  <Trash2 className="size-3.5" /> Delete Field
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+
+                        {/* Input Preview */}
+                        <div className="h-9 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-muted-foreground flex items-center">
+                          {f.placeholder || `Enter ${f.label || 'value'}...`}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -357,11 +633,11 @@ export function StudioFocusCanvas({
       </div>
 
       {/* ─── Bottom Status Footer ─── */}
-      <div className="w-full max-w-4xl py-4 flex items-center justify-between text-xs text-muted-foreground border-t border-slate-200/60 dark:border-slate-800/60">
+      <div className="w-full max-w-4xl py-4 flex items-center justify-between text-xs text-muted-foreground border-t border-slate-200/60 dark:border-slate-800/60 mt-6">
         <span className="flex items-center gap-1">
           <Lock className="size-3 text-emerald-500" /> 256-bit SSL Encrypted Form
         </span>
-        <span>Powered by Fieseros GPTForm</span>
+        <span>Powered by Fieseros GPTForm Studio</span>
       </div>
     </div>
   );

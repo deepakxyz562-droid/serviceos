@@ -101,6 +101,21 @@ export const UNIVERSAL_GENERAL_SETTINGS: SettingField[] = [
     default: false,
     description: 'Prevent submission if this field is empty.',
   },
+  // ─── Column Width & Layout (1-Col, 2-Col, 3-Col, 4-Col) ────────────────────
+  {
+    key: 'width',
+    label: 'Column Width',
+    type: 'segmented',
+    group: 'general',
+    default: 'full',
+    options: [
+      { label: '100% (1 Col)', value: 'full' },
+      { label: '50% (2 Col)', value: 'half' },
+      { label: '33% (3 Col)', value: 'third' },
+      { label: '25% (4 Col)', value: 'quarter' },
+    ],
+    helpText: 'Control how this field spans within a multi-column row.',
+  },
   // ─── Duplicate Field (inline button — JotForm) ────────────────────────────────
   {
     key: '_duplicate',

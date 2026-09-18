@@ -189,7 +189,7 @@ export function FieldEditorCard({
             {field.scoring && (
               <Badge
                 variant="outline"
-                className="text-[9px] h-4 gap-0.5 bg-purple-50 text-purple-700 border-purple-200"
+                className="text-[9px] h-4 gap-0.5 bg-amber-50 text-amber-700 border-amber-200"
               >
                 <Star className="size-2.5" /> scored (w={field.scoring.weight})
               </Badge>

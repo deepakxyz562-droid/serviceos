@@ -69,6 +69,7 @@ import { StudioThemeGalleryModal, THEME_GALLERY_PRESETS, FormThemePreset } from 
 import { StudioAiCopilotSidebar } from './builder/studio-ai-copilot-sidebar';
 import { StudioPagesTree } from './builder/studio-pages-tree';
 import { StudioFocusCanvas } from './builder/studio-focus-canvas';
+import { StudioWidgetPalette } from './builder/studio-widget-palette';
 import {
   FIELD_REGISTRY,
   FIELD_CATEGORY_META,
@@ -131,13 +132,14 @@ export function FormStudioBuilder({
   const [previewSubmitted, setPreviewSubmitted] = useState(false);
 
   // 2026 AI Studio & Multi-Step Panel Collapse States
-  const [showAiCopilot, setShowAiCopilot] = useState(true);
+  const [showWidgetPalette, setShowWidgetPalette] = useState(true);
+  const [showAiCopilot, setShowAiCopilot] = useState(false);
   const [showPagesTree, setShowPagesTree] = useState(true);
   const [showInspector, setShowInspector] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'focus' | 'paper'>('focus');
   const [themeModalOpen, setThemeModalOpen] = useState(false);
-  const [currentThemeId, setCurrentThemeId] = useState('washed-purple');
+  const [currentThemeId, setCurrentThemeId] = useState('fieseros-emerald');
 
   const handleSelectTheme = (preset: FormThemePreset) => {
     setCurrentThemeId(preset.id);
@@ -253,6 +255,14 @@ export function FormStudioBuilder({
       validation: f.validation,
     }));
 
+    const templateSteps = template.schema.steps?.map((s) => ({
+      id: s.id,
+      title: s.title,
+      description: s.description,
+    })) || [{ id: 'step_1', title: 'Step 1: Details' }];
+
+    const hasMultiSteps = (template.schema.steps?.length || 0) > 1;
+
     onFormDataChange((prev) => {
       const updatedFields =
         mode === 'append' ? [...(prev.fields || []), ...newFields] : newFields;
@@ -260,6 +270,14 @@ export function FormStudioBuilder({
         ...prev,
         name: customTitle || prev.name,
         fields: updatedFields,
+        isMultiStep: hasMultiSteps ? true : prev.isMultiStep,
+        steps: mode === 'replace' && hasMultiSteps ? templateSteps : (prev.steps || templateSteps),
+        primaryColor: template.schema.theme?.primaryColor || prev.primaryColor,
+        theme: {
+          ...(prev.theme || {}),
+          ...(template.schema.theme || {}),
+          primaryColor: template.schema.theme?.primaryColor || prev.primaryColor || '#9333ea',
+        } as any,
       };
     });
 
@@ -342,24 +360,27 @@ export function FormStudioBuilder({
       return;
     }
     const newId = `r-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const currentStepId = formData.steps?.[currentStepIndex]?.id || (formData.isMultiStep ? `step_${currentStepIndex + 1}` : undefined);
     const newField: FormField = {
       id: newId,
-      label: (def.label as string) || 'New Field',
+      label: (def.label as string) || 'New Question',
       type: ((def.type as string) || 'short_answer') as FieldType,
       required: Boolean(def.required),
       placeholder: (def.placeholder as string) || '',
       options: (def.options as any) || undefined,
       widgetType: def.widgetType as string | undefined,
       widgetConfig: def.widgetConfig as Record<string, unknown> | undefined,
+      stepId: currentStepId,
+      width: 'full',
     };
     onFormDataChange((prev) => ({
       ...prev,
       fields: [...prev.fields, newField],
     }));
     setSelectedFieldId(newId);
-    setInspectorMode('properties');
+    setShowInspector(true);
     toast.success(`✨ Added ${newField.label}`);
-  }, [onFormDataChange]);
+  }, [onFormDataChange, formData.steps, formData.isMultiStep, currentStepIndex]);
 
   // Keyboard shortcut for Cmd/Ctrl+S
   useEffect(() => {
@@ -375,19 +396,17 @@ export function FormStudioBuilder({
 
   // ─── Field CRUD Operations ──────────────────────────────────────────────────
 
-  // Legacy `handleAddWidget(widget: WidgetDefinition)` was removed in Phase A1.
-  // The "Widgets" palette tab now uses `handleAddFromRegistry(registryId)`
-  // directly, which delegates to `createFieldFromRegistry` — the same path as
-  // the "Basic" tab. This unifies widget creation through FIELD_REGISTRY.
-
   const handleAddPaymentGateway = (gw: PaymentGatewayDef) => {
     const newId = `pay-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const currentStepId = formData.steps?.[currentStepIndex]?.id || (formData.isMultiStep ? `step_${currentStepIndex + 1}` : undefined);
     const newField: FormField = {
       id: newId,
       label: `Payment via ${gw.name}`,
       type: 'short_answer',
       required: true,
       widgetType: `payment_${gw.id}`,
+      stepId: currentStepId,
+      width: 'full',
       widgetConfig: {
         gatewayId: gw.id,
         fieldType: gw.fieldType,
@@ -405,7 +424,7 @@ export function FormStudioBuilder({
       fields: [...prev.fields, newField],
     }));
     setSelectedFieldId(newId);
-    setInspectorMode('properties');
+    setShowInspector(true);
     toast.success(`💳 Added ${gw.name} Gateway`);
   };
 
@@ -643,7 +662,7 @@ export function FormStudioBuilder({
           </button>
         </div>
 
-        {/* Right: Universal Mode, Theme Design, Panel Toggles, Preview & Save */}
+        {/* Right: Universal Mode, Stepper Mode, Theme Design, Panel Toggles, Preview & Save */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           {studioTab === 'build' && !isPreviewMode && (
             <>
@@ -653,8 +672,8 @@ export function FormStudioBuilder({
                   type="button"
                   onClick={() => setViewMode('focus')}
                   className={cn(
-                    'px-2 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1',
-                    viewMode === 'focus' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    'px-2 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer',
+                    viewMode === 'focus' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                   )}
                   title="Card-by-card focus flow (Typeform style)"
                 >
@@ -664,12 +683,44 @@ export function FormStudioBuilder({
                   type="button"
                   onClick={() => setViewMode('paper')}
                   className={cn(
-                    'px-2 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1',
+                    'px-2 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer',
                     viewMode === 'paper' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                   )}
                   title="Classic paper document (Jotform style)"
                 >
                   <span>📄 Paper</span>
+                </button>
+              </div>
+
+              {/* Multi-Step Stepper Switcher */}
+              <div className="hidden xl:flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/60">
+                <button
+                  type="button"
+                  onClick={() => onFormDataChange((prev) => ({ ...prev, isMultiStep: false }))}
+                  className={cn(
+                    'px-2 py-1 text-[11px] font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer',
+                    !formData.isMultiStep ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Single Continuous Page"
+                >
+                  <span>📄 Single Page</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onFormDataChange((prev) => ({
+                    ...prev,
+                    isMultiStep: true,
+                    steps: (!prev.steps || prev.steps.length === 0)
+                      ? [{ id: 'step_1', title: 'Step 1: Contact Info' }, { id: 'step_2', title: 'Step 2: Service Details' }]
+                      : prev.steps,
+                  }))}
+                  className={cn(
+                    'px-2 py-1 text-[11px] font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer',
+                    formData.isMultiStep ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title="Multi-Step Stepper"
+                >
+                  <span>📑 Stepper</span>
                 </button>
               </div>
 
@@ -679,26 +730,26 @@ export function FormStudioBuilder({
                 variant="outline"
                 size="sm"
                 onClick={() => setThemeModalOpen(true)}
-                className="h-8 gap-1.5 text-xs font-semibold border-purple-300 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                className="h-8 gap-1.5 text-xs font-semibold border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer"
               >
                 <span>🎨 Design</span>
               </Button>
 
-              {/* Panel Show / Hide Toggle Buttons */}
+              {/* 4 Panel Show / Hide Toggle Buttons */}
               <div className="hidden lg:flex items-center gap-0.5 border border-border/80 rounded-lg p-0.5 bg-muted/40">
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setShowAiCopilot((v) => !v)}
+                  onClick={() => setShowWidgetPalette((v) => !v)}
                   className={cn(
-                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1',
-                    showAiCopilot ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground'
+                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
+                    showWidgetPalette ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground'
                   )}
-                  title="Toggle AI Copilot Sidebar"
+                  title="Toggle Widget Palette"
                 >
-                  <Sparkles className="size-3 text-purple-600" />
-                  <span>AI</span>
+                  <Plus className="size-3 text-emerald-600" />
+                  <span>Widgets</span>
                 </Button>
 
                 <Button
@@ -707,13 +758,28 @@ export function FormStudioBuilder({
                   size="sm"
                   onClick={() => setShowPagesTree((v) => !v)}
                   className={cn(
-                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1',
+                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
                     showPagesTree ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
                   )}
-                  title="Toggle Multi-Step Pages Tree"
+                  title="Toggle Pages & Steps"
                 >
                   <Layers className="size-3" />
-                  <span>Pages</span>
+                  <span>Steps</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAiCopilot((v) => !v)}
+                  className={cn(
+                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
+                    showAiCopilot ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground'
+                  )}
+                  title="Toggle AI Copilot Sidebar"
+                >
+                  <Sparkles className="size-3 text-emerald-600" />
+                  <span>AI</span>
                 </Button>
 
                 <Button
@@ -722,7 +788,7 @@ export function FormStudioBuilder({
                   size="sm"
                   onClick={() => setShowInspector((v) => !v)}
                   className={cn(
-                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1',
+                    'h-7 px-2 text-[11px] font-semibold rounded-md transition-all gap-1 cursor-pointer',
                     showInspector ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground'
                   )}
                   title="Toggle Field Inspector"
@@ -764,7 +830,7 @@ export function FormStudioBuilder({
             size="sm"
             onClick={onSave}
             disabled={saving}
-            className="h-8 gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-sm"
+            className="h-8 gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-semibold shadow-sm shadow-emerald-600/20 cursor-pointer"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
             <span>{saving ? 'Saving...' : 'Save Form'}</span>
@@ -776,20 +842,20 @@ export function FormStudioBuilder({
           MAIN STUDIO WORKSPACE
          ═════════════════════════════════════════════════════════════════════════ */}
       <div className="flex-1 min-h-0 flex overflow-hidden relative w-full h-full">
-        {/* ─── 1. BUILD TAB (2026 AI-NATIVE 4-PANEL MULTI-STEP STUDIO) ──────── */}
+        {/* ─── 1. BUILD TAB (2026 AI-NATIVE 5-PANEL MULTI-STEP STUDIO) ──────── */}
         {studioTab === 'build' && !isPreviewMode && (
           <div className="flex-1 min-h-0 flex overflow-hidden w-full h-full relative">
-            {/* Left Panel 1: AI Copilot Sidebar */}
-            {showAiCopilot && (
-              <StudioAiCopilotSidebar
-                formData={formData}
-                onFormDataChange={onFormDataChange}
-                onClose={() => setShowAiCopilot(false)}
-                className="w-80 border-r border-border/80 bg-background z-20 shrink-0"
+            {/* Panel 1: Studio Widget Palette (200+ widgets, 33 payments, basic fields) */}
+            {showWidgetPalette && (
+              <StudioWidgetPalette
+                onAddRegistryField={handleAddFromRegistry}
+                onAddPaymentGateway={handleAddPaymentGateway}
+                onClose={() => setShowWidgetPalette(false)}
+                activeStepTitle={formData.steps?.[currentStepIndex]?.title || `Step ${currentStepIndex + 1}`}
               />
             )}
 
-            {/* Left Panel 2: Multi-Step Pages & Question Tree */}
+            {/* Panel 2: Multi-Step Pages & Question Tree */}
             {showPagesTree && (
               <StudioPagesTree
                 formData={formData}
@@ -801,24 +867,21 @@ export function FormStudioBuilder({
                   setSelectedFieldId(id);
                   setShowInspector(true);
                 }}
-                onOpenAddWidgetDialog={(stepIdx) => {
-                  const newField: FormField = {
-                    id: `f-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                    type: 'short_answer',
-                    label: 'New Question',
-                    placeholder: 'Type your answer here...',
-                    stepId: `step_${stepIdx + 1}`,
-                  };
-                  onFormDataChange((prev) => ({
-                    ...prev,
-                    fields: [...prev.fields, newField],
-                  }));
-                  setSelectedFieldId(newField.id);
-                  setShowInspector(true);
-                  toast.success(`Added new question to Step ${stepIdx + 1}`);
+                onOpenAddWidgetDialog={(stepIdx, stepId) => {
+                  setShowWidgetPalette(true);
+                  if (stepIdx !== currentStepIndex) setCurrentStepIndex(stepIdx);
                 }}
                 onClose={() => setShowPagesTree(false)}
-                className="w-64 border-r border-border/80 bg-background z-20 shrink-0"
+              />
+            )}
+
+            {/* Panel 3: AI Copilot Sidebar */}
+            {showAiCopilot && (
+              <StudioAiCopilotSidebar
+                formData={formData}
+                onFormDataChange={onFormDataChange}
+                onClose={() => setShowAiCopilot(false)}
+                className="w-80 border-r border-border/80 bg-background z-20 shrink-0"
               />
             )}
 
@@ -834,12 +897,15 @@ export function FormStudioBuilder({
                 setShowInspector(true);
               }}
               viewMode={viewMode}
+              isWidgetPaletteCollapsed={!showWidgetPalette}
+              onToggleWidgetPalette={() => setShowWidgetPalette((v) => !v)}
               isAiCopilotCollapsed={!showAiCopilot}
               onToggleAiCopilot={() => setShowAiCopilot((v) => !v)}
               isPagesTreeCollapsed={!showPagesTree}
               onTogglePagesTree={() => setShowPagesTree((v) => !v)}
               isInspectorCollapsed={!showInspector}
               onToggleInspector={() => setShowInspector((v) => !v)}
+              onOpenAddWidgetDialog={() => setShowWidgetPalette(true)}
               className="flex-1 min-h-0 h-full"
             />
 
@@ -1009,9 +1075,9 @@ export function FormStudioBuilder({
                 <button
                   type="button"
                   onClick={() => setPreviewFormat('agent')}
-                  className={cn('px-2.5 py-1 rounded-md transition-all flex items-center gap-1', previewFormat === 'agent' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground')}
+                  className={cn('px-2.5 py-1 rounded-md transition-all flex items-center gap-1', previewFormat === 'agent' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground')}
                 >
-                  <Bot className="size-3 text-purple-600" />
+                  <Bot className="size-3 text-emerald-600" />
                   <span>💬 AI Voice/Chat Agent</span>
                 </button>
               </div>

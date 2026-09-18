@@ -172,6 +172,17 @@ export interface EditorFormData {
   successMessage?: string;
   rules?: any[];
   id?: string;
+  isMultiStep?: boolean;
+  steps?: Array<{ id: string; title: string; description?: string }>;
+  theme?: {
+    primaryColor?: string;
+    backgroundColor?: string;
+    cardBackground?: string;
+    textColor?: string;
+    fontFamily?: string;
+    borderRadius?: string | number;
+    layout?: string;
+  };
 }
 
 /**

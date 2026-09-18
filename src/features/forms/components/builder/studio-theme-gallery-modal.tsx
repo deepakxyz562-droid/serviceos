@@ -27,17 +27,31 @@ export interface FormThemePreset {
 
 export const THEME_GALLERY_PRESETS: FormThemePreset[] = [
   {
-    id: 'washed-purple',
-    name: 'Washed Purple',
+    id: 'fieseros-emerald',
+    name: 'Fieseros Emerald',
     category: 'popular',
-    primaryColor: '#9333ea',
-    backgroundColor: '#faf5ff',
+    primaryColor: '#059669',
+    backgroundColor: '#f0fdf4',
     cardBackground: '#ffffff',
-    textColor: '#581c87',
+    textColor: '#064e3b',
     fontFamily: 'Inter, sans-serif',
     borderRadius: '1rem',
-    accentLineColor: '#c084fc',
-    buttonColor: '#9333ea',
+    accentLineColor: '#34d399',
+    buttonColor: '#059669',
+    buttonTextColor: '#ffffff',
+  },
+  {
+    id: 'ocean-teal',
+    name: 'Ocean Teal',
+    category: 'popular',
+    primaryColor: '#0d9488',
+    backgroundColor: '#f0fdfa',
+    cardBackground: '#ffffff',
+    textColor: '#134e4a',
+    fontFamily: 'Inter, sans-serif',
+    borderRadius: '0.75rem',
+    accentLineColor: '#2dd4bf',
+    buttonColor: '#0d9488',
     buttonTextColor: '#ffffff',
   },
   {
@@ -55,20 +69,6 @@ export const THEME_GALLERY_PRESETS: FormThemePreset[] = [
     buttonTextColor: '#ffffff',
   },
   {
-    id: 'inky-black',
-    name: 'Inky Black',
-    category: 'dark',
-    primaryColor: '#10b981',
-    backgroundColor: '#09090b',
-    cardBackground: '#18181b',
-    textColor: '#f4f4f5',
-    fontFamily: 'Inter, sans-serif',
-    borderRadius: '0.75rem',
-    accentLineColor: '#3f3f46',
-    buttonColor: '#ffffff',
-    buttonTextColor: '#09090b',
-  },
-  {
     id: 'pearl-white',
     name: 'Pearl White',
     category: 'minimal',
@@ -80,34 +80,6 @@ export const THEME_GALLERY_PRESETS: FormThemePreset[] = [
     borderRadius: '0.5rem',
     accentLineColor: '#cbd5e1',
     buttonColor: '#0f172a',
-    buttonTextColor: '#ffffff',
-  },
-  {
-    id: 'neon-emerald',
-    name: 'Neon Emerald',
-    category: 'bold',
-    primaryColor: '#059669',
-    backgroundColor: '#f0fdf4',
-    cardBackground: '#ffffff',
-    textColor: '#064e3b',
-    fontFamily: 'Inter, sans-serif',
-    borderRadius: '1rem',
-    accentLineColor: '#34d399',
-    buttonColor: '#059669',
-    buttonTextColor: '#ffffff',
-  },
-  {
-    id: 'sunset-coral',
-    name: 'Sunset Coral',
-    category: 'bold',
-    primaryColor: '#e11d48',
-    backgroundColor: '#fff1f2',
-    cardBackground: '#ffffff',
-    textColor: '#881337',
-    fontFamily: 'Inter, sans-serif',
-    borderRadius: '1rem',
-    accentLineColor: '#fb7185',
-    buttonColor: '#e11d48',
     buttonTextColor: '#ffffff',
   },
   {
@@ -125,17 +97,17 @@ export const THEME_GALLERY_PRESETS: FormThemePreset[] = [
     buttonTextColor: '#ffffff',
   },
   {
-    id: 'ocean-teal',
-    name: 'Ocean Teal',
-    category: 'minimal',
-    primaryColor: '#0d9488',
-    backgroundColor: '#f0fdfa',
+    id: 'sunset-coral',
+    name: 'Sunset Coral',
+    category: 'bold',
+    primaryColor: '#e11d48',
+    backgroundColor: '#fff1f2',
     cardBackground: '#ffffff',
-    textColor: '#134e4a',
+    textColor: '#881337',
     fontFamily: 'Inter, sans-serif',
-    borderRadius: '0.75rem',
-    accentLineColor: '#2dd4bf',
-    buttonColor: '#0d9488',
+    borderRadius: '1rem',
+    accentLineColor: '#fb7185',
+    buttonColor: '#e11d48',
     buttonTextColor: '#ffffff',
   },
 ];
@@ -150,7 +122,7 @@ interface StudioThemeGalleryModalProps {
 export function StudioThemeGalleryModal({
   open,
   onOpenChange,
-  currentThemeId = 'washed-purple',
+  currentThemeId = 'fieseros-emerald',
   onSelectTheme,
 }: StudioThemeGalleryModalProps) {
   const [activeTab, setActiveTab] = useState<'gallery' | 'my_themes'>('gallery');
@@ -158,100 +130,109 @@ export function StudioThemeGalleryModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl p-0 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl bg-white dark:bg-slate-950">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400">
+        <DialogHeader className="p-4 px-6 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
               <Palette className="size-4" />
             </div>
             <div>
-              <DialogTitle className="text-sm font-bold text-foreground">Theme &amp; Design Studio</DialogTitle>
-              <p className="text-xs text-muted-foreground">Pick a curated visual theme or create your own brand style</p>
+              <DialogTitle className="text-sm font-bold text-foreground">
+                Theme Studio &amp; Design Presets
+              </DialogTitle>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Select high-conversion modern form design systems &amp; responsive typography
+              </p>
             </div>
           </div>
+        </DialogHeader>
 
-          <div className="flex items-center gap-1 bg-slate-200/80 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-semibold">
-            <button
-              onClick={() => setActiveTab('gallery')}
-              className={`px-3 py-1 rounded-md transition-all ${
-                activeTab === 'gallery'
-                  ? 'bg-white dark:bg-slate-900 text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Gallery
-            </button>
-            <button
-              onClick={() => setActiveTab('my_themes')}
-              className={`px-3 py-1 rounded-md transition-all ${
-                activeTab === 'my_themes'
-                  ? 'bg-white dark:bg-slate-900 text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              My Themes
-            </button>
-          </div>
-        </div>
-
-        {/* Theme Cards Grid */}
-        <div className="p-5 max-h-[70vh] overflow-y-auto">
+        {/* Gallery Grid */}
+        <div className="p-6 max-h-[70vh] overflow-y-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {THEME_GALLERY_PRESETS.map((preset) => {
-              const isSelected = currentThemeId === preset.id;
+            {THEME_GALLERY_PRESETS.map((theme) => {
+              const isSelected = currentThemeId === theme.id;
               return (
                 <div
-                  key={preset.id}
+                  key={theme.id}
                   onClick={() => {
-                    onSelectTheme(preset);
+                    onSelectTheme(theme);
+                    onOpenChange(false);
                   }}
-                  className={`group relative rounded-xl border-2 transition-all cursor-pointer overflow-hidden p-3 flex flex-col justify-between h-44 ${
+                  className={`group relative rounded-xl border p-3 cursor-pointer transition-all hover:shadow-lg ${
                     isSelected
-                      ? 'border-purple-600 dark:border-purple-400 shadow-md ring-2 ring-purple-600/20'
-                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 hover:shadow-sm'
+                      ? 'border-emerald-600 dark:border-emerald-400 shadow-md ring-2 ring-emerald-600/20'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
                   }`}
-                  style={{ backgroundColor: preset.backgroundColor }}
+                  style={{ backgroundColor: theme.backgroundColor }}
                 >
                   {/* Selected Indicator */}
                   {isSelected && (
-                    <div className="absolute top-2 right-2 size-5 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xs">
-                      <Check className="size-3" />
+                    <div className="absolute top-2 right-2 size-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                      <Check className="size-3 stroke-[3]" />
                     </div>
                   )}
 
-                  {/* Theme Sample Preview Card */}
+                  {/* Visual Preview Box */}
                   <div
-                    className="rounded-lg p-2.5 space-y-1.5 shadow-xs border border-black/5"
-                    style={{ backgroundColor: preset.cardBackground, color: preset.textColor }}
+                    className="rounded-lg p-3 shadow-xs space-y-2 border border-black/5"
+                    style={{
+                      backgroundColor: theme.cardBackground,
+                      borderRadius: theme.borderRadius,
+                    }}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold" style={{ color: preset.primaryColor }}>
-                        Question
-                      </span>
-                      <div className="h-1.5 w-6 rounded-full" style={{ backgroundColor: preset.accentLineColor }} />
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className="size-3 rounded-full"
+                        style={{ backgroundColor: theme.primaryColor }}
+                      />
+                      <div
+                        className="h-2 w-16 rounded-full opacity-60"
+                        style={{ backgroundColor: theme.textColor }}
+                      />
                     </div>
-                    <p className="text-[9px] font-medium opacity-80">Answer text input...</p>
-                    <div className="h-1 w-full rounded-full" style={{ backgroundColor: preset.accentLineColor }} />
+
                     <div
-                      className="h-4 rounded text-[8px] font-bold text-center flex items-center justify-center mt-1"
+                      className="h-1.5 w-full rounded-full opacity-30"
+                      style={{ backgroundColor: theme.accentLineColor }}
+                    />
+                    <div
+                      className="h-1.5 w-3/4 rounded-full opacity-30"
+                      style={{ backgroundColor: theme.accentLineColor }}
+                    />
+
+                    <div
+                      className="mt-2 py-1 px-2.5 rounded text-[10px] font-bold text-center shadow-2xs"
                       style={{
-                        backgroundColor: preset.buttonColor,
-                        color: preset.buttonTextColor,
+                        backgroundColor: theme.buttonColor,
+                        color: theme.buttonTextColor,
                       }}
                     >
-                      Button
+                      Submit Button
                     </div>
                   </div>
 
-                  {/* Theme Name Label */}
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                      {preset.name}
-                    </span>
+                  <div className="mt-3 flex items-center justify-between">
+                    <div>
+                      <p
+                        className="text-xs font-bold leading-tight"
+                        style={{ color: theme.textColor }}
+                      >
+                        {theme.name}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground capitalize">
+                        {theme.category}
+                      </p>
+                    </div>
+
                     <span
-                      className="size-3 rounded-full border border-black/10 shadow-xs"
-                      style={{ backgroundColor: preset.primaryColor }}
-                    />
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
+                      style={{
+                        borderColor: theme.accentLineColor,
+                        color: theme.primaryColor,
+                      }}
+                    >
+                      Use
+                    </span>
                   </div>
                 </div>
               );

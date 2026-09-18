@@ -223,11 +223,11 @@ export function StudioAiCopilotSidebar({
       {/* Top Header */}
       <div className="p-3.5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900/60 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="size-6 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-xs">
+          <div className="size-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
             <Sparkles className="size-3.5" />
           </div>
           <span className="font-bold text-xs text-foreground">GPTForm AI Copilot</span>
-          <Badge variant="outline" className="text-[9px] bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 py-0">
+          <Badge variant="outline" className="text-[9px] bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 py-0">
             2026 AI
           </Badge>
         </div>
@@ -248,7 +248,7 @@ export function StudioAiCopilotSidebar({
           <div key={msg.id} className="space-y-2">
             {msg.sender === 'user' ? (
               <div className="flex justify-end">
-                <div className="max-w-[85%] bg-purple-600 text-white rounded-2xl rounded-tr-xs px-3.5 py-2.5 text-xs shadow-sm leading-relaxed">
+                <div className="max-w-[85%] bg-emerald-600 text-white rounded-2xl rounded-tr-xs px-3.5 py-2.5 text-xs shadow-sm leading-relaxed">
                   {msg.text}
                 </div>
               </div>
@@ -261,9 +261,9 @@ export function StudioAiCopilotSidebar({
                     onClick={() =>
                       setExpandedTraceId(expandedTraceId === msg.id ? null : msg.id)
                     }
-                    className="flex items-center gap-1.5 text-[11px] font-semibold text-purple-700 dark:text-purple-300 hover:text-purple-900 transition-colors"
+                    className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 transition-colors"
                   >
-                    <CheckCircle2 className="size-3 text-purple-600" />
+                    <CheckCircle2 className="size-3 text-emerald-600" />
                     <span>Completed {msg.stepTrace.stepCount} steps</span>
                     {expandedTraceId === msg.id ? (
                       <ChevronUp className="size-3" />
@@ -275,10 +275,10 @@ export function StudioAiCopilotSidebar({
 
                 {/* Collapsible Action List */}
                 {expandedTraceId === msg.id && msg.stepTrace && (
-                  <div className="p-2.5 bg-purple-50/60 dark:bg-purple-950/30 rounded-xl border border-purple-100 dark:border-purple-900/40 text-[10.5px] space-y-1 text-slate-700 dark:text-slate-300 font-mono">
+                  <div className="p-2.5 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/40 text-[10.5px] space-y-1 text-slate-700 dark:text-slate-300 font-mono">
                     {msg.stepTrace.actions.map((act, i) => (
                       <div key={i} className="flex items-start gap-1.5">
-                        <span className="text-purple-600 font-bold">•</span>
+                        <span className="text-emerald-600 font-bold">•</span>
                         <span>{act}</span>
                       </div>
                     ))}
@@ -313,7 +313,7 @@ export function StudioAiCopilotSidebar({
                           setFeedbackGiven((prev) => ({ ...prev, [msg.id]: 'up' }))
                         }
                         className={`p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-muted-foreground ${
-                          feedbackGiven[msg.id] === 'up' ? 'text-purple-600 font-bold' : ''
+                          feedbackGiven[msg.id] === 'up' ? 'text-emerald-600 font-bold' : ''
                         }`}
                       >
                         <ThumbsUp className="size-3" />
@@ -338,7 +338,7 @@ export function StudioAiCopilotSidebar({
         ))}
 
         {isProcessing && (
-          <div className="flex items-center gap-2 text-xs text-purple-600 dark:text-purple-400 p-3 bg-purple-50/50 dark:bg-purple-950/30 rounded-xl border border-purple-100 dark:border-purple-900/30">
+          <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 p-3 bg-emerald-50/50 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
             <Sparkles className="size-4 animate-spin" />
             <span>AI Copilot is modifying your multi-step form schema...</span>
           </div>
@@ -350,14 +350,14 @@ export function StudioAiCopilotSidebar({
         {[
           'Add a welcome screen',
           'Add digital signature',
-          'Apply Washed Purple theme',
+          'Apply Emerald Theme',
           'Make all inputs required',
         ].map((suggestion) => (
           <button
             key={suggestion}
             type="button"
             onClick={() => handleSendPrompt(suggestion)}
-            className="text-[10px] font-medium bg-slate-100 hover:bg-purple-50 hover:text-purple-700 dark:bg-slate-800 dark:hover:bg-purple-950/50 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-md transition-colors"
+            className="text-[10px] font-medium bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:hover:bg-emerald-950/50 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-md transition-colors"
           >
             + {suggestion}
           </button>
@@ -377,14 +377,14 @@ export function StudioAiCopilotSidebar({
             value={promptInput}
             onChange={(e) => setPromptInput(e.target.value)}
             placeholder="Ask GPTForm AI to edit anything..."
-            className="pr-16 text-xs h-10 rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus-visible:ring-purple-500"
+            className="pr-16 text-xs h-10 rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus-visible:ring-emerald-500"
           />
           <div className="absolute right-1.5 flex items-center gap-1">
             <Button
               type="submit"
               size="sm"
               disabled={!promptInput.trim() || isProcessing}
-              className="size-7 p-0 bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-xs"
+              className="size-7 p-0 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-xs"
             >
               <Send className="size-3.5" />
             </Button>
