@@ -88,13 +88,7 @@ We pride ourselves on honest pricing, on-time arrivals, and quality workmanship.
       slug: 'repair-replacement',
     },
   ],
-  reviews: [
-    { rating: 5, comment: 'Came out at 2am for an emergency. Fast, professional, and fair price. Will use again!', authorName: 'Sarah M.' },
-    { rating: 5, comment: 'Installed a new system same day. Very knowledgeable and cleaned up everything. Highly recommend.', authorName: 'David K.' },
-    { rating: 4, comment: 'Good service. A bit pricey but the work was solid.', authorName: 'Maria L.' },
-    { rating: 5, comment: 'Best in town. Honest, on-time, and does excellent work. We use them for all our properties.', authorName: 'James R.' },
-    { rating: 5, comment: 'Fixed the issue in 30 minutes. Friendly and professional.', authorName: 'Patricia B.' },
-  ],
+  reviews: [],
   gallery: [],
   faqs: [
     { question: 'Do you offer 24/7 emergency service?', answer: 'Yes. We are available 24 hours a day, 7 days a week for emergencies. Call us anytime.' },

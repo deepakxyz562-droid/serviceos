@@ -3,7 +3,6 @@ import { permanentRedirect, notFound } from 'next/navigation'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import {
-  Star,
   MapPin,
   Phone,
   Clock,
@@ -38,7 +37,6 @@ import {
   getFaqSchema,
   getServiceSchema,
   type FaqItem,
-  type LocalBusinessReview,
   type LocalBusinessHours,
 } from '@/lib/seo/schemas'
 import { stripHtml } from '@/lib/seo/html-utils'
@@ -49,7 +47,6 @@ import {
 import {
   getPublicBusinessByUrl,
   getPublicServices,
-  getPublicReviews,
   getMarketplaceCertifications,
   getSimilarProviders,
   formatAddressForDisplay,
@@ -245,12 +242,7 @@ export default async function PublicBusinessHubPage({
 
   const cleanPhone = business.phone ? business.phone.replace(/\s*\(\/\)\s*/g, '').trim() : null;
 
-  // Fetch services + reviews + certifications + featured-listing in parallel.
-  // Running all four queries concurrently (instead of awaiting services/reviews/
-  // certifications first, then featuredMap separately) cuts the total data-fetch
-  // window from ~4 sequential round-trips to ~1. For marketplace providers we
-  // also fetch certifications + the featured-listing row; non-marketplace
-  // businesses resolve those two as empty/absent so no extra query runs.
+  // Fetch services + certifications + featured-listing in parallel.
   const certificationsPromise = business.marketplaceOptIn
     ? getMarketplaceCertifications(business.id)
     : Promise.resolve<PublicCertificationData[]>([])
@@ -264,9 +256,8 @@ export default async function PublicBusinessHubPage({
     business.country,
     6,
   ).catch(() => [])
-  const [servicesRaw, reviewsRaw, certificationsRaw, featuredMap, similarProvidersRaw, publicBranding] = await Promise.all([
+  const [servicesRaw, certificationsRaw, featuredMap, similarProvidersRaw, publicBranding] = await Promise.all([
     getPublicServices(business.id),
-    getPublicReviews(business.id, 10),
     certificationsPromise,
     featuredPromise,
     similarPromise,
@@ -276,7 +267,6 @@ export default async function PublicBusinessHubPage({
     loadTenantPublicBranding(business.id),
   ])
   const services = Array.isArray(servicesRaw) ? servicesRaw : []
-  const reviews = Array.isArray(reviewsRaw) ? reviewsRaw : []
   const certifications = Array.isArray(certificationsRaw) ? certificationsRaw : []
   const similarProviders = Array.isArray(similarProvidersRaw) ? similarProvidersRaw : []
   // When true, the tenant's plan allows white-label AND they've enabled it.
@@ -364,15 +354,6 @@ export default async function PublicBusinessHubPage({
   // NOTE: rating-breakdown buckets were removed per Google Maps ToS §3.2.4
   // (the summary box that used them displayed Google's rating/reviewCount).
 
-  // Build structured data.
-  const localBusinessReviews: LocalBusinessReview[] = reviews.map((r) => ({
-    authorName: r.authorName || 'Verified Customer',
-    rating: r.rating,
-    comment: r.comment || undefined,
-    datePublished: new Date(r.createdAt).toISOString().split('T')[0],
-    url: undefined,
-  }))
-
   const openingHours: LocalBusinessHours[] = buildOpeningHours(businessHours)
 
   const localBusinessSchema = getLocalBusinessSchema({
@@ -397,11 +378,6 @@ export default async function PublicBusinessHubPage({
     country: business.country,
     logo: business.logo || undefined,
     coverImage: business.coverImage || undefined,
-    // rating + reviewCount removed from schema per Google Maps ToS §3.2.4 —
-    // these fields originated from Google Places API and cannot be surfaced
-    // (even in structured data). Customer reviews from our own Review table
-    // are still passed via `reviews` below.
-    reviews: localBusinessReviews,
     openingHours: openingHours.length > 0 ? openingHours : undefined,
     sameAs: Object.values(socialLinks).filter(Boolean),
     // SEO-3 (review fix): emit GeoCoordinates when the business has real
@@ -572,11 +548,10 @@ export default async function PublicBusinessHubPage({
                   7. HiringChecklist       — always (industry-specific guide)
                   8. HowBookingWorks       — always (3-step flow)
                   9. Certifications        — conditional, marketplace-only
-                 10. Reviews               — conditional
-                 11. Business FAQs         — conditional (business-authored)
-                 12. PlatformFaqs          — always (platform-level FAQs)
-                 13. TrustVerification     — always (explains the 4 badges)
-                 14. CRM CTA               — conditional, unclaimed only
+                 10. Business FAQs         — conditional (business-authored)
+                 11. PlatformFaqs          — always (platform-level FAQs)
+                 12. TrustVerification     — always (explains the 4 badges)
+                 13. CRM CTA               — conditional, unclaimed only
 
                 The 7 evergreen sections (1, 2, 3, 6, 7, 8, 12, 13) ensure the
                 page has genuine content depth for EVERY listing — claimed or
@@ -767,29 +742,7 @@ export default async function PublicBusinessHubPage({
                 </section>
               ) : null}
 
-              {/* Reviews */}
-              {reviews.length > 0 && (
-                <section id="reviews" aria-labelledby="reviews-heading">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 id="reviews-heading" className="text-2xl font-bold tracking-tight">
-                      Customer Reviews ({reviews.length})
-                    </h2>
-                  </div>
 
-                  {/* Rating summary box removed per Google Maps ToS §3.2.4.
-                      The big rating number + review count came from Google
-                      Places API (business.rating / business.reviewCount) and
-                      cannot be surfaced in user-visible UI. The individual
-                      customer reviews below are from our own Review table
-                      (genuine customer feedback) and remain intact. */}
-
-                  <div className="space-y-4">
-                    {reviews.map((r) => (
-                      <ReviewCard key={r.id} review={r} />
-                    ))}
-                  </div>
-                </section>
-              )}
 
               {/* FAQs */}
               {faqs.length > 0 && (
@@ -1252,10 +1205,7 @@ function PublicBusinessHero({
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight">
                 {business.name}
               </h1>
-              {/* Google rating removed per Maps ToS §3.2.4 — rating/reviewCount
-                  on Tenant originated from Google Places API and cannot be
-                  surfaced in user-visible UI. Customer reviews (from our own
-                  Review table) are still shown in the Reviews section below. */}
+              {/* Google rating and fake customer reviews removed per user request and Maps ToS §3.2.4. */}
             </div>
             {business.tagline && (
               <p className="text-base text-muted-foreground mb-2">{business.tagline}</p>
@@ -1386,47 +1336,7 @@ function ServiceCard({
   )
 }
 
-// ── Review card ─────────────────────────────────────────────────────────────
 
-function ReviewCard({
-  review,
-}: {
-  review: { id: string; rating: number; comment: string | null; authorName: string | null; source: string; createdAt: Date; responseJson: string }
-}) {
-  const response: { text?: string; respondedAt?: string } | null = safeJson(review.responseJson, null)
-  return (
-    <div className="rounded-lg border bg-card text-card-foreground p-4">
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-emerald-700 dark:text-emerald-300 font-semibold text-sm">
-              {(review.authorName || 'A')[0].toUpperCase()}
-            </div>
-            <div>
-              <div className="font-medium text-foreground text-sm">
-                {review.authorName || 'Verified Customer'}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {new Date(review.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                {review.source !== 'internal' && <span className="ml-1">· via {review.source}</span>}
-              </div>
-            </div>
-          </div>
-        </div>
-        <StarRating rating={review.rating} />
-      </div>
-      {review.comment && (
-        <p className="text-sm text-muted-foreground leading-relaxed mt-2">{review.comment}</p>
-      )}
-      {response?.text && (
-        <div className="mt-3 pl-3 border-l-2 border-emerald-200 dark:border-emerald-800">
-          <div className="text-xs font-semibold text-foreground mb-0.5">Response from business</div>
-          <p className="text-sm text-muted-foreground">{response.text}</p>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ── Similar business card (Fix C — redesigned) ──────────────────────────────
 // Clean, modern card matching the marketplace browse page's design language:
@@ -1528,24 +1438,7 @@ function SimilarBusinessCard({ business }: { business: SimilarBusiness }) {
   )
 }
 
-// ── Star rating ─────────────────────────────────────────────────────────────
 
-function StarRating({ rating }: { rating: number }) {
-  return (
-    <div className="flex items-center gap-0.5" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <Star
-          key={i}
-          className={`h-4 w-4 ${
-            i <= Math.round(rating)
-              ? 'fill-amber-400 text-amber-400'
-              : 'fill-muted text-muted'
-          }`}
-        />
-      ))}
-    </div>
-  )
-}
 
 // ── Info row ────────────────────────────────────────────────────────────────
 
