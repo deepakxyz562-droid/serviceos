@@ -73,6 +73,14 @@ const nextConfig: NextConfig = {
         destination: '/',
       },
       {
+        source: '/gptform',
+        destination: '/ai-forms',
+      },
+      {
+        source: '/gptsite',
+        destination: '/ai-employee',
+      },
+      {
         source: '/webhook-test/:path*',
         destination: '/api/webhook-test/:path*',
       },

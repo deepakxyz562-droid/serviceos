@@ -115,21 +115,26 @@ export default function AiFormsLandingPage() {
       {/* ─── Hero Section with Instant AI Form Generator ─────────────────────── */}
       <section className="relative overflow-hidden pt-12 pb-20 md:pt-20 md:pb-28 border-b bg-gradient-to-b from-teal-50/60 via-background to-background dark:from-teal-950/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-100/80 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-semibold shadow-xs">
-            <Sparkles className="size-3.5 text-teal-600" />
-            <span>200+ Smart Widgets • 33 Payment Gateways • 11 AI Channels</span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-100/80 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-semibold shadow-xs">
+              <Sparkles className="size-3.5 text-teal-600" />
+              <span>GPTForm™ · 200+ Smart Widgets • 33 Payment Gateways</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-medium">
+              <span>🎁 1 Subscription Includes Both <strong>GPTForm + GPTSite</strong></span>
+            </div>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground max-w-4xl mx-auto leading-[1.15]">
             Build Next-Gen{' '}
             <span className="bg-gradient-to-r from-teal-600 via-emerald-600 to-blue-600 bg-clip-text text-transparent">
-              Smart Forms &amp; AI Agents
+              GPTForm™ Smart Forms
             </span>{' '}
             in Seconds
           </h1>
 
           <p className="text-base sm:text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Replace clunky legacy forms with high-converting conversational agents, live calculations, GPS coordinates, photo annotations, and 33 direct payment gateways with <strong>0% platform fees</strong>.
+            Replace clunky legacy forms with high-converting conversational agents, live calculations, GPS coordinates, photo annotations, and 33 direct payment gateways with <strong>0% platform fees</strong>. Includes GPTSite™ 24/7 AI employee at no extra cost.
           </p>
 
           {/* Interactive Generator Box */}

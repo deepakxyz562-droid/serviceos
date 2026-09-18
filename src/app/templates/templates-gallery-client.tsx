@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Search,
@@ -92,10 +92,40 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 24;
 
-  // Quick Preview Modal State (Jotform Parity)
+  // Quick Preview Modal State (Jotform Parity with Hybrid SEO URL routing)
   const [previewTemplate, setPreviewTemplate] = useState<FormTemplate | null>(null);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+
+  const openPreview = useCallback((template: FormTemplate) => {
+    setPreviewTemplate(template);
+    if (typeof window !== 'undefined') {
+      const primaryCat = template.categories[0] || 'general';
+      window.history.pushState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
+    }
+  }, []);
+
+  const closePreview = useCallback(() => {
+    setPreviewTemplate(null);
+    if (typeof window !== 'undefined') {
+      const cleanUrl = selectedCategory !== 'all' ? `/templates?category=${selectedCategory}` : '/templates';
+      window.history.pushState(null, '', cleanUrl);
+    }
+  }, [selectedCategory]);
+
+  // Handle browser back / forward navigation seamlessly
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (!e.state?.previewTemplateId) {
+        setPreviewTemplate(null);
+      } else {
+        const found = templates.find((t) => t.id === e.state.previewTemplateId);
+        if (found) setPreviewTemplate(found);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [templates]);
 
   // Compute live category & industry counts
   const categoryCounts = useMemo(() => {
@@ -461,7 +491,7 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
                 <ModernTemplateCard
                   key={template.id}
                   template={template}
-                  onQuickPreview={() => setPreviewTemplate(template)}
+                  onQuickPreview={() => openPreview(template)}
                   onUseTemplate={() => navigateToUseTemplate(template)}
                 />
               ))}
@@ -506,9 +536,9 @@ export function TemplatesGalleryClient({ templates }: TemplatesGalleryClientProp
         </div>
       </div>
 
-      {/* JOTFORM-STYLE INTERACTIVE QUICK PREVIEW MODAL */}
+      {/* JOTFORM-STYLE INTERACTIVE QUICK PREVIEW MODAL WITH HYBRID SEO URL */}
       {previewTemplate && (
-        <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && setPreviewTemplate(null)}>
+        <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && closePreview()}>
           <DialogContent className="max-w-5xl max-h-[94vh] flex flex-col p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl">
             {/* Modal Header (Top App Bar with Device Switcher & Quick CTA) */}
             <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">

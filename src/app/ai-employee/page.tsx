@@ -101,20 +101,25 @@ export default function AiEmployeeLandingPage() {
       {/* ─── Hero Section with Interactive Generator ──────────────────────── */}
       <section className="relative overflow-hidden pt-12 pb-20 md:pt-20 md:pb-28 border-b bg-gradient-to-b from-emerald-50/60 via-background to-background dark:from-emerald-950/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold shadow-xs">
-            <Sparkles className="size-3.5 text-emerald-600" />
-            <span>Turn Your Website Into a 24/7 AI Employee</span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-semibold shadow-xs">
+              <Sparkles className="size-3.5 text-emerald-600" />
+              <span>GPTSite™ · 24/7 Autonomous AI Employee</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-teal-50 dark:bg-teal-950/50 border border-teal-300 dark:border-teal-800 text-teal-800 dark:text-teal-300 text-xs font-medium">
+              <span>🎁 1 Subscription Includes Both <strong>GPTForm + GPTSite</strong></span>
+            </div>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground max-w-4xl mx-auto leading-[1.15]">
-            Instantly Answer Questions, Qualify Leads &amp;{' '}
+            Turn Your Website Into a{' '}
             <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">
-              Book Jobs on Your Calendar
+              24/7 GPTSite™ AI Employee
             </span>
           </h1>
 
           <p className="text-base sm:text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Trained on your website content, service menus &amp; PDF manuals. Embeds anywhere with 1 line of JavaScript or our official WordPress plugin.
+            Trained on your website content, service menus &amp; PDF manuals. Instantly answers questions, qualifies leads, schedules appointments, and generates smart GPTForm™ workflows with <strong>0% platform fees</strong>.
           </p>
 
           {/* Interactive URL Input Box */}

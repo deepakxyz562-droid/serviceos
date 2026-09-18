@@ -175,13 +175,16 @@ export function AiMarketingHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Link href="/ai-employee" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
-              AI Employee
+            <Link href="/templates" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
+              20,000+ Templates
             </Link>
-            <Link href="/ai-forms" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
-              AI Forms
+            <Link href="/ai-forms" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
+              GPTForm (AI Forms)
             </Link>
-            <Link href="#pricing" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
+            <Link href="/ai-employee" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
+              GPTSite (AI Agent)
+            </Link>
+            <Link href="/ai-forms#pricing" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
               Pricing
             </Link>
           </nav>
