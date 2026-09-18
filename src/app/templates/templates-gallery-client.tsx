@@ -200,7 +200,11 @@ export function TemplatesGalleryClient({
     setModalActiveTab('overview');
     if (typeof window !== 'undefined') {
       const primaryCat = template.categories[0] || 'general';
-      window.history.pushState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
+      try {
+        window.history.replaceState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
+      } catch {
+        // ignore
+      }
     }
 
     // Ensure full schema is loaded
@@ -223,7 +227,11 @@ export function TemplatesGalleryClient({
     setPreviewTemplate(null);
     if (typeof window !== 'undefined') {
       const cleanUrl = selectedCategory !== 'all' ? `/templates?category=${selectedCategory}` : '/templates';
-      window.history.pushState(null, '', cleanUrl);
+      try {
+        window.history.replaceState(null, '', cleanUrl);
+      } catch {
+        // ignore
+      }
     }
   }, [selectedCategory]);
 
@@ -1098,7 +1106,10 @@ function ModernTemplateCard({
   return (
     <div className="group relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-500 hover:shadow-xl transition-all duration-200 flex flex-col justify-between overflow-hidden">
       {/* Visual Form Thumbnail Preview Area (Jotform Parity) */}
-      <div className="relative cursor-pointer overflow-hidden border-b border-slate-100 dark:border-slate-800/80">
+      <div
+        onClick={onQuickPreview}
+        className="relative cursor-pointer overflow-hidden border-b border-slate-100 dark:border-slate-800/80"
+      >
         <FormThumbnailPreview template={template} />
 
         {/* Top Badges Overlay */}

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { Component, type ReactNode } from 'react';
+import React, { Component, useMemo, type ReactNode } from 'react';
 import { FormRuntimeRenderer } from '@/features/forms/components/runtime/form-runtime-renderer';
+import { normalizeFormSchema } from '@/lib/forms/form-schema-types';
 import type { FormTemplate } from '@/lib/forms/templates';
 import { Button } from '@/components/ui/button';
 
@@ -47,6 +48,10 @@ interface FormPreviewCanvasProps {
 }
 
 export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) {
+  const normalizedSchema = useMemo(() => {
+    return normalizeFormSchema(template?.schema);
+  }, [template?.schema]);
+
   const renderFallback = () => (
     <div className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-md space-y-6">
       <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -58,7 +63,7 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
       </div>
 
       <div className="space-y-4">
-        {(template.schema?.fields || []).map((field, idx) => (
+        {(normalizedSchema?.fields || []).map((field, idx) => (
           <div key={field.id || idx} className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center justify-between">
               <span>
@@ -85,18 +90,19 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
   );
 
   return (
-    <div className="flex-1 min-w-0 bg-slate-100 dark:bg-slate-950 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
+    <div className="flex-1 min-w-0 bg-slate-100/80 dark:bg-slate-950 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
       {device === 'mobile' ? (
         /* Mobile Frame */
         <div className="w-[360px] bg-slate-900 rounded-[36px] p-3 shadow-2xl border-4 border-slate-800 transition-all my-2">
           <div className="w-24 h-4 bg-slate-950 rounded-full mx-auto mb-3 flex items-center justify-center">
             <div className="w-8 h-1 bg-slate-800 rounded-full" />
           </div>
-          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-4 max-h-[64vh] overflow-y-auto shadow-inner">
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-2 sm:p-4 max-h-[68vh] overflow-y-auto shadow-inner">
             <FormErrorBoundary fallback={renderFallback}>
               <FormRuntimeRenderer
                 formName={template.name}
-                schema={template.schema}
+                formDescription={template.shortDescription}
+                schema={normalizedSchema}
                 previewMode={true}
               />
             </FormErrorBoundary>
@@ -105,11 +111,12 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
       ) : device === 'tablet' ? (
         /* Tablet Frame */
         <div className="w-full max-w-xl bg-slate-900 rounded-[28px] p-4 shadow-2xl border-4 border-slate-800 transition-all my-2">
-          <div className="bg-white dark:bg-slate-900 rounded-[18px] p-6 max-h-[66vh] overflow-y-auto shadow-inner">
+          <div className="bg-white dark:bg-slate-900 rounded-[18px] p-4 sm:p-6 max-h-[70vh] overflow-y-auto shadow-inner">
             <FormErrorBoundary fallback={renderFallback}>
               <FormRuntimeRenderer
                 formName={template.name}
-                schema={template.schema}
+                formDescription={template.shortDescription}
+                schema={normalizedSchema}
                 previewMode={true}
               />
             </FormErrorBoundary>
@@ -117,18 +124,12 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
         </div>
       ) : (
         /* Desktop Paper Canvas */
-        <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-6 sm:p-8 shadow-xl transition-all my-2">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-4 mb-6">
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 mb-1">
-              Official Fieseros Form Template
-            </div>
-            <h2 className="text-2xl font-bold text-foreground">{template.name}</h2>
-            <p className="text-xs text-muted-foreground mt-1">{template.shortDescription}</p>
-          </div>
+        <div className="w-full max-w-2xl transition-all my-2">
           <FormErrorBoundary fallback={renderFallback}>
             <FormRuntimeRenderer
               formName={template.name}
-              schema={template.schema}
+              formDescription={template.shortDescription}
+              schema={normalizedSchema}
               previewMode={true}
             />
           </FormErrorBoundary>
