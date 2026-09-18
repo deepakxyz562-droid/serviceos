@@ -55,23 +55,42 @@ export function getAllTemplates(): FormTemplate[] {
   return Array.from(REGISTRY.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+import { synthesizeTemplate } from './generators/mass-template-synthesizer';
+import { TEMPLATE_INDUSTRIES } from './taxonomy/industries';
+import { TEMPLATE_CATEGORIES } from './taxonomy/categories';
+
 /**
- * Synchronous lookup by id. Only finds templates that are in the JS bundle
- * (the curated set). Use `getTemplate(id)` for the async version that will
- * eventually also check the database.
+ * Synchronous lookup by id. Returns curated template or synthesizes on-demand.
  */
 export function getTemplateSync(id: string): FormTemplate | undefined {
-  return REGISTRY.get(id);
+  if (REGISTRY.has(id)) {
+    return REGISTRY.get(id);
+  }
+
+  // Attempt dynamic synthesis for long-tail template slug
+  const parts = id.split('-');
+  const matchedIndustry = TEMPLATE_INDUSTRIES.find((ind) => id.startsWith(ind.id));
+  
+  if (matchedIndustry) {
+    const remainder = id.substring(matchedIndustry.id.length + 1);
+    const matchedCategory =
+      TEMPLATE_CATEGORIES.find((c) => remainder.includes(c.id) || c.subcategories.some((s) => remainder.includes(s.id))) ||
+      TEMPLATE_CATEGORIES[0];
+
+    const synthesized = synthesizeTemplate(matchedCategory.id as any, matchedIndustry.id as any);
+    synthesized.id = id; // Match requested slug
+    REGISTRY.set(id, synthesized);
+    return synthesized;
+  }
+
+  return undefined;
 }
 
 /**
- * Async lookup by id. Currently checks the in-memory store only. In
- * Release 3 this will also query the database for AI-generated and
- * community templates that aren't in the bundle.
+ * Async lookup by id. Checks in-memory registry, then falls back to dynamic synthesis.
  */
 export async function getTemplate(id: string): Promise<FormTemplate | undefined> {
-  // Release 3 will add: const dbTemplate = await db.formTemplate.findUnique({ where: { id } });
-  return REGISTRY.get(id);
+  return getTemplateSync(id);
 }
 
 // ─── Search ────────────────────────────────────────────────────────────────

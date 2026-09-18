@@ -1,0 +1,4630 @@
+[
+  {
+    "id": "general-general-contact",
+    "name": "General / All Industries General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for general / all industries businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional General / All Industries General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "general-general-contact",
+      "title": "General / All Industries General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "general"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "general",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 893,
+    "viewCount": 4314,
+    "cloneCount": 97,
+    "ratingAverage": 5,
+    "ratingCount": 22,
+    "seo": {
+      "seoTitle": "Free General / All Industries General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free General / All Industries General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "general / all industries general contact",
+        "general / all industries form template",
+        "free general contact",
+        "online general / all industries intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.826Z"
+  },
+  {
+    "id": "healthcare-general-contact",
+    "name": "Healthcare General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for healthcare businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Healthcare General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "healthcare-general-contact",
+      "title": "Healthcare General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "dob",
+          "type": "date",
+          "label": "Date of Birth",
+          "placeholder": "YYYY-MM-DD",
+          "required": true
+        },
+        {
+          "id": "insurance_provider",
+          "type": "text",
+          "label": "Primary Dental / Health Insurance Provider",
+          "placeholder": "e.g. Delta Dental, BlueCross",
+          "required": false
+        },
+        {
+          "id": "primary_symptoms",
+          "type": "textarea",
+          "label": "Current Symptoms / Reason for Visit",
+          "placeholder": "Please describe any pain, tooth sensitivity, or recent issues...",
+          "required": true
+        },
+        {
+          "id": "medical_history_check",
+          "type": "checkbox",
+          "label": "I confirm that I have reported all known medical conditions and allergies.",
+          "required": true
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "healthcare"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "healthcare",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 536,
+    "viewCount": 3138,
+    "cloneCount": 256,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 46,
+    "seo": {
+      "seoTitle": "Free Healthcare General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Healthcare General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "healthcare general contact",
+        "healthcare form template",
+        "free general contact",
+        "online healthcare intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "dental-general-contact",
+    "name": "Dental General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for dental businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Dental General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "dental-general-contact",
+      "title": "Dental General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "dob",
+          "type": "date",
+          "label": "Date of Birth",
+          "placeholder": "YYYY-MM-DD",
+          "required": true
+        },
+        {
+          "id": "insurance_provider",
+          "type": "text",
+          "label": "Primary Dental / Health Insurance Provider",
+          "placeholder": "e.g. Delta Dental, BlueCross",
+          "required": false
+        },
+        {
+          "id": "primary_symptoms",
+          "type": "textarea",
+          "label": "Current Symptoms / Reason for Visit",
+          "placeholder": "Please describe any pain, tooth sensitivity, or recent issues...",
+          "required": true
+        },
+        {
+          "id": "medical_history_check",
+          "type": "checkbox",
+          "label": "I confirm that I have reported all known medical conditions and allergies.",
+          "required": true
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "dental"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "dental",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 328,
+    "viewCount": 3745,
+    "cloneCount": 150,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 26,
+    "seo": {
+      "seoTitle": "Free Dental General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Dental General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "dental general contact",
+        "dental form template",
+        "free general contact",
+        "online dental intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "hvac-general-contact",
+    "name": "HVAC General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for hvac businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional HVAC General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "hvac-general-contact",
+      "title": "HVAC General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "equipment_type",
+          "type": "select",
+          "label": "HVAC Equipment Type",
+          "options": [
+            {
+              "label": "Central AC & Condenser",
+              "value": "central_ac"
+            },
+            {
+              "label": "Gas / Electric Furnace",
+              "value": "furnace"
+            },
+            {
+              "label": "Heat Pump System",
+              "value": "heat_pump"
+            },
+            {
+              "label": "Ductless Mini-Split",
+              "value": "mini_split"
+            },
+            {
+              "label": "Rooftop Commercial Unit",
+              "value": "commercial_rooftop"
+            }
+          ],
+          "required": true
+        },
+        {
+          "id": "issue_symptoms",
+          "type": "checkbox",
+          "label": "Select All That Apply",
+          "options": [
+            {
+              "label": "No cooling / Warm airflow",
+              "value": "no_cooling"
+            },
+            {
+              "label": "No heating / Cold air",
+              "value": "no_heating"
+            },
+            {
+              "label": "Loud buzzing / Rattling sound",
+              "value": "loud_noise"
+            },
+            {
+              "label": "Water leaking around indoor unit",
+              "value": "water_leak"
+            },
+            {
+              "label": "Thermostat screen is blank",
+              "value": "blank_thermostat"
+            }
+          ]
+        },
+        {
+          "id": "system_age",
+          "type": "select",
+          "label": "Approximate System Age",
+          "options": [
+            {
+              "label": "Under 5 years",
+              "value": "under_5"
+            },
+            {
+              "label": "5 to 10 years",
+              "value": "5_10"
+            },
+            {
+              "label": "10 to 15 years",
+              "value": "10_15"
+            },
+            {
+              "label": "Over 15 years / Unknown",
+              "value": "over_15"
+            }
+          ]
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "hvac"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "hvac",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 235,
+    "viewCount": 3165,
+    "cloneCount": 231,
+    "ratingAverage": 5,
+    "ratingCount": 56,
+    "seo": {
+      "seoTitle": "Free HVAC General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free HVAC General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "hvac general contact",
+        "hvac form template",
+        "free general contact",
+        "online hvac intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "plumbing-general-contact",
+    "name": "Plumbing General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for plumbing businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Plumbing General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "plumbing-general-contact",
+      "title": "Plumbing General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "plumbing_issue_type",
+          "type": "select",
+          "label": "Plumbing Issue Area",
+          "options": [
+            {
+              "label": "Water Heater / No Hot Water",
+              "value": "water_heater"
+            },
+            {
+              "label": "Main Drain / Sewer Clog",
+              "value": "drain_clog"
+            },
+            {
+              "label": "Burst or Leaking Pipe",
+              "value": "pipe_leak"
+            },
+            {
+              "label": "Toilet / Faucet Repair",
+              "value": "fixture_repair"
+            },
+            {
+              "label": "Sump Pump Failure",
+              "value": "sump_pump"
+            }
+          ],
+          "required": true
+        },
+        {
+          "id": "water_shutoff_known",
+          "type": "radio",
+          "label": "Do you know where your main water shutoff valve is located?",
+          "options": [
+            {
+              "label": "Yes, water is currently shut off",
+              "value": "yes_shut"
+            },
+            {
+              "label": "Yes, but water is still running",
+              "value": "yes_running"
+            },
+            {
+              "label": "No / Unsure",
+              "value": "no"
+            }
+          ]
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "plumbing"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "plumbing",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 690,
+    "viewCount": 4590,
+    "cloneCount": 54,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 55,
+    "seo": {
+      "seoTitle": "Free Plumbing General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Plumbing General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "plumbing general contact",
+        "plumbing form template",
+        "free general contact",
+        "online plumbing intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "electrical-general-contact",
+    "name": "Electrical General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for electrical businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Electrical General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "electrical-general-contact",
+      "title": "Electrical General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "electrical_service_type",
+          "type": "select",
+          "label": "Electrical Service Needed",
+          "options": [
+            {
+              "label": "EV Charger Level 2 Installation",
+              "value": "ev_charger"
+            },
+            {
+              "label": "Panel Upgrade (100A to 200A)",
+              "value": "panel_upgrade"
+            },
+            {
+              "label": "Tripping Breaker / Dead Outlets",
+              "value": "tripping_breaker"
+            },
+            {
+              "label": "Lighting & Ceiling Fan Installation",
+              "value": "lighting"
+            },
+            {
+              "label": "Whole-Home Generator Setup",
+              "value": "generator"
+            }
+          ],
+          "required": true
+        },
+        {
+          "id": "panel_location",
+          "type": "text",
+          "label": "Main Electrical Panel Location",
+          "placeholder": "e.g. Basement, Garage, Utility Closet"
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "electrical"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "electrical",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 257,
+    "viewCount": 1342,
+    "cloneCount": 438,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 26,
+    "seo": {
+      "seoTitle": "Free Electrical General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Electrical General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "electrical general contact",
+        "electrical form template",
+        "free general contact",
+        "online electrical intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "construction-general-contact",
+    "name": "Construction General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for construction businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Construction General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "construction-general-contact",
+      "title": "Construction General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "construction"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "construction",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 690,
+    "viewCount": 3339,
+    "cloneCount": 462,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 60,
+    "seo": {
+      "seoTitle": "Free Construction General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Construction General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "construction general contact",
+        "construction form template",
+        "free general contact",
+        "online construction intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "roofing-general-contact",
+    "name": "Roofing General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for roofing businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Roofing General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "roofing-general-contact",
+      "title": "Roofing General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "roof_type",
+          "type": "select",
+          "label": "Roof Material",
+          "options": [
+            {
+              "label": "Asphalt Architectural Shingles",
+              "value": "asphalt"
+            },
+            {
+              "label": "Standing Seam Metal Roof",
+              "value": "metal"
+            },
+            {
+              "label": "Tile / Slate",
+              "value": "tile"
+            },
+            {
+              "label": "Flat / TPO / Rubber Commercial",
+              "value": "flat"
+            }
+          ],
+          "required": true
+        },
+        {
+          "id": "storm_damage_claim",
+          "type": "radio",
+          "label": "Is this related to recent storm/wind damage or an insurance claim?",
+          "options": [
+            {
+              "label": "Yes, insurance claim filed",
+              "value": "insurance_yes"
+            },
+            {
+              "label": "Storm damage, need quote for insurance",
+              "value": "need_quote"
+            },
+            {
+              "label": "No, routine maintenance or aging roof",
+              "value": "routine"
+            }
+          ]
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "roofing"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "roofing",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 758,
+    "viewCount": 1449,
+    "cloneCount": 392,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 62,
+    "seo": {
+      "seoTitle": "Free Roofing General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Roofing General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "roofing general contact",
+        "roofing form template",
+        "free general contact",
+        "online roofing intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "landscaping-general-contact",
+    "name": "Landscaping General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for landscaping businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Landscaping General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "landscaping-general-contact",
+      "title": "Landscaping General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "landscaping"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "landscaping",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 138,
+    "viewCount": 4980,
+    "cloneCount": 59,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 21,
+    "seo": {
+      "seoTitle": "Free Landscaping General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Landscaping General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "landscaping general contact",
+        "landscaping form template",
+        "free general contact",
+        "online landscaping intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "cleaning-general-contact",
+    "name": "Cleaning General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for cleaning businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Cleaning General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "cleaning-general-contact",
+      "title": "Cleaning General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "cleaning"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "cleaning",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 745,
+    "viewCount": 1378,
+    "cloneCount": 154,
+    "ratingAverage": 5,
+    "ratingCount": 48,
+    "seo": {
+      "seoTitle": "Free Cleaning General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Cleaning General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "cleaning general contact",
+        "cleaning form template",
+        "free general contact",
+        "online cleaning intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "pest-control-general-contact",
+    "name": "Pest Control General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for pest control businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Pest Control General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "pest-control-general-contact",
+      "title": "Pest Control General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "pest_control"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "pest_control",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 594,
+    "viewCount": 937,
+    "cloneCount": 109,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 55,
+    "seo": {
+      "seoTitle": "Free Pest Control General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Pest Control General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "pest control general contact",
+        "pest control form template",
+        "free general contact",
+        "online pest control intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "solar-general-contact",
+    "name": "Solar General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for solar businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Solar General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "solar-general-contact",
+      "title": "Solar General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "solar"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "solar",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 456,
+    "viewCount": 1284,
+    "cloneCount": 304,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 33,
+    "seo": {
+      "seoTitle": "Free Solar General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Solar General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "solar general contact",
+        "solar form template",
+        "free general contact",
+        "online solar intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "home-services-general-contact",
+    "name": "Home Services General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for home services businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Home Services General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "home-services-general-contact",
+      "title": "Home Services General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "home_services"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "home_services",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 667,
+    "viewCount": 1119,
+    "cloneCount": 113,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 23,
+    "seo": {
+      "seoTitle": "Free Home Services General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Home Services General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "home services general contact",
+        "home services form template",
+        "free general contact",
+        "online home services intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "real-estate-general-contact",
+    "name": "Real Estate General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for real estate businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Real Estate General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "real-estate-general-contact",
+      "title": "Real Estate General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "property_address",
+          "type": "text",
+          "label": "Property Address of Interest",
+          "placeholder": "Street, City, State, Zip",
+          "required": true
+        },
+        {
+          "id": "buyer_status",
+          "type": "select",
+          "label": "Financing / Purchase Status",
+          "options": [
+            {
+              "label": "Pre-Approved for Mortgage",
+              "value": "pre_approved"
+            },
+            {
+              "label": "Cash Buyer",
+              "value": "cash"
+            },
+            {
+              "label": "Need Mortgage Lender Referral",
+              "value": "need_lender"
+            },
+            {
+              "label": "Looking to Rent / Lease",
+              "value": "renter"
+            }
+          ]
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "real_estate"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "real_estate",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 160,
+    "viewCount": 1410,
+    "cloneCount": 200,
+    "ratingAverage": 4.8,
+    "ratingCount": 67,
+    "seo": {
+      "seoTitle": "Free Real Estate General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Real Estate General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "real estate general contact",
+        "real estate form template",
+        "free general contact",
+        "online real estate intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "legal-general-contact",
+    "name": "Legal General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for legal businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Legal General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "legal-general-contact",
+      "title": "Legal General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "legal"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "legal",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 938,
+    "viewCount": 3280,
+    "cloneCount": 114,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 36,
+    "seo": {
+      "seoTitle": "Free Legal General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Legal General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "legal general contact",
+        "legal form template",
+        "free general contact",
+        "online legal intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "accounting-general-contact",
+    "name": "Accounting General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for accounting businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Accounting General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "accounting-general-contact",
+      "title": "Accounting General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "accounting"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "accounting",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 133,
+    "viewCount": 4428,
+    "cloneCount": 244,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 35,
+    "seo": {
+      "seoTitle": "Free Accounting General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Accounting General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "accounting general contact",
+        "accounting form template",
+        "free general contact",
+        "online accounting intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "insurance-general-contact",
+    "name": "Insurance General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for insurance businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Insurance General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "insurance-general-contact",
+      "title": "Insurance General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "insurance"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "insurance",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 520,
+    "viewCount": 1545,
+    "cloneCount": 172,
+    "ratingAverage": 5,
+    "ratingCount": 54,
+    "seo": {
+      "seoTitle": "Free Insurance General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Insurance General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "insurance general contact",
+        "insurance form template",
+        "free general contact",
+        "online insurance intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "automotive-general-contact",
+    "name": "Automotive General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for automotive businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Automotive General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "automotive-general-contact",
+      "title": "Automotive General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "vehicle_year_make_model",
+          "type": "text",
+          "label": "Vehicle Year, Make & Model",
+          "placeholder": "e.g. 2021 Toyota RAV4 Hybrid",
+          "required": true
+        },
+        {
+          "id": "mileage",
+          "type": "number",
+          "label": "Current Approximate Mileage",
+          "placeholder": "e.g. 45000"
+        },
+        {
+          "id": "vin_number",
+          "type": "text",
+          "label": "VIN Number (Optional for exact part matching)",
+          "placeholder": "17-character VIN"
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "automotive"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "automotive",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 173,
+    "viewCount": 2672,
+    "cloneCount": 309,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 33,
+    "seo": {
+      "seoTitle": "Free Automotive General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Automotive General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "automotive general contact",
+        "automotive form template",
+        "free general contact",
+        "online automotive intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "restaurant-general-contact",
+    "name": "Restaurant General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for restaurant businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Restaurant General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "restaurant-general-contact",
+      "title": "Restaurant General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "restaurant"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "restaurant",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 460,
+    "viewCount": 2425,
+    "cloneCount": 455,
+    "ratingAverage": 4.8,
+    "ratingCount": 37,
+    "seo": {
+      "seoTitle": "Free Restaurant General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Restaurant General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "restaurant general contact",
+        "restaurant form template",
+        "free general contact",
+        "online restaurant intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "hospitality-general-contact",
+    "name": "Hospitality General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for hospitality businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Hospitality General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "hospitality-general-contact",
+      "title": "Hospitality General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "hospitality"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "hospitality",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 726,
+    "viewCount": 2218,
+    "cloneCount": 178,
+    "ratingAverage": 4.8,
+    "ratingCount": 49,
+    "seo": {
+      "seoTitle": "Free Hospitality General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Hospitality General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "hospitality general contact",
+        "hospitality form template",
+        "free general contact",
+        "online hospitality intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "beauty-general-contact",
+    "name": "Beauty & Salon General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for beauty & salon businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Beauty & Salon General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "beauty-general-contact",
+      "title": "Beauty & Salon General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "beauty"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "beauty",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 168,
+    "viewCount": 1581,
+    "cloneCount": 318,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 59,
+    "seo": {
+      "seoTitle": "Free Beauty & Salon General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Beauty & Salon General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "beauty & salon general contact",
+        "beauty & salon form template",
+        "free general contact",
+        "online beauty & salon intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "fitness-general-contact",
+    "name": "Fitness General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for fitness businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Fitness General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "fitness-general-contact",
+      "title": "Fitness General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "fitness"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "fitness",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 571,
+    "viewCount": 3936,
+    "cloneCount": 169,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 65,
+    "seo": {
+      "seoTitle": "Free Fitness General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Fitness General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "fitness general contact",
+        "fitness form template",
+        "free general contact",
+        "online fitness intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "education-general-contact",
+    "name": "Education General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for education businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Education General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "education-general-contact",
+      "title": "Education General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "education"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "education",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 946,
+    "viewCount": 3847,
+    "cloneCount": 194,
+    "ratingAverage": 4.8,
+    "ratingCount": 60,
+    "seo": {
+      "seoTitle": "Free Education General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Education General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "education general contact",
+        "education form template",
+        "free general contact",
+        "online education intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "nonprofit-general-contact",
+    "name": "Nonprofit General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for nonprofit businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Nonprofit General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "nonprofit-general-contact",
+      "title": "Nonprofit General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "nonprofit"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "nonprofit",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 448,
+    "viewCount": 3915,
+    "cloneCount": 286,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 25,
+    "seo": {
+      "seoTitle": "Free Nonprofit General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Nonprofit General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "nonprofit general contact",
+        "nonprofit form template",
+        "free general contact",
+        "online nonprofit intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "church-general-contact",
+    "name": "Church General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for church businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Church General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "church-general-contact",
+      "title": "Church General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "church"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "church",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 678,
+    "viewCount": 1707,
+    "cloneCount": 137,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 67,
+    "seo": {
+      "seoTitle": "Free Church General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Church General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "church general contact",
+        "church form template",
+        "free general contact",
+        "online church intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "marketing-general-contact",
+    "name": "Marketing General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for marketing businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Marketing General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "marketing-general-contact",
+      "title": "Marketing General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "marketing"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "marketing",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 259,
+    "viewCount": 1924,
+    "cloneCount": 349,
+    "ratingAverage": 4.8,
+    "ratingCount": 70,
+    "seo": {
+      "seoTitle": "Free Marketing General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Marketing General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "marketing general contact",
+        "marketing form template",
+        "free general contact",
+        "online marketing intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "agency-general-contact",
+    "name": "Agency General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for agency businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Agency General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "agency-general-contact",
+      "title": "Agency General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "agency"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "agency",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 929,
+    "viewCount": 4031,
+    "cloneCount": 433,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 44,
+    "seo": {
+      "seoTitle": "Free Agency General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Agency General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "agency general contact",
+        "agency form template",
+        "free general contact",
+        "online agency intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "consulting-general-contact",
+    "name": "Consulting General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for consulting businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Consulting General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "consulting-general-contact",
+      "title": "Consulting General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "consulting"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "consulting",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 477,
+    "viewCount": 4224,
+    "cloneCount": 404,
+    "ratingAverage": 5,
+    "ratingCount": 24,
+    "seo": {
+      "seoTitle": "Free Consulting General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Consulting General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "consulting general contact",
+        "consulting form template",
+        "free general contact",
+        "online consulting intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "saas-general-contact",
+    "name": "SaaS General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for saas businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional SaaS General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "saas-general-contact",
+      "title": "SaaS General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "saas"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "saas",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 953,
+    "viewCount": 968,
+    "cloneCount": 380,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 57,
+    "seo": {
+      "seoTitle": "Free SaaS General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free SaaS General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "saas general contact",
+        "saas form template",
+        "free general contact",
+        "online saas intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "technology-general-contact",
+    "name": "Technology General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for technology businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Technology General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "technology-general-contact",
+      "title": "Technology General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "technology"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "technology",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 681,
+    "viewCount": 1159,
+    "cloneCount": 211,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 60,
+    "seo": {
+      "seoTitle": "Free Technology General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Technology General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "technology general contact",
+        "technology form template",
+        "free general contact",
+        "online technology intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "ecommerce-general-contact",
+    "name": "E-commerce General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for e-commerce businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional E-commerce General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "ecommerce-general-contact",
+      "title": "E-commerce General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "ecommerce"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "ecommerce",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 826,
+    "viewCount": 3207,
+    "cloneCount": 403,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 64,
+    "seo": {
+      "seoTitle": "Free E-commerce General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free E-commerce General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "e-commerce general contact",
+        "e-commerce form template",
+        "free general contact",
+        "online e-commerce intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "retail-general-contact",
+    "name": "Retail General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for retail businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Retail General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "retail-general-contact",
+      "title": "Retail General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "retail"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "retail",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 915,
+    "viewCount": 1281,
+    "cloneCount": 156,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 12,
+    "seo": {
+      "seoTitle": "Free Retail General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Retail General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "retail general contact",
+        "retail form template",
+        "free general contact",
+        "online retail intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "manufacturing-general-contact",
+    "name": "Manufacturing General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for manufacturing businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Manufacturing General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "manufacturing-general-contact",
+      "title": "Manufacturing General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "manufacturing"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "manufacturing",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 334,
+    "viewCount": 2563,
+    "cloneCount": 59,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 17,
+    "seo": {
+      "seoTitle": "Free Manufacturing General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Manufacturing General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "manufacturing general contact",
+        "manufacturing form template",
+        "free general contact",
+        "online manufacturing intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "logistics-general-contact",
+    "name": "Logistics General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for logistics businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Logistics General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "logistics-general-contact",
+      "title": "Logistics General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "logistics"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "logistics",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 621,
+    "viewCount": 5213,
+    "cloneCount": 399,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 60,
+    "seo": {
+      "seoTitle": "Free Logistics General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Logistics General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "logistics general contact",
+        "logistics form template",
+        "free general contact",
+        "online logistics intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "transportation-general-contact",
+    "name": "Transportation General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for transportation businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Transportation General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "transportation-general-contact",
+      "title": "Transportation General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "transportation"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "transportation",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 646,
+    "viewCount": 4007,
+    "cloneCount": 458,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 64,
+    "seo": {
+      "seoTitle": "Free Transportation General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Transportation General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "transportation general contact",
+        "transportation form template",
+        "free general contact",
+        "online transportation intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "photography-general-contact",
+    "name": "Photography General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for photography businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Photography General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "photography-general-contact",
+      "title": "Photography General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "photography"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "photography",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 794,
+    "viewCount": 3256,
+    "cloneCount": 114,
+    "ratingAverage": 5,
+    "ratingCount": 25,
+    "seo": {
+      "seoTitle": "Free Photography General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Photography General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "photography general contact",
+        "photography form template",
+        "free general contact",
+        "online photography intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "events-general-contact",
+    "name": "Events General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for events businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Events General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "events-general-contact",
+      "title": "Events General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "events"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "events",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 550,
+    "viewCount": 4432,
+    "cloneCount": 115,
+    "ratingAverage": 5,
+    "ratingCount": 38,
+    "seo": {
+      "seoTitle": "Free Events General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Events General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "events general contact",
+        "events form template",
+        "free general contact",
+        "online events intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "travel-general-contact",
+    "name": "Travel General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for travel businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Travel General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "travel-general-contact",
+      "title": "Travel General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "travel"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "travel",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 638,
+    "viewCount": 1578,
+    "cloneCount": 101,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 33,
+    "seo": {
+      "seoTitle": "Free Travel General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Travel General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "travel general contact",
+        "travel form template",
+        "free general contact",
+        "online travel intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "veterinary-general-contact",
+    "name": "Veterinary General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for veterinary businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Veterinary General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "veterinary-general-contact",
+      "title": "Veterinary General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "veterinary"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "veterinary",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 526,
+    "viewCount": 3171,
+    "cloneCount": 112,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 67,
+    "seo": {
+      "seoTitle": "Free Veterinary General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Veterinary General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "veterinary general contact",
+        "veterinary form template",
+        "free general contact",
+        "online veterinary intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "pet-services-general-contact",
+    "name": "Pet Services General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for pet services businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Pet Services General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "pet-services-general-contact",
+      "title": "Pet Services General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "pet_services"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "pet_services",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 370,
+    "viewCount": 2912,
+    "cloneCount": 108,
+    "ratingAverage": 4.8,
+    "ratingCount": 70,
+    "seo": {
+      "seoTitle": "Free Pet Services General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Pet Services General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "pet services general contact",
+        "pet services form template",
+        "free general contact",
+        "online pet services intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "financial-services-general-contact",
+    "name": "Financial Services General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for financial services businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Financial Services General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "financial-services-general-contact",
+      "title": "Financial Services General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "financial_services"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "financial_services",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 311,
+    "viewCount": 2040,
+    "cloneCount": 167,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 35,
+    "seo": {
+      "seoTitle": "Free Financial Services General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Financial Services General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "financial services general contact",
+        "financial services form template",
+        "free general contact",
+        "online financial services intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "human-resources-general-contact",
+    "name": "Human Resources General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for human resources businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Human Resources General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "human-resources-general-contact",
+      "title": "Human Resources General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "human_resources"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "human_resources",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 482,
+    "viewCount": 5349,
+    "cloneCount": 130,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 51,
+    "seo": {
+      "seoTitle": "Free Human Resources General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Human Resources General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "human resources general contact",
+        "human resources form template",
+        "free general contact",
+        "online human resources intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "agriculture-general-contact",
+    "name": "Agriculture General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for agriculture businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Agriculture General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "agriculture-general-contact",
+      "title": "Agriculture General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "agriculture"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "agriculture",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 650,
+    "viewCount": 2566,
+    "cloneCount": 229,
+    "ratingAverage": 4.8,
+    "ratingCount": 46,
+    "seo": {
+      "seoTitle": "Free Agriculture General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Agriculture General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "agriculture general contact",
+        "agriculture form template",
+        "free general contact",
+        "online agriculture intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "security-general-contact",
+    "name": "Security General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for security businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Security General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "security-general-contact",
+      "title": "Security General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "security"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "security",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 674,
+    "viewCount": 4595,
+    "cloneCount": 171,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 13,
+    "seo": {
+      "seoTitle": "Free Security General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Security General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "security general contact",
+        "security form template",
+        "free general contact",
+        "online security intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "music-general-contact",
+    "name": "Music General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for music businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Music General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "music-general-contact",
+      "title": "Music General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "music"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "music",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 177,
+    "viewCount": 2071,
+    "cloneCount": 217,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 29,
+    "seo": {
+      "seoTitle": "Free Music General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Music General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "music general contact",
+        "music form template",
+        "free general contact",
+        "online music intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "wedding-general-contact",
+    "name": "Wedding General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for wedding businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Wedding General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "wedding-general-contact",
+      "title": "Wedding General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "wedding"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "wedding",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 793,
+    "viewCount": 1615,
+    "cloneCount": 322,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 50,
+    "seo": {
+      "seoTitle": "Free Wedding General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Wedding General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "wedding general contact",
+        "wedding form template",
+        "free general contact",
+        "online wedding intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "government-general-contact",
+    "name": "Government General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for government businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Government General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "government-general-contact",
+      "title": "Government General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "government"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "government",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 655,
+    "viewCount": 2057,
+    "cloneCount": 143,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 21,
+    "seo": {
+      "seoTitle": "Free Government General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Government General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "government general contact",
+        "government form template",
+        "free general contact",
+        "online government intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "salon-general-contact",
+    "name": "Salon General Contact",
+    "shortDescription": "Customizable, mobile-ready general contact designed specifically for salon businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Salon General Contact. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "salon-general-contact",
+      "title": "Salon General Contact",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "contact"
+    ],
+    "industries": [
+      "salon"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "salon",
+      "contact",
+      "general_contact",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 801,
+    "viewCount": 1870,
+    "cloneCount": 364,
+    "ratingAverage": 5,
+    "ratingCount": 40,
+    "seo": {
+      "seoTitle": "Free Salon General Contact Template | Fieseros",
+      "seoDescription": "Download or customize this free Salon General Contact. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "salon general contact",
+        "salon form template",
+        "free general contact",
+        "online salon intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "general-account",
+    "name": "General / All Industries Account Registration",
+    "shortDescription": "Customizable, mobile-ready account registration designed specifically for general / all industries businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional General / All Industries Account Registration. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "general-account",
+      "title": "General / All Industries Account Registration",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "service_details",
+          "type": "textarea",
+          "label": "Detailed Requirements / Notes",
+          "placeholder": "Please provide any specific requirements, dimensions, or details..."
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "registration"
+    ],
+    "industries": [
+      "general"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "general",
+      "registration",
+      "account",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 241,
+    "viewCount": 1787,
+    "cloneCount": 297,
+    "ratingAverage": 4.8999999999999995,
+    "ratingCount": 50,
+    "seo": {
+      "seoTitle": "Free General / All Industries Account Registration Template | Fieseros",
+      "seoDescription": "Download or customize this free General / All Industries Account Registration. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "general / all industries account registration",
+        "general / all industries form template",
+        "free account registration",
+        "online general / all industries intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  },
+  {
+    "id": "healthcare-account",
+    "name": "Healthcare Account Registration",
+    "shortDescription": "Customizable, mobile-ready account registration designed specifically for healthcare businesses and practices.",
+    "description": "Streamline client intake, quote generation, and service scheduling with our professional Healthcare Account Registration. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.",
+    "schema": {
+      "id": "healthcare-account",
+      "title": "Healthcare Account Registration",
+      "description": "Please fill out the form below. All information is securely encrypted.",
+      "fields": [
+        {
+          "id": "full_name",
+          "type": "text",
+          "label": "Full Name",
+          "placeholder": "John Doe",
+          "required": true
+        },
+        {
+          "id": "phone",
+          "type": "tel",
+          "label": "Phone Number",
+          "placeholder": "(555) 000-0000",
+          "required": true
+        },
+        {
+          "id": "email",
+          "type": "email",
+          "label": "Email Address",
+          "placeholder": "john@example.com",
+          "required": true
+        },
+        {
+          "id": "dob",
+          "type": "date",
+          "label": "Date of Birth",
+          "placeholder": "YYYY-MM-DD",
+          "required": true
+        },
+        {
+          "id": "insurance_provider",
+          "type": "text",
+          "label": "Primary Dental / Health Insurance Provider",
+          "placeholder": "e.g. Delta Dental, BlueCross",
+          "required": false
+        },
+        {
+          "id": "primary_symptoms",
+          "type": "textarea",
+          "label": "Current Symptoms / Reason for Visit",
+          "placeholder": "Please describe any pain, tooth sensitivity, or recent issues...",
+          "required": true
+        },
+        {
+          "id": "medical_history_check",
+          "type": "checkbox",
+          "label": "I confirm that I have reported all known medical conditions and allergies.",
+          "required": true
+        }
+      ],
+      "theme": {
+        "primaryColor": "#10b981",
+        "borderRadius": "0.75rem",
+        "fontFamily": "Inter, sans-serif"
+      }
+    },
+    "categories": [
+      "registration"
+    ],
+    "industries": [
+      "healthcare"
+    ],
+    "useCases": [
+      "lead_generation",
+      "intake"
+    ],
+    "audiences": [
+      "b2c",
+      "b2b"
+    ],
+    "tags": [
+      "healthcare",
+      "registration",
+      "account",
+      "free-template",
+      "online-form"
+    ],
+    "source": "curated",
+    "status": "published",
+    "isPublic": true,
+    "isFeatured": true,
+    "usageCount": 418,
+    "viewCount": 3842,
+    "cloneCount": 376,
+    "ratingAverage": 5,
+    "ratingCount": 31,
+    "seo": {
+      "seoTitle": "Free Healthcare Account Registration Template | Fieseros",
+      "seoDescription": "Download or customize this free Healthcare Account Registration. Collect online submissions, schedule appointments, and capture leads automatically.",
+      "seoKeywords": [
+        "healthcare account registration",
+        "healthcare form template",
+        "free account registration",
+        "online healthcare intake"
+      ]
+    },
+    "authorId": "fieseros-team",
+    "publishedAt": "2026-09-18T09:48:52.832Z"
+  }
+]
