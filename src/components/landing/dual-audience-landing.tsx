@@ -53,6 +53,21 @@ import {
   Loader2,
   Smartphone,
   Store,
+  Activity,
+  Layers,
+  Radio,
+  FileSpreadsheet,
+  CheckCircle2,
+  Cpu,
+  Coins,
+  Lock,
+  Sliders,
+  Eye,
+  Share2,
+  Send,
+  Navigation,
+  Volume2,
+  Percent,
   type LucideIcon,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -103,7 +118,7 @@ interface DualAudienceLandingProps {
   onTryDemo?: () => void;
 }
 
-type Audience = 'crm' | 'marketplace';
+export type Audience = 'crm' | 'forms' | 'marketplace';
 
 // ─── CRM marketing data ─────────────────────────────────────────────────────
 
@@ -773,6 +788,654 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
   );
 }
 
+// ─── 2026 Interactive Hero Simulator ──────────────────────────────────────────
+
+function InteractiveHeroSimulator({ onGetStarted }: { onGetStarted?: () => void }) {
+  const [activeTab, setActiveTab] = React.useState<'dispatch' | 'voice' | 'forms' | 'marketplace'>('dispatch');
+  const [formMode, setFormMode] = React.useState<'classic' | 'card' | 'ai'>('classic');
+  const [selectedBid, setSelectedBid] = React.useState<number>(1);
+  const [voicePlaying, setVoicePlaying] = React.useState<boolean>(true);
+
+  return (
+    <div className="mt-12 relative max-w-5xl mx-auto text-left">
+      {/* Glow effect */}
+      <div className="absolute -inset-4 bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-cyan-500/20 rounded-3xl blur-3xl -z-10" />
+
+      <div className="rounded-2xl border border-border/80 bg-card/95 backdrop-blur-xl shadow-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10">
+        {/* Simulator Top Bar / Tabs */}
+        <div className="flex flex-wrap items-center justify-between border-b border-border/70 bg-muted/60 px-4 py-2.5 gap-2">
+          {/* Window controls */}
+          <div className="hidden sm:flex items-center gap-1.5 mr-2">
+            <span className="w-3 h-3 rounded-full bg-red-400/80 inline-block" />
+            <span className="w-3 h-3 rounded-full bg-amber-400/80 inline-block" />
+            <span className="w-3 h-3 rounded-full bg-emerald-400/80 inline-block" />
+            <span className="ml-2 text-[11px] font-mono text-muted-foreground">fieseros.app/live-os</span>
+          </div>
+
+          {/* Interactive Mode Pills */}
+          <div className="flex items-center gap-1 overflow-x-auto py-1 max-w-full" style={{ scrollbarWidth: 'none' }}>
+            <button
+              type="button"
+              onClick={() => setActiveTab('dispatch')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap',
+                activeTab === 'dispatch'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-background/60 text-muted-foreground hover:text-foreground hover:bg-background',
+              )}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              <span>Field Service OS &amp; Dispatch</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('voice')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap',
+                activeTab === 'voice'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-background/60 text-muted-foreground hover:text-foreground hover:bg-background',
+              )}
+            >
+              <PhoneCall className="h-3.5 w-3.5" />
+              <span>24/7 AI Voice Receptionist</span>
+              <span className="text-[9px] bg-white/20 text-white px-1.5 py-0.2 rounded-full uppercase">Live</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('forms')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap',
+                activeTab === 'forms'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-background/60 text-muted-foreground hover:text-foreground hover:bg-background',
+              )}
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              <span>AI Form Studio (20K+ Templates)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('marketplace')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap',
+                activeTab === 'marketplace'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'bg-background/60 text-muted-foreground hover:text-foreground hover:bg-background',
+              )}
+            >
+              <Store className="h-3.5 w-3.5" />
+              <span>3-Bid Marketplace</span>
+              <span className="text-[9px] bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 rounded-full font-bold">$0 Lead Fee</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tab 1: Field Service OS & Live Dispatch */}
+        {activeTab === 'dispatch' ? (
+          <div className="p-4 sm:p-6 grid lg:grid-cols-12 gap-5">
+            {/* Left Column: Live KPI & Telemetry */}
+            <div className="lg:col-span-4 space-y-4">
+              <div className="rounded-xl border border-border bg-background p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Today&apos;s Revenue</span>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                    <TrendingUp className="h-3 w-3" /> +28% vs last week
+                  </span>
+                </div>
+                <div className="mt-2 text-2xl font-black text-foreground tracking-tight">$4,850.00</div>
+                <div className="mt-3 grid grid-cols-2 gap-2 pt-3 border-t border-border/60 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">Completed</span>
+                    <p className="font-bold text-foreground">12 jobs</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">On-Time ETA</span>
+                    <p className="font-bold text-emerald-600">99.2%</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Technician Status Card */}
+              <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-500/5 to-teal-500/10 dark:border-emerald-800/60 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">
+                        DM
+                      </div>
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-background animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-foreground">Dave Miller · Lead Tech</div>
+                      <div className="text-[11px] text-muted-foreground">Van #4 (GPS Active)</div>
+                    </div>
+                  </div>
+                  <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px]">
+                    En Route
+                  </Badge>
+                </div>
+                <div className="mt-2 text-xs text-foreground/90 flex items-center justify-between">
+                  <span>Destination: 742 Evergreen Terr.</span>
+                  <span className="font-bold text-emerald-600">ETA 6 min</span>
+                </div>
+                <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: '78%' }} />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-background p-3.5 text-xs space-y-1.5">
+                <div className="flex items-center gap-2 text-emerald-600 font-semibold">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>33 Payment Gateways Connected</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Stripe, Square, PayPal, Razorpay, Apple Pay &amp; Google Pay with 1-click tap to pay.
+                </p>
+              </div>
+            </div>
+
+            {/* Right Column: Live Dispatch Board View */}
+            <div className="lg:col-span-8 rounded-xl border border-border bg-background p-4 sm:p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-emerald-600" />
+                  <span className="text-xs font-bold text-foreground">Active Dispatch Queue</span>
+                  <Badge variant="outline" className="text-[10px] text-muted-foreground">3 In Progress</Badge>
+                </div>
+                <span className="text-[11px] text-muted-foreground">Live Telemetry Synchronized</span>
+              </div>
+
+              {/* Jobs List */}
+              <div className="space-y-2.5">
+                <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/80 bg-emerald-500/5 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300">
+                      <Wrench className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-foreground">Job #1084 · Main Water Line Burst</span>
+                        <span className="text-[10px] bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 px-1.5 py-0.2 rounded font-semibold uppercase">Emergency</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Robert Vance · 742 Evergreen Terr · $650.00 Est.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    <span className="text-xs font-bold text-emerald-600">Dave M. assigned</span>
+                    <Button size="sm" variant="outline" className="h-7 text-xs px-2.5">
+                      View Job
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border bg-card p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/60 text-teal-700 dark:text-teal-300">
+                      <Thermometer className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-foreground">Job #1085 · Seasonal HVAC Heat Pump Tune-Up</span>
+                        <span className="text-[10px] bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300 px-1.5 py-0.2 rounded font-semibold uppercase">Recurring</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Elena Rostova · 1904 Harbor Blvd · $249.00</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    <Badge variant="secondary" className="text-[11px]">Alex C. On Site</Badge>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border bg-card p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
+                      <Plug className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-foreground">Job #1086 · 200A Electrical Panel Upgrade &amp; EV Charger</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">Marcus Sterling · 88 West End Ave · $2,400.00</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    <span className="text-xs text-muted-foreground">Starts 2:00 PM</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Quick Action Strip */}
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground border-t border-border/60">
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1">
+                    <Smartphone className="h-3.5 w-3.5 text-emerald-600" /> Offline Mobile PWA Synced
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-teal-600" /> Automated Recurring Contracts
+                  </span>
+                </div>
+                {onGetStarted ? (
+                  <button
+                    type="button"
+                    onClick={onGetStarted}
+                    className="text-xs font-bold text-emerald-600 hover:underline inline-flex items-center gap-1"
+                  >
+                    Open Full CRM Dashboard <ArrowRight className="h-3 w-3" />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Tab 2: 24/7 AI Voice Receptionist */}
+        {activeTab === 'voice' ? (
+          <div className="p-4 sm:p-6 grid lg:grid-cols-12 gap-5">
+            {/* Left Column: Live Call Audio & Waveform */}
+            <div className="lg:col-span-5 rounded-xl border border-emerald-400/30 bg-slate-950 p-5 text-white space-y-4 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center">
+                      <PhoneCall className="h-5 w-5 text-emerald-400" />
+                    </div>
+                    <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-slate-950 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span>Inbound Call · 24/7 Live</span>
+                      <span className="text-[9px] bg-emerald-500/30 text-emerald-300 px-1.5 py-0.2 rounded-full uppercase font-mono">00:38</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">+1 (512) 840-2911 → Apex Plumbing</p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setVoicePlaying(!voicePlaying)}
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-emerald-400"
+                  aria-label="Toggle voice simulation"
+                >
+                  <Volume2 className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Animated Soundwave Visualizer */}
+              <div className="rounded-lg bg-white/5 border border-white/10 p-3 flex items-center justify-center gap-1.5 h-14">
+                {[12, 28, 44, 20, 36, 48, 16, 40, 24, 46, 32, 18, 42, 28, 38, 14, 30].map((h, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      'w-1 rounded-full bg-emerald-400 transition-all duration-300',
+                      voicePlaying ? 'animate-pulse' : 'opacity-40',
+                    )}
+                    style={{
+                      height: voicePlaying ? `${h}px` : '8px',
+                      animationDelay: `${i * 70}ms`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div className="space-y-2 pt-2 text-xs">
+                <div className="flex items-center justify-between text-slate-300">
+                  <span>AI Agent Voice Engine:</span>
+                  <span className="font-mono text-emerald-300 font-semibold">Vapi.ai + Deepgram + Claude</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-300">
+                  <span>Speech-to-Speech Latency:</span>
+                  <span className="font-mono text-emerald-300 font-semibold">410 ms</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-300">
+                  <span>Usage Rate:</span>
+                  <span className="font-mono text-emerald-300 font-semibold">$0.05 – $0.12 / min (BYOK)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Live Dialogue & Automated Actions */}
+            <div className="lg:col-span-7 rounded-xl border border-border bg-background p-4 sm:p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-emerald-600" />
+                  <span className="text-xs font-bold text-foreground">Real-Time Autonomous Transcript</span>
+                </div>
+                <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px]">
+                  ✓ Auto-Booked in Calendar
+                </Badge>
+              </div>
+
+              {/* Chat bubbles */}
+              <div className="space-y-2.5 text-xs">
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] rounded-xl bg-emerald-500/10 border border-emerald-400/20 p-2.5">
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 block mb-0.5">AI Receptionist · Riley</span>
+                    <p className="text-foreground/90 leading-relaxed">&ldquo;Thanks for calling Apex Plumbing! I can dispatch an emergency technician today. What is the address of the leak?&rdquo;</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <div className="max-w-[85%] rounded-xl bg-muted p-2.5">
+                    <span className="text-[10px] font-bold text-muted-foreground block mb-0.5">Caller (Homeowner)</span>
+                    <p className="text-foreground/90 leading-relaxed">&ldquo;Hi, water is overflowing under my kitchen sink. We&apos;re at 742 Evergreen Terrace.&rdquo;</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] rounded-xl bg-emerald-500/10 border border-emerald-400/20 p-2.5">
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 block mb-0.5">AI Receptionist · Riley</span>
+                    <p className="text-foreground/90 leading-relaxed">&ldquo;Understood. I have booked Dave Miller for 2:15 PM today. I just sent a confirmation SMS to your number with live GPS tracking.&rdquo;</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Automated Actions Taken */}
+              <div className="pt-3 border-t border-border/60 grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-2 text-emerald-700 dark:text-emerald-300 font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Lead Created</span>
+                </div>
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-2 text-emerald-700 dark:text-emerald-300 font-semibold flex items-center gap-1.5">
+                  <CalendarCheck className="h-3.5 w-3.5" />
+                  <span>2:15 PM Booked</span>
+                </div>
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-2 text-emerald-700 dark:text-emerald-300 font-semibold flex items-center gap-1.5 col-span-2 sm:col-span-1">
+                  <MessageSquareText className="h-3.5 w-3.5" />
+                  <span>SMS Dispatched</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Tab 3: AI Form Studio & 20,391 Templates */}
+        {activeTab === 'forms' ? (
+          <div className="p-4 sm:p-6 grid lg:grid-cols-12 gap-5">
+            {/* Left Column: Form Format Selector & 20K Templates Pill Grid */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="rounded-xl border border-border bg-background p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">Interactive Form Format</span>
+                  <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px]">
+                    200+ Smart Widgets
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-muted/60 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setFormMode('classic')}
+                    className={cn(
+                      'py-1.5 text-xs font-semibold rounded-md transition-all text-center',
+                      formMode === 'classic' ? 'bg-background shadow-xs text-foreground font-bold' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    Classic Paper
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormMode('card')}
+                    className={cn(
+                      'py-1.5 text-xs font-semibold rounded-md transition-all text-center',
+                      formMode === 'card' ? 'bg-background shadow-xs text-foreground font-bold' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    Card Swipe
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormMode('ai')}
+                    className={cn(
+                      'py-1.5 text-xs font-semibold rounded-md transition-all text-center',
+                      formMode === 'ai' ? 'bg-background shadow-xs text-foreground font-bold' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    Conversational
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  Switch instantly between traditional multi-step forms, mobile swipe cards, or an AI dialogue agent that fills inputs automatically.
+                </p>
+              </div>
+
+              {/* Template Category Pills */}
+              <div className="rounded-xl border border-border bg-background p-4 shadow-sm space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">20,391 Ready Templates</span>
+                  <Link href="/templates" className="text-[11px] font-bold text-emerald-600 hover:underline">
+                    Browse All 40+ &rarr;
+                  </Link>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: 'Booking Forms', href: '/templates/booking-forms' },
+                    { label: 'Inspection Forms', href: '/templates/inspection-forms' },
+                    { label: 'Feedback Forms', href: '/templates/feedback-forms' },
+                    { label: 'Consent Forms', href: '/templates/consent-forms' },
+                    { label: 'Contract Forms', href: '/templates/contract-forms' },
+                    { label: 'Application Forms', href: '/templates/application-forms' },
+                  ].map((cat) => (
+                    <Link
+                      key={cat.label}
+                      href={cat.href}
+                      className="px-2.5 py-1 rounded-full bg-muted/60 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-300 text-[11px] font-medium border border-border/70 transition-colors"
+                    >
+                      {cat.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Live Form Runtime Preview */}
+            <div className="lg:col-span-7 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 bg-background p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <div>
+                  <div className="text-xs font-bold text-foreground">Commercial Roof Inspection &amp; Estimate Form</div>
+                  <div className="text-[11px] text-muted-foreground">Dynamic Calculations · Photo Notes · E-Signature</div>
+                </div>
+                <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-300">
+                  Live Preview Mode
+                </Badge>
+              </div>
+
+              {/* Interactive Form Field Simulation */}
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-[11px] font-semibold text-muted-foreground mb-1">
+                    Roof Square Footage (Formula Calculation Widget)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input readOnly value="2,500 sq ft" className="h-8 text-xs font-medium bg-muted/40" />
+                    <span className="text-muted-foreground font-mono">× $0.45/sqft</span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40 flex items-center justify-between">
+                  <span className="font-semibold text-emerald-900 dark:text-emerald-200">
+                    Live Computed Estimate:
+                  </span>
+                  <span className="text-base font-black text-emerald-700 dark:text-emerald-300">
+                    $1,125.00
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="rounded-lg border border-border/80 p-2.5 text-center bg-muted/20">
+                    <Paintbrush className="h-4 w-4 mx-auto text-emerald-600 mb-1" />
+                    <span className="text-[11px] font-medium text-foreground">Photo Markup Attached</span>
+                  </div>
+                  <div className="rounded-lg border border-border/80 p-2.5 text-center bg-muted/20">
+                    <CheckCircle2 className="h-4 w-4 mx-auto text-teal-600 mb-1" />
+                    <span className="text-[11px] font-medium text-foreground">E-Signature Captured</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between text-xs">
+                <Link
+                  href="/gptform"
+                  className="font-bold text-emerald-600 hover:underline inline-flex items-center gap-1"
+                >
+                  Explore AI Form Builder <ArrowRight className="h-3 w-3" />
+                </Link>
+                <Link
+                  href="/templates"
+                  className="font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                >
+                  Search 20,391 Templates &rarr;
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Tab 4: 3-Bid On-Demand Marketplace (AllBetter Parity) */}
+        {activeTab === 'marketplace' ? (
+          <div className="p-4 sm:p-6 grid lg:grid-cols-12 gap-5">
+            {/* Left Column: Customer Request Wizard Info */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="rounded-xl border border-amber-300/80 bg-gradient-to-br from-amber-500/5 to-orange-500/10 dark:border-amber-800/60 p-4 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground">Job #892: Water Heater Emergency</span>
+                  <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[10px]">
+                    3 Bids Received
+                  </Badge>
+                </div>
+                <p className="text-xs text-foreground/90 leading-relaxed">
+                  &ldquo;50-gallon Rheem water heater leaking in basement. Need replacement today before 5 PM.&rdquo;
+                </p>
+                <div className="pt-2 border-t border-amber-200/60 dark:border-amber-800/40 text-[11px] text-muted-foreground flex items-center justify-between">
+                  <span>📍 Austin, TX (78704)</span>
+                  <span className="font-semibold text-amber-700 dark:text-amber-300">Posted 8 mins ago</span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-background p-4 text-xs space-y-2 shadow-sm">
+                <div className="flex items-center gap-2 text-amber-600 font-bold">
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>$0 Upfront Contractor Lead Fees</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Unlike Angi or Thumbtack where contractors pay $30–$80 per click/lead with zero guarantee, Fieseros charges <strong>$0 to submit bids</strong>. Contractors only pay 2.5%–8% when winning the job.
+                </p>
+              </div>
+            </div>
+
+            {/* Right Column: Live Competing Bids Comparison */}
+            <div className="lg:col-span-7 rounded-xl border border-border bg-background p-4 sm:p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <Store className="h-4 w-4 text-amber-600" />
+                  <span className="text-xs font-bold text-foreground">Live Competing Bids (Escrow Protected)</span>
+                </div>
+                <Link href="/request/track" className="text-[11px] font-bold text-amber-600 hover:underline">
+                  Track Live &rarr;
+                </Link>
+              </div>
+
+              {/* 3 Bid Cards */}
+              <div className="space-y-2.5">
+                {[
+                  {
+                    id: 1,
+                    pro: 'Apex Master Plumbing',
+                    rating: '4.9 (124 reviews)',
+                    eta: 'Can arrive in 45 mins',
+                    price: '$1,250.00',
+                    badge: 'Fastest Response',
+                  },
+                  {
+                    id: 2,
+                    pro: 'Capital City Water & Gas',
+                    rating: '5.0 (88 reviews)',
+                    eta: 'Available 2:00 PM',
+                    price: '$1,320.00',
+                    badge: '5-Yr Parts Warranty',
+                  },
+                  {
+                    id: 3,
+                    pro: 'Budget Flow Service',
+                    rating: '4.8 (64 reviews)',
+                    eta: 'Available 3:30 PM',
+                    price: '$1,190.00',
+                    badge: 'Best Price',
+                  },
+                ].map((bid) => (
+                  <div
+                    key={bid.id}
+                    onClick={() => setSelectedBid(bid.id)}
+                    className={cn(
+                      'cursor-pointer rounded-xl border p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-all',
+                      selectedBid === bid.id
+                        ? 'border-amber-400 bg-amber-500/10 shadow-sm'
+                        : 'border-border bg-card hover:border-amber-300',
+                    )}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className={cn(
+                        'w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0',
+                        selectedBid === bid.id ? 'bg-amber-600 text-white' : 'bg-muted text-muted-foreground',
+                      )}>
+                        #{bid.id}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-foreground">{bid.pro}</span>
+                          <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.2 rounded font-semibold">
+                            {bid.badge}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">⭐ {bid.rating} · {bid.eta}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 self-end sm:self-center">
+                      <div className="text-right">
+                        <span className="text-xs font-black text-foreground">{bid.price}</span>
+                        <span className="block text-[9px] text-muted-foreground">Escrow held</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className={cn(
+                          'h-7 text-xs px-2.5',
+                          selectedBid === bid.id ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'variant-outline',
+                        )}
+                      >
+                        {selectedBid === bid.id ? 'Selected' : 'Select Bid'}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bottom CTAs */}
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-xs border-t border-border/60">
+                <Link
+                  href="/request"
+                  className="font-bold text-amber-600 hover:underline inline-flex items-center gap-1"
+                >
+                  Post a 3-Bid Request (Free) <ArrowRight className="h-3 w-3" />
+                </Link>
+                <Link
+                  href="/marketplace"
+                  className="font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                >
+                  Browse Marketplace Directory &rarr;
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 // ─── Hero with audience fork ────────────────────────────────────────────────
 
 function HeroFork({
@@ -793,54 +1456,72 @@ function HeroFork({
       <div className="absolute -left-32 -top-32 -z-10 h-96 w-96 rounded-full bg-emerald-300/20 blur-3xl dark:bg-emerald-700/20" />
       <div className="absolute -right-32 top-20 -z-10 h-96 w-96 rounded-full bg-amber-300/15 blur-3xl dark:bg-amber-700/10" />
 
-      <div className="mx-auto max-w-5xl px-4 pb-12 pt-14 sm:px-6 sm:pb-16 sm:pt-20 text-center">
+      <div className="mx-auto max-w-6xl px-4 pb-12 pt-12 sm:px-6 sm:pb-16 sm:pt-16 text-center">
         {/* Eyebrow */}
         <div className="mb-4 flex justify-center">
-          <Badge className="gap-1.5 border-emerald-200 bg-white/70 px-3 py-1 text-emerald-700 backdrop-blur hover:bg-white/70 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-            <Sparkles className="h-3.5 w-3.5" />
-            The AI Operating System for Local Services
+          <Badge className="gap-1.5 border-emerald-200 bg-white/80 px-3.5 py-1 text-emerald-800 backdrop-blur hover:bg-white dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 shadow-xs">
+            <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            2026 AI Operating System for Field Service &amp; Local Trades
           </Badge>
         </div>
 
-        <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl md:text-6xl leading-[1.1]">
-          Fieseros —{' '}
+        <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl md:text-6xl lg:text-7xl leading-[1.08] max-w-5xl mx-auto">
+          Run your service business.{' '}
           <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">
-            The AI Operating System
-          </span>{' '}
-          for Local Services
+            Automate calls, dispatch &amp; forms.
+          </span>
         </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
-          Run your business. Get more customers. Automate everything.
+        <p className="mx-auto mt-4 max-w-3xl text-base text-muted-foreground sm:text-lg lg:text-xl leading-relaxed">
+          The complete platform for contractors and local service pros: Field Service OS, 24/7 AI Voice Receptionist, 20,391 smart form templates, and a 3-bid on-demand customer marketplace with <strong>$0 upfront lead fees</strong>.
         </p>
 
-        {/* Primary CTA — prominent "Start Free Trial" button above the fork.
-            The audience fork (below) remains as a secondary option, giving
-            users a clear primary action while still supporting the dual-audience
-            (business + consumer) exploration path. This mirrors the single-CTA
-            pattern used by Housecall Pro and other high-converting SaaS pages. */}
-        {onGetStarted ? (
-          <div className="mt-8 flex flex-col items-center">
+        {/* Primary Action Buttons */}
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+          {onGetStarted ? (
             <Button
               type="button"
               onClick={onGetStarted}
               size="lg"
-              className="h-14 px-8 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40 min-w-[220px]"
+              className="h-13 px-8 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40 rounded-xl"
             >
-              Start Free Trial <ArrowRight className="w-4 h-4 ml-2" />
+              Start 14-Day Free Trial <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
-            <p className="mt-2 text-xs text-muted-foreground">14 days free · No credit card required</p>
-          </div>
-        ) : null}
+          ) : null}
 
-        {/* Fork — two big CTAs (secondary to the primary CTA above) */}
-        <div className="mx-auto mt-8 max-w-3xl">
-          <p className="mb-3 text-xs uppercase tracking-widest text-muted-foreground font-semibold">Or, tell us who you are</p>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <Button
+            asChild
+            size="lg"
+            variant="outline"
+            className="h-13 px-6 text-base font-semibold border-border bg-background/80 hover:bg-muted rounded-xl"
+          >
+            <Link href="/request">
+              <Store className="w-4 h-4 mr-2 text-amber-600" /> Post a 3-Bid Request
+            </Link>
+          </Button>
+
+          {onTryDemo ? (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onTryDemo}
+              size="lg"
+              className="h-13 px-5 text-base font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl"
+            >
+              <Play className="w-4 h-4 mr-2" /> Live Demo
+            </Button>
+          ) : null}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">Get started for $5/month &bull; No credit card required &bull; Live in under 10 minutes</p>
+
+        {/* Audience Fork — 3 Modes (Contractor CRM, AI Forms & Templates, 3-Bid Marketplace) */}
+        <div className="mx-auto mt-9 max-w-4xl">
+          <p className="mb-3 text-xs uppercase tracking-widest text-muted-foreground font-bold">Choose your experience</p>
+          <div className="grid gap-3 sm:grid-cols-3 text-left">
             <button
               type="button"
               onClick={() => onPick('crm')}
               className={cn(
-                'group relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all min-h-[88px] sm:min-h-0',
+                'group relative overflow-hidden rounded-2xl border-2 p-4 transition-all min-h-[96px]',
                 audience === 'crm'
                   ? 'border-emerald-500 bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40'
                   : 'border-border bg-card hover:border-emerald-400 hover:shadow-md',
@@ -848,18 +1529,47 @@ function HeroFork({
             >
               <div className="flex items-start gap-3">
                 <span className={cn(
-                  'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl',
-                  audience === 'crm' ? 'bg-white/20' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                  audience === 'crm' ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
                 )}>
                   <Briefcase className="h-5 w-5" />
                 </span>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-bold">I run a service business</span>
-                    {audience === 'crm' ? <Check className="h-4 w-4 text-white" /> : null}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold truncate">I run a Service Business</span>
+                    {audience === 'crm' ? <Check className="h-4 w-4 text-white shrink-0" /> : null}
                   </div>
-                  <p className={cn('mt-0.5 text-xs', audience === 'crm' ? 'text-emerald-50' : 'text-muted-foreground')}>
-                    CRM, dispatch, invoicing, AI Receptionist. Get more customers with the marketplace.
+                  <p className={cn('mt-1 text-xs leading-snug', audience === 'crm' ? 'text-emerald-50' : 'text-muted-foreground')}>
+                    CRM, dispatch, invoicing, GPS tracking &amp; 24/7 AI Receptionist.
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onPick('forms')}
+              className={cn(
+                'group relative overflow-hidden rounded-2xl border-2 p-4 transition-all min-h-[96px]',
+                audience === 'forms'
+                  ? 'border-teal-500 bg-gradient-to-br from-teal-500 to-cyan-600 text-white shadow-lg shadow-teal-200 dark:shadow-teal-900/40'
+                  : 'border-border bg-card hover:border-teal-400 hover:shadow-md',
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <span className={cn(
+                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                  audience === 'forms' ? 'bg-white/20 text-white' : 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300',
+                )}>
+                  <FileSpreadsheet className="h-5 w-5" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold truncate">AI Form Studio (20K+)</span>
+                    {audience === 'forms' ? <Check className="h-4 w-4 text-white shrink-0" /> : null}
+                  </div>
+                  <p className={cn('mt-1 text-xs leading-snug', audience === 'forms' ? 'text-teal-50' : 'text-muted-foreground')}>
+                    20,391 templates, 200+ calculation widgets, photo notes &amp; 33 gateways.
                   </p>
                 </div>
               </div>
@@ -869,7 +1579,7 @@ function HeroFork({
               type="button"
               onClick={() => onPick('marketplace')}
               className={cn(
-                'group relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all min-h-[88px] sm:min-h-0',
+                'group relative overflow-hidden rounded-2xl border-2 p-4 transition-all min-h-[96px]',
                 audience === 'marketplace'
                   ? 'border-amber-500 bg-gradient-to-br from-amber-500 to-rose-500 text-white shadow-lg shadow-amber-200 dark:shadow-amber-900/40'
                   : 'border-border bg-card hover:border-amber-400 hover:shadow-md',
@@ -877,78 +1587,54 @@ function HeroFork({
             >
               <div className="flex items-start gap-3">
                 <span className={cn(
-                  'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl',
-                  audience === 'marketplace' ? 'bg-white/20' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                  audience === 'marketplace' ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
                 )}>
                   <Search className="h-5 w-5" />
                 </span>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-bold">I need a service</span>
-                    {audience === 'marketplace' ? <Check className="h-4 w-4 text-white" /> : null}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold truncate">I Need a Local Pro</span>
+                    {audience === 'marketplace' ? <Check className="h-4 w-4 text-white shrink-0" /> : null}
                   </div>
-                  <p className={cn('mt-0.5 text-xs', audience === 'marketplace' ? 'text-amber-50' : 'text-muted-foreground')}>
-                    Describe your problem. AI routes you to verified local pros. Book instantly or compare quotes.
+                  <p className={cn('mt-1 text-xs leading-snug', audience === 'marketplace' ? 'text-amber-50' : 'text-muted-foreground')}>
+                    Post in 60s. Get 3 verified bids in 10 mins. Escrow protection.
                   </p>
                 </div>
               </div>
             </button>
           </div>
-
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
-            {onTryDemo ? (
-              <button
-                type="button"
-                onClick={onTryDemo}
-                className="inline-flex items-center justify-center min-h-11 gap-1.5 text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 font-medium px-2"
-              >
-                <Play className="h-3.5 w-3.5" /> Try the live demo
-              </button>
-            ) : null}
-            <span className="text-muted-foreground hidden sm:inline" aria-hidden>·</span>
-            <a href="/marketplace" className="inline-flex items-center justify-center min-h-11 gap-1.5 text-amber-700 hover:text-amber-800 dark:text-amber-300 font-medium px-2">
-              Browse the marketplace <ArrowRight className="h-3.5 w-3.5" />
-            </a>
-            <span className="text-muted-foreground hidden sm:inline" aria-hidden>·</span>
-            <a
-              href="https://play.google.com/store/apps/details?id=com.fieseros.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center min-h-11 gap-1.5 text-foreground/80 hover:text-foreground dark:text-background/80 dark:hover:text-background font-medium px-2"
-            >
-              <Smartphone className="h-3.5 w-3.5" /> Get the mobile app
-              <ArrowRight className="h-3.5 w-3.5" />
-            </a>
-          </div>
         </div>
 
+        {/* ── 2026 Interactive Hero Simulator ── */}
+        <InteractiveHeroSimulator onGetStarted={onGetStarted} />
+
         {/* Trust badges row */}
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
           {heroTrustBadges.map((badge) => {
             const Icon = badge.icon;
             return (
               <div key={badge.label} className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground">
-                <Icon className="h-3.5 w-3.5 text-emerald-600" />
+                <Icon className="h-4 w-4 text-emerald-600" />
                 <span className="font-medium">{badge.label}</span>
               </div>
             );
           })}
         </div>
 
-        {/* Industry marquee — instantly signals "this is for service businesses" */}
+        {/* Industry marquee */}
         <div className="mt-10">
           <p className="text-center text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-3">
-            Trusted by service businesses across 23+ industries
+            Powering contractors &amp; service businesses across 25+ trades
           </p>
           <div className="relative overflow-hidden">
-            {/* Gradient fade edges */}
             <div className="absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-background to-transparent pointer-events-none" />
             <div className="absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-background to-transparent pointer-events-none" />
             <div className="flex gap-2 animate-[marquee_40s_linear_infinite] hover:[animation-play-state:paused]">
               {[...industryChips, ...industryChips].map((chip, i) => (
                 <span
                   key={`${chip}-${i}`}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white dark:bg-card px-3 py-1.5 text-xs font-medium text-foreground/80 whitespace-nowrap shadow-sm"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white dark:bg-card px-3.5 py-1.5 text-xs font-medium text-foreground/90 whitespace-nowrap shadow-xs"
                 >
                   <Wrench className="h-3 w-3 text-emerald-500" />
                   {chip}
@@ -959,57 +1645,14 @@ function HeroFork({
         </div>
 
         {/* Trust stats */}
-        <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
           {stats.map((stat) => (
-            <div key={stat.label} className="text-center">
-              <p className="text-2xl font-bold text-foreground sm:text-3xl">{stat.value}</p>
+            <div key={stat.label} className="text-center p-3 rounded-xl border border-border/60 bg-card/60">
+              <p className="text-2xl font-black text-foreground sm:text-3xl">{stat.value}</p>
               <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{stat.label}</p>
             </div>
           ))}
         </div>
-
-        {/* Dashboard preview — only when CRM fork is active */}
-        {audience === 'crm' ? (
-          <div className="mt-14 relative max-w-4xl mx-auto">
-            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-200/40 via-teal-200/30 to-emerald-200/40 rounded-3xl blur-3xl -z-10 dark:from-emerald-700/20 dark:via-teal-700/15 dark:to-emerald-700/20" />
-            <div className="relative rounded-2xl border border-border bg-white shadow-2xl shadow-slate-300/40 overflow-hidden dark:bg-card">
-              <div className="aspect-[1344/768] relative">
-                <Image
-                  src="/images/landing/hero-dashboard.png"
-                  alt="Fieseros CRM dashboard showing unified inbox, jobs, and dispatch"
-                  fill
-                  priority
-                  sizes="(max-width: 1024px) 100vw, 80vw"
-                  className="object-cover object-top"
-                />
-              </div>
-            </div>
-
-            {/* Floating worker badge — small "tech en route" card */}
-            <div className="absolute -bottom-5 -left-3 sm:-left-6 hidden sm:block">
-              <div className="rounded-xl border border-border bg-white shadow-lg p-3 w-44 dark:bg-card">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-200 overflow-hidden relative shrink-0">
-                    <Image
-                      src="/images/landing/hero-worker.png"
-                      alt="Field technician en route to customer"
-                      fill
-                      sizes="32px"
-                      className="object-cover"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-foreground leading-tight">Tech en route</div>
-                    <div className="text-[10px] text-muted-foreground leading-tight">ETA 12 min</div>
-                  </div>
-                </div>
-                <div className="h-1 rounded-full bg-muted overflow-hidden">
-                  <div className="h-full bg-emerald-500" style={{ width: '65%' }} />
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
     </section>
   );
@@ -1930,6 +2573,421 @@ function CrmForProviders({ onGetStarted }: { onGetStarted?: () => void }) {
   );
 }
 
+// ─── CRM: AI Form Studio & 20,391 Templates Showcase ────────────────────────
+
+function CrmAiFormShowcase() {
+  const formCategories = [
+    { name: 'Application Forms', count: '1,420+ templates', href: '/templates/application-forms', icon: ClipboardList },
+    { name: 'Booking & Appointment Forms', count: '2,150+ templates', href: '/templates/booking-forms', icon: CalendarCheck },
+    { name: 'Consent & Liability Waivers', count: '890+ templates', href: '/templates/consent-forms', icon: ShieldCheck },
+    { name: 'Contract & Agreement Forms', count: '1,120+ templates', href: '/templates/contract-forms', icon: FileText },
+    { name: 'Feedback & Review Forms', count: '940+ templates', href: '/templates/feedback-forms', icon: Star },
+    { name: 'Inspection & Audit Checklists', count: '3,200+ templates', href: '/templates/inspection-forms', icon: Wrench },
+    { name: 'Medical & Healthcare Forms', count: '1,840+ templates', href: '/templates/medical-forms', icon: Activity },
+    { name: 'Payment & Invoice Forms', count: '1,650+ templates', href: '/templates/payment-forms', icon: Wallet },
+    { name: 'Registration & Onboarding', count: '2,300+ templates', href: '/templates/registration-forms', icon: UserCheck },
+    { name: 'Service Request & Quotes', count: '4,881+ templates', href: '/templates/request-forms', icon: Zap },
+  ];
+
+  const smartWidgets = [
+    {
+      icon: Percent,
+      title: 'Dynamic Calculation Engine',
+      description: 'Formula logic for square footage, hourly labor, parts pricing, tax, discounts, and real-time total computation.',
+    },
+    {
+      icon: Paintbrush,
+      title: 'Photo Markup & Drawing Notes',
+      description: 'Customers and field technicians can snap photos, highlight damage, draw arrows, and annotate on site.',
+    },
+    {
+      icon: MapPin,
+      title: 'GPS Location & Geostamp',
+      description: 'Capture exact GPS coordinates and device timestamps on form completion for verifiable proof of service.',
+    },
+    {
+      icon: Wallet,
+      title: '33 Payment Gateways',
+      description: 'Collect deposits or instant payments with Stripe, Square, PayPal, Razorpay, Apple Pay, and Google Pay.',
+    },
+    {
+      icon: Layers,
+      title: '3 Smart View Formats',
+      description: 'Render any form as Multi-Step Paper, TikTok-style Card-by-Card Swipe, or Conversational AI Agent.',
+    },
+    {
+      icon: CheckCircle2,
+      title: 'E-Signatures & Audit Trail',
+      description: 'Legally-binding digital signatures with audit metadata, IP capture, and automated PDF delivery.',
+    },
+  ];
+
+  return (
+    <section id="ai-forms" className="relative border-t bg-muted/20 py-16 sm:py-24 overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.06),transparent_60%)]" />
+
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 relative z-10">
+        <div className="mb-12 text-center">
+          <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 mb-3 font-semibold px-3 py-1">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-emerald-600" />
+            GPTForm™ · 200+ Calculation Widgets · 33 Gateways
+          </Badge>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-foreground tracking-tight">
+            Build high-converting forms with <br className="hidden sm:inline" />
+            <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">
+              20,391 templates &amp; 200+ smart widgets
+            </span>
+          </h2>
+          <p className="text-muted-foreground mt-4 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed">
+            Replace Jotform, Typeform, and paper clipboards. Generate estimates, collect customer signatures, process deposits through 33 payment gateways, and push submissions straight into your CRM lead pipeline.
+          </p>
+        </div>
+
+        {/* 6 Smart Widget Capabilities */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-14">
+          {smartWidgets.map((w) => {
+            const Icon = w.icon;
+            return (
+              <Card key={w.title} className="bg-card border-border hover:border-emerald-400/80 hover:shadow-md transition-all h-full">
+                <CardHeader className="p-6">
+                  <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center mb-3">
+                    <Icon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <CardTitle className="text-base font-bold text-foreground mb-1.5">{w.title}</CardTitle>
+                  <CardDescription className="text-xs text-muted-foreground leading-relaxed">{w.description}</CardDescription>
+                </CardHeader>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* 20,391 Templates Category Explorer */}
+        <div className="rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-sm mb-10">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-border/80">
+            <div>
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-emerald-600" />
+                <h3 className="text-xl font-bold text-foreground">Explore 20,391 Ready-to-Use Form Templates</h3>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Jotform-parity catalog across 40+ professional categories with instant SEO preview and 1-click customization.
+              </p>
+            </div>
+            <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold px-4 h-9 shrink-0">
+              <Link href="/templates">
+                Browse Full Catalog <ArrowRight className="h-3.5 w-3.5 ml-1" />
+              </Link>
+            </Button>
+          </div>
+
+          {/* Categories Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-6">
+            {formCategories.map((cat) => {
+              const Icon = cat.icon;
+              return (
+                <Link
+                  key={cat.name}
+                  href={cat.href}
+                  className="group rounded-xl border border-border/80 bg-background/60 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 hover:border-emerald-300 p-3.5 transition-all flex flex-col justify-between"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="p-1.5 rounded-lg bg-muted group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 text-emerald-600 transition-colors">
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <span className="text-xs font-bold text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors leading-tight line-clamp-1">
+                      {cat.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                    <span>{cat.count}</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Direct CTA */}
+        <div className="flex flex-wrap items-center justify-center gap-4 text-center">
+          <Button asChild size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 h-12 rounded-xl text-sm shadow-md">
+            <Link href="/gptform">
+              Launch AI Form Studio <ArrowRight className="w-4 h-4 ml-2" />
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline" className="border-border px-6 h-12 rounded-xl text-sm font-semibold">
+            <Link href="/templates">
+              Search 20,391 Templates Catalog
+            </Link>
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: 3-Bid Service Marketplace Showcase (AllBetter Parity) ─────────────
+
+function CrmThreeBidMarketplace({ onGetStarted }: { onGetStarted?: () => void }) {
+  return (
+    <section id="marketplace-3bid" className="relative border-t bg-background py-16 sm:py-24 overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.06),transparent_60%)]" />
+
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 relative z-10">
+        <div className="mb-12 text-center">
+          <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300 mb-3 font-semibold px-3 py-1">
+            <Store className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
+            3-Bid Marketplace · AllBetter Model · Escrow Guarantee
+          </Badge>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-foreground tracking-tight">
+            Get 3 verified bids in 10 minutes — <br className="hidden sm:inline" />
+            <span className="bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent dark:from-amber-400 dark:via-orange-400 dark:to-rose-400">
+              or win high-intent jobs with $0 lead fees
+            </span>
+          </h2>
+          <p className="text-muted-foreground mt-4 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed">
+            The modern marketplace model. Homeowners post tasks in 60 seconds with escrow protection. Verified contractors bid for free and only pay a fair 2.5%–8% fee when winning the job.
+          </p>
+        </div>
+
+        {/* Dual Pillar Comparison: Homeowners vs Contractors */}
+        <div className="grid lg:grid-cols-2 gap-8 mb-12">
+          {/* Pillar 1: Homeowners & Property Managers */}
+          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-sm space-y-6">
+            <div className="flex items-center gap-3 pb-4 border-b border-border/80">
+              <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600">
+                <Home className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">For Homeowners &amp; Property Managers</h3>
+                <p className="text-xs text-muted-foreground">Fast, transparent &amp; 100% risk-free</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {[
+                {
+                  step: '1',
+                  title: 'Post in 60 Seconds',
+                  desc: 'Describe your job, upload photos of the issue, or record a voice memo. Set your timing and budget preference.',
+                },
+                {
+                  step: '2',
+                  title: 'Receive 3 Upfront Bids in ~10 Mins',
+                  desc: 'Verified, background-checked local pros review your request and submit binding price quotes with estimated arrival times.',
+                },
+                {
+                  step: '3',
+                  title: '100% Escrow Protection',
+                  desc: 'Funds are held securely. Your contractor only gets paid after you inspect and sign off on the completed work.',
+                },
+                {
+                  step: '4',
+                  title: 'Live Telemetry & GPS Tracking',
+                  desc: 'Track your technician on the live map in real-time as they drive to your address.',
+                },
+              ].map((item) => (
+                <div key={item.step} className="flex items-start gap-3.5">
+                  <div className="w-7 h-7 rounded-full bg-amber-500 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                    {item.step}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">{item.title}</h4>
+                    <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-4 border-t border-border/80 flex flex-wrap items-center gap-3">
+              <Button asChild className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-10 px-5 rounded-xl shadow-sm">
+                <Link href="/request">
+                  Post a Job Request (Free) <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="text-xs h-10 px-4 rounded-xl border-border">
+                <Link href="/request/track">
+                  Track Existing Request
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* Pillar 2: Contractors & Trade Pros */}
+          <div className="rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-sm space-y-6">
+            <div className="flex items-center gap-3 pb-4 border-b border-border/80">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600">
+                <HardHat className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">For Contractors &amp; Service Pros</h3>
+                <p className="text-xs text-muted-foreground">$0 upfront lead fee · Pay only on win</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {[
+                {
+                  step: '1',
+                  title: '$0 Upfront Lead Fee Guarantee',
+                  desc: 'Stop burning cash on Angi or Thumbtack paying $30–$80 per click for tire-kickers. Submitting bids on Fieseros is always $0.',
+                },
+                {
+                  step: '2',
+                  title: 'Pay Only 2.5%–8% When You Win',
+                  desc: 'Our take-rate is only deducted when you complete the job and get paid. Zero risk, zero wasted marketing spend.',
+                },
+                {
+                  step: '3',
+                  title: 'Unified Lead-to-Cash CRM Included',
+                  desc: 'Accepted marketplace jobs sync directly into your dispatch schedule, technician PWA app, and invoice records.',
+                },
+                {
+                  step: '4',
+                  title: 'Build Verified Reputation',
+                  desc: 'Every completed job earns verified 5-star reviews and portfolio showcases that boost your local SEO ranking.',
+                },
+              ].map((item) => (
+                <div key={item.step} className="flex items-start gap-3.5">
+                  <div className="w-7 h-7 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                    {item.step}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">{item.title}</h4>
+                    <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-4 border-t border-border/80 flex flex-wrap items-center gap-3">
+              {onGetStarted ? (
+                <Button onClick={onGetStarted} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-5 rounded-xl shadow-sm">
+                  Join Marketplace as a Pro <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                </Button>
+              ) : null}
+              <Button asChild variant="outline" className="text-xs h-10 px-4 rounded-xl border-border">
+                <Link href="/marketplace">
+                  Browse Public Directory
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: 2026 Competitive Benchmark Matrix ─────────────────────────────────
+
+function CrmVsCompetitors({ onGetStarted }: { onGetStarted?: () => void }) {
+  const comparisonRows = [
+    {
+      feature: 'Upfront Lead Cost',
+      fieseros: '$0 (Pay 2.5%-8% only on win)',
+      angi: '$30 – $80 per click/lead',
+      jobber: 'No marketplace included',
+      jotform: 'No marketplace included',
+    },
+    {
+      feature: '24/7 AI Voice Phone Receptionist',
+      fieseros: '✓ Built-in (Vapi BYOK)',
+      angi: '❌ None',
+      jobber: '❌ $100+/mo add-on',
+      jotform: '❌ None',
+    },
+    {
+      feature: 'Form Templates Catalog',
+      fieseros: '20,391 Ready Templates',
+      angi: '❌ None',
+      jobber: '❌ Basic quote form only',
+      jotform: '~10,000 templates',
+    },
+    {
+      feature: 'Calculation & Photo Markup Widgets',
+      fieseros: '200+ Smart Widgets',
+      angi: '❌ None',
+      jobber: '❌ Limited basic inputs',
+      jotform: '✓ Good widget library',
+    },
+    {
+      feature: '3 View Formats (Paper/Card/AI)',
+      fieseros: '✓ 3 Interactive View Modes',
+      angi: '❌ None',
+      jobber: '❌ Single web form',
+      jotform: '❌ 1 format only',
+    },
+    {
+      feature: 'Complete CRM, GPS Dispatch & Invoicing',
+      fieseros: '✓ All-in-One Operating System',
+      angi: '❌ None (Leads only)',
+      jobber: '✓ Field service management',
+      jotform: '❌ Forms only',
+    },
+    {
+      feature: 'Starting Monthly Price',
+      fieseros: '$5/mo founding offer',
+      angi: '$300+/mo lead trap',
+      jobber: '$49 – $199/mo + seat fees',
+      jotform: '$39 – $99/mo',
+    },
+  ];
+
+  return (
+    <section className="border-t bg-muted/30 py-16 sm:py-24">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-12 text-center">
+          <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 mb-3 font-semibold">
+            2026 Competitive Analysis
+          </Badge>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
+            Why service businesses choose <span className="text-emerald-600">Fieseros</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto text-sm sm:text-base">
+            Stop stitching together 5 different tools or paying thousands on pay-per-lead sites. Get everything in one modern platform.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-border bg-muted/60">
+                  <th className="p-4 font-bold text-foreground">Capability</th>
+                  <th className="p-4 font-bold text-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/40">Fieseros (2026 OS)</th>
+                  <th className="p-4 font-semibold text-muted-foreground">Angi / Thumbtack</th>
+                  <th className="p-4 font-semibold text-muted-foreground">Jobber / Housecall Pro</th>
+                  <th className="p-4 font-semibold text-muted-foreground">Jotform / Typeform</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {comparisonRows.map((row, i) => (
+                  <tr key={row.feature} className={cn(i % 2 === 0 ? 'bg-transparent' : 'bg-muted/20')}>
+                    <td className="p-4 font-bold text-foreground">{row.feature}</td>
+                    <td className="p-4 font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/30 dark:bg-emerald-950/20">{row.fieseros}</td>
+                    <td className="p-4 text-muted-foreground">{row.angi}</td>
+                    <td className="p-4 text-muted-foreground">{row.jobber}</td>
+                    <td className="p-4 text-muted-foreground">{row.jotform}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {onGetStarted ? (
+          <div className="mt-8 text-center">
+            <Button onClick={onGetStarted} size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 rounded-xl shadow-md">
+              Switch to Fieseros for Free <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 // ─── Sticky bottom CTA bar (mobile-friendly) ────────────────────────────────
 
 function StickyCta({
@@ -1950,7 +3008,9 @@ function StickyCta({
           <p className="text-xs text-muted-foreground truncate">
             {audience === 'crm'
               ? 'Fieseros CRM — run your business from lead to invoice'
-              : 'Fieseros Marketplace — find verified local pros'}
+              : audience === 'forms'
+              ? 'Fieseros AI Form Studio — 20,391 templates with 200+ smart widgets'
+              : 'Fieseros Marketplace — 3 upfront bids with escrow protection'}
           </p>
         </div>
         {audience === 'crm' ? (
@@ -1969,6 +3029,22 @@ function StickyCta({
               </Button>
             ) : null}
           </>
+        ) : audience === 'forms' ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPick('crm')}
+              className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hidden sm:inline-flex min-h-11"
+            >
+              <Briefcase className="h-3.5 w-3.5" /> I run a business
+            </Button>
+            <Button asChild size="sm" className="gap-1 bg-teal-600 text-white hover:bg-teal-700 min-h-11 flex-1 sm:flex-none w-full sm:w-auto">
+              <Link href="/gptform">
+                AI Form Builder <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </>
         ) : (
           <>
             <Button
@@ -1980,10 +3056,10 @@ function StickyCta({
               <Briefcase className="h-3.5 w-3.5" /> I run a business
             </Button>
             <a
-              href="/marketplace"
+              href="/request"
               className="inline-flex items-center justify-center gap-1.5 rounded-md bg-amber-600 px-4 py-2 min-h-11 text-sm font-semibold text-white hover:bg-amber-700 flex-1 sm:flex-none w-full sm:w-auto"
             >
-              Browse all <ArrowRight className="h-3.5 w-3.5" />
+              Post 3-Bid Request <ArrowRight className="h-3.5 w-3.5" />
             </a>
           </>
         )}
@@ -2030,9 +3106,12 @@ export function DualAudienceLanding({
             <CrmProblem />
             <CrmHowItWorks />
             <CrmFeatures />
+            <CrmAiFormShowcase />
+            <CrmThreeBidMarketplace onGetStarted={onGetStarted} />
             <CrmChannels />
             <CrmAiReceptionist onGetStarted={onGetStarted} />
             <CrmRoiMetrics />
+            <CrmVsCompetitors onGetStarted={onGetStarted} />
             <CrmTestimonials />
             <CrmPersonas />
             <CrmBuiltFor />
@@ -2041,8 +3120,20 @@ export function DualAudienceLanding({
             <CrmFaq />
             <CrmForProviders onGetStarted={onGetStarted} />
           </>
+        ) : audience === 'forms' ? (
+          <>
+            <CrmAiFormShowcase />
+            <CrmFeatures />
+            <CrmPricing onGetStarted={onGetStarted} />
+            <CrmResources />
+            <CrmFaq />
+          </>
         ) : (
-          <MarketplaceCompact onGetStarted={onGetStarted} onSignIn={onSignIn} />
+          <>
+            <CrmThreeBidMarketplace onGetStarted={onGetStarted} />
+            <MarketplaceCompact onGetStarted={onGetStarted} onSignIn={onSignIn} />
+            <CrmForProviders onGetStarted={onGetStarted} />
+          </>
         )}
       </main>
 
