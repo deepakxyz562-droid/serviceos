@@ -356,17 +356,34 @@ export function FormRuntimeRenderer({
   }
 
   // Render Classic Paper / Card Swipe Mode
+  const primaryColor = schema.theme?.primaryColor || '#059669';
+  const buttonColor = schema.theme?.buttonColor || primaryColor;
+  const buttonTextColor = schema.theme?.buttonTextColor || '#ffffff';
+  const borderRadius = schema.theme?.borderRadius || '16px';
+  const backgroundColor = schema.theme?.backgroundColor || '#ffffff';
+  const textColor = schema.theme?.textColor || '#0f172a';
+  const fontFamily = schema.theme?.fontFamily || 'Inter, sans-serif';
+
   return (
-    <div className="max-w-xl mx-auto space-y-4">
+    <div
+      className="w-full max-w-xl mx-auto space-y-4 transition-all"
+      style={{
+        fontFamily,
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        ['--form-primary' as any]: primaryColor,
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+        ['--form-btn-color' as any]: buttonColor,
+      }}
+    >
       {/* Mode Switcher if enabled */}
       {allowModeSwitch && (
-        <div className="flex justify-end gap-1 pb-1">
+        <div className="flex justify-end gap-1.5 pb-1">
           <Button
             type="button"
             variant={activeMode === 'paper' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => handleModeSwitch('paper')}
-            className="text-xs h-7"
+            className="text-xs h-7 rounded-lg cursor-pointer"
           >
             Classic Paper
           </Button>
@@ -375,7 +392,7 @@ export function FormRuntimeRenderer({
             variant={activeMode === 'card' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => handleModeSwitch('card')}
-            className="text-xs h-7"
+            className="text-xs h-7 rounded-lg cursor-pointer"
           >
             Card Swipe
           </Button>
@@ -384,52 +401,51 @@ export function FormRuntimeRenderer({
             variant={(activeMode as 'paper' | 'card' | 'agent') === 'agent' ? 'secondary' : 'ghost'}
             size="sm"
             onClick={() => handleModeSwitch('agent')}
-            className="text-xs h-7 gap-1 text-emerald-600"
+            className="text-xs h-7 gap-1 font-semibold rounded-lg cursor-pointer"
+            style={{ color: primaryColor }}
           >
-            <Bot className="size-3" /> AI Agent
+            <Bot className="size-3.5" /> AI Agent
           </Button>
         </div>
       )}
 
       <Card
-        className="shadow-md border-border/80 overflow-hidden rounded-2xl"
+        className="shadow-xl border border-slate-200/90 dark:border-slate-800 overflow-hidden transition-all duration-300"
         style={{
-          borderRadius: schema.theme?.borderRadius || '1rem',
-          backgroundColor: schema.theme?.backgroundColor || undefined,
-          color: schema.theme?.textColor || undefined,
+          borderRadius,
+          backgroundColor,
+          color: textColor,
         }}
       >
         {/* Header */}
         <div
-          className="p-6 text-white"
+          className="p-6 sm:p-7 text-white transition-all shadow-sm"
           style={{
-            background: schema.theme?.primaryColor
-              ? `linear-gradient(135deg, ${schema.theme.primaryColor}, ${schema.theme.primaryColor}dd)`
-              : 'linear-gradient(135deg, #059669, #0f766e)',
+            background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)`,
           }}
         >
           {branding?.businessName && (
-            <p className="text-[10px] uppercase font-bold tracking-wider opacity-90">
+            <p className="text-[10px] uppercase font-extrabold tracking-wider opacity-90">
               {branding.businessName}
             </p>
           )}
-          <h1 className="text-xl font-black mt-1">{formName}</h1>
+          <h1 className="text-xl sm:text-2xl font-black mt-1 leading-tight">{formName}</h1>
           {formDescription && (
-            <p className="text-xs opacity-90 mt-1 leading-relaxed">{formDescription}</p>
+            <p className="text-xs opacity-90 mt-1.5 leading-relaxed max-w-lg">{formDescription}</p>
           )}
 
           {/* Progress Bar for multi-step */}
           {steps.length > 1 && (
-            <div className="mt-4">
-              <div className="flex justify-between text-[11px] font-medium mb-1.5 opacity-90">
+            <div className="mt-5 pt-3 border-t border-white/20">
+              <div className="flex justify-between text-[11px] font-semibold mb-1.5 opacity-95">
                 <span>
                   Step {currentStepIndex + 1} of {steps.length}: {currentStep.title}
                 </span>
                 <span>{Math.round(((currentStepIndex + 1) / steps.length) * 100)}%</span>
               </div>
-              <div className="h-1.5 w-full bg-black/20 rounded-full overflow-hidden">
+              <div className="h-2 w-full bg-black/25 rounded-full overflow-hidden shadow-inner">
                 <div
-                  className="h-full bg-white rounded-full transition-all duration-300"
+                  className="h-full bg-white rounded-full transition-all duration-400 shadow-sm"
                   style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
                 />
               </div>
@@ -438,25 +454,28 @@ export function FormRuntimeRenderer({
         </div>
 
         {/* Content */}
-        <CardContent className="p-6">
+        <CardContent className="p-6 sm:p-7">
           <form onSubmit={handleSubmit} className="space-y-5">
             <input type="text" name="_hp" className="hidden" tabIndex={-1} autoComplete="off" />
 
             {/* ─── Card-by-Card Mode: render ONE field at a time ─────────────── */}
             {activeMode === 'card' ? (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {/* Card progress indicator */}
                 {currentStepFields.length > 0 && (
                   <div className="flex justify-between items-center text-[11px] text-muted-foreground mb-2">
-                    <span>Question {Math.min(cardFieldIndex + 1, currentStepFields.length)} of {currentStepFields.length}</span>
-                    <span>{Math.round(((cardFieldIndex + 1) / currentStepFields.length) * 100)}%</span>
+                    <span className="font-semibold">Question {Math.min(cardFieldIndex + 1, currentStepFields.length)} of {currentStepFields.length}</span>
+                    <span className="font-bold">{Math.round(((cardFieldIndex + 1) / currentStepFields.length) * 100)}%</span>
                   </div>
                 )}
                 {/* Progress bar */}
-                <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
+                <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
                   <div
-                    className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                    style={{ width: `${currentStepFields.length > 0 ? ((cardFieldIndex + 1) / currentStepFields.length) * 100 : 0}%` }}
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${currentStepFields.length > 0 ? ((cardFieldIndex + 1) / currentStepFields.length) * 100 : 0}%`,
+                      backgroundColor: primaryColor,
+                    }}
                   />
                 </div>
 
@@ -477,50 +496,91 @@ export function FormRuntimeRenderer({
                   };
 
                   return (
-                    <div key={field.id} className="space-y-1.5 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div key={field.id} className="space-y-2.5 animate-in fade-in slide-in-from-right-4 duration-300">
                       {!labelHidden && (
-                        <Label htmlFor={field.id} className={`text-sm font-semibold text-foreground ${labelAlignClass}`}>
-                          <span>{field.label} {field.required && <span className="text-red-500">*</span>}</span>
+                        <Label htmlFor={field.id} className={`text-sm sm:text-base font-bold text-foreground ${labelAlignClass}`}>
+                          <span>{field.label} {field.required && <span className="text-rose-500">*</span>}</span>
                         </Label>
                       )}
                       {field.helpText && !['heading', 'paragraph'].includes(field.type) && (
-                        <p className="text-[11px] text-muted-foreground">{field.helpText}</p>
+                        <p className="text-xs text-muted-foreground">{field.helpText}</p>
                       )}
-                      {/* Fire the dispatcher for control_widget fields AND for
-                          backward-compat: legacy saved forms where phase widgets
-                          set type='short_answer' + widgetType (the dispatcher's
-                          resolveRuntimeComponent handles the alias/override chain).
-                          'hidden' is excluded — it should stay invisible. */}
                       {(field.type === 'control_widget' || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
                         <WidgetRuntimeDispatcher field={field} value={formData[field.id]} onChange={(val) => handleFieldChange(field.id, val)} allFormData={formData} />
                       )}
                       {!field.widgetType && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
-                        <Input id={field.id} type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'numerical' ? 'number' : field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : 'text'} value={formData[field.id] || ''} onChange={(e) => handleFieldChange(field.id, e.target.value)} placeholder={field.placeholder || ''} className="text-sm" style={inputStyle} />
+                        <Input
+                          id={field.id}
+                          type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'numerical' ? 'number' : field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : 'text'}
+                          value={formData[field.id] || ''}
+                          onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                          placeholder={field.placeholder || ''}
+                          className="text-sm h-11 rounded-xl bg-slate-50/70 dark:bg-slate-900 border-border/80 focus-visible:ring-2"
+                          style={inputStyle}
+                        />
                       )}
                       {field.type === 'long_answer' && (
-                        <Textarea id={field.id} value={formData[field.id] || ''} onChange={(e) => handleFieldChange(field.id, e.target.value)} placeholder={field.placeholder || ''} rows={4} className="text-sm resize-none" style={inputStyle} />
+                        <Textarea
+                          id={field.id}
+                          value={formData[field.id] || ''}
+                          onChange={(e) => handleFieldChange(field.id, e.target.value)}
+                          placeholder={field.placeholder || ''}
+                          rows={4}
+                          className="text-sm rounded-xl bg-slate-50/70 dark:bg-slate-900 border-border/80 focus-visible:ring-2 resize-none"
+                          style={inputStyle}
+                        />
                       )}
                       {field.type === 'dropdown' && (
                         <Select value={formData[field.id] || ''} onValueChange={(val) => handleFieldChange(field.id, val)}>
-                          <SelectTrigger className="text-sm"><SelectValue placeholder={field.placeholder || 'Select an option'} /></SelectTrigger>
+                          <SelectTrigger className="text-sm h-11 rounded-xl bg-slate-50/70 dark:bg-slate-900 border-border/80"><SelectValue placeholder={field.placeholder || 'Select an option'} /></SelectTrigger>
                           <SelectContent>{field.options?.map((opt) => (<SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>))}</SelectContent>
                         </Select>
                       )}
                       {field.type === 'radio' && (
                         <RadioGroup value={formData[field.id] || ''} onValueChange={(val) => handleFieldChange(field.id, val)} className="space-y-2">
-                          {field.options?.map((opt) => (<div key={opt.value} className="flex items-center space-x-2"><RadioGroupItem value={opt.value} id={`${field.id}_${opt.value}`} /><Label htmlFor={`${field.id}_${opt.value}`} className="text-sm font-normal cursor-pointer">{opt.label}</Label></div>))}
+                          {field.options?.map((opt) => (
+                            <div
+                              key={opt.value}
+                              className={`flex items-center space-x-2.5 p-3 rounded-xl border transition-all cursor-pointer ${
+                                formData[field.id] === opt.value
+                                  ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
+                                  : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
+                              }`}
+                              onClick={() => handleFieldChange(field.id, opt.value)}
+                            >
+                              <RadioGroupItem value={opt.value} id={`${field.id}_${opt.value}`} />
+                              <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-semibold cursor-pointer">{opt.label}</Label>
+                            </div>
+                          ))}
                         </RadioGroup>
                       )}
                       {field.type === 'checkbox' && (
                         <div className="space-y-2">
                           {field.options?.map((opt) => {
                             const currentArr = Array.isArray(formData[field.id]) ? formData[field.id] : [];
-                            return (<div key={opt.value} className="flex items-center space-x-2"><Checkbox id={`${field.id}_${opt.value}`} checked={currentArr.includes(opt.value)} onCheckedChange={(isChecked) => { const updated = isChecked ? [...currentArr, opt.value] : currentArr.filter((v: string) => v !== opt.value); handleFieldChange(field.id, updated); }} /><Label htmlFor={`${field.id}_${opt.value}`} className="text-sm font-normal cursor-pointer">{opt.label}</Label></div>);
+                            const isChecked = currentArr.includes(opt.value);
+                            return (
+                              <div
+                                key={opt.value}
+                                className={`flex items-center space-x-2.5 p-3 rounded-xl border transition-all cursor-pointer ${
+                                  isChecked
+                                    ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
+                                    : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
+                                }`}
+                                onClick={() => {
+                                  const updated = isChecked ? currentArr.filter((v: string) => v !== opt.value) : [...currentArr, opt.value];
+                                  handleFieldChange(field.id, updated);
+                                }}
+                              >
+                                <Checkbox id={`${field.id}_${opt.value}`} checked={isChecked} />
+                                <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-semibold cursor-pointer">{opt.label}</Label>
+                              </div>
+                            );
                           })}
                         </div>
                       )}
                       {field.type === 'heading' && (<h2 className="text-lg font-bold text-foreground pt-2">{field.label}</h2>)}
-                      {field.type === 'paragraph' && (<p className="text-sm text-muted-foreground">{(field.widgetConfig as any)?.text || field.label}</p>)}
+                      {field.type === 'paragraph' && (<p className="text-sm text-muted-foreground leading-relaxed">{(field.widgetConfig as any)?.text || field.label}</p>)}
                     </div>
                   );
                 })()}
@@ -528,37 +588,48 @@ export function FormRuntimeRenderer({
                 {/* Card Navigation */}
                 <div className="flex justify-between items-center pt-6">
                   {cardFieldIndex > 0 ? (
-                    <Button type="button" variant="outline" size="sm" onClick={() => setCardFieldIndex((i) => i - 1)} className="text-xs gap-1">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setCardFieldIndex((i) => i - 1)} className="text-xs h-9 px-4 rounded-xl gap-1 cursor-pointer">
                       <ArrowLeft className="size-3.5" /> Back
                     </Button>
                   ) : <div />}
                   {cardFieldIndex < currentStepFields.length - 1 ? (
-                    <Button type="button" size="sm" onClick={() => setCardFieldIndex((i) => i + 1)} className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setCardFieldIndex((i) => i + 1)}
+                      className="text-xs h-9 px-5 rounded-xl font-bold text-white gap-1 shadow-md cursor-pointer"
+                      style={{ backgroundColor: buttonColor, color: buttonTextColor }}
+                    >
                       Next <ArrowRight className="size-3.5" />
                     </Button>
                   ) : (
-                    <Button type="submit" disabled={submitting} className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 px-5 gap-2 shadow-sm">
+                    <Button
+                      type="submit"
+                      disabled={submitting}
+                      className="text-xs font-bold h-10 px-6 rounded-xl gap-2 shadow-lg cursor-pointer"
+                      style={{ backgroundColor: buttonColor, color: buttonTextColor }}
+                    >
                       {submitting ? (<><Loader2 className="size-3.5 animate-spin" /> Submitting...</>) : (schema.settings?.submitButtonText || 'Submit')}
                     </Button>
                   )}
                 </div>
               </div>
             ) : (
-            <div className="space-y-4">
+            <div className="flex flex-wrap gap-y-4 justify-between">
               {currentStepFields.map((field) => {
                 const isHalf = field.width === 'half';
                 const isThird = field.width === 'third';
                 const isQuarter = field.width === 'quarter';
                 const widthClass = isHalf
-                  ? 'sm:w-[48%] sm:inline-block sm:mr-[2%] sm:align-top'
+                  ? 'w-full sm:w-[48.5%]'
                   : isThird
-                    ? 'sm:w-[31%] sm:inline-block sm:mr-[2%] sm:align-top'
+                    ? 'w-full sm:w-[31.5%]'
                     : isQuarter
-                      ? 'sm:w-[23%] sm:inline-block sm:mr-[2%] sm:align-top'
+                      ? 'w-full sm:w-[23.5%]'
                       : 'w-full';
                 const hasError = errors[field.id];
 
-                // ─── Phase F1: Apply universal settings ──────────────────────
+                // ─── Apply universal settings ──────────────────────
                 const labelHidden = field.labelEnabled === false
                   || field.labelAlign === 'hidden'
                   || ['heading', 'paragraph', 'divider'].includes(field.type);
@@ -581,14 +652,14 @@ export function FormRuntimeRenderer({
                     className={`space-y-1.5 ${widthClass}`}
                     style={fieldStyle}
                   >
-                    {/* Label — respects labelEnabled + labelAlign */}
+                    {/* Label */}
                     {!labelHidden && (
                       <Label
                         htmlFor={field.id}
-                        className={`text-xs font-semibold text-foreground ${labelAlignClass}`}
+                        className={`text-xs font-bold text-foreground ${labelAlignClass}`}
                       >
                         <span>
-                          {field.label} {field.required && <span className="text-red-500">*</span>}
+                          {field.label} {field.required && <span className="text-rose-500">*</span>}
                         </span>
                       </Label>
                     )}
@@ -597,10 +668,7 @@ export function FormRuntimeRenderer({
                       <p className="text-[11px] text-muted-foreground">{field.helpText}</p>
                     )}
 
-                    {/* Specialized Control Widgets — fires for control_widget
-                        fields AND backward-compat for legacy saved forms where
-                        phase widgets set type='short_answer' + widgetType.
-                        'hidden' is excluded to stay invisible. */}
+                    {/* Specialized Control Widgets */}
                     {(field.type === 'control_widget' || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
                       <WidgetRuntimeDispatcher
                         field={field}
@@ -610,8 +678,7 @@ export function FormRuntimeRenderer({
                       />
                     )}
 
-                    {/* Standard Inputs — only for fields WITHOUT a widgetType
-                        (widget fields are handled by the dispatcher above) */}
+                    {/* Standard Inputs */}
                     {!field.widgetType && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
                       <Input
                         id={field.id}
@@ -631,7 +698,9 @@ export function FormRuntimeRenderer({
                         value={formData[field.id] || ''}
                         onChange={(e) => handleFieldChange(field.id, e.target.value)}
                         placeholder={field.placeholder || ''}
-                        className={`text-xs ${hasError ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                        className={`text-xs h-10 rounded-xl bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 ${
+                          hasError ? 'border-rose-500 ring-1 ring-rose-500' : ''
+                        }`}
                         style={inputStyle}
                       />
                     )}
@@ -643,7 +712,9 @@ export function FormRuntimeRenderer({
                         onChange={(e) => handleFieldChange(field.id, e.target.value)}
                         placeholder={field.placeholder || ''}
                         rows={3}
-                        className={`text-xs resize-none ${hasError ? 'border-red-500 ring-1 ring-red-500' : ''}`}
+                        className={`text-xs rounded-xl bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 resize-none ${
+                          hasError ? 'border-rose-500 ring-1 ring-rose-500' : ''
+                        }`}
                         style={inputStyle}
                       />
                     )}
@@ -653,7 +724,7 @@ export function FormRuntimeRenderer({
                         value={formData[field.id] || ''}
                         onValueChange={(val) => handleFieldChange(field.id, val)}
                       >
-                        <SelectTrigger className={`text-xs ${hasError ? 'border-red-500' : ''}`}>
+                        <SelectTrigger className={`text-xs h-10 rounded-xl bg-slate-50/50 dark:bg-slate-900 border-border/80 ${hasError ? 'border-rose-500' : ''}`}>
                           <SelectValue placeholder={field.placeholder || 'Select an option'} />
                         </SelectTrigger>
                         <SelectContent>
@@ -673,9 +744,17 @@ export function FormRuntimeRenderer({
                         className="space-y-1.5"
                       >
                         {field.options?.map((opt) => (
-                          <div key={opt.value} className="flex items-center space-x-2">
+                          <div
+                            key={opt.value}
+                            className={`flex items-center space-x-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                              formData[field.id] === opt.value
+                                ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
+                                : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
+                            }`}
+                            onClick={() => handleFieldChange(field.id, opt.value)}
+                          >
                             <RadioGroupItem value={opt.value} id={`${field.id}_${opt.value}`} />
-                            <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-normal cursor-pointer">
+                            <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-semibold cursor-pointer">
                               {opt.label}
                             </Label>
                           </div>
@@ -689,18 +768,25 @@ export function FormRuntimeRenderer({
                           const currentArr = Array.isArray(formData[field.id]) ? formData[field.id] : [];
                           const checked = currentArr.includes(opt.value);
                           return (
-                            <div key={opt.value} className="flex items-center space-x-2">
+                            <div
+                              key={opt.value}
+                              className={`flex items-center space-x-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                                checked
+                                  ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
+                                  : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
+                              }`}
+                              onClick={() => {
+                                const updated = checked
+                                  ? currentArr.filter((v: string) => v !== opt.value)
+                                  : [...currentArr, opt.value];
+                                handleFieldChange(field.id, updated);
+                              }}
+                            >
                               <Checkbox
                                 id={`${field.id}_${opt.value}`}
                                 checked={checked}
-                                onCheckedChange={(isChecked) => {
-                                  const updated = isChecked
-                                    ? [...currentArr, opt.value]
-                                    : currentArr.filter((v: string) => v !== opt.value);
-                                  handleFieldChange(field.id, updated);
-                                }}
                               />
-                              <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-normal cursor-pointer">
+                              <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-semibold cursor-pointer">
                                 {opt.label}
                               </Label>
                             </div>
@@ -729,34 +815,34 @@ export function FormRuntimeRenderer({
 
                     {/* Headings / Paragraphs */}
                     {field.type === 'heading' && (
-                      <h2 className="text-base font-bold text-foreground pt-2 border-b border-border/60 pb-1">
+                      <h2 className="text-base font-bold text-foreground pt-2 border-b border-border/60 pb-1 w-full">
                         {field.label}
                       </h2>
                     )}
                     {field.type === 'paragraph' && (
-                      <p className="text-xs text-muted-foreground leading-relaxed">
+                      <p className="text-xs text-muted-foreground leading-relaxed w-full">
                         {field.label}
                       </p>
                     )}
 
                     {/* Error message */}
-                    {hasError && <p className="text-[11px] text-red-500 font-medium">{hasError}</p>}
+                    {hasError && <p className="text-[11px] text-rose-500 font-medium">{hasError}</p>}
                   </div>
                 );
               })}
             </div>
             )}
 
-            {/* Navigation / Submit Controls (paper mode only — card mode has its own nav) */}
+            {/* Navigation / Submit Controls */}
             {activeMode !== 'card' && (
-            <div className="flex justify-between items-center pt-4 border-t border-border/80">
+            <div className="flex justify-between items-center pt-5 border-t border-border/80">
               {steps.length > 1 && currentStepIndex > 0 ? (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={handlePrev}
-                  className="text-xs gap-1"
+                  className="text-xs h-9 px-4 rounded-xl gap-1 cursor-pointer"
                 >
                   <ArrowLeft className="size-3.5" /> Back
                 </Button>
@@ -769,7 +855,8 @@ export function FormRuntimeRenderer({
                   type="button"
                   size="sm"
                   onClick={handleNext}
-                  className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                  className="text-xs font-bold h-9 px-5 rounded-xl text-white gap-1 shadow-md cursor-pointer"
+                  style={{ backgroundColor: buttonColor, color: buttonTextColor }}
                 >
                   Next Step <ArrowRight className="size-3.5" />
                 </Button>
@@ -777,14 +864,15 @@ export function FormRuntimeRenderer({
                 <Button
                   type="submit"
                   disabled={submitting}
-                  className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 px-5 gap-2 shadow-sm"
+                  className="text-xs font-bold h-10 px-6 rounded-xl text-white gap-2 shadow-lg cursor-pointer"
+                  style={{ backgroundColor: buttonColor, color: buttonTextColor }}
                 >
                   {submitting ? (
                     <>
                       <Loader2 className="size-3.5 animate-spin" /> Submitting...
                     </>
                   ) : (
-                    schema.settings?.submitButtonText || 'Submit'
+                    schema.settings?.submitButtonText || 'Submit Form'
                   )}
                 </Button>
               )}

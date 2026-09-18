@@ -46,7 +46,7 @@ export function AgentPublishTab({
   const [copiedLink, setCopiedLink] = useState(false);
 
   const standaloneUrl = `${siteOrigin}/chat/${agent.slug || 'clara-dental'}`;
-  const embedScript = `<script src="${siteOrigin}/widget/agent.js" data-agent-id="${agent.id}" data-color="${agent.brandColor || '#2563eb'}" async></script>`;
+  const embedScript = `<script src="${siteOrigin}/widget/agent.js" data-agent-id="${agent.id}" data-color="${agent.brandColor || '#059669'}" async></script>`;
 
   const copyToClipboard = (text: string, type: 'code' | 'link') => {
     navigator.clipboard.writeText(text);

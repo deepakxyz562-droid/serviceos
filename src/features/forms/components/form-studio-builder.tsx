@@ -178,6 +178,8 @@ export function FormStudioBuilder({
         textColor: preset.textColor,
         fontFamily: preset.fontFamily,
         borderRadius: preset.borderRadius,
+        buttonColor: preset.primaryColor,
+        buttonTextColor: '#ffffff',
       } as any,
     }));
     toast.success(`Applied theme: ${preset.name}`);
@@ -592,15 +594,15 @@ export function FormStudioBuilder({
   };
 
   const handleOpenLive = async () => {
-    if (!formData.id) {
-      toast.info('Saving form before opening live...');
-      try {
-        await onSave();
-      } catch {
-        // continue
-      }
+    toast.info('Synchronizing live form...');
+    try {
+      await onSave();
+    } catch {
+      // continue
     }
-    window.open(liveUrl, '_blank', 'noopener,noreferrer');
+    const currentId = formData.id || canonicalFormId;
+    const targetUrl = `${resolvedOrigin}/form/${currentId}`;
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleSendEmailInvites = async () => {
@@ -1937,6 +1939,7 @@ export function FormStudioBuilder({
                 id: `agent_${formData.id || 'form_agent'}`,
                 name: formData.name ? `${formData.name} Assistant` : 'Clara',
                 roleTitle: `${formData.name || 'Inquiry'} AI Assistant`,
+                brandColor: formData.theme?.primaryColor || formData.primaryColor || '#059669',
                 connectedForms: [
                   {
                     id: formData.id || 'form_1',

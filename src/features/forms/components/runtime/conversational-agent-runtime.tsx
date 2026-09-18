@@ -34,10 +34,14 @@ export function ConversationalAgentRuntime({
     (f) => !['heading', 'paragraph', 'divider'].includes(f.type)
   );
 
+  const primaryColor = schema.theme?.primaryColor || schema.theme?.buttonColor || '#059669';
+  const borderRadius = schema.theme?.borderRadius || '16px';
+
   const [currentFieldIndex, setCurrentFieldIndex] = useState(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputVal, setInputVal] = useState('');
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -50,17 +54,16 @@ export function ConversationalAgentRuntime({
     if (!hasInitialized.current && messages.length === 0 && fields.length > 0) {
       hasInitialized.current = true;
       const firstField = fields[0];
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages([
         {
           id: 'msg_welcome',
           sender: 'ai',
-          text: `Hi there! 👋 I'm your AI assistant for ${formName}. I'll guide you through a few quick questions. Let's start:`,
+          text: `Hi there! 👋 I'm your AI assistant for ${formName}. I'll guide you step-by-step through a few quick questions. Let's get started:`,
         },
         {
           id: `msg_q_0`,
           sender: 'ai',
-          text: `${firstField.label} ${firstField.helpText ? `(${firstField.helpText})` : ''}`,
+          text: `${firstField.label}${firstField.required ? ' *' : ''} ${firstField.helpText ? `(${firstField.helpText})` : ''}`,
           fieldId: firstField.id,
         },
       ]);
@@ -71,10 +74,11 @@ export function ConversationalAgentRuntime({
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!inputVal.trim() || submitting) return;
+  const handleSend = async (textToSend?: string) => {
+    const rawText = textToSend !== undefined ? textToSend : inputVal;
+    if (!rawText.trim() || submitting) return;
 
-    const userText = inputVal.trim();
+    const userText = rawText.trim();
     const currentField = fields[currentFieldIndex];
 
     // Save field value
@@ -96,7 +100,7 @@ export function ConversationalAgentRuntime({
       updatedMessages.push({
         id: `ai_${Date.now()}`,
         sender: 'ai',
-        text: `Got it. Next: ${nextField.label} ${nextField.helpText ? `(${nextField.helpText})` : ''}`,
+        text: `Got it! Next: ${nextField.label}${nextField.required ? ' *' : ''} ${nextField.helpText ? `(${nextField.helpText})` : ''}`,
         fieldId: nextField.id,
       });
       setMessages(updatedMessages);
@@ -112,29 +116,62 @@ export function ConversationalAgentRuntime({
     }
   };
 
+  const toggleMic = () => {
+    if (!isRecording) {
+      setIsRecording(true);
+      toast.info('Voice input listening... (Speak your answer)');
+      // Simulate voice capture
+      setTimeout(() => {
+        setIsRecording(false);
+      }, 4000);
+    } else {
+      setIsRecording(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-[520px] bg-background border border-border/80 rounded-2xl shadow-sm overflow-hidden">
+    <div
+      className="flex flex-col h-[540px] bg-background border border-border/80 shadow-lg overflow-hidden transition-all"
+      style={{ borderRadius }}
+    >
       {/* Header */}
-      <div className="p-3.5 bg-muted/40 border-b border-border/80 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="size-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-xs">
-            <Bot className="size-4" />
+      <div className="p-4 bg-muted/40 border-b border-border/80 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className="size-9 rounded-xl text-white flex items-center justify-center shadow-md transition-all"
+            style={{
+              background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)`,
+            }}
+          >
+            <Bot className="size-5" />
           </div>
           <div>
             <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
               <span>{formName} AI Agent</span>
-              <span className="inline-block size-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span
+                className="inline-block size-2 rounded-full animate-pulse"
+                style={{ backgroundColor: primaryColor }}
+              />
             </h3>
-            <p className="text-[10px] text-muted-foreground">Conversational Voice & Chat Assistant</p>
+            <p className="text-[10px] text-muted-foreground">Conversational Voice &amp; Chat Assistant</p>
           </div>
         </div>
-        <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200/60 dark:border-emerald-800/40">
-          {Math.min(currentFieldIndex, fields.length)} of {fields.length} questions
+
+        {/* Question Counter Badge */}
+        <div
+          className="text-[11px] font-bold px-2.5 py-0.5 rounded-full border shadow-2xs transition-colors"
+          style={{
+            backgroundColor: `${primaryColor}15`,
+            color: primaryColor,
+            borderColor: `${primaryColor}40`,
+          }}
+        >
+          {Math.min(currentFieldIndex + 1, Math.max(fields.length, 1))} of {fields.length} questions
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+      {/* Messages Feed */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/40 dark:bg-slate-950/40">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -143,16 +180,27 @@ export function ConversationalAgentRuntime({
             }`}
           >
             {msg.sender === 'ai' && (
-              <div className="size-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+              <div
+                className="size-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 shadow-2xs"
+                style={{
+                  backgroundColor: `${primaryColor}20`,
+                  color: primaryColor,
+                }}
+              >
                 <Sparkles className="size-3.5" />
               </div>
             )}
             <div
-              className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${
+              className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-xs transition-all ${
                 msg.sender === 'user'
-                  ? 'bg-emerald-600 text-white rounded-tr-none'
-                  : 'bg-muted/70 text-foreground border border-border/60 rounded-tl-none'
+                  ? 'text-white rounded-tr-none font-medium'
+                  : 'bg-card text-foreground border border-border/70 rounded-tl-none'
               }`}
+              style={
+                msg.sender === 'user'
+                  ? { backgroundColor: primaryColor }
+                  : undefined
+              }
             >
               {msg.text}
             </div>
@@ -167,29 +215,52 @@ export function ConversationalAgentRuntime({
       </div>
 
       {/* Bottom Input or Submit CTA */}
-      <div className="p-3 bg-muted/20 border-t border-border/80">
+      <div className="p-3.5 bg-background border-t border-border/80">
         {!isCompleted ? (
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSend();
             }}
-            className="flex gap-2"
+            className="flex items-center gap-2"
           >
             <Input
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
               placeholder="Type your answer here..."
-              className="text-xs h-9 bg-background"
+              className="text-xs h-10 bg-slate-50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 rounded-xl"
+              style={{
+                // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+                ['--tw-ring-color' as any]: primaryColor,
+              }}
               autoFocus
             />
+
+            {/* Mic Toggle Button */}
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={toggleMic}
+              className={`size-10 rounded-xl shrink-0 cursor-pointer transition-colors ${
+                isRecording ? 'bg-rose-500 text-white border-rose-600 animate-pulse' : 'hover:bg-muted'
+              }`}
+              title="Speak with voice"
+            >
+              <Mic className="size-4" />
+            </Button>
+
+            {/* Send Button */}
             <Button
               type="submit"
               size="sm"
               disabled={!inputVal.trim()}
-              className="h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+              className="h-10 px-4 text-white font-bold rounded-xl shadow-md shrink-0 cursor-pointer transition-opacity"
+              style={{
+                backgroundColor: primaryColor,
+              }}
             >
-              <Send className="size-3.5" />
+              <Send className="size-4" />
             </Button>
           </form>
         ) : (
@@ -197,7 +268,10 @@ export function ConversationalAgentRuntime({
             type="button"
             onClick={onSubmit}
             disabled={submitting}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-10 gap-2 shadow-sm"
+            className="w-full text-white text-xs font-bold h-11 rounded-xl gap-2 shadow-lg cursor-pointer"
+            style={{
+              backgroundColor: primaryColor,
+            }}
           >
             {submitting ? (
               <Loader2 className="size-4 animate-spin" />

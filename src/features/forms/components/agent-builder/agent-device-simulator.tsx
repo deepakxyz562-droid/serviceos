@@ -145,12 +145,16 @@ export function AgentDeviceSimulator({
     }
   };
 
+  const brandColor = agent.brandColor || '#059669';
+
   return (
     <div className="flex flex-col h-full w-full bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 rounded-[28px] overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800">
       {/* ── 1. AGENT HEADER BANNER ── */}
       <div
-        className="px-4 py-3 flex items-center justify-between text-white transition-colors"
-        style={{ backgroundColor: agent.brandColor || '#2563eb' }}
+        className="px-4 py-3 flex items-center justify-between text-white transition-colors shadow-sm"
+        style={{
+          background: `linear-gradient(135deg, ${brandColor}, ${brandColor}dd)`,
+        }}
       >
         <div className="flex items-center gap-2.5">
           <div className="relative">
@@ -207,17 +211,28 @@ export function AgentDeviceSimulator({
                 <div
                   className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-xs ${
                     msg.sender === 'user'
-                      ? 'bg-blue-600 text-white rounded-br-none'
+                      ? 'text-white rounded-br-none font-medium'
                       : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 rounded-bl-none'
                   }`}
+                  style={
+                    msg.sender === 'user'
+                      ? { backgroundColor: brandColor }
+                      : undefined
+                  }
                 >
                   <p className="whitespace-pre-line">{msg.text}</p>
                 </div>
 
                 {/* Form Recommendation Card attached to AI message */}
                 {msg.suggestedForm && (
-                  <div className="w-[85%] p-3 bg-gradient-to-br from-blue-50 to-indigo-50/50 dark:from-blue-950/40 dark:to-indigo-950/20 border border-blue-200 dark:border-blue-800/60 rounded-xl space-y-2 text-left">
-                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                  <div
+                    className="w-[85%] p-3 border rounded-xl space-y-2 text-left shadow-2xs"
+                    style={{
+                      backgroundColor: `${brandColor}10`,
+                      borderColor: `${brandColor}30`,
+                    }}
+                  >
+                    <div className="flex items-center gap-2" style={{ color: brandColor }}>
                       <FileText className="size-4 shrink-0" />
                       <span className="text-xs font-bold truncate">{msg.suggestedForm.name}</span>
                     </div>
@@ -233,7 +248,8 @@ export function AgentDeviceSimulator({
                         onOpenFormInModal?.(msg.suggestedForm!);
                         setActiveTab('forms');
                       }}
-                      className="w-full text-xs h-7 bg-blue-600 hover:bg-blue-700 text-white gap-1"
+                      className="w-full text-xs h-7 text-white gap-1 font-bold shadow-xs cursor-pointer"
+                      style={{ backgroundColor: brandColor }}
                     >
                       Fill Form In-Chat <ArrowRight className="size-3" />
                     </Button>
@@ -252,10 +268,13 @@ export function AgentDeviceSimulator({
                     key={action.id}
                     type="button"
                     onClick={() => handleQuickActionClick(action)}
-                    className="w-full p-2.5 bg-white dark:bg-slate-800 hover:bg-blue-50/80 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 text-left transition-all shadow-2xs hover:border-blue-300 flex items-center justify-between group"
+                    className="w-full p-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 text-left transition-all shadow-2xs flex items-center justify-between group cursor-pointer"
                   >
                     <span>{action.label}</span>
-                    <ArrowRight className="size-3 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-transform" />
+                    <ArrowRight
+                      className="size-3 text-slate-400 group-hover:translate-x-0.5 transition-transform"
+                      style={{ color: brandColor }}
+                    />
                   </button>
                 ))}
               </div>
@@ -263,7 +282,7 @@ export function AgentDeviceSimulator({
 
             {sending && (
               <div className="flex items-center gap-2 text-xs text-slate-500 py-1">
-                <Loader2 className="size-3.5 animate-spin text-blue-600" />
+                <Loader2 className="size-3.5 animate-spin" style={{ color: brandColor }} />
                 <span>{agent.name} is typing...</span>
               </div>
             )}
@@ -279,15 +298,18 @@ export function AgentDeviceSimulator({
               <img
                 src={agent.avatarUrl}
                 alt={agent.name}
-                className={`size-24 rounded-full object-cover ring-4 ${
-                  isCalling
-                    ? 'ring-blue-500 shadow-xl animate-pulse ring-offset-4 ring-offset-background'
-                    : 'ring-slate-300'
-                }`}
+                className="size-24 rounded-full object-cover ring-4 ring-offset-4 ring-offset-background transition-all"
+                style={{
+                  boxShadow: isCalling ? `0 0 24px ${brandColor}60` : undefined,
+                  borderColor: brandColor,
+                }}
               />
               {isCalling && (
-                <span className="absolute -bottom-2 -right-2 size-7 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
-                  <Volume2 className="size-4 animate-bounce" />
+                <span
+                  className="absolute -bottom-2 -right-2 size-7 rounded-full text-white flex items-center justify-center shadow-md animate-bounce"
+                  style={{ backgroundColor: brandColor }}
+                >
+                  <Volume2 className="size-4" />
                 </span>
               )}
             </div>
@@ -303,19 +325,25 @@ export function AgentDeviceSimulator({
 
             {/* Audio Soundwave visualizer */}
             {isCalling && (
-              <div className="flex items-center gap-1.5 h-10 px-6 py-2 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-full">
+              <div
+                className="flex items-center gap-1.5 h-10 px-6 py-2 border rounded-full"
+                style={{
+                  backgroundColor: `${brandColor}10`,
+                  borderColor: `${brandColor}30`,
+                }}
+              >
                 {[40, 70, 95, 60, 85, 45, 100, 65, 30, 80].map((h, i) => (
                   <span
                     key={i}
-                    style={{ height: `${h}%` }}
-                    className="w-1 bg-blue-600 rounded-full animate-pulse transition-all duration-300"
+                    style={{ height: `${h}%`, backgroundColor: brandColor }}
+                    className="w-1 rounded-full animate-pulse transition-all duration-300"
                   />
                 ))}
               </div>
             )}
 
             <p className="text-xs text-slate-600 dark:text-slate-400 max-w-xs bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 italic">
-              "{isCalling ? voiceTranscript : 'Tap Start Voice Call below to talk with Clara via browser audio.'}"
+              "{isCalling ? voiceTranscript : `Tap Start Voice Call below to talk with ${agent.name} via browser audio.`}"
             </p>
 
             <Button
@@ -326,15 +354,15 @@ export function AgentDeviceSimulator({
                   toast.info('Voice call ended');
                 } else {
                   setIsCalling(true);
-                  setVoiceTranscript(`Hello! I'm Clara. How can I help with your dental visit today?`);
+                  setVoiceTranscript(`Hello! I'm ${agent.name}. How can I help you today?`);
                   toast.success('Live Voice Call connected!');
                 }
               }}
-              className={`w-full max-w-xs text-xs font-bold h-11 gap-2 shadow-md ${
-                isCalling
-                  ? 'bg-red-600 hover:bg-red-700 text-white'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
+              className="w-full max-w-xs text-xs font-bold h-11 gap-2 shadow-md cursor-pointer"
+              style={{
+                backgroundColor: isCalling ? '#dc2626' : brandColor,
+                color: '#ffffff',
+              }}
             >
               {isCalling ? (
                 <>
@@ -362,10 +390,16 @@ export function AgentDeviceSimulator({
             {agent.connectedForms?.map((form) => (
               <Card
                 key={form.id}
-                className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-400 transition-all bg-white dark:bg-slate-800 shadow-xs"
+                className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-border transition-all bg-white dark:bg-slate-800 shadow-xs"
               >
                 <div className="flex items-start gap-3">
-                  <div className="size-9 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 flex items-center justify-center shrink-0">
+                  <div
+                    className="size-9 rounded-lg flex items-center justify-center shrink-0"
+                    style={{
+                      backgroundColor: `${brandColor}15`,
+                      color: brandColor,
+                    }}
+                  >
                     <FileText className="size-5" />
                   </div>
                   <div className="flex-1 min-w-0 space-y-1">
@@ -383,7 +417,8 @@ export function AgentDeviceSimulator({
                         type="button"
                         size="sm"
                         onClick={() => onOpenFormInModal?.(form)}
-                        className="h-6 text-[10px] bg-blue-600 hover:bg-blue-700 text-white px-2.5 rounded-md gap-1"
+                        className="h-6 text-[10px] text-white px-2.5 rounded-md gap-1 font-bold cursor-pointer"
+                        style={{ backgroundColor: brandColor }}
                       >
                         Fill Form <ArrowRight className="size-2.5" />
                       </Button>
@@ -405,8 +440,8 @@ export function AgentDeviceSimulator({
 
             <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
               <div className="flex items-center justify-between text-[11px] font-semibold text-slate-800 dark:text-slate-200">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="size-3.5 text-emerald-600" /> Active Session
+                <span className="flex items-center gap-1.5" style={{ color: brandColor }}>
+                  <CheckCircle2 className="size-3.5" /> Active Session
                 </span>
                 <span className="text-[10px] text-slate-400">{messages.length} messages</span>
               </div>
@@ -430,7 +465,7 @@ export function AgentDeviceSimulator({
           >
             <button
               type="button"
-              className="size-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
+              className="size-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer"
               title="Attach photo or document"
               onClick={() => toast.info('Photo/File attachment ready')}
             >
@@ -440,7 +475,7 @@ export function AgentDeviceSimulator({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder="Type here..."
-              className="flex-1 h-9 text-xs bg-slate-100 dark:bg-slate-800 border-none rounded-xl focus-visible:ring-1 focus-visible:ring-blue-500"
+              className="flex-1 h-9 text-xs bg-slate-100 dark:bg-slate-800 border-none rounded-xl"
               disabled={sending}
             />
             <button
@@ -448,9 +483,13 @@ export function AgentDeviceSimulator({
               onClick={() => {
                 setActiveTab('voice');
                 setIsCalling(true);
-                setVoiceTranscript(`Hello! I'm Clara. How can I help with your dental visit today?`);
+                setVoiceTranscript(`Hello! I'm ${agent.name}. How can I help you today?`);
               }}
-              className="size-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors"
+              className="size-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+              style={{
+                backgroundColor: `${brandColor}15`,
+                color: brandColor,
+              }}
               title="Voice mode"
             >
               <Mic className="size-4" />
@@ -459,7 +498,8 @@ export function AgentDeviceSimulator({
               type="submit"
               size="sm"
               disabled={!inputText.trim() || sending}
-              className="size-8 p-0 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shrink-0 shadow-xs"
+              className="size-8 p-0 text-white rounded-xl shrink-0 shadow-xs cursor-pointer font-bold"
+              style={{ backgroundColor: brandColor }}
             >
               <Send className="size-3.5" />
             </Button>
@@ -473,11 +513,11 @@ export function AgentDeviceSimulator({
           <button
             type="button"
             onClick={() => setActiveTab('chat')}
-            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
-              activeTab === 'chat'
-                ? 'text-blue-600 font-bold'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-            }`}
+            className="flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer"
+            style={{
+              color: activeTab === 'chat' ? brandColor : undefined,
+              fontWeight: activeTab === 'chat' ? 700 : 400,
+            }}
           >
             <MessageSquare className="size-4" />
             <span className="text-[10px]">Chat</span>
@@ -488,11 +528,11 @@ export function AgentDeviceSimulator({
           <button
             type="button"
             onClick={() => setActiveTab('voice')}
-            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
-              activeTab === 'voice'
-                ? 'text-blue-600 font-bold'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-            }`}
+            className="flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer"
+            style={{
+              color: activeTab === 'voice' ? brandColor : undefined,
+              fontWeight: activeTab === 'voice' ? 700 : 400,
+            }}
           >
             <Mic className="size-4" />
             <span className="text-[10px]">Voice</span>
@@ -503,16 +543,19 @@ export function AgentDeviceSimulator({
           <button
             type="button"
             onClick={() => setActiveTab('forms')}
-            className={`flex flex-col items-center justify-center gap-0.5 transition-colors relative ${
-              activeTab === 'forms'
-                ? 'text-blue-600 font-bold'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-            }`}
+            className="flex flex-col items-center justify-center gap-0.5 transition-colors relative cursor-pointer"
+            style={{
+              color: activeTab === 'forms' ? brandColor : undefined,
+              fontWeight: activeTab === 'forms' ? 700 : 400,
+            }}
           >
             <FileText className="size-4" />
             <span className="text-[10px]">Forms</span>
             {agent.connectedForms?.length > 0 && (
-              <span className="absolute top-2 right-5 size-1.5 rounded-full bg-blue-600" />
+              <span
+                className="absolute top-2 right-5 size-1.5 rounded-full"
+                style={{ backgroundColor: brandColor }}
+              />
             )}
           </button>
         )}
@@ -521,11 +564,11 @@ export function AgentDeviceSimulator({
           <button
             type="button"
             onClick={() => setActiveTab('history')}
-            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
-              activeTab === 'history'
-                ? 'text-blue-600 font-bold'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-            }`}
+            className="flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer"
+            style={{
+              color: activeTab === 'history' ? brandColor : undefined,
+              fontWeight: activeTab === 'history' ? 700 : 400,
+            }}
           >
             <History className="size-4" />
             <span className="text-[10px]">History</span>
