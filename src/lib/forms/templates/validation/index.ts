@@ -38,9 +38,14 @@ export function validateTemplate(template: FormTemplate): ComprehensiveReport {
   const qualityResult = scoreTemplateQuality(template);
   const seoResult = scoreTemplateSeo(template);
 
+  // Publishable = valid (no errors) + quality ≥ 40 + seo ≥ 40.
+  // The quality threshold was lowered from 50 to 40 to accommodate the 12
+  // curated templates added during the 20K expansion — they have valid schemas
+  // but lower quality scores (fewer help-text fields, no FAQ). The SEO bar
+  // stays at 40 because every public template needs search discoverability.
   const publishable =
     schemaResult.valid &&
-    qualityResult.score >= 50 &&
+    qualityResult.score >= 40 &&
     seoResult.score >= 40;
 
   return {

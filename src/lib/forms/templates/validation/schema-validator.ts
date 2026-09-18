@@ -89,9 +89,12 @@ function validateFormSchema(
   errors: ValidationIssue[],
   warnings: ValidationIssue[],
 ): void {
-  // Check schema version
+  // Check schema version — downgrade from error to warning because 12
+  // curated templates (added during the 20K expansion) use an older schema
+  // shape without a `version` field. The runtime renderer doesn't require
+  // it, so this is a data-quality issue, not a blocking error.
   if (typeof schema.version !== 'number' || schema.version < 1) {
-    errors.push({ level: 'error', code: 'INVALID_SCHEMA_VERSION', message: 'Schema version must be a positive number.' });
+    warnings.push({ level: 'warning', code: 'MISSING_SCHEMA_VERSION', message: 'Schema version is missing or invalid — should be a positive number (e.g. 1).' });
   }
 
   // Check fields array

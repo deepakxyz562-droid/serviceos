@@ -30,7 +30,25 @@ import { resolveIndustryFromText } from './taxonomy/industries';
 
 // ─── In-memory store ────────────────────────────────────────────────────────
 
+/**
+ * CURATED registry — only hand-coded templates (registered via canonical/*.ts).
+ * getAllTemplates() returns ONLY these, so tests and UI that expect curated
+ * quality are not polluted by synthesized templates.
+ */
 const REGISTRY = new Map<string, FormTemplate>();
+
+/**
+ * SYNTHESIZED cache — on-demand generated templates (mass synthesizer output).
+ * Kept SEPARATE from REGISTRY so getAllTemplates() stays clean. The search
+ * engine + getTemplateSync() check BOTH stores, but getAllTemplates() only
+ * returns REGISTRY entries (the hand-coded 63).
+ *
+ * This fixes the critical "registry mutation" bug where searchTemplates()
+ * was writing synthesized templates into REGISTRY, polluting every subsequent
+ * getAllTemplates() call and breaking tests that assert "every curated
+ * template has ≥5 fields".
+ */
+const SYNTHESIZED_CACHE = new Map<string, FormTemplate>();
 
 /**
  * Register a template. Called by each `canonical/*.ts` file at import time.
@@ -150,14 +168,22 @@ export function getAllTemplates(): FormTemplate[] {
 }
 
 /**
- * Synchronous lookup by id. Returns curated template or synthesizes on-demand in <0.1ms.
+ * Synchronous lookup by id. Checks curated REGISTRY first, then synthesizes
+ * on-demand and caches in SYNTHESIZED_CACHE (NOT REGISTRY — keeps
+ * getAllTemplates() clean).
  */
 export function getTemplateSync(id: string): FormTemplate | undefined {
+  // 1. Curated template (hand-coded)
   if (REGISTRY.has(id)) {
     return REGISTRY.get(id);
   }
 
-  // Sort industries by length descending to match exact prefix (e.g. 'home_services' before 'home')
+  // 2. Previously-synthesized template (cache hit)
+  if (SYNTHESIZED_CACHE.has(id)) {
+    return SYNTHESIZED_CACHE.get(id);
+  }
+
+  // 3. Synthesize on-demand — cache in SYNTHESIZED_CACHE, NOT REGISTRY
   const sortedIndustries = [...TEMPLATE_INDUSTRIES].sort((a, b) => b.id.length - a.id.length);
   const matchedIndustry = sortedIndustries.find((ind) => id.startsWith(ind.id));
 
@@ -189,9 +215,11 @@ export function getTemplateSync(id: string): FormTemplate | undefined {
     const subIndex = Math.max(0, subcategories.findIndex((s) => s.id === remainder));
     const variantIndex = cycle * subcategories.length + subIndex;
 
-    const synthesized = synthesizeTemplate(matchedCategory.id as any, matchedIndustry.id as any, variantIndex);
+    const synthesized = synthesizeTemplate(matchedCategory.id as never, matchedIndustry.id as never, variantIndex);
     synthesized.id = id;
-    REGISTRY.set(id, synthesized);
+    // Cache in SYNTHESIZED_CACHE (separate from REGISTRY) so getAllTemplates()
+    // stays clean but repeated lookups for the same id are fast.
+    SYNTHESIZED_CACHE.set(id, synthesized);
     return synthesized;
   }
 
@@ -255,6 +283,13 @@ export async function searchTemplates(
         score += 15;
         matchedFields.push('tags');
       }
+      // ─── Curated boost: hand-coded templates always rank above synthesized ──
+      // This fixes the bug where a synthesized 'general-general-contact' outranks
+      // the real 'contact-form' for the query "contact". Curated templates get
+      // +500 so they always appear first, then synthesized ones fill the rest.
+      if (entry.isCurated) {
+        score += 500;
+      }
       if (score > 0) {
         scored.push({ entry, score, matchedFields });
       }
@@ -273,10 +308,16 @@ export async function searchTemplates(
   const limit = query.limit || 50;
   const pageSlice = scored.slice(offset, offset + limit);
 
-  return pageSlice.map(({ entry, score, matchedFields }) => {
-    const template = getTemplateSync(entry.id)!;
-    return { template, score, matchedFields };
-  });
+  // Filter out entries where getTemplateSync returns undefined (can happen for
+  // malformed catalog index entries that don't match any industry prefix).
+  // The non-null assertion `!` was hiding these, causing test failures where
+  // r.template was undefined.
+  return pageSlice
+    .map(({ entry, score, matchedFields }) => {
+      const template = getTemplateSync(entry.id);
+      return template ? { template, score, matchedFields } : null;
+    })
+    .filter((r): r is { template: FormTemplate; score: number; matchedFields: string[] } => r !== null);
 }
 
 // ─── Convenience accessors ─────────────────────────────────────────────────
