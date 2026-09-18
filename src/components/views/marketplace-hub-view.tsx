@@ -15,10 +15,10 @@
 
 import { useState, lazy, Suspense } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Loader2, Store, ShieldCheck } from 'lucide-react';
+import { Loader2, Store, ShieldCheck, Briefcase } from 'lucide-react';
 import { useAppStore } from '@/store/app-store';
 
-// Lazy-load both dashboard components + the claim view
+// Lazy-load both dashboard components + the claim view + find work feed
 const ListingProviderDashboard = lazy(() =>
   import('@/components/marketplace/listing-provider-dashboard').then((m) => ({ default: m.ListingProviderDashboard }))
 );
@@ -28,8 +28,11 @@ const ProviderMarketplaceDashboard = lazy(() =>
 const ClaimBusinessView = lazy(() =>
   import('@/components/views/claim-business-view').then((m) => ({ default: m.ClaimBusinessView }))
 );
+const ProviderFindWork = lazy(() =>
+  import('@/components/marketplace/provider-find-work').then((m) => ({ default: m.ProviderFindWork }))
+);
 
-type MarketplaceTab = 'listing' | 'claim';
+type MarketplaceTab = 'find-work' | 'listing' | 'claim';
 
 function TabLoader() {
   return (
@@ -64,7 +67,7 @@ function MarketplaceDashboardRouterInner() {
 }
 
 export function MarketplaceHubView() {
-  const [activeTab, setActiveTab] = useState<MarketplaceTab>('listing');
+  const [activeTab, setActiveTab] = useState<MarketplaceTab>('find-work');
 
   return (
     <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
@@ -73,22 +76,31 @@ export function MarketplaceHubView() {
           <Store className="h-6 w-6 text-emerald-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Marketplace</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Marketplace & Jobs</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Manage your marketplace listing and claim existing business profiles.
+            Find new customer opportunities, submit competitive proposals, and manage your public listing.
           </p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as MarketplaceTab)}>
         <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="listing" className="gap-1.5">
+          <TabsTrigger value="find-work" className="gap-1.5 font-medium">
+            <Briefcase className="size-4" /> Find Work (Live Leads)
+          </TabsTrigger>
+          <TabsTrigger value="listing" className="gap-1.5 font-medium">
             <Store className="size-4" /> My Listing
           </TabsTrigger>
-          <TabsTrigger value="claim" className="gap-1.5">
+          <TabsTrigger value="claim" className="gap-1.5 font-medium">
             <ShieldCheck className="size-4" /> Claim Business
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="find-work" className="mt-6">
+          <Suspense fallback={<TabLoader />}>
+            <ProviderFindWork />
+          </Suspense>
+        </TabsContent>
 
         <TabsContent value="listing" className="mt-6">
           <MarketplaceDashboardRouterInner />

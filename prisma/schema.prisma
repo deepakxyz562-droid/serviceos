@@ -246,6 +246,10 @@ model Tenant {
   aiCalls            AiCall[]
   // Marketplace & Revenue (Phase 1)
   marketplaceTransactions MarketplaceTransaction[]
+  marketplaceMatches       MarketplaceProviderMatch[]
+  providerProposals        ProviderProposal[]
+  marketplaceBookings      MarketplaceBooking[]
+  marketplaceReviews       MarketplaceReview[]
   payouts           Payout[]
   featuredListings  FeaturedListing[]
   aiCredits         AICredit[]
@@ -1913,6 +1917,8 @@ model Customer {
   invitations          Invitation[]
   recurringJobSchedules RecurringJobSchedule[] @relation("CustomerRecurringJobs")
   scheduledMessages   ScheduledMessage[] @relation("CustomerScheduledMessages")
+  marketplaceRequests MarketplaceRequest[]
+  marketplaceBookings MarketplaceBooking[]
 
   // ── ISSUE-3: Nested repeating collections for the redesigned customer form ──
   properties           Property[]
@@ -2069,6 +2075,8 @@ model Job {
   journey           CustomerJourney?
   documents         Document[]
   scheduledMessages ScheduledMessage[] @relation("JobScheduledMessages")
+  marketplaceBooking MarketplaceBooking?
+  marketplaceReview  MarketplaceReview?
 
   @@index([status])
   @@index([assigneeId])
@@ -5654,6 +5662,191 @@ model FeaturedListing {
   // most common query pattern (fetchFeaturedTenantIds + fetchFeaturedListingsMap).
   @@index([isActive, endDate])
   @@index([tenantId, isActive, endDate])
+}
+
+// ==========================================
+// MARKETPLACE ACQUISITION & MATCHING ENGINE (PHASE 0)
+// ==========================================
+
+model MarketplaceRequest {
+  id                  String    @id @default(cuid())
+  publicSlug          String    @unique @default(cuid())
+  customerId          String?
+  customerName        String
+  customerPhone       String
+  customerEmail       String?
+  
+  categorySlug        String    // e.g. 'hvac', 'plumbing', 'electrical', 'roofing', 'cleaning'
+  serviceType         String?   // e.g. 'AC Diagnostic', 'Burst Pipe Repair'
+  title               String
+  description         String
+  propertyType        String    @default("residential") // residential | commercial
+  urgency             String    @default("flexible")    // emergency | same_day | this_week | flexible
+  
+  budgetMin           Float?
+  budgetMax           Float?
+  
+  // Fuzzy location (public to providers before booking)
+  city                String
+  state               String
+  postalCode          String
+  country             String    @default("US")
+  approxDistanceMiles Float?
+  latitude            Float
+  longitude           Float
+  
+  // Full address (LOCKED until booking confirmation)
+  streetAddress       String?
+  unit                String?
+  accessInstructions  String?
+  
+  preferredDate       DateTime?
+  preferredTimeSlot   String?   // morning | afternoon | evening | specific
+  
+  status              String    @default("POSTED") 
+  // DRAFT | POSTED | MATCHING | ACTIVE | PROPOSALS_RECEIVED | PROVIDER_SELECTED | BOOKED | IN_PROGRESS | COMPLETED | CANCELLED | EXPIRED
+  
+  aiTriageSummaryJson String    @default("{}")
+  expiresAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  customer            Customer? @relation(fields: [customerId], references: [id])
+  media               MarketplaceRequestMedia[]
+  matches             MarketplaceProviderMatch[]
+  proposals           ProviderProposal[]
+  booking             MarketplaceBooking?
+
+  @@index([status])
+  @@index([categorySlug])
+  @@index([city, state])
+  @@index([createdAt])
+}
+
+model MarketplaceRequestMedia {
+  id         String   @id @default(cuid())
+  requestId  String
+  url        String
+  type       String   @default("image") // image | video | document
+  caption    String?
+  createdAt  DateTime @default(now())
+
+  request    MarketplaceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  @@index([requestId])
+}
+
+model MarketplaceProviderMatch {
+  id               String   @id @default(cuid())
+  requestId        String
+  tenantId         String
+  matchScore       Float    @default(0) // Internal ranking (0..100)
+  matchReasonsJson String   @default("[]") // ['within_radius', 'skills_match', 'available_today']
+  notifiedAt       DateTime?
+  viewedAt         DateTime?
+  status           String   @default("MATCHED") // MATCHED | VIEWED | PROPOSED | DECLINED | EXPIRED
+  createdAt        DateTime @default(now())
+
+  request          MarketplaceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  
+  @@unique([requestId, tenantId])
+  @@index([tenantId, status])
+}
+
+model ProviderProposal {
+  id               String   @id @default(cuid())
+  requestId        String
+  tenantId         String
+  
+  tierType         String   @default("standard") // standard | good | better | best
+  title            String
+  coverMessage     String?
+  
+  price            Float
+  estimatedHours   Float?
+  earliestArrival  DateTime?
+  arrivalWindow    String?  // e.g. "Tomorrow, 10:00 AM - 12:00 PM"
+  
+  warrantyMonths   Int      @default(0)
+  warrantyTerms    String?
+  
+  status           String   @default("SUBMITTED") // SUBMITTED | VIEWED | SHORTLISTED | ACCEPTED | DECLINED | WITHDRAWN
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  request          MarketplaceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  items            ProposalItem[]
+
+  @@index([requestId, status])
+  @@index([tenantId])
+}
+
+model ProposalItem {
+  id          String   @id @default(cuid())
+  proposalId  String
+  type        String   @default("labor") // labor | part | diagnostic | fee | discount
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Float
+  total       Float
+  createdAt   DateTime @default(now())
+
+  proposal    ProviderProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  @@index([proposalId])
+}
+
+model MarketplaceBooking {
+  id                 String   @id @default(cuid())
+  requestId          String   @unique
+  proposalId         String
+  tenantId           String
+  customerId         String
+  
+  // Bridge links to existing Fieseros CRM entities
+  leadId             String?  @unique
+  quoteId            String?  @unique
+  jobId              String?  @unique
+  
+  agreedPrice        Float
+  marketplaceFeeRate Float    @default(0.05) // e.g. 5%
+  marketplaceFeeAmount Float  @default(0)
+  payoutAmount       Float
+  
+  scheduledStart     DateTime
+  scheduledEnd       DateTime?
+  
+  addressUnlocked    Boolean  @default(true)
+  status             String   @default("CONFIRMED") // CONFIRMED | IN_PROGRESS | COMPLETED | CANCELLED
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  request            MarketplaceRequest @relation(fields: [requestId], references: [id])
+  tenant             Tenant             @relation(fields: [tenantId], references: [id])
+  customer           Customer           @relation(fields: [customerId], references: [id])
+  job                Job?               @relation(fields: [jobId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([customerId])
+}
+
+model MarketplaceReview {
+  id          String   @id @default(cuid())
+  tenantId    String
+  jobId       String?  @unique
+  bookingId   String?
+  authorName  String
+  rating      Int      @default(5) // 1..5
+  comment     String?
+  verifiedJob Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  job         Job?     @relation(fields: [jobId], references: [id])
+
+  @@index([tenantId, rating])
 }
 
 model AICredit {
