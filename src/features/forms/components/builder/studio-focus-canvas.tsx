@@ -92,6 +92,8 @@ export function StudioFocusCanvas({
   const primaryColor = formData.theme?.primaryColor || formData.primaryColor || '#059669';
   const backgroundColor = formData.theme?.backgroundColor || '#f8fafc';
   const textColor = formData.theme?.textColor || '#0f172a';
+  const inputBorderRadius = formData.theme?.inputBorderRadius || '12px';
+  const inputHeight = formData.theme?.inputHeight || 'medium';
 
   // Normalize steps
   const steps = useMemo(() => {
@@ -435,9 +437,18 @@ export function StudioFocusCanvas({
                         </div>
 
                         {/* Input Type Preview */}
-                        <div className="border-b-2 border-slate-200 dark:border-slate-700 py-1 text-xs text-muted-foreground">
-                          {field.placeholder || `Enter ${field.label || 'value'}...`}
-                        </div>
+                        {(() => {
+                          const fieldRadius = field.borderRadius && field.borderRadius !== 'inherit' ? field.borderRadius : inputBorderRadius;
+                          const fieldHeightCls = (field.inputHeight && field.inputHeight !== 'inherit' ? field.inputHeight : inputHeight) === 'compact' ? 'h-9 text-xs' : (field.inputHeight && field.inputHeight !== 'inherit' ? field.inputHeight : inputHeight) === 'large' ? 'h-12 text-sm' : 'h-11 text-xs';
+                          return (
+                            <div
+                              className={`${fieldHeightCls} w-full border border-slate-200/90 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/70 px-3.5 py-2 text-muted-foreground flex items-center shadow-2xs transition-all`}
+                              style={{ borderRadius: fieldRadius }}
+                            >
+                              {field.placeholder || `Enter ${field.label || 'value'}...`}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })
@@ -619,9 +630,18 @@ export function StudioFocusCanvas({
                         </div>
 
                         {/* Input Preview */}
-                        <div className="h-9 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-muted-foreground flex items-center">
-                          {f.placeholder || `Enter ${f.label || 'value'}...`}
-                        </div>
+                        {(() => {
+                          const fieldRadius = f.borderRadius && f.borderRadius !== 'inherit' ? f.borderRadius : inputBorderRadius;
+                          const fieldHeightCls = (f.inputHeight && f.inputHeight !== 'inherit' ? f.inputHeight : inputHeight) === 'compact' ? 'h-9 text-xs' : (f.inputHeight && f.inputHeight !== 'inherit' ? f.inputHeight : inputHeight) === 'large' ? 'h-12 text-sm' : 'h-11 text-xs';
+                          return (
+                            <div
+                              className={`${fieldHeightCls} w-full border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2 text-muted-foreground flex items-center shadow-2xs transition-all`}
+                              style={{ borderRadius: fieldRadius }}
+                            >
+                              {f.placeholder || `Enter ${f.label || 'value'}...`}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })}

@@ -135,17 +135,17 @@ export function FormRuntimeRenderer({
     onModeChange?.(newMode);
   };
 
-  const steps = schema.steps?.length ? schema.steps : [{ id: 'step_1', title: 'Details' }];
+  const isMultiStep = (schema as any).isMultiStep !== false && (schema.steps && schema.steps.length > 1 && schema.theme?.layout !== 'classic');
+  const steps = isMultiStep && schema.steps?.length ? schema.steps : [{ id: 'step_1', title: 'Form Details' }];
   const currentStep = steps[currentStepIndex] || steps[0];
 
   // Filter to the current step's fields AND evaluate conditional rules.
-  // A field is visible when:
-  //   - it belongs to the current step (or no stepId), AND
-  //   - no rule with action:'show' targets it that doesn't match, AND
-  //   - no rule with action:'hide' targets it that does match.
+  // When isMultiStep is false, ALL fields are displayed together on a single page.
   const currentStepFields = schema.fields.filter((f) => {
-    const inStep = !f.stepId || f.stepId === currentStep.id || steps.length === 1;
-    if (!inStep) return false;
+    if (isMultiStep && steps.length > 1) {
+      const inStep = f.stepId === currentStep.id || (!f.stepId && currentStepIndex === 0);
+      if (!inStep) return false;
+    }
 
     // Evaluate schema.rules (show/hide rules targeting this field).
     const rules = schema.rules || [];
@@ -360,9 +360,18 @@ export function FormRuntimeRenderer({
   const buttonColor = schema.theme?.buttonColor || primaryColor;
   const buttonTextColor = schema.theme?.buttonTextColor || '#ffffff';
   const borderRadius = schema.theme?.borderRadius || '16px';
+  const inputBorderRadius = schema.theme?.inputBorderRadius || '12px';
+  const inputHeightMode = schema.theme?.inputHeight || 'medium';
   const backgroundColor = schema.theme?.backgroundColor || '#ffffff';
   const textColor = schema.theme?.textColor || '#0f172a';
   const fontFamily = schema.theme?.fontFamily || 'Inter, sans-serif';
+
+  const defaultInputHeightCls =
+    inputHeightMode === 'compact'
+      ? 'h-9 text-xs'
+      : inputHeightMode === 'large'
+      ? 'h-12 text-sm'
+      : 'h-11 text-xs';
 
   return (
     <div
@@ -662,9 +671,15 @@ export function FormRuntimeRenderer({
                 const fieldStyle: React.CSSProperties = {
                   ...(field.widthPx ? { maxWidth: `${field.widthPx}px` } : {}),
                 };
+                const fieldRadius =
+                  field.borderRadius && field.borderRadius !== 'inherit'
+                    ? field.borderRadius
+                    : inputBorderRadius;
+
                 const inputStyle: React.CSSProperties = {
                   ...(field.heightPx ? { height: `${field.heightPx}px` } : {}),
                   ...(field.align ? { textAlign: field.align } : {}),
+                  borderRadius: fieldRadius,
                 };
 
                 return (
@@ -719,7 +734,7 @@ export function FormRuntimeRenderer({
                         value={formData[field.id] || ''}
                         onChange={(e) => handleFieldChange(field.id, e.target.value)}
                         placeholder={field.placeholder || ''}
-                        className={`text-xs h-10 rounded-xl bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 ${
+                        className={`${defaultInputHeightCls} bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 shadow-2xs ${
                           hasError ? 'border-rose-500 ring-1 ring-rose-500' : ''
                         }`}
                         style={inputStyle}
@@ -733,7 +748,7 @@ export function FormRuntimeRenderer({
                         onChange={(e) => handleFieldChange(field.id, e.target.value)}
                         placeholder={field.placeholder || ''}
                         rows={3}
-                        className={`text-xs rounded-xl bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 resize-none ${
+                        className={`text-xs bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 resize-none shadow-2xs ${
                           hasError ? 'border-rose-500 ring-1 ring-rose-500' : ''
                         }`}
                         style={inputStyle}
@@ -745,7 +760,10 @@ export function FormRuntimeRenderer({
                         value={formData[field.id] || ''}
                         onValueChange={(val) => handleFieldChange(field.id, val)}
                       >
-                        <SelectTrigger className={`text-xs h-10 rounded-xl bg-slate-50/50 dark:bg-slate-900 border-border/80 ${hasError ? 'border-rose-500' : ''}`}>
+                        <SelectTrigger
+                          className={`${defaultInputHeightCls} bg-slate-50/50 dark:bg-slate-900 border-border/80 shadow-2xs ${hasError ? 'border-rose-500' : ''}`}
+                          style={{ borderRadius: fieldRadius }}
+                        >
                           <SelectValue placeholder={field.placeholder || 'Select an option'} />
                         </SelectTrigger>
                         <SelectContent>
@@ -767,11 +785,12 @@ export function FormRuntimeRenderer({
                         {field.options?.map((opt) => (
                           <div
                             key={opt.value}
-                            className={`flex items-center space-x-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                            className={`flex items-center space-x-2.5 p-2.5 border transition-all cursor-pointer ${
                               formData[field.id] === opt.value
                                 ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
                                 : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
                             }`}
+                            style={{ borderRadius: fieldRadius }}
                             onClick={() => handleFieldChange(field.id, opt.value)}
                           >
                             <RadioGroupItem value={opt.value} id={`${field.id}_${opt.value}`} />
@@ -791,11 +810,12 @@ export function FormRuntimeRenderer({
                           return (
                             <div
                               key={opt.value}
-                              className={`flex items-center space-x-2.5 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                              className={`flex items-center space-x-2.5 p-2.5 border transition-all cursor-pointer ${
                                 checked
                                   ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
                                   : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
                               }`}
+                              style={{ borderRadius: fieldRadius }}
                               onClick={() => {
                                 const updated = checked
                                   ? currentArr.filter((v: string) => v !== opt.value)

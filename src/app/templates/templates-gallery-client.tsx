@@ -196,10 +196,11 @@ export function TemplatesGalleryClient({
   }, [currentPage, selectedCategory, selectedIndustry, searchQuery, sort, initialTemplates, initialTotalCount, pageSize]);
 
   const openPreview = useCallback(async (template: FormTemplate) => {
+    if (!template) return;
     setPreviewTemplate(template);
     setModalActiveTab('overview');
     if (typeof window !== 'undefined') {
-      const primaryCat = template.categories[0] || 'general';
+      const primaryCat = template.categories?.[0] || 'general';
       try {
         window.history.replaceState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
       } catch {
@@ -299,13 +300,14 @@ export function TemplatesGalleryClient({
   // Related templates in preview modal
   const relatedTemplates = useMemo(() => {
     if (!previewTemplate) return [];
-    const primaryCat = previewTemplate.categories[0];
-    const primaryInd = previewTemplate.industries[0];
+    const primaryCat = previewTemplate.categories?.[0] || 'general';
+    const primaryInd = previewTemplate.industries?.[0] || 'general';
     return items
       .filter(
         (t) =>
           t.id !== previewTemplate.id &&
-          (t.categories.includes(primaryCat) || (primaryInd && primaryInd !== 'general' && t.industries.includes(primaryInd)))
+          ((t.categories || []).includes(primaryCat as any) ||
+            (primaryInd && primaryInd !== 'general' && (t.industries || []).includes(primaryInd as any)))
       )
       .slice(0, 4);
   }, [previewTemplate, items]);
@@ -751,7 +753,7 @@ export function TemplatesGalleryClient({
                   <Link href="/templates" className="hover:text-foreground font-medium">Form Templates</Link>
                   <ChevronRight className="size-3 shrink-0" />
                   <span className="text-emerald-700 dark:text-emerald-400 font-semibold truncate">
-                    {getCategoryLabel(previewTemplate.categories[0] || 'general')}
+                    {getCategoryLabel(previewTemplate.categories?.[0] || 'general')}
                   </span>
                   <ChevronRight className="size-3 shrink-0" />
                   <span className="text-foreground font-bold truncate max-w-[180px] sm:max-w-[280px]">
@@ -917,12 +919,12 @@ export function TemplatesGalleryClient({
                       <div className="space-y-1.5">
                         <p className="text-[11px] font-bold text-foreground">Categories &amp; Tags</p>
                         <div className="flex flex-wrap gap-1.5">
-                          {previewTemplate.categories.map((c) => (
+                          {(previewTemplate.categories || []).map((c) => (
                             <Badge key={c} variant="outline" className="text-[10px] font-medium bg-slate-50 dark:bg-slate-800">
                               {getCategoryLabel(c)}
                             </Badge>
                           ))}
-                          {previewTemplate.industries.filter((i) => i !== 'general').map((i) => (
+                          {(previewTemplate.industries || []).filter((i) => i !== 'general').map((i) => (
                             <Badge key={i} variant="outline" className="text-[10px] font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 border-blue-200">
                               {getIndustryLabel(i)}
                             </Badge>
@@ -1104,9 +1106,10 @@ function ModernTemplateCard({
   onQuickPreview: () => void;
   onUseTemplate: () => void;
 }) {
-  const fieldCount = template.schema.fields?.length || 0;
-  const primaryCat = template.categories[0] || 'general';
+  const fieldCount = template.schema?.fields?.length || 0;
+  const primaryCat = template.categories?.[0] || 'general';
   const detailHref = `/templates/${primaryCat}/${template.id}`;
+  const industries = template.industries || [];
 
   return (
     <div className="group relative rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-500 hover:shadow-xl transition-all duration-200 flex flex-col justify-between overflow-hidden">
@@ -1123,9 +1126,9 @@ function ModernTemplateCard({
             <Badge variant="outline" className="bg-white/95 dark:bg-slate-900/95 text-[10px] font-bold shadow-xs">
               {getCategoryLabel(primaryCat)}
             </Badge>
-            {template.industries[0] && template.industries[0] !== 'general' && (
+            {industries[0] && industries[0] !== 'general' && (
               <Badge variant="outline" className="bg-blue-50/90 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-[10px] border-blue-200">
-                {getIndustryLabel(template.industries[0])}
+                {getIndustryLabel(industries[0])}
               </Badge>
             )}
           </div>

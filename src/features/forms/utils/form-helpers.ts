@@ -239,20 +239,35 @@ export function buildApiPayload(formData: EditorFormData) {
 
   const safeFields = Array.isArray(formData.fields) ? formData.fields : [];
   const safeMappings = Array.isArray(formData.fieldMappings) ? formData.fieldMappings : [];
+  const isMultiStep = formData.isMultiStep ?? true;
+
+  const normalizedSteps = isMultiStep && formData.steps && formData.steps.length > 0
+    ? formData.steps
+    : [{ id: 'step_1', title: formData.name || 'Form Details' }];
+
+  const validStepIds = new Set(normalizedSteps.map((s) => s.id));
+  const defaultStepId = normalizedSteps[0]?.id || 'step_1';
+
+  const preparedFields = safeFields.map((f, idx) => ({
+    ...f,
+    id: f.id || `f_${idx + 1}`,
+    stepId: isMultiStep ? (f.stepId && validStepIds.has(f.stepId) ? f.stepId : defaultStepId) : defaultStepId,
+  }));
 
   const schemaObj = {
     version: 1,
-    steps: formData.isMultiStep && formData.steps && formData.steps.length > 0
-      ? formData.steps
-      : [{ id: 'step_1', title: formData.name || 'Form Details' }],
-    fields: safeFields,
+    isMultiStep,
+    steps: normalizedSteps,
+    fields: preparedFields,
     theme: {
       primaryColor: formData.primaryColor || formData.theme?.primaryColor || '#059669',
       backgroundColor: formData.theme?.backgroundColor || '#ffffff',
       cardBackground: formData.theme?.cardBackground || '#ffffff',
       textColor: formData.theme?.textColor || '#0f172a',
       fontFamily: formData.theme?.fontFamily || 'Inter, sans-serif',
-      borderRadius: `${formData.borderRadius || 12}px`,
+      borderRadius: `${formData.borderRadius || 16}px`,
+      inputBorderRadius: formData.theme?.inputBorderRadius || '12px',
+      inputHeight: formData.theme?.inputHeight || 'medium',
       buttonColor: formData.theme?.buttonColor || formData.primaryColor || '#059669',
       buttonTextColor: formData.theme?.buttonTextColor || '#ffffff',
       layout: formData.theme?.layout || (formData.settings?.formLayout === 'single_question' ? 'card' : 'paper'),

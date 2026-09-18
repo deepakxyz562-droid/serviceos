@@ -79,6 +79,7 @@ export interface FormField {
   align?: 'left' | 'center' | 'right';
   widthPx?: number | string;
   heightPx?: number | string;
+  borderRadius?: string;
   labelEnabled?: boolean;
   readOnly?: boolean;
   description?: string;
@@ -104,7 +105,15 @@ export interface FormTheme {
   primaryColor: string;
   backgroundColor: string;
   textColor: string;
-  borderRadius: string; // sm, md, lg, full
+  borderRadius: string; // sm, md, lg, full, px values
+  inputBorderRadius?: string; // 0px, 4px, 8px, 12px, 16px, 9999px
+  inputHeight?: 'compact' | 'medium' | 'large' | string; // compact: 38px, medium: 44px, large: 50px
+  inputBgColor?: string;
+  inputBorderColor?: string;
+  inputFocusColor?: string;
+  buttonColor?: string;
+  buttonTextColor?: string;
+  cardBackground?: string;
   fontFamily?: string;
   logoUrl?: string | null;
   layout?: 'classic' | 'card' | 'multi_step' | 'conversational';
@@ -156,7 +165,11 @@ export const DEFAULT_FORM_THEME: FormTheme = {
   primaryColor: '#059669', // Emerald
   backgroundColor: '#ffffff',
   textColor: '#0f172a',
-  borderRadius: '0.75rem',
+  borderRadius: '16px',
+  inputBorderRadius: '12px',
+  inputHeight: 'medium',
+  buttonColor: '#059669',
+  buttonTextColor: '#ffffff',
   layout: 'card',
 };
 
@@ -234,8 +247,19 @@ export function normalizeFormSchema(raw: unknown): FormSchema {
   }
   const s = raw as Partial<FormSchema> & { steps?: Array<FormStep & { fields?: FormField[] }> };
   
+  const steps: FormStep[] = Array.isArray(s.steps) && s.steps.length > 0
+    ? s.steps.map((st, idx) => ({
+        id: st.id || `step_${idx + 1}`,
+        title: st.title || `Step ${idx + 1}`,
+        description: st.description,
+      }))
+    : DEFAULT_FORM_SCHEMA.steps;
+
+  const validStepIds = new Set(steps.map((st) => st.id));
+  const defaultStepId = steps[0]?.id || 'step_1';
+
   // Extract fields from steps if top-level fields not provided
-  let resolvedFields = Array.isArray(s.fields) && s.fields.length > 0 ? s.fields : [];
+  let resolvedFields: FormField[] = Array.isArray(s.fields) && s.fields.length > 0 ? s.fields : [];
   if (resolvedFields.length === 0 && Array.isArray(s.steps)) {
     for (const step of s.steps) {
       if (Array.isArray(step.fields)) {
@@ -249,10 +273,22 @@ export function normalizeFormSchema(raw: unknown): FormSchema {
     resolvedFields = DEFAULT_FORM_SCHEMA.fields;
   }
 
+  // Ensure every field has a valid stepId so it is never dropped or filtered out
+  const sanitizedFields = resolvedFields.map((f, idx) => {
+    const stepId = f.stepId && validStepIds.has(f.stepId) ? f.stepId : defaultStepId;
+    return {
+      ...f,
+      id: f.id || `f_${idx + 1}`,
+      label: f.label || `Question ${idx + 1}`,
+      type: f.type || 'short_answer',
+      stepId,
+    };
+  });
+
   return {
     version: s.version || 1,
-    steps: Array.isArray(s.steps) && s.steps.length > 0 ? s.steps : DEFAULT_FORM_SCHEMA.steps,
-    fields: resolvedFields,
+    steps,
+    fields: sanitizedFields,
     rules: Array.isArray(s.rules) ? s.rules : [],
     theme: { ...DEFAULT_FORM_THEME, ...(s.theme || {}) },
     settings: {

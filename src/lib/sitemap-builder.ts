@@ -4,6 +4,7 @@ import {
   countIndexableBusinessTenants,
 } from "@/lib/public-business";
 import { getAllPosts } from "@/lib/blog";
+import { getAllTemplates } from "@/lib/forms/templates";
 import { db } from "@/lib/db";
 import {
   mapIndustryToPluralSlug,
@@ -456,7 +457,45 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] failed to list plural browse URLs:", err);
   }
 
-  return [...staticEntries, ...blogEntries, ...industryHubEntries, ...browseEntries];
+  // ── Dynamic: AI Form Templates (categories, industries, details) ───────────
+  const templateEntries: MetadataRoute.Sitemap = [];
+  try {
+    const templates = getAllTemplates();
+    const categorySet = new Set<string>();
+    const industrySet = new Set<string>();
+
+    for (const t of templates) {
+      for (const c of t.categories || []) categorySet.add(c);
+      for (const i of t.industries || []) industrySet.add(i);
+    }
+
+    for (const cat of categorySet) {
+      templateEntries.push({
+        url: `${BASE_URL}/templates/${cat}`,
+        lastModified: SITE_LASTMOD,
+      });
+    }
+
+    for (const ind of industrySet) {
+      if (ind === 'general') continue;
+      templateEntries.push({
+        url: `${BASE_URL}/templates/industries/${ind}`,
+        lastModified: SITE_LASTMOD,
+      });
+    }
+
+    for (const t of templates) {
+      const cat = t.categories?.[0] || 'general';
+      templateEntries.push({
+        url: `${BASE_URL}/templates/${cat}/${t.id}`,
+        lastModified: new Date(t.updatedAt || t.createdAt || Date.now()).toISOString(),
+      });
+    }
+  } catch (err) {
+    console.error("[sitemap] failed to generate template sitemap entries:", err);
+  }
+
+  return [...staticEntries, ...blogEntries, ...industryHubEntries, ...browseEntries, ...templateEntries];
 }
 
 /**

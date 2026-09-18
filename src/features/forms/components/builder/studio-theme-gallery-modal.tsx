@@ -23,6 +23,8 @@ export interface FormThemePreset {
   accentLineColor: string;
   buttonColor: string;
   buttonTextColor: string;
+  inputBorderRadius?: string;
+  inputHeight?: 'compact' | 'medium' | 'large';
 }
 
 export const THEME_GALLERY_PRESETS: FormThemePreset[] = [
@@ -36,6 +38,8 @@ export const THEME_GALLERY_PRESETS: FormThemePreset[] = [
     textColor: '#064e3b',
     fontFamily: 'Inter, sans-serif',
     borderRadius: '1rem',
+    inputBorderRadius: '12px',
+    inputHeight: 'medium',
     accentLineColor: '#34d399',
     buttonColor: '#059669',
     buttonTextColor: '#ffffff',
@@ -50,6 +54,8 @@ export const THEME_GALLERY_PRESETS: FormThemePreset[] = [
     textColor: '#134e4a',
     fontFamily: 'Inter, sans-serif',
     borderRadius: '0.75rem',
+    inputBorderRadius: '10px',
+    inputHeight: 'medium',
     accentLineColor: '#2dd4bf',
     buttonColor: '#0d9488',
     buttonTextColor: '#ffffff',
@@ -64,6 +70,8 @@ export const THEME_GALLERY_PRESETS: FormThemePreset[] = [
     textColor: '#1e293b',
     fontFamily: 'Inter, sans-serif',
     borderRadius: '0.75rem',
+    inputBorderRadius: '8px',
+    inputHeight: 'medium',
     accentLineColor: '#60a5fa',
     buttonColor: '#2563eb',
     buttonTextColor: '#ffffff',
