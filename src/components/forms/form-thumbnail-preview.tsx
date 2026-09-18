@@ -18,6 +18,7 @@ import {
   Upload,
   Briefcase,
   Check,
+  Sparkles,
 } from 'lucide-react';
 import type { FormTemplate, TemplateCategoryId, TemplateIndustryId } from '@/lib/forms/templates';
 import { getCategoryLabel, getIndustryLabel } from '@/lib/forms/templates';

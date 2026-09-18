@@ -3,7 +3,7 @@
 import React, { Component, type ReactNode } from 'react';
 import { FormRuntimeRenderer } from '@/features/forms/components/runtime/form-runtime-renderer';
 import type { FormTemplate } from '@/lib/forms/templates';
-import { Sparkles, Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 
 interface ErrorBoundaryProps {
   fallback: (error: Error, reset: () => void) => ReactNode;
