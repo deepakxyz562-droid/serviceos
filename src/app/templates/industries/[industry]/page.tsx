@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { TemplatesGalleryClient } from '../../templates-gallery-client';
 import {
   getAllTemplates,
+  getTemplatesByIndustry,
   TEMPLATE_INDUSTRIES,
   INDUSTRY_MAP,
   getCategoryLabel,

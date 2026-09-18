@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email-send';
 import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
+import { invalidatePublicBusinessCache } from '@/lib/public-business';
 
 export const dynamic = 'force-dynamic';
 
@@ -109,11 +111,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { reportId, action, adminNote } = body;
+    const { reportId, action, adminNote, overrideData } = body;
 
-    if (!reportId || !action || !['approve', 'reject'].includes(action)) {
+    if (!reportId || !action || !['approve', 'reject', 'reapply'].includes(action)) {
       return NextResponse.json(
-        { error: 'reportId and valid action ("approve" | "reject") are required' },
+        { error: 'reportId and valid action ("approve" | "reject" | "reapply") are required' },
         { status: 400 }
       );
     }
@@ -147,7 +149,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Action === 'approve'
+    // Action === 'approve' or 'reapply'
     let suggestedData: any = {};
     try {
       suggestedData = JSON.parse(report.suggestedDataJson || '{}');
@@ -172,7 +174,50 @@ export async function POST(req: NextRequest) {
     const appliedChanges: any = {};
     const tenantUpdateData: any = {};
 
-    if (report.reportType === 'privacy_phone_removal') {
+    // 1. Business Name (from overrideData, suggestedData, or reason statement fallback)
+    const proposedName = (
+      overrideData?.name ||
+      overrideData?.newName ||
+      suggestedData?.newName ||
+      suggestedData?.name ||
+      suggestedData?.businessName ||
+      ''
+    ).trim();
+
+    if (proposedName) {
+      tenantUpdateData.name = proposedName;
+      appliedChanges.name = proposedName;
+    }
+
+    // 2. Category / Industry
+    const proposedCategory = (
+      overrideData?.industry ||
+      overrideData?.category ||
+      overrideData?.targetCategory ||
+      suggestedData?.targetCategory ||
+      suggestedData?.newCategory ||
+      suggestedData?.category ||
+      (report.reportType === 'category_change' ? suggestedData.targetCategory : '') ||
+      ''
+    ).toLowerCase().trim();
+
+    if (proposedCategory) {
+      tenantUpdateData.industry = proposedCategory;
+      tenantUpdateData.businessCategoriesJson = JSON.stringify([proposedCategory]);
+      appliedChanges.industry = proposedCategory;
+    }
+
+    // 3. Tagline & Branding update
+    if (proposedName || proposedCategory) {
+      const tenantName = proposedName || tenant?.name || currentSnapshot.name || 'Business';
+      const tenantCategory = proposedCategory || tenant?.industry || currentSnapshot.industry || 'services';
+      const tenantCity = tenant?.city || currentSnapshot.city || 'local area';
+      tenantUpdateData.tagline = `${tenantName} — ${tenantCategory} in ${tenantCity}`;
+    }
+
+    // 4. Privacy Phone Removal
+    const removePhone = overrideData?.removePhone ?? (report.reportType === 'privacy_phone_removal');
+    if (removePhone) {
       tenantUpdateData.phone = null;
       tenantUpdateData.whatsappPhone = null;
       tenantUpdateData.outreachDisabled = true;
@@ -181,51 +226,37 @@ export async function POST(req: NextRequest) {
         adminNote || `Privacy request approved (${report.reason || 'Personal phone removal'})`;
       appliedChanges.phoneRemoved = true;
       appliedChanges.outreachDisabled = true;
-    } else if (report.reportType === 'category_change') {
-      const targetCategory = (suggestedData.targetCategory || '').toLowerCase().trim();
-      if (targetCategory) {
-        tenantUpdateData.industry = targetCategory;
-        tenantUpdateData.businessCategoriesJson = JSON.stringify([targetCategory]);
-        const tenantName = tenant?.name || currentSnapshot.name || 'Business';
-        const tenantCity = tenant?.city || currentSnapshot.city || 'local area';
-        tenantUpdateData.tagline = `${tenantName} — ${targetCategory} in ${tenantCity}`;
-        appliedChanges.categoryChanged = {
-          from: tenant?.industry || currentSnapshot.industry || 'Unknown',
-          to: targetCategory,
-        };
+    }
+
+    // 5. Phone Update
+    if (!removePhone) {
+      const proposedPhone = overrideData?.phone !== undefined ? overrideData.phone : (suggestedData?.newPhone !== undefined ? suggestedData.newPhone : suggestedData?.phone);
+      if (proposedPhone !== undefined && proposedPhone !== '') {
+        tenantUpdateData.phone = proposedPhone;
+        appliedChanges.phone = proposedPhone;
       }
-    } else if (report.reportType === 'permanently_closed') {
+    }
+
+    // 6. Website Update
+    const proposedWebsite = overrideData?.website !== undefined ? overrideData.website : (suggestedData?.newWebsite !== undefined ? suggestedData.newWebsite : suggestedData?.website);
+    if (proposedWebsite !== undefined && proposedWebsite !== '') {
+      tenantUpdateData.website = proposedWebsite;
+      appliedChanges.website = proposedWebsite;
+    }
+
+    // 7. Address Update
+    const proposedAddress = overrideData?.address !== undefined ? overrideData.address : (suggestedData?.newAddress !== undefined ? suggestedData.newAddress : suggestedData?.address);
+    if (proposedAddress !== undefined && proposedAddress !== '') {
+      tenantUpdateData.address = proposedAddress;
+      appliedChanges.address = proposedAddress;
+    }
+
+    // 8. Permanently Closed
+    const markClosed = overrideData?.markClosed ?? (report.reportType === 'permanently_closed');
+    if (markClosed) {
       tenantUpdateData.publicProfileEnabled = false;
       tenantUpdateData.listingTier = 'none';
       appliedChanges.permanentlyClosed = true;
-    } else if (report.reportType === 'details_update') {
-      const newName = suggestedData.newName || suggestedData.name || suggestedData.businessName;
-      if (newName && typeof newName === 'string') {
-        tenantUpdateData.name = newName.trim();
-        appliedChanges.name = newName.trim();
-      }
-      const newPhone = suggestedData.newPhone !== undefined ? suggestedData.newPhone : suggestedData.phone;
-      if (newPhone !== undefined) {
-        tenantUpdateData.phone = newPhone;
-        appliedChanges.phone = newPhone;
-      }
-      const newWebsite = suggestedData.newWebsite !== undefined ? suggestedData.newWebsite : suggestedData.website;
-      if (newWebsite !== undefined) {
-        tenantUpdateData.website = newWebsite;
-        appliedChanges.website = newWebsite;
-      }
-      const newAddress = suggestedData.newAddress !== undefined ? suggestedData.newAddress : suggestedData.address;
-      if (newAddress !== undefined) {
-        tenantUpdateData.address = newAddress;
-        appliedChanges.address = newAddress;
-      }
-      const newCategory = suggestedData.targetCategory || suggestedData.newCategory || suggestedData.category;
-      if (newCategory && typeof newCategory === 'string') {
-        const cat = newCategory.toLowerCase().trim();
-        tenantUpdateData.industry = cat;
-        tenantUpdateData.businessCategoriesJson = JSON.stringify([cat]);
-        appliedChanges.industry = cat;
-      }
     }
 
     tenantUpdateData.updatedAt = new Date();
@@ -237,6 +268,27 @@ export async function POST(req: NextRequest) {
           where: { id: tenant.id },
           data: tenantUpdateData,
         });
+
+        // ── Invalidate Edge / Next.js caches ──────────────────────────────
+        try {
+          await invalidatePublicBusinessCache();
+          revalidatePath('/[companySlug]/[city]/[slug]', 'page');
+          
+          const ind = tenantUpdateData.industry || tenant.industry || 'services';
+          const pluralSlug = mapIndustryToPluralSlug(ind);
+          const citySlug = (tenant.city || currentSnapshot.city || 'city').toLowerCase().replace(/\s+/g, '-');
+          const tSlug = tenant.slug || currentSnapshot.slug;
+
+          if (tSlug) {
+            revalidatePath(`/${pluralSlug}/${citySlug}/${tSlug}`, 'page');
+          }
+          if (citySlug) {
+            revalidatePath(`/${pluralSlug}/${citySlug}`, 'page');
+          }
+          revalidatePath(`/${pluralSlug}`, 'page');
+        } catch (cacheErr) {
+          logger.warn('[ListingReport Admin POST] Cache invalidation warning:', cacheErr);
+        }
       }
     } else {
       appliedChanges.note = 'Report approved (no linked active tenant record in database)';

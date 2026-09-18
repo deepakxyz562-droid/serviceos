@@ -39,9 +39,18 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
+import { INDUSTRY_CATALOG } from '@/lib/marketplace-taxonomies';
 
 interface ReportRecord {
   id: string;
@@ -92,6 +101,15 @@ export function DirectoryReports() {
   const [adminNote, setAdminNote] = React.useState('');
   const [isProcessing, setIsProcessing] = React.useState(false);
 
+  // Field Overrides for Superadmin inspection & direct live application
+  const [editName, setEditName] = React.useState('');
+  const [editCategory, setEditCategory] = React.useState('');
+  const [editPhone, setEditPhone] = React.useState('');
+  const [editWebsite, setEditWebsite] = React.useState('');
+  const [editAddress, setEditAddress] = React.useState('');
+  const [editRemovePhone, setEditRemovePhone] = React.useState(false);
+  const [editMarkClosed, setEditMarkClosed] = React.useState(false);
+
   const fetchReports = React.useCallback(async () => {
     setIsLoading(true);
     try {
@@ -117,7 +135,30 @@ export function DirectoryReports() {
   const handleOpenReview = (report: ReportRecord, action: 'approve' | 'reject') => {
     setSelectedReport(report);
     setReviewAction(action);
-    setAdminNote('');
+    setAdminNote(report.adminNote || '');
+
+    let suggested: any = {};
+    try { suggested = JSON.parse(report.suggestedDataJson || '{}'); } catch {}
+    let current: any = {};
+    try { current = JSON.parse(report.currentDataJson || '{}'); } catch {}
+
+    // Smart name extraction if submitter mentioned quotes e.g. "SafeTech Roofing and Windows"
+    let initialName = suggested.newName || suggested.name || suggested.businessName || '';
+    if (!initialName && report.reason) {
+      const match = report.reason.match(/["']([^"']+)["']/);
+      if (match && match[1]) {
+        initialName = match[1].trim();
+      }
+    }
+
+    setEditName(initialName || report.tenant?.name || current.name || '');
+    setEditCategory(suggested.targetCategory || suggested.newCategory || suggested.category || report.tenant?.industry || current.industry || '');
+    setEditPhone(suggested.newPhone !== undefined ? suggested.newPhone : (report.tenant?.phone || current.phone || ''));
+    setEditWebsite(suggested.newWebsite !== undefined ? suggested.newWebsite : (report.tenant?.website || current.website || ''));
+    setEditAddress(suggested.newAddress !== undefined ? suggested.newAddress : (report.tenant?.address || current.address || ''));
+    setEditRemovePhone(report.reportType === 'privacy_phone_removal');
+    setEditMarkClosed(report.reportType === 'permanently_closed');
+
     setReviewModalOpen(true);
   };
 
@@ -133,6 +174,15 @@ export function DirectoryReports() {
           reportId: selectedReport.id,
           action: reviewAction,
           adminNote: adminNote || undefined,
+          overrideData: reviewAction === 'approve' ? {
+            name: editName.trim(),
+            industry: editCategory.trim(),
+            phone: editRemovePhone ? '' : editPhone.trim(),
+            website: editWebsite.trim(),
+            address: editAddress.trim(),
+            removePhone: editRemovePhone,
+            markClosed: editMarkClosed,
+          } : undefined,
         }),
       });
 
@@ -141,7 +191,7 @@ export function DirectoryReports() {
 
       toast.success(
         reviewAction === 'approve'
-          ? 'Report approved and live database updated!'
+          ? 'Changes verified, live database updated, and cache purged!'
           : 'Report marked as rejected'
       );
       setReviewModalOpen(false);
@@ -468,6 +518,21 @@ export function DirectoryReports() {
                       </Button>
                     </div>
                   )}
+
+                  {/* Action Buttons for Approved Cards */}
+                  {report.status === 'approved' && (
+                    <div className="flex items-center justify-end gap-2 pt-1 border-t border-border/50">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-8 gap-1.5 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-medium"
+                        onClick={() => handleOpenReview(report, 'approve')}
+                      >
+                        <Edit3 className="size-3.5" />
+                        Edit &amp; Re-apply Live
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -475,33 +540,157 @@ export function DirectoryReports() {
         </div>
       )}
 
-      {/* Confirmation & Note Modal */}
+      {/* Confirmation & Field Override Modal */}
       <Dialog open={reviewModalOpen} onOpenChange={setReviewModalOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold">
-              {reviewAction === 'approve' ? 'Approve Directory Request' : 'Reject Directory Request'}
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              {reviewAction === 'approve' ? (
+                <>
+                  <CheckCircle2 className="size-5 text-emerald-600" />
+                  <span>Verify &amp; Apply Changes to Live Listing</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="size-5 text-red-600" />
+                  <span>Reject Directory Request</span>
+                </>
+              )}
             </DialogTitle>
             <DialogDescription className="text-xs">
               {reviewAction === 'approve'
-                ? `This will automatically apply the requested changes to ${selectedReport?.tenant?.name} in the live database and send a confirmation email.`
+                ? `Inspect and edit the verified information for ${selectedReport?.tenant?.name || 'this business'}. Clicking Confirm & Execute will update the database, purge edge caches, and notify the submitter.`
                 : `This will mark request #${selectedReport?.id} as rejected without modifying the business listing.`}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Review Note (Optional)</Label>
-              <Textarea
-                placeholder="Add an internal note or message to the submitter..."
-                rows={3}
-                value={adminNote}
-                onChange={(e) => setAdminNote(e.target.value)}
-              />
-            </div>
-          </div>
+          {reviewAction === 'approve' ? (
+            <div className="space-y-4 py-2">
+              {/* Field 1: Business Name */}
+              <div className="space-y-1.5 p-3 rounded-xl border border-emerald-500/30 bg-emerald-50/20 dark:bg-emerald-950/10">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold text-foreground">Official Business Name</Label>
+                  <Badge variant="outline" className="text-[9px] text-emerald-600 border-emerald-500/40">
+                    Live Name &amp; SEO
+                  </Badge>
+                </div>
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="e.g. SafeTech Roofing and Windows"
+                  className="h-9 text-xs font-semibold bg-background"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Updates directory title, public hub headers, schema markup, and meta tags.
+                </p>
+              </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+              {/* Field 2 & 3: Industry Category & Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Primary Category / Trade</Label>
+                  <Select value={editCategory} onValueChange={setEditCategory}>
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue placeholder="Select trade category..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-56">
+                      {INDUSTRY_CATALOG.map((ind) => (
+                        <SelectItem key={ind.id} value={ind.id} className="text-xs">
+                          {ind.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Public Phone Number</Label>
+                  <Input
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="+1 (555) 000-0000"
+                    disabled={editRemovePhone}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Field 4 & 5: Website & Physical Address */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Official Website URL</Label>
+                  <Input
+                    value={editWebsite}
+                    onChange={(e) => setEditWebsite(e.target.value)}
+                    placeholder="https://example.com"
+                    className="h-9 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Address / Location</Label>
+                  <Input
+                    value={editAddress}
+                    onChange={(e) => setEditAddress(e.target.value)}
+                    placeholder="13796 NW 19th St, Pembroke Pines, FL"
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Toggles: Privacy Removal & Permanently Closed */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-muted/30">
+                  <div className="space-y-0.5 pr-2">
+                    <Label className="text-xs font-semibold">Remove Phone (Privacy)</Label>
+                    <p className="text-[10px] text-muted-foreground">Suppresses phone &amp; stops outreach</p>
+                  </div>
+                  <Switch
+                    checked={editRemovePhone}
+                    onCheckedChange={setEditRemovePhone}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-lg border border-border/70 bg-muted/30">
+                  <div className="space-y-0.5 pr-2">
+                    <Label className="text-xs font-semibold">Permanently Closed</Label>
+                    <p className="text-[10px] text-muted-foreground">Unpublishes listing from search</p>
+                  </div>
+                  <Switch
+                    checked={editMarkClosed}
+                    onCheckedChange={setEditMarkClosed}
+                  />
+                </div>
+              </div>
+
+              {/* Admin Note */}
+              <div className="space-y-1.5 pt-1 border-t border-border/60">
+                <Label className="text-xs font-semibold">Admin Verification Note (Sent in confirmation email)</Label>
+                <Textarea
+                  placeholder="e.g. Verified business certificate and updated official trading name."
+                  rows={2}
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3 py-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Rejection Reason / Note</Label>
+                <Textarea
+                  placeholder="Explain why this request is being rejected..."
+                  rows={3}
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  className="text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t border-border/60">
             <Button variant="outline" size="sm" onClick={() => setReviewModalOpen(false)} disabled={isProcessing}>
               Cancel
             </Button>
@@ -509,12 +698,12 @@ export function DirectoryReports() {
               size="sm"
               disabled={isProcessing}
               onClick={handleExecuteReview}
-              className={reviewAction === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'}
+              className={reviewAction === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-semibold' : 'bg-red-600 hover:bg-red-700 text-white'}
             >
               {isProcessing ? (
                 <>
                   <Loader2 className="size-3.5 animate-spin mr-1.5" />
-                  Processing...
+                  Applying Changes...
                 </>
               ) : reviewAction === 'approve' ? (
                 'Confirm & Execute'

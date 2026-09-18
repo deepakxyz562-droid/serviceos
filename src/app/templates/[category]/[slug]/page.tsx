@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import {
   getAllTemplates,
   getTemplateSync,
+  getTemplatesByCategory,
   getCategoryLabel,
   getIndustryLabel,
   type TemplateCategoryId,

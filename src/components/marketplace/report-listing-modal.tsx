@@ -57,8 +57,10 @@ export function ReportListingModal({
   const [submitterEmail, setSubmitterEmail] = React.useState('');
   const [phoneToRemove, setPhoneToRemove] = React.useState(currentPhone || '');
   const [targetCategory, setTargetCategory] = React.useState('');
+  const [newName, setNewName] = React.useState('');
   const [newPhone, setNewPhone] = React.useState('');
   const [newWebsite, setNewWebsite] = React.useState('');
+  const [newAddress, setNewAddress] = React.useState('');
   const [reason, setReason] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [submittedSuccess, setSubmittedSuccess] = React.useState<{ reportId: string } | null>(null);
@@ -66,6 +68,10 @@ export function ReportListingModal({
   React.useEffect(() => {
     if (isOpen) {
       setPhoneToRemove(currentPhone || '');
+      setNewName('');
+      setNewPhone('');
+      setNewWebsite('');
+      setNewAddress('');
       setSubmittedSuccess(null);
     }
   }, [isOpen, currentPhone]);
@@ -81,8 +87,10 @@ export function ReportListingModal({
       } else if (reportType === 'category_change') {
         suggestedData.targetCategory = targetCategory;
       } else if (reportType === 'details_update') {
-        if (newPhone) suggestedData.newPhone = newPhone;
-        if (newWebsite) suggestedData.newWebsite = newWebsite;
+        if (newName.trim()) suggestedData.newName = newName.trim();
+        if (newPhone.trim()) suggestedData.newPhone = newPhone.trim();
+        if (newWebsite.trim()) suggestedData.newWebsite = newWebsite.trim();
+        if (newAddress.trim()) suggestedData.newAddress = newAddress.trim();
       }
 
       const res = await fetch('/api/public/listings/report', {
@@ -219,6 +227,14 @@ export function ReportListingModal({
 
                 {/* Tab: Edit Info */}
                 <TabsContent value="details_update" className="space-y-3 pt-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Correct Business Name</Label>
+                    <Input
+                      placeholder="e.g. SafeTech Roofing and Windows"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                    />
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Correct Phone Number</Label>
@@ -236,6 +252,14 @@ export function ReportListingModal({
                         onChange={(e) => setNewWebsite(e.target.value)}
                       />
                     </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Correct Physical Address (Optional)</Label>
+                    <Input
+                      placeholder="e.g. 123 Main St, Suite 100"
+                      value={newAddress}
+                      onChange={(e) => setNewAddress(e.target.value)}
+                    />
                   </div>
                 </TabsContent>
 
