@@ -1,77 +1,63 @@
 import type { MetadataRoute } from 'next';
 import {
-  getAllTemplates,
+  getCatalogIndex,
   TEMPLATE_CATEGORIES,
   TEMPLATE_INDUSTRIES,
 } from '@/lib/forms/templates';
 
 /**
- * Dynamic sitemap for all template-related routes.
+ * Dynamic sitemap for all 20,000+ template-related routes.
  *
- * Next.js will serve this at /templates/sitemap.xml (and merge it with the
- * root sitemap if one exists). It includes:
+ * Next.js serves this at /templates/sitemap.xml. It includes:
  *   - /templates (main gallery)
- *   - /templates/[category] (one per category with ≥1 template)
- *   - /templates/industries/[industry] (one per industry with ≥1 template)
- *   - /templates/[category]/[slug] (one per template)
- *
- * Priority and changeFrequency are set per Jotform's pattern:
- *   gallery: 0.9, weekly
- *   category/industry: 0.7, weekly
- *   template detail: 0.8, monthly (templates rarely change once published)
+ *   - /templates/[category] (all 40 categories)
+ *   - /templates/industries/[industry] (all 60 industries)
+ *   - /templates/[category]/[slug] (all 20,391 high-intent synthesized & curated templates)
  */
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://fieseros.com';
 
 export default function templatesSitemap(): MetadataRoute.Sitemap {
-  const all = getAllTemplates();
-
-  // Build category + industry sets from actual templates
-  const categorySet = new Set<string>();
-  const industrySet = new Set<string>();
-  for (const t of all) {
-    for (const c of t.categories) categorySet.add(c);
-    for (const i of t.industries) industrySet.add(i);
-  }
+  const index = getCatalogIndex();
+  const now = new Date();
 
   const entries: MetadataRoute.Sitemap = [];
 
   // Main gallery
   entries.push({
     url: `${SITE_URL}/templates`,
-    lastModified: new Date(),
-    changeFrequency: 'weekly',
-    priority: 0.9,
+    lastModified: now,
+    changeFrequency: 'daily',
+    priority: 1.0,
   });
 
-  // Category pages
-  for (const cat of categorySet) {
+  // All 40 Category hubs
+  for (const cat of TEMPLATE_CATEGORIES) {
     entries.push({
-      url: `${SITE_URL}/templates/${cat}`,
-      lastModified: new Date(),
+      url: `${SITE_URL}/templates/${cat.id}`,
+      lastModified: now,
       changeFrequency: 'weekly',
-      priority: 0.7,
+      priority: 0.8,
     });
   }
 
-  // Industry pages
-  for (const ind of industrySet) {
-    if (ind === 'general') continue;
+  // All 60 Industry hubs
+  for (const ind of TEMPLATE_INDUSTRIES) {
+    if (ind.id === 'general') continue;
     entries.push({
-      url: `${SITE_URL}/templates/industries/${ind}`,
-      lastModified: new Date(),
+      url: `${SITE_URL}/templates/industries/${ind.id}`,
+      lastModified: now,
       changeFrequency: 'weekly',
-      priority: 0.7,
+      priority: 0.8,
     });
   }
 
-  // Template detail pages
-  for (const t of all) {
-    const category = t.categories[0] || 'general';
+  // All 20,391 Template detail pages
+  for (const t of index) {
     entries.push({
-      url: `${SITE_URL}/templates/${category}/${t.id}`,
-      lastModified: new Date(t.updatedAt || t.createdAt || Date.now()),
+      url: `${SITE_URL}/templates/${t.categoryId}/${t.id}`,
+      lastModified: now,
       changeFrequency: 'monthly',
-      priority: t.isFeatured ? 0.9 : 0.8,
+      priority: t.isFeatured ? 0.9 : 0.6,
     });
   }
 

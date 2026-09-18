@@ -86,7 +86,7 @@ export interface TemplateIndexEntry {
 
 let CATALOG_INDEX: TemplateIndexEntry[] | null = null;
 
-function getCatalogIndex(): TemplateIndexEntry[] {
+export function getCatalogIndex(): TemplateIndexEntry[] {
   if (CATALOG_INDEX) return CATALOG_INDEX;
 
   const entries: TemplateIndexEntry[] = [];

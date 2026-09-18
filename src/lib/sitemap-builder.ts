@@ -4,7 +4,11 @@ import {
   countIndexableBusinessTenants,
 } from "@/lib/public-business";
 import { getAllPosts } from "@/lib/blog";
-import { getAllTemplates } from "@/lib/forms/templates";
+import {
+  getCatalogIndex,
+  TEMPLATE_CATEGORIES,
+  TEMPLATE_INDUSTRIES,
+} from "@/lib/forms/templates";
 import { db } from "@/lib/db";
 import {
   mapIndustryToPluralSlug,
@@ -457,38 +461,30 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     console.error("[sitemap] failed to list plural browse URLs:", err);
   }
 
-  // ── Dynamic: AI Form Templates (categories, industries, details) ───────────
+  // ── Dynamic: AI Form Templates (all 20,000+ categories, industries, details) ───────────
   const templateEntries: MetadataRoute.Sitemap = [];
   try {
-    const templates = getAllTemplates();
-    const categorySet = new Set<string>();
-    const industrySet = new Set<string>();
+    const catalogIndex = getCatalogIndex();
 
-    for (const t of templates) {
-      for (const c of t.categories || []) categorySet.add(c);
-      for (const i of t.industries || []) industrySet.add(i);
-    }
-
-    for (const cat of categorySet) {
+    for (const cat of TEMPLATE_CATEGORIES) {
       templateEntries.push({
-        url: `${BASE_URL}/templates/${cat}`,
+        url: `${BASE_URL}/templates/${cat.id}`,
         lastModified: SITE_LASTMOD,
       });
     }
 
-    for (const ind of industrySet) {
-      if (ind === 'general') continue;
+    for (const ind of TEMPLATE_INDUSTRIES) {
+      if (ind.id === 'general') continue;
       templateEntries.push({
-        url: `${BASE_URL}/templates/industries/${ind}`,
+        url: `${BASE_URL}/templates/industries/${ind.id}`,
         lastModified: SITE_LASTMOD,
       });
     }
 
-    for (const t of templates) {
-      const cat = t.categories?.[0] || 'general';
+    for (const t of catalogIndex) {
       templateEntries.push({
-        url: `${BASE_URL}/templates/${cat}/${t.id}`,
-        lastModified: new Date(t.updatedAt || t.createdAt || Date.now()).toISOString(),
+        url: `${BASE_URL}/templates/${t.categoryId}/${t.id}`,
+        lastModified: SITE_LASTMOD,
       });
     }
   } catch (err) {

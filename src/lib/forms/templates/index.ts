@@ -42,8 +42,9 @@ export {
   getTemplatesByIndustry,
   getFeaturedTemplates,
   getPublishedTemplateCount,
+  getCatalogIndex,
 } from './registry';
-export type { PaginatedTemplateSearchResult } from './registry';
+export type { PaginatedTemplateSearchResult, TemplateIndexEntry } from './registry';
 
 // ─── Import all canonical templates (populates the registry) ────────────────
 // Each canonical file calls registerTemplate() at module load time.
