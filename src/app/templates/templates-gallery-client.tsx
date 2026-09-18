@@ -719,7 +719,7 @@ export function TemplatesGalleryClient({
           <DialogContent
             showCloseButton={false}
             style={{ paddingTop: 0 }}
-            className="!max-w-[1280px] sm:!max-w-[1280px] lg:!max-w-[1320px] w-[96vw] max-h-[94vh] flex flex-col !p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 relative"
+            className="!max-w-[1280px] sm:!max-w-[1280px] lg:!max-w-[1320px] w-[96vw] max-h-[94vh] flex flex-col !p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900"
           >
             <DialogHeader className="sr-only">
               <DialogTitle>{previewTemplate.name}</DialogTitle>
