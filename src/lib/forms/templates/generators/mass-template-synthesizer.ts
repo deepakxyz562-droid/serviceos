@@ -450,7 +450,7 @@ export function synthesizeTemplate(
     useCases: ['lead_generation', 'intake'],
     audiences: ['b2c', 'b2b'],
     tags: [indId, catId, subcategory?.id || 'form', 'free-template', 'online-form'],
-    source: 'curated',
+    source: 'synthesized',
     status: 'published',
     isPublic: true,
     isFeatured: variantIndex === 0,
@@ -467,6 +467,16 @@ export function synthesizeTemplate(
         `${indLabel.toLowerCase()} form template`,
         `free ${subLabel.toLowerCase()}`,
         `online ${indLabel.toLowerCase()} intake`,
+      ],
+      faq: [
+        {
+          question: `Can I customize this ${indLabel} ${subLabel}?`,
+          answer: `Yes, you can easily add, remove, or modify fields, customize branding and colors, and configure conditional logic using the Fieseros visual builder.`,
+        },
+        {
+          question: `Is this form mobile-friendly?`,
+          answer: `All Fieseros form templates are fully responsive and optimized for mobile devices, tablets, and desktops.`,
+        },
       ],
     },
     authorId: 'fieseros-team',

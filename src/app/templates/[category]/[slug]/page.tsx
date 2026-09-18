@@ -76,27 +76,9 @@ export default async function TemplateDetailPage({
     notFound();
   }
 
-  // Find related templates (same primary category or shared industries, excluding self)
-  const all = getAllTemplates();
-  const related = all
-    .filter((t) => t.id !== template.id)
-    .map((t) => {
-      let score = 0;
-      // Shared categories
-      const sharedCats = t.categories.filter((c) => template.categories.includes(c));
-      score += sharedCats.length * 3;
-      // Shared industries
-      const sharedInds = t.industries.filter((i) => template.industries.includes(i) && i !== 'general');
-      score += sharedInds.length * 2;
-      // Shared tags
-      const sharedTags = t.tags.filter((tag) => template.tags.includes(tag));
-      score += sharedTags.length;
-      return { template: t, score };
-    })
-    .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4)
-    .map((r) => r.template);
+  // Find related templates (same primary category, excluding self)
+  const categoryTemplates = await getTemplatesByCategory(template.categories[0] as TemplateCategoryId, { limit: 5 });
+  const related = categoryTemplates.filter((t) => t.id !== template.id).slice(0, 4);
 
   const fieldCount = template.schema.fields?.length || 0;
   const stepCount = template.schema.steps?.length || 1;

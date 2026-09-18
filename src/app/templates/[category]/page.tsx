@@ -55,8 +55,7 @@ export default async function CategoryPage({
   const cat = CATEGORY_MAP.get(category);
   if (!cat) notFound();
 
-  const all = getAllTemplates();
-  const templates = all.filter((t) => t.categories.includes(category as never));
+  const templates = await getTemplatesByCategory(category as never, { limit: 100 });
 
   if (templates.length === 0) notFound();
 

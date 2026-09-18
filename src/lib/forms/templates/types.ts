@@ -138,7 +138,7 @@ export type TemplateAudienceId =
   | 'education'
   | 'consumer';
 
-export type TemplateSource = 'curated' | 'ai_generated' | 'community';
+export type TemplateSource = 'curated' | 'ai_generated' | 'synthesized' | 'community';
 
 export type TemplateStatus =
   | 'draft'

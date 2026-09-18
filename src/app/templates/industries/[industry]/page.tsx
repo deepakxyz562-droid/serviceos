@@ -54,8 +54,7 @@ export default async function IndustryPage({
   const ind = INDUSTRY_MAP.get(industry);
   if (!ind) notFound();
 
-  const all = getAllTemplates();
-  const templates = all.filter((t) => t.industries.includes(industry as never));
+  const templates = await getTemplatesByIndustry(industry as never, { limit: 100 });
 
   if (templates.length === 0) notFound();
 
