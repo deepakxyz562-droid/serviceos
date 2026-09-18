@@ -4,7 +4,7 @@ import React from 'react';
 import { Sparkles, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { FormTemplate } from '@/lib/forms/templates';
-import { navigateToUseTemplate } from '../templates-gallery-client';
+import { navigateToUseTemplate } from '@/lib/forms/templates/use-template-action';
 
 interface UseTemplateCTAButtonProps {
   template: FormTemplate;
