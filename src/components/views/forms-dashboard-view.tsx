@@ -11,11 +11,14 @@ import {
   BookOpen,
   ArrowRight,
   Plus,
+  LayoutGrid,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { TemplatePickerDialog } from '@/features/forms/components/builder/template-picker-dialog';
+import type { FormTemplate } from '@/lib/forms/templates';
 
 interface FormsDashboardStats {
   totalForms: number;
@@ -46,6 +49,20 @@ export function FormsDashboardView() {
   const [stats, setStats] = useState<FormsDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+
+  const handlePickTemplate = (_template: FormTemplate) => {
+    // The picked template id is stashed in sessionStorage; form-builder-view
+    // reads it on mount and pre-populates formData before opening the studio.
+    // (We use sessionStorage instead of a store to avoid coupling the
+    // dashboard to the builder's form-state shape.)
+    try {
+      sessionStorage.setItem('pendingTemplateId', _template.id);
+    } catch {
+      // sessionStorage may be unavailable (SSR / private mode) — non-fatal.
+    }
+    setCurrentView('formBuilder');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -122,10 +139,16 @@ export function FormsDashboardView() {
             Build intelligent forms, train your AI agent, and capture leads — all in one place.
           </p>
         </div>
-        <Button onClick={() => setCurrentView('formBuilder')}>
-          <Plus className="w-4 h-4 mr-2" />
-          Create Form
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setTemplatePickerOpen(true)}>
+            <LayoutGrid className="w-4 h-4 mr-2" />
+            Browse Templates
+          </Button>
+          <Button onClick={() => setCurrentView('formBuilder')}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Form
+          </Button>
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -264,6 +287,13 @@ export function FormsDashboardView() {
           )}
         </CardContent>
       </Card>
+
+      {/* Template Picker Dialog (T1.6) */}
+      <TemplatePickerDialog
+        open={templatePickerOpen}
+        onOpenChange={setTemplatePickerOpen}
+        onPick={handlePickTemplate}
+      />
     </div>
   );
 }

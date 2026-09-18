@@ -32,6 +32,7 @@ export default function robots(): MetadataRoute.Robots {
       "https://fieseros.com/sitemap1.xml",
       "https://fieseros.com/sitemap2.xml",
       "https://fieseros.com/sitemap3.xml",
+      "https://fieseros.com/templates/sitemap.xml",
     ],
     host: "https://fieseros.com",
   };

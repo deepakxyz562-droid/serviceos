@@ -14,6 +14,7 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
     "db:seed": "bun run prisma/seed-users.ts",
+    "db:seed-templates": "bun run prisma/seed-form-templates.ts",
     "db:seed-emails": "bun run prisma/seed-email-templates.ts",
     "db:seed-full": "bun run prisma/seed.ts",
     "db:generate-seed-sql": "bun run prisma/generate-seed-sql.ts",

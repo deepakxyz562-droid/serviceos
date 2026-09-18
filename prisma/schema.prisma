@@ -1249,6 +1249,71 @@ model Form {
   @@index([slug])
 }
 
+// ─── Form Template Model (T1.3) ────────────────────────────────────────────
+// Stores curated, AI-generated, and community-submitted form templates.
+// Multi-dimensional classification is stored as JSON arrays for SQLite
+// compatibility + query simplicity (avoids 5 junction tables for Release 1).
+//
+// The in-memory registry (src/lib/forms/templates/registry.ts) is the
+// primary read path for the builder palette. This DB model is for:
+//   1. Public SEO pages (Release 2) — server-rendered from DB
+//   2. Community submissions (Release 5) — user-uploaded templates
+//   3. AI-generated templates persisted after ≥3 uses (Release 4)
+//   4. Usage analytics (viewCount, cloneCount, usageCount)
+//
+// The `schemaJson` field holds a serialized FormTemplate (the in-memory
+// shape from types.ts). The top-level columns mirror the classification
+// arrays so they're queryable without parsing JSON.
+model FormTemplate {
+  id                String   @id @default(cuid())
+  slug              String   @unique            // kebab-case URL slug
+  name              String
+  shortDescription  String?
+  description       String?
+
+  // The full FormTemplate object (schema, theme, settings, seo, etc.)
+  schemaJson        Json
+
+  // Multi-dimensional classification (JSON arrays of taxonomy IDs)
+  categories        Json     @default("[]")     // TemplateCategoryId[]
+  industries        Json     @default("[]")     // TemplateIndustryId[]
+  useCases          Json     @default("[]")     // TemplateUseCaseId[]
+  audiences         Json     @default("[]")     // TemplateAudienceId[]
+  tags              Json     @default("[]")     // string[]
+
+  // Lifecycle
+  source            String   @default("curated") // curated, ai_generated, community
+  status            String   @default("published") // draft, submitted, under_review, approved, published, rejected, archived
+  language          String   @default("en")
+  isPublic          Boolean  @default(true)
+  isFeatured        Boolean  @default(false)
+
+  // Discovery / analytics
+  usageCount        Int      @default(0)
+  viewCount         Int      @default(0)
+  cloneCount        Int      @default(0)
+  ratingAverage     Float    @default(0)
+  ratingCount       Int      @default(0)
+
+  // SEO
+  seoTitle          String?
+  seoDescription    String?
+  seoKeywords       Json     @default("[]")      // string[]
+
+  // Authorship (for community templates — Release 5)
+  authorId          String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  publishedAt       DateTime?
+
+  @@index([status])
+  @@index([isPublic])
+  @@index([isFeatured])
+  @@index([source])
+  @@index([authorId])
+}
+
 model FormResponse {
   id          String   @id @default(cuid())
   formId      String

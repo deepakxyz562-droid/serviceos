@@ -62,7 +62,8 @@ import { FormImporterDialog } from './form-importer-dialog';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
 import { FormAgentStudio } from './agent-builder/form-agent-studio';
-import { TemplateExplorer, type FormTemplateItem } from './builder/template-explorer';
+import { TemplateExplorer } from './builder/template-explorer';
+import type { FormTemplate } from '@/lib/forms/templates';
 import { UnifiedFieldInspector } from './builder/unified-field-inspector';
 import {
   FIELD_REGISTRY,
@@ -193,13 +194,31 @@ export function FormStudioBuilder({
   };
 
   const handleApplyTemplate = (
-    template: FormTemplateItem,
+    template: FormTemplate,
     customTitle: string,
     mode: 'replace' | 'append'
   ) => {
-    const newFields: FormField[] = template.fields.map((f, idx) => ({
-      ...f,
+    // The registry's FormTemplate.schema.fields uses the canonical FormSchema
+    // shape (options: FieldOption[]). The builder's FormField (from
+    // @/features/forms/types) uses options: string[]. We map options.labels
+    // out and preserve widgetType/widgetConfig so the drag-and-drop canvas
+    // keeps the same specialized widgets the template shipped with.
+    const newFields: FormField[] = template.schema.fields.map((f, idx) => ({
       id: `f-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      type: (f.type as FieldType) || 'text',
+      label: f.label || 'Question',
+      placeholder: f.placeholder,
+      helpText: f.helpText,
+      description: f.description,
+      required: Boolean(f.required),
+      options: f.options?.map((o) => (typeof o === 'string' ? o : o.label)) || [],
+      widgetType: f.widgetType,
+      widgetConfig: f.widgetConfig,
+      width: f.width,
+      stepId: f.stepId,
+      defaultValue: f.defaultValue,
+      hidden: (f as { hidden?: boolean }).hidden,
+      validation: f.validation,
     }));
 
     onFormDataChange((prev) => {
@@ -215,7 +234,7 @@ export function FormStudioBuilder({
     setSelectedFieldId(newFields[0]?.id || null);
     setStudioTab('build');
     setIsPreviewMode(false);
-    toast.success(`Loaded "${template.name}" template with ${template.fields.length} fields!`);
+    toast.success(`Loaded "${template.name}" template with ${newFields.length} fields!`);
   };
 
   // Active field lookup

@@ -1,30 +1,39 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+/**
+ * TemplateExplorer — Form Template Library browser.
+ *
+ * T1.5: rewritten to consume the new template registry
+ *   (`@/lib/forms/templates`) instead of the legacy 6-template
+ *   `FORM_TEMPLATES` array.
+ *
+ * Data flow:
+ *   - Sidebar categories + counts → derived from `getAllTemplates()`
+ *     (synchronous, stable across searches).
+ *   - Industry dropdown → `TEMPLATE_INDUSTRIES` taxonomy.
+ *   - Card grid → async `searchTemplates({ query, category, industry })`,
+ *     debounced via React state + useEffect.
+ *   - Preview modal → renders `template.schema` directly through
+ *     `FormRuntimeRenderer` (no reconstruction needed — registry schemas are
+ *     already valid FormSchema objects).
+ *   - Apply → calls `onApplyTemplate(template, customTitle, mode)` with the
+ *     full `FormTemplate` (parent extracts `template.schema.fields`).
+ */
+
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
   Search,
   Check,
   Eye,
   Sparkles,
-  Layers,
-  Calendar,
-  PenTool,
-  MapPin,
-  Camera,
-  HeartPulse,
-  Wrench,
-  CheckCircle2,
+  Star,
   FileText,
-  SlidersHorizontal,
-  Building2,
-  ShoppingCart,
-  Smile,
-  ShieldCheck,
-  Clock,
-  Car,
   ChevronRight,
   X,
+  Loader2,
+  Layers,
+  Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +41,13 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -42,680 +58,503 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import type { FormField } from '@/features/forms/types';
 import { FormRuntimeRenderer } from '../runtime/form-runtime-renderer';
-import type { FormSchema } from '@/lib/forms/form-schema-types';
+import {
+  searchTemplates,
+  getAllTemplates,
+  TEMPLATE_CATEGORIES,
+  TEMPLATE_INDUSTRIES,
+  getCategoryLabel,
+  getIndustryLabel,
+  type FormTemplate,
+  type TemplateCategoryId,
+  type TemplateIndustryId,
+} from '@/lib/forms/templates';
 
-export interface FormTemplateItem {
-  id: string;
-  name: string;
-  category: 'healthcare' | 'field_service' | 'hvac' | 'ecommerce' | 'survey' | 'real_estate' | 'legal' | 'general';
-  categoryLabel: string;
-  description: string;
-  icon: React.ElementType;
-  badge?: string;
-  featured?: boolean;
-  fields: FormField[];
-  highlightWidgets: string[];
-}
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-export const FORM_TEMPLATES: FormTemplateItem[] = [
-  // ─── 1. DENTAL CLINIC PATIENT INTAKE & APPOINTMENT (Featured) ─────────────────
-  {
-    id: 'dental_clinic_intake',
-    name: 'Dental Clinic Patient Intake & Appointment',
-    category: 'healthcare',
-    categoryLabel: 'Healthcare & Dental',
-    description: 'Comprehensive dental patient registration with reason for visit, medical history, insurance card photo, appointment scheduling, and consent signature.',
-    icon: HeartPulse,
-    badge: 'FEATURED TEMPLATE',
-    featured: true,
-    highlightWidgets: ['📅 Appointment Booking', '📸 Insurance Card Upload', '✍️ Patient Signature Pad', '🦷 Treatment Selector'],
-    fields: [
-      {
-        id: 'patient_name',
-        label: 'Patient Full Name',
-        type: 'short_answer',
-        required: true,
-        placeholder: 'e.g. Jane Doe',
-        description: 'Legal first and last name as shown on insurance card.',
-        width: 'half',
-      },
-      {
-        id: 'patient_dob',
-        label: 'Date of Birth',
-        type: 'date',
-        required: true,
-        placeholder: 'YYYY-MM-DD',
-        width: 'half',
-      },
-      {
-        id: 'patient_phone',
-        label: 'Mobile Phone (for SMS Reminders)',
-        type: 'phone',
-        required: true,
-        placeholder: '+1 (555) 000-0000',
-        width: 'half',
-      },
-      {
-        id: 'patient_email',
-        label: 'Email Address',
-        type: 'email',
-        required: true,
-        placeholder: 'jane@example.com',
-        width: 'half',
-      },
-      {
-        id: 'dental_service_reason',
-        label: 'Reason for Dental Visit',
-        type: 'dropdown',
-        required: true,
-        placeholder: 'Select treatment or concern',
-        options: [
-          'Routine Cleaning & Comprehensive Exam',
-          'Emergency Toothache / Swelling',
-          'Teeth Whitening & Cosmetic Consultation',
-          'Dental Crowns & Bridges',
-          'Root Canal Evaluation',
-          'Wisdom Teeth & Extractions',
-          'Orthodontics / Clear Aligners Consultation',
-          'Dental Implants',
-        ],
-      },
-      {
-        id: 'preferred_appointment_time',
-        label: 'Preferred Appointment Date & Time',
-        type: 'date',
-        required: true,
-        widgetType: 'appointment',
-        widgetConfig: {
-          duration: 45,
-          interval: 30,
-          leadTime: 24,
-        },
-        description: 'Choose your preferred date and slot for the visit.',
-      },
-      {
-        id: 'medical_history_notes',
-        label: 'Medical Conditions & Allergies',
-        type: 'long_answer',
-        required: false,
-        placeholder: 'List any allergies (latex, penicillin), medications, or medical conditions (diabetes, heart conditions, pregnancy)...',
-      },
-      {
-        id: 'insurance_provider_info',
-        label: 'Dental Insurance Carrier & Policy ID',
-        type: 'short_answer',
-        required: false,
-        placeholder: 'e.g. Delta Dental - Policy #98234710',
-        description: 'Leave blank if paying out-of-pocket / self-pay.',
-      },
-      {
-        id: 'insurance_card_upload',
-        label: 'Insurance Card Photo (Front & Back)',
-        type: 'photo',
-        required: false,
-        widgetType: 'image_upload',
-        widgetConfig: {
-          maxFiles: 2,
-          maxFileSizeMb: 10,
-        },
-        description: 'Upload clear photos of your dental insurance card.',
-      },
-      {
-        id: 'patient_consent_signature',
-        label: 'Patient Consent & Financial Agreement Signature',
-        type: 'signature',
-        required: true,
-        widgetType: 'signature',
-        widgetConfig: {
-          legalText: 'By signing below, I certify that the information provided is accurate and authorize the dental clinic to process treatment and insurance billing.',
-        },
-      },
-    ],
-  },
+const ALL = 'all';
+/** Pseudo-category id that filters the grid to featured templates only. */
+const FEATURED = '__featured__';
 
-  // ─── 2. PLUMBER EMERGENCY & SERVICE JOB CARD (Featured) ──────────────────────
-  {
-    id: 'plumber_service_job_card',
-    name: 'Plumbing Emergency & Service Job Card',
-    category: 'field_service',
-    categoryLabel: 'Field Service & Plumbing',
-    description: 'Dispatch-ready plumbing service order with automated Route Planner Map, issue categorization, leak photo upload, arrival alerts, and customer sign-off.',
-    icon: Wrench,
-    badge: 'FEATURED TEMPLATE',
-    featured: true,
-    highlightWidgets: ['🗺️ Route Planner Map', '📸 Photo with Notes', '🚨 Emergency Selector', '✍️ Work Auth Signature'],
-    fields: [
-      {
-        id: 'client_name',
-        label: 'Customer Full Name',
-        type: 'short_answer',
-        required: true,
-        placeholder: 'e.g. Robert Smith',
-        width: 'half',
-      },
-      {
-        id: 'client_phone',
-        label: 'Contact Phone (for Tech Arrival ETA)',
-        type: 'phone',
-        required: true,
-        placeholder: '+1 (555) 234-5678',
-        width: 'half',
-      },
-      {
-        id: 'client_service_address',
-        label: 'Service Address (Street, City, ZIP)',
-        type: 'short_answer',
-        required: true,
-        placeholder: '123 Elm Street, Chicago, IL 60601',
-      },
-      {
-        id: 'plumbing_route_planner',
-        label: 'Service Route & Technician Dispatch Route',
-        type: 'short_answer',
-        required: false,
-        widgetType: 'route_planner_map',
-        widgetConfig: {
-          startLocationLabel: 'Plumbing Dispatch Hub',
-          endLocationLabel: 'Customer Service Location',
-          addressPlaceholder: 'Street address, city or ZIP',
-          allowAdditionalStops: true,
-          showRouteSummary: true,
-          defaultTravelMode: 'driving',
-        },
-        description: 'Live interactive route between the plumbing dispatch center and the job site.',
-      },
-      {
-        id: 'plumbing_issue_type',
-        label: 'Plumbing Issue / Service Requested',
-        type: 'dropdown',
-        required: true,
-        placeholder: 'Select primary issue',
-        options: [
-          '🚨 Active Burst Pipe / Flooding (Emergency)',
-          'Clogged Drain / Main Sewer Line Backup',
-          'Water Heater Repair or Replacement',
-          'Leaking Faucet / Running Toilet',
-          'Garbage Disposal Repair',
-          'Sump Pump Failure / Inspection',
-          'Gas Line Leak / Inspection',
-          'General Plumbing Maintenance & Inspection',
-        ],
-      },
-      {
-        id: 'urgency_priority',
-        label: 'Service Priority Level',
-        type: 'radio',
-        required: true,
-        options: [
-          '🚨 Emergency (Immediate Dispatch within 60-90 min)',
-          'Same Day Service (Standard business hours)',
-          'Schedule for Later this Week',
-        ],
-      },
-      {
-        id: 'leak_photo_upload',
-        label: 'Photo of the Leak / Fixture Issue',
-        type: 'photo',
-        required: false,
-        widgetType: 'photo',
-        description: 'Take or upload a photo of the plumbing leak, valve, or fixture.',
-      },
-      {
-        id: 'property_access_notes',
-        label: 'Property Access & Gate Code Instructions',
-        type: 'long_answer',
-        required: false,
-        placeholder: 'e.g. Gate code #4521, dog is in the backyard, key is in lockbox...',
-      },
-      {
-        id: 'work_authorization_signature',
-        label: 'Work Authorization & Diagnostic Fee Signature',
-        type: 'signature',
-        required: true,
-        widgetType: 'signature',
-        widgetConfig: {
-          legalText: 'I authorize the technician to perform diagnostic inspection and understand that estimates will be provided before major repairs begin.',
-        },
-      },
-    ],
-  },
-
-  // ─── 3. HVAC MAINTENANCE & TUNE-UP INSPECTION ───────────────────────────────
-  {
-    id: 'hvac_inspection_tuneup',
-    name: 'HVAC Seasonal Tune-Up & Maintenance',
-    category: 'hvac',
-    categoryLabel: 'HVAC & Climate',
-    description: 'AC and heating inspection checklist with system type selection, filter status, thermostat checks, and service dispatch.',
-    icon: SlidersHorizontal,
-    badge: 'POPULAR',
-    highlightWidgets: ['❄️ System Diagnostics', '📅 Booking Calendar', '✍️ Service Sign-off'],
-    fields: [
-      { id: 'homeowner_name', label: 'Homeowner Name', type: 'short_answer', required: true, width: 'half' },
-      { id: 'homeowner_phone', label: 'Contact Phone', type: 'phone', required: true, width: 'half' },
-      { id: 'service_location', label: 'Service Address', type: 'short_answer', required: true },
-      {
-        id: 'hvac_system_type',
-        label: 'HVAC System Type',
-        type: 'dropdown',
-        required: true,
-        options: ['Central AC & Gas Furnace', 'Heat Pump System', 'Ductless Mini-Split', 'Boiler / Radiator', 'Commercial Rooftop Unit'],
-      },
-      {
-        id: 'system_age',
-        label: 'Approximate System Age',
-        type: 'dropdown',
-        required: false,
-        options: ['Less than 3 years', '3 - 7 years', '8 - 12 years', '13+ years (Upgrade candidate)'],
-      },
-      {
-        id: 'preferred_service_slot',
-        label: 'Preferred Service Window',
-        type: 'date',
-        required: true,
-        widgetType: 'appointment',
-      },
-      {
-        id: 'customer_signature',
-        label: 'Service Authorization Signature',
-        type: 'signature',
-        required: true,
-        widgetType: 'signature',
-      },
-    ],
-  },
-
-  // ─── 4. E-COMMERCE PRODUCT ORDER WITH STRIPE PAYMENT ───────────────────────
-  {
-    id: 'ecommerce_product_order',
-    name: 'Product Order & 1-Click Stripe Checkout',
-    category: 'ecommerce',
-    categoryLabel: 'E-Commerce & Orders',
-    description: 'Product catalog ordering with quantity selection, shipping address, and secure inline credit card payment.',
-    icon: ShoppingCart,
-    badge: 'PAYMENT READY',
-    highlightWidgets: ['💳 Stripe Elements', '📦 Inventory Options', '📍 Shipping Address'],
-    fields: [
-      { id: 'buyer_name', label: 'Customer Full Name', type: 'short_answer', required: true, width: 'half' },
-      { id: 'buyer_email', label: 'Email Address for Receipt', type: 'email', required: true, width: 'half' },
-      {
-        id: 'product_item',
-        label: 'Select Product Package',
-        type: 'dropdown',
-        required: true,
-        options: ['Starter Kit ($49.00)', 'Professional Bundle ($99.00)', 'Enterprise Suite ($249.00)'],
-      },
-      { id: 'order_quantity', label: 'Quantity', type: 'numerical', required: true, defaultValue: 1 },
-      { id: 'shipping_address', label: 'Shipping Address', type: 'short_answer', required: true },
-      {
-        id: 'stripe_payment_card',
-        label: 'Secure Credit or Debit Card Payment',
-        type: 'short_answer',
-        required: true,
-        widgetType: 'payment_stripe_elements',
-        widgetConfig: {
-          gatewayId: 'stripe_elements',
-          currency: 'USD',
-          showCard: true,
-          chargeImmediately: true,
-        },
-      },
-    ],
-  },
-
-  // ─── 5. NET PROMOTER SCORE (NPS) & CUSTOMER FEEDBACK ───────────────────────
-  {
-    id: 'nps_customer_survey',
-    name: 'Customer Satisfaction & NPS Survey',
-    category: 'survey',
-    categoryLabel: 'Surveys & Feedback',
-    description: '0-10 Net Promoter Score survey with 5-star rating, conditional feedback comments, and social share prompts.',
-    icon: Smile,
-    badge: 'ANALYTICS READY',
-    highlightWidgets: ['⭐ 5-Star Rating', '📊 NPS 0-10 Slider', '💬 Conditional Comments'],
-    fields: [
-      { id: 'customer_name', label: 'Your Name (Optional)', type: 'short_answer', required: false, width: 'half' },
-      { id: 'customer_email', label: 'Your Email (Optional)', type: 'email', required: false, width: 'half' },
-      {
-        id: 'service_rating',
-        label: 'How would you rate your overall experience with us?',
-        type: 'rating',
-        required: true,
-        widgetType: 'star_rating_comments',
-        widgetConfig: { maxStars: 5, requireCommentOnLowRating: true },
-      },
-      {
-        id: 'nps_score',
-        label: 'How likely are you to recommend our company to a friend or colleague?',
-        type: 'short_answer',
-        required: true,
-        widgetType: 'nps_slider',
-        widgetConfig: { min: 0, max: 10, minLabel: 'Not likely', maxLabel: 'Extremely likely' },
-      },
-      { id: 'feedback_improvements', label: 'What could we do to improve in the future?', type: 'long_answer', required: false },
-    ],
-  },
-
-  // ─── 6. REAL ESTATE PROPERTY INQUIRY & TOUR BOOKING ────────────────────────
-  {
-    id: 'real_estate_tour_booking',
-    name: 'Real Estate Property Tour & Schedule',
-    category: 'real_estate',
-    categoryLabel: 'Real Estate',
-    description: 'Lead capture form for buyers and renters to schedule in-person or virtual property showings with pre-approval info.',
-    icon: Building2,
-    badge: 'LEAD CAPTURE',
-    highlightWidgets: ['🏠 Tour Scheduler', '💰 Budget Slider', '📍 Property Locator'],
-    fields: [
-      { id: 'buyer_name', label: 'Full Name', type: 'short_answer', required: true, width: 'half' },
-      { id: 'buyer_phone', label: 'Phone Number', type: 'phone', required: true, width: 'half' },
-      { id: 'buyer_email', label: 'Email Address', type: 'email', required: true },
-      {
-        id: 'tour_type',
-        label: 'Tour Preference',
-        type: 'radio',
-        required: true,
-        options: ['In-Person Guided Showing', 'Live Video Virtual Tour (Zoom / FaceTime)'],
-      },
-      {
-        id: 'tour_date_time',
-        label: 'Preferred Tour Date & Time Slot',
-        type: 'date',
-        required: true,
-        widgetType: 'appointment',
-      },
-      {
-        id: 'financing_status',
-        label: 'Financing Pre-Approval Status',
-        type: 'dropdown',
-        required: false,
-        options: ['Pre-Approved with Mortgage Lender', 'Cash Buyer', 'Need Lender Recommendations', 'Just Browsing'],
-      },
-    ],
-  },
-];
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface TemplateExplorerProps {
   onBackToBuild: () => void;
-  onApplyTemplate: (template: FormTemplateItem, customTitle: string, mode: 'replace' | 'append') => void;
+  /**
+   * Called when the user confirms a template in the preview modal.
+   * The parent (form-studio-builder.tsx) extracts `template.schema.fields`
+   * and merges them into the canvas per the chosen `mode`.
+   */
+  onApplyTemplate: (
+    template: FormTemplate,
+    customTitle: string,
+    mode: 'replace' | 'append',
+  ) => void;
   currentFieldCount: number;
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function TemplateExplorer({
   onBackToBuild,
   onApplyTemplate,
   currentFieldCount,
 }: TemplateExplorerProps) {
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  // ── Filter state ────────────────────────────────────────────────────────
+  const [selectedCategory, setSelectedCategory] = useState<string>(ALL);
+  const [selectedIndustry, setSelectedIndustry] = useState<string>(ALL);
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Modal Preview State
-  const [previewTemplate, setPreviewTemplate] = useState<FormTemplateItem | null>(null);
+
+  // ── Async search results ───────────────────────────────────────────────
+  const [results, setResults] = useState<FormTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // ── Modal preview state ────────────────────────────────────────────────
+  const [previewTemplate, setPreviewTemplate] = useState<FormTemplate | null>(null);
   const [customFormTitle, setCustomFormTitle] = useState('');
   const [applyMode, setApplyMode] = useState<'replace' | 'append'>('replace');
 
-  // Filter templates
-  const filteredTemplates = useMemo(() => {
-    return FORM_TEMPLATES.filter((tpl) => {
-      const matchesCat = selectedCategory === 'all' || tpl.category === selectedCategory || (selectedCategory === 'featured' && tpl.featured);
-      if (!matchesCat) return false;
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        tpl.name.toLowerCase().includes(q) ||
-        tpl.description.toLowerCase().includes(q) ||
-        tpl.categoryLabel.toLowerCase().includes(q) ||
-        tpl.highlightWidgets.some((w) => w.toLowerCase().includes(q))
-      );
-    });
-  }, [selectedCategory, searchQuery]);
+  // ── Stable counts (synchronous, derived from the whole registry) ───────
+  // These don't change as the user types — they reflect the registry's
+  // total contents per category, used for the sidebar counts.
+  const allTemplates = useMemo(() => getAllTemplates(), []);
+  const featuredCount = useMemo(
+    () => allTemplates.filter((t) => t.isFeatured).length,
+    [allTemplates],
+  );
+  const categoryCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of allTemplates) {
+      for (const c of t.categories) m.set(c, (m.get(c) || 0) + 1);
+    }
+    return m;
+  }, [allTemplates]);
 
-  // Categories list
-  const categories = [
-    { id: 'all', label: 'All Templates', count: FORM_TEMPLATES.length },
-    { id: 'featured', label: '⭐ Featured', count: FORM_TEMPLATES.filter((t) => t.featured).length },
-    { id: 'healthcare', label: '🦷 Dental & Healthcare', count: FORM_TEMPLATES.filter((t) => t.category === 'healthcare').length },
-    { id: 'field_service', label: '🔧 Plumbing & Field Service', count: FORM_TEMPLATES.filter((t) => t.category === 'field_service').length },
-    { id: 'hvac', label: '❄️ HVAC & Climate', count: FORM_TEMPLATES.filter((t) => t.category === 'hvac').length },
-    { id: 'ecommerce', label: '🛒 E-Commerce & Payment', count: FORM_TEMPLATES.filter((t) => t.category === 'ecommerce').length },
-    { id: 'survey', label: '📊 Surveys & NPS', count: FORM_TEMPLATES.filter((t) => t.category === 'survey').length },
-    { id: 'real_estate', label: '🏠 Real Estate', count: FORM_TEMPLATES.filter((t) => t.category === 'real_estate').length },
-  ];
+  const visibleCategories = useMemo(
+    () => TEMPLATE_CATEGORIES.filter((c) => (categoryCounts.get(c.id) || 0) > 0),
+    [categoryCounts],
+  );
 
-  // Handle opening preview modal
-  const handleOpenPreview = (tpl: FormTemplateItem) => {
+  // ── Async search effect (debounced) ────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    // Tiny debounce so each keystroke doesn't fire a fresh search.
+    const handle = setTimeout(() => {
+      setIsLoading(true);
+
+      const cat: TemplateCategoryId | undefined =
+        selectedCategory === ALL || selectedCategory === FEATURED
+          ? undefined
+          : (selectedCategory as TemplateCategoryId);
+
+      const ind: TemplateIndustryId | undefined =
+        selectedIndustry === ALL ? undefined : (selectedIndustry as TemplateIndustryId);
+
+      const q = searchQuery.trim() || undefined;
+
+      // When the user picks the Featured pseudo-category we sort by featured
+      // so the starred templates surface first; otherwise relevance wins.
+      const sort = selectedCategory === FEATURED ? 'featured' : 'relevance';
+
+      searchTemplates({
+        query: q,
+        category: cat,
+        industry: ind,
+        sort,
+        publishedOnly: true,
+        limit: 200,
+      })
+        .then((hits) => {
+          if (cancelled) return;
+          let list = hits.map((h) => h.template);
+          // FEATURED pseudo-category is not a real TemplateCategoryId, so the
+          // registry ignores it — we filter client-side.
+          if (selectedCategory === FEATURED) {
+            list = list.filter((t) => t.isFeatured);
+          }
+          setResults(list);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    }, 150);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [searchQuery, selectedCategory, selectedIndustry]);
+
+  // ── Preview modal handlers ──────────────────────────────────────────────
+  const handleOpenPreview = (tpl: FormTemplate) => {
     setPreviewTemplate(tpl);
     setCustomFormTitle(tpl.name);
-    setApplyMode(currentFieldCount > 0 ? 'replace' : 'replace');
+    setApplyMode('replace');
   };
-
-  // Convert template fields to FormSchema for preview render
-  const previewSchema: FormSchema | null = useMemo(() => {
-    if (!previewTemplate) return null;
-    return {
-      version: 1,
-      steps: [{ id: 'step_1', title: customFormTitle || previewTemplate.name }],
-      fields: previewTemplate.fields.map((f) => ({
-        id: f.id,
-        type: f.widgetType ? 'control_widget' : (f.type as any),
-        label: f.label,
-        placeholder: f.placeholder,
-        helpText: f.description || f.helpText,
-        required: f.required,
-        stepId: 'step_1',
-        width: f.width || 'full',
-        widgetType: f.widgetType,
-        widgetConfig: f.widgetConfig,
-        options: f.options?.map((opt) =>
-          typeof opt === 'string'
-            ? { label: opt, value: opt.toLowerCase().replace(/\s+/g, '_') }
-            : opt
-        ),
-      })),
-      theme: {
-        primaryColor: '#059669',
-        backgroundColor: '#ffffff',
-        textColor: '#0f172a',
-        borderRadius: '12px',
-        layout: 'classic',
-      },
-      rules: [],
-      settings: {
-        submitButtonText: 'Submit Form',
-        successTitle: 'Thank You!',
-        successMessage: 'Your submission has been recorded.',
-        actions: {},
-      },
-    };
-  }, [previewTemplate, customFormTitle]);
 
   const handleConfirmApply = () => {
     if (!previewTemplate) return;
-    onApplyTemplate(previewTemplate, customFormTitle || previewTemplate.name, applyMode);
+    onApplyTemplate(
+      previewTemplate,
+      customFormTitle || previewTemplate.name,
+      applyMode,
+    );
     setPreviewTemplate(null);
   };
 
+  const resetFilters = () => {
+    setSelectedCategory(ALL);
+    setSelectedIndustry(ALL);
+    setSearchQuery('');
+  };
+
+  // ── Derived preview state ───────────────────────────────────────────────
+  const previewSchema = useMemo(() => {
+    if (!previewTemplate) return null;
+    // Use the template's canonical schema directly — it's already a valid
+    // FormSchema. Override the first step's title with the user's custom
+    // name so the live preview reflects the chosen form title.
+    const baseSteps = previewTemplate.schema.steps?.length
+      ? previewTemplate.schema.steps
+      : [{ id: 'step_1', title: previewTemplate.name }];
+    const title = customFormTitle || previewTemplate.name;
+    return {
+      ...previewTemplate.schema,
+      steps: baseSteps.map((s, i) => (i === 0 ? { ...s, title } : s)),
+    };
+  }, [previewTemplate, customFormTitle]);
+
+  const previewFieldCount = previewTemplate?.schema.fields.length ?? 0;
+  const previewWidgetCount =
+    previewTemplate?.schema.fields.filter((f) => !!f.widgetType).length ?? 0;
+
+  const hasActiveFilters =
+    selectedCategory !== ALL || selectedIndustry !== ALL || searchQuery.trim().length > 0;
+
+  // ────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto">
-      {/* ════ TOP STICKY HEADER & BACK BUTTON ════ */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border px-6 py-4 flex flex-wrap items-center justify-between gap-4 shadow-xs">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onBackToBuild}
-            className="h-9 gap-2 font-semibold text-xs border-emerald-600/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-          >
-            <ArrowLeft className="size-4" />
-            <span>Back to Build</span>
-          </Button>
+    <div className="flex-1 flex h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
+      {/* ════ LEFT SIDEBAR — CATEGORY LIST ════ */}
+      <aside className="hidden md:flex flex-col w-64 shrink-0 border-r border-border bg-background">
+        <div className="p-4 border-b border-border">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Layers className="size-3.5" />
+            <span>Categories</span>
+          </h2>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            {allTemplates.length} curated templates across {visibleCategories.length} categories.
+          </p>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-0.5">
+            <CategoryButton
+              active={selectedCategory === ALL}
+              onClick={() => setSelectedCategory(ALL)}
+              label="All Templates"
+              count={allTemplates.length}
+            />
+            <CategoryButton
+              active={selectedCategory === FEATURED}
+              onClick={() => setSelectedCategory(FEATURED)}
+              label="⭐ Featured"
+              count={featuredCount}
+              featured
+            />
+            <div className="h-px bg-border my-1.5 mx-2" />
+            {visibleCategories.map((cat) => (
+              <CategoryButton
+                key={cat.id}
+                active={selectedCategory === cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                label={cat.label}
+                count={categoryCounts.get(cat.id) || 0}
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      </aside>
 
-          <div className="h-5 w-[1px] bg-border hidden sm:block" />
+      {/* ════ MAIN COLUMN ════ */}
+      <div className="flex-1 flex flex-col overflow-y-auto">
+        {/* ─── Sticky top header ─── */}
+        <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b border-border px-6 py-4 flex flex-wrap items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onBackToBuild}
+              className="h-9 gap-2 font-semibold text-xs border-emerald-600/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+            >
+              <ArrowLeft className="size-4" />
+              <span>Back to Build</span>
+            </Button>
 
-          <div>
-            <h1 className="text-base font-bold flex items-center gap-2 text-foreground">
-              <Sparkles className="size-4 text-emerald-600" />
-              <span>Form Template Library</span>
-            </h1>
-            <p className="text-xs text-muted-foreground hidden sm:block">
-              Choose a pre-built industry template with pre-configured widgets, maps, and signatures.
-            </p>
+            <div className="h-5 w-[1px] bg-border hidden sm:block" />
+
+            <div>
+              <h1 className="text-base font-bold flex items-center gap-2 text-foreground">
+                <Sparkles className="size-4 text-emerald-600" />
+                <span>Form Template Library</span>
+              </h1>
+              <p className="text-xs text-muted-foreground hidden sm:block">
+                Curated industry templates — pre-configured widgets, maps, and signatures.
+              </p>
+            </div>
+          </div>
+
+          {/* Industry filter + Search */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
+              <SelectTrigger className="h-9 w-44 text-xs gap-1.5">
+                <Building2 className="size-3.5 text-muted-foreground" />
+                <SelectValue placeholder="All industries" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All industries</SelectItem>
+                {TEMPLATE_INDUSTRIES.map((ind) => (
+                  <SelectItem key={ind.id} value={ind.id}>
+                    {ind.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search templates, widgets, industries..."
+                className="pl-9 h-9 text-xs bg-background"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
+                  aria-label="Clear search"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-          <Input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search templates, widgets, industries..."
-            className="pl-9 h-9 text-xs bg-background"
+        {/* ─── Mobile category strip (visible only on small screens) ─── */}
+        <div className="md:hidden px-6 pt-4 pb-2 flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-border/40">
+          <CategoryChip
+            active={selectedCategory === ALL}
+            onClick={() => setSelectedCategory(ALL)}
+            label="All"
+            count={allTemplates.length}
           />
-          {searchQuery && (
+          <CategoryChip
+            active={selectedCategory === FEATURED}
+            onClick={() => setSelectedCategory(FEATURED)}
+            label="⭐ Featured"
+            count={featuredCount}
+          />
+          {visibleCategories.map((cat) => (
+            <CategoryChip
+              key={cat.id}
+              active={selectedCategory === cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              label={cat.label}
+              count={categoryCounts.get(cat.id) || 0}
+            />
+          ))}
+        </div>
+
+        {/* ─── Active-filter summary row ─── */}
+        <div className="px-6 pt-3 flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-muted-foreground">Showing</span>
+          <Badge variant="secondary" className="text-[10px] font-semibold">
+            {isLoading ? '…' : results.length} template{results.length === 1 ? '' : 's'}
+          </Badge>
+          {selectedCategory !== ALL && (
+            <Badge variant="outline" className="text-[10px] font-semibold gap-1 pl-2 pr-1">
+              {selectedCategory === FEATURED ? 'Featured' : getCategoryLabel(selectedCategory)}
+              <button
+                onClick={() => setSelectedCategory(ALL)}
+                className="hover:text-foreground"
+                aria-label="Clear category filter"
+              >
+                <X className="size-3" />
+              </button>
+            </Badge>
+          )}
+          {selectedIndustry !== ALL && (
+            <Badge variant="outline" className="text-[10px] font-semibold gap-1 pl-2 pr-1">
+              {getIndustryLabel(selectedIndustry)}
+              <button
+                onClick={() => setSelectedIndustry(ALL)}
+                className="hover:text-foreground"
+                aria-label="Clear industry filter"
+              >
+                <X className="size-3" />
+              </button>
+            </Badge>
+          )}
+          {searchQuery.trim() && (
+            <Badge variant="outline" className="text-[10px] font-semibold gap-1 pl-2 pr-1">
+              &ldquo;{searchQuery}&rdquo;
+              <button
+                onClick={() => setSearchQuery('')}
+                className="hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="size-3" />
+              </button>
+            </Badge>
+          )}
+          {hasActiveFilters && (
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
+              onClick={resetFilters}
+              className="text-emerald-600 hover:underline ml-1 font-semibold"
             >
-              <X className="size-3.5" />
+              Reset all
             </button>
           )}
         </div>
-      </div>
 
-      {/* ════ CATEGORY FILTER CHIPS ════ */}
-      <div className="px-6 pt-4 pb-2 flex items-center gap-2 overflow-x-auto no-scrollbar border-b border-border/40 bg-background/40">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setSelectedCategory(cat.id)}
-            className={cn(
-              'px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5',
-              selectedCategory === cat.id
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-muted/70 text-muted-foreground hover:text-foreground hover:bg-muted'
-            )}
-          >
-            <span>{cat.label}</span>
-            <span
-              className={cn(
-                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
-                selectedCategory === cat.id ? 'bg-white/20 text-white' : 'bg-background/80 text-muted-foreground'
-              )}
-            >
-              {cat.count}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* ════ TEMPLATE CARDS GRID ════ */}
-      <div className="p-6 max-w-7xl mx-auto w-full">
-        {filteredTemplates.length === 0 ? (
-          <div className="text-center py-16 space-y-3">
-            <div className="size-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
-              <Search className="size-6" />
+        {/* ─── Cards grid ─── */}
+        <div className="p-6 max-w-7xl mx-auto w-full">
+          {isLoading ? (
+            <div className="text-center py-20 space-y-3">
+              <Loader2 className="size-6 mx-auto animate-spin text-emerald-600" />
+              <p className="text-xs text-muted-foreground">Searching templates…</p>
             </div>
-            <h3 className="text-sm font-bold text-foreground">No matching templates found</h3>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              Try adjusting your search terms or category filter to discover available industry templates.
-            </p>
-            <Button variant="outline" size="sm" onClick={() => { setSelectedCategory('all'); setSearchQuery(''); }}>
-              Reset Filters
-            </Button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredTemplates.map((tpl) => {
-              const IconComp = tpl.icon || Layers;
-              return (
-                <Card
-                  key={tpl.id}
-                  className={cn(
-                    'group relative flex flex-col justify-between overflow-hidden border transition-all duration-200 hover:shadow-md hover:border-emerald-500/50 bg-card',
-                    tpl.featured && 'ring-1 ring-emerald-500/30 border-emerald-500/40 bg-gradient-to-b from-emerald-500/[0.03] to-transparent'
-                  )}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-2">
+          ) : results.length === 0 ? (
+            <div className="text-center py-16 space-y-3">
+              <div className="size-12 rounded-full bg-muted flex items-center justify-center mx-auto text-muted-foreground">
+                <Search className="size-6" />
+              </div>
+              <h3 className="text-sm font-bold text-foreground">No matching templates found</h3>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                Try adjusting your search terms, category, or industry filter to discover more
+                industry templates.
+              </p>
+              <Button variant="outline" size="sm" onClick={resetFilters}>
+                Reset Filters
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {results.map((tpl) => {
+                const cats = tpl.categories.slice(0, 3);
+                const inds = tpl.industries.slice(0, 3);
+                const fieldCount = tpl.schema.fields.length;
+                const widgetCount = tpl.schema.fields.filter((f) => !!f.widgetType).length;
+                return (
+                  <Card
+                    key={tpl.id}
+                    className={cn(
+                      'group relative flex flex-col justify-between overflow-hidden border transition-all duration-200 hover:shadow-md hover:border-emerald-500/50 bg-card',
+                      tpl.isFeatured &&
+                        'ring-1 ring-emerald-500/30 border-emerald-500/40 bg-gradient-to-b from-emerald-500/[0.03] to-transparent',
+                    )}
+                  >
+                    {tpl.isFeatured && (
+                      <div className="absolute top-2 right-2 z-10">
+                        <Badge className="bg-amber-500 hover:bg-amber-500 text-white font-bold text-[9px] px-1.5 py-0.5 gap-0.5">
+                          <Star className="size-2.5 fill-white" />
+                          Featured
+                        </Badge>
+                      </div>
+                    )}
+
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start gap-2 mb-1.5">
                         <div className="size-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                          <IconComp className="size-5" />
+                          <FileText className="size-5" />
                         </div>
-                        <div>
-                          <Badge variant="outline" className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground bg-muted/40">
-                            {tpl.categoryLabel}
-                          </Badge>
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {cats.map((c) => (
+                            <Badge
+                              key={c}
+                              variant="outline"
+                              className="text-[10px] font-semibold tracking-wider uppercase text-muted-foreground bg-muted/40"
+                            >
+                              {getCategoryLabel(c)}
+                            </Badge>
+                          ))}
                         </div>
                       </div>
 
-                      {tpl.badge && (
-                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white font-bold text-[9px] px-2 py-0.5 rounded-full shadow-2xs">
-                          {tpl.badge}
-                        </Badge>
+                      <CardTitle className="text-base font-bold text-foreground group-hover:text-emerald-600 transition-colors leading-snug pr-12">
+                        {tpl.name}
+                      </CardTitle>
+                      <CardDescription className="text-xs line-clamp-2 leading-relaxed text-muted-foreground">
+                        {tpl.shortDescription}
+                      </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="space-y-3 pt-0">
+                      {/* Industry pills */}
+                      {inds.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {inds.map((i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-[10px] font-medium border border-blue-200/50 dark:border-blue-900/50"
+                            >
+                              {getIndustryLabel(i)}
+                            </span>
+                          ))}
+                        </div>
                       )}
-                    </div>
 
-                    <CardTitle className="text-base font-bold text-foreground group-hover:text-emerald-600 transition-colors leading-snug">
-                      {tpl.name}
-                    </CardTitle>
-                    <CardDescription className="text-xs line-clamp-2 leading-relaxed text-muted-foreground">
-                      {tpl.description}
-                    </CardDescription>
-                  </CardHeader>
-
-                  <CardContent className="space-y-4 pt-0">
-                    {/* Highlighted Widgets Tags */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {tpl.highlightWidgets.map((w, idx) => (
-                        <span
-                          key={idx}
-                          className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted/70 text-slate-700 dark:text-slate-300 text-[10px] font-medium border border-border/50"
-                        >
-                          {w}
+                      {/* Stats line */}
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/50">
+                        <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
+                          <FileText className="size-3.5 text-emerald-600" />
+                          {fieldCount} field{fieldCount === 1 ? '' : 's'}
                         </span>
-                      ))}
-                    </div>
+                        {widgetCount > 0 && (
+                          <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
+                            <Sparkles className="size-3 text-emerald-600" />
+                            {widgetCount} widget{widgetCount === 1 ? '' : 's'}
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/50">
-                      <span className="flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300">
-                        <FileText className="size-3.5 text-emerald-600" />
-                        {tpl.fields.length} Configured Fields
-                      </span>
-                    </div>
+                      {/* Action buttons */}
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenPreview(tpl)}
+                          className="h-8 text-xs font-semibold gap-1.5 hover:bg-muted/80"
+                        >
+                          <Eye className="size-3.5" />
+                          <span>Preview</span>
+                        </Button>
 
-                    {/* Action Buttons */}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenPreview(tpl)}
-                        className="h-8 text-xs font-semibold gap-1.5 hover:bg-muted/80"
-                      >
-                        <Eye className="size-3.5" />
-                        <span>Preview</span>
-                      </Button>
-
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleOpenPreview(tpl)}
-                        className="h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
-                      >
-                        <span>Select</span>
-                        <ChevronRight className="size-3.5" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleOpenPreview(tpl)}
+                          className="h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                        >
+                          <span>Select</span>
+                          <ChevronRight className="size-3.5" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ════ TEMPLATE PREVIEW & CONFIRMATION MODAL ════ */}
@@ -731,7 +570,7 @@ export function TemplateExplorer({
               {previewTemplate?.name}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              {previewTemplate?.description}
+              {previewTemplate?.shortDescription}
             </DialogDescription>
           </DialogHeader>
 
@@ -764,11 +603,15 @@ export function TemplateExplorer({
                     <div className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border bg-background cursor-pointer hover:border-emerald-500/60 transition-colors">
                       <RadioGroupItem value="replace" id="mode-replace" className="mt-0.5" />
                       <div className="space-y-0.5">
-                        <label htmlFor="mode-replace" className="font-semibold text-foreground cursor-pointer">
+                        <label
+                          htmlFor="mode-replace"
+                          className="font-semibold text-foreground cursor-pointer"
+                        >
                           Replace existing form
                         </label>
                         <p className="text-[10px] text-muted-foreground">
-                          Overwrites the current {currentFieldCount} field(s) on your canvas with this template.
+                          Overwrites the current {currentFieldCount} field(s) on your canvas with
+                          this template.
                         </p>
                       </div>
                     </div>
@@ -776,11 +619,15 @@ export function TemplateExplorer({
                     <div className="flex items-start gap-2.5 p-2.5 rounded-lg border border-border bg-background cursor-pointer hover:border-emerald-500/60 transition-colors">
                       <RadioGroupItem value="append" id="mode-append" className="mt-0.5" />
                       <div className="space-y-0.5">
-                        <label htmlFor="mode-append" className="font-semibold text-foreground cursor-pointer">
+                        <label
+                          htmlFor="mode-append"
+                          className="font-semibold text-foreground cursor-pointer"
+                        >
                           Append to existing form
                         </label>
                         <p className="text-[10px] text-muted-foreground">
-                          Keeps existing {currentFieldCount} field(s) and appends this template's {previewTemplate?.fields.length} fields at the end.
+                          Keeps existing {currentFieldCount} field(s) and appends this template&rsquo;s{' '}
+                          {previewFieldCount} fields at the end.
                         </p>
                       </div>
                     </div>
@@ -792,18 +639,28 @@ export function TemplateExplorer({
               <div className="space-y-2 pt-2 border-t border-border">
                 <Label className="text-xs font-semibold text-foreground">Template Specs</Label>
                 <div className="bg-muted/50 rounded-lg p-3 space-y-2 text-xs text-muted-foreground border border-border/60">
-                  <div className="flex justify-between">
-                    <span>Category:</span>
-                    <span className="font-semibold text-foreground">{previewTemplate?.categoryLabel}</span>
+                  <div className="flex justify-between gap-3">
+                    <span className="shrink-0">Categories:</span>
+                    <span className="font-semibold text-foreground text-right">
+                      {previewTemplate?.categories.map((c) => getCategoryLabel(c)).join(', ')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="shrink-0">Industries:</span>
+                    <span className="font-semibold text-foreground text-right">
+                      {previewTemplate?.industries.map((i) => getIndustryLabel(i)).join(', ')}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Total Fields:</span>
-                    <span className="font-semibold text-foreground">{previewTemplate?.fields.length} Questions</span>
+                    <span className="font-semibold text-foreground">
+                      {previewFieldCount} Questions
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Widgets Included:</span>
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      {previewTemplate?.fields.filter((f) => !!f.widgetType).length} Widgets
+                      {previewWidgetCount} Widgets
                     </span>
                   </div>
                 </div>
@@ -821,8 +678,8 @@ export function TemplateExplorer({
                 <div className="bg-background rounded-xl p-5 border border-border shadow-xs">
                   <FormRuntimeRenderer
                     schema={previewSchema}
-                    isPreview={true}
-                    onAnswerChange={() => {}}
+                    formName={customFormTitle || previewTemplate?.name || 'Template Preview'}
+                    previewMode
                   />
                 </div>
               ) : null}
@@ -854,6 +711,78 @@ export function TemplateExplorer({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─── Sidebar/strip button helpers ────────────────────────────────────────────
+
+function CategoryButton({
+  active,
+  onClick,
+  label,
+  count,
+  featured,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  featured?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors text-left',
+        active
+          ? 'bg-emerald-600 text-white shadow-xs'
+          : 'text-muted-foreground hover:text-foreground hover:bg-muted/70',
+      )}
+    >
+      <span className={cn('truncate', featured && 'flex items-center gap-1')}>{label}</span>
+      <span
+        className={cn(
+          'text-[10px] px-1.5 py-0.2 rounded-full font-bold shrink-0',
+          active ? 'bg-white/20 text-white' : 'bg-background/80 text-muted-foreground',
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function CategoryChip({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5',
+        active
+          ? 'bg-emerald-600 text-white shadow-xs'
+          : 'bg-muted/70 text-muted-foreground hover:text-foreground hover:bg-muted',
+      )}
+    >
+      <span>{label}</span>
+      <span
+        className={cn(
+          'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+          active ? 'bg-white/20 text-white' : 'bg-background/80 text-muted-foreground',
+        )}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
 

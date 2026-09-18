@@ -166,6 +166,63 @@ export function FormBuilderView() {
     setShowCreateDialog(true);
   };
 
+  // ─── T1.6 — Template pre-population from dashboard ──────────────────────
+  // When the user picks a template from the dashboard's "Browse Templates"
+  // dialog, the template id is stashed in sessionStorage. On mount, we check
+  // for it and pre-populate formData with the template's fields before
+  // opening the studio — so the user lands in the builder with the template
+  // already loaded.
+  useEffect(() => {
+    try {
+      const pendingId = sessionStorage.getItem('pendingTemplateId');
+      if (!pendingId) return;
+      // Consume the id immediately so a refresh doesn't re-apply it.
+      sessionStorage.removeItem('pendingTemplateId');
+
+      // Dynamically import to avoid pulling the registry into the bundle
+      // for users who never use templates.
+      import('@/lib/forms/templates').then(({ getTemplateSync }) => {
+        const template = getTemplateSync(pendingId);
+        if (!template) {
+          console.warn(`[form-builder-view] Template '${pendingId}' not found in registry.`);
+          return;
+        }
+        // Map template FormField[] → builder FormField[] (same as handleApplyTemplate)
+        const templateFields = template.schema.fields.map((f, idx) => ({
+          id: `tpl-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          label: f.label,
+          type: f.widgetType ? 'control_widget' : f.type,
+          required: f.required ?? false,
+          placeholder: f.placeholder || '',
+          helpText: f.helpText || f.description || '',
+          width: f.width || 'full',
+          widgetType: f.widgetType,
+          widgetConfig: f.widgetConfig as Record<string, unknown> | undefined,
+          options: f.options?.map((opt) =>
+            typeof opt === 'string' ? opt : opt.label,
+          ),
+        }));
+        setFormData({
+          name: template.name,
+          description: template.shortDescription,
+          type: 'lead_capture',
+          status: 'active',
+          fields: templateFields,
+          submissionActions: getDefaultActions('lead_capture'),
+          fieldMappings: [],
+          welcomeMessage: '',
+          completionMessage: template.schema.settings.successMessage || '',
+        });
+        setEditMode(false);
+        setEditFormId(null);
+        setActiveTab('details');
+        setShowCreateDialog(true);
+      });
+    } catch {
+      // sessionStorage unavailable — non-fatal.
+    }
+  }, []);
+
   const handleOpenEdit = (form: FormItem) => {
     setEditMode(true);
     setEditFormId(form.id);
