@@ -719,6 +719,11 @@ export function TemplatesGalleryClient({
             style={{ paddingTop: 0 }}
             className="!max-w-[1280px] sm:!max-w-[1280px] lg:!max-w-[1320px] w-[96vw] max-h-[94vh] flex flex-col !p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900 relative"
           >
+            <DialogHeader className="sr-only">
+              <DialogTitle>{previewTemplate.name}</DialogTitle>
+              <DialogDescription>{previewTemplate.shortDescription || 'Form template preview'}</DialogDescription>
+            </DialogHeader>
+
             {/* Jotform Floating Navigation Arrows (Desktop Fixed / Lateral) */}
             <button
               type="button"

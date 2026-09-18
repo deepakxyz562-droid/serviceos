@@ -410,43 +410,64 @@ export function FormRuntimeRenderer({
       )}
 
       <Card
-        className="shadow-xl border border-slate-200/90 dark:border-slate-800 overflow-hidden transition-all duration-300"
+        className="shadow-xl border border-slate-200/90 dark:border-slate-800 overflow-hidden transition-all duration-300 bg-white dark:bg-slate-900 rounded-3xl"
         style={{
           borderRadius,
           backgroundColor,
           color: textColor,
         }}
       >
-        {/* Header */}
+        {/* Top Accent Bar */}
         <div
-          className="p-6 sm:p-7 text-white transition-all shadow-sm"
-          style={{
-            background: `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)`,
-          }}
-        >
+          className="h-1.5 w-full transition-all"
+          style={{ backgroundColor: primaryColor }}
+        />
+
+        {/* Header */}
+        <div className="p-6 sm:p-8 pb-4 border-b border-border/40">
           {branding?.businessName && (
-            <p className="text-[10px] uppercase font-extrabold tracking-wider opacity-90">
+            <p
+              className="text-[10px] uppercase font-extrabold tracking-wider mb-1"
+              style={{ color: primaryColor }}
+            >
               {branding.businessName}
             </p>
           )}
-          <h1 className="text-xl sm:text-2xl font-black mt-1 leading-tight">{formName}</h1>
+          <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
+            {formName}
+          </h1>
           {formDescription && (
-            <p className="text-xs opacity-90 mt-1.5 leading-relaxed max-w-lg">{formDescription}</p>
+            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
+              {formDescription}
+            </p>
           )}
 
-          {/* Progress Bar for multi-step */}
+          {/* Stepper Progress for multi-step forms */}
           {steps.length > 1 && (
-            <div className="mt-5 pt-3 border-t border-white/20">
-              <div className="flex justify-between text-[11px] font-semibold mb-1.5 opacity-95">
-                <span>
-                  Step {currentStepIndex + 1} of {steps.length}: {currentStep.title}
+            <div className="mt-5 pt-4 border-t border-border/50">
+              <div className="flex items-center justify-between gap-4 mb-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="size-5 rounded-md text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    {currentStepIndex + 1}
+                  </span>
+                  <span className="text-xs font-bold text-foreground truncate max-w-xs">
+                    {currentStep.title}
+                  </span>
+                </div>
+                <span className="text-[11px] font-semibold text-muted-foreground">
+                  Step {currentStepIndex + 1} of {steps.length} ({Math.round(((currentStepIndex + 1) / steps.length) * 100)}%)
                 </span>
-                <span>{Math.round(((currentStepIndex + 1) / steps.length) * 100)}%</span>
               </div>
-              <div className="h-2 w-full bg-black/25 rounded-full overflow-hidden shadow-inner">
+              <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
                 <div
-                  className="h-full bg-white rounded-full transition-all duration-400 shadow-sm"
-                  style={{ width: `${((currentStepIndex + 1) / steps.length) * 100}%` }}
+                  className="h-full rounded-full transition-all duration-300 shadow-xs"
+                  style={{
+                    width: `${((currentStepIndex + 1) / steps.length) * 100}%`,
+                    backgroundColor: primaryColor,
+                  }}
                 />
               </div>
             </div>
@@ -454,8 +475,8 @@ export function FormRuntimeRenderer({
         </div>
 
         {/* Content */}
-        <CardContent className="p-6 sm:p-7">
-          <form onSubmit={handleSubmit} className="space-y-5">
+        <CardContent className="p-6 sm:p-8 pt-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <input type="text" name="_hp" className="hidden" tabIndex={-1} autoComplete="off" />
 
             {/* ─── Card-by-Card Mode: render ONE field at a time ─────────────── */}

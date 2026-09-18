@@ -89,9 +89,9 @@ export function StudioFocusCanvas({
 }: StudioFocusCanvasProps) {
   const fields = formData.fields || [];
   const isMultiStep = formData.isMultiStep ?? true;
-  const primaryColor = formData.theme?.primaryColor || formData.primaryColor || '#9333ea';
-  const backgroundColor = formData.theme?.backgroundColor || '#faf5ff';
-  const textColor = formData.theme?.textColor || '#581c87';
+  const primaryColor = formData.theme?.primaryColor || formData.primaryColor || '#059669';
+  const backgroundColor = formData.theme?.backgroundColor || '#f8fafc';
+  const textColor = formData.theme?.textColor || '#0f172a';
 
   // Normalize steps
   const steps = useMemo(() => {

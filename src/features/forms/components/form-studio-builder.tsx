@@ -310,7 +310,7 @@ export function FormStudioBuilder({
         theme: {
           ...(prev.theme || {}),
           ...(template.schema.theme || {}),
-          primaryColor: template.schema.theme?.primaryColor || prev.primaryColor || '#9333ea',
+          primaryColor: template.schema.theme?.primaryColor || prev.primaryColor || '#059669',
         } as any,
       };
     });
