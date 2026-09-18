@@ -101,34 +101,7 @@ export default function TemplatesGalleryPage() {
         </div>
       </header>
 
-      <section className="border-b border-border bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <h2 className="text-sm font-semibold text-foreground mb-3">Browse by Category</h2>
-          <div className="flex flex-wrap gap-2">
-            {categories.map((cat) => (
-              <Link key={cat.id} href={`/templates/${cat.id}`} className="inline-flex items-center gap-1 text-xs bg-background border border-border hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 px-3 py-1.5 rounded-full transition">
-                {cat.label}
-                <span className="text-muted-foreground font-medium">({categoryCounts.get(cat.id) || 120}+)</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <h2 className="text-sm font-semibold text-foreground mb-3">Browse by Industry</h2>
-          <div className="flex flex-wrap gap-2">
-            {industries.slice(0, 30).map((ind) => (
-              <Link key={ind.id} href={`/templates/industries/${ind.id}`} className="inline-flex items-center gap-1 text-xs bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-full transition">
-                {ind.label}
-                <span className="opacity-70 font-medium">({industryCounts.get(ind.id) || 85}+)</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
+      {/* Main Two-Column Gallery with Sticky Sidebar & Instant Preview */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         <TemplatesGalleryClient templates={allTemplates} />
       </main>
