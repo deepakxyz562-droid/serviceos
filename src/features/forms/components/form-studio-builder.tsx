@@ -1067,8 +1067,8 @@ export function FormStudioBuilder({
                           key={field.id}
                           onClick={() => {
                             setSelectedFieldId(field.id);
-                            if (inspectorMode === 'ai_builder') {
-                              setInspectorMode('properties');
+                            if (inspectorMode === 'ai_builder' || !field.widgetType) {
+                              setInspectorMode(field.widgetType ? 'widget_settings' : 'properties');
                             }
                           }}
                           className={cn(
@@ -1263,32 +1263,49 @@ export function FormStudioBuilder({
                 !propertiesOpen && '-mr-72 lg:-mr-80'
               )}
             >
-              {/* 2-Mode Inspector Header (✨ AI Builder | ⚙️ Properties) + Close Button */}
+              {/* Dynamic Multi-Mode Inspector Header (🪄 Widget Settings | ⚙️ Properties | ✨ AI Builder) */}
               <div className="p-2 border-b border-border/80 bg-muted/40 flex items-center gap-1 shrink-0">
-                <div className="grid grid-cols-2 gap-1 flex-1">
-                  <button
-                    type="button"
-                    onClick={() => setInspectorMode('ai_builder')}
-                    className={cn(
-                      'py-1.5 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
-                      inspectorMode === 'ai_builder' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                    title="AI Form Builder & Co-Pilot"
-                  >
-                    <Sparkles className="size-3.5 text-emerald-600" />
-                    <span>AI Builder</span>
-                  </button>
+                <div className={cn(
+                  'grid gap-1 flex-1',
+                  selectedField?.widgetType ? 'grid-cols-3' : 'grid-cols-2'
+                )}>
+                  {selectedField?.widgetType && (
+                    <button
+                      type="button"
+                      onClick={() => setInspectorMode('widget_settings')}
+                      className={cn(
+                        'py-1.5 text-[10px] sm:text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
+                        inspectorMode === 'widget_settings' ? 'bg-background text-purple-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                      )}
+                      title="Widget Settings (JotForm-style)"
+                    >
+                      <Wand2 className="size-3.5 text-purple-600" />
+                      <span>Settings</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setInspectorMode('properties')}
                     className={cn(
-                      'py-1.5 text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
+                      'py-1.5 text-[10px] sm:text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
                       inspectorMode === 'properties' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
                     )}
                     title="Field Properties (JotForm-style)"
                   >
                     <Settings className="size-3.5" />
                     <span>Properties</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectorMode('ai_builder')}
+                    className={cn(
+                      'py-1.5 text-[10px] sm:text-[11px] font-bold rounded-md transition-all flex items-center justify-center gap-1',
+                      inspectorMode === 'ai_builder' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                    title="AI Form Builder & Co-Pilot"
+                  >
+                    <Sparkles className="size-3.5 text-emerald-600" />
+                    <span>AI Builder</span>
                   </button>
                 </div>
                 <Button
@@ -1303,9 +1320,9 @@ export function FormStudioBuilder({
                 </Button>
               </div>
 
-              <ScrollArea className="flex-1 min-h-0 h-full p-4 overflow-y-auto">
-                {/* ════ MODE A: AI FORM BUILDER & CO-PILOT (✨) ════ */}
-                {inspectorMode === 'ai_builder' ? (
+              {/* Inspector Body */}
+              {inspectorMode === 'ai_builder' ? (
+                <ScrollArea className="flex-1 min-h-0 h-full p-4 overflow-y-auto">
                   <div className="space-y-4 pb-28">
                     <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-500/30 space-y-2">
                       <div className="flex items-center gap-2">
@@ -1415,33 +1432,32 @@ export function FormStudioBuilder({
                       </div>
                     </div>
                   </div>
-                ) : selectedField ? (
-                  <div className="space-y-4 pb-28">
-                    {/* ════ PROPERTIES & WIDGET SETTINGS PANEL (schema-driven — JotForm-style) ════ */}
-                    {(inspectorMode === 'properties' || inspectorMode === 'widget_settings') && (
-                      <UnifiedFieldInspector
-                        field={selectedField as unknown as Record<string, any>}
-                        allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
-                        mode={inspectorMode}
-                        onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
-                        onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
-                        onDuplicate={() => {
-                          const idx = formData.fields.findIndex((f) => f.id === selectedField.id);
-                          if (idx >= 0) handleDuplicateField(selectedField, idx);
-                        }}
-                        onClose={() => setPropertiesOpen(false)}
-                        onUpdate={() => { onSave(); }}
-                      />
-                    )}
-
-                  </div>
-                ) : (
-                  <div className="text-center py-16 pb-28 space-y-2 text-muted-foreground">
-                    <SlidersHorizontal className="size-8 mx-auto opacity-30" />
-                    <p className="text-xs">Select any field or widget on the canvas to configure settings.</p>
-                  </div>
-                )}
-              </ScrollArea>
+                </ScrollArea>
+              ) : selectedField ? (
+                <div className="flex-1 min-h-0 flex flex-col h-full">
+                  {/* ════ PROPERTIES & WIDGET SETTINGS PANEL (schema-driven — JotForm-style) ════ */}
+                  {(inspectorMode === 'properties' || inspectorMode === 'widget_settings') && (
+                    <UnifiedFieldInspector
+                      field={selectedField as unknown as Record<string, any>}
+                      allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
+                      mode={inspectorMode}
+                      onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
+                      onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
+                      onDuplicate={() => {
+                        const idx = formData.fields.findIndex((f) => f.id === selectedField.id);
+                        if (idx >= 0) handleDuplicateField(selectedField, idx);
+                      }}
+                      onClose={() => setPropertiesOpen(false)}
+                      onUpdate={() => { onSave(); }}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-16 px-4 space-y-2 text-muted-foreground">
+                  <SlidersHorizontal className="size-8 mx-auto opacity-30" />
+                  <p className="text-xs">Select any field or widget on the canvas to configure settings.</p>
+                </div>
+              )}
             </aside>
           </div>
         )}

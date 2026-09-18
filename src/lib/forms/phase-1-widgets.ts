@@ -164,13 +164,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'confirmation', label: 'Require confirmation', type: 'toggle_with_description', group: 'field_specific', default: false },
     { key: 'blockFreeDomains', label: 'Block free domains (gmail/yahoo)', type: 'toggle_with_description', group: 'field_specific', default: false },
   ]],
-  ['phone_widget', 'Phone Number', 'contact', 'Phone', 'International phone input', '', 'free', [
-    { key: 'defaultCountry', label: 'Default country', type: 'text', group: 'field_specific', default: 'US' },
-    { key: 'validateMobile', label: 'Validate as mobile', type: 'toggle_with_description', group: 'field_specific', default: false },
-    { key: 'format', label: 'Display format', type: 'select', group: 'field_specific', default: 'international', options: [
-      { label: 'International', value: 'international' }, { label: 'National', value: 'national' }, { label: 'E.164', value: 'e164' },
-    ] },
-  ]],
   ['full_name', 'Full Name (First/Last)', 'contact', 'User', 'First + last name combined', '', 'free', [
     { key: 'middleName', label: 'Include middle name', type: 'toggle_with_description', group: 'field_specific', default: false },
     { key: 'prefix', label: 'Include prefix (Mr/Ms/Dr)', type: 'toggle_with_description', group: 'field_specific', default: false },

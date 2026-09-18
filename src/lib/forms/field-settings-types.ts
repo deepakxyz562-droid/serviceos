@@ -35,7 +35,8 @@ export type SettingFieldType =
   | 'label_with_toggle'      // Field Label text input + enable/disable toggle
   | 'field_selector'         // dropdown listing all form fields (for Customer Email, Custom Data)
   | 'calculation_values_editor' // Calculation values matrix per option (JotForm pattern)
-  | 'bulk_options_editor';   // bulk options paste / text editor
+  | 'bulk_options_editor'   // bulk options paste / text editor
+  | 'range';                 // slider / range input with numeric value display (JotForm pattern)
 
 export type SettingGroup = 'general' | 'advanced' | 'field_specific' | 'survey';
 

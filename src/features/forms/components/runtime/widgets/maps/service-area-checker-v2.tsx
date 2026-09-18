@@ -1,48 +1,107 @@
 'use client';
 
-import React, { useState } from 'react';
-import { MapPin, CheckCircle2, AlertTriangle, Loader2, Navigation, Building2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Circle, Marker, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import { Search, Info, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { WidgetProps, str, num, bool } from '../widget-props';
 
-interface ServiceAreaResult {
+// Leaflet default icon fix
+delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
+import 'leaflet/dist/leaflet.css';
+
+export interface ServiceAreaResult {
+  address: string;
   inArea: boolean;
-  searchedAddress: string;
-  matchedZone?: string;
-  distanceKm?: number;
+  distance: number;
+  unit: string;
   notes?: string;
 }
 
+/** Component to handle flying/fitting map view when center or user location changes */
+function MapRecenter({ center, radiusMeters }: { center: [number, number]; radiusMeters: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, radiusMeters > 50000 ? 9 : radiusMeters > 20000 ? 10 : 11);
+  }, [center, radiusMeters, map]);
+  return null;
+}
+
 /**
- * Service Area Checker v2.
- * Uses Nominatim (free, CORS) for geocoding the user address, then Haversine
- * distance against one or more configured zones. If any zone's center is
- * within `radiusKm` (or the address's postcode matches `allowedPostcodes`),
- * the address is in service area.
+ * Service Area Checker — matches Jotform screenshot and behavior.
+ * Features:
+ *  - Configurable address placeholder
+ *  - OpenStreetMap tiles with Leaflet Circle representing the service area
+ *  - Live geocoding via Nominatim
+ *  - Inside / Outside verification against service radius
+ *  - Helper message & info banner when service center is unconfigured
  */
 export function ServiceAreaCheckerV2({ value, onChange, config, disabled, field }: WidgetProps) {
-  const ariaLabel = str(field?.label, 'Service area checker v2');
-  const zoneListRaw = config.zones;
-  type ZoneCfg = { label?: string; lat?: number; lng?: number; postcode?: string };
-  const zones: ZoneCfg[] = Array.isArray(zoneListRaw)
-    ? (zoneListRaw as ZoneCfg[])
-    : [{ label: str(config.zoneLabel, 'Main zone'), lat: num(config.centerLat, 40.7128), lng: num(config.centerLng, -74.006), postcode: str(config.centerPostcode, '') }];
-  const radiusKm = num(config.radiusKm, 25);
-  const allowedPostcodes: string[] = Array.isArray(config.allowedPostcodes)
-    ? (config.allowedPostcodes as string[])
-    : [];
-  const allowGps = bool(config.allowGps, true);
+  const serviceCenterAddress = str(config.serviceCenterAddress, str(config.centerAddress, ''));
+  const addressPlaceholder = str(config.addressPlaceholder, 'Street, city, postal code');
+  const serviceRadius = num(config.serviceRadius, num(config.radiusMiles, 30));
+  const distanceUnit = str(config.distanceUnit, 'miles') === 'kilometers' ? 'kilometers' : 'miles';
+  const outsideAreaMessage = str(
+    config.outsideAreaMessage,
+    str(config.outOfAreaMessage, 'We cannot serve this address. Please enter another address or contact us for help.')
+  );
+  const showDistanceToRespondent = bool(config.showDistanceToRespondent, true);
 
   const existing: ServiceAreaResult | null =
     value && typeof value === 'object' ? (value as ServiceAreaResult) : null;
-  const [query, setQuery] = useState(existing?.searchedAddress ?? '');
+
+  const [addressInput, setAddressInput] = useState(existing?.address ?? '');
   const [loading, setLoading] = useState(false);
+  const [centerCoords, setCenterCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [result, setResult] = useState<ServiceAreaResult | null>(existing);
   const [error, setError] = useState<string | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
-  const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371;
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Geocode service center address
+  useEffect(() => {
+    if (!serviceCenterAddress.trim()) {
+      setCenterCoords(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchCenter = async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
+            serviceCenterAddress.trim()
+          )}`
+        );
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data) && data[0]) {
+          setCenterCoords({
+            lat: parseFloat(data[0].lat),
+            lng: parseFloat(data[0].lon),
+          });
+        }
+      } catch {
+        /* ignore geocode failure */
+      }
+    };
+    fetchCenter();
+    return () => {
+      cancelled = true;
+    };
+  }, [serviceCenterAddress]);
+
+  const haversineDist = (lat1: number, lon1: number, lat2: number, lon2: number, unit: 'miles' | 'kilometers') => {
+    const R = unit === 'miles' ? 3958.8 : 6371;
     const toRad = (d: number) => (d * Math.PI) / 180;
     const dLat = toRad(lat2 - lat1);
     const dLon = toRad(lon2 - lon1);
@@ -52,152 +111,161 @@ export function ServiceAreaCheckerV2({ value, onChange, config, disabled, field 
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  const check = async (lat: number, lng: number, label: string, postcode?: string) => {
-    let best: { zone: ZoneCfg; distKm: number } | null = null;
-    for (const z of zones) {
-      if (typeof z.lat === 'number' && typeof z.lng === 'number') {
-        const d = haversineKm(lat, lng, z.lat, z.lng);
-        if (!best || d < best.distKm) best = { zone: z, distKm: d };
-      }
+  const handleCheckAddress = async () => {
+    if (!addressInput.trim() || disabled) return;
+    if (!centerCoords) {
+      setError('Please configure a valid Service Center Address in the widget settings first.');
+      return;
     }
-    const matchedPostcode = allowedPostcodes.length > 0 && postcode
-      ? allowedPostcodes.find((p) => p === postcode)
-      : undefined;
-    const insideByDistance = best ? best.distKm <= radiusKm : false;
-    const inside = insideByDistance || !!matchedPostcode;
 
-    const out: ServiceAreaResult = {
-      inArea: inside,
-      searchedAddress: label,
-      matchedZone: best?.zone.label ?? (matchedPostcode ? `Postcode ${matchedPostcode}` : undefined),
-      distanceKm: best ? Number(best.distKm.toFixed(1)) : undefined,
-      notes: inside
-        ? matchedPostcode
-          ? 'Matched allowed postcode'
-          : `Within ${radiusKm} km of service center`
-        : best
-          ? `${best.distKm.toFixed(1)} km from nearest zone (limit ${radiusKm} km)`
-          : 'No configured zone could be matched',
-    };
-    setResult(out);
-    onChange(out);
-  };
-
-  const onSearch = async () => {
-    if (!query.trim() || disabled) return;
     setLoading(true);
     setError(null);
+
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=1&q=${encodeURIComponent(query.trim())}`,
-        { headers: { Accept: 'application/json' } },
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
+          addressInput.trim()
+        )}`
       );
-      const json = await res.json();
-      if (Array.isArray(json) && json[0]) {
-        await check(
-          parseFloat(json[0].lat),
-          parseFloat(json[0].lon),
-          json[0].display_name ?? query,
-          json[0].address?.postcode,
-        );
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]) {
+        const uLat = parseFloat(data[0].lat);
+        const uLng = parseFloat(data[0].lon);
+        setUserCoords({ lat: uLat, lng: uLng });
+
+        const dist = haversineDist(centerCoords.lat, centerCoords.lng, uLat, uLng, distanceUnit);
+        const roundedDist = Number(dist.toFixed(1));
+        const inArea = roundedDist <= serviceRadius;
+
+        const resData: ServiceAreaResult = {
+          address: data[0].display_name || addressInput,
+          inArea,
+          distance: roundedDist,
+          unit: distanceUnit,
+          notes: inArea ? undefined : outsideAreaMessage,
+        };
+        setResult(resData);
+        onChange(resData);
       } else {
-        setError('Address not found.');
+        setError('Address not found. Please verify and try again.');
       }
     } catch {
-      setError('Lookup failed.');
+      setError('Failed to check address. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const onGps = () => {
-    if (!navigator.geolocation || disabled) return;
-    setLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        await check(pos.coords.latitude, pos.coords.longitude, 'My GPS location');
-        setLoading(false);
-      },
-      () => {
-        setLoading(false);
-        setError('GPS unavailable.');
-      },
-      { timeout: 10000 },
-    );
-  };
+  const radiusInMeters = distanceUnit === 'miles' ? serviceRadius * 1609.34 : serviceRadius * 1000;
+  const defaultCenter: [number, number] = centerCoords ? [centerCoords.lat, centerCoords.lng] : [20, 0];
+  const defaultZoom = centerCoords ? (radiusInMeters > 50000 ? 9 : 10) : 2;
 
   return (
-    <div className="space-y-3" aria-label={ariaLabel}>
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <MapPin className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), onSearch())}
-            placeholder="Enter your address or ZIP..."
-            className="pl-9 text-xs"
-            disabled={disabled || loading}
-            aria-label={`${ariaLabel} address`}
-          />
-        </div>
-        <Button
+    <div className="space-y-3 font-sans text-xs">
+      {/* Address Search Input */}
+      <div className="relative">
+        <Input
+          value={addressInput}
+          onChange={(e) => setAddressInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleCheckAddress())}
+          placeholder={addressPlaceholder}
+          disabled={disabled || loading}
+          className="pr-20 h-10 text-xs bg-background/90 border-border/80 rounded-lg shadow-xs"
+        />
+        <button
           type="button"
-          variant="outline"
-          size="sm"
-          onClick={onSearch}
-          disabled={disabled || loading || !query.trim()}
-          className="text-xs shrink-0"
+          onClick={handleCheckAddress}
+          disabled={disabled || loading || !addressInput.trim()}
+          className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-md text-[11px] transition-colors flex items-center gap-1 shadow-xs"
         >
-          {loading ? <Loader2 className="size-3.5 animate-spin" /> : 'Check'}
-        </Button>
-        {allowGps && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={onGps}
-            disabled={disabled || loading}
-            className="text-xs shrink-0 gap-1.5"
+          {loading ? <Loader2 className="size-3 animate-spin" /> : <Search className="size-3" />}
+          <span>Check</span>
+        </button>
+      </div>
+
+      {/* Interactive Map */}
+      <div className="h-64 sm:h-72 w-full rounded-lg overflow-hidden border border-border/80 shadow-xs relative bg-muted/20">
+        {isClient ? (
+          <MapContainer
+            center={defaultCenter}
+            zoom={defaultZoom}
+            scrollWheelZoom={false}
+            className="h-full w-full z-0"
+            style={{ height: '100%', width: '100%' }}
           >
-            <Navigation className="size-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">GPS</span>
-          </Button>
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {centerCoords && (
+              <>
+                <MapRecenter center={[centerCoords.lat, centerCoords.lng]} radiusMeters={radiusInMeters} />
+                <Circle
+                  center={[centerCoords.lat, centerCoords.lng]}
+                  radius={radiusInMeters}
+                  pathOptions={{
+                    color: '#3b82f6',
+                    fillColor: '#60a5fa',
+                    fillOpacity: 0.2,
+                    weight: 2,
+                  }}
+                />
+                <Marker position={[centerCoords.lat, centerCoords.lng]} />
+              </>
+            )}
+            {userCoords && <Marker position={[userCoords.lat, userCoords.lng]} />}
+          </MapContainer>
+        ) : (
+          <div className="h-full w-full flex items-center justify-center text-xs text-muted-foreground">
+            Loading map...
+          </div>
         )}
       </div>
 
-      <p className="text-[10px] text-muted-foreground">
-        Service radius: {radiusKm} km · {allowedPostcodes.length > 0 ? `${allowedPostcodes.length} allowed postcodes` : 'no postcode allowlist'} · {zones.length} zone(s)
+      {/* Footnote */}
+      <p className="text-[11px] text-muted-foreground">
+        Your address is checked against the service area before you submit.
       </p>
 
-      {error && <p className="text-[11px] text-destructive">{error}</p>}
+      {/* Info notice when unconfigured (Jotform pattern) */}
+      {!serviceCenterAddress && (
+        <div className="flex items-center gap-2.5 p-3 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200 text-xs">
+          <Info className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>Add your Service Center Address in the widget settings to start checking addresses.</span>
+        </div>
+      )}
 
+      {/* Error message */}
+      {error && (
+        <p className="text-xs text-rose-500 font-medium px-1">{error}</p>
+      )}
+
+      {/* Result Card */}
       {result && (
         <div
-          className={`rounded-md border p-3 text-xs flex items-start gap-2.5 ${
+          className={`p-3 rounded-lg border text-xs flex items-start gap-2.5 transition-all ${
             result.inArea
-              ? 'border-emerald-300 bg-emerald-50/60 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'
-              : 'border-amber-300 bg-amber-50/60 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200'
+              ? 'border-emerald-300 bg-emerald-50/70 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200'
+              : 'border-rose-300 bg-rose-50/70 text-rose-900 dark:bg-rose-950/30 dark:text-rose-200'
           }`}
         >
           {result.inArea ? (
             <CheckCircle2 className="size-4 mt-0.5 text-emerald-600 shrink-0" />
           ) : (
-            <AlertTriangle className="size-4 mt-0.5 text-amber-600 shrink-0" />
+            <AlertTriangle className="size-4 mt-0.5 text-rose-600 shrink-0" />
           )}
-          <div className="space-y-0.5 flex-1">
-            <p className="font-semibold">
-              {result.inArea ? 'You are in our service area' : 'Outside service area'}
-              {result.matchedZone && ` — ${result.matchedZone}`}
+          <div className="space-y-1 flex-1">
+            <p className="font-bold text-xs">
+              {result.inArea ? 'You are within our service area!' : 'Outside our service area'}
             </p>
-            <p className="text-[11px] opacity-80 flex items-center gap-1">
-              <Building2 className="size-3" />
-              <span className="truncate">{result.searchedAddress}</span>
-            </p>
-            {result.distanceKm != null && (
-              <p className="text-[11px] opacity-80">{result.distanceKm} km from nearest zone</p>
+            {showDistanceToRespondent && result.distance != null && (
+              <p className="text-[11px] opacity-90">
+                Measured Distance: <span className="font-semibold">{result.distance} {result.unit}</span> (Allowed: {serviceRadius} {result.unit})
+              </p>
             )}
-            {result.notes && <p className="text-[10px] opacity-70">{result.notes}</p>}
+            {!result.inArea && result.notes && (
+              <p className="text-[11px] opacity-80 pt-0.5">{result.notes}</p>
+            )}
           </div>
         </div>
       )}
@@ -206,3 +274,4 @@ export function ServiceAreaCheckerV2({ value, onChange, config, disabled, field 
 }
 
 export default ServiceAreaCheckerV2;
+

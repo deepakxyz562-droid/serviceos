@@ -62,8 +62,11 @@ export function WidgetSettingsRenderer({
   onClose,
   onUpdate,
 }: WidgetSettingsRendererProps) {
-  const isWidgetSettingsMode = mode === 'widget_settings' || (Boolean(field.widgetType) && definition.category !== 'basic');
-  const [subTab, setSubTab] = useState<SubTab>(isWidgetSettingsMode ? 'field_specific' : 'general');
+  // If mode is explicitly 'widget_settings', show widget settings.
+  // If mode is explicitly 'properties', show question properties.
+  const isWidget = Boolean(field.widgetType) && definition.category !== 'basic';
+  const isWidgetSettingsMode = mode === 'widget_settings' && isWidget;
+  const [subTab, setSubTab] = useState<SubTab>('general');
   const [widgetTab, setWidgetTab] = useState<'general' | 'custom_css'>('general');
 
   const universalGeneral = UNIVERSAL_GENERAL_SETTINGS;
@@ -235,60 +238,48 @@ export function WidgetSettingsRenderer({
           </div>
         );
 
-      case 'icon_picker':
-      default:
-        return (
-          <div key={setting.key} className="space-y-1">
-            <Label className="text-[11px] font-semibold">{setting.label}</Label>
-            <Input
-              className="h-8 text-xs bg-background"
-              placeholder={setting.placeholder}
-              value={String(value ?? '')}
-              onChange={(e) => onChange(e.target.value)}
-            />
-          </div>
-        );
-
       // ─── Phase R2 — JotForm-style control types ───────────────────────────────
 
       case 'segmented':
         return (
-          <div key={setting.key} className="space-y-1">
+          <div key={setting.key} className="space-y-1.5">
             <Label className="text-[11px] font-semibold">{setting.label}</Label>
-            <div className="grid grid-flow-col auto-cols-fr gap-1 bg-muted/60 p-1 rounded-md border border-border/60">
+            <div className="grid grid-flow-col auto-cols-fr gap-1 bg-muted/60 p-1 rounded-lg border border-border/60">
               {setting.options?.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
                   onClick={() => onChange(opt.value)}
                   className={cn(
-                    'py-1.5 rounded text-[11px] font-semibold transition-all',
-                    String(value ?? '') === opt.value
-                      ? 'bg-background shadow-xs text-emerald-600'
+                    'py-1 rounded text-center text-xs font-medium transition-all',
+                    String(value ?? setting.default ?? '') === opt.value
+                      ? 'bg-background shadow-xs text-foreground font-semibold'
                       : 'text-muted-foreground hover:text-foreground',
                   )}
-                  aria-pressed={String(value ?? '') === opt.value}
                 >
                   {opt.label}
                 </button>
               ))}
             </div>
-            {/* "Set as form default" checkbox (JotForm pattern) */}
             {setting.setAsFormDefault && (
-              <label className="flex items-center gap-2 text-[10px] cursor-pointer mt-1">
+              <label className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground cursor-pointer select-none">
                 <input
                   type="checkbox"
-                  className="size-3 accent-emerald-600"
-                  aria-label="Set as form default"
+                  className="rounded border-border size-3.5 accent-emerald-600"
+                  checked={Boolean(field[`${setting.key}_form_default`])}
+                  onChange={(e) => onFieldChange(`${setting.key}_form_default`, e.target.checked)}
                 />
-                <span className="text-muted-foreground">Set as form default</span>
+                <span>Set as form default</span>
               </label>
             )}
             {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
           </div>
         );
 
-      case 'dimension':
+      case 'dimension': {
+        const numVal = value === '' || value === undefined || value === null
+          ? setting.default ?? ''
+          : Number(value);
         return (
           <div key={setting.key} className="space-y-1">
             <Label className="text-[11px] font-semibold">{setting.label}</Label>
@@ -296,53 +287,49 @@ export function WidgetSettingsRenderer({
               <Input
                 type="number"
                 className="h-8 text-xs bg-background flex-1"
-                value={value === '' || value === undefined || value === null ? '' : Number(value)}
+                placeholder={String(setting.default ?? '')}
+                value={numVal}
                 min={setting.min}
                 max={setting.max}
                 step={setting.step ?? 1}
                 onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
               />
-              {setting.unit && (
-                <span className="px-2.5 h-8 inline-flex items-center rounded-md border border-border/60 bg-muted/60 text-[10px] font-bold text-muted-foreground shrink-0">
-                  {setting.unit}
-                </span>
-              )}
+              <span className="text-[11px] font-mono font-semibold px-2.5 py-1.5 rounded-md bg-muted text-muted-foreground border border-border shrink-0">
+                {setting.unit ?? 'PX'}
+              </span>
             </div>
             {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
           </div>
         );
+      }
 
       case 'multi_checkbox': {
-        const selectedValues: string[] = Array.isArray(value)
-          ? (value as unknown[]).map((v) => String(v))
-          : (typeof value === 'string' && value ? value.split(',').map((s) => s.trim()) : []);
-        const toggle = (val: string) => {
-          const next = selectedValues.includes(val)
-            ? selectedValues.filter((v) => v !== val)
-            : [...selectedValues, val];
-          onChange(next);
+        const arrVal: string[] = Array.isArray(value) ? value : [];
+        const toggleVal = (v: string) => {
+          if (arrVal.includes(v)) {
+            onChange(arrVal.filter((x) => x !== v));
+          } else {
+            onChange([...arrVal, v]);
+          }
         };
         return (
-          <div key={setting.key} className="space-y-1">
+          <div key={setting.key} className="space-y-1.5">
             <Label className="text-[11px] font-semibold">{setting.label}</Label>
-            <div className="grid grid-cols-2 gap-1.5 p-2 rounded-md border border-border/60 bg-background">
-              {setting.options?.map((opt) => {
-                const checked = selectedValues.includes(opt.value);
-                return (
-                  <label key={opt.value} className="flex items-center gap-1.5 text-[11px] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggle(opt.value)}
-                      className="size-3.5 accent-emerald-600"
-                      aria-label={opt.label}
-                    />
-                    <span className={checked ? 'text-foreground font-medium' : 'text-muted-foreground'}>
-                      {opt.label}
-                    </span>
-                  </label>
-                );
-              })}
+            <div className="space-y-1 pt-0.5">
+              {setting.options?.map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-2 p-1.5 rounded border border-border/40 hover:bg-muted/40 cursor-pointer text-xs select-none"
+                >
+                  <input
+                    type="checkbox"
+                    className="rounded border-border size-3.5 accent-emerald-600"
+                    checked={arrVal.includes(opt.value)}
+                    onChange={() => toggleVal(opt.value)}
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))}
             </div>
             {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
           </div>
@@ -351,7 +338,7 @@ export function WidgetSettingsRenderer({
 
       case 'toggle_with_description':
         return (
-          <div key={setting.key} className="flex items-center justify-between p-2 border rounded-md bg-background gap-3">
+          <div key={setting.key} className="flex items-center justify-between p-2.5 border rounded-lg bg-background gap-3">
             <div className="min-w-0 flex-1">
               <Label className="text-[11px] font-semibold block">{setting.label}</Label>
               {setting.description && <p className="text-[10px] text-muted-foreground mt-0.5">{setting.description}</p>}
@@ -362,7 +349,7 @@ export function WidgetSettingsRenderer({
 
       case 'duplicate_button':
         return (
-          <div key={setting.key} className="space-y-1">
+          <div key={setting.key} className="space-y-1 pt-1">
             <Button
               type="button"
               variant="outline"
@@ -432,7 +419,7 @@ export function WidgetSettingsRenderer({
       case 'label_with_toggle': {
         const enabled = value === undefined ? setting.default !== false : Boolean(value);
         return (
-          <div key={setting.key} className="flex items-center justify-between p-2 border rounded-md bg-background gap-3">
+          <div key={setting.key} className="flex items-center justify-between p-2.5 border rounded-lg bg-background gap-3">
             <div className="min-w-0 flex-1">
               <Label className="text-[11px] font-semibold block">{setting.label}</Label>
               {setting.helpText && <p className="text-[10px] text-muted-foreground mt-0.5">{setting.helpText}</p>}
@@ -500,6 +487,44 @@ export function WidgetSettingsRenderer({
             onChange={onChange}
           />
         );
+
+      case 'range': {
+        const numVal = typeof value === 'number' ? value : Number(value || setting.default || 0);
+        return (
+          <div key={setting.key} className="space-y-1.5 p-2.5 rounded-lg border border-border/60 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold">{setting.label}</Label>
+              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-background border border-border">
+                {numVal}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={setting.min ?? 1}
+              max={setting.max ?? 1000}
+              step={setting.step ?? 1}
+              value={numVal}
+              onChange={(e) => onChange(Number(e.target.value))}
+              className="w-full accent-blue-600 h-1.5 bg-muted rounded-lg cursor-pointer"
+            />
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+      }
+
+      case 'icon_picker':
+      default:
+        return (
+          <div key={setting.key} className="space-y-1">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <Input
+              className="h-8 text-xs bg-background"
+              placeholder={setting.placeholder}
+              value={String(value ?? '')}
+              onChange={(e) => onChange(e.target.value)}
+            />
+          </div>
+        );
     }
   };
 
@@ -518,98 +543,100 @@ export function WidgetSettingsRenderer({
   const hasSurveyTab = surveySpecific.length > 0;
 
   return (
-    <div className="space-y-3">
-      {/* ════ JOTFORM WIDGET SETTINGS HERO CARD ════ */}
-      {isWidgetSettingsMode ? (
-        <div className="space-y-3">
-          {/* Widget Hero Card */}
-          <div className="rounded-xl border border-border/70 bg-muted/30 p-3.5 flex items-start gap-3 shadow-xs">
-            <div className="size-9 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center p-2 shrink-0 border border-emerald-600/20">
-              <span className="font-bold text-xs">🧩</span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <h4 className="font-bold text-xs text-foreground truncate">{definition.name}</h4>
-                {definition.badge && (
-                  <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 font-bold">
-                    {definition.badge}
-                  </Badge>
-                )}
+    <div className="flex flex-col h-full min-h-0 w-full">
+      {/* ════ HEADER / TABS (shrink-0) ════ */}
+      <div className="p-3 pb-2 border-b border-border/60 shrink-0 space-y-2.5 bg-background">
+        {isWidgetSettingsMode ? (
+          <div className="space-y-2.5">
+            {/* Widget Hero Card */}
+            <div className="rounded-xl border border-border/70 bg-muted/30 p-3 flex items-start gap-2.5 shadow-xs">
+              <div className="size-8 rounded-lg bg-purple-600/10 text-purple-600 dark:text-purple-400 flex items-center justify-center p-1.5 shrink-0 border border-purple-600/20">
+                <span className="font-bold text-xs">🧩</span>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                {definition.description}
-              </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <h4 className="font-bold text-xs text-foreground truncate">{definition.name}</h4>
+                  {definition.badge && (
+                    <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 font-bold">
+                      {definition.badge}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
+                  {definition.description}
+                </p>
+              </div>
+            </div>
+
+            {/* JotForm Widget Tabs: [ GENERAL ] [ CUSTOM CSS ] */}
+            <div className="grid grid-cols-2 p-1 bg-muted/60 rounded-lg border border-border/60 gap-1">
+              <button
+                type="button"
+                onClick={() => setWidgetTab('general')}
+                className={cn(
+                  'py-1.5 rounded-md text-center text-xs font-semibold transition-all',
+                  widgetTab === 'general'
+                    ? 'bg-background shadow-xs text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                General
+              </button>
+              <button
+                type="button"
+                onClick={() => setWidgetTab('custom_css')}
+                className={cn(
+                  'py-1.5 rounded-md text-center text-xs font-semibold transition-all',
+                  widgetTab === 'custom_css'
+                    ? 'bg-background shadow-xs text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Custom CSS
+              </button>
             </div>
           </div>
-
-          {/* JotForm Widget Tabs: [ GENERAL ] [ CUSTOM CSS ] */}
-          <div className="grid grid-cols-2 p-1 bg-muted/60 rounded-lg border border-border/60 gap-1">
-            <button
-              type="button"
-              onClick={() => setWidgetTab('general')}
-              className={cn(
-                'py-1.5 rounded-md text-center text-xs font-semibold transition-all',
-                widgetTab === 'general'
-                  ? 'bg-background shadow-xs text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              General
-            </button>
-            <button
-              type="button"
-              onClick={() => setWidgetTab('custom_css')}
-              className={cn(
-                'py-1.5 rounded-md text-center text-xs font-semibold transition-all',
-                widgetTab === 'custom_css'
-                  ? 'bg-background shadow-xs text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              Custom CSS
-            </button>
+        ) : (
+          /* Standard Question Properties Tabs: [ General ] [ Options ] [ Advanced ] */
+          <div className={cn('grid gap-1 bg-muted/60 p-1 rounded-lg border border-border/60', hasSurveyTab ? 'grid-cols-4' : 'grid-cols-3')}>
+            {(['general', 'field_specific', 'survey', 'advanced'] as SubTab[])
+              .filter((tab) => tab !== 'survey' || hasSurveyTab)
+              .map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setSubTab(tab)}
+                className={cn(
+                  'py-1.5 rounded-md text-center text-[11px] font-semibold transition-all',
+                  subTab === tab
+                    ? 'bg-background shadow-xs text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {tab === 'general' && 'General'}
+                {tab === 'field_specific' && (
+                  definition.category === 'choice' ? 'Options'
+                  : definition.category === 'payment' ? 'Payment Properties'
+                  : definition.category === 'signature' ? 'Signature Settings'
+                  : definition.category === 'media' ? 'Media Settings'
+                  : definition.category === 'maps' ? 'Map Settings'
+                  : definition.category === 'security' ? 'Security Settings'
+                  : definition.category === 'datetime' ? 'Date Settings'
+                  : definition.category === 'survey' ? 'Survey Settings'
+                  : definition.category === 'calculation' ? 'Calculation Settings'
+                  : definition.category === 'file' ? 'File Settings'
+                  : 'Field Settings'
+                )}
+                {tab === 'survey' && 'Surveying'}
+                {tab === 'advanced' && 'Advanced'}
+              </button>
+            ))}
           </div>
-        </div>
-      ) : (
-        /* Standard Question Properties Tabs: [ General ] [ Options ] [ Advanced ] */
-        <div className={cn('grid gap-1 bg-muted/60 p-1 rounded-lg border border-border/60', hasSurveyTab ? 'grid-cols-4' : 'grid-cols-3')}>
-          {(['general', 'field_specific', 'survey', 'advanced'] as SubTab[])
-            .filter((tab) => tab !== 'survey' || hasSurveyTab)
-            .map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setSubTab(tab)}
-              className={cn(
-                'py-1.5 rounded-md text-center text-[11px] font-semibold transition-all',
-                subTab === tab
-                  ? 'bg-background shadow-xs text-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {tab === 'general' && 'General'}
-              {tab === 'field_specific' && (
-                definition.category === 'choice' ? 'Options'
-                : definition.category === 'payment' ? 'Payment Properties'
-                : definition.category === 'signature' ? 'Signature Settings'
-                : definition.category === 'media' ? 'Media Settings'
-                : definition.category === 'maps' ? 'Map Settings'
-                : definition.category === 'security' ? 'Security Settings'
-                : definition.category === 'datetime' ? 'Date Settings'
-                : definition.category === 'survey' ? 'Survey Settings'
-                : definition.category === 'calculation' ? 'Calculation Settings'
-                : definition.category === 'file' ? 'File Settings'
-                : 'Field Settings'
-              )}
-              {tab === 'survey' && 'Surveying'}
-              {tab === 'advanced' && 'Advanced'}
-            </button>
-          ))}
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* ════ TAB CONTENT AREA ════ */}
-      <ScrollArea className="max-h-[60vh] pr-2">
+      {/* ════ TAB CONTENT AREA (Single unified scroll container) ════ */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 pb-8">
         {isWidgetSettingsMode && widgetTab === 'custom_css' ? (
           <div className="space-y-2 p-1">
             <Label className="text-[11px] font-semibold">Custom CSS Code</Label>
@@ -625,7 +652,7 @@ export function WidgetSettingsRenderer({
             />
           </div>
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {currentSettings.length === 0 ? (
               <p className="text-[11px] text-muted-foreground text-center py-6 italic">
                 No settings available for this field.
@@ -635,11 +662,11 @@ export function WidgetSettingsRenderer({
             )}
           </div>
         )}
-      </ScrollArea>
+      </div>
 
-      {/* ─── Sticky Footer: Close + Update (JotForm pattern) ──────────────────────── */}
+      {/* ─── Pinned Footer: Close + Update (JotForm pattern) ──────────────────────── */}
       {(onClose || onUpdate) && (
-        <div className="sticky bottom-0 -mx-1 mt-2 pt-3 border-t border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex items-center gap-2">
+        <div className="shrink-0 p-3 border-t border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex items-center gap-2">
           <Button
             type="button"
             variant="outline"
