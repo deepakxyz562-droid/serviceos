@@ -566,18 +566,6 @@ export function FormStudioBuilder({
   return (
     <div className="flex-1 min-h-0 flex flex-col w-full h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
       {/* ═════════════════════════════════════════════════════════════════════════
-          TOP STUDIO APP BAR (JOTFORM SIGNATURE HEADER)
-         ═════════════════════════════════════════════════════════════════════════ */}
-      <header className="h-14 border-b border-border/80 bg-background/95 backdrop-blur px-4 flex items-center justify-between shrink-0 z-30">
-        {/* Left: Back + Form Name */}
-        <div className="flex items-center gap-3 min-w-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onExit}
-            className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground shrink-0"
-          >
-      {/* ═════════════════════════════════════════════════════════════════════════
           TIER 1: GLOBAL STUDIO HEADER & LIFECYCLE BAR (Uncluttered, High Polish)
          ═════════════════════════════════════════════════════════════════════════ */}
       <header className="h-14 border-b border-border/80 bg-background/95 backdrop-blur px-3 sm:px-5 flex items-center justify-between gap-3 shrink-0 z-30 select-none">
@@ -586,7 +574,7 @@ export function FormStudioBuilder({
           <Button
             variant="ghost"
             size="sm"
-            onClick={onBack}
+            onClick={onExit}
             className="h-8 px-2 text-xs font-semibold gap-1 text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
           >
             <ArrowLeft className="size-3.5" />
