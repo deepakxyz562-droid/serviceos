@@ -1,0 +1,157 @@
+/**
+ * Canonical Survey, CSAT & Feedback Form Templates (Jotform Parity)
+ */
+
+import { registerTemplates } from '../registry';
+import type { FormTemplate } from '../types';
+
+export const SURVEY_FEEDBACK_TEMPLATES: FormTemplate[] = [
+  {
+    id: 'customer-satisfaction-csat-survey',
+    name: 'Customer Satisfaction (CSAT) Survey Form',
+    shortDescription: 'Standard CSAT feedback form with multi-criteria rating, responsiveness assessment, and open review comments.',
+    description: 'Measure customer happiness, identify service bottlenecks, and gather positive reviews to share on social proof channels.',
+    schema: {
+      id: 'customer-satisfaction-csat-survey',
+      title: 'Customer Satisfaction Survey',
+      description: 'Your feedback helps us continuously elevate our service quality.',
+      fields: [
+        { id: 'customer_name', type: 'text', label: 'Your Name (Optional for anonymous feedback)' },
+        { id: 'customer_email', type: 'email', label: 'Email Address (Optional)' },
+        {
+          id: 'overall_satisfaction',
+          type: 'radio',
+          label: 'Overall, how satisfied were you with your recent service?',
+          options: [
+            { label: '😍 Very Satisfied (5/5)', value: '5' },
+            { label: '🙂 Satisfied (4/5)', value: '4' },
+            { label: '😐 Neutral (3/5)', value: '3' },
+            { label: '🙁 Dissatisfied (2/5)', value: '2' },
+            { label: '😡 Very Dissatisfied (1/5)', value: '1' },
+          ],
+          required: true,
+        },
+        {
+          id: 'timeliness_rating',
+          type: 'select',
+          label: 'Punctuality & Arrival Time',
+          options: [
+            { label: 'Arrived exactly on time / early', value: 'on_time' },
+            { label: 'Slight delay with proactive notification', value: 'minor_delay' },
+            { label: 'Late without advance communication', value: 'late' },
+          ],
+          required: true,
+        },
+        {
+          id: 'quality_of_work',
+          type: 'select',
+          label: 'Quality & Craftsmanship of the Completed Work',
+          options: [
+            { label: '⭐⭐⭐⭐⭐ Exceeded Expectations', value: '5' },
+            { label: '⭐⭐⭐⭐ Met Expectations', value: '4' },
+            { label: '⭐⭐⭐ Average Quality', value: '3' },
+            { label: '⭐⭐ Below Expectations', value: '2' },
+          ],
+          required: true,
+        },
+        { id: 'best_part', type: 'textarea', label: 'What did our technician/team do particularly well?' },
+        { id: 'improvement_areas', type: 'textarea', label: 'What could we have done better?' },
+        {
+          id: 'public_testimonial_ok',
+          type: 'checkbox',
+          label: 'I give permission to feature my review comments on your website / testimonials section.',
+        },
+      ],
+      theme: { primaryColor: '#f59e0b', borderRadius: '0.75rem' },
+    },
+    categories: ['survey', 'feedback'],
+    industries: ['general'],
+    useCases: ['feedback'],
+    audiences: ['b2c', 'b2b'],
+    tags: ['csat', 'customer-survey', 'satisfaction-form', 'review-request', 'nps'],
+    source: 'curated',
+    status: 'published',
+    isPublic: true,
+    isFeatured: true,
+    usageCount: 3100,
+    viewCount: 16000,
+    cloneCount: 2200,
+    ratingAverage: 4.9,
+    ratingCount: 190,
+    seo: {
+      seoTitle: 'Free Customer Satisfaction (CSAT) Survey Template | Fieseros',
+      seoDescription: 'Measure client sentiment with this customizable Customer Satisfaction (CSAT) survey form template.',
+      seoKeywords: ['csat survey form', 'customer satisfaction template', 'feedback form template', 'client review survey'],
+    },
+    authorId: 'fieseros-team',
+    publishedAt: new Date().toISOString(),
+  },
+  {
+    id: 'employee-quarterly-performance-review',
+    name: 'Quarterly Employee Performance Self-Review Form',
+    shortDescription: 'Internal HR performance review template for goal tracking, accomplishment highlights, and manager feedback.',
+    description: 'Structure quarterly and annual 1-on-1 performance evaluations with structured goal reviews, core competency ratings, and career growth milestones.',
+    schema: {
+      id: 'employee-quarterly-performance-review',
+      title: 'Quarterly Performance Review',
+      description: 'Review period evaluation and professional development goals.',
+      fields: [
+        { id: 'employee_name', type: 'text', label: 'Employee Full Name', required: true },
+        { id: 'department', type: 'text', label: 'Department / Team', required: true },
+        { id: 'review_period', type: 'text', label: 'Review Quarter / Year', placeholder: 'e.g. Q3 2026', required: true },
+        { id: 'manager_name', type: 'text', label: 'Direct Manager / Supervisor', required: true },
+        { id: 'top_achievements', type: 'textarea', label: 'Top 3 Key Accomplishments & Delivered Milestones', required: true },
+        {
+          id: 'competency_collaboration',
+          type: 'select',
+          label: 'Team Collaboration & Cross-Functional Communication',
+          options: [
+            { label: 'Exceptional (Role Model)', value: '5' },
+            { label: 'Exceeds Job Requirements', value: '4' },
+            { label: 'Consistently Meets Standards', value: '3' },
+            { label: 'Needs Guidance / Improvement', value: '2' },
+          ],
+          required: true,
+        },
+        {
+          id: 'competency_execution',
+          type: 'select',
+          label: 'Execution Speed, Quality & Accountability',
+          options: [
+            { label: 'Exceptional (Always Delivers Early/Flawless)', value: '5' },
+            { label: 'High Quality & Dependable', value: '4' },
+            { label: 'Meets Standards', value: '3' },
+            { label: 'Inconsistent Deadlines', value: '2' },
+          ],
+          required: true,
+        },
+        { id: 'future_goals', type: 'textarea', label: 'Key Goals & Target Skills for Next Quarter', required: true },
+        { id: 'support_needed', type: 'textarea', label: 'What resources, tools, or support do you need from leadership?' },
+      ],
+      theme: { primaryColor: '#6366f1', borderRadius: '0.75rem' },
+    },
+    categories: ['survey', 'internal_operations'],
+    industries: ['general'],
+    useCases: ['onboarding', 'evaluation'],
+    audiences: ['internal'],
+    tags: ['performance-review', 'employee-evaluation', 'hr-form', 'quarterly-review'],
+    source: 'curated',
+    status: 'published',
+    isPublic: true,
+    isFeatured: true,
+    usageCount: 1280,
+    viewCount: 5900,
+    cloneCount: 650,
+    ratingAverage: 4.8,
+    ratingCount: 48,
+    seo: {
+      seoTitle: 'Free Employee Performance Review Form Template | Fieseros',
+      seoDescription: 'Download and customize this quarterly employee performance review and self-evaluation form template.',
+      seoKeywords: ['employee performance review template', 'quarterly self review form', 'hr evaluation form', 'staff assessment sheet'],
+    },
+    authorId: 'fieseros-team',
+    publishedAt: new Date().toISOString(),
+  },
+];
+
+registerTemplates(SURVEY_FEEDBACK_TEMPLATES);

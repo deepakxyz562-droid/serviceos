@@ -55,3 +55,8 @@ import './canonical/_placeholder'; // contact-form (foundational)
 import './canonical/business-templates'; // 17 business/general templates
 import './canonical/healthcare-home-templates'; // 17 healthcare + home services
 import './canonical/industry-templates'; // 16 industry templates
+import './canonical/order-payment-templates'; // Order, payment, donation templates
+import './canonical/registration-application-templates'; // Job application, rental, event registration
+import './canonical/inspection-checklist-templates'; // Multi-point inspection, HVAC tuneup
+import './canonical/waiver-consent-templates'; // Liability waivers, media release
+import './canonical/survey-feedback-templates'; // CSAT, performance review, NPS

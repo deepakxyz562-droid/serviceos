@@ -1,0 +1,135 @@
+/**
+ * Canonical Waiver, Consent & Release Form Templates (Jotform Parity)
+ */
+
+import { registerTemplates } from '../registry';
+import type { FormTemplate } from '../types';
+
+export const WAIVER_CONSENT_TEMPLATES: FormTemplate[] = [
+  {
+    id: 'general-liability-waiver-release-form',
+    name: 'General Liability Waiver & Release of Claims Form',
+    shortDescription: 'Standard liability waiver for sports events, fitness gyms, adventure tours, and recreational facilities.',
+    description: 'Protect your business and organization with legally enforceable digital liability waivers, emergency contact collection, and digital signatures.',
+    schema: {
+      id: 'general-liability-waiver-release-form',
+      title: 'Participant Liability Waiver & Release',
+      description: 'Please read carefully and sign before participating in activities.',
+      fields: [
+        { id: 'participant_name', type: 'text', label: 'Participant Full Legal Name', required: true },
+        { id: 'participant_dob', type: 'date', label: 'Date of Birth', required: true },
+        { id: 'participant_phone', type: 'tel', label: 'Phone Number', required: true },
+        { id: 'participant_email', type: 'email', label: 'Email Address', required: true },
+        { id: 'emergency_contact_name', type: 'text', label: 'Emergency Contact Name', required: true },
+        { id: 'emergency_contact_phone', type: 'tel', label: 'Emergency Contact Phone Number', required: true },
+        {
+          id: 'health_conditions',
+          type: 'textarea',
+          label: 'Relevant Medical Conditions or Physical Limitations (if any)',
+          placeholder: 'e.g. Asthma, previous knee surgery, heart condition...',
+        },
+        {
+          id: 'waiver_terms_ack',
+          type: 'checkbox',
+          label: 'I acknowledge the inherent risks associated with this activity and hereby release the organizers, facility owners, and employees from any liability, injury, or property damage claims.',
+          required: true,
+        },
+        { id: 'digital_signature', type: 'text', label: 'Type Full Name as Electronic Signature', placeholder: 'e.g. Michael R. Vance', required: true },
+        { id: 'signature_date', type: 'date', label: 'Date Signed', required: true },
+      ],
+      theme: { primaryColor: '#4b5563', borderRadius: '0.75rem' },
+    },
+    categories: ['waiver', 'consent'],
+    industries: ['general'],
+    useCases: ['intake', 'compliance'],
+    audiences: ['b2c'],
+    tags: ['liability-waiver', 'release-form', 'gym-waiver', 'sports-consent', 'digital-signature'],
+    source: 'curated',
+    status: 'published',
+    isPublic: true,
+    isFeatured: true,
+    usageCount: 2900,
+    viewCount: 14200,
+    cloneCount: 1850,
+    ratingAverage: 4.9,
+    ratingCount: 165,
+    seo: {
+      seoTitle: 'Free Liability Waiver & Release Form Template | Fieseros',
+      seoDescription: 'Download and customize this free General Liability Waiver Form Template. Collect digital signatures and emergency contacts online.',
+      seoKeywords: ['liability waiver form', 'release of liability template', 'gym waiver form', 'electronic signature waiver'],
+    },
+    authorId: 'fieseros-team',
+    publishedAt: new Date().toISOString(),
+  },
+  {
+    id: 'photo-video-media-release-consent-form',
+    name: 'Photo & Video Media Release Consent Form',
+    shortDescription: 'Media release authorization for marketing, website publication, event photography, and social media promotion.',
+    description: 'Obtain explicit permission from clients, event participants, and parents to record and broadcast photos and videos for promotional materials.',
+    schema: {
+      id: 'photo-video-media-release-consent-form',
+      title: 'Photo & Video Media Release Consent',
+      description: 'Media publication and copyright authorization.',
+      fields: [
+        { id: 'subject_name', type: 'text', label: 'Subject / Model Full Name', required: true },
+        { id: 'subject_email', type: 'email', label: 'Email Address', required: true },
+        { id: 'subject_phone', type: 'tel', label: 'Phone Number' },
+        {
+          id: 'is_minor',
+          type: 'radio',
+          label: 'Is the participant under 18 years of age?',
+          options: [
+            { label: 'No — Adult Participant (18+)', value: 'adult' },
+            { label: 'Yes — Minor (Parent/Guardian signature required)', value: 'minor' },
+          ],
+          required: true,
+        },
+        { id: 'parent_guardian_name', type: 'text', label: 'Parent / Legal Guardian Name (if applicable)' },
+        {
+          id: 'media_channels_allowed',
+          type: 'checkbox',
+          label: 'Authorized Distribution Channels',
+          options: [
+            { label: 'Company Website & Blog', value: 'website' },
+            { label: 'Social Media (Instagram, Facebook, LinkedIn, YouTube)', value: 'social' },
+            { label: 'Printed Brochures & Marketing Flyers', value: 'print' },
+            { label: 'Television & Paid Online Ads', value: 'ads' },
+          ],
+          required: true,
+        },
+        {
+          id: 'consent_agreement',
+          type: 'checkbox',
+          label: 'I grant perpetual, worldwide permission to photograph, record, and publish media of me or my child for promotional purposes without compensation.',
+          required: true,
+        },
+        { id: 'signature', type: 'text', label: 'Electronic Signature (Full Legal Name)', required: true },
+        { id: 'sign_date', type: 'date', label: 'Date', required: true },
+      ],
+      theme: { primaryColor: '#0284c7', borderRadius: '0.75rem' },
+    },
+    categories: ['consent', 'waiver'],
+    industries: ['general'],
+    useCases: ['consent'],
+    audiences: ['b2c', 'b2b'],
+    tags: ['photo-release', 'media-consent', 'video-release', 'model-release'],
+    source: 'curated',
+    status: 'published',
+    isPublic: true,
+    isFeatured: true,
+    usageCount: 1450,
+    viewCount: 7800,
+    cloneCount: 890,
+    ratingAverage: 4.8,
+    ratingCount: 62,
+    seo: {
+      seoTitle: 'Free Photo & Video Media Release Form Template | Fieseros',
+      seoDescription: 'Obtain legal photo and video publication consent with this customizable media release form template.',
+      seoKeywords: ['photo release form', 'video consent template', 'media release agreement', 'model release form'],
+    },
+    authorId: 'fieseros-team',
+    publishedAt: new Date().toISOString(),
+  },
+];
+
+registerTemplates(WAIVER_CONSENT_TEMPLATES);
