@@ -21,7 +21,6 @@ import {
   Plus,
   ArrowRight,
   Filter,
-  Bot,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,34 +62,18 @@ import {
 const ALL = 'all';
 const FEATURED = '__featured__';
 
-const QUICK_SUGGESTIONS: Record<'form' | 'agent' | 'app', string[]> = {
-  form: [
-    '🎬 2-Part Split Hero',
-    'Elementor Split Form',
-    'HVAC Quote',
-    'Patient Intake',
-    'Job Application',
-    'Bakery Order',
-    'Liability Waiver',
-    'Vehicle Inspection',
-    'CSAT Survey',
-    'Event Registration',
-  ],
-  agent: [
-    'HVAC Emergency Diagnostic',
-    'Dental Patient Triage',
-    'Legal Case Screener',
-    'Real Estate Tour Booker',
-    'Auto Repair Service Advisor',
-    'Commercial Cleaning Estimator',
-  ],
-  app: [
-    'Field Service Contractor Hub',
-    'Medical Patient Portal App',
-    'Auto Repair Experience App',
-    'Property Resident App',
-  ],
-};
+const QUICK_SUGGESTIONS = [
+  '🎬 2-Part Split Hero',
+  'Elementor Split Form',
+  'HVAC Quote',
+  'Patient Intake',
+  'Job Application',
+  'Bakery Order',
+  'Liability Waiver',
+  'Vehicle Inspection',
+  'CSAT Survey',
+  'Event Registration',
+];
 
 export interface TemplateExplorerProps {
   onBackToBuild: () => void;
@@ -107,9 +90,6 @@ export function TemplateExplorer({
   onApplyTemplate,
   currentFieldCount,
 }: TemplateExplorerProps) {
-  // Mode switcher state
-  const [activeTab, setActiveTab] = useState<'form' | 'agent' | 'app'>('form');
-
   // Filter state
   const [selectedCategory, setSelectedCategory] = useState<string>(ALL);
   const [selectedIndustry, setSelectedIndustry] = useState<string>(ALL);
@@ -132,35 +112,27 @@ export function TemplateExplorer({
   // Stable category & industry taxonomy counts
   const allTemplates = useMemo(() => getAllTemplates(), []);
   
-  const formCount = useMemo(() => allTemplates.filter((t) => (t.templateType || 'form') === 'form').length || 20391, [allTemplates]);
-  const agentCount = useMemo(() => allTemplates.filter((t) => t.templateType === 'agent').length, [allTemplates]);
-  const appCount = useMemo(() => allTemplates.filter((t) => t.templateType === 'app').length, [allTemplates]);
-
   const categoryCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of allTemplates) {
-      if ((t.templateType || 'form') === activeTab) {
-        for (const c of t.categories) m.set(c, (m.get(c) || 0) + 1);
-      }
+      for (const c of t.categories) m.set(c, (m.get(c) || 0) + 1);
     }
     return m;
-  }, [allTemplates, activeTab]);
+  }, [allTemplates]);
 
   const industryCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of allTemplates) {
-      if ((t.templateType || 'form') === activeTab) {
-        for (const i of t.industries) {
-          if (i !== 'general') m.set(i, (m.get(i) || 0) + 1);
-        }
+      for (const i of t.industries) {
+        if (i !== 'general') m.set(i, (m.get(i) || 0) + 1);
       }
     }
     return m;
-  }, [allTemplates, activeTab]);
+  }, [allTemplates]);
 
   const featuredCount = useMemo(
-    () => allTemplates.filter((t) => (t.templateType || 'form') === activeTab && t.isFeatured).length,
-    [allTemplates, activeTab],
+    () => allTemplates.filter((t) => t.isFeatured).length,
+    [allTemplates],
   );
 
   // Search & filter effect (debounced)
@@ -184,7 +156,6 @@ export function TemplateExplorer({
         query: q,
         category: cat,
         industry: ind,
-        templateType: activeTab,
         sort: selectedCategory === FEATURED ? 'featured' : sort === 'featured' ? 'featured' : sort === 'rating' ? 'rating' : 'popular',
         publishedOnly: true,
         limit: 1000,
@@ -218,7 +189,7 @@ export function TemplateExplorer({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [searchQuery, selectedCategory, selectedIndustry, sort, activeTab]);
+  }, [searchQuery, selectedCategory, selectedIndustry, sort]);
 
   // Preview & apply actions
   const handleOpenPreview = (tpl: FormTemplate) => {
@@ -264,7 +235,7 @@ export function TemplateExplorer({
               <span>Categories</span>
             </h2>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {activeTab === 'form' ? `${formCount.toLocaleString()} Forms` : activeTab === 'agent' ? `${agentCount} Agents` : `${appCount} Apps`} Available
+              {allTemplates.length.toLocaleString()} Templates Available
             </p>
           </div>
           {hasActiveFilters && (
@@ -288,16 +259,12 @@ export function TemplateExplorer({
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                   selectedCategory === ALL && selectedIndustry === ALL
-                    ? activeTab === 'form'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : activeTab === 'agent'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-purple-600 text-white shadow-xs'
+                    ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
                 <span className="flex items-center gap-2">
-                  <Layers className="size-4" /> All {activeTab === 'form' ? 'Forms' : activeTab === 'agent' ? 'Agents' : 'Apps'}
+                  <Layers className="size-4" /> All Templates
                 </span>
                 <Badge
                   variant="outline"
@@ -307,7 +274,7 @@ export function TemplateExplorer({
                       : 'text-muted-foreground'
                   }`}
                 >
-                  {activeTab === 'form' ? formCount : activeTab === 'agent' ? agentCount : appCount}
+                  {allTemplates.length}
                 </Badge>
               </button>
 
@@ -338,23 +305,19 @@ export function TemplateExplorer({
             {/* Form Types Section */}
             <div>
               <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">
-                Categories ({TEMPLATE_CATEGORIES.length})
+                Form Types ({TEMPLATE_CATEGORIES.length})
               </h3>
               <div className="space-y-0.5">
                 {TEMPLATE_CATEGORIES.map((cat) => {
                   const isSelected = selectedCategory === cat.id;
-                  const count = categoryCounts.get(cat.id) || (activeTab === 'form' ? 35 : 1);
+                  const count = categoryCounts.get(cat.id) || 35;
                   return (
                     <button
                       key={cat.id}
                       onClick={() => setSelectedCategory(isSelected ? ALL : cat.id)}
                       className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors text-left ${
                         isSelected
-                          ? activeTab === 'agent'
-                            ? 'bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300 font-semibold'
-                            : activeTab === 'app'
-                            ? 'bg-purple-50 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300 font-semibold'
-                            : 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 font-semibold'
+                          ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 font-semibold'
                           : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                       }`}
                     >
@@ -374,7 +337,7 @@ export function TemplateExplorer({
               <div className="space-y-0.5 max-h-60 overflow-y-auto pr-1">
                 {TEMPLATE_INDUSTRIES.filter((i) => i.id !== 'general').map((ind) => {
                   const isSelected = selectedIndustry === ind.id;
-                  const count = industryCounts.get(ind.id) || (activeTab === 'form' ? 24 : 1);
+                  const count = industryCounts.get(ind.id) || 24;
                   return (
                     <button
                       key={ind.id}
@@ -413,55 +376,14 @@ export function TemplateExplorer({
 
             <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-800 hidden sm:block" />
 
-            {/* 3-Way Top Mode Selector */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
-              <button
-                onClick={() => {
-                  setActiveTab('form');
-                  setSelectedCategory(ALL);
-                  setSearchQuery('');
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === 'form'
-                    ? 'bg-white dark:bg-slate-900 text-foreground shadow-xs border border-slate-200 dark:border-slate-700'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <FileText className="size-3.5 text-emerald-600" />
-                <span>AI Forms</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('agent');
-                  setSelectedCategory(ALL);
-                  setSearchQuery('');
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === 'agent'
-                    ? 'bg-white dark:bg-slate-900 text-foreground shadow-xs border border-slate-200 dark:border-slate-700'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Bot className="size-3.5 text-blue-600" />
-                <span>AI Agents</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('app');
-                  setSelectedCategory(ALL);
-                  setSearchQuery('');
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === 'app'
-                    ? 'bg-white dark:bg-slate-900 text-foreground shadow-xs border border-slate-200 dark:border-slate-700'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Smartphone className="size-3.5 text-purple-600" />
-                <span>AI Apps</span>
-              </button>
+            <div>
+              <h1 className="text-sm sm:text-base font-bold flex items-center gap-2 text-foreground">
+                <Sparkles className="size-4 text-emerald-600" />
+                <span>Form Template Library</span>
+              </h1>
+              <p className="text-[11px] text-muted-foreground hidden sm:block">
+                Curated industry templates — pre-configured widgets, maps, and signatures.
+              </p>
             </div>
           </div>
 
@@ -488,13 +410,7 @@ export function TemplateExplorer({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={
-                  activeTab === 'form'
-                    ? "Search forms (e.g. 'dental', 'hvac', 'waiver')..."
-                    : activeTab === 'agent'
-                    ? "Search agents (e.g. 'diagnostics', 'triage', 'screener')..."
-                    : "Search apps (e.g. 'contractor', 'patient portal', 'resident')..."
-                }
+                placeholder="Search templates (e.g. 'dental', 'hvac', 'waiver')..."
                 className="pl-9 pr-8 h-9 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
               />
               {searchQuery && (
@@ -515,7 +431,7 @@ export function TemplateExplorer({
           <span className="text-muted-foreground font-medium flex items-center gap-1">
             <Sparkles className="size-3 text-emerald-600" /> Suggestions:
           </span>
-          {QUICK_SUGGESTIONS[activeTab].map((s) => (
+          {QUICK_SUGGESTIONS.map((s) => (
             <button
               key={s}
               onClick={() => setSearchQuery(s)}
@@ -616,90 +532,38 @@ export function TemplateExplorer({
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               {paginated.map((tpl) => {
-                const isAgent = tpl.templateType === 'agent';
-                const isApp = tpl.templateType === 'app';
                 const primaryCat = tpl.categories[0] || 'general';
                 const fieldCount = tpl.schema.fields?.length || 0;
+                const widgetCount = tpl.schema.fields?.filter((f) => !!f.widgetType).length || 0;
 
                 return (
                   <div
                     key={tpl.id}
-                    className={`group relative rounded-2xl border bg-white dark:bg-slate-900 transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-xs hover:shadow-xl ${
-                      isAgent
-                        ? 'border-blue-200/80 dark:border-blue-900/50 hover:border-blue-500'
-                        : isApp
-                        ? 'border-purple-200/80 dark:border-purple-900/50 hover:border-purple-500'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-emerald-500'
-                    }`}
+                    className="group relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-500 hover:shadow-xl transition-all duration-200 flex flex-col justify-between overflow-hidden"
                   >
-                    {/* Visual Card Header */}
+                    {/* Visual Form Thumbnail Preview */}
                     <div className="relative cursor-pointer overflow-hidden border-b border-slate-100 dark:border-slate-800/80">
-                      {isAgent ? (
-                        <div className="h-44 bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-cyan-500/10 p-4 flex flex-col justify-between">
-                          <div className="flex items-center justify-between">
-                            <Badge className="bg-blue-600 text-white font-bold text-[10px] gap-1 px-2.5 py-0.5">
-                              <Bot className="size-3.5" /> AI Agent Persona
+                      <FormThumbnailPreview template={tpl} />
+
+                      {/* Top Badges */}
+                      <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-10">
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="bg-white/95 dark:bg-slate-900/95 text-[10px] font-bold shadow-xs">
+                            {getCategoryLabel(primaryCat)}
+                          </Badge>
+                          {tpl.industries[0] && tpl.industries[0] !== 'general' && (
+                            <Badge variant="outline" className="bg-blue-50/90 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-[10px] border-blue-200">
+                              {getIndustryLabel(tpl.industries[0])}
                             </Badge>
-                            {tpl.agentConfig?.voiceTone && (
-                              <span className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-950/60 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                                {tpl.agentConfig.voiceTone}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs p-3 rounded-xl border border-blue-100 dark:border-blue-900/40">
-                            <p className="text-[11px] text-slate-700 dark:text-slate-300 italic line-clamp-2">
-                              &ldquo;{tpl.agentConfig?.greetingMessage || tpl.shortDescription}&rdquo;
-                            </p>
-                          </div>
+                          )}
                         </div>
-                      ) : isApp ? (
-                        <div className="h-44 bg-gradient-to-br from-purple-500/10 via-fuchsia-500/5 to-indigo-500/10 p-4 flex flex-col justify-between">
-                          <div className="flex items-center justify-between">
-                            <Badge className="bg-purple-600 text-white font-bold text-[10px] gap-1 px-2.5 py-0.5">
-                              <Smartphone className="size-3.5" /> Turnkey PWA App
-                            </Badge>
-                            <span className="text-[10px] font-semibold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-950/60 px-2 py-0.5 rounded-md">
-                              Multi-Form Bundle
-                            </span>
-                          </div>
 
-                          <div className="flex items-center gap-1.5 overflow-x-auto py-1">
-                            {tpl.appConfig?.navigationTabs.map((tab) => (
-                              <div
-                                key={tab.id}
-                                className="text-[9px] font-medium bg-white/90 dark:bg-slate-800/90 text-purple-900 dark:text-purple-200 border border-purple-200 dark:border-purple-800 px-2 py-0.5 rounded-md shrink-0"
-                              >
-                                {tab.label}
-                              </div>
-                            ))}
+                        {tpl.isFeatured && (
+                          <div className="inline-flex items-center gap-1 text-[9px] font-bold uppercase bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full shadow-xs">
+                            <Star className="size-2.5 fill-current" /> Featured
                           </div>
-                        </div>
-                      ) : (
-                        <>
-                          <FormThumbnailPreview template={tpl} />
-
-                          {/* Top Badges */}
-                          <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-10">
-                            <div className="flex items-center gap-1">
-                              <Badge variant="outline" className="bg-white/95 dark:bg-slate-900/95 text-[10px] font-bold shadow-xs">
-                                {getCategoryLabel(primaryCat)}
-                              </Badge>
-                              {tpl.industries[0] && tpl.industries[0] !== 'general' && (
-                                <Badge variant="outline" className="bg-blue-50/90 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-[10px] border-blue-200">
-                                  {getIndustryLabel(tpl.industries[0])}
-                                </Badge>
-                              )}
-                            </div>
-
-                            {tpl.isFeatured && (
-                              <div className="inline-flex items-center gap-1 text-[9px] font-bold uppercase bg-amber-400 text-amber-950 px-2 py-0.5 rounded-full shadow-xs">
-                                <Star className="size-2.5 fill-current" /> Featured
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      )}
+                        )}
+                      </div>
 
                       {/* Hover Action Overlay */}
                       <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center gap-2 p-4 z-20">
@@ -721,15 +585,9 @@ export function TemplateExplorer({
                             e.stopPropagation();
                             handleOpenPreview(tpl);
                           }}
-                          className={`text-white font-bold text-xs shadow-md rounded-xl gap-1.5 ${
-                            isAgent
-                              ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30'
-                              : isApp
-                              ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-600/30'
-                              : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30'
-                          }`}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/30 rounded-xl gap-1.5"
                         >
-                          <Sparkles className="size-3.5" /> Use {isAgent ? 'Agent' : isApp ? 'App' : 'Template'}
+                          <Sparkles className="size-3.5" /> Use Template
                         </Button>
                       </div>
                     </div>
@@ -748,46 +606,19 @@ export function TemplateExplorer({
                           </span>
                         </div>
 
-                        <h3 className={`text-base font-bold transition-colors line-clamp-1 ${
-                          isAgent
-                            ? 'group-hover:text-blue-600'
-                            : isApp
-                            ? 'group-hover:text-purple-600'
-                            : 'group-hover:text-emerald-600'
-                        }`}>
+                        <h3 className="text-base font-bold text-foreground group-hover:text-emerald-600 transition-colors line-clamp-1">
                           {tpl.name}
                         </h3>
 
                         <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
                           {tpl.shortDescription}
                         </p>
-
-                        {/* Agent topics or App features snippet */}
-                        {isAgent && tpl.agentConfig && (
-                          <div className="mt-2.5 flex flex-wrap gap-1">
-                            {tpl.agentConfig.knowledgeTopics.slice(0, 2).map((topic, i) => (
-                              <span key={i} className="text-[10px] bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md">
-                                📚 {topic}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {isApp && tpl.appConfig && (
-                          <div className="mt-2.5 text-[11px] text-purple-700 dark:text-purple-300 font-medium">
-                            📦 Bundles {tpl.appConfig.bundledForms.length} Sub-Forms & Pinned AI Concierge
-                          </div>
-                        )}
                       </div>
 
                       {/* Card Footer Actions */}
                       <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                         <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-                          {isApp ? (
-                            <><Smartphone className="size-3 text-purple-600" /> {tpl.appConfig?.bundledForms.length || 3} bundled apps</>
-                          ) : (
-                            <><FileText className="size-3 text-emerald-600" /> {fieldCount} fields</>
-                          )}
+                          <FileText className="size-3 text-emerald-600" /> {fieldCount} fields
                         </span>
 
                         <div className="flex items-center gap-1.5">
@@ -802,13 +633,7 @@ export function TemplateExplorer({
                           <Button
                             size="sm"
                             onClick={() => handleOpenPreview(tpl)}
-                            className={`h-7 text-xs font-bold text-white rounded-lg px-2.5 gap-1 ${
-                              isAgent
-                                ? 'bg-blue-600 hover:bg-blue-700'
-                                : isApp
-                                ? 'bg-purple-600 hover:bg-purple-700'
-                                : 'bg-emerald-600 hover:bg-emerald-700'
-                            }`}
+                            className="h-7 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 gap-1"
                           >
                             <span>Use</span>
                             <ArrowRight className="size-3" />
