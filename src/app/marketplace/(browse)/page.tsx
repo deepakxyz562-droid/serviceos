@@ -27,6 +27,12 @@ import {
   Search,
   Home as HomeIcon,
   ChevronRight,
+  Sparkles,
+  ShieldCheck,
+  Clock,
+  ArrowRight,
+  Plus,
+  ClipboardList,
 } from 'lucide-react';
 
 // A5 (Route/Page Cache): The page itself stays force-dynamic so SuperAdmin
@@ -568,6 +574,52 @@ export default async function MarketplaceBrowsePage({
                 </div>
               </div>
             </nav>
+
+            {/* ── 2026 Smart 3-Bid Request Hero Banner ── */}
+            <div className="mx-4 sm:mx-6 mb-6 rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-cyan-500/10 dark:from-emerald-950/40 dark:via-slate-900 dark:to-teal-950/30 p-5 sm:p-6 shadow-sm relative overflow-hidden">
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="max-w-2xl space-y-1.5">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-xs font-semibold">
+                    <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>AI-Powered 3-Bid Matching</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+                    Need help with a home repair or commercial project?
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Describe your job in 60s. Verified local pros send 3 tiered proposals with upfront pricing, arrival windows, and escrow protection.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-xs text-muted-foreground font-medium">
+                    <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                      <ShieldCheck className="size-3.5" /> 100% Verified Pros
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="size-3.5 text-teal-600" /> Quotes in ~10 mins
+                    </span>
+                    <span className="text-xs font-bold text-amber-600">
+                      $0 Lead Fee for Pros
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+                  <a
+                    href="/request"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 px-5 shadow-md shadow-emerald-600/20 transition-all hover:shadow-lg"
+                  >
+                    <Plus className="size-4" />
+                    <span>Post a Free Request</span>
+                  </a>
+                  <a
+                    href="/requests"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background hover:bg-muted text-foreground text-xs font-semibold h-11 px-4 transition-colors"
+                  >
+                    <ClipboardList className="size-3.5 text-emerald-600" />
+                    <span>My Requests</span>
+                  </a>
+                </div>
+              </div>
+            </div>
 
             <noscript>
               <div className="mx-auto mb-8 max-w-2xl">

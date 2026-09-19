@@ -10,6 +10,9 @@ import {
   Settings,
   LogOut,
   ChevronDown,
+  ClipboardList,
+  Plus,
+  ArrowRight,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { useMarketplaceSearch } from './use-marketplace-search';
@@ -346,13 +349,28 @@ function HeaderAction() {
 
   if (!auth?.isAuthenticated) {
     return (
-      <Link
-        href="/?auth=register"
-        className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-3 sm:px-4 text-xs sm:text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-      >
-        <span className="hidden sm:inline">List your business</span>
-        <span className="sm:hidden">List</span>
-      </Link>
+      <div className="flex items-center gap-2">
+        <Link
+          href="/requests"
+          className="hidden sm:inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <ClipboardList className="size-3.5 text-emerald-600" />
+          <span>My Requests</span>
+        </Link>
+        <Link
+          href="/request"
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 sm:px-3.5 text-xs sm:text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+        >
+          <Plus className="size-3.5 hidden sm:inline" />
+          <span>Post a Request</span>
+        </Link>
+        <Link
+          href="/?auth=register"
+          className="hidden lg:inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-emerald-600/30 bg-emerald-50/50 dark:bg-emerald-950/20 px-3 text-xs font-semibold text-emerald-700 dark:text-emerald-300 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+        >
+          <span>For Pros / List</span>
+        </Link>
+      </div>
     );
   }
 

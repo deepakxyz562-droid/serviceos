@@ -11,9 +11,10 @@ export const metadata = {
 export default function RequestPage({
   searchParams,
 }: {
-  searchParams?: { category?: string };
+  searchParams?: { category?: string; q?: string; description?: string };
 }) {
   const category = searchParams?.category;
+  const initialDescription = searchParams?.q || searchParams?.description;
 
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 flex flex-col">
@@ -45,7 +46,7 @@ export default function RequestPage({
       {/* Main Form Body */}
       <main className="flex-1">
         <Suspense fallback={<div className="text-center py-20">Loading Request Wizard...</div>}>
-          <RequestWizard initialCategory={category} />
+          <RequestWizard initialCategory={category} initialDescription={initialDescription} />
         </Suspense>
       </main>
 

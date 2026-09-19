@@ -19,6 +19,10 @@ import {
   CheckCircle2,
   Loader2,
   Info,
+  Bell,
+  Mail,
+  Smartphone,
+  Check,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -94,6 +98,30 @@ export function ProviderFindWork() {
   const [betterWarranty, setBetterWarranty] = useState(12);
   const [bestPrice, setBestPrice] = useState(450);
   const [bestWarranty, setBestWarranty] = useState(24);
+
+  // Notification Preferences Modal State
+  const [notifModalOpen, setNotifModalOpen] = useState(false);
+  const [notifyInApp, setNotifyInApp] = useState(true);
+  const [notifyEmail, setNotifyEmail] = useState(true);
+  const [notifyPush, setNotifyPush] = useState(true);
+  const [notifySms, setNotifySms] = useState(false);
+  const [notifyFrequency, setNotifyFrequency] = useState<'immediate' | '30m' | 'daily'>('immediate');
+  const [minBudgetFilter, setMinBudgetFilter] = useState(150);
+  const [isSavingNotif, setIsSavingNotif] = useState(false);
+  const [notifSaved, setNotifSaved] = useState(false);
+
+  const handleSaveNotifications = async () => {
+    setIsSavingNotif(true);
+    // Simulate save or persist to provider profile
+    setTimeout(() => {
+      setIsSavingNotif(false);
+      setNotifSaved(true);
+      setTimeout(() => {
+        setNotifSaved(false);
+        setNotifModalOpen(false);
+      }, 1200);
+    }, 600);
+  };
 
   useEffect(() => {
     fetchOpportunities();
@@ -237,9 +265,19 @@ export function ProviderFindWork() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs">
-          <div className="p-2 px-3 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-emerald-200 text-emerald-800 dark:text-emerald-300 font-medium">
-            ✨ Free to browse, match & submit proposals
+        <div className="flex items-center gap-2 text-xs">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setNotifModalOpen(true)}
+            className="gap-1.5 h-9 text-xs border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+          >
+            <Bell className="size-3.5 text-emerald-600" />
+            <span>Alert Preferences</span>
+          </Button>
+          <div className="hidden sm:inline-block p-2 px-3 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-emerald-200 text-emerald-800 dark:text-emerald-300 font-medium">
+            ✨ Free to match &amp; quote
           </div>
         </div>
       </div>
@@ -685,6 +723,157 @@ export function ProviderFindWork() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Notification Preferences Modal */}
+      <Dialog open={notifModalOpen} onOpenChange={setNotifModalOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600">
+                <Bell className="size-5" />
+              </div>
+              <div>
+                <DialogTitle>Marketplace Opportunity Alerts</DialogTitle>
+                <DialogDescription>
+                  Configure how and when you receive notifications about new local jobs.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* Delivery Channels */}
+            <div>
+              <label className="block font-bold text-foreground mb-2">Notification Channels</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNotifyInApp(!notifyInApp)}
+                  className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
+                    notifyInApp ? 'border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/20 font-semibold' : 'border-border bg-card'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Bell className="size-4 text-emerald-600" />
+                    <span>In-App Banner</span>
+                  </div>
+                  {notifyInApp && <Check className="size-4 text-emerald-600" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNotifyEmail(!notifyEmail)}
+                  className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
+                    notifyEmail ? 'border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/20 font-semibold' : 'border-border bg-card'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Mail className="size-4 text-emerald-600" />
+                    <span>Email Alerts</span>
+                  </div>
+                  {notifyEmail && <Check className="size-4 text-emerald-600" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNotifyPush(!notifyPush)}
+                  className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
+                    notifyPush ? 'border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/20 font-semibold' : 'border-border bg-card'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="size-4 text-emerald-600" />
+                    <span>Mobile Push</span>
+                  </div>
+                  {notifyPush && <Check className="size-4 text-emerald-600" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNotifySms(!notifySms)}
+                  className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all ${
+                    notifySms ? 'border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/20 font-semibold' : 'border-border bg-card'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Send className="size-4 text-emerald-600" />
+                    <span>SMS Alert</span>
+                  </div>
+                  {notifySms && <Check className="size-4 text-emerald-600" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Notification Frequency */}
+            <div>
+              <label className="block font-bold text-foreground mb-2">Notification Frequency</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'immediate', label: '⚡ Immediately' },
+                  { id: '30m', label: '⏱️ Every 30 Mins' },
+                  { id: 'daily', label: '📅 Daily Digest' },
+                ].map((freq) => (
+                  <button
+                    key={freq.id}
+                    type="button"
+                    onClick={() => setNotifyFrequency(freq.id as any)}
+                    className={`p-2 rounded-lg border text-center font-medium transition-all ${
+                      notifyFrequency === freq.id
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold'
+                        : 'border-border bg-card text-muted-foreground'
+                    }`}
+                  >
+                    {freq.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Filter Criteria */}
+            <div className="space-y-3 pt-2 border-t border-border">
+              <div>
+                <div className="flex items-center justify-between mb-1 font-semibold text-foreground">
+                  <span>Minimum Budget Threshold:</span>
+                  <span className="text-emerald-600 font-bold">${minBudgetFilter}+</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1000"
+                  step="50"
+                  value={minBudgetFilter}
+                  onChange={(e) => setMinBudgetFilter(Number(e.target.value))}
+                  className="w-full accent-emerald-600"
+                />
+                <p className="text-[11px] text-muted-foreground">Only alert me for jobs with a budget of at least ${minBudgetFilter}.</p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setNotifModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={isSavingNotif}
+              onClick={handleSaveNotifications}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5"
+            >
+              {isSavingNotif ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" /> Saving...
+                </>
+              ) : notifSaved ? (
+                <>
+                  <CheckCircle2 className="size-4" /> Saved!
+                </>
+              ) : (
+                'Save Preferences'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

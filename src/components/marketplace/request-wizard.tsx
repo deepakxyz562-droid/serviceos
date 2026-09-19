@@ -59,7 +59,13 @@ const CATEGORIES = [
   { id: 'handyman', label: 'Handyman & Repairs', icon: Hammer, color: 'text-indigo-500', bg: 'bg-indigo-50' },
 ];
 
-export function RequestWizard({ initialCategory }: { initialCategory?: string }) {
+export function RequestWizard({
+  initialCategory,
+  initialDescription,
+}: {
+  initialCategory?: string;
+  initialDescription?: string;
+}) {
   const router = useRouter();
 
   // Wizard Step State
@@ -69,7 +75,7 @@ export function RequestWizard({ initialCategory }: { initialCategory?: string })
 
   // Form Data
   const [category, setCategory] = useState(initialCategory || 'hvac');
-  const [problemDescription, setProblemDescription] = useState('');
+  const [problemDescription, setProblemDescription] = useState(initialDescription || '');
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
 
   const [title, setTitle] = useState('');

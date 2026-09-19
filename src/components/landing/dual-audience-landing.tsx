@@ -73,6 +73,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -500,7 +501,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
           <span className="text-xl font-bold tracking-tight text-foreground">Fieseros</span>
         </a>
 
-        {/* ── Desktop Navigation (4 Clean Grouped Items) ── */}
+        {/* ── Desktop Navigation (5 Clean Grouped Items) ── */}
         <nav className="hidden md:flex items-center gap-1.5">
           <ProductMegaMenu onAnchorClick={crmAnchorClick} />
           <SolutionsMegaMenu />
@@ -514,6 +515,13 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
               Pros
             </span>
           </Link>
+          <Link
+            href="/requests"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 px-2.5 py-1.5 rounded-lg transition-colors"
+          >
+            <ClipboardList className="h-4 w-4 text-emerald-600" />
+            <span>My Requests</span>
+          </Link>
           <a
             href="#pricing"
             className="text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 px-2.5 py-1.5 rounded-lg transition-colors"
@@ -525,6 +533,18 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
 
         {/* ── Right Actions ── */}
         <div className="hidden sm:flex items-center gap-2">
+          {/* Post Request CTA */}
+          <Button
+            asChild
+            size="sm"
+            className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 font-semibold shadow-sm text-xs sm:text-sm h-9 px-3 rounded-lg"
+          >
+            <Link href="/request">
+              <span>Post Request</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+
           {/* Employee login entry point */}
           <Button
             variant="ghost"
@@ -534,7 +554,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
             title="Field technician and staff portal"
           >
             <Key className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>Employee Login</span>
+            <span className="hidden lg:inline">Employee Login</span>
           </Button>
           {onSignIn ? (
             <Button
@@ -548,11 +568,12 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
           ) : null}
           {onGetStarted ? (
             <Button
+              variant="outline"
               size="sm"
               onClick={onGetStarted}
-              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 font-semibold shadow-sm text-xs sm:text-sm h-9 px-3.5 rounded-lg transition-all hover:shadow-md hover:shadow-emerald-600/20"
+              className="gap-1.5 border-emerald-600/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold text-xs sm:text-sm h-9 px-3.5 rounded-lg"
             >
-              Get Started <ArrowRight className="h-3.5 w-3.5" />
+              Start Trial
             </Button>
           ) : null}
         </div>
@@ -1450,6 +1471,19 @@ function HeroFork({
   onTryDemo?: () => void;
   onGetStarted?: () => void;
 }) {
+  const router = useRouter();
+  const [homeownerInput, setHomeownerInput] = React.useState('');
+
+  const handleHomeownerSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const query = homeownerInput.trim();
+    if (query) {
+      router.push(`/request?q=${encodeURIComponent(query)}`);
+    } else {
+      router.push('/request');
+    }
+  };
+
   return (
     <section id="top" className="relative overflow-hidden">
       {/* Gradient backdrop */}
@@ -1462,7 +1496,7 @@ function HeroFork({
         <div className="mb-4 flex justify-center">
           <Badge className="gap-1.5 border-emerald-200 bg-white/80 px-3.5 py-1 text-emerald-800 backdrop-blur hover:bg-white dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 shadow-xs">
             <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            2026 AI Operating System for Field Service &amp; Local Trades
+            2026 AI Operating System for Field Service &amp; Verified Local Pros
           </Badge>
         </div>
 
@@ -1476,14 +1510,74 @@ function HeroFork({
           The complete platform for contractors and local service pros: Field Service OS, 24/7 AI Voice Receptionist, 20,391 smart form templates, and a 3-bid on-demand customer marketplace with <strong>$0 upfront lead fees</strong>.
         </p>
 
-        {/* Primary Action Buttons */}
+        {/* ── 2026 Consumer AI Fast Quote Search Bar ── */}
+        <div className="mt-8 max-w-3xl mx-auto">
+          <form
+            onSubmit={handleHomeownerSearch}
+            className="relative flex flex-col sm:flex-row items-stretch sm:items-center shadow-2xl rounded-2xl border-2 border-emerald-500/40 bg-background/95 backdrop-blur-xl p-2 focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/20 transition-all gap-2"
+          >
+            <div className="flex items-center flex-1 min-w-0 pl-2">
+              <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mr-2 animate-pulse" />
+              <input
+                type="text"
+                value={homeownerInput}
+                onChange={(e) => setHomeownerInput(e.target.value)}
+                placeholder="What service do you need? (e.g. AC not cooling, burst pipe, house cleaning...)"
+                className="w-full bg-transparent text-sm sm:text-base text-foreground placeholder:text-muted-foreground focus:outline-none py-2"
+              />
+            </div>
+            <Button
+              type="submit"
+              className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 sm:h-12 px-6 rounded-xl shadow-md gap-1.5"
+            >
+              <span>Get 3 Free Bids</span>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </form>
+
+          {/* Popular trade quick chips */}
+          <div className="mt-3.5 flex flex-wrap items-center justify-center gap-1.5 text-xs">
+            <span className="text-muted-foreground font-semibold mr-1">Popular:</span>
+            {[
+              { label: '❄️ HVAC', cat: 'hvac' },
+              { label: '🔧 Plumbing', cat: 'plumbing' },
+              { label: '⚡ Electrical', cat: 'electrical' },
+              { label: '🏠 Roofing', cat: 'roofing' },
+              { label: '🧹 Cleaning', cat: 'cleaning' },
+              { label: '🔨 Handyman', cat: 'handyman' },
+            ].map((trade) => (
+              <Link
+                key={trade.cat}
+                href={`/request?category=${trade.cat}`}
+                className="px-2.5 py-1 rounded-full bg-background/80 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-300 font-medium transition-colors border border-border/70 shadow-xs"
+              >
+                {trade.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Trust Guarantees */}
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-semibold">
+              <ShieldCheck className="h-3.5 w-3.5" /> 100% Identity-Verified Pros
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5 text-teal-600" /> 3 Tiered Bids in ~10 Mins
+            </span>
+            <span className="flex items-center gap-1">
+              <Lock className="h-3.5 w-3.5 text-amber-600" /> Money Protected in Escrow
+            </span>
+          </div>
+        </div>
+
+        {/* Primary Contractor Action Buttons */}
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
           {onGetStarted ? (
             <Button
               type="button"
               onClick={onGetStarted}
               size="lg"
-              className="h-13 px-8 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40 rounded-xl"
+              className="h-12 px-7 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40 rounded-xl"
             >
               Start 14-Day Free Trial <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
@@ -1493,10 +1587,10 @@ function HeroFork({
             asChild
             size="lg"
             variant="outline"
-            className="h-13 px-6 text-base font-semibold border-border bg-background/80 hover:bg-muted rounded-xl"
+            className="h-12 px-5 text-base font-semibold border-border bg-background/80 hover:bg-muted rounded-xl"
           >
-            <Link href="/request">
-              <Store className="w-4 h-4 mr-2 text-amber-600" /> Post a 3-Bid Request
+            <Link href="/marketplace">
+              <Store className="w-4 h-4 mr-2 text-emerald-600" /> Browse Verified Pros
             </Link>
           </Button>
 
@@ -1506,7 +1600,7 @@ function HeroFork({
               variant="ghost"
               onClick={onTryDemo}
               size="lg"
-              className="h-13 px-5 text-base font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl"
+              className="h-12 px-4 text-base font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl"
             >
               <Play className="w-4 h-4 mr-2" /> Live Demo
             </Button>

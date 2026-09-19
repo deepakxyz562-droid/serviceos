@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Clock, MapPin, DollarSign, MessageSquare,
-  CheckCircle2, Loader2, ArrowRight, Bell,
+  CheckCircle2, Loader2, ArrowRight, Bell, Phone, ShieldCheck, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 interface CustomerInfo {
@@ -57,31 +58,87 @@ export default function MyRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
 
-  useEffect(() => {
-    // Check auth
+  // Inline Phone Login for non-logged-in customers
+  const [phoneInput, setPhoneInput] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
+  const checkAuth = () => {
     fetch('/api/marketplace/auth/me')
       .then((res) => res.json())
       .then((data) => {
-        if (!data.customer) {
-          // Not logged in — redirect to post a request (which handles OTP)
-          router.push('/request');
-          return;
+        if (data.customer) {
+          setCustomer(data.customer);
         }
-        setCustomer(data.customer);
         setAuthChecked(true);
       })
       .catch(() => {
-        router.push('/request');
+        setAuthChecked(true);
       });
-  }, [router]);
+  };
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneInput) return;
+    setIsVerifying(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/marketplace/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneInput }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOtpSent(true);
+      } else {
+        setLoginError(data.error || 'Failed to send verification code');
+      }
+    } catch {
+      setLoginError('Network error. Please try again.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode) return;
+    setIsVerifying(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/marketplace/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneInput, code: otpCode }),
+      });
+      const data = await res.json();
+      if (data.success && data.customer) {
+        setCustomer(data.customer);
+      } else {
+        setLoginError(data.error || 'Invalid verification code');
+      }
+    } catch {
+      setLoginError('Verification failed');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   useEffect(() => {
     if (!authChecked || !customer) return;
+    setLoading(true);
     fetch('/api/marketplace/customer/requests')
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
-          setRequests(data.requests);
+          setRequests(data.requests || []);
         }
       })
       .finally(() => setLoading(false));
@@ -91,6 +148,104 @@ export default function MyRequestsPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // If not logged in, render the clean 2026 Customer Login view
+  if (!customer) {
+    return (
+      <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-xl border-slate-200 dark:border-slate-800">
+          <CardHeader className="text-center pb-3">
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 flex items-center justify-center text-emerald-600 mb-2">
+              <ShieldCheck className="size-6" />
+            </div>
+            <CardTitle className="text-xl font-bold">Track My Requests</CardTitle>
+            <CardDescription className="text-xs">
+              Enter your mobile number to view your active service bids and chat with local contractors.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {!otpSent ? (
+              <form onSubmit={handleSendOtp} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
+                    Mobile Phone Number
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                    <Input
+                      type="tel"
+                      required
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                      placeholder="(312) 555-0199"
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+
+                {loginError && <p className="text-xs text-rose-600 font-medium">{loginError}</p>}
+
+                <Button
+                  type="submit"
+                  disabled={isVerifying || !phoneInput.trim()}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                >
+                  {isVerifying ? <Loader2 className="size-4 animate-spin" /> : 'Send Verification Code →'}
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyOtp} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
+                    Enter 6-Digit Code sent to {phoneInput}
+                  </label>
+                  <Input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    placeholder="123456"
+                    className="text-center font-mono text-lg tracking-widest"
+                    autoFocus
+                  />
+                </div>
+
+                {loginError && <p className="text-xs text-rose-600 font-medium">{loginError}</p>}
+
+                <Button
+                  type="submit"
+                  disabled={isVerifying || !otpCode.trim()}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                >
+                  {isVerifying ? <Loader2 className="size-4 animate-spin" /> : 'Verify & Open Requests'}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => setOtpSent(false)}
+                  className="w-full text-xs text-muted-foreground hover:underline text-center mt-2"
+                >
+                  Change phone number
+                </button>
+              </form>
+            )}
+
+            <div className="pt-4 border-t border-border/60 text-center">
+              <p className="text-xs text-muted-foreground mb-2">Haven&apos;t posted a request yet?</p>
+              <Button asChild variant="outline" size="sm" className="w-full gap-1.5">
+                <Link href="/request">
+                  <Plus className="size-3.5 text-emerald-600" />
+                  <span>Post a New Request</span>
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
