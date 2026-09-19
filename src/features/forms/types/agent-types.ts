@@ -97,9 +97,9 @@ export interface FormAgentData {
   tenantId?: string;
   slug: string;
   name: string;
-  roleTitle: string; // e.g. "Loan Application Guide"
+  roleTitle: string;
   avatarUrl: string;
-  statusText: string; // e.g. "Online & Active"
+  statusText: string;
   brandColor: string;
   voiceTone: 'friendly' | 'professional' | 'medical' | 'sales' | 'empathetic';
   
@@ -130,97 +130,153 @@ export interface FormAgentData {
     guardrails: string[];
   };
 
-  // Publish & Channels
+  // 11 Multichannel Configurations
   channels: {
     activeChannel: AgentChannelType;
     chatbot: {
       enabled: boolean;
-      position: 'bottom-right' | 'bottom-left' | 'fullscreen' | 'drawer';
+      layoutMode: 'floating' | 'sidebar';
+      position: 'left' | 'right';
+      layoutButtonToggle: boolean;
+      sidebarBehavior: 'overlay' | 'push';
+      welcomeStyle: 'avatar' | 'quick_input';
+      greetingToggle: boolean;
+      placeholderMessage: string;
+      aiGeneratedGreeting: boolean;
+      showButtons: boolean;
       primaryColor: string;
       greetingBubble: string;
+      layoutButton?: {
+        greetingText: string;
+        action1: string;
+        action2: string;
+        showTalk: boolean;
+      };
     };
     standalone: {
       enabled: boolean;
       slug: string;
       customDomain?: string;
+      seoTitle?: string;
+      seoDescription?: string;
+    };
+    instagram: {
+      enabled: boolean;
+      accountHandle?: string;
+      autoReply: boolean;
+      paired: boolean;
     };
     whatsapp: {
       enabled: boolean;
       phoneNumber?: string;
       paired: boolean;
+      welcomeTemplate?: string;
     };
     phone: {
       enabled: boolean;
       phoneNumber?: string;
       voiceId: string;
-    };
-    sms: {
-      enabled: boolean;
-      phoneNumber?: string;
-    };
-    instagram: {
-      enabled: boolean;
-      accountHandle?: string;
+      recordCalls: boolean;
+      forwardingNumber?: string;
     };
     gmail: {
       enabled: boolean;
       autoReply: boolean;
+      replyDelaySeconds: number;
+      signature?: string;
+    };
+    presentation: {
+      enabled: boolean;
+      slideDeckUrl?: string;
+      autoPresentVoice: boolean;
+    };
+    voice: {
+      enabled: boolean;
+      realtimeStreaming: boolean;
+      voiceProvider: 'elevenlabs' | 'openai' | 'cartesia';
+    };
+    messenger: {
+      enabled: boolean;
+      facebookPageId?: string;
+      greetingMessage?: string;
+    };
+    sms: {
+      enabled: boolean;
+      phoneNumber?: string;
+      optOutKeyword?: string;
     };
     crm: {
       enabled: boolean;
       provider: 'fieseros' | 'salesforce' | 'hubspot';
       autoCreateLead: boolean;
+      syncNotes: boolean;
     };
   };
 
-  // ── 2026 AI Agent Settings Suite ──
+  // ── 2026 AI Agent Settings Suite (Jotform Parity) ──
   settings?: {
-    // 1. General & Identity
+    // 1. General & Properties (8 Exact Controls from Screenshot 2)
+    agentPermission: 'public' | 'private';
+    conversationHistoryAccess: boolean;
+    userFeedbackEnabled: boolean;
+    siteSearchAssist: boolean;
+    allowScreenSharing: boolean;
+    memoryEnabled: boolean;
+    fileUploadEnabled: boolean;
+    agentStatus: 'active' | 'disabled' | 'maintenance';
     language: string;
     autoDetectLanguage: boolean;
-    status: 'active' | 'inactive' | 'maintenance';
     timezone: string;
     businessHours: {
       enabled: boolean;
       start: string;
       end: string;
-      days: number[]; // 1=Mon .. 7=Sun
+      days: number[];
       afterHoursBehavior: 'self_serve' | 'offline_message' | 'collect_lead';
     };
 
-    // 2. AI Model & Reasoning Engine
+    // 2. Notifications Tab (3 Exact Controls from Screenshot 1)
+    notifications: {
+      sendConversationEmails: boolean;
+      notificationEmails: string;
+      sendAutoresponderEmails: boolean;
+      unansweredQuestionAlerts: boolean;
+      unansweredAlertFrequency: 'each' | 'daily' | 'weekly';
+    };
+
+    // 3. AI Model & Reasoning Engine
     llm: {
       provider: 'openai' | 'anthropic' | 'google' | 'meta';
       model: 'gpt-4o' | 'claude-3.5-sonnet' | 'gemini-1.5-pro' | 'llama-3.3-70b';
-      temperature: number; // 0.0 - 1.0
+      temperature: number;
       maxTokens: number;
       streamResponses: boolean;
       enableReasoningEffort: boolean;
     };
 
-    // 3. Voice & Telephony Engine
+    // 4. Voice & Telephony Engine
     voice: {
       provider: 'elevenlabs' | 'openai' | 'cartesia';
       voiceId: string;
       voiceName: string;
-      speed: number; // 0.75 - 1.5
-      pitch: number; // -10 - 10
-      stability: number; // 0.0 - 1.0
+      speed: number;
+      pitch: number;
+      stability: number;
       ambientSound: 'none' | 'office' | 'chime' | 'callcenter';
       interruptionSensitivity: 'low' | 'balanced' | 'high';
     };
 
-    // 4. Escalation & Human Handoff
+    // 5. Escalation & Human Handoff
     escalation: {
       enabled: boolean;
       triggers: ('user_request' | 'negative_sentiment' | 'low_confidence')[];
-      confidenceThreshold: number; // e.g. 70 (%)
+      confidenceThreshold: number;
       destination: 'live_chat' | 'email' | 'zendesk' | 'whatsapp';
       targetEmail?: string;
       fallbackMessage: string;
     };
 
-    // 5. Guardrails & Compliance
+    // 6. Guardrails & Compliance
     guardrails: {
       piiRedaction: boolean;
       strictKnowledgeOnly: boolean;
@@ -229,7 +285,7 @@ export interface FormAgentData {
       zeroDataRetention: boolean;
     };
 
-    // 6. CRM & Webhooks
+    // 7. CRM & Webhooks
     crm: {
       autoCreateLead: boolean;
       provider: 'fieseros' | 'salesforce' | 'hubspot';
@@ -238,23 +294,26 @@ export interface FormAgentData {
       csatRatingEnabled: boolean;
     };
 
-    // 7. Widget & Branding
+    // 8. Widget Behavior & Branding
     widget: {
       position: 'bottom-right' | 'bottom-left' | 'custom';
-      autoOpenDelaySeconds: number; // 0 = disabled
+      autoOpenDelaySeconds: number;
       chimeSound: boolean;
       showPoweredBy: boolean;
     };
   };
 
-  // ── Visual Designer & CSS Tokens ──
+  // ── Visual Designer & CSS Tokens (Screenshot 2) ──
   style?: {
+    colorSchemeId: string;
     themePreset: 'modern-blue' | 'emerald-serene' | 'midnight-dark' | 'sunset-purple' | 'pure-light';
     pageBackgroundStart: string;
     pageBackgroundEnd: string;
+    agentBackgroundStart: string;
+    agentBackgroundEnd: string;
+    titleColor: string;
     chatBg: string;
     inputTextColor: string;
-    agentBackgroundStart: string;
     fontFamily: 'Inter' | 'Plus Jakarta Sans' | 'Outfit' | 'Geist' | 'DM Sans';
     borderRadius: 'sm' | 'md' | 'lg' | 'full';
   };
@@ -273,17 +332,16 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
   id: 'agent_alex',
   slug: 'alex-assistant',
   name: 'Nell',
-  roleTitle: 'Loan Application AI Guide',
+  roleTitle: 'Loan Application Guide',
   avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
   statusText: 'Online & Active',
   brandColor: '#0284c7',
   voiceTone: 'professional',
-  welcomeGreeting: "Hi! I'm **Nell**, your AI Loan Application Guide. How can I help you today?",
+  welcomeGreeting: "Hi! I'm **Nell**, your **AI Agent** and **Loan Application Guide**. How can I help you?",
   greetingSubtitle: 'Get immediate loan estimates, check eligibility, or complete your application.',
   quickActions: [
     { id: 'qa_1', label: 'Begin loan application', actionType: 'message', payload: 'I would like to begin my loan application.' },
     { id: 'qa_2', label: 'Learn more', actionType: 'message', payload: 'Tell me about available loan options and rates.' },
-    { id: 'qa_3', label: 'Check application status', actionType: 'message', payload: 'I would like to check the status of my existing loan.' },
   ],
   navigation: {
     chatEnabled: true,
@@ -291,83 +349,107 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
     formsEnabled: true,
     historyEnabled: true,
     presentationEnabled: false,
-    whatsappEnabled: true,
+    whatsappEnabled: false,
   },
   connectedForms: [
     {
       id: 'form_loan',
-      name: 'Residential Mortgage & Loan Application',
-      description: 'Full borrower financial and property intake form.',
+      name: 'Loan Application Form',
+      description: 'Borrower financial and property intake form.',
       submissionCount: 42,
     },
   ],
   knowledge: {
-    crawledUrls: ['https://example.com/rates', 'https://example.com/requirements'],
-    documents: [
-      {
-        id: 'doc_1',
-        name: 'Loan_Application_Eligibility_Guide.pdf',
-        size: 245000,
-        type: 'pdf',
-        status: 'indexed',
-        indexedAt: new Date().toISOString(),
-      },
-    ],
+    crawledUrls: ['https://example.com/rates'],
+    documents: [],
     faqPairs: [
       { id: 'faq_1', question: 'What is the minimum credit score?', answer: 'Our standard loan programs typically require a minimum credit score of 620.' },
-      { id: 'faq_2', question: 'How long does approval take?', answer: 'Pre-approval takes as little as 3 minutes online, with full underwriting in 3–5 business days.' },
     ],
-    systemPrompt: 'You are Nell, an expert loan application assistant. Guide borrowers through eligibility, estimate monthly payments, answer mortgage FAQs, and help fill out the loan intake form accurately.',
-    guardrails: [
-      'Maintain an empathetic, reassuring, and professional financial tone.',
-      'Explain that estimates are illustrative and subject to final underwriter review.',
-      'Assist borrower step-by-step with completing the connected form.',
-    ],
+    systemPrompt: 'You are Nell, an expert loan application assistant. Guide borrowers through eligibility and loan applications.',
+    guardrails: ['Be reassuring and professional.'],
   },
   channels: {
     activeChannel: 'chatbot',
     chatbot: {
       enabled: true,
-      position: 'bottom-right',
+      layoutMode: 'floating',
+      position: 'right',
+      layoutButtonToggle: true,
+      sidebarBehavior: 'overlay',
+      welcomeStyle: 'quick_input',
+      greetingToggle: true,
+      placeholderMessage: 'Ask AI',
+      aiGeneratedGreeting: true,
+      showButtons: true,
       primaryColor: '#0284c7',
-      greetingBubble: '👋 Need help with your loan application? Chat with Nell!',
+      greetingBubble: '👋 Have a question? Chat with Nell!',
+      layoutButton: {
+        greetingText: "Hi! I'm Nell, your AI Agent and Loan Application Guide. How can I help you?",
+        action1: 'Begin loan application',
+        action2: 'Learn more',
+        showTalk: true,
+      },
     },
     standalone: {
       enabled: true,
       slug: 'loan-application-guide',
     },
+    instagram: {
+      enabled: false,
+      accountHandle: '@loan_advisor_ai',
+      autoReply: true,
+      paired: false,
+    },
     whatsapp: {
-      enabled: true,
+      enabled: false,
       phoneNumber: '+1 (555) 345-6789',
-      paired: true,
+      paired: false,
     },
     phone: {
       enabled: true,
       phoneNumber: '+1 (800) 555-LOAN',
       voiceId: 'Rachel',
+      recordCalls: true,
+    },
+    gmail: {
+      enabled: true,
+      autoReply: true,
+      replyDelaySeconds: 15,
+    },
+    presentation: {
+      enabled: false,
+      autoPresentVoice: true,
+    },
+    voice: {
+      enabled: true,
+      realtimeStreaming: true,
+      voiceProvider: 'elevenlabs',
+    },
+    messenger: {
+      enabled: false,
     },
     sms: {
       enabled: true,
       phoneNumber: '+1 (555) 345-6789',
     },
-    instagram: {
-      enabled: false,
-      accountHandle: '@loan_advisor_ai',
-    },
-    gmail: {
-      enabled: true,
-      autoReply: true,
-    },
     crm: {
       enabled: true,
       provider: 'salesforce',
       autoCreateLead: true,
+      syncNotes: true,
     },
   },
   settings: {
+    agentPermission: 'public',
+    conversationHistoryAccess: true,
+    userFeedbackEnabled: true,
+    siteSearchAssist: true,
+    allowScreenSharing: false,
+    memoryEnabled: true,
+    fileUploadEnabled: true,
+    agentStatus: 'active',
     language: 'English',
     autoDetectLanguage: true,
-    status: 'active',
     timezone: 'America/New_York',
     businessHours: {
       enabled: true,
@@ -375,6 +457,13 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
       end: '18:00',
       days: [1, 2, 3, 4, 5],
       afterHoursBehavior: 'self_serve',
+    },
+    notifications: {
+      sendConversationEmails: true,
+      notificationEmails: 'admin@mybusiness.com',
+      sendAutoresponderEmails: true,
+      unansweredQuestionAlerts: true,
+      unansweredAlertFrequency: 'each',
     },
     llm: {
       provider: 'openai',
@@ -400,12 +489,12 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
       confidenceThreshold: 75,
       destination: 'live_chat',
       targetEmail: 'support@fieseros.com',
-      fallbackMessage: 'Our senior loan officers are currently assisting other clients. Please leave your email and we will contact you in under 15 minutes.',
+      fallbackMessage: 'Our specialists are currently busy. We will contact you shortly.',
     },
     guardrails: {
       piiRedaction: true,
       strictKnowledgeOnly: false,
-      blockedTopics: ['cryptocurrency speculative loans', 'unlicensed jurisdictions'],
+      blockedTopics: [],
       gdprConsentRequired: true,
       zeroDataRetention: false,
     },
@@ -413,7 +502,7 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
       autoCreateLead: true,
       provider: 'salesforce',
       autoSubmitForms: true,
-      webhookUrl: 'https://api.fieseros.com/webhooks/loan-leads',
+      webhookUrl: '',
       csatRatingEnabled: true,
     },
     widget: {
@@ -424,12 +513,15 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
     },
   },
   style: {
+    colorSchemeId: 'scheme_1',
     themePreset: 'modern-blue',
-    pageBackgroundStart: '#0f172a',
-    pageBackgroundEnd: '#1e293b',
+    pageBackgroundStart: '#C5E3FA',
+    pageBackgroundEnd: '#D6E1E7',
+    agentBackgroundStart: '#C5E3FA',
+    agentBackgroundEnd: '#D6E1E7',
+    titleColor: '#0A1551',
     chatBg: '#ffffff',
     inputTextColor: '#0f172a',
-    agentBackgroundStart: '#0284c7',
     fontFamily: 'Plus Jakarta Sans',
     borderRadius: 'lg',
   },
@@ -439,276 +531,3 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
     avgSatisfactionRating: 4.95,
   },
 };
-
-export interface IndustryAgentPreset {
-  id: string;
-  industryName: string;
-  agentName: string;
-  roleTitle: string;
-  avatarUrl: string;
-  brandColor: string;
-  voiceTone: FormAgentData['voiceTone'];
-  description: string;
-  badge?: string;
-  welcomeGreeting: string;
-  greetingSubtitle: string;
-  quickActions: QuickActionButton[];
-  systemPrompt: string;
-  sampleFaqs: FaqPair[];
-  guardrails: string[];
-}
-
-export const INDUSTRY_AGENT_PRESETS: IndustryAgentPreset[] = [
-  {
-    id: 'loan_finance',
-    industryName: 'Mortgage & Loan Advisory',
-    agentName: 'Nell',
-    roleTitle: 'Loan Application AI Guide',
-    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
-    brandColor: '#0284c7',
-    voiceTone: 'professional',
-    description: 'Guide borrowers through mortgage pre-approvals, rates, documents, and loan applications.',
-    badge: 'FINANCE',
-    welcomeGreeting: "Hi! I'm **Nell**, your AI Loan Application Guide. How can I help you today?",
-    greetingSubtitle: 'Get immediate loan estimates, check eligibility, or complete your application.',
-    quickActions: [
-      { id: 'qa_1', label: 'Begin loan application', actionType: 'message', payload: 'I would like to begin my loan application.' },
-      { id: 'qa_2', label: 'Learn more', actionType: 'message', payload: 'Tell me about available loan options and rates.' },
-      { id: 'qa_3', label: 'Check application status', actionType: 'message', payload: 'I would like to check the status of my existing loan.' },
-    ],
-    systemPrompt: 'You are Nell, an expert loan application assistant. Guide borrowers through eligibility, estimate monthly payments, answer mortgage FAQs, and help fill out the loan intake form accurately.',
-    sampleFaqs: [
-      { id: 'faq_1', question: 'What is the minimum credit score?', answer: 'Our standard loan programs typically require a minimum credit score of 620.' },
-      { id: 'faq_2', question: 'How long does approval take?', answer: 'Pre-approval takes as little as 3 minutes online, with full underwriting in 3–5 business days.' },
-    ],
-    guardrails: ['Be reassuring and professional.', 'Guide users to complete the form for official rate quotes.'],
-  },
-  {
-    id: 'generic_business',
-    industryName: 'General Business & Support',
-    agentName: 'Alex',
-    roleTitle: 'Customer Support & Intake Specialist',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-    brandColor: '#059669',
-    voiceTone: 'friendly',
-    description: 'Universal AI assistant for inquiries, quotes, and lead qualification for any company.',
-    badge: 'POPULAR',
-    welcomeGreeting: "Hi, I'm **Alex**, an AI Assistant ready to help you. How may I assist you today?",
-    greetingSubtitle: 'Ask questions, get estimates, schedule bookings, or fill out connected forms.',
-    quickActions: [
-      { id: 'qa_1', label: 'Book an Appointment', actionType: 'message', payload: 'I would like to schedule an appointment.' },
-      { id: 'qa_2', label: 'Complete Request Form', actionType: 'open_form', payload: 'form_1' },
-      { id: 'qa_3', label: 'Services & Pricing', actionType: 'message', payload: 'What services do you offer and what are your rates?' },
-      { id: 'qa_4', label: 'Hours & Location', actionType: 'message', payload: 'What are your operating hours and office location?' },
-    ],
-    systemPrompt: 'You are Alex, an intelligent and courteous AI assistant for our business. Answer inquiries, help schedule visits, and guide customers to fill out our intake form.',
-    sampleFaqs: [
-      { id: 'faq_1', question: 'What are your business hours?', answer: 'We are open Monday through Friday from 8:00 AM to 6:00 PM.' },
-      { id: 'faq_2', question: 'How do I request a quote?', answer: 'Simply complete our attached intake form or tell me your project details for an estimate.' },
-    ],
-    guardrails: ['Be courteous, concise, and helpful.', 'Guide users to complete the form for official quote processing.'],
-  },
-  {
-    id: 'hvac_services',
-    industryName: 'HVAC & Climate Control',
-    agentName: 'Sam',
-    roleTitle: 'HVAC Service & Dispatch Coordinator',
-    avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&auto=format&fit=crop&q=80',
-    brandColor: '#0284c7',
-    voiceTone: 'professional',
-    description: 'Diagnose AC/heating issues, dispatch technicians, and schedule seasonal tune-ups.',
-    badge: 'FIELD SERVICE',
-    welcomeGreeting: "Hello! I'm **Sam**, your **HVAC & Climate Service Assistant**. Are you experiencing a heating or cooling issue?",
-    greetingSubtitle: 'Book a service call, request a system replacement quote, or report an emergency.',
-    quickActions: [
-      { id: 'qa_1', label: 'AC / Heating Not Working', actionType: 'message', payload: 'My AC unit is not cooling and needs repair.' },
-      { id: 'qa_2', label: 'Schedule Seasonal Tune-up', actionType: 'open_form', payload: 'form_hvac' },
-      { id: 'qa_3', label: 'New System Estimate', actionType: 'message', payload: 'I would like an estimate for a new heat pump or HVAC unit.' },
-      { id: 'qa_4', label: 'Emergency Dispatch', actionType: 'message', payload: 'I have an urgent heating/cooling emergency.' },
-    ],
-    systemPrompt: 'You are Sam, an experienced HVAC service dispatcher. Triage customer heating and AC problems, identify system type (furnace, heat pump, central AC), and book service appointments.',
-    sampleFaqs: [
-      { id: 'faq_1', question: 'Do you offer same-day service?', answer: 'Yes! We offer same-day emergency repairs for heating and cooling outages.' },
-      { id: 'faq_2', question: 'What brands do you service?', answer: 'We service all major brands including Carrier, Trane, Lennox, Rheem, and Daikin.' },
-    ],
-    guardrails: ['Advise turning off the system if smoke or burning smell is reported.', 'Collect unit brand and square footage when possible.'],
-  },
-  {
-    id: 'dental_medical',
-    industryName: 'Dental & Medical Clinic',
-    agentName: 'Clara',
-    roleTitle: 'Dental Appointment Assistant',
-    avatarUrl: 'https://images.unsplash.com/photo-1594824813576-905c149eb569?w=200&auto=format&fit=crop&q=80',
-    brandColor: '#0d9488',
-    voiceTone: 'friendly',
-    description: 'Patient intake, insurance verification, cleaning visits, and emergency dental scheduling.',
-    badge: 'HEALTHCARE',
-    welcomeGreeting: "Hi, I'm **Clara**, an AI Agent and **Dental Appointment Assistant**. How may I help you today?",
-    greetingSubtitle: 'Ask questions, schedule visits, or complete patient registration forms.',
-    quickActions: [
-      { id: 'qa_1', label: 'Schedule Cleaning / Exam', actionType: 'message', payload: 'I would like to schedule a dental checkup and cleaning.' },
-      { id: 'qa_2', label: 'Complete Patient Intake Form', actionType: 'open_form', payload: 'form_dental' },
-      { id: 'qa_3', label: 'Tooth Pain / Emergency', actionType: 'message', payload: 'I have severe tooth pain and need an urgent appointment.' },
-      { id: 'qa_4', label: 'Accepted Insurance Plans', actionType: 'message', payload: 'What dental insurance plans do you accept?' },
-    ],
-    systemPrompt: 'You are Clara, a friendly and knowledgeable dental assistant. Help patients book appointments, answer insurance questions, and complete intake forms.',
-    sampleFaqs: [
-      { id: 'faq_1', question: 'Do you accept walk-ins?', answer: 'Yes, we accept emergency walk-in patients from 9 AM to 5 PM.' },
-    ],
-    guardrails: ['Never prescribe medication or give clinical medical diagnoses.', 'Invite patients for an in-person dental exam.'],
-  },
-];
-
-export function createAgentFromPreset(presetId: string, customOverrides?: Partial<FormAgentData>): FormAgentData {
-  const preset = INDUSTRY_AGENT_PRESETS.find((p) => p.id === presetId) || INDUSTRY_AGENT_PRESETS[0];
-  const uniqueId = `agent_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-  const slug = `${preset.agentName.toLowerCase()}-${preset.id.replace(/_/g, '-')}-${Math.random().toString(36).substring(2, 5)}`;
-
-  return {
-    id: uniqueId,
-    slug,
-    name: preset.agentName,
-    roleTitle: preset.roleTitle,
-    avatarUrl: preset.avatarUrl,
-    statusText: 'Online & Active',
-    brandColor: preset.brandColor,
-    voiceTone: preset.voiceTone,
-    welcomeGreeting: preset.welcomeGreeting,
-    greetingSubtitle: preset.greetingSubtitle,
-    quickActions: [...preset.quickActions],
-    navigation: {
-      chatEnabled: true,
-      voiceEnabled: true,
-      formsEnabled: true,
-      historyEnabled: true,
-      presentationEnabled: false,
-      whatsappEnabled: true,
-    },
-    connectedForms: [
-      {
-        id: `form_${uniqueId}`,
-        name: `${preset.industryName} Intake Form`,
-        description: `Customer intake form for ${preset.industryName}.`,
-        submissionCount: 0,
-      },
-    ],
-    knowledge: {
-      crawledUrls: [],
-      documents: [],
-      faqPairs: [...preset.sampleFaqs],
-      systemPrompt: preset.systemPrompt,
-      guardrails: [...preset.guardrails],
-    },
-    channels: {
-      activeChannel: 'chatbot',
-      chatbot: {
-        enabled: true,
-        position: 'bottom-right',
-        primaryColor: preset.brandColor,
-        greetingBubble: `👋 Need assistance? Chat with ${preset.agentName}!`,
-      },
-      standalone: {
-        enabled: true,
-        slug,
-      },
-      whatsapp: {
-        enabled: true,
-        paired: false,
-      },
-      phone: {
-        enabled: true,
-        voiceId: 'Rachel',
-      },
-      sms: {
-        enabled: true,
-      },
-      instagram: {
-        enabled: false,
-      },
-      gmail: {
-        enabled: true,
-        autoReply: true,
-      },
-      crm: {
-        enabled: true,
-        provider: 'fieseros',
-        autoCreateLead: true,
-      },
-    },
-    settings: {
-      language: 'English',
-      autoDetectLanguage: true,
-      status: 'active',
-      timezone: 'America/New_York',
-      businessHours: {
-        enabled: true,
-        start: '08:00',
-        end: '18:00',
-        days: [1, 2, 3, 4, 5],
-        afterHoursBehavior: 'self_serve',
-      },
-      llm: {
-        provider: 'openai',
-        model: 'gpt-4o',
-        temperature: 0.3,
-        maxTokens: 1024,
-        streamResponses: true,
-        enableReasoningEffort: true,
-      },
-      voice: {
-        provider: 'elevenlabs',
-        voiceId: '21m00Tcm4TlvDq8ikWAM',
-        voiceName: 'Rachel (Professional Female)',
-        speed: 1.0,
-        pitch: 0,
-        stability: 0.75,
-        ambientSound: 'none',
-        interruptionSensitivity: 'balanced',
-      },
-      escalation: {
-        enabled: true,
-        triggers: ['user_request', 'negative_sentiment'],
-        confidenceThreshold: 75,
-        destination: 'live_chat',
-        fallbackMessage: 'All of our specialists are currently busy. Please leave your contact information.',
-      },
-      guardrails: {
-        piiRedaction: true,
-        strictKnowledgeOnly: false,
-        blockedTopics: [],
-        gdprConsentRequired: false,
-        zeroDataRetention: false,
-      },
-      crm: {
-        autoCreateLead: true,
-        provider: 'fieseros',
-        autoSubmitForms: true,
-        csatRatingEnabled: true,
-      },
-      widget: {
-        position: 'bottom-right',
-        autoOpenDelaySeconds: 3,
-        chimeSound: true,
-        showPoweredBy: true,
-      },
-    },
-    style: {
-      themePreset: 'modern-blue',
-      pageBackgroundStart: '#0f172a',
-      pageBackgroundEnd: '#1e293b',
-      chatBg: '#ffffff',
-      inputTextColor: '#0f172a',
-      agentBackgroundStart: preset.brandColor,
-      fontFamily: 'Inter',
-      borderRadius: 'lg',
-    },
-    metrics: {
-      totalConversations: 0,
-      totalFormSubmissions: 0,
-      avgSatisfactionRating: 5.0,
-    },
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    ...customOverrides,
-  };
-}
