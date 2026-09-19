@@ -540,6 +540,35 @@ export function FormRuntimeRenderer({
   const steps = isMultiStep && schema.steps?.length ? schema.steps : [{ id: 'step_1', title: 'Form Details' }];
   const currentStep = steps[currentStepIndex] || steps[0];
 
+  const mediaPanel = schema.mediaPanel || schema.theme?.mediaPanel;
+  const isSplitLayout =
+    (schema.theme?.layout === 'split_media' || (mediaPanel && mediaPanel.enabled !== false)) &&
+    activeMode !== 'agent';
+  const splitRatio = mediaPanel?.splitRatio || '50-50';
+  const isRightSide = mediaPanel?.position === 'right';
+
+  const mediaColSpan =
+    splitRatio === '40-60'
+      ? 'lg:col-span-5'
+      : splitRatio === '60-40'
+      ? 'lg:col-span-7'
+      : splitRatio === '35-65'
+      ? 'lg:col-span-4'
+      : splitRatio === '30-70'
+      ? 'lg:col-span-3'
+      : 'lg:col-span-6';
+
+  const formColSpan =
+    splitRatio === '40-60'
+      ? 'lg:col-span-7'
+      : splitRatio === '60-40'
+      ? 'lg:col-span-5'
+      : splitRatio === '35-65'
+      ? 'lg:col-span-8'
+      : splitRatio === '30-70'
+      ? 'lg:col-span-9'
+      : 'lg:col-span-6';
+
   // Filter to the current step's fields AND evaluate conditional rules.
   // When isMultiStep is false, ALL fields are displayed together on a single page.
   const currentStepFields = schema.fields.filter((f) => {
@@ -774,35 +803,6 @@ export function FormRuntimeRenderer({
   const backgroundColor = schema.theme?.backgroundColor || '#ffffff';
   const textColor = schema.theme?.textColor || '#0f172a';
   const fontFamily = schema.theme?.fontFamily || 'Inter, sans-serif';
-
-  const mediaPanel = schema.mediaPanel || schema.theme?.mediaPanel;
-  const isSplitLayout =
-    (schema.theme?.layout === 'split_media' || (mediaPanel && mediaPanel.enabled !== false)) &&
-    activeMode !== 'agent';
-  const splitRatio = mediaPanel?.splitRatio || '50-50';
-  const isRightSide = mediaPanel?.position === 'right';
-
-  const mediaColSpan =
-    splitRatio === '40-60'
-      ? 'lg:col-span-5'
-      : splitRatio === '60-40'
-      ? 'lg:col-span-7'
-      : splitRatio === '35-65'
-      ? 'lg:col-span-4'
-      : splitRatio === '30-70'
-      ? 'lg:col-span-3'
-      : 'lg:col-span-6';
-
-  const formColSpan =
-    splitRatio === '40-60'
-      ? 'lg:col-span-7'
-      : splitRatio === '60-40'
-      ? 'lg:col-span-5'
-      : splitRatio === '35-65'
-      ? 'lg:col-span-8'
-      : splitRatio === '30-70'
-      ? 'lg:col-span-9'
-      : 'lg:col-span-6';
 
   const defaultInputHeightCls =
     inputHeightMode === 'compact'
