@@ -45,10 +45,10 @@ export async function generateMetadata({
   if (!template) return { title: 'Template not found' };
 
   return {
-    title: template.seo.seoTitle || `${template.name} | Fieseros`,
-    description: template.seo.seoDescription || template.shortDescription,
+    title: template.seo?.seoTitle || `${template.name} | Fieseros`,
+    description: template.seo?.seoDescription || template.shortDescription,
     alternates: { canonical: `/templates/${template.categories[0] || 'general'}/${template.id}` },
-    keywords: template.seo.seoKeywords,
+    keywords: template.seo?.seoKeywords,
     openGraph: {
       title: template.name,
       description: template.shortDescription,
@@ -85,7 +85,7 @@ export default async function TemplateDetailPage({
   const stepCount = template.schema.steps?.length || 1;
 
   // JSON-LD structured data (FAQ + SoftwareApplication)
-  const faqJsonLd = template.seo.faq && template.seo.faq.length > 0
+  const faqJsonLd = template.seo?.faq && template.seo.faq.length > 0
     ? {
         '@context': 'https://schema.org',
         '@type': 'FAQPage',
@@ -251,7 +251,7 @@ export default async function TemplateDetailPage({
           </section>
 
           {/* FAQ */}
-          {template.seo.faq && template.seo.faq.length > 0 && (
+          {template.seo?.faq && template.seo.faq.length > 0 && (
             <section>
               <h2 className="text-lg font-bold text-foreground mb-3">Frequently Asked Questions</h2>
               <div className="space-y-3">

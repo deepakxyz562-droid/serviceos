@@ -139,11 +139,29 @@ const HVAC_SPLIT_ESTIMATE_TEMPLATE: FormTemplate = {
   audiences: ['residential', 'commercial'],
   tags: ['split-screen', 'elementor', 'hvac', 'instant-quote', 'video-hero', 'lead-capture'],
   fieldTypes: ['short_answer', 'phone', 'email', 'dropdown', 'radio', 'address', 'long_answer'],
+  source: 'curated',
+  status: 'published',
   isFeatured: true,
+  isPublic: true,
   rating: 4.96,
   ratingCount: 142,
   usageCount: 1850,
   estimatedMinutes: 2,
+  seo: {
+    seoTitle: 'Elementor-Style HVAC 2-Part Split Quote & Consultation Form',
+    seoDescription: 'High-converting 2-part split form with video hero, trust badges, and rapid quote intake for HVAC contractors.',
+    seoKeywords: ['hvac split form', 'elementor form', '2 part split form', 'hvac quote request'],
+    faq: [
+      {
+        question: 'Can I customize the video or image in the left hero panel?',
+        answer: 'Yes! Click directly on the left hero panel in the AI Form Builder Studio to change the media type (video/image), YouTube/Vimeo URL, aspect ratio, trust badge, headline, and bullet points.',
+      },
+      {
+        question: 'How does the split form look on mobile devices?',
+        answer: 'On mobile screens, the form automatically stacks gracefully with options to display a top hero banner, compact badge, or prioritize the form fields for fast loading.',
+      },
+    ],
+  },
   createdAt: '2026-03-01T00:00:00Z',
   updatedAt: '2026-09-19T00:00:00Z',
 };
@@ -275,11 +293,29 @@ const ROOFING_SPLIT_ESTIMATE_TEMPLATE: FormTemplate = {
   audiences: ['residential', 'commercial'],
   tags: ['split-screen', 'elementor', 'roofing', 'drone-inspection', 'hero-media'],
   fieldTypes: ['short_answer', 'phone', 'email', 'dropdown', 'address', 'file_upload'],
+  source: 'curated',
+  status: 'published',
   isFeatured: true,
+  isPublic: true,
   rating: 4.94,
   ratingCount: 98,
   usageCount: 1240,
   estimatedMinutes: 2,
+  seo: {
+    seoTitle: 'Elementor-Style Roofing & Drone Inspection Split Form',
+    seoDescription: 'Split-screen Elementor form featuring roof inspection hero video and drone estimate booking.',
+    seoKeywords: ['roofing split form', 'drone roof estimate', 'roof replacement form'],
+    faq: [
+      {
+        question: 'Can homeowners upload photos of roof leaks?',
+        answer: 'Yes, the built-in file upload field lets homeowners upload photos and videos of roof leaks and storm damage directly.',
+      },
+      {
+        question: 'Does this template support self-hosted videos?',
+        answer: 'Yes, you can paste any direct MP4 link, YouTube URL, or Vimeo URL into the left media panel.',
+      },
+    ],
+  },
   createdAt: '2026-03-01T00:00:00Z',
   updatedAt: '2026-09-19T00:00:00Z',
 };
@@ -398,11 +434,29 @@ const AUTO_DETAIL_SPLIT_TEMPLATE: FormTemplate = {
   audiences: ['b2c', 'residential'],
   tags: ['split-screen', 'elementor', 'automotive', 'luxury', 'detailing', 'ceramic-coating'],
   fieldTypes: ['short_answer', 'phone', 'email', 'dropdown', 'date'],
+  source: 'curated',
+  status: 'published',
   isFeatured: true,
+  isPublic: true,
   rating: 4.98,
   ratingCount: 165,
   usageCount: 2120,
   estimatedMinutes: 2,
+  seo: {
+    seoTitle: 'Luxury Auto Detailing & Ceramic Coating Split Booking Form',
+    seoDescription: 'Elementor 2-part split form for auto detailing studios, ceramic coating reservations, and paint protection booking.',
+    seoKeywords: ['auto detailing split form', 'ceramic coating booking', 'car detail form'],
+    faq: [
+      {
+        question: 'Can I add custom add-on options to the package dropdown?',
+        answer: 'Yes, edit the package field in the studio to add custom packages, tint options, or tiered pricing.',
+      },
+      {
+        question: 'Does this form work on dark mode websites?',
+        answer: 'Yes, the theme includes dark background styling with high-contrast text presets.',
+      },
+    ],
+  },
   createdAt: '2026-03-01T00:00:00Z',
   updatedAt: '2026-09-19T00:00:00Z',
 };
