@@ -15,17 +15,39 @@ export const FALLBACK_ICON: LucideIcon = LucideIcons.HelpCircle;
 const ICON_MAP = LucideIcons as unknown as Record<string, LucideIcon | undefined>;
 
 /**
- * Resolve a lucide icon by its PascalCase name (e.g. 'ImagePlus', 'Camera').
+ * Resolve a lucide icon by its name or FieldDefinition object.
  * Returns the fallback icon if not found.
  */
-export function resolveIcon(name: string | undefined | null): LucideIcon {
-  if (!name) return FALLBACK_ICON;
-  return ICON_MAP[name] ?? FALLBACK_ICON;
+export function resolveIcon(nameOrDef: any): LucideIcon {
+  if (!nameOrDef) return FALLBACK_ICON;
+
+  if (typeof nameOrDef === 'object') {
+    const rawName = nameOrDef.iconName || nameOrDef.icon || nameOrDef.icon_name;
+    return resolveIcon(rawName);
+  }
+
+  if (typeof nameOrDef === 'string') {
+    const trimmed = nameOrDef.trim();
+    if (!trimmed) return FALLBACK_ICON;
+
+    // Direct lookup
+    if (ICON_MAP[trimmed]) return ICON_MAP[trimmed]!;
+
+    // Case-insensitive lookup fallback
+    const lowerKey = trimmed.toLowerCase();
+    const foundKey = Object.keys(ICON_MAP).find((k) => k.toLowerCase() === lowerKey);
+    if (foundKey && ICON_MAP[foundKey]) {
+      return ICON_MAP[foundKey]!;
+    }
+  }
+
+  return FALLBACK_ICON;
 }
 
 /**
  * Check whether a lucide icon name exists (used by registry validation).
  */
 export function iconExists(name: string): boolean {
-  return Boolean(ICON_MAP[name]);
+  if (!name) return false;
+  return Boolean(ICON_MAP[name] || Object.keys(ICON_MAP).some((k) => k.toLowerCase() === name.toLowerCase()));
 }

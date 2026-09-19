@@ -235,7 +235,7 @@ export function StudioWidgetPalette({
 
               <div className="grid grid-cols-1 gap-1.5">
                 {contentWidgets.map((def) => {
-                  const Icon = resolveIcon(def.icon);
+                  const Icon = resolveIcon(def.iconName || (def as any).icon);
                   return (
                     <button
                       key={def.id}
@@ -278,7 +278,7 @@ export function StudioWidgetPalette({
 
               <div className="grid grid-cols-1 gap-1.5">
                 {formInputFields.map((def) => {
-                  const Icon = resolveIcon(def.icon);
+                  const Icon = resolveIcon(def.iconName || (def as any).icon);
                   return (
                     <button
                       key={def.id}
@@ -408,7 +408,7 @@ export function StudioWidgetPalette({
 
             <div className="grid grid-cols-1 gap-1.5">
               {filteredWidgets.map((def) => {
-                const Icon = resolveIcon(def.icon);
+                const Icon = resolveIcon(def.iconName || (def as any).icon);
                 return (
                   <button
                     key={def.id}
