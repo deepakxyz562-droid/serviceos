@@ -78,3 +78,7 @@ import './canonical/canonical-curated-catalog-200'; // Master curated catalog ad
 import './canonical/canonical-expanded-trades-2'; // Expanded trades batch 2
 import './canonical/canonical-expanded-services-2'; // Expanded professional services batch 2
 import './canonical/canonical-master-suite-200'; // Master suite batch to reach 200+ canonical
+
+// ─── AI Agent Templates (F5) ────────────────────────────────────────────────
+// Re-export agent templates so they're importable from the templates barrel.
+export { AGENT_TEMPLATES, getAgentTemplateById, getAgentTemplatesByCategory, type AgentTemplate } from './canonical/agent-templates';

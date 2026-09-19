@@ -52,7 +52,7 @@ export async function POST(
         temperature: 0.3,
       });
 
-      replyText = aiRes.text || '';
+      replyText = aiRes.content || '';
     } catch (e) {
       console.warn('Chat AI call failed, using intelligent rule responder:', e);
     }

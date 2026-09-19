@@ -251,6 +251,7 @@ model Tenant {
   marketplaceBookings      MarketplaceBooking[]
   marketplaceReviews       MarketplaceReview[]
   providerProfile          MarketplaceProviderProfile?
+  formAgents               FormAgent[]
   payouts           Payout[]
   featuredListings  FeaturedListing[]
   aiCredits         AICredit[]
@@ -1317,6 +1318,41 @@ model FormTemplate {
   @@index([isFeatured])
   @@index([source])
   @@index([authorId])
+}
+
+// ─── FormAgent Model (F3 — persistence for AI agents) ──────────────────────
+// Stores AI agent configurations. The complex nested objects (channels,
+// knowledge, settings, navigation, quickActions, connectedForms) are
+// serialized as JSON to avoid 20+ junction tables. Top-level fields are
+// columns for fast querying.
+model FormAgent {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  slug            String   @unique
+  name            String
+  roleTitle       String   @default("AI Assistant")
+  avatarUrl       String   @default("")
+  statusText      String   @default("Online")
+  brandColor      String   @default("#059669")
+  voiceTone       String   @default("friendly") // friendly | professional | medical | sales | empathetic
+  welcomeGreeting String   @default("Hello! How can I help you today?")
+  greetingSubtitle String?
+  
+  // Full agent config (FormAgentData serialized) — channels, knowledge,
+  // settings, navigation, quickActions, connectedForms
+  configJson      Json     @default("{}")
+  
+  // Agent status
+  status          String   @default("active") // active | inactive | draft
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
+  
+  @@index([tenantId])
+  @@index([status])
+  @@index([slug])
 }
 
 model FormResponse {

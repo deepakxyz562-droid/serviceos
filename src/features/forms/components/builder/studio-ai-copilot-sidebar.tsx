@@ -58,142 +58,140 @@ export function StudioAiCopilotSidebar({
 }: StudioAiCopilotSidebarProps) {
   const [messages, setMessages] = useState<AiChatMessage[]>([
     {
-      id: 'msg-1',
-      sender: 'user',
-      text: 'create a multi-step form with user details, service selection, and signature footer',
-      timestamp: 'Just now',
-    },
-    {
-      id: 'msg-2',
+      id: 'msg-welcome',
       sender: 'assistant',
-      text: 'Done! I created a 3-step modern form with customer contact details, service selection cards, and a digital signature section in the footer.',
+      text: 'Hi! I\'m your GPTForm AI Copilot. Tell me what you want to change — add fields, apply themes, add signature, add address autocomplete, or describe a form you want to build.',
       timestamp: 'Just now',
-      stepTrace: {
-        stepCount: 12,
-        actions: [
-          'Analyzed schema requirements for multi-step flow',
-          'Created Step 1: Customer Contact Details',
-          'Added Full Name, Work Email, and Phone inputs',
-          'Created Step 2: Service & Requirement Selection',
-          'Created Step 3: Confirmation & Digital Signature',
-          'Applied Washed Purple 2026 theme typography & accents',
-          'Configured responsive keyboard navigation',
-        ],
-      },
       checklist: [
-        'Added a required contact details section (Name, Email, Phone)',
-        'Added service dropdown & detailed notes field',
-        'Added a legally binding digital signature step',
-        'Configured multi-step progress bar and keyboard shortcuts',
+        'I can add, remove, or modify fields',
+        'I can apply theme colors (emerald, blue, black, purple)',
+        'I can add signature pads and address autocomplete',
+        'Just describe what you need in plain English',
       ],
     },
   ]);
 
   const [promptInput, setPromptInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [expandedTraceId, setExpandedTraceId] = useState<string | null>('msg-2');
+  const [expandedTraceId, setExpandedTraceId] = useState<string | null>('msg-welcome');
   const [feedbackGiven, setFeedbackGiven] = useState<Record<string, 'up' | 'down'>>({});
 
-  const handleSendPrompt = (textToSend?: string) => {
+  const handleSendPrompt = async (textToSend?: string) => {
     const prompt = (textToSend || promptInput).trim();
-    if (!prompt) return;
+    if (!prompt || isProcessing) return;
 
     const userMsgId = `user-${Date.now()}`;
-    const newMessages: AiChatMessage[] = [
-      ...messages,
-      {
-        id: userMsgId,
-        sender: 'user',
-        text: prompt,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ];
+    const userMsg: AiChatMessage = {
+      id: userMsgId,
+      sender: 'user',
+      text: prompt,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
 
-    setMessages(newMessages);
+    setMessages((prev) => [...prev, userMsg]);
     setPromptInput('');
     setIsProcessing(true);
 
-    // AI Multi-Turn Transformation Execution
-    setTimeout(() => {
-      const lower = prompt.toLowerCase();
-      let responseText = `I have updated your multi-step form based on "${prompt}".`;
-      const checklist: string[] = [];
+    try {
+      // Build currentSchema from formData (same shape as runtimeSchema in form-studio-builder)
+      const currentSchema = {
+        version: 1,
+        steps: [{ id: 'step_1', title: formData.name || 'Form' }],
+        fields: formData.fields.map((f) => ({
+          id: f.id,
+          type: f.widgetType ? 'control_widget' : f.type,
+          label: f.label,
+          placeholder: f.placeholder,
+          required: f.required,
+          width: f.width || 'full',
+          widgetType: f.widgetType,
+          widgetConfig: f.widgetConfig,
+          options: f.options?.map((opt) =>
+            typeof opt === 'string'
+              ? { label: opt, value: opt.toLowerCase().replace(/\s+/g, '_') }
+              : opt,
+          ),
+        })),
+        rules: [],
+        theme: {
+          primaryColor: formData.theme?.primaryColor || formData.primaryColor || '#059669',
+          backgroundColor: formData.theme?.backgroundColor || '#ffffff',
+          textColor: formData.theme?.textColor || '#0f172a',
+          borderRadius: '12px',
+          layout: 'card',
+        },
+        settings: {
+          submitButtonText: formData.submitButtonText || 'Submit',
+          successTitle: 'Thank You!',
+          successMessage: formData.completionMessage || 'Your submission has been received.',
+          actions: {},
+        },
+      };
+
+      // Call the REAL AI copilot API
+      const res = await fetch('/api/forms/ai/copilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentSchema, instruction: prompt }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'AI Copilot failed to process your request');
+      }
+
+      const updatedSchema = data.schema;
       const traceActions: string[] = ['Parsed natural language request'];
+      const checklist: string[] = [];
+      let responseText = 'Done! I\'ve updated your form.';
 
-      // Theme changes
-      if (lower.includes('theme') || lower.includes('color') || lower.includes('purple') || lower.includes('black') || lower.includes('blue')) {
-        const themePreset = lower.includes('black')
-          ? THEME_GALLERY_PRESETS.find((t) => t.id === 'inky-black')
-          : lower.includes('blue')
-          ? THEME_GALLERY_PRESETS.find((t) => t.id === 'classic-blue')
-          : lower.includes('emerald')
-          ? THEME_GALLERY_PRESETS.find((t) => t.id === 'neon-emerald')
-          : THEME_GALLERY_PRESETS[0]; // Washed purple
+      if (updatedSchema && updatedSchema.fields) {
+        // Apply the updated fields to formData
+        const newFields: FormField[] = updatedSchema.fields.map((f: any, idx: number) => ({
+          id: f.id || `f_${idx + 1}`,
+          type: f.type || 'short_answer',
+          label: f.label || 'Field',
+          placeholder: f.placeholder || '',
+          helpText: f.helpText || f.description || '',
+          required: Boolean(f.required),
+          width: f.width || 'full',
+          options: f.options?.map((o: any) => (typeof o === 'string' ? o : o.label)) || [],
+          widgetType: f.widgetType,
+          widgetConfig: f.widgetConfig,
+        }));
 
-        if (themePreset) {
-          onFormDataChange((prev) => ({
-            ...prev,
-            theme: {
-              ...prev.theme,
-              primaryColor: themePreset.primaryColor,
-              backgroundColor: themePreset.backgroundColor,
-              textColor: themePreset.textColor,
-            },
-          }));
-          responseText = `Applied the ${themePreset.name} theme with customized accents and font pairings.`;
-          checklist.push(`Updated primary accent color to ${themePreset.primaryColor}`);
-          checklist.push(`Applied ${themePreset.name} card background and typography`);
-          traceActions.push(`Updated theme tokens across multi-step canvas`);
+        onFormDataChange((prev) => ({
+          ...prev,
+          fields: newFields,
+          primaryColor: updatedSchema.theme?.primaryColor || prev.primaryColor,
+          theme: updatedSchema.theme
+            ? {
+                ...prev.theme,
+                primaryColor: updatedSchema.theme.primaryColor,
+                backgroundColor: updatedSchema.theme.backgroundColor,
+                textColor: updatedSchema.theme.textColor,
+              }
+            : prev.theme,
+          submitButtonText: updatedSchema.settings?.submitButtonText || prev.submitButtonText,
+        }));
+
+        // Build checklist from what changed
+        checklist.push(`Updated ${newFields.length} field${newFields.length !== 1 ? 's' : ''}`);
+        if (updatedSchema.theme?.primaryColor) {
+          checklist.push(`Applied theme color: ${updatedSchema.theme.primaryColor}`);
         }
-      }
-
-      // Add Signature field / step
-      if (lower.includes('signature') || lower.includes('sign')) {
-        const sigField: FormField = {
-          id: `signature_${Date.now()}`,
-          type: 'signature',
-          label: 'Digital E-Signature',
-          helpText: 'Sign within the box using your mouse, finger, or stylus',
-          required: true,
-          width: 'full',
-        };
-        onFormDataChange((prev) => ({
-          ...prev,
-          fields: [...prev.fields, sigField],
-        }));
-        checklist.push('Added a digital e-signature field to the form footer');
-        traceActions.push('Created signature input component with canvas listener');
-      }
-
-      // Add Location map / address
-      if (lower.includes('location') || lower.includes('map') || lower.includes('address')) {
-        const addressField: FormField = {
-          id: `address_${Date.now()}`,
-          type: 'address',
-          label: 'Shop / Service Location Address',
-          placeholder: 'Search street address, city, state...',
-          required: true,
-          width: 'full',
-        };
-        onFormDataChange((prev) => ({
-          ...prev,
-          fields: [...prev.fields, addressField],
-        }));
-        checklist.push('Added verified Google Places address autocomplete input');
-        traceActions.push('Integrated location coordinates picker');
-      }
-
-      // Add Welcome screen
-      if (lower.includes('welcome') || lower.includes('intro')) {
-        checklist.push('Added animated Welcome Screen with hero headline and Start button');
-        traceActions.push('Created Welcome Screen step with media hero');
-      }
-
-      // General field additions if none triggered specifically
-      if (checklist.length === 0) {
-        checklist.push('Refined field placeholders and question labels');
-        checklist.push('Optimized multi-step progression order');
-        traceActions.push('Validated schema integrity');
+        traceActions.push(`Generated ${newFields.length} field definitions`);
+        if (data.provider === 'openai' || data.provider === 'openrouter') {
+          traceActions.push(`AI provider: ${data.provider} / ${data.model}`);
+        } else {
+          traceActions.push(`Smart rule engine processed request`);
+        }
+        traceActions.push('Applied changes to form schema');
+      } else {
+        responseText = 'I understood your request but didn\'t make any changes. Try rephrasing — for example: "Add a signature field" or "Change the theme to emerald".';
+        checklist.push('No schema changes applied');
+        traceActions.push('No matching rule found');
       }
 
       const assistantMsgId = `assistant-${Date.now()}`;
@@ -205,15 +203,29 @@ export function StudioAiCopilotSidebar({
           text: responseText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           stepTrace: {
-            stepCount: traceActions.length + 3,
+            stepCount: traceActions.length + 2,
             actions: traceActions,
           },
           checklist,
         },
       ]);
       setExpandedTraceId(assistantMsgId);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      const assistantMsgId = `assistant-err-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMsgId,
+          sender: 'assistant',
+          text: `Sorry, I couldn't process that request. ${errorMsg}. Please try again with a different instruction.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          checklist: ['Request failed — try rephrasing your instruction'],
+        },
+      ]);
+    } finally {
       setIsProcessing(false);
-    }, 600);
+    }
   };
 
   return (

@@ -23,7 +23,8 @@ import {
   ListPlus, HelpCircle, Code, ShieldAlert, Navigation, Map,
   Sliders, Bot, Send, Search, RefreshCw, Layers, CalendarCheck,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X,
-  Wifi, Battery, Lock, Languages, AlertTriangle, Key, Share, Download, Film
+  Wifi, Battery, Lock, Languages, AlertTriangle, Key, Share, Download, Film,
+  ImageIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
