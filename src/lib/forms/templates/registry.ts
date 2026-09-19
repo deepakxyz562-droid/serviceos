@@ -82,6 +82,7 @@ export interface TemplateIndexEntry {
   ratingAverage: number;
   ratingCount: number;
   tags: string[];
+  templateType?: 'form' | 'agent' | 'app';
 }
 
 let CATALOG_INDEX: TemplateIndexEntry[] | null = null;
@@ -108,6 +109,7 @@ export function getCatalogIndex(): TemplateIndexEntry[] {
       ratingAverage: t.ratingAverage || 4.9,
       ratingCount: t.ratingCount || 50,
       tags: t.tags || [],
+      templateType: t.templateType || 'form',
     });
   }
 
@@ -244,6 +246,9 @@ export async function searchTemplates(
   const index = getCatalogIndex();
   let candidates = index;
 
+  if (query.templateType && query.templateType !== 'all') {
+    candidates = candidates.filter((t) => (t.templateType || 'form') === query.templateType);
+  }
   if (query.category) {
     candidates = candidates.filter((t) => t.categoryId === query.category);
   }

@@ -189,6 +189,7 @@ export function generateIndustryVariant(
 
   // 1. Apply theme color
   if (transform.primaryColor) {
+    newSchema.theme = newSchema.theme || { primaryColor: transform.primaryColor, backgroundColor: '#ffffff' };
     newSchema.theme.primaryColor = transform.primaryColor;
   }
 

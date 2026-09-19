@@ -78,3 +78,5 @@ import './canonical/canonical-curated-catalog-200'; // Master curated catalog ad
 import './canonical/canonical-expanded-trades-2'; // Expanded trades batch 2
 import './canonical/canonical-expanded-services-2'; // Expanded professional services batch 2
 import './canonical/canonical-master-suite-200'; // Master suite batch to reach 200+ canonical
+import './canonical/agent-templates'; // AI Agent templates (Jotform Agent parity)
+import './canonical/app-templates'; // AI App templates (Jotform App parity)

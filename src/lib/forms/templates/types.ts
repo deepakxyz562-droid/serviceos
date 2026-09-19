@@ -196,6 +196,32 @@ export interface FormTemplate {
   /** Free-text tags for search (e.g. ['hipaa', 'insurance', 'appointment']). */
   tags: string[];
 
+  // ─── Universal Project Type (Forms, AI Agents, AI Apps) ───────────────
+  /** Template modality: 'form' (default), 'agent' (interactive persona), or 'app' (turnkey PWA). */
+  templateType?: 'form' | 'agent' | 'app';
+
+  /** Metadata specific to AI Agent templates */
+  agentConfig?: {
+    personaTitle: string;
+    avatarIcon?: string;
+    voiceTone: 'friendly' | 'professional' | 'medical' | 'sales' | 'empathetic';
+    greetingMessage: string;
+    systemPrompt: string;
+    suggestedPrompts: string[];
+    knowledgeTopics: string[];
+    actionForms?: string[];
+  };
+
+  /** Metadata specific to AI App templates */
+  appConfig?: {
+    appIcon: string;
+    primaryColor: string;
+    navigationTabs: Array<{ id: string; label: string; icon: string }>;
+    bundledForms: Array<{ title: string; fieldCount: number; type: string }>;
+    pinnedAgentName?: string;
+    features: string[];
+  };
+
   // ─── Lifecycle ──────────────────────────────────────────────────────────
   source: TemplateSource;
   status: TemplateStatus;
@@ -227,6 +253,7 @@ export interface TemplateSearchQuery {
   useCase?: TemplateUseCaseId;
   audience?: TemplateAudienceId;
   tags?: string[];
+  templateType?: 'form' | 'agent' | 'app' | 'all';
   /** Only return templates with status 'published'. Defaults to true. */
   publishedOnly?: boolean;
   /** Sort key. Defaults to 'relevance' when a query is present, else 'popular'. */
