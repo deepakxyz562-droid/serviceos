@@ -894,12 +894,11 @@ export function FormStudioBuilder({
                 }}
                 className={cn(
                   'px-2.5 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1',
-                  viewMode === 'split_media' ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 shadow-2xs font-bold ring-1 ring-teal-500/30' : 'text-muted-foreground hover:text-foreground'
+                  viewMode === 'split_media' ? 'bg-primary/10 text-primary shadow-2xs font-bold ring-1 ring-primary/30' : 'text-muted-foreground hover:text-foreground'
                 )}
-                title="Elementor-style 2-Part Split Form (Video/Image Hero + Form Fields)"
+                title="2-Part Split Hero (Video / Image / Map Hero + Form)"
               >
-                <span>🎬 2-Part Split</span>
-                <span className="text-[8px] bg-teal-500/20 text-teal-800 dark:text-teal-200 px-1 rounded font-bold">Elementor</span>
+                <span>🎬 2-Part Split Hero</span>
               </button>
             </div>
 
@@ -1682,17 +1681,17 @@ export function FormStudioBuilder({
                         🃏 Card Focus
                       </Label>
                     </div>
-                    <div className="flex items-center space-x-2 border border-emerald-500/60 bg-emerald-50/20 dark:bg-emerald-950/20 rounded-xl p-3 hover:bg-muted/40 cursor-pointer">
+                    <div className="flex items-center space-x-2 border border-primary/40 bg-primary/5 rounded-xl p-3 hover:bg-muted/40 cursor-pointer">
                       <RadioGroupItem value="split_media" id="layout-split" />
-                      <Label htmlFor="layout-split" className="text-xs font-semibold cursor-pointer text-emerald-700 dark:text-emerald-300">
-                        🎬 Split Media (Elementor 2-Col)
+                      <Label htmlFor="layout-split" className="text-xs font-semibold cursor-pointer text-foreground">
+                        🎬 2-Part Split Hero
                       </Label>
                     </div>
                   </RadioGroup>
                 </CardContent>
               </Card>
 
-              {/* 17.1. Split Media & Video Hero Customizer (Elementor Style) */}
+              {/* 17.1. Split Media & Video Hero Customizer */}
               {(formData.settings?.formLayout === 'split_media' || formData.theme?.layout === 'split_media') && (() => {
                 const mp = formData.mediaPanel || formData.theme?.mediaPanel || {
                   enabled: true,
@@ -1711,16 +1710,16 @@ export function FormStudioBuilder({
                 };
 
                 return (
-                  <Card className="rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-50/20 via-background to-teal-50/10 dark:from-emerald-950/20 shadow-md">
+                  <Card className="rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 via-background to-secondary/5 shadow-md">
                     <CardHeader className="pb-3 border-b border-border/60">
                       <div className="flex items-center justify-between">
                         <div>
                           <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
-                            <Film className="size-4 text-emerald-600" />
-                            2-Column Media Hero Panel Settings (Elementor Style)
+                            <Film className="size-4 text-primary" />
+                            Side-by-Side Hero Media &amp; Map Settings
                           </CardTitle>
                           <CardDescription className="text-xs mt-0.5">
-                            Customize the left-side video/image showcase, value proposition, and trust badges
+                            Customize the hero video, image, interactive map, value propositions, and trust badges
                           </CardDescription>
                         </div>
                         <Badge variant="outline" className="text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300">

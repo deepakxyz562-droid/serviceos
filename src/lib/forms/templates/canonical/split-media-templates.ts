@@ -461,12 +461,146 @@ const AUTO_DETAIL_SPLIT_TEMPLATE: FormTemplate = {
   updatedAt: '2026-09-19T00:00:00Z',
 };
 
+// ─── 4. 2-Part Split Local Map Dispatch Form ──────────────────────────────
+const PLUMBING_MAP_SPLIT_TEMPLATE: FormTemplate = {
+  id: 'plumbing-map-dispatch-split',
+  name: 'Local Emergency Plumbing & Dispatch Map Form',
+  shortDescription:
+    'High-converting 2-part split layout with live service area map pin and rapid intake form.',
+  description:
+    'Modern side-by-side layout featuring an interactive dispatch area map on the left, paired with a 5-field priority emergency plumbing request form on the right.',
+  schema: {
+    version: 1,
+    steps: [{ id: 'step-1', title: 'Emergency Intake' }],
+    fields: [
+      {
+        id: 'full_name',
+        type: 'short_answer',
+        label: 'Full Name',
+        placeholder: 'Michael Chang',
+        required: true,
+        width: 'half',
+        stepId: 'step-1',
+      },
+      {
+        id: 'phone',
+        type: 'phone',
+        label: 'Phone Number',
+        placeholder: '(555) 456-7890',
+        required: true,
+        width: 'half',
+        stepId: 'step-1',
+      },
+      {
+        id: 'address',
+        type: 'address',
+        label: 'Service Address',
+        placeholder: 'Street, City, State, ZIP',
+        required: true,
+        width: 'full',
+        stepId: 'step-1',
+      },
+      {
+        id: 'emergency_issue',
+        type: 'dropdown',
+        label: 'Plumbing Issue',
+        required: true,
+        width: 'half',
+        stepId: 'step-1',
+        options: [
+          { label: 'Burst Pipe / Active Flooding', value: 'burst_pipe' },
+          { label: 'Sewer Line Backup', value: 'sewer_backup' },
+          { label: 'No Hot Water / Tank Leak', value: 'water_heater' },
+          { label: 'Clogged Main Drain', value: 'main_drain' },
+        ],
+      },
+      {
+        id: 'urgency',
+        type: 'radio',
+        label: 'Dispatch Priority',
+        required: true,
+        width: 'half',
+        stepId: 'step-1',
+        options: [
+          { label: '🚨 Immediate (Under 60 Mins)', value: 'emergency' },
+          { label: 'Today (Standard Window)', value: 'today' },
+        ],
+      },
+    ],
+    rules: [],
+    theme: {
+      primaryColor: '#0284c7',
+      backgroundColor: '#f8fafc',
+      textColor: '#0f172a',
+      borderRadius: '1rem',
+      layout: 'split_media',
+      mediaPanel: {
+        enabled: true,
+        position: 'left',
+        splitRatio: '40-60',
+        mediaType: 'map',
+        mapAddress: 'Downtown Metro Dispatch Hub',
+        mapServiceRadius: 'Active Dispatch within 45 Mile Radius',
+        aspectRatio: '16-9',
+        badgeText: '📍 Live On-Call Plumbers In Your Area',
+        headline: 'Fast, Licensed Plumbers Dispatched 24/7',
+        subtitle: 'Our fully stocked mobile service vans are equipped for immediate pipe, sewer, and water heater repairs.',
+        benefitsList: [
+          'Average arrival time under 45 minutes',
+          'Upfront flat-rate pricing before work begins',
+          '100% Satisfaction & 1-Year Warranty',
+        ],
+        mobileBehavior: 'stack_top',
+      },
+    },
+    settings: {
+      formLayout: 'split_media',
+      submitButtonText: 'Dispatch Technician Now ⚡',
+      successTitle: 'Technician Dispatched!',
+      successMessage: 'A licensed master plumber has received your location and will call you in 5 minutes.',
+      actions: {
+        sendEmailNotification: { enabled: true, toEmails: [] },
+        createCrmLead: { enabled: true, source: 'split_map_plumbing' },
+      },
+    },
+  },
+  categories: ['booking', 'estimate', 'lead_generation'],
+  industries: ['plumbing', 'home_services'],
+  useCases: ['lead_capture', 'emergency_booking'],
+  audiences: ['residential', 'commercial'],
+  tags: ['split-screen', 'map-hero', 'plumbing', 'dispatch', '2026-ui'],
+  fieldTypes: ['short_answer', 'phone', 'address', 'dropdown', 'radio'],
+  source: 'curated',
+  status: 'published',
+  isFeatured: true,
+  isPublic: true,
+  rating: 4.97,
+  ratingCount: 112,
+  usageCount: 1780,
+  estimatedMinutes: 2,
+  seo: {
+    seoTitle: '2-Part Split Hero Plumbing Dispatch Form with Interactive Map',
+    seoDescription: 'High-converting side-by-side dispatch form with live service area map pin and emergency intake.',
+    seoKeywords: ['plumbing split form', 'interactive map form', 'emergency plumber dispatch'],
+    faq: [
+      {
+        question: 'Does the map update to the customer location?',
+        answer: 'The map shows your designated dispatch service hub and active service coverage area.',
+      },
+    ],
+  },
+  createdAt: '2026-03-01T00:00:00Z',
+  updatedAt: '2026-09-19T00:00:00Z',
+};
+
 // Register all split-media templates
 export function registerSplitMediaTemplates(): void {
   registerTemplate(HVAC_SPLIT_ESTIMATE_TEMPLATE);
   registerTemplate(ROOFING_SPLIT_ESTIMATE_TEMPLATE);
   registerTemplate(AUTO_DETAIL_SPLIT_TEMPLATE);
+  registerTemplate(PLUMBING_MAP_SPLIT_TEMPLATE);
 }
 
 // Auto-register on import
 registerSplitMediaTemplates();
+

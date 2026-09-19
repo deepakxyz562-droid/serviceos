@@ -429,6 +429,42 @@ export function synthesizeTemplate(
 
   const allFields: FormField[] = [...baseFields, ...industryFields];
 
+  // Curated 2026 4K Unsplash Imagery Presets per Industry
+  const INDUSTRY_PHOTO_MAP: Record<string, string> = {
+    hvac: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+    plumbing: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
+    electrical: 'https://images.unsplash.com/photo-1558441719-8b489c63f7d1?auto=format&fit=crop&w=1200&q=80',
+    roofing: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=1200&q=80',
+    solar: 'https://images.unsplash.com/photo-1509391365360-2e959784a276?auto=format&fit=crop&w=1200&q=80',
+    dental: 'https://images.unsplash.com/photo-1629909613654-28e377c37b09?auto=format&fit=crop&w=1200&q=80',
+    healthcare: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1200&q=80',
+    automotive: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&w=1200&q=80',
+    real_estate: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+    legal: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1200&q=80',
+    accounting: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1200&q=80',
+    beauty: 'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=1200&q=80',
+    fitness: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1200&q=80',
+    restaurant: 'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=1200&q=80',
+    hospitality: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80',
+    technology: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80',
+    saas: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=1200&q=80',
+    construction: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1200&q=80',
+    cleaning: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
+    landscaping: 'https://images.unsplash.com/photo-1558904541-efa8c4a08931?auto=format&fit=crop&w=1200&q=80',
+  };
+
+  const primaryPhoto =
+    INDUSTRY_PHOTO_MAP[indId] ||
+    'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80';
+
+  // Intelligent 2026 Layout Mapping
+  const chosenLayout =
+    catId === 'quote' || catId === 'estimate' || catId === 'booking' || catId === 'lead_generation'
+      ? 'split_media'
+      : allFields.length > 6
+      ? 'multi_step'
+      : 'card';
+
   const template: FormTemplate = {
     id: slug,
     name: cycle > 0 ? `${indLabel} ${subLabel} (Variant ${cycle + 1})` : `${indLabel} ${subLabel}`,
@@ -440,16 +476,48 @@ export function synthesizeTemplate(
       description: `Please fill out the form below. All information is securely encrypted.`,
       fields: allFields,
       theme: {
-        primaryColor: indDef?.color ? `#${indDef.color}` : '#10b981',
-        borderRadius: '0.75rem',
+        primaryColor: indDef?.color ? `#${indDef.color}` : '#0284c7',
+        backgroundColor: '#ffffff',
+        textColor: '#0f172a',
+        borderRadius: '1rem',
+        inputBorderRadius: '0.75rem',
+        inputHeight: 'large',
+        cardBackground: 'rgba(255, 255, 255, 0.98)',
+        showTopBorder: true,
         fontFamily: 'Inter, sans-serif',
+        layout: chosenLayout,
+        mediaPanel: {
+          enabled: true,
+          position: 'left',
+          splitRatio: '40-60',
+          mediaType: 'image',
+          mediaUrl: primaryPhoto,
+          badgeText: `⭐ Verified ${indLabel} Specialist • 2026 Pro`,
+          headline: `${indLabel} ${subLabel}`,
+          subtitle: `Upfront flat-rate pricing and instant confirmation for ${indLabel.toLowerCase()} services.`,
+          benefitsList: [
+            'Direct assignment to top-rated verified professionals',
+            '100% Upfront transparent quote & zero hidden fees',
+            'Confidential 256-bit encrypted data protection',
+          ],
+          mobileBehavior: 'stack_top',
+        },
+      },
+      settings: {
+        submitButtonText: 'Submit Request ⚡',
+        successTitle: 'Submission Received!',
+        successMessage: `Thank you for contacting our ${indLabel.toLowerCase()} team. We will review your details and respond shortly.`,
+        actions: {
+          sendEmailNotification: { enabled: true, toEmails: [] },
+          createCrmLead: { enabled: true, source: `synthesized_${slug}` },
+        },
       },
     },
     categories: [catId],
     industries: [indId],
     useCases: ['lead_generation', 'intake'],
     audiences: ['b2c', 'b2b'],
-    tags: [indId, catId, subcategory?.id || 'form', 'free-template', 'online-form'],
+    tags: [indId, catId, subcategory?.id || 'form', 'free-template', '2026-ui'],
     source: 'synthesized',
     status: 'published',
     isPublic: true,

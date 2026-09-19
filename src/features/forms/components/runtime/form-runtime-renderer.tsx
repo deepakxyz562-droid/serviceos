@@ -68,7 +68,7 @@ function parseVideoEmbed(url?: string): { type: 'youtube' | 'vimeo' | 'mp4' | 'n
 }
 
 /**
- * Elementor-style Visual Media Hero Panel (Left or Right Column)
+ * 2026 Interactive Hero Media & Map Panel (Left or Right Column)
  */
 function FormMediaHeroPanel({
   mediaPanel,
@@ -83,8 +83,16 @@ function FormMediaHeroPanel({
 }) {
   const [isMuted, setIsMuted] = useState(mediaPanel?.videoMuted ?? true);
   const videoParsed = parseVideoEmbed(mediaPanel?.videoEmbedUrl || mediaPanel?.mediaUrl);
-  const isVideo = mediaPanel?.mediaType === 'video' || mediaPanel?.mediaType === 'youtube' || mediaPanel?.mediaType === 'vimeo' || videoParsed.type !== 'none';
-  const hasImage = Boolean(mediaPanel?.mediaUrl && !isVideo);
+  const isMap = mediaPanel?.mediaType === 'map';
+  const isGradient = mediaPanel?.mediaType === 'gradient';
+  const isVideo =
+    !isMap &&
+    !isGradient &&
+    (mediaPanel?.mediaType === 'video' ||
+      mediaPanel?.mediaType === 'youtube' ||
+      mediaPanel?.mediaType === 'vimeo' ||
+      videoParsed.type !== 'none');
+  const hasImage = Boolean(mediaPanel?.mediaUrl && !isVideo && !isMap && !isGradient);
 
   const headline = mediaPanel?.headline || formName;
   const subtitle = mediaPanel?.subtitle || formDescription;
@@ -94,8 +102,22 @@ function FormMediaHeroPanel({
 
   return (
     <div className="relative flex flex-col justify-between overflow-hidden bg-slate-900 text-white p-6 sm:p-8 lg:p-10 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-[320px] lg:min-h-full">
-      {/* Background Image / Video Backdrop */}
-      {isVideo ? (
+      {/* Background Image / Video / Map / Gradient Backdrop */}
+      {isMap ? (
+        <div className="absolute inset-0 z-0 overflow-hidden bg-slate-950">
+          <iframe
+            src={`https://maps.google.com/maps?q=${encodeURIComponent(mediaPanel?.mapAddress || 'Austin, TX')}&t=&z=${mediaPanel?.mapZoom || 13}&ie=UTF8&iwloc=&output=embed`}
+            title="Service Location Map"
+            className="w-full h-full object-cover scale-110 pointer-events-none opacity-50 mix-blend-luminosity"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-900/40" />
+        </div>
+      ) : isGradient ? (
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-950 via-slate-950 to-emerald-950">
+          <div className="absolute -top-24 -left-24 size-96 rounded-full blur-3xl opacity-35 bg-primary" />
+          <div className="absolute -bottom-24 -right-24 size-96 rounded-full blur-3xl opacity-30 bg-blue-600" />
+        </div>
+      ) : isVideo ? (
         <div className="absolute inset-0 z-0 overflow-hidden">
           {videoParsed.type === 'youtube' || videoParsed.type === 'vimeo' ? (
             <iframe
@@ -148,6 +170,11 @@ function FormMediaHeroPanel({
             >
               <Sparkles className="size-3.5 text-amber-300" />
               {badge}
+            </span>
+          ) : isMap ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-600/30 backdrop-blur-md border border-rose-500/30 text-rose-200">
+              <ShieldCheck className="size-3.5 text-rose-400" />
+              Local Verified Service Area
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md border border-white/15 text-white/90">
@@ -595,6 +622,8 @@ export function FormRuntimeRenderer({
       ? 'lg:col-span-7'
       : splitRatio === '35-65'
       ? 'lg:col-span-4'
+      : splitRatio === '30-70'
+      ? 'lg:col-span-3'
       : 'lg:col-span-6';
 
   const formColSpan =
@@ -604,6 +633,8 @@ export function FormRuntimeRenderer({
       ? 'lg:col-span-5'
       : splitRatio === '35-65'
       ? 'lg:col-span-8'
+      : splitRatio === '30-70'
+      ? 'lg:col-span-9'
       : 'lg:col-span-6';
 
   const defaultInputHeightCls =

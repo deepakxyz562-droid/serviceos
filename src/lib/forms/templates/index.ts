@@ -63,5 +63,18 @@ import './canonical/registration-application-templates'; // Job application, ren
 import './canonical/inspection-checklist-templates'; // Multi-point inspection, HVAC tuneup
 import './canonical/waiver-consent-templates'; // Liability waivers, media release
 import './canonical/survey-feedback-templates'; // CSAT, performance review, NPS
-import './canonical/split-media-templates'; // 2-Part Split Hero (Elementor-Style)
-
+import './canonical/split-media-templates'; // 2-Part Split Hero & Map Templates
+import './canonical/home-services-extended'; // Home services, trades & contractor templates
+import './canonical/extended-trades-and-services'; // Concrete, flooring, fencing, additions
+import './canonical/healthcare-wellness-extended'; // Healthcare, clinical & wellness templates
+import './canonical/automotive-transport-extended'; // Automotive & transportation templates
+import './canonical/professional-legal-finance-extended'; // Legal, real estate & advisory templates
+import './canonical/events-hospitality-extended'; // Events, catering & hospitality templates
+import './canonical/education-creative-saas-extended'; // Tech, SaaS, creative & education templates
+import './canonical/extended-health-and-care'; // Clinical, wellness & vet templates
+import './canonical/extended-business-and-finance'; // Advisory, commercial RE & finance templates
+import './canonical/extended-orders-and-events'; // Luxury events, catering & rentals
+import './canonical/canonical-curated-catalog-200'; // Master curated catalog additions
+import './canonical/canonical-expanded-trades-2'; // Expanded trades batch 2
+import './canonical/canonical-expanded-services-2'; // Expanded professional services batch 2
+import './canonical/canonical-master-suite-200'; // Master suite batch to reach 200+ canonical

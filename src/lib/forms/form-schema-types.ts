@@ -111,15 +111,20 @@ export interface ConditionalRule {
 
 export interface FormMediaPanel {
   enabled: boolean;
-  position?: 'left' | 'right';
-  splitRatio?: '50-50' | '40-60' | '60-40' | '35-65';
-  mediaType: 'image' | 'video' | 'youtube' | 'vimeo';
+  position?: 'left' | 'right' | 'top';
+  splitRatio?: '50-50' | '40-60' | '60-40' | '35-65' | '30-70';
+  mediaType: 'image' | 'video' | 'youtube' | 'vimeo' | 'map' | 'gradient' | 'testimonial';
   mediaUrl?: string;
   videoEmbedUrl?: string;
   videoAutoplay?: boolean;
   videoMuted?: boolean;
   videoLoop?: boolean;
-  aspectRatio?: 'cover' | '16-9' | '4-3' | '1-1';
+  mapAddress?: string;
+  mapEmbedUrl?: string;
+  mapZoom?: number;
+  mapServiceRadius?: string;
+  gradientPreset?: 'cyber_emerald' | 'electric_indigo' | 'solar_amber' | 'rose_obsidian' | 'deep_space';
+  aspectRatio?: 'cover' | '16-9' | '4-3' | '1-1' | 'auto';
   headline?: string;
   subtitle?: string;
   badgeText?: string;
@@ -134,6 +139,7 @@ export interface FormMediaPanel {
   overlayColor?: string;
   overlayOpacity?: number; // 0 to 100
   mobileBehavior?: 'stack_top' | 'compact_banner' | 'hide';
+  stepBehavior?: 'persistent' | 'per_step';
 }
 
 export interface FormTheme {

@@ -279,7 +279,7 @@ export function StudioFocusCanvas({
       {/* ─── MAIN WYSIWYG CANVAS ─── */}
       <div className="w-full max-w-5xl my-auto flex flex-col items-center">
         {viewMode === 'split_media' ? (
-          /* ════ 0. ELEMENTOR 2-PART SPLIT FORM VIEW (Left Hero Media, Right 5-6 Fields) ════ */
+          /* ════ 0. 2-PART SPLIT HERO FORM VIEW (Multi-Media Hero + Multi-Step Fields) ════ */
           <div className="w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xl overflow-hidden transition-all">
             {(() => {
               const panel = formData.mediaPanel || formData.theme?.mediaPanel || {
@@ -308,6 +308,8 @@ export function StudioFocusCanvas({
                   ? 'lg:w-[60%]'
                   : splitRatio === '35-65'
                   ? 'lg:w-[35%]'
+                  : splitRatio === '30-70'
+                  ? 'lg:w-[30%]'
                   : 'lg:w-1/2';
 
               const rightWidthClass =
@@ -317,7 +319,11 @@ export function StudioFocusCanvas({
                   ? 'lg:w-[40%]'
                   : splitRatio === '35-65'
                   ? 'lg:w-[65%]'
+                  : splitRatio === '30-70'
+                  ? 'lg:w-[70%]'
                   : 'lg:w-1/2';
+
+              const activeStepFields = steps.length > 1 ? activeStep.fields : fields;
 
               return (
                 <div className={`flex flex-col ${panel.position === 'right' ? 'lg:flex-row-reverse' : 'lg:flex-row'} min-h-[550px]`}>
@@ -326,7 +332,7 @@ export function StudioFocusCanvas({
                     onClick={() => onSelectField('__media_panel__')}
                     className={`relative p-6 sm:p-8 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white flex flex-col justify-between cursor-pointer group transition-all ${leftWidthClass} ${
                       isMediaSelected
-                        ? 'ring-4 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900'
+                        ? 'ring-4 ring-primary ring-offset-2 dark:ring-offset-slate-900'
                         : 'hover:brightness-105'
                     }`}
                   >
@@ -334,8 +340,8 @@ export function StudioFocusCanvas({
                     <div className="flex items-center justify-between gap-2 mb-4">
                       <div className="flex items-center gap-2">
                         {panel.badgeText && (
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-semibold backdrop-blur">
-                            <Star className="size-3 text-emerald-400 fill-emerald-400" />
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/20 border border-primary/40 text-primary-foreground text-xs font-semibold backdrop-blur">
+                            <Star className="size-3 text-amber-400 fill-amber-400" />
                             <span>{panel.badgeText}</span>
                           </div>
                         )}
@@ -345,18 +351,54 @@ export function StudioFocusCanvas({
                         variant="secondary"
                         className={`text-[10px] font-bold gap-1 transition-opacity ${
                           isMediaSelected
-                            ? 'bg-emerald-500 text-slate-950 opacity-100'
+                            ? 'bg-primary text-primary-foreground opacity-100'
                             : 'bg-white/20 text-white opacity-0 group-hover:opacity-100 backdrop-blur'
                         }`}
                       >
                         <Edit2 className="size-2.5" />
-                        <span>Left Hero (Click to Edit)</span>
+                        <span>Hero Panel (Click to Edit)</span>
                       </Badge>
                     </div>
 
-                    {/* Media Display (Image or Video) */}
+                    {/* Media Display (Image, Video, Map, or Gradient) */}
                     <div className="my-4 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl relative">
-                      {panel.mediaType === 'video' && panel.mediaUrl ? (
+                      {panel.mediaType === 'map' ? (
+                        <div className="relative w-full aspect-video min-h-[220px] bg-slate-950 overflow-hidden flex flex-col justify-between p-4">
+                          <iframe
+                            src={`https://maps.google.com/maps?q=${encodeURIComponent(panel.mapAddress || 'Austin, TX')}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
+                            title="Location Map"
+                            className="absolute inset-0 w-full h-full border-0 pointer-events-none opacity-60 mix-blend-luminosity"
+                          />
+                          <div className="relative z-10 flex items-center justify-between">
+                            <Badge className="bg-rose-600 text-white text-[10px] gap-1 shadow-md">
+                              <MapPin className="size-3" /> Live Dispatch Area
+                            </Badge>
+                          </div>
+                          <div className="relative z-10 bg-slate-900/90 backdrop-blur border border-white/10 p-2.5 rounded-xl">
+                            <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <MapPin className="size-3 text-rose-400" />
+                              {panel.mapAddress || 'Austin, TX Metro Area'}
+                            </p>
+                            {panel.mapServiceRadius && (
+                              <p className="text-[10px] text-slate-300 mt-0.5">
+                                {panel.mapServiceRadius}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : panel.mediaType === 'gradient' ? (
+                        <div className="relative w-full aspect-video min-h-[220px] overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-900 to-emerald-950 p-6 flex flex-col justify-center items-center text-center">
+                          <div className="size-32 rounded-full bg-primary/30 blur-2xl absolute -top-4 -left-4" />
+                          <div className="size-32 rounded-full bg-indigo-500/20 blur-2xl absolute -bottom-4 -right-4" />
+                          <div className="relative z-10 space-y-2">
+                            <div className="size-10 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center mx-auto text-primary">
+                              <Sparkles className="size-5" />
+                            </div>
+                            <p className="text-sm font-black text-white">2026 Luminous Canvas</p>
+                            <p className="text-[11px] text-slate-300 max-w-xs">Atmospheric glow with instant response guarantees.</p>
+                          </div>
+                        </div>
+                      ) : panel.mediaType === 'video' && panel.mediaUrl ? (
                         panel.mediaUrl.includes('youtube.com') || panel.mediaUrl.includes('youtu.be') ? (
                           <div className="aspect-video w-full">
                             <iframe
@@ -415,22 +457,77 @@ export function StudioFocusCanvas({
                     </div>
                   </div>
 
-                  {/* RIGHT FORM FIELDS COLUMN (5-6 Fields) */}
+                  {/* RIGHT FORM FIELDS COLUMN (Stepped / Single Page) */}
                   <div className={`p-6 sm:p-8 flex flex-col justify-between space-y-6 ${rightWidthClass} bg-card`}>
                     <div className="space-y-4">
-                      <div className="space-y-1">
-                        <h3 className="text-lg font-bold text-foreground">
-                          {formData.name || 'Request a Quote / Booking'}
-                        </h3>
-                        <p className="text-xs text-muted-foreground">
-                          {formData.description || 'Fill in the details below to receive your upfront estimate.'}
-                        </p>
-                      </div>
+                      {/* Stepper Tabs Bar (if Multi-Step) */}
+                      {steps.length > 1 ? (
+                        <div className="space-y-3 pb-3 border-b border-border/60">
+                          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {steps.map((step, sIdx) => {
+                                const isCurrent = sIdx === currentStepIndex;
+                                return (
+                                  <button
+                                    key={step.id}
+                                    type="button"
+                                    onClick={() => onStepChange(sIdx)}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                      isCurrent
+                                        ? 'bg-primary text-primary-foreground shadow-xs'
+                                        : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'
+                                    }`}
+                                  >
+                                    <span className="size-4 rounded-full bg-black/20 dark:bg-white/20 text-[10px] flex items-center justify-center font-extrabold">
+                                      {sIdx + 1}
+                                    </span>
+                                    <span className="truncate max-w-[120px]">{step.title}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleAddStep}
+                              className="h-7 text-[11px] gap-1 px-2 shrink-0 border-dashed"
+                            >
+                              <Plus className="size-3" /> Step
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
+                            <span>Step {currentStepIndex + 1} of {steps.length}: <strong className="text-foreground">{activeStep.title}</strong></span>
+                            <span>{progressPercent}% Complete</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between pb-2 border-b border-border/40">
+                          <div className="space-y-0.5">
+                            <h3 className="text-base font-bold text-foreground">
+                              {formData.name || 'Request a Quote / Booking'}
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                              {formData.description || 'Fill in the details below to receive your upfront estimate.'}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAddStep}
+                            className="h-7 text-[11px] gap-1 px-2.5 border-dashed shrink-0"
+                          >
+                            <Plus className="size-3" /> Convert to Multi-Step
+                          </Button>
+                        </div>
+                      )}
 
                       {/* Right Fields Grid */}
                       <div className="flex flex-wrap gap-3">
-                        {fields.length > 0 ? (
-                          fields.map((f, fIdx) => {
+                        {activeStepFields.length > 0 ? (
+                          activeStepFields.map((f) => {
                             const isSelected = selectedFieldId === f.id;
                             const widthCls = getWidthClasses(f.width);
 
@@ -443,7 +540,7 @@ export function StudioFocusCanvas({
                                 }}
                                 className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
                                   isSelected
-                                    ? 'border-emerald-600 dark:border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 ring-2 ring-emerald-600/20 shadow-sm'
+                                    ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs'
                                     : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300'
                                 }`}
                               >
@@ -460,7 +557,7 @@ export function StudioFocusCanvas({
                                         onClick={() => handleSetFieldWidth(f.id, 'full')}
                                         className={`px-1.5 py-0.5 rounded ${
                                           !f.width || f.width === 'full'
-                                            ? 'bg-emerald-600 text-white shadow-2xs font-extrabold'
+                                            ? 'bg-primary text-primary-foreground shadow-2xs font-extrabold'
                                             : 'text-muted-foreground hover:text-foreground'
                                         }`}
                                       >
@@ -471,7 +568,7 @@ export function StudioFocusCanvas({
                                         onClick={() => handleSetFieldWidth(f.id, 'half')}
                                         className={`px-1.5 py-0.5 rounded ${
                                           f.width === 'half'
-                                            ? 'bg-emerald-600 text-white shadow-2xs font-extrabold'
+                                            ? 'bg-primary text-primary-foreground shadow-2xs font-extrabold'
                                             : 'text-muted-foreground hover:text-foreground'
                                         }`}
                                       >
@@ -514,32 +611,70 @@ export function StudioFocusCanvas({
                           })
                         ) : (
                           <div className="w-full p-8 border-2 border-dashed rounded-2xl text-center text-muted-foreground text-xs space-y-2">
-                            <p>No fields added yet.</p>
+                            <p>No fields in this step yet.</p>
                             {onOpenAddWidgetDialog && (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => onOpenAddWidgetDialog(0)}
-                                className="text-xs font-semibold gap-1"
+                                onClick={() => onOpenAddWidgetDialog(currentStepIndex, activeStep.id)}
+                                className="h-8 text-xs gap-1.5"
                               >
-                                <Plus className="size-3.5" /> Add Field
+                                <Plus className="size-3" /> Add Question to Step
                               </Button>
                             )}
                           </div>
                         )}
                       </div>
+
+                      {/* Add Field Button inside split canvas */}
+                      {onOpenAddWidgetDialog && activeStepFields.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => onOpenAddWidgetDialog(currentStepIndex, activeStep.id)}
+                          className="w-full h-9 border border-dashed border-border text-xs text-muted-foreground hover:text-primary hover:border-primary/50 gap-1.5 rounded-xl"
+                        >
+                          <Plus className="size-3.5" /> Add Another Field to this Step
+                        </Button>
+                      )}
                     </div>
 
-                    {/* Submit Button Preview */}
-                    <div className="pt-2">
-                      <Button
-                        type="button"
-                        className="w-full h-11 text-xs sm:text-sm font-bold text-white rounded-xl shadow-md gap-2"
-                        style={{ backgroundColor: primaryColor }}
-                      >
-                        <span>{formData.submitButtonText || 'Submit Request & Get Quote'}</span>
-                        <ArrowRight className="size-4" />
-                      </Button>
+                    {/* Bottom Action Footer */}
+                    <div className="pt-4 border-t border-border/40 flex items-center justify-between">
+                      {steps.length > 1 && currentStepIndex > 0 ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onStepChange(Math.max(0, currentStepIndex - 1))}
+                          className="h-9 text-xs gap-1"
+                        >
+                          <ArrowLeft className="size-3" /> Previous Step
+                        </Button>
+                      ) : (
+                        <span />
+                      )}
+
+                      {steps.length > 1 && currentStepIndex < steps.length - 1 ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => onStepChange(currentStepIndex + 1)}
+                          className="h-9 text-xs gap-1.5 px-4 font-bold"
+                          style={{ backgroundColor: primaryColor, color: '#ffffff' }}
+                        >
+                          Next Step <ArrowRight className="size-3" />
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-9 text-xs gap-1.5 px-5 font-bold shadow-md"
+                          style={{ backgroundColor: primaryColor, color: '#ffffff' }}
+                        >
+                          {formData.settings?.submitButtonText || 'Submit Form ⚡'}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
