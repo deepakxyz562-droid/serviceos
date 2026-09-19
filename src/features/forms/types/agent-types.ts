@@ -5,11 +5,16 @@ export type AgentChannelType =
   | 'whatsapp'
   | 'phone'
   | 'gmail'
+  | 'wordpress'
   | 'presentation'
   | 'voice'
   | 'messenger'
+  | 'shopify'
+  | 'agent_app'
   | 'sms'
-  | 'crm';
+  | 'crm'
+  | 'canva'
+  | 'platforms';
 
 export interface QuickActionButton {
   id: string;
