@@ -71,6 +71,8 @@ import { StudioAiCopilotSidebar } from './builder/studio-ai-copilot-sidebar';
 import { StudioPagesTree } from './builder/studio-pages-tree';
 import { StudioFocusCanvas } from './builder/studio-focus-canvas';
 import { StudioWidgetPalette } from './builder/studio-widget-palette';
+import { UniversalPublishCenter } from './builder/universal-publish-center';
+import { generateUniversalProjectFromPrompt } from '@/lib/forms/generators/ai-universal-generator';
 import {
   FIELD_REGISTRY,
   FIELD_CATEGORY_META,
@@ -2021,6 +2023,12 @@ export function FormStudioBuilder({
         {studioTab === 'publish' && (
           <main className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center">
             <div className="w-full max-w-4xl space-y-6 pb-24">
+              {/* Universal 3-Way Publishing Engine */}
+              <UniversalPublishCenter
+                project={generateUniversalProjectFromPrompt(formData.name || 'Service App', 'general')}
+                siteOrigin={siteOrigin}
+              />
+
               {/* Section 1: Direct Link */}
               <Card className="rounded-2xl border-border/80 shadow-md bg-gradient-to-b from-card to-emerald-500/5">
                 <CardHeader className="pb-3">
