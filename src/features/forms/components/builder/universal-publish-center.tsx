@@ -25,16 +25,25 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
+import { FloatingFormAgentWidget } from '../runtime/floating-form-agent-widget';
+
 interface UniversalPublishCenterProps {
   project: UniversalProject;
   siteOrigin?: string;
+  formSchema?: any;
 }
 
 export function UniversalPublishCenter({
   project,
   siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com',
+  formSchema,
 }: UniversalPublishCenterProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [widgetPosition, setWidgetPosition] = useState<'bottom-right' | 'bottom-left' | 'bottom-center'>('bottom-right');
+  const [widgetGreeting, setWidgetGreeting] = useState('👋 Have questions or want a quick quote? Ask our AI!');
+  const [widgetColor, setWidgetColor] = useState(project.brandColor || '#059669');
+  const [widgetDefaultMode, setWidgetDefaultMode] = useState<'chat' | 'form'>('chat');
+  const [showLiveWidget, setShowLiveWidget] = useState(false);
 
   const formSlug = project.forms?.[0]?.slug || `${project.slug}-form`;
   const agentSlug = project.agents?.[0]?.slug || `${project.slug}-agent`;
@@ -45,7 +54,7 @@ export function UniversalPublishCenter({
   const appUrl = `${siteOrigin}/app/${appSlug}`;
 
   const formEmbedCode = `<script src="${siteOrigin}/widget/form.js" data-form-id="${formSlug}" async></script>`;
-  const agentEmbedCode = `<script src="${siteOrigin}/widget/agent.js" data-agent-id="${agentSlug}" data-position="bottom-right" async></script>`;
+  const agentEmbedCode = `<script src="${siteOrigin}/widget/agent.js" data-agent-id="${agentSlug}" data-position="${widgetPosition}" data-color="${widgetColor}" async></script>`;
 
   const copyText = (text: string, key: string, label = 'Link') => {
     navigator.clipboard.writeText(text);
@@ -55,7 +64,7 @@ export function UniversalPublishCenter({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto p-4 sm:p-8 space-y-6 select-none font-sans">
+    <div className="w-full max-w-5xl mx-auto p-4 sm:p-8 space-y-8 select-none font-sans">
       <div className="space-y-1">
         <h2 className="text-xl sm:text-2xl font-black text-foreground flex items-center gap-2">
           <Share2 className="size-6 text-primary" />
@@ -82,7 +91,7 @@ export function UniversalPublishCenter({
                 Deploy as a clean standalone intake/quote form or embed directly on WordPress/Shopify.
               </p>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-muted-foreground">Public URL</label>
+                <label className="text-[10px] font-bold uppercase text-muted-foreground">Public URL (/f/[slug])</label>
                 <div className="flex gap-1">
                   <Input value={formUrl} readOnly className="text-xs font-mono h-8 bg-muted/40" />
                   <Button
@@ -136,7 +145,7 @@ export function UniversalPublishCenter({
                 Deploy as a 24/7 floating website chat concierge, full-screen chat, or WhatsApp bot.
               </p>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-muted-foreground">Chat URL</label>
+                <label className="text-[10px] font-bold uppercase text-muted-foreground">Chat URL (/chat/[agentId])</label>
                 <div className="flex gap-1">
                   <Input value={agentUrl} readOnly className="text-xs font-mono h-8 bg-muted/40" />
                   <Button
@@ -190,7 +199,7 @@ export function UniversalPublishCenter({
                 Installable Progressive Web App (PWA) on iOS &amp; Android bundling Home Tiles, AI Concierge, Forms &amp; Passport.
               </p>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-muted-foreground">App PWA Link</label>
+                <label className="text-[10px] font-bold uppercase text-muted-foreground">App PWA Link (/app/[slug])</label>
                 <div className="flex gap-1">
                   <Input value={appUrl} readOnly className="text-xs font-mono h-8 bg-muted/40" />
                   <Button
@@ -223,6 +232,165 @@ export function UniversalPublishCenter({
           </div>
         </Card>
       </div>
+
+      {/* ─── 4. CUSTOMIZABLE FLOATING POPUP WIDGET CONFIGURATOR ─── */}
+      <Card className="rounded-2xl border-emerald-500/30 bg-gradient-to-br from-card via-card to-emerald-500/5 shadow-lg overflow-hidden">
+        <CardHeader className="pb-4 border-b border-border/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                <Bot className="size-5 text-emerald-600" />
+                Customizable Floating Popup Widget (Live Embed &amp; Tester)
+              </CardTitle>
+              <CardDescription className="text-xs mt-1">
+                Customize your website's floating AI concierge &amp; lead capture bubble. Test it live directly on this screen.
+              </CardDescription>
+            </div>
+            <Button
+              onClick={() => {
+                setShowLiveWidget((prev) => !prev);
+                if (!showLiveWidget) {
+                  toast.success('✨ Floating Widget launcher active in bottom corner!');
+                }
+              }}
+              className={`text-xs font-bold gap-1.5 shadow-md ${
+                showLiveWidget ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }`}
+            >
+              <Sparkles className="size-3.5" />
+              {showLiveWidget ? 'Hide Live Widget' : 'Test Live Widget on Screen'}
+            </Button>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Position Picker */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-foreground">Widget Position</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'bottom-left', label: 'Bottom Left' },
+                  { id: 'bottom-center', label: 'Center' },
+                  { id: 'bottom-right', label: 'Bottom Right' },
+                ].map((pos) => (
+                  <button
+                    key={pos.id}
+                    type="button"
+                    onClick={() => setWidgetPosition(pos.id as any)}
+                    className={`p-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                      widgetPosition === pos.id
+                        ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20'
+                        : 'border-border bg-card hover:bg-muted/40 text-muted-foreground'
+                    }`}
+                  >
+                    {pos.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Default Mode & Color */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-foreground">Default Open Mode</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWidgetDefaultMode('chat')}
+                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                    widgetDefaultMode === 'chat'
+                      ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20'
+                      : 'border-border bg-card hover:bg-muted/40 text-muted-foreground'
+                  }`}
+                >
+                  <Bot className="size-3.5" /> AI Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWidgetDefaultMode('form')}
+                  className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                    widgetDefaultMode === 'form'
+                      ? 'border-purple-600 bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 ring-2 ring-purple-500/20'
+                      : 'border-border bg-card hover:bg-muted/40 text-muted-foreground'
+                  }`}
+                >
+                  <Globe className="size-3.5" /> Lead Form
+                </button>
+              </div>
+            </div>
+
+            {/* Brand Color Picker */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-foreground">Theme Color</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  value={widgetColor}
+                  onChange={(e) => setWidgetColor(e.target.value)}
+                  className="w-12 h-9 p-1 rounded-lg cursor-pointer bg-card border-border"
+                />
+                <Input
+                  type="text"
+                  value={widgetColor}
+                  onChange={(e) => setWidgetColor(e.target.value)}
+                  className="font-mono text-xs h-9"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Greeting Bubble Text */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-foreground">Greeting Bubble Text (Preview Callout)</label>
+            <Input
+              value={widgetGreeting}
+              onChange={(e) => setWidgetGreeting(e.target.value)}
+              placeholder="e.g. 👋 Have questions or want a quick quote? Ask our AI!"
+              className="text-xs"
+            />
+          </div>
+
+          {/* 1-Line Embed Code */}
+          <div className="p-4 rounded-xl bg-slate-900 text-slate-100 dark:bg-slate-950 space-y-2 border border-slate-800">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                1-LINE WEBSITE EMBED SNIPPET
+              </span>
+              <Button
+                size="sm"
+                onClick={() =>
+                  copyText(
+                    `<script src="${siteOrigin}/widget/agent.js" data-agent-id="${agentSlug}" data-position="${widgetPosition}" data-color="${widgetColor}" data-greeting="${encodeURIComponent(widgetGreeting)}" async></script>`,
+                    'embed_full',
+                    'Widget Embed Code'
+                  )
+                }
+                className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold"
+              >
+                {copiedKey === 'embed_full' ? <Check className="size-3 mr-1" /> : <Copy className="size-3 mr-1" />}
+                Copy Embed Script
+              </Button>
+            </div>
+            <pre className="text-[11px] font-mono overflow-x-auto text-emerald-400 whitespace-pre-wrap leading-relaxed">
+              {`<script src="${siteOrigin}/widget/agent.js" data-agent-id="${agentSlug}" data-position="${widgetPosition}" data-color="${widgetColor}" async></script>`}
+            </pre>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Live Floating Widget Test Instance */}
+      {showLiveWidget && (
+        <FloatingFormAgentWidget
+          agentId={agentSlug}
+          formId={formSlug}
+          businessName={project.name || 'Apex Services'}
+          brandColor={widgetColor}
+          position={widgetPosition}
+          greetingBubble={widgetGreeting}
+          defaultMode={widgetDefaultMode}
+          formSchema={formSchema}
+        />
+      )}
     </div>
   );
 }

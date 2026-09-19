@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { normalizeFormSchema } from '@/lib/forms/form-schema-types';
+import { getTemplateSync } from '@/lib/forms/templates';
 
 /**
  * GET /api/public/forms/[id]
@@ -51,6 +52,24 @@ export async function GET(
     });
 
     if (!form) {
+      // Check canonical template registry fallback (supports template IDs, slugs, and demo forms)
+      const template = getTemplateSync(id);
+      if (template) {
+        const normalizedSchema = normalizeFormSchema(template.schema, template.schema.fields || []);
+        return NextResponse.json({
+          id: template.id,
+          name: template.name,
+          slug: template.id,
+          description: template.shortDescription || template.description,
+          type: template.categories[0] || 'lead_capture',
+          schema: normalizedSchema,
+          branding: {
+            businessName: template.name.split(' ')[0] + ' Services',
+            businessPhone: '(555) 019-2834',
+            businessEmail: 'contact@serviceprovider.com',
+          },
+        });
+      }
       return NextResponse.json({ error: 'Form not found or inactive' }, { status: 404 });
     }
 

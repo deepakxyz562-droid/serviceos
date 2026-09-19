@@ -11,8 +11,8 @@
  * Adding a new widget's settings means adding entries to its settingsSchema
  * — NOT touching the builder.
  */
-import { useState } from 'react';
-import { GripVertical, Plus, Trash2, X, Copy, Check } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { GripVertical, Plus, Trash2, X, Copy, Check, Calculator, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -31,6 +31,7 @@ import {
 } from '@/lib/forms/field-settings-types';
 import type { FieldDefinition } from '@/lib/forms/field-settings-types';
 import { cn } from '@/lib/utils';
+import { evaluateFormula, formatCalculationOutput } from '@/lib/forms/calculation-engine';
 
 export interface WidgetSettingsRendererProps {
   definition: FieldDefinition;
@@ -48,7 +49,7 @@ export interface WidgetSettingsRendererProps {
   onUpdate?: () => void;
 }
 
-type SubTab = 'general' | 'field_specific' | 'survey' | 'advanced' | 'custom_css';
+type SubTab = 'general' | 'field_specific' | 'calculation' | 'survey' | 'advanced' | 'custom_css';
 
 export function WidgetSettingsRenderer({
   definition,
@@ -595,9 +596,9 @@ export function WidgetSettingsRenderer({
             </div>
           </div>
         ) : (
-          /* Standard Question Properties Tabs: [ General ] [ Options ] [ Advanced ] */
-          <div className={cn('grid gap-1 bg-muted/60 p-1 rounded-lg border border-border/60', hasSurveyTab ? 'grid-cols-4' : 'grid-cols-3')}>
-            {(['general', 'field_specific', 'survey', 'advanced'] as SubTab[])
+          /* Standard Question Properties Tabs: [ General ] [ Options ] [ 🧮 Calculation ] [ Advanced ] */
+          <div className={cn('grid gap-1 bg-muted/60 p-1 rounded-lg border border-border/60', hasSurveyTab ? 'grid-cols-5' : 'grid-cols-4')}>
+            {(['general', 'field_specific', 'calculation', 'survey', 'advanced'] as SubTab[])
               .filter((tab) => tab !== 'survey' || hasSurveyTab)
               .map((tab) => (
               <button
@@ -605,26 +606,27 @@ export function WidgetSettingsRenderer({
                 type="button"
                 onClick={() => setSubTab(tab)}
                 className={cn(
-                  'py-1.5 rounded-md text-center text-[11px] font-semibold transition-all',
+                  'py-1.5 rounded-md text-center text-[10px] font-semibold transition-all',
                   subTab === tab
-                    ? 'bg-background shadow-xs text-foreground'
+                    ? 'bg-background shadow-xs text-foreground font-bold'
                     : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {tab === 'general' && 'General'}
                 {tab === 'field_specific' && (
                   definition.category === 'choice' ? 'Options'
-                  : definition.category === 'payment' ? 'Payment Properties'
-                  : definition.category === 'signature' ? 'Signature Settings'
-                  : definition.category === 'media' ? 'Media Settings'
-                  : definition.category === 'maps' ? 'Map Settings'
-                  : definition.category === 'security' ? 'Security Settings'
-                  : definition.category === 'datetime' ? 'Date Settings'
-                  : definition.category === 'survey' ? 'Survey Settings'
-                  : definition.category === 'calculation' ? 'Calculation Settings'
-                  : definition.category === 'file' ? 'File Settings'
-                  : 'Field Settings'
+                  : definition.category === 'payment' ? 'Payment'
+                  : definition.category === 'signature' ? 'Sign'
+                  : definition.category === 'media' ? 'Media'
+                  : definition.category === 'maps' ? 'Map'
+                  : definition.category === 'security' ? 'Security'
+                  : definition.category === 'datetime' ? 'Date'
+                  : definition.category === 'survey' ? 'Survey'
+                  : definition.category === 'calculation' ? 'Calc'
+                  : definition.category === 'file' ? 'File'
+                  : 'Settings'
                 )}
+                {tab === 'calculation' && '🧮 Math'}
                 {tab === 'survey' && 'Surveying'}
                 {tab === 'advanced' && 'Advanced'}
               </button>
@@ -648,6 +650,108 @@ export function WidgetSettingsRenderer({
               onChange={(e) => onConfigChange('customCss', e.target.value)}
               rows={8}
             />
+          </div>
+        ) : subTab === 'calculation' && !isWidgetSettingsMode ? (
+          /* ─── COGNITO-GRADE CALCULATION & FORMULA BUILDER ─── */
+          <div className="space-y-4 p-1">
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1.5">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                <Calculator className="size-4" />
+                <span className="text-xs font-bold">Cognito Calculation Engine</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Automatically calculate this field's value using mathematical formulas and other question values.
+              </p>
+            </div>
+
+            {/* Formula Input */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-semibold">Calculation Formula</Label>
+                <span className="text-[9px] font-mono text-muted-foreground">e.g. [sqft] * 4.5 + [base]</span>
+              </div>
+              <Textarea
+                className="font-mono text-xs bg-background min-h-[70px]"
+                placeholder="= [Square Feet] * 4.50 + [Base Fee]"
+                value={String(widgetConfig.calculationFormula || field.calculationFormula || '')}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onFieldChange('calculationFormula', val);
+                  onConfigChange('calculationFormula', val);
+                }}
+              />
+            </div>
+
+            {/* Field Variables Insertion Tokens */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">Insert Field Variable</Label>
+              <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto p-1 bg-muted/40 rounded-lg border border-border/60">
+                {allFields.filter((f) => f.id !== field.id).map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      const current = String(widgetConfig.calculationFormula || field.calculationFormula || '');
+                      const token = `[${f.label || f.id}]`;
+                      const updated = current ? `${current} ${token}` : token;
+                      onFieldChange('calculationFormula', updated);
+                      onConfigChange('calculationFormula', updated);
+                    }}
+                    className="px-2 py-0.5 rounded bg-background hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/40 text-[10px] font-mono font-medium border border-border/80 transition-all text-left truncate max-w-[150px]"
+                    title={`Click to insert [${f.label || f.id}]`}
+                  >
+                    + {f.label || f.id}
+                  </button>
+                ))}
+                {allFields.filter((f) => f.id !== field.id).length === 0 && (
+                  <span className="text-[10px] text-muted-foreground p-1 italic">Add more fields to insert them as variables</span>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Math Operators */}
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase text-muted-foreground">Math Operators</Label>
+              <div className="flex flex-wrap gap-1">
+                {['+', '-', '*', '/', '(', ')', '0.05', '0.10', '0.20'].map((op) => (
+                  <button
+                    key={op}
+                    type="button"
+                    onClick={() => {
+                      const current = String(widgetConfig.calculationFormula || field.calculationFormula || '');
+                      const updated = current ? `${current} ${op} ` : `${op} `;
+                      onFieldChange('calculationFormula', updated);
+                      onConfigChange('calculationFormula', updated);
+                    }}
+                    className="size-7 rounded bg-muted hover:bg-muted/80 text-foreground font-mono font-bold text-xs flex items-center justify-center border border-border/80 transition-all"
+                  >
+                    {op}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Live Formula Preview Test */}
+            {Boolean(widgetConfig.calculationFormula || field.calculationFormula) && (
+              <div className="p-3 rounded-xl bg-slate-900 text-slate-100 dark:bg-slate-950 border border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Formula Syntax Check</span>
+                  <Badge className="bg-emerald-600 text-white text-[9px]">Valid Formula</Badge>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-xs text-slate-300">Live Preview Output:</span>
+                  <span className="text-sm font-bold font-mono text-emerald-400">
+                    {formatCalculationOutput(
+                      evaluateFormula(
+                        String(widgetConfig.calculationFormula || field.calculationFormula || '0'),
+                        { sqft: 1500, rooms: 3, hours: 4, rate: 85, base: 50 },
+                        0
+                      )
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-3">

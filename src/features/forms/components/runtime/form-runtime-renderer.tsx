@@ -40,6 +40,7 @@ import {
   History,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { calculateFormValues } from '@/lib/forms/calculation-engine';
 
 /**
  * Parses video URLs into responsive embed / HTML5 video sources.
@@ -559,7 +560,12 @@ export function FormRuntimeRenderer({
   // Ghost form partial lead capture
   const handleFieldChange = (fieldId: string, value: any) => {
     setFormData((prev) => {
-      const next = { ...prev, [fieldId]: value };
+      let next = { ...prev, [fieldId]: value };
+
+      // Evaluate any Cognito Calculation Engine formulas across all fields
+      if (schema.fields && schema.fields.length > 0) {
+        next = calculateFormValues(schema.fields as any, next);
+      }
 
       // Auto capture lead if email/phone entered
       if (!previewMode && formId && !partialSavedRef.current) {

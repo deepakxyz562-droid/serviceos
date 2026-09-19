@@ -33,6 +33,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
+import { getTemplateSync } from '@/lib/forms/templates';
+
 export default function UniversalAppPublicPage() {
   const params = useParams();
   const slug = (params?.slug as string) || 'apex-hvac';
@@ -52,6 +54,50 @@ export default function UniversalAppPublicPage() {
   const [chatSending, setChatSending] = useState(false);
 
   useEffect(() => {
+    // Check canonical template registry
+    const template = getTemplateSync(slug);
+    if (template && template.appConfig) {
+      setProject({
+        id: template.id,
+        name: template.name,
+        slug: template.id,
+        brandColor: template.appConfig.primaryColor || '#059669',
+        screens: [
+          {
+            id: 'scr_home',
+            title: 'Home Hub',
+            rootNode: {
+              id: 'root',
+              type: 'container',
+              style: { padding: '16px' },
+              children: [],
+            },
+          },
+        ],
+        forms: template.appConfig.bundledForms.map((f, i) => ({
+          id: `form_${i}`,
+          title: f.title,
+          slug: f.title.toLowerCase().replace(/\s+/g, '-'),
+          fields: [],
+        })),
+        agents: [
+          {
+            id: `agent_${template.id}`,
+            name: template.appConfig.pinnedAgentName || '24/7 AI Concierge',
+            slug: `${template.id}-agent`,
+            systemPrompt: 'You are an intelligent service assistant.',
+          },
+        ],
+        pwaSettings: {
+          appName: template.name,
+          themeColor: template.appConfig.primaryColor || '#059669',
+          startUrl: `/app/${template.id}`,
+        },
+      });
+      setLoading(false);
+      return;
+    }
+
     // Generate or load project configuration
     const loaded = generateUniversalProjectFromPrompt(
       slug.replace(/-/g, ' '),
