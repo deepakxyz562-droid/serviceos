@@ -83,6 +83,13 @@ function FormMediaHeroPanel({
   primaryColor: string;
 }) {
   const [isMuted, setIsMuted] = useState(mediaPanel?.videoMuted ?? true);
+  const showMedia = mediaPanel?.showMedia !== false;
+  const showBadge = mediaPanel?.showBadge !== false;
+  const showHeadline = mediaPanel?.showHeadline !== false;
+  const showSubtitle = mediaPanel?.showSubtitle !== false;
+  const showBenefits = mediaPanel?.showBenefits !== false;
+  const showTestimonial = mediaPanel?.showTestimonial !== false;
+
   const videoParsed = parseVideoEmbed(
     mediaPanel?.mediaType === 'video' || mediaPanel?.mediaType === 'youtube' || mediaPanel?.mediaType === 'vimeo'
       ? mediaPanel?.videoEmbedUrl || mediaPanel?.mediaUrl
@@ -106,94 +113,121 @@ function FormMediaHeroPanel({
   const testimonial = mediaPanel?.testimonial;
 
   return (
-    <div className="relative flex flex-col justify-between overflow-hidden bg-slate-900 text-white p-6 sm:p-8 lg:p-10 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-[320px] lg:min-h-full">
-      {/* Background Image / Video / Map / Gradient Backdrop */}
-      {isMap ? (
-        <div className="absolute inset-0 z-0 overflow-hidden bg-slate-950">
-          <iframe
-            src={`https://maps.google.com/maps?q=${encodeURIComponent(mediaPanel?.mapAddress || 'Austin, TX')}&t=&z=${mediaPanel?.mapZoom || 13}&ie=UTF8&iwloc=&output=embed`}
-            title="Service Location Map"
-            className="w-full h-full object-cover scale-110 pointer-events-none opacity-50 mix-blend-luminosity"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-900/40" />
-        </div>
-      ) : isGradient ? (
-        <div className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-950 via-slate-950 to-emerald-950">
-          <div className="absolute -top-24 -left-24 size-96 rounded-full blur-3xl opacity-35 bg-primary" />
-          <div className="absolute -bottom-24 -right-24 size-96 rounded-full blur-3xl opacity-30 bg-blue-600" />
-        </div>
-      ) : isVideo ? (
-        <div className="absolute inset-0 z-0 overflow-hidden">
-          {videoParsed.type === 'youtube' || videoParsed.type === 'vimeo' ? (
-            <iframe
-              src={videoParsed.embedUrl}
-              title="Media Video"
-              className="w-full h-full object-cover scale-125 pointer-events-none opacity-40 mix-blend-luminosity"
-              allow="autoplay; muted; fullscreen"
-            />
-          ) : (
-            <video
-              src={videoParsed.embedUrl || mediaPanel?.mediaUrl}
-              autoPlay={mediaPanel?.videoAutoplay ?? true}
-              muted={isMuted}
-              loop={mediaPanel?.videoLoop ?? true}
-              playsInline
-              className="w-full h-full object-cover opacity-40 mix-blend-luminosity"
-            />
-          )}
-          <div
-            className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-900/60"
-            style={{ opacity: (mediaPanel?.overlayOpacity ?? 80) / 100 }}
-          />
-        </div>
-      ) : hasImage ? (
-        <div className="absolute inset-0 z-0 overflow-hidden">
-          <img
-            src={mediaPanel?.mediaUrl}
-            alt={headline}
-            className="w-full h-full object-cover opacity-45 transition-transform duration-700 hover:scale-105"
-          />
-          <div
-            className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/75 to-slate-900/50"
-            style={{ opacity: (mediaPanel?.overlayOpacity ?? 75) / 100 }}
-          />
-        </div>
-      ) : (
-        <div className="absolute inset-0 z-0 bg-gradient-to-br from-teal-950 via-slate-900 to-indigo-950 opacity-95">
-          <div className="absolute -top-24 -left-24 size-96 rounded-full blur-3xl opacity-30 bg-teal-500" />
-          <div className="absolute -bottom-24 -right-24 size-96 rounded-full blur-3xl opacity-25 bg-blue-500" />
-        </div>
+    <div
+      className="relative flex flex-col justify-between overflow-hidden text-white p-6 sm:p-8 lg:p-10 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-[320px] lg:min-h-full"
+      style={{
+        backgroundColor: mediaPanel?.backgroundColor || '#0f172a',
+      }}
+    >
+      {/* Background Image / Backdrop if present */}
+      {mediaPanel?.backgroundImageUrl && (
+        <div
+          className="absolute inset-0 z-0 bg-cover bg-center transition-all duration-500"
+          style={{
+            backgroundImage: `url(${mediaPanel.backgroundImageUrl})`,
+            filter: mediaPanel?.backgroundBlur ? `blur(${mediaPanel.backgroundBlur}px)` : undefined,
+          }}
+        />
+      )}
+
+      {/* Dark vignette overlay */}
+      <div
+        className="absolute inset-0 z-0 bg-slate-950 pointer-events-none transition-opacity duration-300"
+        style={{
+          opacity: (mediaPanel?.overlayOpacity ?? (mediaPanel?.backgroundImageUrl ? 75 : 60)) / 100,
+        }}
+      />
+
+      {/* Background Media (Map / Gradient / Video / Image) */}
+      {showMedia && (
+        <>
+          {isMap ? (
+            <div className="absolute inset-0 z-0 overflow-hidden bg-slate-950">
+              <iframe
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(mediaPanel?.mapAddress || 'Austin, TX')}&t=&z=${mediaPanel?.mapZoom || 13}&ie=UTF8&iwloc=&output=embed`}
+                title="Service Location Map"
+                className="w-full h-full object-cover scale-110 pointer-events-none opacity-50 mix-blend-luminosity"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-900/40" />
+            </div>
+          ) : isGradient ? (
+            <div className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-950 via-slate-950 to-emerald-950">
+              <div className="absolute -top-24 -left-24 size-96 rounded-full blur-3xl opacity-35 bg-primary" />
+              <div className="absolute -bottom-24 -right-24 size-96 rounded-full blur-3xl opacity-30 bg-blue-600" />
+            </div>
+          ) : isVideo ? (
+            <div className="absolute inset-0 z-0 overflow-hidden">
+              {videoParsed.type === 'youtube' || videoParsed.type === 'vimeo' ? (
+                <iframe
+                  src={videoParsed.embedUrl}
+                  title="Media Video"
+                  className="w-full h-full object-cover scale-125 pointer-events-none opacity-40 mix-blend-luminosity"
+                  allow="autoplay; muted; fullscreen"
+                />
+              ) : (
+                <video
+                  src={videoParsed.embedUrl || mediaPanel?.mediaUrl}
+                  autoPlay={mediaPanel?.videoAutoplay ?? true}
+                  muted={isMuted}
+                  loop={mediaPanel?.videoLoop ?? true}
+                  playsInline
+                  className="w-full h-full object-cover opacity-40 mix-blend-luminosity"
+                />
+              )}
+              <div
+                className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-900/60"
+                style={{ opacity: (mediaPanel?.overlayOpacity ?? 80) / 100 }}
+              />
+            </div>
+          ) : hasImage && mediaPanel?.mediaUrl ? (
+            <div className="absolute inset-0 z-0 overflow-hidden">
+              <img
+                src={mediaPanel?.mediaUrl}
+                alt={headline}
+                className="w-full h-full object-cover opacity-45 transition-transform duration-700 hover:scale-105"
+              />
+              <div
+                className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/75 to-slate-900/50"
+                style={{ opacity: (mediaPanel?.overlayOpacity ?? 75) / 100 }}
+              />
+            </div>
+          ) : null}
+        </>
       )}
 
       {/* Top Media Header & Badge */}
       <div className="relative z-10 space-y-4">
         <div className="flex items-center justify-between gap-2">
-          {badge ? (
-            <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md border border-white/20"
-              style={{ backgroundColor: `${primaryColor}30`, color: '#ffffff' }}
-            >
-              <Sparkles className="size-3.5 text-amber-300" />
-              {badge}
-            </span>
-          ) : isMap ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-600/30 backdrop-blur-md border border-rose-500/30 text-rose-200">
-              <ShieldCheck className="size-3.5 text-rose-400" />
-              Local Verified Service Area
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md border border-white/15 text-white/90">
-              <ShieldCheck className="size-3.5 text-emerald-400" />
-              Verified &amp; Secure Intake
-            </span>
+          {showBadge && (
+            <>
+              {badge ? (
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md border border-white/20"
+                  style={{ backgroundColor: `${primaryColor}30`, color: '#ffffff' }}
+                >
+                  <Sparkles className="size-3.5 text-amber-300" />
+                  {badge}
+                </span>
+              ) : isMap ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-600/30 backdrop-blur-md border border-rose-500/30 text-rose-200">
+                  <ShieldCheck className="size-3.5 text-rose-400" />
+                  Local Verified Service Area
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md border border-white/15 text-white/90">
+                  <ShieldCheck className="size-3.5 text-emerald-400" />
+                  Verified &amp; Secure Intake
+                </span>
+              )}
+            </>
           )}
 
           {/* Sound toggle if HTML5 video */}
-          {isVideo && videoParsed.type === 'mp4' && (
+          {showMedia && isVideo && videoParsed.type === 'mp4' && (
             <button
               type="button"
               onClick={() => setIsMuted(!isMuted)}
-              className="size-7 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white transition-all border border-white/10"
+              className="size-7 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white transition-all border border-white/10 ml-auto"
               title={isMuted ? 'Unmute video' : 'Mute video'}
             >
               {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
@@ -201,79 +235,89 @@ function FormMediaHeroPanel({
           )}
         </div>
 
-        <div className="space-y-2 pt-2">
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-snug">
-            {headline}
-          </h2>
-          {subtitle && (
-            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md">
-              {subtitle}
-            </p>
-          )}
-        </div>
+        {(showHeadline || showSubtitle) && (
+          <div className="space-y-2 pt-2">
+            {showHeadline && (
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-snug">
+                {headline}
+              </h2>
+            )}
+            {showSubtitle && subtitle && (
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md">
+                {subtitle}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Bullet Benefits List */}
-        {benefits.length > 0 ? (
-          <div className="space-y-2.5 pt-4">
-            {benefits.map((benefit, i) => (
-              <div key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200">
-                <div
-                  className="size-4 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                  style={{ backgroundColor: `${primaryColor}40` }}
-                >
-                  <CheckCircle2 className="size-3.5 text-emerald-400" />
-                </div>
-                <span>{benefit}</span>
+        {showBenefits && (
+          <>
+            {benefits.length > 0 ? (
+              <div className="space-y-2.5 pt-4">
+                {benefits.map((benefit, i) => (
+                  <div key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200">
+                    <div
+                      className="size-4 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                      style={{ backgroundColor: `${primaryColor}40` }}
+                    >
+                      <CheckCircle2 className="size-3.5 text-emerald-400" />
+                    </div>
+                    <span>{benefit}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2 pt-4">
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-              <span>Instant AI price calculation &amp; live estimate</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-              <span>Guaranteed response within 15 minutes</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300">
-              <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-              <span>100% Satisfaction &amp; Escrow Guarantee</span>
-            </div>
-          </div>
+            ) : (
+              <div className="space-y-2 pt-4">
+                <div className="flex items-center gap-2 text-xs text-slate-300">
+                  <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+                  <span>Instant AI price calculation &amp; live estimate</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-300">
+                  <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+                  <span>Guaranteed response within 15 minutes</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-300">
+                  <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+                  <span>100% Satisfaction &amp; Escrow Guarantee</span>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* Bottom Testimonial / Social Proof */}
-      <div className="relative z-10 pt-6">
-        {testimonial ? (
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 shadow-sm space-y-1.5">
-            <div className="flex items-center gap-1 text-amber-400">
-              {Array.from({ length: testimonial.rating || 5 }).map((_, i) => (
-                <Star key={i} className="size-3 fill-amber-400" />
-              ))}
+      {showTestimonial && (
+        <div className="relative z-10 pt-6">
+          {testimonial ? (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 shadow-sm space-y-1.5">
+              <div className="flex items-center gap-1 text-amber-400">
+                {Array.from({ length: testimonial.rating || 5 }).map((_, i) => (
+                  <Star key={i} className="size-3 fill-amber-400" />
+                ))}
+              </div>
+              <p className="text-xs italic text-slate-200">
+                "{testimonial.quote}"
+              </p>
+              <p className="text-[11px] font-bold text-white">
+                — {testimonial.author} {testimonial.role ? <span className="font-normal text-slate-400">({testimonial.role})</span> : ''}
+              </p>
             </div>
-            <p className="text-xs italic text-slate-200">
-              "{testimonial.quote}"
-            </p>
-            <p className="text-[11px] font-bold text-white">
-              — {testimonial.author} {testimonial.role ? <span className="font-normal text-slate-400">({testimonial.role})</span> : ''}
-            </p>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 backdrop-blur-xs border border-white/10">
-            <div className="flex -space-x-1.5">
-              <div className="size-6 rounded-full bg-emerald-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">A</div>
-              <div className="size-6 rounded-full bg-blue-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">D</div>
-              <div className="size-6 rounded-full bg-indigo-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">M</div>
+          ) : (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 backdrop-blur-xs border border-white/10">
+              <div className="flex -space-x-1.5">
+                <div className="size-6 rounded-full bg-emerald-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">A</div>
+                <div className="size-6 rounded-full bg-blue-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">D</div>
+                <div className="size-6 rounded-full bg-indigo-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">M</div>
+              </div>
+              <div className="text-[11px] text-slate-300">
+                <span className="font-bold text-white">4.9/5 Rating</span> from 1,200+ happy clients
+              </div>
             </div>
-            <div className="text-[11px] text-slate-300">
-              <span className="font-bold text-white">4.9/5 Rating</span> from 1,200+ happy clients
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

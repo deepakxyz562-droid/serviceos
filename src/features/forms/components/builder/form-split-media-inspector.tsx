@@ -20,6 +20,8 @@ import {
   Compass,
   MessageSquareQuote,
   Palette,
+  Check,
+  X,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -43,6 +45,52 @@ export interface FormSplitMediaInspectorProps {
   formName?: string;
 }
 
+const BG_COLOR_PRESETS = [
+  { label: 'Midnight Slate', value: '#0f172a' },
+  { label: 'Deep Obsidian', value: '#020617' },
+  { label: 'Indigo Navy', value: '#1e1b4b' },
+  { label: 'Emerald Forest', value: '#064e3b' },
+  { label: 'Teal Lagoon', value: '#134e4a' },
+  { label: 'Royal Charcoal', value: '#18181b' },
+  { label: 'Pure White', value: '#ffffff' },
+  { label: 'Soft Slate', value: '#f8fafc' },
+];
+
+const CURATED_UNSPLASH_HEROES = [
+  {
+    name: 'Plumbing & Repairs',
+    url: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    name: 'HVAC & AC Service',
+    url: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    name: 'Electrician & Power',
+    url: 'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    name: 'Roofing & Construction',
+    url: 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    name: 'Modern Architecture',
+    url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    name: 'Healthcare & Wellness',
+    url: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    name: 'Tech & Digital MVP',
+    url: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=1200&q=80',
+  },
+  {
+    name: 'Luxury Concierge',
+    url: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80',
+  },
+];
+
 export function FormSplitMediaInspector({
   mediaPanel,
   onChange,
@@ -57,6 +105,13 @@ export function FormSplitMediaInspector({
     headline: formName || 'Fast & Reliable Professional Service',
     subtitle: 'Fill out the form below to receive upfront pricing and schedule top-rated pros.',
     badgeText: '⭐ 5-Star Rated Service Pro',
+    showBadge: true,
+    showHeadline: true,
+    showSubtitle: true,
+    showMedia: true,
+    showBenefits: true,
+    showTestimonial: false,
+    backgroundColor: '#0f172a',
     benefitsList: [
       'Guaranteed response within 15 minutes',
       'Licensed, insured & background-checked',
@@ -89,7 +144,7 @@ export function FormSplitMediaInspector({
   };
 
   return (
-    <div className="space-y-5 text-xs">
+    <div className="space-y-4 text-xs">
       {/* Header Banner */}
       <div className="p-3.5 rounded-xl bg-gradient-to-br from-indigo-50/80 via-white to-emerald-50/80 dark:from-indigo-950/30 dark:via-slate-900 dark:to-emerald-950/30 border border-border/80 shadow-xs space-y-1.5">
         <div className="flex items-center justify-between">
@@ -99,10 +154,10 @@ export function FormSplitMediaInspector({
             </div>
             <div>
               <span className="font-bold text-foreground text-xs block">
-                Hero Media &amp; Map Panel
+                Left Hero Column (Elementor Style)
               </span>
               <span className="text-[10px] text-muted-foreground">
-                2026 Interactive Side-by-Side Canvas
+                Modular Column Background &amp; Widgets
               </span>
             </div>
           </div>
@@ -112,400 +167,424 @@ export function FormSplitMediaInspector({
         </div>
       </div>
 
-      <Tabs defaultValue="media" className="w-full">
-        <TabsList className="grid grid-cols-3 w-full bg-slate-100 dark:bg-slate-900 h-9 p-1 rounded-lg">
-          <TabsTrigger value="media" className="text-[11px] font-semibold">
-            🎥 Media Type
+      <Tabs defaultValue="style" className="w-full">
+        <TabsList className="grid grid-cols-4 w-full bg-slate-100 dark:bg-slate-900 h-9 p-1 rounded-lg">
+          <TabsTrigger value="style" className="text-[10.5px] font-semibold">
+            🎨 Style &amp; BG
           </TabsTrigger>
-          <TabsTrigger value="content" className="text-[11px] font-semibold">
-            📝 Trust &amp; Copy
+          <TabsTrigger value="widgets" className="text-[10.5px] font-semibold">
+            🧩 Widgets
           </TabsTrigger>
-          <TabsTrigger value="layout" className="text-[11px] font-semibold">
-            📐 Layout &amp; Grid
+          <TabsTrigger value="media" className="text-[10.5px] font-semibold">
+            🎥 Media
+          </TabsTrigger>
+          <TabsTrigger value="layout" className="text-[10.5px] font-semibold">
+            📐 Layout
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: MEDIA CONFIGURATION */}
-        <TabsContent value="media" className="space-y-4 pt-3">
-          {/* Media Type Switcher (Image, Video, Map, Gradient, Testimonial) */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold text-foreground">Visual Media Format</Label>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => updateField('mediaType', 'image')}
-                className={`p-2.5 rounded-xl border flex items-center gap-2 font-medium transition-all ${
-                  (panel.mediaType || 'image') === 'image'
-                    ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
-                    : 'border-border hover:border-slate-300'
-                }`}
-              >
-                <ImageIcon className="size-4 text-emerald-600" /> Photo / Image
-              </button>
-              <button
-                type="button"
-                onClick={() => updateField('mediaType', 'video')}
-                className={`p-2.5 rounded-xl border flex items-center gap-2 font-medium transition-all ${
-                  panel.mediaType === 'video' || panel.mediaType === 'youtube' || panel.mediaType === 'vimeo'
-                    ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
-                    : 'border-border hover:border-slate-300'
-                }`}
-              >
-                <Video className="size-4 text-teal-600" /> Video (MP4 / YT)
-              </button>
-              <button
-                type="button"
-                onClick={() => updateField('mediaType', 'map')}
-                className={`p-2.5 rounded-xl border flex items-center gap-2 font-medium transition-all ${
-                  panel.mediaType === 'map'
-                    ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
-                    : 'border-border hover:border-slate-300'
-                }`}
-              >
-                <MapPin className="size-4 text-rose-500" /> Interactive Map
-              </button>
-              <button
-                type="button"
-                onClick={() => updateField('mediaType', 'gradient')}
-                className={`p-2.5 rounded-xl border flex items-center gap-2 font-medium transition-all ${
-                  panel.mediaType === 'gradient'
-                    ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
-                    : 'border-border hover:border-slate-300'
-                }`}
-              >
-                <Palette className="size-4 text-indigo-500" /> 2026 Mesh Glow
-              </button>
-            </div>
-          </div>
+        {/* ═════════════════════════════════════════════════════════════════════
+            TAB 1: COLUMN STYLE & BACKGROUND (Elementor Parity)
+           ═════════════════════════════════════════════════════════════════════ */}
+        <TabsContent value="style" className="space-y-4 pt-3">
+          {/* Column Background Color */}
+          <div className="space-y-2">
+            <Label className="text-[11px] font-bold text-foreground flex items-center justify-between">
+              <span>Left Column Background Color</span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {panel.backgroundColor || '#0f172a'}
+              </span>
+            </Label>
 
-          {/* Map Configuration */}
-          {panel.mediaType === 'map' && (
-            <div className="space-y-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-border">
-              <div className="space-y-1.5">
-                <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
-                  <MapPin className="size-3.5 text-rose-500" /> Business Address / Location Pin
-                </Label>
-                <Input
-                  type="text"
-                  value={panel.mapAddress || ''}
-                  onChange={(e) => updateField('mapAddress', e.target.value)}
-                  placeholder="e.g. 500 Congress Ave, Austin, TX 78701"
-                  className="h-9 text-xs"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[11px] font-semibold text-foreground">Service Radius Badge</Label>
-                <Input
-                  type="text"
-                  value={panel.mapServiceRadius || ''}
-                  onChange={(e) => updateField('mapServiceRadius', e.target.value)}
-                  placeholder="e.g. Serving Austin &amp; surrounding 35 miles"
-                  className="h-9 text-xs"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Gradient Mesh Configuration */}
-          {panel.mediaType === 'gradient' && (
-            <div className="space-y-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-border">
-              <Label className="text-[11px] font-semibold text-foreground">Gradient Palette Theme</Label>
-              <Select
-                value={panel.gradientPreset || 'cyber_emerald'}
-                onValueChange={(val: any) => updateField('gradientPreset', val)}
-              >
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="Select gradient" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cyber_emerald">🟢 Cyber Emerald &amp; Slate</SelectItem>
-                  <SelectItem value="electric_indigo">🟣 Electric Indigo &amp; Violet</SelectItem>
-                  <SelectItem value="solar_amber">🟠 Solar Amber &amp; Crimson</SelectItem>
-                  <SelectItem value="rose_obsidian">🔴 Rose Obsidian &amp; Charcoal</SelectItem>
-                  <SelectItem value="deep_space">🌌 Deep Space Aurora</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Media URL Input (for Image & Video) */}
-          {panel.mediaType !== 'map' && panel.mediaType !== 'gradient' && (
-            <div className="space-y-1.5">
-              <Label className="text-[11px] font-semibold text-foreground">
-                {panel.mediaType === 'video' ? 'Video URL (MP4, YouTube, Vimeo)' : 'Image URL or 4K Unsplash Link'}
-              </Label>
-              <Input
-                type="url"
-                value={panel.mediaUrl || ''}
-                onChange={(e) => updateField('mediaUrl', e.target.value)}
-                placeholder={
-                  panel.mediaType === 'video'
-                    ? 'https://www.youtube.com/watch?v=... or https://...mp4'
-                    : 'https://images.unsplash.com/...'
-                }
-                className="h-9 text-xs"
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={panel.backgroundColor || '#0f172a'}
+                onChange={(e) => updateField('backgroundColor', e.target.value)}
+                className="size-8 rounded-lg border border-border cursor-pointer shrink-0"
               />
-              <p className="text-[10px] text-muted-foreground">
-                {panel.mediaType === 'video'
-                  ? 'Supports YouTube, Vimeo, and direct MP4 video URLs with auto-loop.'
-                  : 'Paste high-res photography, showroom photos, or brand banner.'}
-              </p>
-            </div>
-          )}
-
-          {/* Aspect Ratio */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold text-foreground">Aspect Ratio / Fit</Label>
-            <Select
-              value={panel.aspectRatio || '16-9'}
-              onValueChange={(val: any) => updateField('aspectRatio', val)}
-            >
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Select ratio" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="16-9">16:9 Widescreen (Standard Video &amp; Photo)</SelectItem>
-                <SelectItem value="cover">Full Height Cover (Fills entire column)</SelectItem>
-                <SelectItem value="4-3">4:3 Classic Display</SelectItem>
-                <SelectItem value="1-1">1:1 Square (Product / Headshot)</SelectItem>
-                <SelectItem value="auto">Natural Image Dimensions</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Quick Preset Imagery & Video */}
-          <div className="space-y-1.5 pt-1">
-            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              2026 Industry Presets
-            </Label>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  updateField('mediaType', 'image');
-                  updateField('mediaUrl', 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80');
-                  updateField('headline', 'Certified Heating, Cooling & Air Quality Pros');
-                  updateField('badgeText', '⭐ 4.9/5 Certified Master Techs');
-                }}
-                className="p-1.5 rounded-lg border text-left hover:border-primary text-[11px] truncate bg-card"
-              >
-                ❄️ HVAC &amp; AC Repair
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  updateField('mediaType', 'image');
-                  updateField('mediaUrl', 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80');
-                  updateField('headline', '24/7 Emergency Plumbing & Water Damage');
-                  updateField('badgeText', '⚡ 15-Minute Response Guaranteed');
-                }}
-                className="p-1.5 rounded-lg border text-left hover:border-primary text-[11px] truncate bg-card"
-              >
-                🔧 Plumbing &amp; Drains
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  updateField('mediaType', 'map');
-                  updateField('mapAddress', '1000 Main Street, Metro Area');
-                  updateField('mapServiceRadius', 'Active Dispatch in 45 Mile Radius');
-                  updateField('headline', 'Find Local Technicians Near Your Neighborhood');
-                }}
-                className="p-1.5 rounded-lg border text-left hover:border-primary text-[11px] truncate bg-card"
-              >
-                🗺️ Local Service Map
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  updateField('mediaType', 'video');
-                  updateField('mediaUrl', 'https://assets.mixkit.co/videos/preview/mixkit-handyman-repairing-an-air-conditioner-41315-large.mp4');
-                  updateField('headline', 'Watch How Our Master Technicians Work');
-                }}
-                className="p-1.5 rounded-lg border text-left hover:border-primary text-[11px] truncate bg-card"
-              >
-                🎬 Video Demonstration
-              </button>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* TAB 2: CONTENT & VALUE PROPOSITIONS */}
-        <TabsContent value="content" className="space-y-4 pt-3">
-          {/* Trust Badge */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
-              <Award className="size-3.5 text-amber-500" /> Trust Badge &amp; Rating Text
-            </Label>
-            <Input
-              type="text"
-              value={panel.badgeText || ''}
-              onChange={(e) => updateField('badgeText', e.target.value)}
-              placeholder="e.g. ⭐ 4.9/5 Star Rated Pro • Licensed &amp; Insured"
-              className="h-9 text-xs"
-            />
-          </div>
-
-          {/* Headline */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold text-foreground">Hero Headline Title</Label>
-            <Input
-              type="text"
-              value={panel.headline || ''}
-              onChange={(e) => updateField('headline', e.target.value)}
-              placeholder="e.g. Fast &amp; Reliable Emergency Repairs"
-              className="h-9 text-xs font-semibold"
-            />
-          </div>
-
-          {/* Subtitle */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold text-foreground">Supporting Subtitle</Label>
-            <Textarea
-              value={panel.subtitle || ''}
-              onChange={(e) => updateField('subtitle', e.target.value)}
-              placeholder="e.g. Compare upfront estimates from top verified pros in minutes with zero obligation."
-              rows={2}
-              className="text-xs resize-none"
-            />
-          </div>
-
-          {/* Bullet Benefits List */}
-          <div className="space-y-2 pt-1">
-            <div className="flex items-center justify-between">
-              <Label className="text-[11px] font-semibold text-foreground">
-                Value Proposition Points ({panel.benefitsList?.length || 0})
-              </Label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleAddBenefit}
-                className="h-7 px-2 text-[11px] text-primary gap-1 hover:bg-primary/10"
-              >
-                <Plus className="size-3" /> Add Point
-              </Button>
+              <Input
+                type="text"
+                value={panel.backgroundColor || '#0f172a'}
+                onChange={(e) => updateField('backgroundColor', e.target.value)}
+                className="h-8 text-xs font-mono flex-1"
+                placeholder="#0f172a"
+              />
             </div>
 
-            <div className="space-y-2">
-              {(panel.benefitsList || []).map((benefit, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <CheckCircle2 className="size-3.5 text-primary shrink-0" />
-                  <Input
-                    type="text"
-                    value={benefit}
-                    onChange={(e) => handleUpdateBenefit(idx, e.target.value)}
-                    className="h-8 text-xs flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemoveBenefit(idx)}
-                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="size-3" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* TAB 3: SPLIT RATIO & STEP BEHAVIOR */}
-        <TabsContent value="layout" className="space-y-4 pt-3">
-          {/* Split Ratio Presets */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold text-foreground">Desktop Split Ratio</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: '50-50', label: '50 : 50 Balanced', desc: 'Equal media & form width' },
-                { id: '40-60', label: '40 : 60 Form-Focused', desc: 'Compact media, wide form' },
-                { id: '60-40', label: '60 : 40 Media-Focused', desc: 'Large hero, compact form' },
-                { id: '35-65', label: '35 : 65 Slim Hero', desc: 'Maximized field area' },
-                { id: '30-70', label: '30 : 70 Sidebar', desc: 'Ultra compact info column' },
-              ].map((ratio) => (
+            {/* Quick Color Presets */}
+            <div className="grid grid-cols-4 gap-1.5 pt-1">
+              {BG_COLOR_PRESETS.map((p) => (
                 <button
-                  key={ratio.id}
+                  key={p.value}
                   type="button"
-                  onClick={() => updateField('splitRatio', ratio.id as any)}
-                  className={`p-2.5 rounded-xl border text-left transition-all ${
-                    (panel.splitRatio || '50-50') === ratio.id
-                      ? 'border-primary bg-primary/10 text-primary font-semibold ring-2 ring-primary/20 shadow-xs'
-                      : 'border-border hover:border-slate-300'
+                  onClick={() => updateField('backgroundColor', p.value)}
+                  className={`p-1 rounded-lg border text-center text-[10px] font-semibold flex items-center gap-1.5 transition-all ${
+                    panel.backgroundColor === p.value
+                      ? 'border-primary ring-2 ring-primary/20 font-bold'
+                      : 'border-border/80 hover:border-slate-300'
                   }`}
                 >
-                  <p className="text-xs font-bold">{ratio.label}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{ratio.desc}</p>
+                  <span className="size-3 rounded-full shrink-0 border border-black/20" style={{ backgroundColor: p.value }} />
+                  <span className="truncate">{p.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Panel Position */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold text-foreground">Media Position</Label>
-            <div className="grid grid-cols-2 gap-2">
+          {/* Column Background Image (Optional full column backdrop) */}
+          <div className="space-y-2 pt-2 border-t border-border/60">
+            <Label className="text-[11px] font-bold text-foreground flex items-center justify-between">
+              <span>Column Backdrop Photo (Optional)</span>
+              {panel.backgroundImageUrl && (
+                <button
+                  type="button"
+                  onClick={() => updateField('backgroundImageUrl', null)}
+                  className="text-[10px] text-rose-500 hover:underline font-semibold"
+                >
+                  Remove Backdrop
+                </button>
+              )}
+            </Label>
+
+            <Input
+              type="url"
+              value={panel.backgroundImageUrl || ''}
+              onChange={(e) => updateField('backgroundImageUrl', e.target.value || null)}
+              placeholder="Paste custom Unsplash or image URL..."
+              className="h-8 text-xs"
+            />
+
+            {/* Curated Backdrop Photo Presets */}
+            <div className="space-y-1 pt-1">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                1-Click 4K Presets
+              </span>
+              <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                {CURATED_UNSPLASH_HEROES.map((hero) => (
+                  <button
+                    key={hero.url}
+                    type="button"
+                    onClick={() => updateField('backgroundImageUrl', hero.url)}
+                    className={`group relative h-12 rounded-lg overflow-hidden border text-left p-1.5 flex flex-col justify-end transition-all ${
+                      panel.backgroundImageUrl === hero.url ? 'ring-2 ring-primary border-primary' : 'border-border'
+                    }`}
+                  >
+                    <img src={hero.url} alt={hero.name} className="absolute inset-0 size-full object-cover brightness-50 group-hover:scale-105 transition-transform" />
+                    <span className="relative z-10 text-[9.5px] font-bold text-white drop-shadow truncate">
+                      {hero.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Dark Vignette Overlay Opacity */}
+            <div className="space-y-1 pt-2">
+              <div className="flex items-center justify-between text-[11px] font-semibold">
+                <Label>Backdrop Dark Overlay</Label>
+                <span className="font-mono text-muted-foreground">{panel.overlayOpacity ?? 70}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={panel.overlayOpacity ?? 70}
+                onChange={(e) => updateField('overlayOpacity', Number(e.target.value))}
+                className="w-full accent-primary h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer"
+              />
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ═════════════════════════════════════════════════════════════════════
+            TAB 2: MODULAR WIDGETS & COPY (1-Click Toggle / Edit / Delete)
+           ═════════════════════════════════════════════════════════════════════ */}
+        <TabsContent value="widgets" className="space-y-3.5 pt-3">
+          <p className="text-[10px] text-muted-foreground">
+            Toggle on/off or delete any block on the left panel.
+          </p>
+
+          {/* 1. Trust Badge Widget */}
+          <div className="p-3 rounded-xl border border-border/80 bg-card space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Award className="size-3.5 text-amber-500" />
+                <Label className="text-[11px] font-bold">⭐ Trust Badge Pill</Label>
+              </div>
+              <Switch
+                checked={panel.showBadge ?? Boolean(panel.badgeText)}
+                onCheckedChange={(checked) => updateField('showBadge', checked)}
+              />
+            </div>
+            {(panel.showBadge ?? Boolean(panel.badgeText)) && (
+              <Input
+                type="text"
+                value={panel.badgeText || ''}
+                onChange={(e) => updateField('badgeText', e.target.value)}
+                placeholder="⭐ 5-Star Rated Service Pro"
+                className="h-8 text-xs"
+              />
+            )}
+          </div>
+
+          {/* 2. Hero Headline Widget */}
+          <div className="p-3 rounded-xl border border-border/80 bg-card space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Type className="size-3.5 text-emerald-500" />
+                <Label className="text-[11px] font-bold">🔤 Headline Title</Label>
+              </div>
+              <Switch
+                checked={panel.showHeadline ?? true}
+                onCheckedChange={(checked) => updateField('showHeadline', checked)}
+              />
+            </div>
+            {(panel.showHeadline ?? true) && (
+              <Input
+                type="text"
+                value={panel.headline || ''}
+                onChange={(e) => updateField('headline', e.target.value)}
+                placeholder="Fast & Reliable Professional Service"
+                className="h-8 text-xs font-semibold"
+              />
+            )}
+          </div>
+
+          {/* 3. Subtitle Paragraph Widget */}
+          <div className="p-3 rounded-xl border border-border/80 bg-card space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MessageSquareQuote className="size-3.5 text-blue-500" />
+                <Label className="text-[11px] font-bold">📝 Supporting Subtitle</Label>
+              </div>
+              <Switch
+                checked={panel.showSubtitle ?? true}
+                onCheckedChange={(checked) => updateField('showSubtitle', checked)}
+              />
+            </div>
+            {(panel.showSubtitle ?? true) && (
+              <Textarea
+                value={panel.subtitle || ''}
+                onChange={(e) => updateField('subtitle', e.target.value)}
+                placeholder="Fill out the form below to receive upfront pricing."
+                rows={2}
+                className="text-xs resize-none"
+              />
+            )}
+          </div>
+
+          {/* 4. Value Benefits Checklist Widget */}
+          <div className="p-3 rounded-xl border border-border/80 bg-card space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="size-3.5 text-primary" />
+                <Label className="text-[11px] font-bold">
+                  ✅ Benefits Checklist ({panel.benefitsList?.length || 0})
+                </Label>
+              </div>
+              <Switch
+                checked={panel.showBenefits ?? (panel.benefitsList && panel.benefitsList.length > 0)}
+                onCheckedChange={(checked) => updateField('showBenefits', checked)}
+              />
+            </div>
+
+            {(panel.showBenefits ?? true) && (
+              <div className="space-y-2 pt-1">
+                {(panel.benefitsList || []).map((benefit, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
+                    <Input
+                      type="text"
+                      value={benefit}
+                      onChange={(e) => handleUpdateBenefit(idx, e.target.value)}
+                      className="h-7 text-xs flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveBenefit(idx)}
+                      className="size-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                      title="Delete Benefit"
+                    >
+                      <Trash2 className="size-3" />
+                    </Button>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddBenefit}
+                  className="w-full h-7 text-[10.5px] font-semibold gap-1 border-dashed"
+                >
+                  <Plus className="size-3" /> Add Benefit Point
+                </Button>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ═════════════════════════════════════════════════════════════════════
+            TAB 3: MEDIA DISPLAY (Photo / Map / Video)
+           ═════════════════════════════════════════════════════════════════════ */}
+        <TabsContent value="media" className="space-y-4 pt-3">
+          <div className="flex items-center justify-between p-2.5 rounded-xl border bg-card">
+            <div className="space-y-0.5">
+              <Label className="text-[11px] font-bold">Display Visual Media</Label>
+              <p className="text-[10px] text-muted-foreground">Show hero photo, map, or video</p>
+            </div>
+            <Switch
+              checked={panel.showMedia ?? true}
+              onCheckedChange={(checked) => updateField('showMedia', checked)}
+            />
+          </div>
+
+          {(panel.showMedia ?? true) && (
+            <div className="space-y-3">
+              {/* Media Type Switcher */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => updateField('mediaType', 'image')}
+                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all ${
+                    (panel.mediaType || 'image') === 'image'
+                      ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
+                      : 'border-border hover:border-slate-300'
+                  }`}
+                >
+                  <ImageIcon className="size-4 text-emerald-600" /> Photo / Image
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateField('mediaType', 'video')}
+                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all ${
+                    panel.mediaType === 'video' || panel.mediaType === 'youtube' || panel.mediaType === 'vimeo'
+                      ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
+                      : 'border-border hover:border-slate-300'
+                  }`}
+                >
+                  <Video className="size-4 text-teal-600" /> Video (MP4 / YT)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateField('mediaType', 'map')}
+                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all ${
+                    panel.mediaType === 'map'
+                      ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
+                      : 'border-border hover:border-slate-300'
+                  }`}
+                >
+                  <MapPin className="size-4 text-rose-500" /> Interactive Map
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateField('mediaType', 'gradient')}
+                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all ${
+                    panel.mediaType === 'gradient'
+                      ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
+                      : 'border-border hover:border-slate-300'
+                  }`}
+                >
+                  <Palette className="size-4 text-indigo-500" /> 2026 Glow
+                </button>
+              </div>
+
+              {/* Map Settings */}
+              {panel.mediaType === 'map' && (
+                <div className="space-y-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-border">
+                  <Label className="text-[11px] font-bold">Google Map Location</Label>
+                  <Input
+                    type="text"
+                    value={panel.mapAddress || ''}
+                    onChange={(e) => updateField('mapAddress', e.target.value)}
+                    placeholder="e.g. Austin, TX"
+                    className="h-8 text-xs"
+                  />
+                  <Input
+                    type="text"
+                    value={panel.mapServiceRadius || ''}
+                    onChange={(e) => updateField('mapServiceRadius', e.target.value)}
+                    placeholder="e.g. 25-Mile Service Radius"
+                    className="h-8 text-xs"
+                  />
+                </div>
+              )}
+
+              {/* Photo or Video URL */}
+              {panel.mediaType !== 'map' && panel.mediaType !== 'gradient' && (
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] font-bold">
+                    {panel.mediaType === 'video' ? 'Video URL' : 'Image URL'}
+                  </Label>
+                  <Input
+                    type="url"
+                    value={panel.mediaUrl || ''}
+                    onChange={(e) => updateField('mediaUrl', e.target.value)}
+                    placeholder={panel.mediaType === 'video' ? 'https://youtube.com/...' : 'https://images.unsplash.com/...'}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ═════════════════════════════════════════════════════════════════════
+            TAB 4: LAYOUT & SPLIT RATIO
+           ═════════════════════════════════════════════════════════════════════ */}
+        <TabsContent value="layout" className="space-y-4 pt-3">
+          <div className="space-y-2">
+            <Label className="text-[11px] font-bold">Desktop Split Ratio</Label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { id: '50-50', label: '50 : 50 Balanced' },
+                { id: '40-60', label: '40 : 60 Form Wide' },
+                { id: '60-40', label: '60 : 40 Media Wide' },
+                { id: '35-65', label: '35 : 65 Slim Media' },
+                { id: '30-70', label: '30 : 70 Sidebar' },
+              ].map((ratio) => (
+                <button
+                  key={ratio.id}
+                  type="button"
+                  onClick={() => updateField('splitRatio', ratio.id as any)}
+                  className={`p-2 rounded-lg border text-left text-xs transition-all ${
+                    (panel.splitRatio || '50-50') === ratio.id
+                      ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
+                      : 'border-border hover:border-slate-300'
+                  }`}
+                >
+                  {ratio.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-border/60">
+            <Label className="text-[11px] font-bold">Panel Position</Label>
+            <div className="grid grid-cols-2 gap-1.5">
               <button
                 type="button"
                 onClick={() => updateField('position', 'left')}
-                className={`p-2 rounded-lg border text-center font-medium ${
-                  (panel.position || 'left') === 'left'
-                    ? 'border-primary bg-primary/10 text-primary font-bold'
-                    : 'border-border'
+                className={`p-2 rounded-lg border text-xs font-semibold ${
+                  (panel.position || 'left') === 'left' ? 'border-primary bg-primary/10 text-primary font-bold' : 'border-border'
                 }`}
               >
-                Left Hero (Standard)
+                👈 Left Column
               </button>
               <button
                 type="button"
                 onClick={() => updateField('position', 'right')}
-                className={`p-2 rounded-lg border text-center font-medium ${
-                  panel.position === 'right'
-                    ? 'border-primary bg-primary/10 text-primary font-bold'
-                    : 'border-border'
+                className={`p-2 rounded-lg border text-xs font-semibold ${
+                  panel.position === 'right' ? 'border-primary bg-primary/10 text-primary font-bold' : 'border-border'
                 }`}
               >
-                Right Hero (Inverted)
+                👉 Right Column
               </button>
             </div>
-          </div>
-
-          {/* Multi-Step Hero Behavior */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold text-foreground">Multi-Step Hero Behavior</Label>
-            <Select
-              value={panel.stepBehavior || 'persistent'}
-              onValueChange={(val: any) => updateField('stepBehavior', val)}
-            >
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Step behavior" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="persistent">Persistent Sticky Hero (Stays visible across all steps)</SelectItem>
-                <SelectItem value="per_step">Adaptive Step Hero (Changes headline per step)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Mobile Stacking Mode */}
-          <div className="space-y-1.5">
-            <Label className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
-              <Smartphone className="size-3.5" /> Mobile Stacking Behavior
-            </Label>
-            <Select
-              value={panel.mobileBehavior || 'stack_top'}
-              onValueChange={(val: any) => updateField('mobileBehavior', val)}
-            >
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Mobile behavior" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="stack_top">Show Hero Banner on Top (Recommended)</SelectItem>
-                <SelectItem value="compact_banner">Compact Badge Header Only</SelectItem>
-                <SelectItem value="hide">Hide Hero on Mobile (Prioritize Form)</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </TabsContent>
       </Tabs>

@@ -140,6 +140,19 @@ export interface FormMediaPanel {
   overlayOpacity?: number; // 0 to 100
   mobileBehavior?: 'stack_top' | 'compact_banner' | 'hide';
   stepBehavior?: 'persistent' | 'per_step';
+  // ─── Elementor Column Styling & Visibility ───
+  backgroundColor?: string;
+  backgroundImageUrl?: string | null;
+  backgroundBlur?: 'none' | 'sm' | 'md' | 'lg' | string;
+  customGradient?: string | null;
+  padding?: 'compact' | 'normal' | 'spacious' | string;
+  borderRadius?: string;
+  showBadge?: boolean;
+  showHeadline?: boolean;
+  showSubtitle?: boolean;
+  showMedia?: boolean;
+  showBenefits?: boolean;
+  showTestimonial?: boolean;
 }
 
 export interface FormTheme {

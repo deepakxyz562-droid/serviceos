@@ -491,7 +491,7 @@ function StudioFieldPreview({
       )}
 
       {/* ─── MAIN WYSIWYG CANVAS ─── */}
-      <div className="w-full max-w-5xl my-auto flex flex-col items-center">
+      <div className="relative z-10 w-full max-w-5xl my-auto flex flex-col items-center">
         {viewMode === 'split_media' ? (
           /* ════ 0. 2-PART SPLIT HERO FORM VIEW (Multi-Media Hero + Multi-Step Fields) ════ */
           <div className="w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xl overflow-hidden transition-all">
@@ -505,11 +505,29 @@ function StudioFieldPreview({
                 headline: formData.name || 'Fast & Reliable Professional Service',
                 subtitle: 'Fill out the form below to receive upfront pricing and schedule top-rated pros.',
                 badgeText: '⭐ 5-Star Rated Service Pro',
+                showBadge: true,
+                showHeadline: true,
+                showSubtitle: true,
+                showMedia: true,
+                showBenefits: true,
+                backgroundColor: '#0f172a',
                 benefitsList: [
                   'Guaranteed response within 15 minutes',
                   'Licensed, insured & background-checked',
                   '100% Price Match & Escrow Guarantee',
                 ],
+              };
+
+              const updatePanel = (updates: Partial<typeof panel>) => {
+                const updated = { ...panel, ...updates };
+                onFormDataChange((prev) => ({
+                  ...prev,
+                  mediaPanel: updated,
+                  theme: {
+                    ...(prev.theme || {}),
+                    mediaPanel: updated,
+                  } as any,
+                }));
               };
 
               const isMediaSelected = selectedFieldId === '__media_panel__';
@@ -541,129 +559,243 @@ function StudioFieldPreview({
 
               return (
                 <div className={`flex flex-col ${panel.position === 'right' ? 'lg:flex-row-reverse' : 'lg:flex-row'} min-h-[550px]`}>
-                  {/* LEFT HERO MEDIA COLUMN */}
+                  {/* LEFT HERO MEDIA COLUMN (Elementor Modular Column) */}
                   <div
                     onClick={() => onSelectField('__media_panel__')}
-                    className={`relative p-6 sm:p-8 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white flex flex-col justify-between cursor-pointer group transition-all ${leftWidthClass} ${
+                    className={`relative p-6 sm:p-8 text-white flex flex-col justify-between cursor-pointer group transition-all overflow-hidden ${leftWidthClass} ${
                       isMediaSelected
                         ? 'ring-4 ring-primary ring-offset-2 dark:ring-offset-slate-900'
                         : 'hover:brightness-105'
                     }`}
+                    style={{ backgroundColor: panel.backgroundColor || '#0f172a' }}
                   >
-                    {/* Top Edit Chip */}
-                    <div className="flex items-center justify-between gap-2 mb-4">
-                      <div className="flex items-center gap-2">
-                        {panel.badgeText && (
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/20 border border-primary/40 text-primary-foreground text-xs font-semibold backdrop-blur">
+                    {/* Column Background Photo Layer (if set) */}
+                    {panel.backgroundImageUrl && (
+                      <>
+                        <div
+                          className="absolute inset-0 z-0 bg-cover bg-center pointer-events-none transition-transform duration-500 group-hover:scale-105"
+                          style={{
+                            backgroundImage: `url(${panel.backgroundImageUrl})`,
+                            filter: panel.backgroundBlur === 'lg' ? 'blur(12px)' : panel.backgroundBlur === 'md' ? 'blur(6px)' : panel.backgroundBlur === 'sm' ? 'blur(3px)' : 'none',
+                          }}
+                        />
+                        <div
+                          className="absolute inset-0 z-0 pointer-events-none"
+                          style={{
+                            backgroundColor: '#000000',
+                            opacity: (panel.overlayOpacity ?? 70) / 100,
+                          }}
+                        />
+                      </>
+                    )}
+
+                    {/* Top Action Toolbar (Edit Left Panel / Hide Left Panel) */}
+                    <div className="relative z-10 flex items-center justify-between gap-2 mb-4">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* 1. Trust Badge Widget */}
+                        {(panel.showBadge ?? Boolean(panel.badgeText)) && panel.badgeText && (
+                          <div className="group/badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold backdrop-blur transition-all">
                             <Star className="size-3 text-amber-400 fill-amber-400" />
                             <span>{panel.badgeText}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updatePanel({ showBadge: false });
+                                toast.success('Removed badge from left column');
+                              }}
+                              className="opacity-0 group-hover/badge:opacity-100 hover:text-rose-400 p-0.5 ml-0.5 rounded transition-opacity"
+                              title="Delete Badge"
+                            >
+                              <X className="size-2.5" />
+                            </button>
                           </div>
                         )}
                       </div>
 
-                      <Badge
-                        variant="secondary"
-                        className={`text-[10px] font-bold gap-1 transition-opacity ${
-                          isMediaSelected
-                            ? 'bg-primary text-primary-foreground opacity-100'
-                            : 'bg-white/20 text-white opacity-0 group-hover:opacity-100 backdrop-blur'
-                        }`}
-                      >
-                        <Edit2 className="size-2.5" />
-                        <span>Hero Panel (Click to Edit)</span>
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] font-bold gap-1 transition-opacity ${
+                            isMediaSelected
+                              ? 'bg-primary text-primary-foreground opacity-100'
+                              : 'bg-white/20 text-white opacity-0 group-hover:opacity-100 backdrop-blur'
+                          }`}
+                        >
+                          <Edit2 className="size-2.5" />
+                          <span>Edit Column</span>
+                        </Badge>
+                      </div>
                     </div>
 
-                    {/* Media Display (Image, Video, Map, or Gradient) */}
-                    <div className="my-4 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl relative">
-                      {panel.mediaType === 'map' ? (
-                        <div className="relative w-full aspect-video min-h-[220px] bg-slate-950 overflow-hidden flex flex-col justify-between p-4">
-                          <iframe
-                            src={`https://maps.google.com/maps?q=${encodeURIComponent(panel.mapAddress || 'Austin, TX')}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
-                            title="Location Map"
-                            className="absolute inset-0 w-full h-full border-0 pointer-events-none opacity-60 mix-blend-luminosity"
-                          />
-                          <div className="relative z-10 flex items-center justify-between">
-                            <Badge className="bg-rose-600 text-white text-[10px] gap-1 shadow-md">
-                              <MapPin className="size-3" /> Live Dispatch Area
-                            </Badge>
-                          </div>
-                          <div className="relative z-10 bg-slate-900/90 backdrop-blur border border-white/10 p-2.5 rounded-xl">
-                            <p className="text-xs font-bold text-white flex items-center gap-1.5">
-                              <MapPin className="size-3 text-rose-400" />
-                              {panel.mapAddress || 'Austin, TX Metro Area'}
-                            </p>
-                            {panel.mapServiceRadius && (
-                              <p className="text-[10px] text-slate-300 mt-0.5">
-                                {panel.mapServiceRadius}
-                              </p>
-                            )}
-                          </div>
+                    {/* 2. Visual Media Block (Photo, Video, Map, or Gradient) */}
+                    {(panel.showMedia ?? true) && (
+                      <div className="relative z-10 my-4 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl group/media">
+                        {/* Hover Quick Action to Delete/Change Media */}
+                        <div className="absolute top-2 right-2 z-20 opacity-0 group-hover/media:opacity-100 flex items-center gap-1 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updatePanel({ showMedia: false });
+                              toast.success('Removed media widget from left column');
+                            }}
+                            className="p-1 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-[10px] flex items-center gap-1 shadow-md"
+                            title="Delete Media Block"
+                          >
+                            <Trash2 className="size-3" />
+                          </button>
                         </div>
-                      ) : panel.mediaType === 'gradient' ? (
-                        <div className="relative w-full aspect-video min-h-[220px] overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-900 to-emerald-950 p-6 flex flex-col justify-center items-center text-center">
-                          <div className="size-32 rounded-full bg-primary/30 blur-2xl absolute -top-4 -left-4" />
-                          <div className="size-32 rounded-full bg-indigo-500/20 blur-2xl absolute -bottom-4 -right-4" />
-                          <div className="relative z-10 space-y-2">
-                            <div className="size-10 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center mx-auto text-primary">
-                              <Sparkles className="size-5" />
-                            </div>
-                            <p className="text-sm font-black text-white">2026 Luminous Canvas</p>
-                            <p className="text-[11px] text-slate-300 max-w-xs">Atmospheric glow with instant response guarantees.</p>
-                          </div>
-                        </div>
-                      ) : panel.mediaType === 'video' && panel.mediaUrl ? (
-                        panel.mediaUrl.includes('youtube.com') || panel.mediaUrl.includes('youtu.be') ? (
-                          <div className="aspect-video w-full">
+
+                        {panel.mediaType === 'map' ? (
+                          <div className="relative w-full aspect-video min-h-[220px] bg-slate-950 overflow-hidden flex flex-col justify-between p-4">
                             <iframe
-                              src={
-                                panel.mediaUrl.includes('watch?v=')
-                                  ? panel.mediaUrl.replace('watch?v=', 'embed/').split('&')[0]
-                                  : panel.mediaUrl.replace('youtu.be/', 'www.youtube.com/embed/')
-                              }
-                              title="Video Hero"
-                              className="w-full h-full border-0 pointer-events-none"
+                              src={`https://maps.google.com/maps?q=${encodeURIComponent(panel.mapAddress || 'Austin, TX')}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
+                              title="Location Map"
+                              className="absolute inset-0 w-full h-full border-0 pointer-events-none opacity-60 mix-blend-luminosity"
                             />
+                            <div className="relative z-10 flex items-center justify-between">
+                              <Badge className="bg-rose-600 text-white text-[10px] gap-1 shadow-md">
+                                <MapPin className="size-3" /> Live Dispatch Area
+                              </Badge>
+                            </div>
+                            <div className="relative z-10 bg-slate-900/90 backdrop-blur border border-white/10 p-2.5 rounded-xl">
+                              <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                                <MapPin className="size-3 text-rose-400" />
+                                {panel.mapAddress || 'Austin, TX Metro Area'}
+                              </p>
+                              {panel.mapServiceRadius && (
+                                <p className="text-[10px] text-slate-300 mt-0.5">
+                                  {panel.mapServiceRadius}
+                                </p>
+                              )}
+                            </div>
                           </div>
+                        ) : panel.mediaType === 'gradient' ? (
+                          <div className="relative w-full aspect-video min-h-[220px] overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-900 to-emerald-950 p-6 flex flex-col justify-center items-center text-center">
+                            <div className="size-32 rounded-full bg-primary/30 blur-2xl absolute -top-4 -left-4" />
+                            <div className="size-32 rounded-full bg-indigo-500/20 blur-2xl absolute -bottom-4 -right-4" />
+                            <div className="relative z-10 space-y-2">
+                              <div className="size-10 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center mx-auto text-primary">
+                                <Sparkles className="size-5" />
+                              </div>
+                              <p className="text-sm font-black text-white">2026 Luminous Canvas</p>
+                              <p className="text-[11px] text-slate-300 max-w-xs">Atmospheric glow with instant response guarantees.</p>
+                            </div>
+                          </div>
+                        ) : panel.mediaType === 'video' && panel.mediaUrl ? (
+                          panel.mediaUrl.includes('youtube.com') || panel.mediaUrl.includes('youtu.be') ? (
+                            <div className="aspect-video w-full">
+                              <iframe
+                                src={
+                                  panel.mediaUrl.includes('watch?v=')
+                                    ? panel.mediaUrl.replace('watch?v=', 'embed/').split('&')[0]
+                                    : panel.mediaUrl.replace('youtu.be/', 'www.youtube.com/embed/')
+                                }
+                                title="Video Hero"
+                                className="w-full h-full border-0 pointer-events-none"
+                              />
+                            </div>
+                          ) : (
+                            <video
+                              src={panel.mediaUrl}
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                              className="w-full h-auto object-cover max-h-[280px]"
+                            />
+                          )
                         ) : (
-                          <video
-                            src={panel.mediaUrl}
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            className="w-full h-auto object-cover max-h-[280px]"
-                          />
-                        )
-                      ) : (
-                        <div className="relative w-full aspect-video overflow-hidden">
-                          <img
-                            src={panel.mediaUrl || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80'}
-                            alt="Hero Media"
-                            className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+                          <div className="relative w-full aspect-video overflow-hidden">
+                            <img
+                              src={panel.mediaUrl || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80'}
+                              alt="Hero Media"
+                              className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 3. Headline, Subtitle & Value Benefits */}
+                    <div className="relative z-10 space-y-3 mt-auto">
+                      {(panel.showHeadline ?? true) && (
+                        <div className="group/head relative">
+                          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-snug">
+                            {panel.headline || formData.name || 'Fast & Reliable Professional Service'}
+                          </h2>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updatePanel({ showHeadline: false });
+                              toast.success('Removed headline');
+                            }}
+                            className="absolute top-0 -right-5 opacity-0 group-hover/head:opacity-100 hover:text-rose-400 p-0.5 rounded transition-opacity"
+                            title="Delete Headline"
+                          >
+                            <X className="size-3" />
+                          </button>
                         </div>
                       )}
-                    </div>
 
-                    {/* Headline, Subtitle & Value Benefits */}
-                    <div className="space-y-3 mt-auto">
-                      <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-snug">
-                        {panel.headline || formData.name || 'Fast & Reliable Professional Service'}
-                      </h2>
-                      {panel.subtitle && (
-                        <p className="text-xs text-slate-300 leading-relaxed">
-                          {panel.subtitle}
-                        </p>
+                      {(panel.showSubtitle ?? true) && panel.subtitle && (
+                        <div className="group/sub relative">
+                          <p className="text-xs text-slate-300 leading-relaxed">
+                            {panel.subtitle}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updatePanel({ showSubtitle: false });
+                              toast.success('Removed subtitle');
+                            }}
+                            className="absolute top-0 -right-5 opacity-0 group-hover/sub:opacity-100 hover:text-rose-400 p-0.5 rounded transition-opacity"
+                            title="Delete Subtitle"
+                          >
+                            <X className="size-3" />
+                          </button>
+                        </div>
                       )}
 
-                      {panel.benefitsList && panel.benefitsList.length > 0 && (
-                        <div className="space-y-2 pt-2 border-t border-white/10">
+                      {(panel.showBenefits ?? true) && panel.benefitsList && panel.benefitsList.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-white/10 group/benefits relative">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Benefits</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updatePanel({ showBenefits: false });
+                                toast.success('Removed benefits list');
+                              }}
+                              className="opacity-0 group-hover/benefits:opacity-100 hover:text-rose-400 text-[10px] font-semibold transition-opacity"
+                            >
+                              Delete List
+                            </button>
+                          </div>
                           {panel.benefitsList.map((benefit, bIdx) => (
-                            <div key={bIdx} className="flex items-center gap-2 text-xs text-slate-200">
-                              <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-                              <span>{benefit}</span>
+                            <div key={bIdx} className="flex items-center justify-between gap-2 text-xs text-slate-200 group/item">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+                                <span className="truncate">{benefit}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const list = [...(panel.benefitsList || [])];
+                                  list.splice(bIdx, 1);
+                                  updatePanel({ benefitsList: list });
+                                }}
+                                className="opacity-0 group-hover/item:opacity-100 hover:text-rose-400 p-0.5 shrink-0"
+                                title="Delete Point"
+                              >
+                                <Trash2 className="size-2.5" />
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -672,7 +804,7 @@ function StudioFieldPreview({
                   </div>
 
                   {/* RIGHT FORM FIELDS COLUMN (Stepped / Single Page) */}
-                  <div className={`p-6 sm:p-8 flex flex-col justify-between space-y-6 ${rightWidthClass} bg-card`}>
+                  <div className={`p-6 sm:p-8 flex flex-col justify-between space-y-6 ${rightWidthClass} bg-white dark:bg-slate-900`}>
                     <div className="space-y-4">
                       {/* Stepper Tabs Bar (if Multi-Step) */}
                       {steps.length > 1 ? (
