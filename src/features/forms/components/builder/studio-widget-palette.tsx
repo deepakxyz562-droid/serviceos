@@ -52,8 +52,9 @@ interface StudioWidgetPaletteProps {
   className?: string;
 }
 
-const WIDGET_CATEGORIES: Array<{ id: FieldDefinition['category'] | 'all'; label: string; icon: any }> = [
+const WIDGET_CATEGORIES: Array<{ id: FieldDefinition['category'] | 'booking' | 'all'; label: string; icon: any }> = [
   { id: 'all', label: 'All Widgets', icon: Sparkles },
+  { id: 'booking', label: 'Appointments', icon: Calendar },
   { id: 'media', label: 'Media & Files', icon: Camera },
   { id: 'signature', label: 'E-Signatures', icon: PenTool },
   { id: 'verification', label: 'Verification', icon: Shield },
@@ -61,7 +62,6 @@ const WIDGET_CATEGORIES: Array<{ id: FieldDefinition['category'] | 'all'; label:
   { id: 'rating', label: 'Ratings & CSAT', icon: Star },
   { id: 'survey', label: 'Surveys', icon: FileText },
   { id: 'maps', label: 'Maps & Location', icon: MapPin },
-  { id: 'booking', label: 'Appointments', icon: Calendar },
   { id: 'analytics', label: 'Tracking & Analytics', icon: Zap },
 ];
 
@@ -74,7 +74,7 @@ export function StudioWidgetPalette({
 }: StudioWidgetPaletteProps) {
   const [activeTab, setActiveTab] = useState<'basic' | 'payments' | 'widgets'>('basic');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedWidgetCategory, setSelectedWidgetCategory] = useState<FieldDefinition['category'] | 'all'>('all');
+  const [selectedWidgetCategory, setSelectedWidgetCategory] = useState<FieldDefinition['category'] | 'booking' | 'all'>('all');
   const [selectedPaymentCategory, setSelectedPaymentCategory] = useState<PaymentCategory>('all');
 
   // Filter Basic Fields
@@ -97,15 +97,13 @@ export function StudioWidgetPalette({
 
   // Filter Smart Widgets
   const filteredWidgets = useMemo(() => {
-    const basicIds = new Set([
-      ...BASIC_FIELDS.map((f) => f.id),
-      ...PHASE_1_WIDGETS.map((f) => f.id),
-    ]);
-    const results = searchFields(
-      searchQuery,
-      selectedWidgetCategory === 'all' ? undefined : selectedWidgetCategory
+    // Exclude basic text/choice primitives from basicIds, but allow appointment and all phase 1-4 widgets in Widgets tab
+    const basicIds = new Set(
+      BASIC_FIELDS.filter((f) => f.id !== 'appointment').map((f) => f.id)
     );
-    return results.filter((f) => !basicIds.has(f.id) && !f.unavailable);
+    const cat = selectedWidgetCategory === 'all' ? undefined : (selectedWidgetCategory as any);
+    const results = searchFields(searchQuery, cat);
+    return results.filter((f) => (!basicIds.has(f.id) || f.id === 'appointment') && !f.unavailable);
   }, [searchQuery, selectedWidgetCategory]);
 
   const CONTENT_BLOCK_IDS = useMemo(() => new Set(['static_image', 'map_embed', 'video_embed', 'heading', 'paragraph', 'divider']), []);

@@ -241,6 +241,48 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     ],
   },
   {
+    id: 'appointment',
+    name: 'Appointment',
+    category: 'datetime',
+    iconName: 'CalendarCheck',
+    description: 'Schedule appointments with time slots & calendar sync',
+    badge: 'POPULAR',
+    tier: 'free',
+    createField: (label = 'Appointment') => ({
+      label,
+      type: 'appointment',
+      widgetType: 'appointment',
+      required: true,
+      widgetConfig: {
+        slotDurationMin: 30,
+        intervalMin: 30,
+        rollingDays: 30,
+        appointmentType: 'one_on_one',
+        maxAttendees: 5,
+        defaultTimezone: 'America/New_York',
+        lockTimezone: false,
+        sendReminderEmail: true,
+        reminderTime: '1_day_before',
+        lunchBreakStart: '12:00',
+        lunchBreakEnd: '13:00',
+        availabilityIntervals: [
+          { day: 'Monday', startTime: '09:00', endTime: '17:00' },
+          { day: 'Tuesday', startTime: '09:00', endTime: '17:00' },
+          { day: 'Wednesday', startTime: '09:00', endTime: '17:00' },
+          { day: 'Thursday', startTime: '09:00', endTime: '17:00' },
+          { day: 'Friday', startTime: '09:00', endTime: '17:00' },
+        ],
+      },
+    }),
+    settingsSchema: [
+      { key: 'slotDurationMin', label: 'Slot Duration (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 480 },
+      { key: 'intervalMin', label: 'Slot Interval (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 120 },
+      { key: 'rollingDays', label: 'Booking Window (days)', type: 'number', group: 'field_specific', default: 30, min: 1, max: 365 },
+      { key: 'appointmentType', label: 'Appointment Type', type: 'select', group: 'field_specific', default: 'one_on_one', options: [{ label: 'One-on-One', value: 'one_on_one' }, { label: 'Group', value: 'group' }] },
+      { key: 'maxAttendees', label: 'Max Attendees', type: 'number', group: 'field_specific', default: 5, min: 1, max: 100 },
+    ],
+  },
+  {
     id: 'star_rating',
     name: 'Star Rating',
     category: 'survey',
@@ -1507,6 +1549,10 @@ export const FIELD_ALIASES: Record<string, string> = {
   like_dislike_feedback: 'like_dislike',
   star_rating_with_comments: 'star_rating_comments',
   weekly_appointment_planner: 'weekly_planner',
+  appointment_booking: 'appointment',
+  appointment_scheduler: 'appointment',
+  booking: 'appointment',
+  schedule_appointment: 'appointment',
 };
 
 export function getFieldById(id: string): FieldDefinition | undefined {
@@ -1523,17 +1569,25 @@ export function getFieldsByCategory(category: FieldDefinition['category']): Fiel
 
 export function searchFields(
   query: string,
-  category?: FieldDefinition['category'],
+  category?: FieldDefinition['category'] | 'booking',
 ): FieldDefinition[] {
   const q = query.toLowerCase().trim();
   return FIELD_REGISTRY.filter((f) => {
-    const matchesCat = !category || f.category === category;
+    let matchesCat = true;
+    if (category) {
+      if (category === 'booking') {
+        matchesCat = f.category === 'datetime' || f.id.includes('appointment') || f.id.includes('planner') || f.id.includes('booking') || f.id.includes('schedule');
+      } else {
+        matchesCat = f.category === category;
+      }
+    }
     if (!matchesCat) return false;
     if (!q) return true;
     return (
       f.name.toLowerCase().includes(q) ||
       f.description.toLowerCase().includes(q) ||
-      f.id.toLowerCase().includes(q)
+      f.id.toLowerCase().includes(q) ||
+      (f.id === 'appointment' && ('schedule'.includes(q) || 'booking'.includes(q) || 'calendar'.includes(q) || 'appointment'.includes(q)))
     );
   });
 }
