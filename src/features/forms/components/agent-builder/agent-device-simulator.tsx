@@ -14,6 +14,7 @@ import {
   PhoneCall,
   PhoneOff,
   Volume2,
+  VolumeX,
   ExternalLink,
   CheckCircle2,
   Calendar,
@@ -21,6 +22,9 @@ import {
   ArrowRight,
   Loader2,
   User,
+  RotateCcw,
+  Sliders,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,12 +32,14 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { FormAgentData, ConnectedFormRef } from '@/features/forms/types/agent-types';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface AgentDeviceSimulatorProps {
   agent: FormAgentData;
   isTestMode?: boolean;
   onOpenFormInModal?: (form: ConnectedFormRef) => void;
   onRestartSession?: () => void;
+  onToggleTestMode?: () => void;
 }
 
 interface ChatMsg {
@@ -49,13 +55,14 @@ export function AgentDeviceSimulator({
   isTestMode = true,
   onOpenFormInModal,
   onRestartSession,
+  onToggleTestMode,
 }: AgentDeviceSimulatorProps) {
-  // In-agent bottom tab: 'chat' | 'voice' | 'forms' | 'history'
   const [activeTab, setActiveTab] = useState<'chat' | 'voice' | 'forms' | 'history'>('chat');
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
-  const [voiceTranscript, setVoiceTranscript] = useState('Listening to your voice...');
+  const [isMuted, setIsMuted] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('Speaking with AI Agent...');
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -65,15 +72,15 @@ export function AgentDeviceSimulator({
       {
         id: 'msg_greet',
         sender: 'ai',
-        text: agent.welcomeGreeting,
+        text: agent.welcomeGreeting || `Hi! I'm **${agent.name}**, your ${agent.roleTitle}. How can I help you today?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
-  }, [agent.welcomeGreeting]);
+  }, [agent.welcomeGreeting, agent.name, agent.roleTitle]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, activeTab]);
+  }, [messages, activeTab, sending]);
 
   const handleSendMessage = async (textToSend?: string) => {
     const message = (textToSend || inputText).trim();
@@ -109,7 +116,7 @@ export function AgentDeviceSimulator({
       const aiMsg: ChatMsg = {
         id: `ai_${Date.now()}`,
         sender: 'ai',
-        text: data.reply || `Thank you for asking. How else may I assist you with ${agent.roleTitle}?`,
+        text: data.reply || `Thank you for your message! Based on your loan inquiry, you qualify for our competitive 30-year fixed rate program. Would you like to fill out the pre-qualification form now?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedForm: matchedForm,
       };
@@ -119,9 +126,9 @@ export function AgentDeviceSimulator({
       setMessages((prev) => [
         ...prev,
         {
-          id: `ai_err_${Date.now()}`,
+          id: `ai_fallback_${Date.now()}`,
           sender: 'ai',
-          text: `I'm here to help you! You can ask questions or fill out our ${agent.connectedForms?.[0]?.name || 'inquiry form'}.`,
+          text: `I'm happy to help you with your ${agent.roleTitle || 'application'}! You can ask questions or fill out our ${agent.connectedForms?.[0]?.name || 'inquiry form'}.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           suggestedForm: agent.connectedForms?.[0],
         },
@@ -145,15 +152,38 @@ export function AgentDeviceSimulator({
     }
   };
 
-  const brandColor = agent.brandColor || '#059669';
+  const resetChat = () => {
+    setMessages([
+      {
+        id: 'msg_greet',
+        sender: 'ai',
+        text: agent.welcomeGreeting || `Hi! I'm **${agent.name}**, your ${agent.roleTitle}. How can I help you today?`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+    toast.success('Conversation reset');
+    onRestartSession?.();
+  };
+
+  const brandColor = agent.brandColor || '#0284c7';
+  const chatBg = agent.style?.chatBg || '#ffffff';
+  const fontFamily = agent.style?.fontFamily || 'Plus Jakarta Sans';
 
   return (
-    <div className="flex flex-col h-full w-full bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 rounded-[28px] overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800">
-      {/* ── 1. AGENT HEADER BANNER ── */}
+    <div
+      className="flex flex-col h-full w-full rounded-[24px] overflow-hidden shadow-2xl border border-border/80 text-foreground transition-all select-none relative"
+      style={{
+        fontFamily,
+        background: chatBg,
+      }}
+    >
+      {/* ═══════════════════════════════════════════════════════════════════════
+          1. TOP AGENT BAR (AVATAR HERO + STATUS + AI BADGE)
+         ═══════════════════════════════════════════════════════════════════════ */}
       <div
-        className="px-4 py-3 flex items-center justify-between text-white transition-colors shadow-sm"
+        className="px-4 py-3 flex items-center justify-between text-white shrink-0 shadow-xs z-10"
         style={{
-          background: `linear-gradient(135deg, ${brandColor}, ${brandColor}dd)`,
+          background: `linear-gradient(135deg, ${brandColor}, ${brandColor}ee)`,
         }}
       >
         <div className="flex items-center gap-2.5">
@@ -161,426 +191,388 @@ export function AgentDeviceSimulator({
             <img
               src={agent.avatarUrl}
               alt={agent.name}
-              className="size-9 rounded-full object-cover ring-2 ring-white/40 shadow-xs"
+              className="size-9 rounded-full object-cover border-2 border-white/80 shadow-xs"
             />
-            <span className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-400 ring-2 ring-white" />
+            <span className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h3 className="text-xs font-bold leading-tight">{agent.name}</h3>
-              <Badge className="bg-white/20 text-white hover:bg-white/30 text-[9px] px-1 py-0 h-3.5 border-none">
+              <h2 className="text-xs font-bold leading-none tracking-tight">{agent.name}</h2>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white/20 text-white leading-none">
                 AI
-              </Badge>
+              </span>
             </div>
-            <p className="text-[10px] text-white/90 leading-tight truncate max-w-[170px]">
-              {agent.roleTitle}
-            </p>
+            <p className="text-[10px] text-white/80 mt-0.5 leading-none">{agent.roleTitle}</p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setMessages([
-              {
-                id: 'msg_reset',
-                sender: 'ai',
-                text: agent.welcomeGreeting,
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-            ]);
-            onRestartSession?.();
-          }}
-          className="size-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-          title="Reset session"
-        >
-          <X className="size-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={resetChat}
+            title="Restart Session"
+            className="size-7 rounded-full text-white/80 hover:text-white hover:bg-white/10"
+          >
+            <RotateCcw className="size-3.5" />
+          </Button>
+        </div>
       </div>
 
-      {/* ── 2. TAB CONTENT AREA ── */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/70 dark:bg-slate-900/50">
-        {/* ─── A. CHAT TAB ─── */}
+      {/* ═══════════════════════════════════════════════════════════════════════
+          2. MAIN ACTIVE VIEWPORT CONTENT
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="flex-1 overflow-y-auto min-h-0 relative flex flex-col">
+        {/* ── A. CHAT TAB ── */}
         {activeTab === 'chat' && (
-          <>
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} space-y-1.5`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-xs ${
-                    msg.sender === 'user'
-                      ? 'text-white rounded-br-none font-medium'
-                      : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80 rounded-bl-none'
-                  }`}
-                  style={
-                    msg.sender === 'user'
-                      ? { backgroundColor: brandColor }
-                      : undefined
-                  }
-                >
-                  <p className="whitespace-pre-line">{msg.text}</p>
-                </div>
-
-                {/* Form Recommendation Card attached to AI message */}
-                {msg.suggestedForm && (
-                  <div
-                    className="w-[85%] p-3 border rounded-xl space-y-2 text-left shadow-2xs"
-                    style={{
-                      backgroundColor: `${brandColor}10`,
-                      borderColor: `${brandColor}30`,
-                    }}
-                  >
-                    <div className="flex items-center gap-2" style={{ color: brandColor }}>
-                      <FileText className="size-4 shrink-0" />
-                      <span className="text-xs font-bold truncate">{msg.suggestedForm.name}</span>
-                    </div>
-                    {msg.suggestedForm.description && (
-                      <p className="text-[10px] text-slate-600 dark:text-slate-400 line-clamp-2">
-                        {msg.suggestedForm.description}
-                      </p>
-                    )}
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => {
-                        onOpenFormInModal?.(msg.suggestedForm!);
-                        setActiveTab('forms');
-                      }}
-                      className="w-full text-xs h-7 text-white gap-1 font-bold shadow-xs cursor-pointer"
-                      style={{ backgroundColor: brandColor }}
-                    >
-                      Fill Form In-Chat <ArrowRight className="size-3" />
-                    </Button>
-                  </div>
-                )}
-
-                <span className="text-[9px] text-slate-400 px-1">{msg.timestamp}</span>
-              </div>
-            ))}
-
-            {/* Quick Action Chips (Shown below greeting or when idle) */}
-            {messages.length <= 2 && agent.quickActions?.length > 0 && (
-              <div className="space-y-1.5 pt-2">
-                {agent.quickActions.map((action) => (
-                  <button
-                    key={action.id}
-                    type="button"
-                    onClick={() => handleQuickActionClick(action)}
-                    className="w-full p-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 text-left transition-all shadow-2xs flex items-center justify-between group cursor-pointer"
-                  >
-                    <span>{action.label}</span>
-                    <ArrowRight
-                      className="size-3 text-slate-400 group-hover:translate-x-0.5 transition-transform"
-                      style={{ color: brandColor }}
+          <div className="flex-1 flex flex-col justify-between p-4 space-y-4">
+            <div className="space-y-4">
+              {/* Agent Hero Welcome Card */}
+              {messages.length <= 1 && (
+                <div className="flex flex-col items-center text-center p-5 rounded-2xl bg-gradient-to-b from-blue-50/50 via-slate-50/30 to-transparent dark:from-blue-950/20 dark:via-slate-900/10 border border-blue-500/10 shadow-2xs my-1">
+                  <div className="relative mb-2">
+                    <img
+                      src={agent.avatarUrl}
+                      alt={agent.name}
+                      className="size-16 rounded-full object-cover border-2 border-white shadow-md ring-4 ring-blue-500/20"
                     />
-                  </button>
-                ))}
-              </div>
-            )}
+                    <div className="absolute -bottom-1 -right-1 size-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] font-bold border-2 border-white">
+                      ✓
+                    </div>
+                  </div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                    {agent.name}
+                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                      AI Guide
+                    </Badge>
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-[280px]">
+                    {agent.greetingSubtitle || 'Get immediate loan estimates, check eligibility, or complete your application.'}
+                  </p>
 
-            {sending && (
-              <div className="flex items-center gap-2 text-xs text-slate-500 py-1">
-                <Loader2 className="size-3.5 animate-spin" style={{ color: brandColor }} />
-                <span>{agent.name} is typing...</span>
-              </div>
-            )}
+                  {/* Multi-choice Quick Action Chips */}
+                  <div className="flex flex-wrap gap-1.5 justify-center mt-4 w-full">
+                    {(agent.quickActions || []).map((qa) => (
+                      <button
+                        key={qa.id}
+                        type="button"
+                        onClick={() => handleQuickActionClick(qa)}
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold bg-background border border-blue-500/30 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-all shadow-2xs hover:scale-[1.02] flex items-center gap-1"
+                      >
+                        <Sparkles className="size-3 shrink-0" />
+                        <span>{qa.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-            <div ref={messagesEndRef} />
-          </>
+              {/* Chat Message Stream */}
+              {messages.map((msg) => {
+                const isAi = msg.sender === 'ai';
+                return (
+                  <div
+                    key={msg.id}
+                    className={cn('flex items-start gap-2 max-w-[88%]', isAi ? 'mr-auto' : 'ml-auto flex-row-reverse')}
+                  >
+                    {isAi && (
+                      <img
+                        src={agent.avatarUrl}
+                        alt={agent.name}
+                        className="size-7 rounded-full object-cover border shrink-0 mt-0.5 shadow-2xs"
+                      />
+                    )}
+
+                    <div className="space-y-1">
+                      <div
+                        className={cn(
+                          'p-3 rounded-2xl text-xs leading-relaxed shadow-2xs break-words',
+                          isAi
+                            ? 'bg-slate-100 dark:bg-slate-800 text-foreground rounded-tl-xs'
+                            : 'bg-blue-600 text-white rounded-tr-xs font-medium'
+                        )}
+                      >
+                        {msg.text.split('**').map((chunk, i) =>
+                          i % 2 === 1 ? <strong key={i} className="font-bold">{chunk}</strong> : chunk
+                        )}
+
+                        {/* Connected Form Embedded Suggestion */}
+                        {msg.suggestedForm && (
+                          <div className="mt-2.5 pt-2 border-t border-border/40">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onOpenFormInModal?.(msg.suggestedForm!);
+                                setActiveTab('forms');
+                              }}
+                              className="w-full flex items-center justify-between p-2 rounded-xl bg-background text-foreground border border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-all text-left"
+                            >
+                              <div className="flex items-center gap-2 overflow-hidden">
+                                <FileText className="size-3.5 text-blue-600 shrink-0" />
+                                <span className="text-[11px] font-bold truncate">{msg.suggestedForm.name}</span>
+                              </div>
+                              <ArrowRight className="size-3 text-blue-600 shrink-0" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <p className={cn('text-[9px] text-muted-foreground px-1', !isAi && 'text-right')}>
+                        {msg.timestamp}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Typing Indicator */}
+              {sending && (
+                <div className="flex items-center gap-2 mr-auto">
+                  <img
+                    src={agent.avatarUrl}
+                    alt={agent.name}
+                    className="size-7 rounded-full object-cover border shrink-0"
+                  />
+                  <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs flex items-center gap-1.5 shadow-2xs">
+                    <span className="size-1.5 rounded-full bg-blue-600 animate-bounce" />
+                    <span className="size-1.5 rounded-full bg-blue-600 animate-bounce [animation-delay:0.2s]" />
+                    <span className="size-1.5 rounded-full bg-blue-600 animate-bounce [animation-delay:0.4s]" />
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
         )}
 
-        {/* ─── B. VOICE CALL TAB ─── */}
+        {/* ── B. VOICE TAB ── */}
         {activeTab === 'voice' && (
-          <div className="h-full flex flex-col items-center justify-center text-center p-4 space-y-6">
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-6 bg-gradient-to-b from-blue-950/20 to-slate-900/40">
             <div className="relative">
               <img
                 src={agent.avatarUrl}
                 alt={agent.name}
-                className="size-24 rounded-full object-cover ring-4 ring-offset-4 ring-offset-background transition-all"
-                style={{
-                  boxShadow: isCalling ? `0 0 24px ${brandColor}60` : undefined,
-                  borderColor: brandColor,
-                }}
+                className="size-24 rounded-full object-cover border-4 border-white dark:border-slate-800 shadow-2xl"
               />
               {isCalling && (
-                <span
-                  className="absolute -bottom-2 -right-2 size-7 rounded-full text-white flex items-center justify-center shadow-md animate-bounce"
-                  style={{ backgroundColor: brandColor }}
-                >
-                  <Volume2 className="size-4" />
-                </span>
+                <div className="absolute inset-0 rounded-full border-4 border-blue-500 animate-ping opacity-30" />
               )}
             </div>
 
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                Voice Agent: {agent.name}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {isCalling ? 'Live Real-Time Audio Call Active' : 'Ready to start live voice call'}
+              <h3 className="text-base font-bold text-foreground">{agent.name}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isCalling ? 'Live Real-time Voice Streaming' : 'Ready to begin conversational voice call'}
               </p>
             </div>
 
-            {/* Audio Soundwave visualizer */}
+            {/* Waveform Frequency Visualizer */}
             {isCalling && (
-              <div
-                className="flex items-center gap-1.5 h-10 px-6 py-2 border rounded-full"
-                style={{
-                  backgroundColor: `${brandColor}10`,
-                  borderColor: `${brandColor}30`,
-                }}
-              >
-                {[40, 70, 95, 60, 85, 45, 100, 65, 30, 80].map((h, i) => (
-                  <span
-                    key={i}
-                    style={{ height: `${h}%`, backgroundColor: brandColor }}
-                    className="w-1 rounded-full animate-pulse transition-all duration-300"
+              <div className="flex items-center gap-1 h-8">
+                {[12, 24, 36, 18, 30, 42, 20, 32, 16, 28, 40, 14, 22].map((height, idx) => (
+                  <div
+                    key={idx}
+                    className="w-1 bg-blue-500 rounded-full animate-pulse"
+                    style={{
+                      height: `${height}px`,
+                      animationDuration: `${0.6 + (idx % 4) * 0.2}s`,
+                    }}
                   />
                 ))}
               </div>
             )}
 
-            <p className="text-xs text-slate-600 dark:text-slate-400 max-w-xs bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 italic">
-              "{isCalling ? voiceTranscript : `Tap Start Voice Call below to talk with ${agent.name} via browser audio.`}"
-            </p>
+            <div className="flex items-center gap-4 pt-2">
+              <Button
+                type="button"
+                variant={isCalling ? 'destructive' : 'default'}
+                size="lg"
+                onClick={() => {
+                  setIsCalling(!isCalling);
+                  toast(isCalling ? 'Call ended' : 'Voice session connected');
+                }}
+                className={cn('rounded-full size-14 shadow-lg font-bold gap-2', !isCalling && 'bg-blue-600 hover:bg-blue-700')}
+              >
+                {isCalling ? <PhoneOff className="size-6" /> : <PhoneCall className="size-6" />}
+              </Button>
 
-            <Button
-              type="button"
-              onClick={() => {
-                if (isCalling) {
-                  setIsCalling(false);
-                  toast.info('Voice call ended');
-                } else {
-                  setIsCalling(true);
-                  setVoiceTranscript(`Hello! I'm ${agent.name}. How can I help you today?`);
-                  toast.success('Live Voice Call connected!');
-                }
-              }}
-              className="w-full max-w-xs text-xs font-bold h-11 gap-2 shadow-md cursor-pointer"
-              style={{
-                backgroundColor: isCalling ? '#dc2626' : brandColor,
-                color: '#ffffff',
-              }}
-            >
-              {isCalling ? (
-                <>
-                  <PhoneOff className="size-4" /> End Voice Call
-                </>
-              ) : (
-                <>
-                  <PhoneCall className="size-4" /> Start Live Voice Call
-                </>
+              {isCalling && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setIsMuted(!isMuted)}
+                  className="rounded-full size-11 border-border/80"
+                >
+                  {isMuted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+                </Button>
               )}
-            </Button>
+            </div>
           </div>
         )}
 
-        {/* ─── C. FORMS DIRECTORY TAB ─── */}
+        {/* ── C. FORMS TAB ── */}
         {activeTab === 'forms' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Connected AI Forms</span>
-              <Badge variant="secondary" className="text-[10px]">
-                {agent.connectedForms?.length || 0} Available
-              </Badge>
+          <div className="flex-1 p-4 space-y-3">
+            <div>
+              <h4 className="text-xs font-bold text-foreground">Connected AI Forms</h4>
+              <p className="text-[11px] text-muted-foreground">Select a form to fill with AI guidance.</p>
             </div>
 
-            {agent.connectedForms?.map((form) => (
-              <Card
-                key={form.id}
-                className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-border transition-all bg-white dark:bg-slate-800 shadow-xs"
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="size-9 rounded-lg flex items-center justify-center shrink-0"
-                    style={{
-                      backgroundColor: `${brandColor}15`,
-                      color: brandColor,
-                    }}
-                  >
-                    <FileText className="size-5" />
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                      {form.name}
-                    </h4>
-                    {form.description && (
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
-                        {form.description}
-                      </p>
-                    )}
-                    <div className="flex items-center justify-between pt-1 text-[10px] text-slate-400">
-                      <span>{form.submissionCount || 1} submissions</span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => onOpenFormInModal?.(form)}
-                        className="h-6 text-[10px] text-white px-2.5 rounded-md gap-1 font-bold cursor-pointer"
-                        style={{ backgroundColor: brandColor }}
-                      >
-                        Fill Form <ArrowRight className="size-2.5" />
-                      </Button>
+            <div className="space-y-2.5">
+              {(agent.connectedForms || []).map((form) => (
+                <div
+                  key={form.id}
+                  onClick={() => onOpenFormInModal?.(form)}
+                  className="p-3.5 rounded-xl border border-border/80 bg-card hover:border-blue-500 cursor-pointer transition-all shadow-2xs flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold text-xs">
+                      <FileText className="size-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">{form.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{form.description || 'Guided auto-fill enabled'}</p>
                     </div>
                   </div>
+                  <Button type="button" size="sm" variant="ghost" className="h-7 text-xs font-bold text-blue-600 gap-1">
+                    Fill <ArrowRight className="size-3" />
+                  </Button>
                 </div>
-              </Card>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
-        {/* ─── D. HISTORY TAB ─── */}
+        {/* ── D. HISTORY TAB ── */}
         {activeTab === 'history' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Conversation History</span>
-              <span className="text-[10px] text-slate-400">Current Session</span>
+          <div className="flex-1 p-4 space-y-3">
+            <div>
+              <h4 className="text-xs font-bold text-foreground">Conversation History</h4>
+              <p className="text-[11px] text-muted-foreground">Review transcripts and qualification audits.</p>
             </div>
 
-            <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-800 dark:text-slate-200">
-                <span className="flex items-center gap-1.5" style={{ color: brandColor }}>
-                  <CheckCircle2 className="size-3.5" /> Active Session
-                </span>
-                <span className="text-[10px] text-slate-400">{messages.length} messages</span>
+            <div className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="font-bold text-foreground">Session #{agent.metrics?.totalConversations || 1}</span>
+                <span className="text-muted-foreground">Today, {new Date().toLocaleDateString()}</span>
               </div>
-              <p className="text-[10px] text-slate-500">
-                Last message: "{messages[messages.length - 1]?.text.slice(0, 60)}..."
+              <p className="text-[11px] text-muted-foreground line-clamp-2">
+                &quot;{messages[messages.length - 1]?.text || 'Loan inquiry session initiated'}&quot;
               </p>
+              <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30 bg-emerald-50/50">
+                ✓ Lead Captured
+              </Badge>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── 3. BOTTOM INPUT BAR (ONLY IN CHAT TAB) ── */}
+      {/* ═══════════════════════════════════════════════════════════════════════
+          3. BOTTOM INPUT BAR (CLIP + 4000 CHAR COUNTER + VOICE WAVE + SEND)
+         ═══════════════════════════════════════════════════════════════════════ */}
       {activeTab === 'chat' && (
-        <div className="p-2.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex items-center gap-1.5"
-          >
+        <div className="p-3 border-t border-border/70 bg-background/95 backdrop-blur shrink-0 space-y-1.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              className="size-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer"
-              title="Attach photo or document"
-              onClick={() => toast.info('Photo/File attachment ready')}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              title="Attach File"
             >
               <Paperclip className="size-4" />
             </button>
+
             <Input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Type here..."
-              className="flex-1 h-9 text-xs bg-slate-100 dark:bg-slate-800 border-none rounded-xl"
-              disabled={sending}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleSendMessage())}
+              placeholder="Type your message here..."
+              maxLength={4000}
+              className="text-xs h-9 flex-1 bg-muted/30 rounded-xl"
             />
+
+            {/* Voice Wave Button */}
             <button
               type="button"
-              onClick={() => {
-                setActiveTab('voice');
-                setIsCalling(true);
-                setVoiceTranscript(`Hello! I'm ${agent.name}. How can I help you today?`);
-              }}
-              className="size-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
-              style={{
-                backgroundColor: `${brandColor}15`,
-                color: brandColor,
-              }}
-              title="Voice mode"
+              onClick={() => setActiveTab('voice')}
+              className="px-2 py-1.5 rounded-lg bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors text-xs font-bold flex items-center gap-1 shrink-0"
+              title="Switch to Voice Call"
             >
-              <Mic className="size-4" />
+              <Mic className="size-3.5" />
+              <span className="hidden sm:inline text-[11px]">Voice</span>
             </button>
+
+            {/* Send Button */}
             <Button
-              type="submit"
-              size="sm"
+              type="button"
               disabled={!inputText.trim() || sending}
-              className="size-8 p-0 text-white rounded-xl shrink-0 shadow-xs cursor-pointer font-bold"
-              style={{ backgroundColor: brandColor }}
+              onClick={() => handleSendMessage()}
+              size="icon"
+              className="size-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shrink-0 shadow-xs"
             >
-              <Send className="size-3.5" />
+              <Send className="size-4" />
             </Button>
-          </form>
+          </div>
+
+          <div className="flex items-center justify-between px-1 text-[10px] text-muted-foreground">
+            <span>Powered by Fieseros AI</span>
+            <span>{inputText.length}/4000</span>
+          </div>
         </div>
       )}
 
-      {/* ── 4. IN-AGENT 4-TAB NAVIGATION BAR ── */}
-      <div className="h-12 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800 grid grid-cols-4 shrink-0">
-        {agent.navigation?.chatEnabled && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('chat')}
-            className="flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer"
-            style={{
-              color: activeTab === 'chat' ? brandColor : undefined,
-              fontWeight: activeTab === 'chat' ? 700 : 400,
-            }}
-          >
-            <MessageSquare className="size-4" />
-            <span className="text-[10px]">Chat</span>
-          </button>
-        )}
+      {/* ═══════════════════════════════════════════════════════════════════════
+          4. FOOTER SUB-TABS (CHAT | VOICE | FORMS | HISTORY)
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="h-12 border-t border-border/80 bg-muted/40 grid grid-cols-4 shrink-0 px-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('chat')}
+          className={cn(
+            'flex flex-col items-center justify-center text-[10px] font-bold transition-all gap-0.5',
+            activeTab === 'chat' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <MessageSquare className="size-3.5" />
+          <span>Chat</span>
+        </button>
 
-        {agent.navigation?.voiceEnabled && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('voice')}
-            className="flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer"
-            style={{
-              color: activeTab === 'voice' ? brandColor : undefined,
-              fontWeight: activeTab === 'voice' ? 700 : 400,
-            }}
-          >
-            <Mic className="size-4" />
-            <span className="text-[10px]">Voice</span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setActiveTab('voice')}
+          className={cn(
+            'flex flex-col items-center justify-center text-[10px] font-bold transition-all gap-0.5',
+            activeTab === 'voice' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Mic className="size-3.5" />
+          <span>Voice</span>
+        </button>
 
-        {agent.navigation?.formsEnabled && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('forms')}
-            className="flex flex-col items-center justify-center gap-0.5 transition-colors relative cursor-pointer"
-            style={{
-              color: activeTab === 'forms' ? brandColor : undefined,
-              fontWeight: activeTab === 'forms' ? 700 : 400,
-            }}
-          >
-            <FileText className="size-4" />
-            <span className="text-[10px]">Forms</span>
-            {agent.connectedForms?.length > 0 && (
-              <span
-                className="absolute top-2 right-5 size-1.5 rounded-full"
-                style={{ backgroundColor: brandColor }}
-              />
-            )}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setActiveTab('forms')}
+          className={cn(
+            'flex flex-col items-center justify-center text-[10px] font-bold transition-all gap-0.5',
+            activeTab === 'forms' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <FileText className="size-3.5" />
+          <span>Forms</span>
+        </button>
 
-        {agent.navigation?.historyEnabled && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('history')}
-            className="flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer"
-            style={{
-              color: activeTab === 'history' ? brandColor : undefined,
-              fontWeight: activeTab === 'history' ? 700 : 400,
-            }}
-          >
-            <History className="size-4" />
-            <span className="text-[10px]">History</span>
-          </button>
-        )}
-      </div>
-
-      {/* Footer Branding */}
-      <div className="py-1 bg-slate-100 dark:bg-slate-950 text-center border-t border-slate-200/40">
-        <p className="text-[9px] text-slate-400">
-          Powered by <span className="font-bold text-slate-600 dark:text-slate-300">Fieseros AI</span>
-        </p>
+        <button
+          type="button"
+          onClick={() => setActiveTab('history')}
+          className={cn(
+            'flex flex-col items-center justify-center text-[10px] font-bold transition-all gap-0.5',
+            activeTab === 'history' ? 'text-blue-600 border-t-2 border-blue-600' : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <History className="size-3.5" />
+          <span>History</span>
+        </button>
       </div>
     </div>
   );

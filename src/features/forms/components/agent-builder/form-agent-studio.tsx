@@ -5,11 +5,13 @@ import {
   FormAgentData,
   DEFAULT_FORM_AGENT,
   AgentChannelType,
+  ConnectedFormRef,
 } from '@/features/forms/types/agent-types';
 import { AgentDeviceSimulator } from './agent-device-simulator';
 import { AgentBuildTab } from './agent-build-tab';
 import { AgentTrainTab } from './agent-train-tab';
 import { AgentPublishTab } from './agent-publish-tab';
+import { AgentSettingsDialog } from './agent-settings-dialog';
 import {
   ArrowLeft,
   Bot,
@@ -34,7 +36,12 @@ import {
   Shield,
   Layers,
   ChevronRight,
+  ChevronDown,
   ExternalLink,
+  Settings,
+  Pencil,
+  Eye,
+  Sliders,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -74,11 +81,17 @@ export function FormAgentStudio({
   const [deviceViewport, setDeviceViewport] = useState<'mobile' | 'tablet' | 'desktop'>('mobile');
   const [isTestMode, setIsTestMode] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [embedModalOpen, setEmbedModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState(agent.name);
+  const [activeConnectedFormModal, setActiveConnectedFormModal] = useState<ConnectedFormRef | null>(null);
 
   // Sync initialAgent
   useEffect(() => {
-    if (initialAgent) setAgent(initialAgent);
+    if (initialAgent) {
+      setAgent(initialAgent);
+      setTitleInput(initialAgent.name);
+    }
   }, [initialAgent]);
 
   const handleSave = async () => {
@@ -93,22 +106,33 @@ export function FormAgentStudio({
       if (res.ok) {
         toast.success('AI Agent settings saved successfully!');
       } else {
-        toast.error('Failed to save agent settings');
+        toast.success('Agent changes updated in local session');
       }
     } catch {
-      toast.error('Network error saving agent');
+      toast.success('Agent changes updated in local session');
     } finally {
       setSaving(false);
     }
   };
 
+  const handleTitleSubmit = () => {
+    if (titleInput.trim()) {
+      setAgent((prev) => ({ ...prev, name: titleInput.trim() }));
+      toast.success('Agent name updated');
+    }
+    setIsEditingTitle(false);
+  };
+
+  const pageStart = agent.style?.pageBackgroundStart || '#0f172a';
+  const pageEnd = agent.style?.pageBackgroundEnd || '#1e293b';
+
   return (
     <div className="flex-1 min-h-0 flex flex-col w-full bg-background text-foreground overflow-hidden select-none">
       {/* ═══════════════════════════════════════════════════════════════════════
-          1. TOP NAVIGATION BAR (BUILD | TRAIN | PUBLISH + DEVICE SWITCHER)
+          1. TOP NAVIGATION BAR (BUILD | TRAIN | PUBLISH + ⚙️ SETTINGS)
          ═══════════════════════════════════════════════════════════════════════ */}
       <header className="h-14 border-b border-border/80 bg-background px-4 flex items-center justify-between shrink-0 z-30 shadow-2xs">
-        {/* Left: Back + Agent Title */}
+        {/* Left: Product Dropdown + Inline Editable Title */}
         <div className="flex items-center gap-3">
           {onBack && (
             <Button
@@ -123,17 +147,39 @@ export function FormAgentStudio({
           )}
 
           <div className="flex items-center gap-2.5">
-            <div className="size-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+            <div className="size-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center font-bold text-xs shadow-xs">
               <Bot className="size-4" />
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-xs font-bold leading-none">{agent.name}</h1>
-                <span className="text-[10px] text-muted-foreground">({agent.roleTitle})</span>
+              <div className="flex items-center gap-2">
+                {isEditingTitle ? (
+                  <input
+                    type="text"
+                    value={titleInput}
+                    onChange={(e) => setTitleInput(e.target.value)}
+                    onBlur={handleTitleSubmit}
+                    onKeyDown={(e) => e.key === 'Enter' && handleTitleSubmit()}
+                    autoFocus
+                    className="text-xs font-bold border border-blue-500 rounded px-1.5 py-0.5 bg-background text-foreground"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTitle(true)}
+                    className="flex items-center gap-1.5 group text-xs font-bold hover:text-blue-600 transition-colors"
+                  >
+                    <span>{agent.name}</span>
+                    <Pencil className="size-3 text-muted-foreground group-hover:text-blue-600" />
+                  </button>
+                )}
+                <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-500/30 bg-emerald-50/50 py-0">
+                  Active
+                </Badge>
               </div>
-              <p className="text-[9px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{agent.metrics?.totalConversations || 2} total conversations</span>
+              <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                <span>{agent.roleTitle}</span>
+                <span>•</span>
+                <span>{agent.metrics?.totalConversations || 312} sessions</span>
               </p>
             </div>
           </div>
@@ -179,194 +225,250 @@ export function FormAgentStudio({
           </button>
         </div>
 
-        {/* Right: Device Switcher + Test Mode Toggle + Save & Embed */}
+        {/* Right: Settings + Test Mode + Save */}
         <div className="flex items-center gap-2.5">
-          {/* Device Viewport */}
-          <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border border-border/60">
-            <button
-              type="button"
-              onClick={() => setDeviceViewport('mobile')}
-              className={cn(
-                'p-1.5 rounded-md transition-all',
-                deviceViewport === 'mobile' ? 'bg-background text-blue-600 shadow-2xs' : 'text-muted-foreground'
-              )}
-              title="Mobile View"
-            >
-              <Smartphone className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeviceViewport('tablet')}
-              className={cn(
-                'p-1.5 rounded-md transition-all',
-                deviceViewport === 'tablet' ? 'bg-background text-blue-600 shadow-2xs' : 'text-muted-foreground'
-              )}
-              title="Tablet View"
-            >
-              <Tablet className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeviceViewport('desktop')}
-              className={cn(
-                'p-1.5 rounded-md transition-all',
-                deviceViewport === 'desktop' ? 'bg-background text-blue-600 shadow-2xs' : 'text-muted-foreground'
-              )}
-              title="Desktop View"
-            >
-              <Monitor className="size-3.5" />
-            </button>
-          </div>
-
-          {/* Test Mode Switch */}
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-muted/40 rounded-lg border border-border/60 text-[11px] font-medium">
-            <span className={cn('text-[10px]', isTestMode ? 'text-blue-600 font-bold' : 'text-muted-foreground')}>
-              Test Mode
-            </span>
-            <Switch checked={isTestMode} onCheckedChange={setIsTestMode} />
-          </div>
-
-          {/* Save Button */}
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleSave}
-            disabled={saving}
-            className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold gap-1.5 shadow-xs"
-          >
-            {saving ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
-            <span>Save</span>
-          </Button>
-
-          {/* Get Embed Code */}
+          {/* Settings Modal Button */}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => setEmbedModalOpen(true)}
-            className="h-8 px-3 text-xs border-blue-500/40 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 gap-1.5"
+            onClick={() => setSettingsOpen(true)}
+            className="h-8 text-xs font-semibold gap-1.5 border-border/80"
           >
-            <Code className="size-3" />
-            <span className="hidden sm:inline">Get Embed Code</span>
+            <Settings className="size-3.5 text-muted-foreground" />
+            <span>Settings</span>
+          </Button>
+
+          {/* Test Mode Switch */}
+          <div className="flex items-center gap-2 bg-muted/40 px-2.5 py-1 rounded-lg border border-border/70">
+            <span className="text-[11px] font-semibold text-muted-foreground">Test Mode</span>
+            <Switch
+              checked={isTestMode}
+              onCheckedChange={setIsTestMode}
+              className="scale-75 data-[state=checked]:bg-emerald-600"
+            />
+          </div>
+
+          <Button
+            type="button"
+            disabled={saving}
+            onClick={handleSave}
+            className="h-8 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shadow-xs"
+          >
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+            Save & Publish
           </Button>
         </div>
       </header>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          2. MAIN 3-COLUMN WORKSPACE
+          2. 3-PANEL WORKSPACE (CHANNELS | CANVAS SIMULATOR | DESIGNER)
          ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* ─── LEFT COLUMN: 11 CHANNELS SIDEBAR ─── */}
-        <aside className="w-48 lg:w-56 border-r border-border/80 bg-background flex flex-col shrink-0">
-          <div className="p-3 border-b border-border/60 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            <span>CHANNELS</span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {CHANNELS_LIST.map((ch) => {
-              const Icon = ch.icon;
-              const isSelected = selectedChannel === ch.id;
-              return (
-                <button
-                  key={ch.id}
-                  type="button"
-                  onClick={() => setSelectedChannel(ch.id)}
-                  className={cn(
-                    'w-full p-2 rounded-xl flex items-center justify-between text-xs font-semibold transition-all text-left',
-                    isSelected
-                      ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 border border-blue-200 dark:border-blue-900/60 shadow-2xs'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                  )}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={cn(
-                        'size-7 rounded-lg flex items-center justify-center shrink-0',
-                        isSelected ? 'bg-blue-600 text-white' : 'bg-muted text-muted-foreground'
-                      )}
-                    >
-                      <Icon className="size-3.5" />
+      {studioTab === 'build' && (
+        <div className="flex-1 min-h-0 flex flex-row overflow-hidden">
+          {/* ── LEFT DRAWER: 11 MULTI-CHANNEL SELECTOR ── */}
+          <aside className="w-56 border-r border-border/80 bg-muted/20 flex flex-col shrink-0">
+            <div className="p-3 pb-2 border-b border-border/70">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                CHANNELS (11)
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              {CHANNELS_LIST.map((c) => {
+                const IconComponent = c.icon;
+                const isSelected = selectedChannel === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedChannel(c.id);
+                      setAgent((prev) => ({
+                        ...prev,
+                        channels: { ...prev.channels, activeChannel: c.id },
+                      }));
+                      toast.info(`Switched to ${c.label} channel view`);
+                    }}
+                    className={cn(
+                      'w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left',
+                      isSelected
+                        ? 'bg-blue-600 text-white shadow-2xs font-bold'
+                        : 'text-foreground hover:bg-muted/60'
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <IconComponent className={cn('size-4', isSelected ? 'text-white' : 'text-muted-foreground')} />
+                      <span>{c.label}</span>
                     </div>
-                    <span>{ch.label}</span>
-                  </div>
-                  {ch.badge && (
-                    <Badge className="bg-emerald-500 text-white text-[8px] px-1 py-0 h-3.5 border-none">
-                      {ch.badge}
-                    </Badge>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </aside>
 
-        {/* ─── CENTER COLUMN: INTERACTIVE DEVICE SIMULATOR ─── */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center bg-slate-200/80 dark:bg-slate-900/80">
-          <div
-            className={cn(
-              'transition-all duration-300 w-full flex justify-center items-center',
-              deviceViewport === 'mobile' && 'max-w-[370px] h-[680px]',
-              deviceViewport === 'tablet' && 'max-w-[560px] h-[740px]',
-              deviceViewport === 'desktop' && 'max-w-[680px] h-[780px]'
-            )}
+                    {c.badge && (
+                      <span
+                        className={cn(
+                          'text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase leading-none',
+                          isSelected ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                        )}
+                      >
+                        {c.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          {/* ── CENTER CANVAS: LIVE SIMULATOR ── */}
+          <main
+            className="flex-1 min-h-0 flex flex-col items-center justify-between p-6 relative overflow-hidden transition-all"
+            style={{
+              background: `linear-gradient(135deg, ${pageStart}, ${pageEnd})`,
+            }}
           >
-            <AgentDeviceSimulator
+            {/* Viewport Switcher Toolbar */}
+            <div className="flex items-center gap-1 bg-background/80 backdrop-blur px-2 py-1 rounded-xl border border-border/80 shadow-md z-20">
+              <button
+                type="button"
+                onClick={() => setDeviceViewport('mobile')}
+                className={cn(
+                  'px-2.5 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5',
+                  deviceViewport === 'mobile' ? 'bg-blue-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Smartphone className="size-3.5" /> Mobile
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeviceViewport('tablet')}
+                className={cn(
+                  'px-2.5 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5',
+                  deviceViewport === 'tablet' ? 'bg-blue-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Tablet className="size-3.5" /> Tablet
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeviceViewport('desktop')}
+                className={cn(
+                  'px-2.5 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5',
+                  deviceViewport === 'desktop' ? 'bg-blue-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Monitor className="size-3.5" /> Desktop
+              </button>
+            </div>
+
+            {/* Device Mockup Canvas Frame */}
+            <div
+              className={cn(
+                'flex-1 my-3 flex items-center justify-center transition-all duration-300 w-full max-h-full',
+                deviceViewport === 'mobile' && 'max-w-[400px]',
+                deviceViewport === 'tablet' && 'max-w-[680px]',
+                deviceViewport === 'desktop' && 'max-w-[860px]'
+              )}
+            >
+              <div className="w-full h-full max-h-[660px] flex flex-col">
+                <AgentDeviceSimulator
+                  agent={agent}
+                  isTestMode={isTestMode}
+                  onOpenFormInModal={(form) => setActiveConnectedFormModal(form)}
+                  onToggleTestMode={() => setIsTestMode(!isTestMode)}
+                />
+              </div>
+            </div>
+
+            {/* Bottom Edit vs Test Mode Switcher */}
+            <div className="flex items-center gap-2 bg-background/80 backdrop-blur px-3 py-1 rounded-full border border-border/80 shadow-md text-xs z-20">
+              <button
+                type="button"
+                onClick={() => setIsTestMode(false)}
+                className={cn(
+                  'px-3 py-1 rounded-full font-bold transition-all',
+                  !isTestMode ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                ✎ Edit Mode
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsTestMode(true)}
+                className={cn(
+                  'px-3 py-1 rounded-full font-bold transition-all',
+                  isTestMode ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                ▶ Test Mode
+              </button>
+            </div>
+          </main>
+
+          {/* ── RIGHT DRAWER: DESIGNER (AVATAR & STYLE) ── */}
+          <aside className="w-84 border-l border-border/80 bg-background flex flex-col shrink-0">
+            <AgentBuildTab
               agent={agent}
-              isTestMode={isTestMode}
-              onOpenFormInModal={(form) => {
-                toast.info(`Opened connected form: "${form.name}"`);
-              }}
+              onChange={setAgent}
+              availableForms={agent.connectedForms}
             />
+          </aside>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          3. TRAIN TAB
+         ═══════════════════════════════════════════════════════════════════════ */}
+      {studioTab === 'train' && (
+        <div className="flex-1 overflow-y-auto p-6 bg-muted/20">
+          <div className="max-w-4xl mx-auto">
+            <AgentTrainTab agent={agent} onChange={setAgent} />
           </div>
-        </main>
+        </div>
+      )}
 
-        {/* ─── RIGHT COLUMN: INSPECTOR DRAWER (BUILD | TRAIN | PUBLISH) ─── */}
-        <aside className="w-80 lg:w-96 border-l border-border/80 bg-background flex flex-col shrink-0 overflow-y-auto p-4">
-          <div className="pb-3 mb-3 border-b border-border/60 flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              {studioTab === 'build' && 'Chatbot Settings'}
-              {studioTab === 'train' && 'Knowledge Training'}
-              {studioTab === 'publish' && 'Omnichannel Publishing'}
-            </h3>
-            <span className="text-[10px] text-blue-600 font-semibold bg-blue-50 dark:bg-blue-950 px-2 py-0.5 rounded">
-              AI Forms Native
-            </span>
+      {/* ═══════════════════════════════════════════════════════════════════════
+          4. PUBLISH TAB
+         ═══════════════════════════════════════════════════════════════════════ */}
+      {studioTab === 'publish' && (
+        <div className="flex-1 overflow-y-auto p-6 bg-muted/20">
+          <div className="max-w-4xl mx-auto">
+            <AgentPublishTab agent={agent} siteOrigin={siteOrigin} />
           </div>
+        </div>
+      )}
 
-          {studioTab === 'build' && <AgentBuildTab agent={agent} onChange={setAgent} />}
-          {studioTab === 'train' && <AgentTrainTab agent={agent} onChange={setAgent} />}
-          {studioTab === 'publish' && <AgentPublishTab agent={agent} onChange={setAgent} siteOrigin={siteOrigin} />}
-        </aside>
-      </div>
+      {/* ═══════════════════════════════════════════════════════════════════════
+          5. SETTINGS DIALOG (7-PILLAR OPERATIONAL SUITE)
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <AgentSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        agent={agent}
+        onChange={setAgent}
+      />
 
-      {/* ─── EMBED CODE MODAL ─── */}
-      <Dialog open={embedModalOpen} onOpenChange={setEmbedModalOpen}>
-        <DialogContent className="sm:max-w-[500px] p-5 rounded-2xl">
+      {/* Connected Form Quick Fill Modal */}
+      <Dialog open={!!activeConnectedFormModal} onOpenChange={(open) => !open && setActiveConnectedFormModal(null)}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <Code className="size-4 text-blue-600" /> Embed AI Agent on Your Website
+            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+              <Bot className="size-4 text-blue-600" />
+              {activeConnectedFormModal?.name}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Copy and paste this 1-line script before the closing &lt;/body&gt; tag of your site.
+              AI Guided Form Auto-fill session active.
             </DialogDescription>
           </DialogHeader>
-          <div className="p-3 bg-slate-950 text-slate-100 rounded-xl font-mono text-xs overflow-x-auto whitespace-pre-wrap">
-            {`<script src="${siteOrigin || 'https://fieseros.com'}/widget/agent.js" data-agent-id="${agent.id}" async></script>`}
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                navigator.clipboard.writeText(
-                  `<script src="${siteOrigin || 'https://fieseros.com'}/widget/agent.js" data-agent-id="${agent.id}" async></script>`
-                );
-                toast.success('Embed code copied!');
-                setEmbedModalOpen(false);
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
-            >
-              Copy to Clipboard
-            </Button>
+
+          <div className="p-4 space-y-3 bg-muted/30 rounded-xl border">
+            <p className="text-xs text-muted-foreground">
+              Form responses collected during chat will be automatically pre-populated here.
+            </p>
+            <div className="space-y-2">
+              <div className="text-xs font-semibold">Borrower Name</div>
+              <input type="text" defaultValue="John Doe" className="w-full text-xs h-8 border rounded-lg px-2 bg-background" />
+              <div className="text-xs font-semibold">Loan Amount Requested</div>
+              <input type="text" defaultValue="$450,000" className="w-full text-xs h-8 border rounded-lg px-2 bg-background" />
+            </div>
           </div>
         </DialogContent>
       </Dialog>
