@@ -63,8 +63,10 @@ const ALL = 'all';
 const FEATURED = '__featured__';
 
 const QUICK_SUGGESTIONS = [
-  'Patient Intake',
+  '🎬 2-Part Split Hero',
+  'Elementor Split Form',
   'HVAC Quote',
+  'Patient Intake',
   'Job Application',
   'Bakery Order',
   'Liability Waiver',

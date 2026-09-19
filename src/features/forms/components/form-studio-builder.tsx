@@ -23,7 +23,7 @@ import {
   ListPlus, HelpCircle, Code, ShieldAlert, Navigation, Map,
   Sliders, Bot, Send, Search, RefreshCw, Layers, CalendarCheck,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X,
-  Wifi, Battery, Lock, Languages, AlertTriangle, Key, Share, Download
+  Wifi, Battery, Lock, Languages, AlertTriangle, Key, Share, Download, Film
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -65,6 +65,7 @@ import { FormAgentStudio } from './agent-builder/form-agent-studio';
 import { TemplateExplorer } from './builder/template-explorer';
 import type { FormTemplate } from '@/lib/forms/templates';
 import { UnifiedFieldInspector } from './builder/unified-field-inspector';
+import { FormSplitMediaInspector } from './builder/form-split-media-inspector';
 import { StudioThemeGalleryModal, THEME_GALLERY_PRESETS, FormThemePreset } from './builder/studio-theme-gallery-modal';
 import { StudioAiCopilotSidebar } from './builder/studio-ai-copilot-sidebar';
 import { StudioPagesTree } from './builder/studio-pages-tree';
@@ -131,13 +132,17 @@ export function FormStudioBuilder({
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, any>>({});
   const [previewSubmitted, setPreviewSubmitted] = useState(false);
 
-  // 2026 AI Studio & Multi-Step Panel Collapse States
   const [showWidgetPalette, setShowWidgetPalette] = useState(true);
   const [showAiCopilot, setShowAiCopilot] = useState(false);
   const [showPagesTree, setShowPagesTree] = useState(true);
   const [showInspector, setShowInspector] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [viewMode, setViewMode] = useState<'focus' | 'paper'>('focus');
+  const initialLayout = formData.settings?.formLayout === 'split_media' || formData.theme?.layout === 'split_media'
+    ? 'split_media'
+    : formData.settings?.formLayout === 'all_on_one_page'
+    ? 'paper'
+    : 'focus';
+  const [viewMode, setViewMode] = useState<'focus' | 'paper' | 'split_media'>(initialLayout);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [currentThemeId, setCurrentThemeId] = useState('fieseros-emerald');
 
@@ -848,11 +853,14 @@ export function FormStudioBuilder({
         <div className="h-10 border-b border-border/70 bg-slate-50/80 dark:bg-slate-950/80 px-4 flex items-center justify-between gap-3 shrink-0 select-none z-20">
           {/* Left: Layout View + Stepper Mode Switchers */}
           <div className="flex items-center gap-2">
-            {/* Focus (Typeform) vs Paper (Jotform) */}
+            {/* Focus (Typeform) vs Paper (Jotform) vs 2-Part Split (Elementor) */}
             <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-border/80 text-[11px] font-semibold">
               <button
                 type="button"
-                onClick={() => setViewMode('focus')}
+                onClick={() => {
+                  setViewMode('focus');
+                  updateSetting('formLayout', 'single_question');
+                }}
                 className={cn(
                   'px-2 py-0.5 rounded-md transition-all cursor-pointer',
                   viewMode === 'focus' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
@@ -863,7 +871,10 @@ export function FormStudioBuilder({
               </button>
               <button
                 type="button"
-                onClick={() => setViewMode('paper')}
+                onClick={() => {
+                  setViewMode('paper');
+                  updateSetting('formLayout', 'all_on_one_page');
+                }}
                 className={cn(
                   'px-2 py-0.5 rounded-md transition-all cursor-pointer',
                   viewMode === 'paper' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
@@ -871,6 +882,24 @@ export function FormStudioBuilder({
                 title="Jotform-style Classic Document"
               >
                 📄 Document
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('split_media');
+                  updateSetting('formLayout', 'split_media');
+                  updateMediaPanel({ enabled: true });
+                  setSelectedFieldId('__media_panel__');
+                  setShowInspector(true);
+                }}
+                className={cn(
+                  'px-2.5 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1',
+                  viewMode === 'split_media' ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 shadow-2xs font-bold ring-1 ring-teal-500/30' : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Elementor-style 2-Part Split Form (Video/Image Hero + Form Fields)"
+              >
+                <span>🎬 2-Part Split</span>
+                <span className="text-[8px] bg-teal-500/20 text-teal-800 dark:text-teal-200 px-1 rounded font-bold">Elementor</span>
               </button>
             </div>
 
@@ -1049,21 +1078,65 @@ export function FormStudioBuilder({
             />
 
             {/* Right Panel: Unified Field Inspector & Widget Settings */}
-            {showInspector && selectedField && (
+            {showInspector && (selectedField || selectedFieldId === '__media_panel__') && (
               <aside className="w-80 lg:w-96 border-l border-border/80 bg-background flex flex-col shrink-0 z-20 h-full overflow-hidden">
-                <UnifiedFieldInspector
-                  field={selectedField as unknown as Record<string, any>}
-                  allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
-                  mode={selectedField.widgetType ? 'widget_settings' : 'properties'}
-                  onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
-                  onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
-                  onDuplicate={() => {
-                    const idx = formData.fields.findIndex((f) => f.id === selectedField.id);
-                    if (idx >= 0) handleDuplicateField(selectedField, idx);
-                  }}
-                  onClose={() => setShowInspector(false)}
-                  onUpdate={() => { onSave(); }}
-                />
+                {selectedFieldId === '__media_panel__' ? (
+                  <div className="flex-1 flex flex-col h-full overflow-hidden">
+                    <div className="h-12 border-b border-border/80 px-4 flex items-center justify-between shrink-0 bg-teal-50/50 dark:bg-teal-950/30">
+                      <span className="font-bold text-xs flex items-center gap-1.5 text-teal-950 dark:text-teal-200">
+                        <Film className="size-4 text-teal-600" />
+                        Left Hero Media Inspector
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowInspector(false)}
+                        className="size-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4">
+                      <FormSplitMediaInspector
+                        mediaPanel={
+                          formData.mediaPanel ||
+                          formData.theme?.mediaPanel || {
+                            enabled: true,
+                            position: 'left',
+                            splitRatio: '50-50',
+                            mediaType: 'image',
+                            mediaUrl: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+                            headline: formData.name || 'Fast & Reliable Professional Service',
+                            subtitle: 'Fill out the form below to receive upfront pricing and schedule top-rated pros.',
+                            badgeText: '⭐ 5-Star Rated Service Pro',
+                            benefitsList: [
+                              'Guaranteed response within 15 minutes',
+                              'Licensed, insured & background-checked',
+                              '100% Price Match & Escrow Guarantee',
+                            ],
+                          }
+                        }
+                        onChange={updateMediaPanel}
+                        formName={formData.name}
+                      />
+                    </div>
+                  </div>
+                ) : selectedField ? (
+                  <UnifiedFieldInspector
+                    field={selectedField as unknown as Record<string, any>}
+                    allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
+                    mode={selectedField.widgetType ? 'widget_settings' : 'properties'}
+                    onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
+                    onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
+                    onDuplicate={() => {
+                      const idx = formData.fields.findIndex((f) => f.id === selectedField.id);
+                      if (idx >= 0) handleDuplicateField(selectedField, idx);
+                    }}
+                    onClose={() => setShowInspector(false)}
+                    onUpdate={() => { onSave(); }}
+                  />
+                ) : null}
               </aside>
             )}
           </div>

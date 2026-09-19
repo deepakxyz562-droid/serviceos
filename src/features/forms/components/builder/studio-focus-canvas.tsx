@@ -54,7 +54,7 @@ interface StudioFocusCanvasProps {
   onStepChange: (index: number) => void;
   selectedFieldId: string | null;
   onSelectField: (fieldId: string) => void;
-  viewMode: 'focus' | 'paper';
+  viewMode: 'focus' | 'paper' | 'split_media';
   // Collapsed sidebars state & toggle triggers
   isWidgetPaletteCollapsed?: boolean;
   onToggleWidgetPalette?: () => void;
@@ -277,8 +277,276 @@ export function StudioFocusCanvas({
       )}
 
       {/* ─── MAIN WYSIWYG CANVAS ─── */}
-      <div className="w-full max-w-4xl my-auto flex flex-col items-center">
-        {viewMode === 'focus' ? (
+      <div className="w-full max-w-5xl my-auto flex flex-col items-center">
+        {viewMode === 'split_media' ? (
+          /* ════ 0. ELEMENTOR 2-PART SPLIT FORM VIEW (Left Hero Media, Right 5-6 Fields) ════ */
+          <div className="w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-2xl overflow-hidden transition-all">
+            {(() => {
+              const panel = formData.mediaPanel || formData.theme?.mediaPanel || {
+                enabled: true,
+                position: 'left',
+                splitRatio: '50-50',
+                mediaType: 'image',
+                mediaUrl: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+                headline: formData.name || 'Fast & Reliable Professional Service',
+                subtitle: 'Fill out the form below to receive upfront pricing and schedule top-rated pros.',
+                badgeText: '⭐ 5-Star Rated Service Pro',
+                benefitsList: [
+                  'Guaranteed response within 15 minutes',
+                  'Licensed, insured & background-checked',
+                  '100% Price Match & Escrow Guarantee',
+                ],
+              };
+
+              const isMediaSelected = selectedFieldId === '__media_panel__';
+              const splitRatio = panel.splitRatio || '50-50';
+
+              const leftWidthClass =
+                splitRatio === '40-60'
+                  ? 'lg:w-[40%]'
+                  : splitRatio === '60-40'
+                  ? 'lg:w-[60%]'
+                  : splitRatio === '35-65'
+                  ? 'lg:w-[35%]'
+                  : 'lg:w-1/2';
+
+              const rightWidthClass =
+                splitRatio === '40-60'
+                  ? 'lg:w-[60%]'
+                  : splitRatio === '60-40'
+                  ? 'lg:w-[40%]'
+                  : splitRatio === '35-65'
+                  ? 'lg:w-[65%]'
+                  : 'lg:w-1/2';
+
+              return (
+                <div className={`flex flex-col ${panel.position === 'right' ? 'lg:flex-row-reverse' : 'lg:flex-row'} min-h-[550px]`}>
+                  {/* LEFT HERO MEDIA COLUMN */}
+                  <div
+                    onClick={() => onSelectField('__media_panel__')}
+                    className={`relative p-6 sm:p-8 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white flex flex-col justify-between cursor-pointer group transition-all ${leftWidthClass} ${
+                      isMediaSelected
+                        ? 'ring-4 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900'
+                        : 'hover:brightness-105'
+                    }`}
+                  >
+                    {/* Top Edit Chip */}
+                    <div className="flex items-center justify-between gap-2 mb-4">
+                      <div className="flex items-center gap-2">
+                        {panel.badgeText && (
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-semibold backdrop-blur">
+                            <Star className="size-3 text-emerald-400 fill-emerald-400" />
+                            <span>{panel.badgeText}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <Badge
+                        variant="secondary"
+                        className={`text-[10px] font-bold gap-1 transition-opacity ${
+                          isMediaSelected
+                            ? 'bg-emerald-500 text-slate-950 opacity-100'
+                            : 'bg-white/20 text-white opacity-0 group-hover:opacity-100 backdrop-blur'
+                        }`}
+                      >
+                        <Edit2 className="size-2.5" />
+                        <span>Left Hero (Click to Edit)</span>
+                      </Badge>
+                    </div>
+
+                    {/* Media Display (Image or Video) */}
+                    <div className="my-4 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl relative">
+                      {panel.mediaType === 'video' && panel.mediaUrl ? (
+                        panel.mediaUrl.includes('youtube.com') || panel.mediaUrl.includes('youtu.be') ? (
+                          <div className="aspect-video w-full">
+                            <iframe
+                              src={
+                                panel.mediaUrl.includes('watch?v=')
+                                  ? panel.mediaUrl.replace('watch?v=', 'embed/').split('&')[0]
+                                  : panel.mediaUrl.replace('youtu.be/', 'www.youtube.com/embed/')
+                              }
+                              title="Video Hero"
+                              className="w-full h-full border-0 pointer-events-none"
+                            />
+                          </div>
+                        ) : (
+                          <video
+                            src={panel.mediaUrl}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="w-full h-auto object-cover max-h-[280px]"
+                          />
+                        )
+                      ) : (
+                        <div className="relative w-full aspect-video overflow-hidden">
+                          <img
+                            src={panel.mediaUrl || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80'}
+                            alt="Hero Media"
+                            className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Headline, Subtitle & Value Benefits */}
+                    <div className="space-y-3 mt-auto">
+                      <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-snug">
+                        {panel.headline || formData.name || 'Fast & Reliable Professional Service'}
+                      </h2>
+                      {panel.subtitle && (
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          {panel.subtitle}
+                        </p>
+                      )}
+
+                      {panel.benefitsList && panel.benefitsList.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-white/10">
+                          {panel.benefitsList.map((benefit, bIdx) => (
+                            <div key={bIdx} className="flex items-center gap-2 text-xs text-slate-200">
+                              <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+                              <span>{benefit}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* RIGHT FORM FIELDS COLUMN (5-6 Fields) */}
+                  <div className={`p-6 sm:p-8 flex flex-col justify-between space-y-6 ${rightWidthClass} bg-card`}>
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <h3 className="text-lg font-bold text-foreground">
+                          {formData.name || 'Request a Quote / Booking'}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {formData.description || 'Fill in the details below to receive your upfront estimate.'}
+                        </p>
+                      </div>
+
+                      {/* Right Fields Grid */}
+                      <div className="flex flex-wrap gap-3">
+                        {fields.length > 0 ? (
+                          fields.map((f, fIdx) => {
+                            const isSelected = selectedFieldId === f.id;
+                            const widthCls = getWidthClasses(f.width);
+
+                            return (
+                              <div
+                                key={f.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectField(f.id);
+                                }}
+                                className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
+                                  isSelected
+                                    ? 'border-emerald-600 dark:border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 ring-2 ring-emerald-600/20 shadow-sm'
+                                    : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5 truncate">
+                                    <span className="truncate">{f.label || 'Question'}</span>
+                                    {f.required && <span className="text-rose-500">*</span>}
+                                  </label>
+
+                                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5 text-[9px] font-bold">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetFieldWidth(f.id, 'full')}
+                                        className={`px-1.5 py-0.5 rounded ${
+                                          !f.width || f.width === 'full'
+                                            ? 'bg-emerald-600 text-white shadow-2xs font-extrabold'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                        }`}
+                                      >
+                                        1C
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetFieldWidth(f.id, 'half')}
+                                        className={`px-1.5 py-0.5 rounded ${
+                                          f.width === 'half'
+                                            ? 'bg-emerald-600 text-white shadow-2xs font-extrabold'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                        }`}
+                                      >
+                                        2C
+                                      </button>
+                                    </div>
+
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button className="p-1 rounded text-muted-foreground hover:text-foreground">
+                                          <Sliders className="size-3" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="text-xs w-44">
+                                        <DropdownMenuItem onClick={() => handleDuplicateField(f)} className="gap-1.5">
+                                          <Copy className="size-3.5" /> Duplicate Field
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleMoveField(f.id, 'up')} className="gap-1.5">
+                                          <ArrowUp className="size-3.5" /> Move Up
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleMoveField(f.id, 'down')} className="gap-1.5">
+                                          <ArrowDown className="size-3.5" /> Move Down
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => handleDeleteField(f.id)} className="gap-1.5 text-rose-600">
+                                          <Trash2 className="size-3.5" /> Delete Field
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </div>
+
+                                <div
+                                  className="h-10 w-full border border-slate-200/90 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/70 px-3.5 py-2 text-muted-foreground flex items-center shadow-2xs text-xs rounded-xl"
+                                >
+                                  {f.placeholder || `Enter ${f.label || 'value'}...`}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="w-full p-8 border-2 border-dashed rounded-2xl text-center text-muted-foreground text-xs space-y-2">
+                            <p>No fields added yet.</p>
+                            {onOpenAddWidgetDialog && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onOpenAddWidgetDialog(0)}
+                                className="text-xs font-semibold gap-1"
+                              >
+                                <Plus className="size-3.5" /> Add Field
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Submit Button Preview */}
+                    <div className="pt-2">
+                      <Button
+                        type="button"
+                        className="w-full h-11 text-xs sm:text-sm font-bold text-white rounded-xl shadow-md gap-2"
+                        style={{ backgroundColor: primaryColor }}
+                      >
+                        <span>{formData.submitButtonText || 'Submit Request & Get Quote'}</span>
+                        <ArrowRight className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        ) : viewMode === 'focus' ? (
           /* ════ 1. FOCUS CARD MULTI-STEP VIEW (Typeform Parity) ════ */
           <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl p-6 sm:p-10 transition-all">
             {/* Left Media Block */}

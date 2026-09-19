@@ -63,3 +63,5 @@ import './canonical/registration-application-templates'; // Job application, ren
 import './canonical/inspection-checklist-templates'; // Multi-point inspection, HVAC tuneup
 import './canonical/waiver-consent-templates'; // Liability waivers, media release
 import './canonical/survey-feedback-templates'; // CSAT, performance review, NPS
+import './canonical/split-media-templates'; // 2-Part Split Hero (Elementor-Style)
+
