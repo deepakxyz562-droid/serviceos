@@ -86,7 +86,7 @@ export const WIDGET_MANIFESTS: Record<StudioWidgetType, WidgetManifest> = {
     name: 'Tabs Component',
     description: 'Multi-tab content switcher with customizable tab headers',
     category: 'layout',
-    icon: 'FolderTabs',
+    icon: 'Folders',
     isContainer: true,
     defaultProps: { tabs: ['Overview', 'Details', 'Reviews'] },
     defaultStyle: { padding: '16px' },
