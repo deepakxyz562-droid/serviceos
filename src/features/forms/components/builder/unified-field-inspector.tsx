@@ -11,6 +11,7 @@
 import { useMemo } from 'react';
 import { WidgetSettingsRenderer } from './widget-settings-renderer';
 import { PaymentPropertiesPanel } from './payment-properties-panel';
+import { AppointmentPropertiesPanel } from './appointment-properties-panel';
 import {
   FIELD_REGISTRY,
   getFieldById,
@@ -154,7 +155,28 @@ export function UnifiedFieldInspector({
     );
   }
 
-  // 2. Otherwise render schema-driven widget settings renderer
+  // 2. If this is an Appointment widget, render the dedicated JotForm Appointment Properties panel
+  const isAppointmentWidget =
+    field.widgetType === 'appointment' ||
+    field.type === 'appointment' ||
+    field.type === 'appointment_booking' ||
+    definition.id === 'appointment';
+
+  if (isAppointmentWidget) {
+    return (
+      <AppointmentPropertiesPanel
+        field={field}
+        allFields={allFieldsClean}
+        onFieldChange={onFieldChange}
+        onConfigChange={onConfigChange}
+        onDuplicate={onDuplicate}
+        onClose={onClose}
+        onUpdate={onUpdate}
+      />
+    );
+  }
+
+  // 3. Otherwise render schema-driven widget settings renderer
   return (
     <WidgetSettingsRenderer
       definition={definition}

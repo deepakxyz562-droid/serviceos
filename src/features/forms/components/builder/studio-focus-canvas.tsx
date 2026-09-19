@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import type { EditorFormData, FormField } from '@/features/forms/types';
+import { WidgetRuntimeDispatcher } from '../runtime/widgets/widget-runtime-dispatcher';
 
 interface StudioFocusCanvasProps {
   formData: EditorFormData;
@@ -176,6 +177,30 @@ export function StudioFocusCanvas({
     }));
     toast.info('Field removed');
   };
+
+  // Keyboard shortcut: Delete or Backspace key to delete selected widget
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const activeTag = document.activeElement?.tagName?.toLowerCase();
+        const isContentEditable = document.activeElement?.getAttribute('contenteditable') === 'true';
+        if (
+          activeTag === 'input' ||
+          activeTag === 'textarea' ||
+          activeTag === 'select' ||
+          isContentEditable
+        ) {
+          return;
+        }
+        if (selectedFieldId && selectedFieldId !== '__media_panel__') {
+          e.preventDefault();
+          handleDeleteField(selectedFieldId);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedFieldId]);
 
   // Move Field to Another Step
   const handleMoveFieldToStep = (fieldId: string, targetStepId: string) => {
@@ -372,13 +397,134 @@ function StudioFieldPreview({
     );
   }
 
-  // Default / Standard Inputs
+  // 7. Appointment Widget Preview (100% Jotform Visual Parity)
+  if (field.type === 'appointment' || field.widgetType === 'appointment' || field.type === 'appointment_booking') {
+    const defaultTimezone = cfg.defaultTimezone || 'America/New York (02:18 PM)';
+    const selectedDate = '09/21/2026';
+    const dayLabel = 'Monday, September 21';
+    
+    return (
+      <div className="w-full rounded-2xl border-2 border-blue-500/80 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Left: Interactive Calendar */}
+          <div className="space-y-2.5 border-r border-slate-100 dark:border-slate-800 pr-0 md:pr-4">
+            {/* Date Display input */}
+            <div className="flex items-center justify-between border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 font-medium text-slate-700 dark:text-slate-200">
+              <span>{selectedDate}</span>
+              <Calendar className="size-3.5 text-slate-400" />
+            </div>
+
+            {/* Month & Year Selectors */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">
+                <span>September</span>
+                <ChevronDown className="size-3 text-slate-400" />
+              </div>
+              <div className="flex items-center justify-between border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-700 dark:text-slate-300">
+                <span>2026</span>
+                <div className="flex flex-col text-[8px] text-slate-400 leading-none">
+                  <span>▲</span>
+                  <span>▼</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Calendar Days Table */}
+            <div className="pt-1">
+              <div className="grid grid-cols-7 text-center text-[10px] font-bold text-blue-600 dark:text-blue-400 mb-1.5">
+                <span>SUN</span>
+                <span>MON</span>
+                <span>TUE</span>
+                <span>WED</span>
+                <span>THU</span>
+                <span>FRI</span>
+                <span>SAT</span>
+              </div>
+              <div className="grid grid-cols-7 gap-1 text-center text-[11px]">
+                <span className="text-slate-300 dark:text-slate-700 py-1"></span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">1</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">2</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">3</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">4</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">5</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">6</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">7</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">8</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">9</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">10</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">11</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">12</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">13</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">14</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">15</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">16</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">17</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">18</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1 border border-blue-400 rounded-sm">19</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">20</span>
+                <span className="bg-blue-600 text-white font-bold py-1 rounded-sm shadow-xs">21</span>
+                <span className="text-slate-700 dark:text-slate-300 py-1 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 rounded-sm cursor-pointer">22</span>
+                <span className="text-slate-700 dark:text-slate-300 py-1 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 rounded-sm cursor-pointer">23</span>
+                <span className="text-slate-700 dark:text-slate-300 py-1 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 rounded-sm cursor-pointer">24</span>
+                <span className="text-slate-700 dark:text-slate-300 py-1 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 rounded-sm cursor-pointer">25</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">26</span>
+                <span className="text-slate-400 dark:text-slate-600 py-1">27</span>
+                <span className="text-slate-700 dark:text-slate-300 py-1 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 rounded-sm cursor-pointer">28</span>
+                <span className="text-slate-700 dark:text-slate-300 py-1 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 rounded-sm cursor-pointer">29</span>
+                <span className="text-slate-700 dark:text-slate-300 py-1 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 rounded-sm cursor-pointer">30</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Time Slots Grid */}
+          <div className="space-y-3 flex flex-col justify-between">
+            <div>
+              {/* Day Header with Navigation */}
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-200 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <span>{dayLabel}</span>
+                <div className="flex items-center gap-1 text-slate-400">
+                  <button type="button" className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200">‹</button>
+                  <button type="button" className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200">›</button>
+                </div>
+              </div>
+
+              {/* 2-Column Time Slots */}
+              <div className="grid grid-cols-2 gap-2 pt-2.5">
+                {['9:00 AM', '10:00 AM', '11:00 AM', '2:00 PM', '3:00 PM', '4:00 PM'].map((slot, i) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    className="border border-blue-400/80 dark:border-blue-500/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 py-2 px-3 rounded-lg text-xs font-medium transition-colors text-center relative shadow-2xs"
+                  >
+                    {slot}
+                    {i === 5 && (
+                      <span className="absolute right-1 top-2 text-[9px] text-slate-300 opacity-60">⋮⋮</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Timezone Indicator */}
+            <div className="pt-2 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <Clock className="size-3" />
+              <span>{typeof defaultTimezone === 'string' ? defaultTimezone : 'America/New York (02:18 PM)'} ▾</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 8. Render via Unified Widget Runtime Dispatcher for all rich widgets
   return (
-    <div
-      className={`${fieldHeightCls} w-full border border-slate-200/90 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/70 px-3.5 py-2 text-muted-foreground flex items-center shadow-2xs transition-all`}
-      style={{ borderRadius: fieldRadius }}
-    >
-      {field.placeholder || `Enter ${field.label || 'value'}...`}
+    <div className="w-full pointer-events-auto">
+      <WidgetRuntimeDispatcher
+        field={field as any}
+        value={undefined}
+        onChange={() => {}}
+        disabled={false}
+      />
     </div>
   );
 }

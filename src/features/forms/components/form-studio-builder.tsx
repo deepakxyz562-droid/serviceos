@@ -484,17 +484,37 @@ export function FormStudioBuilder({
     toast.success(`✨ Added ${newField.label}`);
   }, [onFormDataChange, formData.steps, formData.isMultiStep, currentStepIndex]);
 
-  // Keyboard shortcut for Cmd/Ctrl+S
+  // Keyboard shortcuts: Cmd/Ctrl+S to save, Delete/Backspace to delete selected field
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         onSave();
+        return;
+      }
+
+      // Delete or Backspace to delete selected widget
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const activeTag = document.activeElement?.tagName?.toLowerCase();
+        const isContentEditable = document.activeElement?.getAttribute('contenteditable') === 'true';
+        if (
+          activeTag === 'input' ||
+          activeTag === 'textarea' ||
+          activeTag === 'select' ||
+          isContentEditable
+        ) {
+          return; // Let user edit text inside text boxes
+        }
+
+        if (selectedFieldId && selectedFieldId !== '__media_panel__') {
+          e.preventDefault();
+          handleDeleteField(selectedFieldId);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onSave]);
+  }, [onSave, selectedFieldId, formData.fields]);
 
   // ─── Field CRUD Operations ──────────────────────────────────────────────────
 

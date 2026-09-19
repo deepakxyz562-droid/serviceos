@@ -123,9 +123,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'maxGroupSize', label: 'Max Group Size', type: 'number', group: 'field_specific', default: 20 },
   ]],
   ['multi_day_booking', 'Multi-Day Booking', 'productivity', 'CalendarDays', 'Multi-day event booking', '', 'business'],
-  ['appointment_confirmation', 'Appointment Confirmation', 'productivity', 'CheckCircle', 'Appointment summary + confirm', '', 'pro', [
-    { key: 'requireSignature', label: 'Require Signature on Confirmation', type: 'toggle_with_description', group: 'field_specific', default: false },
-  ]],
   ['delivery_window_selector', 'Delivery Window Selector', 'productivity', 'Truck', 'Pick delivery window', '', 'pro', [
     { key: 'leadTimeHours', label: 'Min Lead Time (Hours)', type: 'number', group: 'field_specific', default: 24 },
   ]],
@@ -313,9 +310,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['stripe_payment_link_embed', 'Stripe Payment Link', 'social', 'CreditCard', 'Stripe hosted payment button', '', 'pro', [
     { key: 'paymentLinkUrl', label: 'Stripe Payment Link URL', type: 'text', group: 'field_specific', placeholder: 'https://buy.stripe.com/...' },
     { key: 'buttonText', label: 'Button Text', type: 'text', group: 'field_specific', default: 'Pay with Stripe' },
-  ]],
-  ['calendly_embed', 'Calendly Embed', 'social', 'Calendar', 'Calendly appointment scheduler', 'POPULAR', 'pro', [
-    { key: 'username', label: 'Calendly URL or Username', type: 'text', group: 'field_specific', placeholder: 'your-company/meeting' },
   ]],
   ['typeform_embed', 'Typeform Embed', 'social', 'FileInput', 'Typeform conversational embed', '', 'pro', [
     { key: 'formId', label: 'Typeform Form ID', type: 'text', group: 'field_specific' },

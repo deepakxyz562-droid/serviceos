@@ -51,7 +51,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['prescription_upload', 'Prescription Upload', 'file', 'FilePlus', 'Rx upload + pharmacy', 'PRO', 'business'],
   ['symptom_checker', 'Symptom Checker', 'survey', 'Stethoscope', 'Interactive symptom checker', 'AI', 'business'],
   ['vital_signs_input', 'Vital Signs Input', 'survey', 'HeartPulse', 'BP, HR, Temp, RR, O2', 'PRO', 'business'],
-  ['appointment_with_provider', 'Appointment + Provider', 'datetime', 'Stethoscope', 'Provider + time picker', 'PRO', 'business'],
   ['telehealth_consent', 'Telehealth Consent', 'security', 'Video', 'Telehealth-specific consent', 'PRO', 'business'],
   ['hipaa_phi_field', 'HIPAA PHI Field (Encrypted)', 'security', 'Lock', 'Encrypted PHI input', 'PRO', 'business'],
   ['medical_release_form', 'Medical Release Form', 'security', 'FileText', 'Records release auth', 'PRO', 'business'],

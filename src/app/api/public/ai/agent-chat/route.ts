@@ -92,6 +92,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ─── Check Availability Action ─────────────────────────────────────────
+    if (action === 'check_availability') {
+      const targetDate = body.date || new Date().toISOString().split('T')[0];
+      const slotDuration = Number(body.slotDuration) || 30;
+      
+      // Default working hours: 09:00 to 17:00
+      const startHour = 9;
+      const endHour = 17;
+      const slots: string[] = [];
+      
+      for (let h = startHour; h < endHour; h++) {
+        // Exclude 12:00 to 13:00 lunch break
+        if (h === 12) continue;
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        slots.push(`${h12}:00 ${ampm}`);
+        if (slotDuration <= 30) {
+          slots.push(`${h12}:30 ${ampm}`);
+        }
+      }
+
+      return NextResponse.json(
+        {
+          success: true,
+          date: targetDate,
+          slots,
+          timezone: 'America/New_York',
+        },
+        { headers: CORS_HEADERS },
+      );
+    }
+
     // ─── Direct Booking Action ──────────────────────────────────────────────
     if (action === 'confirm_booking' && bookingData) {
       const { name, phone, email, service, date, time, notes } = bookingData;

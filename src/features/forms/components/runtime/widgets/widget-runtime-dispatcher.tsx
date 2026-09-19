@@ -116,7 +116,10 @@ export function WidgetRuntimeDispatcher({
   allFormData = {},
   disabled = false,
 }: WidgetRuntimeDispatcherProps) {
-  const widgetType = field.widgetType || '';
+  const widgetType =
+    field.widgetType ||
+    (field.type && field.type !== 'control_widget' ? field.type : '') ||
+    '';
   // Cast to Record<string, any> so property access returns `any` instead of `unknown`.
   // The widget config is freeform JSON defined per-widget — we trust the runtime
   // to pass the right shape based on widgetType.
@@ -173,7 +176,9 @@ export function WidgetRuntimeDispatcher({
   }
 
   switch (widgetType) {
+    case 'photos_with_notes':
     case 'image_upload_with_notes':
+    case 'photo_notes':
       return (
         <ImageUploadWithNotes
           value={value || []}
@@ -220,6 +225,8 @@ export function WidgetRuntimeDispatcher({
       );
 
     case 'form_calculation':
+    case 'calculation':
+    case 'math_formula':
       return (
         <FormCalculation
           formula={config.formula || ''}
@@ -256,6 +263,7 @@ export function WidgetRuntimeDispatcher({
       );
 
     case 'voice_recorder':
+    case 'voice_note':
     case 'audio_note':
       return (
         <VoiceRecorder
