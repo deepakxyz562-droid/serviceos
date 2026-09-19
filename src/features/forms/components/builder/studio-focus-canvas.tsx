@@ -178,29 +178,7 @@ export function StudioFocusCanvas({
     toast.info('Field removed');
   };
 
-  // Keyboard shortcut: Delete or Backspace key to delete selected widget
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        const activeTag = document.activeElement?.tagName?.toLowerCase();
-        const isContentEditable = document.activeElement?.getAttribute('contenteditable') === 'true';
-        if (
-          activeTag === 'input' ||
-          activeTag === 'textarea' ||
-          activeTag === 'select' ||
-          isContentEditable
-        ) {
-          return;
-        }
-        if (selectedFieldId && selectedFieldId !== '__media_panel__') {
-          e.preventDefault();
-          handleDeleteField(selectedFieldId);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedFieldId]);
+
 
   // Move Field to Another Step
   const handleMoveFieldToStep = (fieldId: string, targetStepId: string) => {
@@ -1027,6 +1005,8 @@ function StudioFieldPreview({
                             return (
                               <div
                                 key={f.id}
+                                id={`field-card-${f.id}`}
+                                data-field-id={f.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onSelectField(f.id);
@@ -1264,6 +1244,8 @@ function StudioFieldPreview({
                     return (
                       <div
                         key={field.id}
+                        id={`field-card-${field.id}`}
+                        data-field-id={field.id}
                         onClick={() => onSelectField(field.id)}
                         className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
                           isSelected
@@ -1473,6 +1455,8 @@ function StudioFieldPreview({
                     return (
                       <div
                         key={f.id}
+                        id={`field-card-${f.id}`}
+                        data-field-id={f.id}
                         onClick={() => onSelectField(f.id)}
                         className={`group relative p-4 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
                           isSelected

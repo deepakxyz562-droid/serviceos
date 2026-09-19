@@ -484,38 +484,6 @@ export function FormStudioBuilder({
     toast.success(`✨ Added ${newField.label}`);
   }, [onFormDataChange, formData.steps, formData.isMultiStep, currentStepIndex]);
 
-  // Keyboard shortcuts: Cmd/Ctrl+S to save, Delete/Backspace to delete selected field
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        onSave();
-        return;
-      }
-
-      // Delete or Backspace to delete selected widget
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        const activeTag = document.activeElement?.tagName?.toLowerCase();
-        const isContentEditable = document.activeElement?.getAttribute('contenteditable') === 'true';
-        if (
-          activeTag === 'input' ||
-          activeTag === 'textarea' ||
-          activeTag === 'select' ||
-          isContentEditable
-        ) {
-          return; // Let user edit text inside text boxes
-        }
-
-        if (selectedFieldId && selectedFieldId !== '__media_panel__') {
-          e.preventDefault();
-          handleDeleteField(selectedFieldId);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onSave, selectedFieldId, formData.fields]);
-
   // ─── Field CRUD Operations ──────────────────────────────────────────────────
 
   const handleAddPaymentGateway = (gw: PaymentGatewayDef) => {
@@ -618,6 +586,105 @@ export function FormStudioBuilder({
       return { ...prev, fields: next };
     });
   };
+
+  // Keyboard shortcuts:
+  // - Cmd/Ctrl+S: Save
+  // - Delete / Backspace: Delete selected field/widget
+  // - ArrowUp / ArrowDown: Select previous / next widget (cursor navigation)
+  // - Alt + ArrowUp / Alt + ArrowDown: Reorder selected widget up / down
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Cmd/Ctrl + S: Save
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        onSave();
+        return;
+      }
+
+      // Check if user is actively typing inside an input/textarea/select/contenteditable
+      const activeTag = document.activeElement?.tagName?.toLowerCase();
+      const isContentEditable = document.activeElement?.getAttribute('contenteditable') === 'true';
+      if (
+        activeTag === 'input' ||
+        activeTag === 'textarea' ||
+        activeTag === 'select' ||
+        isContentEditable
+      ) {
+        return; // Allow standard text editing and typing
+      }
+
+      // 2. Delete or Backspace to delete selected widget
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedFieldId && selectedFieldId !== '__media_panel__') {
+          e.preventDefault();
+          handleDeleteField(selectedFieldId);
+        }
+        return;
+      }
+
+      // 3. ArrowUp / ArrowDown: Navigate selection cursor between widgets
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        const fields = Array.isArray(formData.fields) ? formData.fields : [];
+        if (fields.length === 0) return;
+
+        // If Alt key is held down (Alt+ArrowUp or Alt+ArrowDown), reorder the selected widget
+        if (e.altKey) {
+          if (!selectedFieldId || selectedFieldId === '__media_panel__') return;
+          const currIdx = fields.findIndex((f) => f.id === selectedFieldId);
+          if (currIdx !== -1) {
+            e.preventDefault();
+            handleMoveField(currIdx, e.key === 'ArrowUp' ? 'up' : 'down');
+            setTimeout(() => {
+              document.getElementById(`field-card-${selectedFieldId}`)?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest',
+              });
+            }, 50);
+          }
+          return;
+        }
+
+        // Standard ArrowUp / ArrowDown: Move cursor selection to previous/next widget
+        e.preventDefault();
+        const currIdx = fields.findIndex((f) => f.id === selectedFieldId);
+        let nextIdx = 0;
+
+        if (currIdx === -1) {
+          nextIdx = e.key === 'ArrowDown' ? 0 : fields.length - 1;
+        } else {
+          if (e.key === 'ArrowDown') {
+            nextIdx = Math.min(currIdx + 1, fields.length - 1);
+          } else {
+            nextIdx = Math.max(currIdx - 1, 0);
+          }
+        }
+
+        const targetField = fields[nextIdx];
+        if (targetField) {
+          setSelectedFieldId(targetField.id);
+          setShowInspector(true);
+
+          // If in multi-step mode and target field is on another step, automatically switch step
+          if (formData.isMultiStep && targetField.stepId && formData.steps) {
+            const stepIdx = formData.steps.findIndex((s) => s.id === targetField.stepId);
+            if (stepIdx !== -1 && stepIdx !== currentStepIndex) {
+              setCurrentStepIndex(stepIdx);
+            }
+          }
+
+          // Smoothly scroll the newly selected widget into view
+          setTimeout(() => {
+            const el = document.getElementById(`field-card-${targetField.id}`);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          }, 40);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onSave, selectedFieldId, formData.fields, formData.isMultiStep, formData.steps, currentStepIndex]);
 
   // ─── AI Co-Pilot Handler ────────────────────────────────────────────────────
   const handleAiCopilotSubmit = async () => {
