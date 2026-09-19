@@ -10,14 +10,15 @@ interface FormSubmissionEmailPayload {
   respondentEmail?: string;
   respondentPhone?: string;
   schema: FormSchema;
+  responseId?: string;
 }
 
 /**
- * Sends notification email to the business and optional auto-response to submitter.
- * Uses Amazon SES via `sendEmail()` with correct `Reply-To` headers.
+ * Sends actionable notification email to the business and optional auto-response to submitter.
+ * Uses provider-agnostic `sendEmail()` with correct `Reply-To` headers and 1-click action buttons.
  */
 export async function sendFormSubmissionEmails(payload: FormSubmissionEmailPayload) {
-  const { formTitle, tenantId, data, respondentName, respondentEmail, schema } = payload;
+  const { formTitle, tenantId, data, respondentName, respondentEmail, respondentPhone, schema, responseId } = payload;
 
   try {
     const tenant = await db.tenant.findUnique({
@@ -27,8 +28,9 @@ export async function sendFormSubmissionEmails(payload: FormSubmissionEmailPaylo
 
     const businessEmail = tenant?.email;
     const businessName = tenant?.name || 'Fieseros Business';
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://fieseros.com';
 
-    // ── 1. Send Notification Email to Business ───────────────────────────
+    // ── 1. Send Actionable Notification Email to Business ──────────────────
     if (schema.settings.actions.sendEmailNotification?.enabled) {
       const targetEmails = schema.settings.actions.sendEmailNotification.toEmails?.length
         ? schema.settings.actions.sendEmailNotification.toEmails
@@ -40,9 +42,9 @@ export async function sendFormSubmissionEmails(payload: FormSubmissionEmailPaylo
         const fieldsHtml = Object.entries(data)
           .map(
             ([key, value]) => `
-              <div style="margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px;">
-                <strong style="color: #475569; font-size: 12px; text-transform: uppercase;">${key}</strong>
-                <div style="color: #0f172a; font-size: 14px; margin-top: 2px;">${
+              <div style="margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;">
+                <strong style="color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">${key}</strong>
+                <div style="color: #0f172a; font-size: 14px; font-weight: 500; margin-top: 3px;">${
                   typeof value === 'object' ? JSON.stringify(value) : String(value || '—')
                 }</div>
               </div>`
@@ -50,18 +52,31 @@ export async function sendFormSubmissionEmails(payload: FormSubmissionEmailPaylo
           .join('');
 
         const emailHtml = `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 28px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
             <div style="padding-bottom: 16px; border-bottom: 2px solid #059669; margin-bottom: 20px;">
-              <span style="font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase; letter-spacing: 0.05em;">New Form Submission</span>
-              <h2 style="margin: 4px 0 0; color: #0f172a; font-size: 20px;">${formTitle}</h2>
+              <span style="font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase; letter-spacing: 0.05em;">⚡ New Inbound Lead</span>
+              <h2 style="margin: 6px 0 0; color: #0f172a; font-size: 22px; font-weight: 800;">${formTitle}</h2>
             </div>
             
             <div style="margin-bottom: 24px;">
               ${fieldsHtml}
             </div>
 
-            <div style="background: #f8fafc; padding: 12px 16px; border-radius: 8px; font-size: 12px; color: #64748b; margin-top: 20px;">
-              💡 <strong>Tip:</strong> Simply click <em>Reply</em> in your email app to message ${respondentName || respondentEmail || 'this customer'} directly.
+            <!-- Action Buttons Bar -->
+            <div style="background: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 24px;">
+              <p style="margin: 0 0 12px; font-size: 12px; font-weight: 700; color: #334155; text-transform: uppercase;">Quick Actions:</p>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                ${
+                  respondentPhone
+                    ? `<a href="tel:${respondentPhone}" style="display: inline-block; background: #059669; color: #ffffff; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; margin-right: 6px; margin-bottom: 6px;">📞 Call (${respondentPhone})</a>`
+                    : ''
+                }
+                <a href="${baseUrl}/app/leads" style="display: inline-block; background: #0284c7; color: #ffffff; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; margin-right: 6px; margin-bottom: 6px;">📋 Open in CRM</a>
+                <a href="${baseUrl}/app/jobs/new?customerName=${encodeURIComponent(respondentName || '')}&customerPhone=${encodeURIComponent(respondentPhone || '')}&customerEmail=${encodeURIComponent(respondentEmail || '')}" style="display: inline-block; background: #4f46e5; color: #ffffff; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; margin-bottom: 6px;">⚡ Dispatch Job</a>
+              </div>
+              <p style="margin: 12px 0 0; font-size: 11px; color: #64748b;">
+                💡 <strong>Direct Reply:</strong> Click <em>Reply</em> in your email client to message ${respondentName || respondentEmail || 'this customer'} directly.
+              </p>
             </div>
           </div>
         `;

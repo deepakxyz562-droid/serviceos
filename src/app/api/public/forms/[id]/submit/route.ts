@@ -111,6 +111,7 @@ export async function POST(
         respondentEmail,
         respondentPhone,
         schema: normalizedSchema,
+        responseId: response.id,
       }).catch((err) => {
         console.error('[form-submit] Email trigger error:', err);
       });

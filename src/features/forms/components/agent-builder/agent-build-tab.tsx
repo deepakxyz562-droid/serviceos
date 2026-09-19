@@ -43,6 +43,8 @@ import {
   Code,
   Copy,
   Check,
+  ExternalLink,
+  QrCode,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -95,7 +97,6 @@ export function AgentBuildTab({
   const [avatarSearch, setAvatarSearch] = useState<string>('');
   const [aiPrompt, setAiPrompt] = useState<string>('Professional female loan officer in modern office');
   const [isGeneratingAiAvatar, setIsGeneratingAiAvatar] = useState<boolean>(false);
-  const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
   const chatbotConfig = agent.channels?.chatbot || {
     enabled: true,
@@ -119,6 +120,22 @@ export function AgentBuildTab({
       channels: {
         ...agent.channels,
         chatbot: updated,
+      },
+    });
+  };
+
+  const updateWhatsappConfig = (updates: Partial<typeof agent.channels.whatsapp>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        whatsapp: {
+          ...agent.channels?.whatsapp,
+          enabled: updates.enabled ?? agent.channels?.whatsapp?.enabled ?? true,
+          phoneNumber: updates.phoneNumber ?? agent.channels?.whatsapp?.phoneNumber ?? '',
+          welcomeTemplate: updates.welcomeTemplate ?? agent.channels?.whatsapp?.welcomeTemplate ?? '',
+          paired: updates.paired ?? agent.channels?.whatsapp?.paired ?? true,
+        },
       },
     });
   };
@@ -181,6 +198,11 @@ export function AgentBuildTab({
     const matchesSearch = !avatarSearch || av.name.toLowerCase().includes(avatarSearch.toLowerCase());
     return matchesCat && matchesSearch;
   });
+
+  const whatsappPhone = agent.channels?.whatsapp?.phoneNumber || '';
+  const cleanWhatsappNumber = whatsappPhone.replace(/[^0-9]/g, '');
+  const whatsappWelcome = agent.channels?.whatsapp?.welcomeTemplate || `Hi! I am chatting with ${agent.name} and would like to continue on WhatsApp.`;
+  const whatsappUrl = cleanWhatsappNumber ? `https://wa.me/${cleanWhatsappNumber}?text=${encodeURIComponent(whatsappWelcome)}` : '';
 
   return (
     <div className="h-full flex flex-col min-h-0 bg-slate-900 text-slate-100 select-none border-l border-slate-800">
@@ -708,7 +730,7 @@ export function AgentBuildTab({
               </div>
             )}
 
-            {/* ── 3. NAVIGATION TAB (Screenshot 3 - 6 exact switches) ── */}
+            {/* ── 3. NAVIGATION TAB (Screenshot 3 - 6 exact switches + WhatsApp Phone Number configuration) ── */}
             {chatbotSubTab === 'navigation' && (
               <div className="space-y-3">
                 {/* 1. Chat */}
@@ -735,16 +757,75 @@ export function AgentBuildTab({
                   />
                 </div>
 
-                {/* 3. Whatsapp */}
-                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/80">
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-bold text-slate-200">Whatsapp</p>
-                    <p className="text-[10px] text-slate-400">Provide support on WhatsApp</p>
+                {/* 3. Whatsapp with Inline Number Configuration */}
+                <div className="rounded-xl bg-slate-800/60 border border-slate-700/80 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <MessageCircle className="size-3.5 text-emerald-400" />
+                        <p className="text-xs font-bold text-slate-200">WhatsApp Support</p>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Provide direct support via WhatsApp</p>
+                    </div>
+                    <Switch
+                      checked={agent.navigation?.whatsappEnabled ?? false}
+                      onCheckedChange={(c) => {
+                        onChange({
+                          ...agent,
+                          navigation: { ...agent.navigation, whatsappEnabled: c },
+                          channels: {
+                            ...agent.channels,
+                            whatsapp: {
+                              ...agent.channels?.whatsapp,
+                              enabled: c,
+                              phoneNumber: agent.channels?.whatsapp?.phoneNumber || '',
+                              welcomeTemplate: agent.channels?.whatsapp?.welcomeTemplate || '',
+                              paired: true,
+                            },
+                          },
+                        });
+                      }}
+                    />
                   </div>
-                  <Switch
-                    checked={agent.navigation?.whatsappEnabled ?? false}
-                    onCheckedChange={(c) => onChange({ ...agent, navigation: { ...agent.navigation, whatsappEnabled: c } })}
-                  />
+
+                  {/* Inline Number Config when WhatsApp is Enabled */}
+                  {(agent.navigation?.whatsappEnabled ?? false) && (
+                    <div className="pt-2 border-t border-slate-700/60 space-y-2.5 animate-in fade-in duration-200">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-semibold text-slate-300">WhatsApp Phone Number</span>
+                        <Input
+                          placeholder="+1 (555) 019-2834"
+                          value={whatsappPhone}
+                          onChange={(e) => updateWhatsappConfig({ phoneNumber: e.target.value })}
+                          className="text-xs h-7 bg-slate-900 border-slate-700 text-slate-100 placeholder:text-slate-500 font-mono"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-semibold text-slate-300">Pre-filled Message</span>
+                        <Input
+                          placeholder="Hi! I would like to chat on WhatsApp."
+                          value={agent.channels?.whatsapp?.welcomeTemplate || ''}
+                          onChange={(e) => updateWhatsappConfig({ welcomeTemplate: e.target.value })}
+                          className="text-xs h-7 bg-slate-900 border-slate-700 text-slate-100 placeholder:text-slate-500"
+                        />
+                      </div>
+
+                      {whatsappUrl && (
+                        <div className="pt-1 flex items-center justify-between text-[10px]">
+                          <span className="text-emerald-400 font-medium">wa.me/{cleanWhatsappNumber}</span>
+                          <a
+                            href={whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-semibold"
+                          >
+                            Test Link <ExternalLink className="size-2.5" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* 4. Forms */}
@@ -898,21 +979,60 @@ export function AgentBuildTab({
 
           {/* WhatsApp Channel Settings */}
           {activeChannel === 'whatsapp' && (
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">WhatsApp Business Number</Label>
                 <Input
                   placeholder="+1 (555) 019-2834"
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100"
+                  value={whatsappPhone}
+                  onChange={(e) => updateWhatsappConfig({ phoneNumber: e.target.value })}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
                 />
+                <p className="text-[10px] text-slate-400">Enter full international format including country code</p>
               </div>
+
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Default WhatsApp Greeting Template</Label>
+                <Label className="text-xs font-semibold text-slate-300">Default WhatsApp Greeting Message</Label>
                 <Textarea
-                  defaultValue={`Hi! I am ${agent.name}, your AI Assistant. How can I help you today?`}
+                  value={agent.channels?.whatsapp?.welcomeTemplate || `Hi! I am ${agent.name}, your AI Assistant. How can I help you today?`}
+                  onChange={(e) => updateWhatsappConfig({ welcomeTemplate: e.target.value })}
                   className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[60px]"
                 />
               </div>
+
+              {whatsappUrl && (
+                <div className="p-3 rounded-xl bg-slate-800/70 border border-slate-700 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold text-emerald-400">
+                    <span>Direct WhatsApp Link</span>
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 hover:underline"
+                    >
+                      Test <ExternalLink className="size-3" />
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={whatsappUrl}
+                      className="text-[11px] h-7 bg-slate-900 border-slate-700 font-mono text-slate-300"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(whatsappUrl);
+                        toast.success('WhatsApp link copied!');
+                      }}
+                      className="h-7 px-2 text-xs"
+                    >
+                      <Copy className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

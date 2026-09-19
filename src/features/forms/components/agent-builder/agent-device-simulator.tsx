@@ -615,15 +615,34 @@ export function AgentDeviceSimulator({
       {/* ── TAB 5: WHATSAPP TAB CONTENT ── */}
       {activeTab === 'whatsapp' && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 text-center">
-          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800 space-y-2">
-            <MessageCircle className="size-8 text-emerald-600 mx-auto" />
-            <h3 className="text-xs font-bold text-foreground">WhatsApp Business Integration</h3>
-            <p className="text-[11px] text-muted-foreground">
-              Continue chatting with {agent.name} directly on WhatsApp.
-            </p>
-            <Button size="sm" className="h-7 text-xs font-bold bg-emerald-600 text-white mt-2">
-              Open WhatsApp
-            </Button>
+          <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800 space-y-3">
+            <div className="size-12 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-md">
+              <MessageCircle className="size-6" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-foreground">WhatsApp Business Integration</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {agent.channels?.whatsapp?.phoneNumber
+                  ? `Connected: ${agent.channels.whatsapp.phoneNumber}`
+                  : 'Configure your WhatsApp number in settings.'}
+              </p>
+            </div>
+            {agent.channels?.whatsapp?.phoneNumber ? (
+              <a
+                href={`https://wa.me/${agent.channels.whatsapp.phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                  agent.channels.whatsapp.welcomeTemplate || `Hi! I would like to chat with ${agent.name}.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 w-full h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors"
+              >
+                Open WhatsApp Chat <ExternalLink className="size-3" />
+              </a>
+            ) : (
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                Enter your WhatsApp number in the Chatbot Navigation settings.
+              </p>
+            )}
           </div>
         </div>
       )}
