@@ -73,9 +73,6 @@ import { StudioPagesTree } from './builder/studio-pages-tree';
 import { StudioFocusCanvas } from './builder/studio-focus-canvas';
 import { StudioWidgetPalette } from './builder/studio-widget-palette';
 import { UniversalPublishCenter } from './builder/universal-publish-center';
-import { UniversalStudioCanvas } from './builder/universal-studio-canvas';
-import { UniversalInspector } from './builder/universal-inspector';
-import type { UniversalComponentNode } from '@/lib/forms/universal-component-types';
 import { generateUniversalProjectFromPrompt } from '@/lib/forms/generators/ai-universal-generator';
 import {
   FIELD_REGISTRY,
@@ -148,12 +145,7 @@ export function FormStudioBuilder({
     : formData.settings?.formLayout === 'all_on_one_page'
     ? 'paper'
     : 'focus';
-  const [viewMode, setViewMode] = useState<'focus' | 'paper' | 'split_media' | 'elementor'>(initialLayout);
-  const [elementorViewport, setElementorViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [universalProject, setUniversalProject] = useState(() =>
-    generateUniversalProjectFromPrompt(formData.name || 'Service App', 'general')
-  );
-  const [selectedUniversalNodeId, setSelectedUniversalNodeId] = useState<string | null>('sec_main');
+  const [viewMode, setViewMode] = useState<'focus' | 'paper' | 'split_media'>(initialLayout);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [currentThemeId, setCurrentThemeId] = useState('fieseros-emerald');
 
@@ -386,23 +378,6 @@ export function FormStudioBuilder({
         } as any,
       };
     });
-
-    // Agent template handling
-    if (template.templateType === 'agent' || template.agentConfig) {
-      setStudioTab('agent');
-      setIsPreviewMode(false);
-      toast.success(`🤖 Activated "${template.name}" in AI Agent Studio!`);
-      return;
-    }
-
-    // App template handling
-    if (template.templateType === 'app' || template.appConfig) {
-      setViewMode('elementor');
-      setStudioTab('build');
-      setIsPreviewMode(false);
-      toast.success(`📱 Loaded "${template.name}" in Elementor App Canvas!`);
-      return;
-    }
 
     setSelectedFieldId(newFields[0]?.id || null);
     setStudioTab('build');
@@ -888,7 +863,7 @@ export function FormStudioBuilder({
         <div className="h-10 border-b border-border/70 bg-slate-50/80 dark:bg-slate-950/80 px-4 flex items-center justify-between gap-3 shrink-0 select-none z-20">
           {/* Left: Layout View + Stepper Mode Switchers */}
           <div className="flex items-center gap-2">
-            {/* Focus (Typeform) vs Paper (Jotform) vs 2-Part Split vs Elementor Visual Canvas */}
+            {/* Focus (Typeform) vs Paper (Jotform) vs 2-Part Split (Elementor) */}
             <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-border/80 text-[11px] font-semibold">
               <button
                 type="button"
@@ -933,61 +908,9 @@ export function FormStudioBuilder({
                 )}
                 title="2-Part Split Hero (Video / Image / Map Hero + Form)"
               >
-                <span>🎬 Split Hero</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setViewMode('elementor');
-                }}
-                className={cn(
-                  'px-2.5 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1',
-                  viewMode === 'elementor' ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 shadow-2xs font-bold ring-1 ring-purple-500/30' : 'text-muted-foreground hover:text-foreground'
-                )}
-                title="Elementor-grade drag-and-drop Visual Canvas with multi-device responsive viewports"
-              >
-                <span>📐 Elementor Canvas</span>
+                <span>🎬 2-Part Split Hero</span>
               </button>
             </div>
-
-            {/* Responsive Viewport Switcher when in Elementor Mode */}
-            {viewMode === 'elementor' && (
-              <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-purple-200 dark:border-purple-800 text-[11px] font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setElementorViewport('desktop')}
-                  className={cn(
-                    'px-2 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1',
-                    elementorViewport === 'desktop' ? 'bg-purple-600 text-white font-bold' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  title="Desktop View (1200px)"
-                >
-                  <Monitor className="size-3" /> Desktop
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setElementorViewport('tablet')}
-                  className={cn(
-                    'px-2 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1',
-                    elementorViewport === 'tablet' ? 'bg-purple-600 text-white font-bold' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  title="Tablet View (768px)"
-                >
-                  <Tablet className="size-3" /> Tablet
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setElementorViewport('mobile')}
-                  className={cn(
-                    'px-2 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1',
-                    elementorViewport === 'mobile' ? 'bg-purple-600 text-white font-bold' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                  title="Mobile View (375px)"
-                >
-                  <Smartphone className="size-3" /> Mobile
-                </button>
-              </div>
-            )}
 
             <Separator orientation="vertical" className="h-4" />
 
@@ -1112,146 +1035,6 @@ export function FormStudioBuilder({
       <div className="flex-1 min-h-0 flex overflow-hidden relative w-full h-full">
         {/* ─── 1. BUILD TAB (2026 AI-NATIVE 5-PANEL MULTI-STEP STUDIO) ──────── */}
         {studioTab === 'build' && !isPreviewMode && (
-          viewMode === 'elementor' ? (
-            /* ════ 1.B ELEMENTOR-GRADE DRAG-AND-DROP VISUAL CANVAS MODE ════ */
-            <div className="flex-1 min-h-0 flex overflow-hidden w-full h-full relative">
-              {/* Center Elementor Visual Responsive Canvas */}
-              <div className="flex-1 min-h-0 h-full overflow-y-auto bg-slate-100 dark:bg-slate-950 p-4 flex justify-center items-start">
-                <UniversalStudioCanvas
-                  rootNode={universalProject.screens[0]?.rootNode || { id: 'root', type: 'container', children: [] }}
-                  selectedNodeId={selectedUniversalNodeId}
-                  onSelectNode={setSelectedUniversalNodeId}
-                  onUpdateNode={(nodeId, updated) => {
-                    setUniversalProject((prev) => {
-                      const updateRecursive = (node: UniversalComponentNode): UniversalComponentNode => {
-                        if (node.id === nodeId) {
-                          return {
-                            ...node,
-                            ...updated,
-                            props: { ...(node.props || {}), ...(updated.props || {}) },
-                            style: { ...(node.style || {}), ...(updated.style || {}) },
-                            behavior: { ...(node.behavior || {}), ...(updated.behavior || {}) },
-                          };
-                        }
-                        return {
-                          ...node,
-                          children: node.children ? node.children.map(updateRecursive) : [],
-                        };
-                      };
-                      return {
-                        ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: updateRecursive(s.rootNode) } : s
-                        ),
-                      };
-                    });
-                  }}
-                  onDeleteNode={(nodeId) => {
-                    setUniversalProject((prev) => {
-                      const deleteRecursive = (node: UniversalComponentNode): UniversalComponentNode => ({
-                        ...node,
-                        children: node.children ? node.children.filter((c) => c.id !== nodeId).map(deleteRecursive) : [],
-                      });
-                      return {
-                        ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: deleteRecursive(s.rootNode) } : s
-                        ),
-                      };
-                    });
-                  }}
-                  onDuplicateNode={(nodeId) => {
-                    setUniversalProject((prev) => {
-                      const dupRecursive = (node: UniversalComponentNode): UniversalComponentNode => {
-                        if (node.id === nodeId) {
-                          return { ...node, id: `${node.id}_copy_${Date.now()}` };
-                        }
-                        return { ...node, children: node.children ? node.children.map(dupRecursive) : [] };
-                      };
-                      return {
-                        ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: dupRecursive(s.rootNode) } : s
-                        ),
-                      };
-                    });
-                  }}
-                  onAddChildNode={(parentId, type) => {
-                    const newNode: UniversalComponentNode = {
-                      id: `node_${Date.now()}`,
-                      type: type as any,
-                      name: `New ${type}`,
-                      props: { label: `New ${type}`, placeholder: 'Enter value...' },
-                      style: { padding: '8px' },
-                    };
-                    setUniversalProject((prev) => {
-                      const addRecursive = (node: UniversalComponentNode): UniversalComponentNode => {
-                        if (node.id === parentId) {
-                          return { ...node, children: [...(node.children || []), newNode] };
-                        }
-                        return { ...node, children: node.children ? node.children.map(addRecursive) : [] };
-                      };
-                      return {
-                        ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: addRecursive(s.rootNode) } : s
-                        ),
-                      };
-                    });
-                    setSelectedUniversalNodeId(newNode.id);
-                  }}
-                  viewport={elementorViewport}
-                  brandColor={formData.theme?.primaryColor || formData.primaryColor || '#059669'}
-                />
-              </div>
-
-              {/* Right Panel: Elementor-Grade Universal Inspector */}
-              <aside className="w-80 lg:w-96 border-l border-border/80 bg-background flex flex-col shrink-0 z-20 h-full overflow-hidden">
-                <UniversalInspector
-                  selectedNode={(() => {
-                    const findNode = (node: UniversalComponentNode): UniversalComponentNode | null => {
-                      if (node.id === selectedUniversalNodeId) return node;
-                      for (const c of node.children || []) {
-                        const res = findNode(c);
-                        if (res) return res;
-                      }
-                      return null;
-                    };
-                    return universalProject.screens[0]?.rootNode
-                      ? findNode(universalProject.screens[0].rootNode)
-                      : null;
-                  })()}
-                  onUpdateNode={(updated) => {
-                    if (!selectedUniversalNodeId) return;
-                    setUniversalProject((prev) => {
-                      const updateRecursive = (node: UniversalComponentNode): UniversalComponentNode => {
-                        if (node.id === selectedUniversalNodeId) {
-                          return {
-                            ...node,
-                            ...updated,
-                            props: { ...(node.props || {}), ...(updated.props || {}) },
-                            style: { ...(node.style || {}), ...(updated.style || {}) },
-                            behavior: { ...(node.behavior || {}), ...(updated.behavior || {}) },
-                          };
-                        }
-                        return {
-                          ...node,
-                          children: node.children ? node.children.map(updateRecursive) : [],
-                        };
-                      };
-                      return {
-                        ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: updateRecursive(s.rootNode) } : s
-                        ),
-                      };
-                    });
-                  }}
-                  brandColor={formData.theme?.primaryColor || formData.primaryColor || '#059669'}
-                />
-              </aside>
-            </div>
-          ) : (
           <div className="flex-1 min-h-0 flex overflow-hidden w-full h-full relative">
             {/* Panel 1: Studio Widget Palette (200+ widgets, 33 payments, basic fields) */}
             {showWidgetPalette && (
@@ -1380,7 +1163,6 @@ export function FormStudioBuilder({
               </aside>
             )}
           </div>
-          )
         )}
 
         {/* ─── 2. SETTINGS TAB (JOTFORM-GRADE FULL FORM SETTINGS SUITE) ──────── */}

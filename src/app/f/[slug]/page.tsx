@@ -2,7 +2,6 @@ import { db } from '@/lib/db'
 import { notFound, redirect } from 'next/navigation'
 import { HostedFormClient } from './hosted-form-client'
 import { loadTenantPublicBranding } from '@/lib/tenant-branding'
-import { getTemplateSync } from '@/lib/forms/templates'
 
 // Hosted Form Page — Public form accessible via /f/[slug]
 // This renders a self-contained form for sharing via email, social media, etc.
@@ -31,18 +30,12 @@ export default async function HostedFormPage({ params }: { params: Promise<{ slu
   const { slug } = await params
   const form = await getForm(slug)
 
-  if (form && form.status !== 'archived') {
-    // Forward to the modern /form/[id] runtime renderer
-    redirect(`/form/${form.id}`)
+  if (!form || form.status === 'archived') {
+    notFound()
   }
 
-  // Check canonical template registry
-  const template = getTemplateSync(slug)
-  if (template) {
-    redirect(`/form/${template.id}`)
-  }
-
-  notFound()
+  // Seamlessly forward to the modern /form/[id] runtime renderer with full 200+ widgets & themes
+  redirect(`/form/${form.id}`)
 
   const fields = typeof form.fieldsJson === 'string'
     ? JSON.parse(form.fieldsJson)
