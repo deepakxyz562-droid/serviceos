@@ -732,9 +732,21 @@ export function FormRuntimeRenderer({
       ? 'h-12 text-sm'
       : 'h-11 text-xs';
 
-  return (
+  const backgroundImageUrl = schema.theme?.backgroundImageUrl;
+  const backgroundOverlayOpacity = schema.theme?.backgroundOverlayOpacity ?? 40;
+  const backgroundBlur = schema.theme?.backgroundBlur;
+  const blurValue =
+    backgroundBlur === 'lg'
+      ? 'blur(16px)'
+      : backgroundBlur === 'md'
+      ? 'blur(8px)'
+      : backgroundBlur === 'sm'
+      ? 'blur(4px)'
+      : 'none';
+
+  const formElement = (
     <div
-      className={`w-full ${isSplitLayout ? 'max-w-5xl' : 'max-w-xl'} mx-auto space-y-4 transition-all`}
+      className={`relative z-10 w-full ${isSplitLayout ? 'max-w-5xl' : 'max-w-xl'} mx-auto space-y-4 transition-all`}
       style={{
         fontFamily,
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -1509,4 +1521,29 @@ export function FormRuntimeRenderer({
       </Card>
     </div>
   );
+
+  if (backgroundImageUrl) {
+    return (
+      <div className="relative min-h-[600px] w-full flex flex-col items-center justify-center p-4 sm:p-6 lg:p-10 overflow-hidden rounded-3xl">
+        <div
+          className="absolute inset-0 z-0 bg-cover bg-center pointer-events-none transition-all duration-500"
+          style={{
+            backgroundImage: `url(${backgroundImageUrl})`,
+            filter: blurValue,
+            transform: backgroundBlur && backgroundBlur !== 'none' ? 'scale(1.05)' : 'none',
+          }}
+        />
+        <div
+          className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-300"
+          style={{
+            backgroundColor: '#000000',
+            opacity: backgroundOverlayOpacity / 100,
+          }}
+        />
+        {formElement}
+      </div>
+    );
+  }
+
+  return formElement;
 }

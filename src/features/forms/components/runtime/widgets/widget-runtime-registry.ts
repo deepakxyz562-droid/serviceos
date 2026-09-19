@@ -46,6 +46,15 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   password: w(() => import('./choice/password')),
   rich_text: w(() => import('./choice/rich-text')),
 
+  // ─── Content & Display (Elementor Style) ────────────────────────────────────
+  static_image: w(() => import('./static-image-widget')),
+  image_display: w(() => import('./static-image-widget')),
+  map_embed: w(() => import('./map-embed-widget')),
+  interactive_map: w(() => import('./map-embed-widget')),
+  video_embed: w(() => import('./video-embed-widget')),
+  video_player: w(() => import('./video-embed-widget')),
+  divider: w(() => import('./divider-widget')),
+
   // ─── DateTime ────────────────────────────────────────────────────────────────
   date_picker: w(() => import('./datetime/date-picker')),
   date: w(() => import('./datetime/date-picker')),

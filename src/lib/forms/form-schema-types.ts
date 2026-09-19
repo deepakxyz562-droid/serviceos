@@ -160,6 +160,12 @@ export interface FormTheme {
   showTopBorder?: boolean; // Accent top border/line
   layout?: 'classic' | 'card' | 'multi_step' | 'conversational' | 'split_media' | string;
   mediaPanel?: FormMediaPanel;
+  // ─── 2026 Background & Backdrop Customization ───
+  backgroundImageUrl?: string | null;
+  backgroundOverlayOpacity?: number; // 0 to 100
+  backgroundBlur?: 'none' | 'sm' | 'md' | 'lg' | string;
+  backgroundGradient?: string | null;
+  backgroundRepeat?: 'cover' | 'contain' | 'repeat' | 'fixed_cover';
 }
 
 export interface FormActionSettings {

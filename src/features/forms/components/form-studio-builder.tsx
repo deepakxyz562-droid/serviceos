@@ -2783,6 +2783,19 @@ export function FormStudioBuilder({
           }));
         }}
         onSelectTheme={handleSelectTheme}
+        themeData={formData.theme}
+        onUpdateTheme={(updates) => {
+          onFormDataChange((prev) => ({
+            ...prev,
+            theme: {
+              ...(prev.theme || {}),
+              ...updates,
+            } as any,
+          }));
+        }}
+        mediaPanel={formData.mediaPanel || formData.theme?.mediaPanel}
+        onUpdateMediaPanel={updateMediaPanel}
+        formName={formData.name}
       />
     </div>
   );

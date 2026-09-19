@@ -216,11 +216,196 @@ export function StudioFocusCanvas({
     }
   };
 
+function StudioFieldPreview({
+  field,
+  inputBorderRadius,
+  inputHeight,
+}: {
+  field: FormField;
+  inputBorderRadius: string;
+  inputHeight: string;
+}) {
+  const fieldRadius = field.borderRadius && field.borderRadius !== 'inherit' ? field.borderRadius : inputBorderRadius;
+  const fieldHeightCls =
+    (field.inputHeight && field.inputHeight !== 'inherit' ? field.inputHeight : inputHeight) === 'compact'
+      ? 'h-9 text-xs'
+      : (field.inputHeight && field.inputHeight !== 'inherit' ? field.inputHeight : inputHeight) === 'large'
+      ? 'h-12 text-sm'
+      : 'h-11 text-xs';
+
+  // 1. Static Image Widget
+  if (field.type === 'static_image' || field.type === 'image_display') {
+    const imageUrl = field.imageUrl || (field.options?.[0]?.value as string) || '';
+    const altText = field.altText || field.label || 'Image preview';
+    const alignment = field.alignment || 'center';
+    const alignCls = alignment === 'left' ? 'justify-start text-left' : alignment === 'right' ? 'justify-end text-right' : 'justify-center text-center';
+    const maxW = field.maxWidthPercent ? `${field.maxWidthPercent}%` : '100%';
+    const customRadius = field.imageBorderRadius || '12px';
+
+    return (
+      <div className={`w-full flex flex-col ${alignCls} py-1`}>
+        {imageUrl ? (
+          <div className="overflow-hidden inline-block shadow-sm border border-slate-200/80 dark:border-slate-800" style={{ maxWidth: maxW, borderRadius: customRadius }}>
+            <img src={imageUrl} alt={altText} className="w-full h-auto object-cover max-h-64" />
+          </div>
+        ) : (
+          <div
+            className="w-full aspect-video max-h-48 border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col items-center justify-center p-4 text-center text-muted-foreground"
+            style={{ borderRadius: customRadius }}
+          >
+            <ImageIcon className="size-8 text-slate-400 mb-2" />
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Image Widget</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Click to configure image URL in Field Settings</p>
+          </div>
+        )}
+        {field.caption && <p className="text-[11px] text-muted-foreground mt-1.5 italic">{field.caption}</p>}
+      </div>
+    );
+  }
+
+  // 2. Map Embed Widget
+  if (field.type === 'map_embed' || field.type === 'interactive_map') {
+    const address = field.address || field.placeholder || 'Austin, TX';
+    const zoom = field.zoom || 13;
+    const heightPx = field.heightPx || 200;
+
+    return (
+      <div className="w-full rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 relative shadow-sm" style={{ height: `${heightPx}px` }}>
+        <iframe
+          src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&t=&z=${zoom}&ie=UTF8&iwloc=&output=embed`}
+          title={field.label || 'Map Widget'}
+          className="w-full h-full border-0 pointer-events-none opacity-85"
+        />
+        <div className="absolute top-2 left-2 z-10 bg-slate-900/90 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-1 shadow-md">
+          <MapPin className="size-3 text-rose-400" />
+          <span className="truncate max-w-[180px]">{address}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Video Embed Widget
+  if (field.type === 'video_embed' || field.type === 'video_player') {
+    const videoUrl = field.videoUrl || (field.options?.[0]?.value as string) || '';
+    const isYt = videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be');
+    const isVim = videoUrl.includes('vimeo.com');
+
+    return (
+      <div className="w-full rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-slate-950 aspect-video relative flex items-center justify-center shadow-sm">
+        {videoUrl ? (
+          isYt ? (
+            <iframe
+              src={
+                videoUrl.includes('watch?v=')
+                  ? videoUrl.replace('watch?v=', 'embed/').split('&')[0]
+                  : videoUrl.replace('youtu.be/', 'www.youtube.com/embed/')
+              }
+              title="Video"
+              className="w-full h-full border-0 pointer-events-none"
+            />
+          ) : isVim ? (
+            <div className="w-full h-full flex flex-col items-center justify-center text-white space-y-2">
+              <Play className="size-10 text-primary" />
+              <p className="text-xs font-bold truncate px-4">{videoUrl}</p>
+            </div>
+          ) : (
+            <video src={videoUrl} className="w-full h-full object-cover" />
+          )
+        ) : (
+          <div className="flex flex-col items-center justify-center text-center p-4 text-slate-400">
+            <Video className="size-8 mb-2 text-slate-500" />
+            <p className="text-xs font-bold text-slate-200">Video Player Widget</p>
+            <p className="text-[10px] text-slate-400">Paste YouTube, Vimeo or MP4 URL</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 4. Divider Widget
+  if (field.type === 'divider') {
+    const style = field.dividerStyle || 'solid';
+    const thickness = field.thicknessPx || 1;
+    const borderStyleClass = style === 'dashed' ? 'border-dashed' : style === 'dotted' ? 'border-dotted' : 'border-solid';
+
+    return (
+      <div className="w-full py-2 flex items-center">
+        {style === 'glow' ? (
+          <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent" />
+        ) : (
+          <hr className={`w-full border-t border-slate-300 dark:border-slate-700 ${borderStyleClass}`} style={{ borderWidth: `${thickness}px 0 0 0` }} />
+        )}
+      </div>
+    );
+  }
+
+  // 5. Heading Widget
+  if (field.type === 'heading') {
+    return (
+      <div className="w-full py-1">
+        <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+          {field.label || 'Section Heading'}
+        </h3>
+        {field.helpText && <p className="text-xs text-muted-foreground mt-0.5">{field.helpText}</p>}
+      </div>
+    );
+  }
+
+  // 6. Paragraph / Text Widget
+  if (field.type === 'paragraph') {
+    return (
+      <div className="w-full py-1">
+        <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+          {field.label || field.placeholder || 'Enter informative descriptive text here...'}
+        </p>
+      </div>
+    );
+  }
+
+  // Default / Standard Inputs
+  return (
+    <div
+      className={`${fieldHeightCls} w-full border border-slate-200/90 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/70 px-3.5 py-2 text-muted-foreground flex items-center shadow-2xs transition-all`}
+      style={{ borderRadius: fieldRadius }}
+    >
+      {field.placeholder || `Enter ${field.label || 'value'}...`}
+    </div>
+  );
+}
+
   return (
     <div
       className={`relative flex-1 flex flex-col items-center justify-between overflow-y-auto p-4 sm:p-6 lg:p-8 select-none transition-all ${className}`}
       style={{ backgroundColor }}
     >
+      {/* ─── Outer Canvas Background Image Backdrop (if set in theme) ─── */}
+      {formData.theme?.backgroundImageUrl && (
+        <>
+          <div
+            className="absolute inset-0 z-0 bg-cover bg-center pointer-events-none transition-all duration-500"
+            style={{
+              backgroundImage: `url(${formData.theme.backgroundImageUrl})`,
+              filter:
+                formData.theme.backgroundBlur === 'lg'
+                  ? 'blur(16px)'
+                  : formData.theme.backgroundBlur === 'md'
+                  ? 'blur(8px)'
+                  : formData.theme.backgroundBlur === 'sm'
+                  ? 'blur(4px)'
+                  : 'none',
+              transform: formData.theme.backgroundBlur && formData.theme.backgroundBlur !== 'none' ? 'scale(1.05)' : 'none',
+            }}
+          />
+          <div
+            className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-300"
+            style={{
+              backgroundColor: '#000000',
+              opacity: (formData.theme.backgroundOverlayOpacity ?? 40) / 100,
+            }}
+          />
+        </>
+      )}
+
       {/* ─── Floating Edge Panels Re-Open Triggers ─── */}
       <div className="absolute top-4 left-4 flex items-center gap-2 z-30">
         {isWidgetPaletteCollapsed && onToggleWidgetPalette && (
@@ -621,11 +806,11 @@ export function StudioFocusCanvas({
                                   </div>
                                 </div>
 
-                                <div
-                                  className="h-10 w-full border border-slate-200/90 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/70 px-3.5 py-2 text-muted-foreground flex items-center shadow-2xs text-xs rounded-xl"
-                                >
-                                  {f.placeholder || `Enter ${f.label || 'value'}...`}
-                                </div>
+                                <StudioFieldPreview
+                                  field={f}
+                                  inputBorderRadius={inputBorderRadius}
+                                  inputHeight={inputHeight}
+                                />
                               </div>
                             );
                           })
@@ -860,18 +1045,11 @@ export function StudioFocusCanvas({
                         </div>
 
                         {/* Input Type Preview */}
-                        {(() => {
-                          const fieldRadius = field.borderRadius && field.borderRadius !== 'inherit' ? field.borderRadius : inputBorderRadius;
-                          const fieldHeightCls = (field.inputHeight && field.inputHeight !== 'inherit' ? field.inputHeight : inputHeight) === 'compact' ? 'h-9 text-xs' : (field.inputHeight && field.inputHeight !== 'inherit' ? field.inputHeight : inputHeight) === 'large' ? 'h-12 text-sm' : 'h-11 text-xs';
-                          return (
-                            <div
-                              className={`${fieldHeightCls} w-full border border-slate-200/90 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/70 px-3.5 py-2 text-muted-foreground flex items-center shadow-2xs transition-all`}
-                              style={{ borderRadius: fieldRadius }}
-                            >
-                              {field.placeholder || `Enter ${field.label || 'value'}...`}
-                            </div>
-                          );
-                        })()}
+                        <StudioFieldPreview
+                          field={field}
+                          inputBorderRadius={inputBorderRadius}
+                          inputHeight={inputHeight}
+                        />
                       </div>
                     );
                   })
@@ -1053,18 +1231,11 @@ export function StudioFocusCanvas({
                         </div>
 
                         {/* Input Preview */}
-                        {(() => {
-                          const fieldRadius = f.borderRadius && f.borderRadius !== 'inherit' ? f.borderRadius : inputBorderRadius;
-                          const fieldHeightCls = (f.inputHeight && f.inputHeight !== 'inherit' ? f.inputHeight : inputHeight) === 'compact' ? 'h-9 text-xs' : (f.inputHeight && f.inputHeight !== 'inherit' ? f.inputHeight : inputHeight) === 'large' ? 'h-12 text-sm' : 'h-11 text-xs';
-                          return (
-                            <div
-                              className={`${fieldHeightCls} w-full border border-slate-200/90 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2 text-muted-foreground flex items-center shadow-2xs transition-all`}
-                              style={{ borderRadius: fieldRadius }}
-                            >
-                              {f.placeholder || `Enter ${f.label || 'value'}...`}
-                            </div>
-                          );
-                        })()}
+                        <StudioFieldPreview
+                          field={f}
+                          inputBorderRadius={inputBorderRadius}
+                          inputHeight={inputHeight}
+                        />
                       </div>
                     );
                   })}
