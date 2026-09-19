@@ -591,8 +591,8 @@ function StudioFieldPreview({
         )}
       </div>
 
-      {/* ─── Top Stepper Progress Bar (Shown in Multi-Step mode) ─── */}
-      {isMultiStep && (
+      {/* ─── Top Stepper Progress Bar (Shown in Multi-Step mode for focus & paper views) ─── */}
+      {isMultiStep && viewMode !== 'split_media' && (
         <div className="w-full max-w-4xl pt-2 pb-5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Badge
@@ -1059,98 +1059,96 @@ function StudioFieldPreview({
                     }`}
                   >
                     <div className="space-y-4">
-                      {/* Stepper Tabs Bar (if Multi-Step) */}
-                      {steps.length > 1 ? (
-                        <div className="space-y-3 pb-3 border-b border-border/60">
-                          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {steps.map((step, sIdx) => {
-                                const isCurrent = sIdx === currentStepIndex;
-                                return (
-                                  <button
-                                    key={step.id}
-                                    type="button"
-                                    onClick={() => onStepChange(sIdx)}
-                                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
-                                      isCurrent
-                                        ? 'bg-primary text-primary-foreground shadow-xs'
-                                        : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'
-                                    }`}
-                                  >
-                                    <span className="size-4 rounded-full bg-black/20 dark:bg-white/20 text-[10px] flex items-center justify-center font-extrabold">
-                                      {sIdx + 1}
-                                    </span>
-                                    <span className="truncate max-w-[120px]">{step.title}</span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Badge
-                                variant="secondary"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSelectColumn?.('right');
-                                }}
-                                className={`text-[10px] font-bold gap-1 cursor-pointer transition-all ${
-                                  isRightColumnActive
-                                    ? 'bg-primary text-primary-foreground shadow-xs'
-                                    : 'bg-muted text-muted-foreground'
-                                }`}
-                              >
-                                👉 Right Form {isRightColumnActive && '✓'}
-                              </Badge>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={handleAddStep}
-                                className="h-7 text-[11px] gap-1 px-2 shrink-0 border-dashed"
-                              >
-                                <Plus className="size-3" /> Step
-                              </Button>
-                            </div>
+                      {/* Top Action & Column Status Header */}
+                      <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/60">
+                        <div className="min-w-0">
+                          <h3 className="text-sm sm:text-base font-bold text-foreground truncate">
+                            {steps.length > 1 ? activeStep.title || `Step ${currentStepIndex + 1}` : formData.name || 'Request a Quote / Booking'}
+                          </h3>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {steps.length > 1
+                              ? `Step ${currentStepIndex + 1} of ${steps.length} • ${progressPercent}% Complete`
+                              : formData.description || 'Fill in the details below to receive your upfront estimate.'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Badge
+                            variant="secondary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectColumn?.('right');
+                            }}
+                            className={`text-[10px] font-bold gap-1 cursor-pointer transition-all ${
+                              isRightColumnActive
+                                ? 'bg-primary text-primary-foreground shadow-xs font-black'
+                                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                            }`}
+                          >
+                            👉 Right Form Column {isRightColumnActive && '✓ (Active Target)'}
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddStep();
+                            }}
+                            className="h-6.5 text-[10px] font-semibold gap-1 px-2 border-dashed rounded-lg shadow-2xs cursor-pointer shrink-0"
+                          >
+                            <Plus className="size-2.5" /> Step
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Stepper Carousel / Steps Indicator (Multi-Step only) */}
+                      {steps.length > 1 && (
+                        <div className="space-y-2 pb-2 border-b border-border/40">
+                          {/* Progress Line */}
+                          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-300"
+                              style={{
+                                width: `${progressPercent}%`,
+                                backgroundColor: primaryColor,
+                              }}
+                            />
                           </div>
 
-                          <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
-                            <span>Step {currentStepIndex + 1} of {steps.length}: <strong className="text-foreground">{activeStep.title}</strong></span>
-                            <span>{progressPercent}% Complete</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between pb-2 border-b border-border/40">
-                          <div className="space-y-0.5">
-                            <h3 className="text-base font-bold text-foreground">
-                              {formData.name || 'Request a Quote / Booking'}
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                              {formData.description || 'Fill in the details below to receive your upfront estimate.'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <Badge
-                              variant="secondary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onSelectColumn?.('right');
-                              }}
-                              className={`text-[10px] font-bold gap-1 cursor-pointer transition-all ${
-                                isRightColumnActive
-                                  ? 'bg-primary text-primary-foreground shadow-xs'
-                                  : 'bg-muted text-muted-foreground'
-                              }`}
-                            >
-                              👉 Right Form {isRightColumnActive && '✓ (Active Target)'}
-                            </Badge>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleAddStep}
-                              className="h-7 text-[11px] gap-1 px-2.5 border-dashed shrink-0"
-                            >
-                              <Plus className="size-3" /> Convert to Multi-Step
-                            </Button>
+                          {/* Horizontal Step Navigation Chips (Never wraps into multiple vertical rows) */}
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none flex-nowrap">
+                            {steps.map((step, sIdx) => {
+                              const isCurrent = sIdx === currentStepIndex;
+                              return (
+                                <button
+                                  key={step.id}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onStepChange(sIdx);
+                                  }}
+                                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                                    isCurrent
+                                      ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                                      : 'bg-muted/80 text-muted-foreground hover:text-foreground hover:bg-muted'
+                                  }`}
+                                  title={`Go to Step ${sIdx + 1}: ${step.title}`}
+                                >
+                                  <span
+                                    className={`size-3.5 rounded-full text-[9px] flex items-center justify-center font-extrabold ${
+                                      isCurrent
+                                        ? 'bg-black/20 dark:bg-white/20 text-white'
+                                        : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                    }`}
+                                  >
+                                    {sIdx + 1}
+                                  </span>
+                                  <span className="truncate max-w-[100px] sm:max-w-[130px]">
+                                    {step.title}
+                                  </span>
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
