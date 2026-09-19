@@ -16,28 +16,42 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { customerId, otpCode } = body;
+    const { customerId, otpCode, code, phone, email } = body;
+    const resolvedCode = otpCode || code;
 
-    if (!customerId || !otpCode) {
+    if (!resolvedCode) {
       return NextResponse.json(
-        { error: 'customerId and otpCode are required' },
+        { error: 'Verification code is required' },
         { status: 400 },
       );
     }
 
-    const customer = await db.marketplaceCustomer.findUnique({
-      where: { id: customerId },
-    });
+    let customer = null;
+    if (customerId) {
+      customer = await db.marketplaceCustomer.findUnique({
+        where: { id: customerId },
+      });
+    } else if (phone) {
+      const normalizedPhone = phone.replace(/[^\d+]/g, '');
+      customer = await db.marketplaceCustomer.findUnique({
+        where: { phone: normalizedPhone },
+      });
+    } else if (email) {
+      const normalizedEmail = email.toLowerCase().trim();
+      customer = await db.marketplaceCustomer.findUnique({
+        where: { email: normalizedEmail },
+      });
+    }
 
     if (!customer) {
       return NextResponse.json(
-        { error: 'Customer not found' },
+        { error: 'Customer account not found' },
         { status: 404 },
       );
     }
 
     // Check OTP
-    if (!customer.otpCode || customer.otpCode !== otpCode) {
+    if (!customer.otpCode || customer.otpCode !== resolvedCode) {
       return NextResponse.json(
         { error: 'Invalid verification code' },
         { status: 400 },
@@ -53,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     // Mark as verified + clear OTP
     const updated = await db.marketplaceCustomer.update({
-      where: { id: customerId },
+      where: { id: customer.id },
       data: {
         otpVerified: true,
         otpCode: null,
@@ -63,7 +77,7 @@ export async function POST(req: NextRequest) {
 
     // Set session cookie (7 days)
     const cookieStore = await cookies();
-    cookieStore.set('mc_session', customerId, {
+    cookieStore.set('mc_session', customer.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

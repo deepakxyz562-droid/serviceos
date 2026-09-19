@@ -109,6 +109,33 @@ export interface ConditionalRule {
   targetStepId?: string;
 }
 
+export interface FormMediaPanel {
+  enabled: boolean;
+  position?: 'left' | 'right';
+  splitRatio?: '50-50' | '40-60' | '60-40' | '35-65';
+  mediaType: 'image' | 'video' | 'youtube' | 'vimeo';
+  mediaUrl?: string;
+  videoEmbedUrl?: string;
+  videoAutoplay?: boolean;
+  videoMuted?: boolean;
+  videoLoop?: boolean;
+  aspectRatio?: 'cover' | '16-9' | '4-3' | '1-1';
+  headline?: string;
+  subtitle?: string;
+  badgeText?: string;
+  benefitsList?: string[];
+  testimonial?: {
+    quote: string;
+    author: string;
+    role?: string;
+    avatarUrl?: string;
+    rating?: number;
+  };
+  overlayColor?: string;
+  overlayOpacity?: number; // 0 to 100
+  mobileBehavior?: 'stack_top' | 'compact_banner' | 'hide';
+}
+
 export interface FormTheme {
   primaryColor: string;
   backgroundColor: string;
@@ -125,7 +152,8 @@ export interface FormTheme {
   fontFamily?: string;
   logoUrl?: string | null;
   showTopBorder?: boolean; // Accent top border/line
-  layout?: 'classic' | 'card' | 'multi_step' | 'conversational';
+  layout?: 'classic' | 'card' | 'multi_step' | 'conversational' | 'split_media' | string;
+  mediaPanel?: FormMediaPanel;
 }
 
 export interface FormActionSettings {
@@ -161,6 +189,7 @@ export interface FormSchema {
   fields: FormField[];
   rules: ConditionalRule[];
   theme: FormTheme;
+  mediaPanel?: FormMediaPanel;
   settings: {
     submitButtonText: string;
     successTitle: string;
@@ -354,5 +383,6 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
         },
       },
     },
+    mediaPanel: s.mediaPanel || s.theme?.mediaPanel,
   };
 }

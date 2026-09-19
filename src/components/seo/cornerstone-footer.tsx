@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Twitter, Linkedin, Github, ShieldCheck, Mail, MapPin } from "lucide-react";
+import { Twitter, Linkedin, Github, ShieldCheck, Mail, MapPin, Calculator, Sparkles, FileText, ArrowRight } from "lucide-react";
 import { BrandMark } from "@/components/brand/brand-mark";
 import { GooglePlayBadge } from "@/components/brand/google-play-badge";
 
@@ -27,6 +27,19 @@ export function CornerstoneFooter() {
     { href: "/?auth=register", label: "List Your Business (Free)" },
     { href: "/marketplace", label: "Claim Business Listing" },
     { href: "/marketplace", label: "Top Service Categories" },
+  ];
+
+  const freeToolsLinks = [
+    { href: "/invoice-generator", label: "Free Invoice Generator" },
+    { href: "/estimate-generator", label: "Free Estimate Generator" },
+    { href: "/proposal-generator", label: "Free Proposal Generator" },
+    { href: "/contract-drafting-generator", label: "Free Contract Generator" },
+    { href: "/job-cost-calculator", label: "Free Job Cost Calculator" },
+    { href: "/material-cost-estimator", label: "Free Material Cost Estimator" },
+    { href: "/home-maintenance-planner", label: "Home Maintenance Planner" },
+    { href: "/renovation-roi-calculator", label: "Renovation ROI Calculator" },
+    { href: "/free-home-value-enhancer", label: "Home Value Enhancer" },
+    { href: "/tools", label: "Browse All Free Tools →" },
   ];
 
   const servicesLinks = [
@@ -146,6 +159,54 @@ export function CornerstoneFooter() {
         </div>
       </div>
 
+      {/* ── Free Tools Spotlight Strip ── */}
+      <div className="border-b border-border/60 bg-emerald-50/30 dark:bg-emerald-950/20 py-5">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
+                <Calculator className="size-3.5 text-emerald-600 dark:text-emerald-400" /> Free Tools
+              </span>
+              <span className="text-xs font-bold text-foreground">
+                100% Free Contractor Generators &amp; Estimators (No Sign Up Needed)
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <Link
+                href="/invoice-generator"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-card border border-border/80 text-muted-foreground hover:text-emerald-600 hover:border-emerald-500/50 transition-colors shadow-2xs"
+              >
+                <FileText className="size-3 text-emerald-600" /> Free Invoice Generator
+              </Link>
+              <Link
+                href="/estimate-generator"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-card border border-border/80 text-muted-foreground hover:text-emerald-600 hover:border-emerald-500/50 transition-colors shadow-2xs"
+              >
+                Free Estimate Generator
+              </Link>
+              <Link
+                href="/proposal-generator"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-card border border-border/80 text-muted-foreground hover:text-emerald-600 hover:border-emerald-500/50 transition-colors shadow-2xs"
+              >
+                Free Proposal Generator
+              </Link>
+              <Link
+                href="/job-cost-calculator"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-card border border-border/80 text-muted-foreground hover:text-emerald-600 hover:border-emerald-500/50 transition-colors shadow-2xs"
+              >
+                Job Cost Calculator
+              </Link>
+              <Link
+                href="/tools"
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition shadow-2xs"
+              >
+                All 9 Free Tools <ArrowRight className="size-3" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Main Links Columns ── */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
@@ -168,7 +229,35 @@ export function CornerstoneFooter() {
             </ul>
           </div>
 
-          {/* Column 2: Marketplace (Dedicated First-Class Column) */}
+          {/* Column 2: Free Tools (Dedicated First-Class Column) */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-3.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                Free Tools
+              </h3>
+              <span className="text-[9px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full uppercase">
+                Free
+              </span>
+            </div>
+            <ul className="space-y-2 text-xs">
+              {freeToolsLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className={`transition-colors block ${
+                      link.href === '/tools'
+                        ? 'font-bold text-emerald-600 dark:text-emerald-400 hover:underline'
+                        : 'text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400'
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Column 3: Marketplace */}
           <div>
             <div className="flex items-center gap-1.5 mb-3.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
@@ -190,13 +279,10 @@ export function CornerstoneFooter() {
                 </li>
               ))}
             </ul>
-          </div>
 
-          {/* Column 3: Services */}
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground mb-2 mt-5">
               Services
-            </h3>
+            </h4>
             <ul className="space-y-2 text-xs">
               {servicesLinks.map((link) => (
                 <li key={link.href}>
@@ -244,7 +330,7 @@ export function CornerstoneFooter() {
             </div>
           </div>
 
-          {/* Column 6: Compare & Resources */}
+          {/* Column 6: Compare & Legal */}
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
               Compare &amp; Legal
@@ -265,7 +351,7 @@ export function CornerstoneFooter() {
               Resources
             </h4>
             <ul className="space-y-2 text-xs">
-              {resourceLinks.slice(0, 4).map((link) => (
+              {resourceLinks.slice(1, 5).map((link) => (
                 <li key={link.label}>
                   <Link
                     href={link.href}

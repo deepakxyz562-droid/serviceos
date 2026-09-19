@@ -28,8 +28,223 @@ import {
   Bot,
   LayoutTemplate,
   CreditCard,
+  Star,
+  Play,
+  Volume2,
+  VolumeX,
+  ShieldCheck,
+  Film,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+/**
+ * Parses video URLs into responsive embed / HTML5 video sources.
+ */
+function parseVideoEmbed(url?: string): { type: 'youtube' | 'vimeo' | 'mp4' | 'none'; embedUrl?: string } {
+  if (!url) return { type: 'none' };
+  const trimmed = url.trim();
+  if (trimmed.endsWith('.mp4') || trimmed.endsWith('.webm') || trimmed.endsWith('.ogg')) {
+    return { type: 'mp4', embedUrl: trimmed };
+  }
+  const ytMatch = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  if (ytMatch && ytMatch[1]) {
+    return {
+      type: 'youtube',
+      embedUrl: `https://www.youtube-nocookie.com/embed/${ytMatch[1]}?autoplay=1&mute=1&loop=1&playlist=${ytMatch[1]}&rel=0`,
+    };
+  }
+  const vimeoMatch = trimmed.match(/vimeo\.com\/(?:video\/)?([0-9]+)/);
+  if (vimeoMatch && vimeoMatch[1]) {
+    return {
+      type: 'vimeo',
+      embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=1&loop=1`,
+    };
+  }
+  if (trimmed.startsWith('http')) {
+    return { type: 'mp4', embedUrl: trimmed };
+  }
+  return { type: 'none' };
+}
+
+/**
+ * Elementor-style Visual Media Hero Panel (Left or Right Column)
+ */
+function FormMediaHeroPanel({
+  mediaPanel,
+  formName,
+  formDescription,
+  primaryColor,
+}: {
+  mediaPanel?: import('@/lib/forms/form-schema-types').FormMediaPanel;
+  formName: string;
+  formDescription?: string | null;
+  primaryColor: string;
+}) {
+  const [isMuted, setIsMuted] = useState(mediaPanel?.videoMuted ?? true);
+  const videoParsed = parseVideoEmbed(mediaPanel?.videoEmbedUrl || mediaPanel?.mediaUrl);
+  const isVideo = mediaPanel?.mediaType === 'video' || mediaPanel?.mediaType === 'youtube' || mediaPanel?.mediaType === 'vimeo' || videoParsed.type !== 'none';
+  const hasImage = Boolean(mediaPanel?.mediaUrl && !isVideo);
+
+  const headline = mediaPanel?.headline || formName;
+  const subtitle = mediaPanel?.subtitle || formDescription;
+  const badge = mediaPanel?.badgeText;
+  const benefits = mediaPanel?.benefitsList || [];
+  const testimonial = mediaPanel?.testimonial;
+
+  return (
+    <div className="relative flex flex-col justify-between overflow-hidden bg-slate-900 text-white p-6 sm:p-8 lg:p-10 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-[320px] lg:min-h-full">
+      {/* Background Image / Video Backdrop */}
+      {isVideo ? (
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          {videoParsed.type === 'youtube' || videoParsed.type === 'vimeo' ? (
+            <iframe
+              src={videoParsed.embedUrl}
+              title="Media Video"
+              className="w-full h-full object-cover scale-125 pointer-events-none opacity-40 mix-blend-luminosity"
+              allow="autoplay; muted; fullscreen"
+            />
+          ) : (
+            <video
+              src={videoParsed.embedUrl || mediaPanel?.mediaUrl}
+              autoPlay={mediaPanel?.videoAutoplay ?? true}
+              muted={isMuted}
+              loop={mediaPanel?.videoLoop ?? true}
+              playsInline
+              className="w-full h-full object-cover opacity-40 mix-blend-luminosity"
+            />
+          )}
+          <div
+            className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-900/60"
+            style={{ opacity: (mediaPanel?.overlayOpacity ?? 80) / 100 }}
+          />
+        </div>
+      ) : hasImage ? (
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <img
+            src={mediaPanel?.mediaUrl}
+            alt={headline}
+            className="w-full h-full object-cover opacity-45 transition-transform duration-700 hover:scale-105"
+          />
+          <div
+            className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/75 to-slate-900/50"
+            style={{ opacity: (mediaPanel?.overlayOpacity ?? 75) / 100 }}
+          />
+        </div>
+      ) : (
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-teal-950 via-slate-900 to-indigo-950 opacity-95">
+          <div className="absolute -top-24 -left-24 size-96 rounded-full blur-3xl opacity-30 bg-teal-500" />
+          <div className="absolute -bottom-24 -right-24 size-96 rounded-full blur-3xl opacity-25 bg-blue-500" />
+        </div>
+      )}
+
+      {/* Top Media Header & Badge */}
+      <div className="relative z-10 space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          {badge ? (
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md border border-white/20"
+              style={{ backgroundColor: `${primaryColor}30`, color: '#ffffff' }}
+            >
+              <Sparkles className="size-3.5 text-amber-300" />
+              {badge}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md border border-white/15 text-white/90">
+              <ShieldCheck className="size-3.5 text-emerald-400" />
+              Verified &amp; Secure Intake
+            </span>
+          )}
+
+          {/* Sound toggle if HTML5 video */}
+          {isVideo && videoParsed.type === 'mp4' && (
+            <button
+              type="button"
+              onClick={() => setIsMuted(!isMuted)}
+              className="size-7 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white transition-all border border-white/10"
+              title={isMuted ? 'Unmute video' : 'Mute video'}
+            >
+              {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-2 pt-2">
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-snug">
+            {headline}
+          </h2>
+          {subtitle && (
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md">
+              {subtitle}
+            </p>
+          )}
+        </div>
+
+        {/* Bullet Benefits List */}
+        {benefits.length > 0 ? (
+          <div className="space-y-2.5 pt-4">
+            {benefits.map((benefit, i) => (
+              <div key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200">
+                <div
+                  className="size-4 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                  style={{ backgroundColor: `${primaryColor}40` }}
+                >
+                  <CheckCircle2 className="size-3.5 text-emerald-400" />
+                </div>
+                <span>{benefit}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2 pt-4">
+            <div className="flex items-center gap-2 text-xs text-slate-300">
+              <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+              <span>Instant AI price calculation &amp; live estimate</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-300">
+              <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+              <span>Guaranteed response within 15 minutes</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-300">
+              <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+              <span>100% Satisfaction &amp; Escrow Guarantee</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Testimonial / Social Proof */}
+      <div className="relative z-10 pt-6">
+        {testimonial ? (
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 shadow-sm space-y-1.5">
+            <div className="flex items-center gap-1 text-amber-400">
+              {Array.from({ length: testimonial.rating || 5 }).map((_, i) => (
+                <Star key={i} className="size-3 fill-amber-400" />
+              ))}
+            </div>
+            <p className="text-xs italic text-slate-200">
+              "{testimonial.quote}"
+            </p>
+            <p className="text-[11px] font-bold text-white">
+              — {testimonial.author} {testimonial.role ? <span className="font-normal text-slate-400">({testimonial.role})</span> : ''}
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 backdrop-blur-xs border border-white/10">
+            <div className="flex -space-x-1.5">
+              <div className="size-6 rounded-full bg-emerald-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">A</div>
+              <div className="size-6 rounded-full bg-blue-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">D</div>
+              <div className="size-6 rounded-full bg-indigo-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">M</div>
+            </div>
+            <div className="text-[11px] text-slate-300">
+              <span className="font-bold text-white">4.9/5 Rating</span> from 1,200+ happy clients
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Safe calculation evaluator.
@@ -355,7 +570,7 @@ export function FormRuntimeRenderer({
     );
   }
 
-  // Render Classic Paper / Card Swipe Mode
+  // Render Classic Paper / Card Swipe / Split Media Mode
   const primaryColor = schema.theme?.primaryColor || '#059669';
   const buttonColor = schema.theme?.buttonColor || primaryColor;
   const buttonTextColor = schema.theme?.buttonTextColor || '#ffffff';
@@ -366,6 +581,31 @@ export function FormRuntimeRenderer({
   const textColor = schema.theme?.textColor || '#0f172a';
   const fontFamily = schema.theme?.fontFamily || 'Inter, sans-serif';
 
+  const mediaPanel = schema.mediaPanel || schema.theme?.mediaPanel;
+  const isSplitLayout =
+    (schema.theme?.layout === 'split_media' || (mediaPanel && mediaPanel.enabled !== false)) &&
+    activeMode !== 'agent';
+  const splitRatio = mediaPanel?.splitRatio || '50-50';
+  const isRightSide = mediaPanel?.position === 'right';
+
+  const mediaColSpan =
+    splitRatio === '40-60'
+      ? 'lg:col-span-5'
+      : splitRatio === '60-40'
+      ? 'lg:col-span-7'
+      : splitRatio === '35-65'
+      ? 'lg:col-span-4'
+      : 'lg:col-span-6';
+
+  const formColSpan =
+    splitRatio === '40-60'
+      ? 'lg:col-span-7'
+      : splitRatio === '60-40'
+      ? 'lg:col-span-5'
+      : splitRatio === '35-65'
+      ? 'lg:col-span-8'
+      : 'lg:col-span-6';
+
   const defaultInputHeightCls =
     inputHeightMode === 'compact'
       ? 'h-9 text-xs'
@@ -375,7 +615,7 @@ export function FormRuntimeRenderer({
 
   return (
     <div
-      className="w-full max-w-xl mx-auto space-y-4 transition-all"
+      className={`w-full ${isSplitLayout ? 'max-w-5xl' : 'max-w-xl'} mx-auto space-y-4 transition-all`}
       style={{
         fontFamily,
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -434,61 +674,76 @@ export function FormRuntimeRenderer({
           />
         )}
 
-        {/* Header */}
-        <div className="p-6 sm:p-8 pb-4 border-b border-border/40">
-          {branding?.businessName && (
-            <p
-              className="text-[10px] uppercase font-extrabold tracking-wider mb-1"
-              style={{ color: primaryColor }}
-            >
-              {branding.businessName}
-            </p>
-          )}
-          <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
-            {formName}
-          </h1>
-          {formDescription && (
-            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
-              {formDescription}
-            </p>
-          )}
-
-          {/* Stepper Progress for multi-step forms */}
-          {steps.length > 1 && (
-            <div className="mt-5 pt-4 border-t border-border/50">
-              <div className="flex items-center justify-between gap-4 mb-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="size-5 rounded-md text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
-                    style={{ backgroundColor: primaryColor }}
-                  >
-                    {currentStepIndex + 1}
-                  </span>
-                  <span className="text-xs font-bold text-foreground truncate max-w-xs">
-                    {currentStep.title}
-                  </span>
-                </div>
-                <span className="text-[11px] font-semibold text-muted-foreground">
-                  Step {currentStepIndex + 1} of {steps.length} ({Math.round(((currentStepIndex + 1) / steps.length) * 100)}%)
-                </span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-                <div
-                  className="h-full rounded-full transition-all duration-300 shadow-xs"
-                  style={{
-                    width: `${((currentStepIndex + 1) / steps.length) * 100}%`,
-                    backgroundColor: primaryColor,
-                  }}
-                />
-              </div>
+        <div className={isSplitLayout ? 'grid grid-cols-1 lg:grid-cols-12 min-h-full' : ''}>
+          {/* Media Hero Column (if Split Layout and positioned on the left) */}
+          {isSplitLayout && !isRightSide && (
+            <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' ? 'hidden lg:flex' : ''}`}>
+              <FormMediaHeroPanel
+                mediaPanel={mediaPanel}
+                formName={formName}
+                formDescription={formDescription}
+                primaryColor={primaryColor}
+              />
             </div>
           )}
-        </div>
 
-        {/* Content */}
-        <CardContent className="p-6 sm:p-8 pt-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <input type="text" name="_hp" className="hidden" tabIndex={-1} autoComplete="off" />
+          {/* Form Content Column */}
+          <div className={`${isSplitLayout ? formColSpan : 'w-full'} flex flex-col justify-between`}>
+            {/* Header */}
+            <div className="p-6 sm:p-8 pb-4 border-b border-border/40">
+              {branding?.businessName && (
+                <p
+                  className="text-[10px] uppercase font-extrabold tracking-wider mb-1"
+                  style={{ color: primaryColor }}
+                >
+                  {branding.businessName}
+                </p>
+              )}
+              <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
+                {formName}
+              </h1>
+              {formDescription && (
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
+                  {formDescription}
+                </p>
+              )}
+
+              {/* Stepper Progress for multi-step forms */}
+              {steps.length > 1 && (
+                <div className="mt-5 pt-4 border-t border-border/50">
+                  <div className="flex items-center justify-between gap-4 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="size-5 rounded-md text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
+                        style={{ backgroundColor: primaryColor }}
+                      >
+                        {currentStepIndex + 1}
+                      </span>
+                      <span className="text-xs font-bold text-foreground truncate max-w-xs">
+                        {currentStep.title}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-semibold text-muted-foreground">
+                      Step {currentStepIndex + 1} of {steps.length} ({Math.round(((currentStepIndex + 1) / steps.length) * 100)}%)
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
+                    <div
+                      className="h-full rounded-full transition-all duration-300 shadow-xs"
+                      style={{
+                        width: `${((currentStepIndex + 1) / steps.length) * 100}%`,
+                        backgroundColor: primaryColor,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Content */}
+            <CardContent className="p-6 sm:p-8 pt-6 flex-1">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <input type="text" name="_hp" className="hidden" tabIndex={-1} autoComplete="off" />
 
             {/* ─── Card-by-Card Mode: render ONE field at a time ─────────────── */}
             {activeMode === 'card' ? (
@@ -1027,8 +1282,22 @@ export function FormRuntimeRenderer({
               )}
             </div>
             )}
-          </form>
-        </CardContent>
+              </form>
+            </CardContent>
+          </div>
+
+          {/* Media Hero Column (if Split Layout and positioned on the right) */}
+          {isSplitLayout && isRightSide && (
+            <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' ? 'hidden lg:flex' : ''}`}>
+              <FormMediaHeroPanel
+                mediaPanel={mediaPanel}
+                formName={formName}
+                formDescription={formDescription}
+                primaryColor={primaryColor}
+              />
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   );

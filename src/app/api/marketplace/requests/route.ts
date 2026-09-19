@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { redactRequestForPublicFeed } from '@/lib/marketplace/privacy-engine';
 import { dispatchMatchingForRequest } from '@/lib/marketplace/matching-dispatch';
+import { sendSmsMessage } from '@/lib/sms-send';
+import { sendEmail } from '@/lib/email-send';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,10 +57,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Auto-link or resolve marketplace customer if not supplied
+    let resolvedCustomerId = marketplaceCustomerId;
+    if (!resolvedCustomerId) {
+      const normalizedPhone = customerPhone.replace(/[^\d+]/g, '');
+      const normalizedEmail = customerEmail ? customerEmail.toLowerCase().trim() : null;
+      let existingCustomer = null;
+      if (normalizedPhone) {
+        existingCustomer = await db.marketplaceCustomer.findUnique({
+          where: { phone: normalizedPhone },
+        });
+      }
+      if (!existingCustomer && normalizedEmail) {
+        existingCustomer = await db.marketplaceCustomer.findUnique({
+          where: { email: normalizedEmail },
+        });
+      }
+      if (existingCustomer) {
+        resolvedCustomerId = existingCustomer.id;
+      }
+    }
+
     // Persist to DB
     const request = await db.marketplaceRequest.create({
       data: {
-        marketplaceCustomerId: marketplaceCustomerId || null,
+        marketplaceCustomerId: resolvedCustomerId || null,
         customerName,
         customerPhone,
         customerEmail: customerEmail || null,
@@ -106,6 +129,57 @@ export async function POST(req: NextRequest) {
     dispatchMatchingForRequest(request.id).catch((err) => {
       console.error('[marketplace/requests POST] matching dispatch failed:', err);
     });
+
+    // Send customer dual-channel confirmation notifications (SMS + Email)
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
+    const trackingLink = `${baseUrl}/requests/${request.publicSlug}`;
+
+    // 1. Send SMS confirmation
+    if (customerPhone) {
+      sendSmsMessage({
+        to: customerPhone,
+        message: `Fieseros: Your request for "${request.title}" is live! Track local contractor bids and quotes here: ${trackingLink}`,
+      }).catch((smsErr) => {
+        console.warn('[marketplace/requests POST] Customer SMS notification error:', smsErr);
+      });
+    }
+
+    // 2. Send Email confirmation
+    if (customerEmail) {
+      sendEmail({
+        to: customerEmail,
+        subject: `Your Service Request is Live — ${request.title}`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1e293b;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <h2 style="color: #059669; margin: 0; font-size: 24px;">Fieseros Marketplace</h2>
+              <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Service Request Confirmation</p>
+            </div>
+            
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+              <h3 style="margin-top: 0; color: #0f172a; font-size: 18px;">${request.title}</h3>
+              <p style="font-size: 14px; color: #475569; margin: 8px 0;"><strong>Location:</strong> ${request.city}, ${request.state} ${request.postalCode}</p>
+              <p style="font-size: 14px; color: #475569; margin: 8px 0;"><strong>Urgency:</strong> ${request.urgency}</p>
+              ${request.budgetMin || request.budgetMax ? `<p style="font-size: 14px; color: #475569; margin: 8px 0;"><strong>Estimated Budget:</strong> $${request.budgetMin || 0} - $${request.budgetMax || 'Flexible'}</p>` : ''}
+              <p style="font-size: 14px; color: #475569; margin: 8px 0;"><strong>Status:</strong> Matching with verified local contractors</p>
+            </div>
+
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${trackingLink}" style="background-color: #059669; color: #ffffff; padding: 14px 28px; text-decoration: none; font-weight: 600; border-radius: 8px; display: inline-block; font-size: 15px;">
+                Track Request & Compare Bids →
+              </a>
+            </div>
+
+            <p style="font-size: 12px; color: #94a3b8; text-align: center; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+              You received this email because you submitted a service request on Fieseros.
+            </p>
+          </div>
+        `,
+        text: `Your service request "${request.title}" is live on Fieseros! Track local contractor bids and quotes here: ${trackingLink}`,
+      }).catch((emailErr) => {
+        console.warn('[marketplace/requests POST] Customer Email notification error:', emailErr);
+      });
+    }
 
     return NextResponse.json({
       success: true,

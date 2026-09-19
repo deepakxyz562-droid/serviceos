@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Clock, MapPin, DollarSign, MessageSquare,
-  CheckCircle2, Loader2, ArrowRight, Bell, Phone, ShieldCheck, Sparkles,
+  CheckCircle2, Loader2, ArrowRight, Bell, Phone, Mail, ShieldCheck, Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,10 +58,13 @@ export default function MyRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
 
-  // Inline Phone Login for non-logged-in customers
+  // Dual-Channel (Phone & Email) Login for non-logged-in customers
+  const [channel, setChannel] = useState<'phone' | 'email'>('phone');
   const [phoneInput, setPhoneInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [otpSentMessage, setOtpSentMessage] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [loginError, setLoginError] = useState('');
 
@@ -85,18 +88,25 @@ export default function MyRequestsPage() {
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phoneInput) return;
+    if (channel === 'phone' && !phoneInput.trim()) return;
+    if (channel === 'email' && !emailInput.trim()) return;
+
     setIsVerifying(true);
     setLoginError('');
     try {
+      const payload = channel === 'phone'
+        ? { phone: phoneInput.trim() }
+        : { email: emailInput.trim() };
+
       const res = await fetch('/api/marketplace/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phoneInput }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
         setOtpSent(true);
+        setOtpSentMessage(data.maskedContact || (channel === 'phone' ? `SMS sent to ${phoneInput}` : `Email sent to ${emailInput}`));
       } else {
         setLoginError(data.error || 'Failed to send verification code');
       }
@@ -109,14 +119,19 @@ export default function MyRequestsPage() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpCode) return;
+    if (!otpCode.trim()) return;
+
     setIsVerifying(true);
     setLoginError('');
     try {
+      const payload = channel === 'phone'
+        ? { phone: phoneInput.trim(), code: otpCode.trim() }
+        : { email: emailInput.trim(), code: otpCode.trim() };
+
       const res = await fetch('/api/marketplace/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phoneInput, code: otpCode }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success && data.customer) {
@@ -152,7 +167,7 @@ export default function MyRequestsPage() {
     );
   }
 
-  // If not logged in, render the clean 2026 Customer Login view
+  // If not logged in, render the clean 2026 Dual-Channel Customer Login view
   if (!customer) {
     return (
       <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -163,45 +178,96 @@ export default function MyRequestsPage() {
             </div>
             <CardTitle className="text-xl font-bold">Track My Requests</CardTitle>
             <CardDescription className="text-xs">
-              Enter your mobile number to view your active service bids and chat with local contractors.
+              Verify your phone number or email to view incoming contractor bids and chat in real-time.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4">
             {!otpSent ? (
-              <form onSubmit={handleSendOtp} className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    Mobile Phone Number
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                    <Input
-                      type="tel"
-                      required
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(e.target.value)}
-                      placeholder="(312) 555-0199"
-                      className="pl-9"
-                    />
-                  </div>
+              <div>
+                {/* Channel Switcher Tabs */}
+                <div className="flex rounded-xl bg-slate-100 dark:bg-slate-900 p-1 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => { setChannel('phone'); setLoginError(''); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                      channel === 'phone'
+                        ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Phone className="size-3.5" /> Mobile (SMS)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setChannel('email'); setLoginError(''); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                      channel === 'email'
+                        ? 'bg-white dark:bg-slate-800 text-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Mail className="size-3.5" /> Email Address
+                  </button>
                 </div>
 
-                {loginError && <p className="text-xs text-rose-600 font-medium">{loginError}</p>}
+                <form onSubmit={handleSendOtp} className="space-y-3">
+                  {channel === 'phone' ? (
+                    <div>
+                      <label className="block text-xs font-semibold text-foreground mb-1.5">
+                        Mobile Phone Number
+                      </label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                        <Input
+                          type="tel"
+                          required
+                          value={phoneInput}
+                          onChange={(e) => setPhoneInput(e.target.value)}
+                          placeholder="(312) 555-0199"
+                          className="pl-9"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-xs font-semibold text-foreground mb-1.5">
+                        Email Address
+                      </label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                        <Input
+                          type="email"
+                          required
+                          value={emailInput}
+                          onChange={(e) => setEmailInput(e.target.value)}
+                          placeholder="jane@example.com"
+                          className="pl-9"
+                        />
+                      </div>
+                    </div>
+                  )}
 
-                <Button
-                  type="submit"
-                  disabled={isVerifying || !phoneInput.trim()}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-                >
-                  {isVerifying ? <Loader2 className="size-4 animate-spin" /> : 'Send Verification Code →'}
-                </Button>
-              </form>
+                  {loginError && <p className="text-xs text-rose-600 font-medium">{loginError}</p>}
+
+                  <Button
+                    type="submit"
+                    disabled={isVerifying || (channel === 'phone' ? !phoneInput.trim() : !emailInput.trim())}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                  >
+                    {isVerifying ? <Loader2 className="size-4 animate-spin" /> : 'Send Verification Code →'}
+                  </Button>
+                </form>
+              </div>
             ) : (
               <form onSubmit={handleVerifyOtp} className="space-y-3">
+                <div className="p-3 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300">
+                  <p className="font-semibold">{otpSentMessage || `Verification code sent to ${channel === 'phone' ? phoneInput : emailInput}`}</p>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-foreground mb-1.5">
-                    Enter 6-Digit Code sent to {phoneInput}
+                    Enter 6-Digit Code
                   </label>
                   <Input
                     type="text"
@@ -225,13 +291,27 @@ export default function MyRequestsPage() {
                   {isVerifying ? <Loader2 className="size-4 animate-spin" /> : 'Verify & Open Requests'}
                 </Button>
 
-                <button
-                  type="button"
-                  onClick={() => setOtpSent(false)}
-                  className="w-full text-xs text-muted-foreground hover:underline text-center mt-2"
-                >
-                  Change phone number
-                </button>
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setOtpSent(false); setOtpCode(''); }}
+                    className="hover:underline"
+                  >
+                    ← Change {channel === 'phone' ? 'phone number' : 'email'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChannel(channel === 'phone' ? 'email' : 'phone');
+                      setOtpSent(false);
+                      setOtpCode('');
+                    }}
+                    className="text-emerald-600 font-medium hover:underline"
+                  >
+                    {channel === 'phone' ? 'SMS delayed? Try email' : 'Switch to phone'}
+                  </button>
+                </div>
               </form>
             )}
 

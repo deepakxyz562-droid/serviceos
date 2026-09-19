@@ -41,7 +41,19 @@ The schema MUST follow this exact TypeScript interface:
     "backgroundColor": "#ffffff",
     "textColor": "#0f172a",
     "borderRadius": "0.75rem",
-    "layout": "card"
+    "layout": "card" | "classic" | "split_media"
+  },
+  "mediaPanel": {
+    "enabled": boolean,
+    "position": "left" | "right",
+    "splitRatio": "50-50" | "40-60" | "60-40" | "35-65",
+    "mediaType": "image" | "video" | "youtube",
+    "mediaUrl": string (optional, image or direct MP4 URL),
+    "videoEmbedUrl": string (optional, YouTube/Vimeo embed URL),
+    "headline": string,
+    "subtitle": string,
+    "badgeText": string,
+    "benefitsList": string[]
   },
   "settings": {
     "submitButtonText": "Submit",
@@ -55,7 +67,7 @@ The schema MUST follow this exact TypeScript interface:
 }
 
 Guidelines:
-1. Always split multi-part requests into logical steps (e.g. Step 1: Customer Contact, Step 2: Service & Damage Details, Step 3: Scheduling & Authorization).
+1. If the user mentions "split", "2 part", "video on left", "image on left", or "Elementor", set theme.layout to "split_media", configure a compelling mediaPanel with headline & benefits, and create 5 to 6 concise, high-converting fields on the right.
 2. Choose specialized widgets intelligently (e.g., use "image_upload_with_notes" for inspections, "nearest_location_finder" or "address" for places, "form_calculation" or "currency_amount_input" for quotes/estimates).
 3. Always return valid, parseable JSON only.`;
 
@@ -92,22 +104,43 @@ Guidelines:
     // Heuristic Fallback Generator (Guarantees fast, robust response even if AI quota is empty)
     if (!schema) {
       const lower = prompt.toLowerCase();
+      const isSplit = style === 'split_media' || lower.includes('split') || lower.includes('2 part') || lower.includes('two part') || lower.includes('video') || lower.includes('elementor');
       const isInspection = lower.includes('inspect') || lower.includes('damage') || lower.includes('photo') || lower.includes('leak');
       const isBooking = lower.includes('book') || lower.includes('appointment') || lower.includes('schedule');
       const isQuote = lower.includes('quote') || lower.includes('estimate') || lower.includes('cost') || lower.includes('calculator');
 
+      const splitMediaPanel = isSplit ? {
+        enabled: true,
+        position: 'left' as const,
+        splitRatio: '50-50' as const,
+        mediaType: lower.includes('video') ? ('video' as const) : ('image' as const),
+        mediaUrl: lower.includes('video')
+          ? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+          : 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+        videoEmbedUrl: lower.includes('video') ? 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' : undefined,
+        videoAutoplay: true,
+        videoMuted: true,
+        videoLoop: true,
+        headline: prompt.length > 5 ? prompt.slice(0, 50) : 'Fast Professional Service & Inspection',
+        subtitle: 'Complete the quick 5-step intake and receive immediate scheduling with upfront pricing.',
+        badgeText: '⭐ 5-Star Rated Service Pro',
+        benefitsList: [
+          'Guaranteed pro response within 15 mins',
+          'Licensed, insured & background-checked',
+          '100% Price Match & Escrow Guarantee',
+        ],
+      } : undefined;
+
       schema = {
         version: 1,
         steps: [
-          { id: 'step_1', title: 'Customer Contact', description: 'Your basic information' },
-          { id: 'step_2', title: 'Service Details', description: 'Tell us about your request' },
-          { id: 'step_3', title: 'Confirmation & Schedule', description: 'Finalize your request' },
+          { id: 'step_1', title: 'Service Intake', description: 'Your information & service request' },
         ],
-        fields: ([
+        fields: [
           { id: 'f_name', type: 'short_answer', label: 'Full Name', placeholder: 'John Doe', required: true, stepId: 'step_1', width: 'half' },
-          { id: 'f_email', type: 'email', label: 'Email Address', placeholder: 'john@example.com', required: true, stepId: 'step_1', width: 'half' },
-          { id: 'f_phone', type: 'phone', label: 'Phone Number', placeholder: '+1 (555) 000-0000', required: true, stepId: 'step_1', width: 'full' },
-          { id: 'f_address', type: 'address', label: 'Service Address', placeholder: '123 Main St, Austin, TX', required: true, stepId: 'step_2', width: 'full' },
+          { id: 'f_phone', type: 'phone', label: 'Phone Number', placeholder: '+1 (555) 000-0000', required: true, stepId: 'step_1', width: 'half' },
+          { id: 'f_email', type: 'email', label: 'Email Address', placeholder: 'john@example.com', required: true, stepId: 'step_1', width: 'full' },
+          { id: 'f_address', type: 'address', label: 'Service Address / Location', placeholder: '123 Main St, Austin, TX', required: true, stepId: 'step_1', width: 'full' },
           ...(isInspection ? [
             {
               id: 'f_photos',
@@ -115,52 +148,49 @@ Guidelines:
               label: 'Photos of Issue with Notes',
               widgetType: 'image_upload_with_notes',
               required: true,
-              stepId: 'step_2',
+              stepId: 'step_1',
               width: 'full' as const,
               widgetConfig: { maxFiles: 5, requireNotes: true },
             },
-          ] : []),
-          ...(isQuote ? [
+          ] : [
             {
-              id: 'f_calc',
-              type: 'control_widget' as const,
-              label: 'Estimated Price Calculation',
-              widgetType: 'form_calculation',
-              stepId: 'step_2',
+              id: 'f_service_type',
+              type: 'dropdown' as const,
+              label: 'Requested Service Type',
+              placeholder: 'Select service type',
+              required: true,
+              stepId: 'step_1',
               width: 'full' as const,
-              widgetConfig: { formula: '([f_sqft] * 3.5) + 50' },
+              options: [
+                { label: 'Standard Maintenance & Tune-Up', value: 'maintenance' },
+                { label: 'Emergency Diagnostics & Repair', value: 'emergency' },
+                { label: 'New System Installation / Replacement', value: 'installation' },
+              ],
             },
-          ] : []),
+          ]),
           {
-            id: 'f_desc',
+            id: 'f_notes',
             type: 'long_answer',
-            label: 'Detailed Description of Request',
-            placeholder: 'Please explain the issue or requirements in detail...',
-            required: true,
-            stepId: 'step_2',
+            label: 'Additional Notes & Details',
+            placeholder: 'Tell us any special instructions or details...',
+            required: false,
+            stepId: 'step_1',
             width: 'full',
           },
-          {
-            id: 'f_sig',
-            type: 'signature',
-            label: 'Customer Authorization Signature',
-            required: true,
-            stepId: 'step_3',
-            width: 'full',
-          },
-        ] as FormField[]),
+        ],
         rules: [],
         theme: {
           primaryColor: '#059669',
           backgroundColor: '#ffffff',
           textColor: '#0f172a',
-          borderRadius: '0.75rem',
-          layout: 'card',
+          borderRadius: '16px',
+          layout: isSplit ? 'split_media' : 'card',
         },
+        mediaPanel: splitMediaPanel,
         settings: {
-          submitButtonText: 'Submit Request',
-          successTitle: 'Thank You!',
-          successMessage: 'Your request has been received. Our team will review it and contact you shortly.',
+          submitButtonText: 'Get Instant Estimate',
+          successTitle: 'Request Received!',
+          successMessage: 'We have received your details and our team is reviewing your request.',
           actions: {
             sendEmailNotification: { enabled: true, toEmails: [] },
             createCrmLead: { enabled: true },

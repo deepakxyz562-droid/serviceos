@@ -57,17 +57,17 @@ export function AiMarketingFooter() {
             </ul>
           </div>
 
-          {/* Col 3: AI Chat & Generation Tools */}
+          {/* Col 3: AI Tools & Free Generators */}
           <div className="space-y-3">
-            <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">AI Tools &amp; Generators</h4>
+            <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Free Tools &amp; Generators</h4>
             <ul className="space-y-2 text-slate-400">
-              <li><Link href="#tools" className="hover:text-emerald-400 transition">AI Form Generator from URL</Link></li>
-              <li><Link href="#tools" className="hover:text-emerald-400 transition">AI FAQ Generator</Link></li>
-              <li><Link href="#tools" className="hover:text-emerald-400 transition">AI Service Reply Generator</Link></li>
-              <li><Link href="#tools" className="hover:text-emerald-400 transition">AI Quote &amp; Estimate Estimator</Link></li>
-              <li><Link href="#calculator" className="hover:text-emerald-400 transition">Chatbot ROI Calculator</Link></li>
-              <li><Link href="#tools" className="hover:text-emerald-400 transition">Sitemap XML URL Extractor</Link></li>
-              <li><Link href="#tools" className="hover:text-emerald-400 transition">In-Editor AI Copilot</Link></li>
+              <li><Link href="/invoice-generator" className="text-emerald-400 hover:underline transition font-medium">Free Invoice Generator</Link></li>
+              <li><Link href="/estimate-generator" className="hover:text-emerald-400 transition">Free Estimate Generator</Link></li>
+              <li><Link href="/proposal-generator" className="hover:text-emerald-400 transition">Free Proposal Generator</Link></li>
+              <li><Link href="/job-cost-calculator" className="hover:text-emerald-400 transition">Job Cost Calculator</Link></li>
+              <li><Link href="/material-cost-estimator" className="hover:text-emerald-400 transition">Material Cost Estimator</Link></li>
+              <li><Link href="/home-maintenance-planner" className="hover:text-emerald-400 transition">Home Maintenance Planner</Link></li>
+              <li><Link href="/tools" className="text-emerald-400 font-semibold hover:underline transition">Browse All Free Tools →</Link></li>
             </ul>
           </div>
 

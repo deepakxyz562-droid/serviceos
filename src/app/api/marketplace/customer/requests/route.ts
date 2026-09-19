@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     // Verify customer exists + is verified
     const customer = await db.marketplaceCustomer.findUnique({
       where: { id: customerId },
-      select: { id: true, otpVerified: true },
+      select: { id: true, otpVerified: true, phone: true, email: true },
     });
 
     if (!customer || !customer.otpVerified) {
@@ -44,8 +44,22 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const statusFilter = searchParams.get('status') || 'all';
 
+    const orConditions: Record<string, unknown>[] = [
+      { marketplaceCustomerId: customer.id },
+    ];
+    if (customer.phone && !customer.phone.startsWith('unknown-')) {
+      orConditions.push({ customerPhone: customer.phone });
+      const digitsOnly = customer.phone.replace(/[^\d]/g, '');
+      if (digitsOnly && digitsOnly !== customer.phone) {
+        orConditions.push({ customerPhone: { contains: digitsOnly } });
+      }
+    }
+    if (customer.email) {
+      orConditions.push({ customerEmail: { equals: customer.email, mode: 'insensitive' } });
+    }
+
     const where: Record<string, unknown> = {
-      marketplaceCustomerId: customerId,
+      OR: orConditions,
     };
 
     if (statusFilter === 'active') {

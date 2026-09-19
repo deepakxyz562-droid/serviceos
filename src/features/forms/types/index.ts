@@ -208,7 +208,9 @@ export interface EditorFormData {
     fontFamily?: string;
     borderRadius?: string | number;
     layout?: string;
+    mediaPanel?: import('@/lib/forms/form-schema-types').FormMediaPanel;
   };
+  mediaPanel?: import('@/lib/forms/form-schema-types').FormMediaPanel;
   settings?: FormSettingsConfig;
 }
 

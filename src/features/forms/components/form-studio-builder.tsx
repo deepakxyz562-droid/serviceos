@@ -164,6 +164,36 @@ export function FormStudioBuilder({
     }));
   }, [onFormDataChange]);
 
+  // Helper to update split form media panel settings
+  const updateMediaPanel = useCallback((updates: Partial<import('@/lib/forms/form-schema-types').FormMediaPanel>) => {
+    onFormDataChange((prev) => {
+      const current = prev.mediaPanel || prev.theme?.mediaPanel || {
+        enabled: true,
+        position: 'left',
+        splitRatio: '50-50',
+        mediaType: 'image',
+        mediaUrl: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+        headline: prev.name || 'Fast & Reliable Professional Service',
+        subtitle: prev.description || 'Fill out the form below to receive upfront pricing.',
+        badgeText: '⭐ 5-Star Rated Service Pro',
+        benefitsList: [
+          'Guaranteed pro response within 15 mins',
+          'Licensed, insured & background-checked',
+          '100% Price Match & Escrow Guarantee',
+        ],
+      };
+      const updated = { ...current, ...updates };
+      return {
+        ...prev,
+        mediaPanel: updated,
+        theme: {
+          ...(prev.theme || {}),
+          mediaPanel: updated,
+        } as any,
+      };
+    });
+  }, [onFormDataChange]);
+
   const handleSelectTheme = (preset: FormThemePreset) => {
     setCurrentThemeId(preset.id);
     onFormDataChange((prev) => ({
@@ -243,8 +273,18 @@ export function FormStudioBuilder({
         buttonColor: formData.theme?.buttonColor || formData.primaryColor || '#059669',
         buttonTextColor: formData.theme?.buttonTextColor || '#ffffff',
         showTopBorder: formData.theme?.showTopBorder ?? false,
-        layout: previewFormat === 'card' ? 'card' : previewFormat === 'agent' ? 'conversational' : (formData.settings?.formLayout === 'single_question' ? 'card' : 'paper'),
+        layout: previewFormat === 'card'
+          ? 'card'
+          : previewFormat === 'agent'
+          ? 'conversational'
+          : formData.settings?.formLayout === 'split_media' || formData.theme?.layout === 'split_media'
+          ? 'split_media'
+          : formData.settings?.formLayout === 'single_question'
+          ? 'card'
+          : 'paper',
+        mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
       },
+      mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
       rules: (formData.rules as any[]) || [],
       settings: {
         submitButtonText: formData.submitButtonText || 'Submit',
@@ -1543,30 +1583,302 @@ export function FormStudioBuilder({
                     Form Layout
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Choose how questions are displayed to respondents
+                    Choose how questions and visual media are displayed to respondents
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <RadioGroup
-                    value={formData.settings?.formLayout || 'all_questions'}
-                    onValueChange={(v: any) => updateSetting('formLayout', v)}
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                    value={formData.settings?.formLayout || (formData.theme?.layout === 'split_media' ? 'split_media' : 'all_questions')}
+                    onValueChange={(v: any) => {
+                      updateSetting('formLayout', v);
+                      if (v === 'split_media') {
+                        updateMediaPanel({ enabled: true });
+                      }
+                    }}
+                    className="grid grid-cols-1 sm:grid-cols-3 gap-3"
                   >
                     <div className="flex items-center space-x-2 border border-border/80 rounded-xl p-3 bg-card hover:bg-muted/40 cursor-pointer">
                       <RadioGroupItem value="all_questions" id="layout-all" />
                       <Label htmlFor="layout-all" className="text-xs font-semibold cursor-pointer">
-                        📄 All questions on one page (Classic / Paper)
+                        📄 Classic Paper
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2 border border-border/80 rounded-xl p-3 bg-card hover:bg-muted/40 cursor-pointer">
                       <RadioGroupItem value="single_question" id="layout-single" />
                       <Label htmlFor="layout-single" className="text-xs font-semibold cursor-pointer">
-                        🃏 Single question per page (Card / Focus)
+                        🃏 Card Focus
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2 border border-emerald-500/60 bg-emerald-50/20 dark:bg-emerald-950/20 rounded-xl p-3 hover:bg-muted/40 cursor-pointer">
+                      <RadioGroupItem value="split_media" id="layout-split" />
+                      <Label htmlFor="layout-split" className="text-xs font-semibold cursor-pointer text-emerald-700 dark:text-emerald-300">
+                        🎬 Split Media (Elementor 2-Col)
                       </Label>
                     </div>
                   </RadioGroup>
                 </CardContent>
               </Card>
+
+              {/* 17.1. Split Media & Video Hero Customizer (Elementor Style) */}
+              {(formData.settings?.formLayout === 'split_media' || formData.theme?.layout === 'split_media') && (() => {
+                const mp = formData.mediaPanel || formData.theme?.mediaPanel || {
+                  enabled: true,
+                  position: 'left',
+                  splitRatio: '50-50',
+                  mediaType: 'image',
+                  mediaUrl: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+                  headline: formData.name || 'Fast & Reliable Professional Service',
+                  subtitle: formData.description || 'Fill out the form to receive upfront pricing.',
+                  badgeText: '⭐ 5-Star Rated Service Pro',
+                  benefitsList: [
+                    'Guaranteed pro response within 15 mins',
+                    'Licensed, insured & background-checked',
+                    '100% Price Match & Escrow Guarantee',
+                  ],
+                };
+
+                return (
+                  <Card className="rounded-2xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-50/20 via-background to-teal-50/10 dark:from-emerald-950/20 shadow-md">
+                    <CardHeader className="pb-3 border-b border-border/60">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                            <Film className="size-4 text-emerald-600" />
+                            2-Column Media Hero Panel Settings (Elementor Style)
+                          </CardTitle>
+                          <CardDescription className="text-xs mt-0.5">
+                            Customize the left-side video/image showcase, value proposition, and trust badges
+                          </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300">
+                          Active Layout
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-4 sm:p-6 space-y-5">
+                      {/* Media Source & Type */}
+                      <div className="space-y-2">
+                        <Label className="text-xs font-bold">Media Type</Label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => updateMediaPanel({ mediaType: 'image' })}
+                            className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                              mp.mediaType === 'image'
+                                ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-600'
+                                : 'border-border/80 hover:bg-muted/40'
+                            }`}
+                          >
+                            <ImageIcon className="size-4" /> Hero Image
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateMediaPanel({ mediaType: 'video' })}
+                            className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                              mp.mediaType === 'video'
+                                ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-600'
+                                : 'border-border/80 hover:bg-muted/40'
+                            }`}
+                          >
+                            <Film className="size-4" /> Video (YouTube / MP4)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* URL input */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold">
+                          {mp.mediaType === 'video' ? 'Video URL (YouTube, Vimeo, or MP4 link)' : 'Hero Image URL'}
+                        </Label>
+                        <Input
+                          type="text"
+                          value={mp.mediaType === 'video' ? (mp.videoEmbedUrl || mp.mediaUrl || '') : (mp.mediaUrl || '')}
+                          onChange={(e) => {
+                            if (mp.mediaType === 'video') {
+                              updateMediaPanel({ videoEmbedUrl: e.target.value, mediaUrl: e.target.value });
+                            } else {
+                              updateMediaPanel({ mediaUrl: e.target.value });
+                            }
+                          }}
+                          placeholder={mp.mediaType === 'video' ? 'https://www.youtube.com/watch?v=... or .mp4' : 'https://images.unsplash.com/...'}
+                          className="h-10 text-xs rounded-xl"
+                        />
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          <span className="text-[10px] text-muted-foreground self-center">Stock presets:</span>
+                          <button
+                            type="button"
+                            onClick={() => updateMediaPanel({
+                              mediaType: 'image',
+                              mediaUrl: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+                            })}
+                            className="px-2 py-0.5 rounded-md text-[10px] bg-muted hover:bg-muted/80 cursor-pointer"
+                          >
+                            Contractor / Pro
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateMediaPanel({
+                              mediaType: 'image',
+                              mediaUrl: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
+                            })}
+                            className="px-2 py-0.5 rounded-md text-[10px] bg-muted hover:bg-muted/80 cursor-pointer"
+                          >
+                            Cleaning &amp; Home
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateMediaPanel({
+                              mediaType: 'video',
+                              videoEmbedUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+                              mediaUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+                            })}
+                            className="px-2 py-0.5 rounded-md text-[10px] bg-muted hover:bg-muted/80 cursor-pointer"
+                          >
+                            Sample Video
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Headline & Subtitle */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold">Hero Headline</Label>
+                          <Input
+                            type="text"
+                            value={mp.headline || ''}
+                            onChange={(e) => updateMediaPanel({ headline: e.target.value })}
+                            placeholder="Fast & Reliable Professional Service"
+                            className="h-10 text-xs rounded-xl"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold">Trust Badge Text</Label>
+                          <Input
+                            type="text"
+                            value={mp.badgeText || ''}
+                            onChange={(e) => updateMediaPanel({ badgeText: e.target.value })}
+                            placeholder="⭐ 5-Star Rated Service Pro"
+                            className="h-10 text-xs rounded-xl"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold">Hero Subtitle</Label>
+                        <Textarea
+                          value={mp.subtitle || ''}
+                          onChange={(e) => updateMediaPanel({ subtitle: e.target.value })}
+                          placeholder="Tell customers what value they get by submitting this form..."
+                          rows={2}
+                          className="text-xs rounded-xl resize-none"
+                        />
+                      </div>
+
+                      {/* Benefits list */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-bold">Bullet Benefit Highlights</Label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const list = mp.benefitsList || [];
+                              updateMediaPanel({ benefitsList: [...list, 'New benefit guarantee point'] });
+                            }}
+                            className="text-[11px] h-6 px-2 text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                          >
+                            <Plus className="size-3 mr-1" /> Add Bullet
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          {(mp.benefitsList || []).map((bullet, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
+                              <Input
+                                type="text"
+                                value={bullet}
+                                onChange={(e) => {
+                                  const updated = [...(mp.benefitsList || [])];
+                                  updated[idx] = e.target.value;
+                                  updateMediaPanel({ benefitsList: updated });
+                                }}
+                                className="h-8 text-xs rounded-lg flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const updated = (mp.benefitsList || []).filter((_, i) => i !== idx);
+                                  updateMediaPanel({ benefitsList: updated });
+                                }}
+                                className="size-8 p-0 text-muted-foreground hover:text-rose-600 cursor-pointer"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Layout Controls: Split Ratio & Position */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-border/60">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold">Split Ratio</Label>
+                          <Select
+                            value={mp.splitRatio || '50-50'}
+                            onValueChange={(val: any) => updateMediaPanel({ splitRatio: val })}
+                          >
+                            <SelectTrigger className="h-9 text-xs rounded-xl">
+                              <SelectValue placeholder="Split Ratio" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="50-50">50% / 50% (Equal)</SelectItem>
+                              <SelectItem value="40-60">40% Media / 60% Form</SelectItem>
+                              <SelectItem value="60-40">60% Media / 40% Form</SelectItem>
+                              <SelectItem value="35-65">35% Media / 65% Form</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold">Media Position</Label>
+                          <Select
+                            value={mp.position || 'left'}
+                            onValueChange={(val: any) => updateMediaPanel({ position: val })}
+                          >
+                            <SelectTrigger className="h-9 text-xs rounded-xl">
+                              <SelectValue placeholder="Position" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="left">Left Column</SelectItem>
+                              <SelectItem value="right">Right Column</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-bold">Mobile Behavior</Label>
+                          <Select
+                            value={mp.mobileBehavior || 'stack_top'}
+                            onValueChange={(val: any) => updateMediaPanel({ mobileBehavior: val })}
+                          >
+                            <SelectTrigger className="h-9 text-xs rounded-xl">
+                              <SelectValue placeholder="Mobile" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="stack_top">Stack Media on Top</SelectItem>
+                              <SelectItem value="compact_banner">Compact Banner</SelectItem>
+                              <SelectItem value="hide">Hide on Mobile</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {/* 18. Advanced Operational Toggles */}
               <Card className="rounded-2xl border-border/80 shadow-xs">

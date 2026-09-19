@@ -164,9 +164,34 @@ export default function AiFormsLandingPage() {
                 {demoLoading ? 'Building Smart Form...' : 'Generate with AI'}
               </Button>
             </form>
-            <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] text-muted-foreground mt-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <span className="text-[11px] text-muted-foreground">Try prompt:</span>
+              <button
+                type="button"
+                onClick={() => setDemoPrompt('Create a 2-part AC repair quote form with video on left and 5 fields on right')}
+                className="px-2.5 py-1 rounded-full text-[11px] bg-teal-50 dark:bg-teal-950/50 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 hover:bg-teal-100 transition cursor-pointer"
+              >
+                🎬 2-Part Split Form (Video + 5 Fields)
+              </button>
+              <button
+                type="button"
+                onClick={() => setDemoPrompt('HVAC emergency inspection with photo upload notes and Stripe payment')}
+                className="px-2.5 py-1 rounded-full text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-foreground transition cursor-pointer"
+              >
+                📸 HVAC Inspection + Notes
+              </button>
+              <button
+                type="button"
+                onClick={() => setDemoPrompt('Roofing quote calculator with GPS address and digital signature')}
+                className="px-2.5 py-1 rounded-full text-[11px] bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-foreground transition cursor-pointer"
+              >
+                📐 Roofing Estimate + Signature
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-4 text-[11px] text-muted-foreground mt-3">
               <span className="flex items-center gap-1"><Check className="size-3 text-teal-600 font-bold" /> 0% Platform Commission</span>
-              <span className="flex items-center gap-1"><Check className="size-3 text-teal-600 font-bold" /> Paper, Card &amp; AI Chat Modes</span>
+              <span className="flex items-center gap-1"><Check className="size-3 text-teal-600 font-bold" /> Paper, Cards, Split Media &amp; AI Chat</span>
               <span className="flex items-center gap-1"><Check className="size-3 text-teal-600 font-bold" /> WordPress, Shopify &amp; 1-Line Embed</span>
             </div>
           </div>
@@ -215,30 +240,30 @@ export default function AiFormsLandingPage() {
         </div>
       </section>
 
-      {/* ─── 3 Runtime Modes (Paper, Cards, AI Chatbot) ──────────────────────── */}
+      {/* ─── 4 Runtime Modes (Paper, Cards, 2-Col Split Media, AI Chatbot) ───── */}
       <section className="py-16 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         <div className="text-center space-y-3 max-w-2xl mx-auto">
           <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
             Multi-Format Form Runtime
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            One Form. Three Powerful Presentation Modes.
+            One Form. Four High-Converting Presentation Modes.
           </h2>
           <p className="text-sm text-muted-foreground">
-            Switch your form’s presentation in 1 click to maximize user engagement across every device.
+            Switch your form’s presentation in 1 click to maximize engagement and conversion rates.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Mode 1: Classic Paper */}
           <Card className="border-border hover:border-teal-500/50 transition shadow-xs">
             <CardHeader className="space-y-2">
               <div className="size-10 rounded-xl bg-teal-100 dark:bg-teal-950/50 flex items-center justify-center text-teal-600">
                 <FileInput className="size-5" />
               </div>
-              <CardTitle className="text-base font-bold">Classic Paper Layout</CardTitle>
+              <CardTitle className="text-base font-bold">Classic Paper</CardTitle>
               <CardDescription className="text-xs">
-                Familiar multi-column web forms with responsive sections, progress indicators, and mobile keyboard support.
+                Familiar web form with responsive sections, step pagination, and mobile keyboard support.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0 text-xs text-muted-foreground space-y-1.5">
@@ -254,9 +279,9 @@ export default function AiFormsLandingPage() {
               <div className="size-10 rounded-xl bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center text-blue-600">
                 <Layers className="size-5" />
               </div>
-              <CardTitle className="text-base font-bold">Card Swipe (Typeform style)</CardTitle>
+              <CardTitle className="text-base font-bold">Card Swipe (Typeform)</CardTitle>
               <CardDescription className="text-xs">
-                One question at a time with smooth micro-animations, keyboard shortcuts (Enter / Tab), and high completion rates.
+                One question at a time with smooth micro-animations and keyboard navigation.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0 text-xs text-muted-foreground space-y-1.5">
@@ -266,7 +291,28 @@ export default function AiFormsLandingPage() {
             </CardContent>
           </Card>
 
-          {/* Mode 3: AI Chatbot Agent */}
+          {/* Mode 3: 2-Column Split Media (Elementor Style) */}
+          <Card className="border-2 border-teal-500/60 hover:border-teal-500 transition shadow-md bg-teal-50/20 dark:bg-teal-950/20">
+            <CardHeader className="space-y-2">
+              <div className="size-10 rounded-xl bg-teal-100 dark:bg-teal-950/50 flex items-center justify-center text-teal-600">
+                <PenTool className="size-5" />
+              </div>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-bold">Split Media Hero</CardTitle>
+                <Badge className="bg-teal-600 text-white text-[9px]">Elementor 2-Col</Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Visual video/image hero on left + 5-6 high converting form fields on right.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0 text-xs text-muted-foreground space-y-1.5">
+              <p>• Video &amp; YouTube live embed</p>
+              <p>• Trust badges &amp; bullet benefits</p>
+              <p>• Responsive mobile stacking</p>
+            </CardContent>
+          </Card>
+
+          {/* Mode 4: AI Chatbot Agent */}
           <Card className="border-2 border-emerald-500/60 hover:border-emerald-500 transition shadow-md bg-emerald-50/20 dark:bg-emerald-950/10">
             <CardHeader className="space-y-2">
               <div className="size-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600">
@@ -277,7 +323,7 @@ export default function AiFormsLandingPage() {
                 <Badge className="bg-emerald-600 text-[9px]">Jotform AI Style</Badge>
               </div>
               <CardDescription className="text-xs">
-                Conversational intake assistant that asks questions naturally, validates uploaded photos, and schedules bookings.
+                Conversational intake assistant that asks questions naturally and books visits.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-0 text-xs text-muted-foreground space-y-1.5">
