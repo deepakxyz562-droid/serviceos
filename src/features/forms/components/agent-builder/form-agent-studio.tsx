@@ -127,8 +127,9 @@ export function FormAgentStudio({
     setIsEditingTitle(false);
   };
 
-  const startBg = agent.style?.agentBackgroundStart || '#C5E3FA';
-  const endBg = agent.style?.agentBackgroundEnd || '#D6E1E7';
+  const isSidebar = agent.channels?.chatbot?.layoutMode === 'sidebar';
+  const isLeftPos = agent.channels?.chatbot?.position === 'left';
+  const isPushContent = agent.channels?.chatbot?.sidebarBehavior === 'push';
 
   return (
     <div className="flex-1 min-h-0 flex flex-col w-full bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden select-none">
@@ -193,7 +194,7 @@ export function FormAgentStudio({
                 'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
                 studioTab === 'build'
                   ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               )}
             >
               BUILD
@@ -205,7 +206,7 @@ export function FormAgentStudio({
                 'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
                 studioTab === 'train'
                   ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               )}
             >
               TRAIN
@@ -217,7 +218,7 @@ export function FormAgentStudio({
                 'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
                 studioTab === 'publish'
                   ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               )}
             >
               PUBLISH
@@ -310,7 +311,12 @@ export function FormAgentStudio({
           {/* ── CENTER CANVAS: BROWSER / WEBSITE FRAME PREVIEW ── */}
           <main className="flex-1 min-h-0 flex flex-col justify-between p-6 relative overflow-hidden bg-slate-50/60 dark:bg-slate-950/60">
             {/* Website Mockup Wireframe Background */}
-            <div className="w-full max-w-4xl mx-auto flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden">
+            <div
+              className={cn(
+                'w-full max-w-4xl mx-auto flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden transition-all duration-300',
+                isSidebar && isPushContent && (isLeftPos ? 'pl-[390px]' : 'pr-[390px]')
+              )}
+            >
               {/* Dummy Website Header Skeleton */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-200/60 dark:border-slate-800">
                 <div className="w-24 h-4 rounded-full bg-slate-200 dark:bg-slate-800" />
@@ -329,7 +335,12 @@ export function FormAgentStudio({
               </div>
 
               {/* Floating Purple FAB Button to Open Designer (Screenshot 2) */}
-              <div className="absolute right-[370px] top-[260px] z-30">
+              <div
+                className={cn(
+                  'absolute z-30 transition-all duration-300',
+                  isLeftPos ? 'left-[380px] top-[260px]' : 'right-[380px] top-[260px]'
+                )}
+              >
                 <button
                   type="button"
                   onClick={() => {
@@ -343,8 +354,15 @@ export function FormAgentStudio({
                 </button>
               </div>
 
-              {/* Simulator Overlay/Sidebar Position Container */}
-              <div className="absolute right-4 bottom-4 top-14 w-[340px] z-20 flex flex-col justify-end">
+              {/* Simulator Dynamic Position Container (Floating vs Sidebar, Left vs Right) */}
+              <div
+                className={cn(
+                  'absolute z-20 transition-all duration-300 flex flex-col',
+                  isSidebar
+                    ? cn('top-0 bottom-0 w-[360px]', isLeftPos ? 'left-0' : 'right-0')
+                    : cn('bottom-4 max-h-[560px] h-[560px] w-[350px] justify-end', isLeftPos ? 'left-4' : 'right-4')
+                )}
+              >
                 <AgentDeviceSimulator
                   agent={agent}
                   isTestMode={isTestMode}
@@ -377,7 +395,7 @@ export function FormAgentStudio({
                   onClick={() => setIsTestMode(false)}
                   className={cn(
                     'px-3 py-1 rounded-full font-bold transition-all',
-                    !isTestMode ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    !isTestMode ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                   )}
                 >
                   Edit Mode
@@ -387,7 +405,7 @@ export function FormAgentStudio({
                   onClick={() => setIsTestMode(true)}
                   className={cn(
                     'px-3 py-1 rounded-full font-bold transition-all',
-                    isTestMode ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                    isTestMode ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
                   )}
                 >
                   Test Mode
@@ -420,6 +438,7 @@ export function FormAgentStudio({
                 activeChannel={selectedChannel}
                 mode={rightDrawerMode}
                 onClose={() => setRightDrawerOpen(false)}
+                onPreviewPageChange={(page) => setPreviewPage(page)}
               />
             </aside>
           )}

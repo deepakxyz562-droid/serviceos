@@ -40,6 +40,9 @@ import {
   Send,
   MessageCircle,
   X,
+  Code,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +73,7 @@ interface AgentBuildTabProps {
   activeChannel?: AgentChannelType;
   mode?: 'channel_settings' | 'designer';
   onClose?: () => void;
+  onPreviewPageChange?: (page: 'conversation' | 'greeting') => void;
 }
 
 export function AgentBuildTab({
@@ -79,6 +83,7 @@ export function AgentBuildTab({
   activeChannel = 'chatbot',
   mode = 'channel_settings',
   onClose,
+  onPreviewPageChange,
 }: AgentBuildTabProps) {
   // Chatbot subtabs: 'layout' | 'welcome' | 'navigation' | 'greeting'
   const [chatbotSubTab, setChatbotSubTab] = useState<'layout' | 'welcome' | 'navigation' | 'greeting'>('layout');
@@ -90,6 +95,7 @@ export function AgentBuildTab({
   const [avatarSearch, setAvatarSearch] = useState<string>('');
   const [aiPrompt, setAiPrompt] = useState<string>('Professional female loan officer in modern office');
   const [isGeneratingAiAvatar, setIsGeneratingAiAvatar] = useState<boolean>(false);
+  const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
   const chatbotConfig = agent.channels?.chatbot || {
     enabled: true,
@@ -137,7 +143,7 @@ export function AgentBuildTab({
         pageBackgroundStart: scheme.bg,
         pageBackgroundEnd: scheme.endBg,
         titleColor: scheme.titleColor,
-        chatBg: '#ffffff',
+        chatBg: scheme.isDark ? '#0f172a' : '#ffffff',
       },
     });
     toast.success(`Applied ${scheme.name} color scheme!`);
@@ -199,19 +205,19 @@ export function AgentBuildTab({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          MODE 1: DESIGNER DRAWER (AVATAR | STYLE) (Screenshot 2)
+          MODE 1: DESIGNER DRAWER (AVATAR | STYLE)
          ═══════════════════════════════════════════════════════════════════════ */}
       {mode === 'designer' && (
         <div className="flex-1 flex flex-col min-h-0">
-          <div className="border-b border-slate-800 px-4">
-            <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+          <div className="border-b border-slate-800 px-3">
+            <div className="grid grid-cols-2 gap-1 text-[11px] font-bold">
               <button
                 type="button"
                 onClick={() => setDesignerSubTab('avatar')}
                 className={cn(
                   'py-2.5 text-center transition-all border-b-2',
                   designerSubTab === 'avatar'
-                    ? 'border-blue-500 text-blue-400 font-bold'
+                    ? 'border-purple-500 text-purple-400 font-bold'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 )}
               >
@@ -223,7 +229,7 @@ export function AgentBuildTab({
                 className={cn(
                   'py-2.5 text-center transition-all border-b-2',
                   designerSubTab === 'style'
-                    ? 'border-blue-500 text-blue-400 font-bold'
+                    ? 'border-purple-500 text-purple-400 font-bold'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 )}
               >
@@ -232,158 +238,166 @@ export function AgentBuildTab({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-5">
-            {/* ── DESIGNER: AVATAR ── */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* ── AVATAR TAB ── */}
             {designerSubTab === 'avatar' && (
               <div className="space-y-4">
-                <div className="relative">
-                  <Search className="size-3.5 absolute left-2.5 top-2.5 text-slate-400" />
-                  <Input
-                    value={avatarSearch}
-                    onChange={(e) => setAvatarSearch(e.target.value)}
-                    placeholder="Search 36+ realistic avatars..."
-                    className="text-xs h-8 pl-8 bg-slate-800 border-slate-700 text-slate-100"
-                  />
+                <div className="flex bg-slate-800 p-1 rounded-xl text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setAvatarMode('gallery')}
+                    className={cn(
+                      'flex-1 py-1.5 rounded-lg transition-all text-center',
+                      avatarMode === 'gallery' ? 'bg-purple-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                    )}
+                  >
+                    Gallery
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAvatarMode('generate')}
+                    className={cn(
+                      'flex-1 py-1.5 rounded-lg transition-all text-center',
+                      avatarMode === 'generate' ? 'bg-purple-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                    )}
+                  >
+                    AI Generator
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAvatarMode('upload')}
+                    className={cn(
+                      'flex-1 py-1.5 rounded-lg transition-all text-center',
+                      avatarMode === 'upload' ? 'bg-purple-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                    )}
+                  >
+                    Upload
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2 max-h-[380px] overflow-y-auto pr-1">
-                  {filteredAvatars.map((av) => {
-                    const isSelected = agent.avatarUrl === av.url;
-                    return (
-                      <div
-                        key={av.id}
-                        onClick={() => selectAvatar(av)}
-                        className={cn(
-                          'relative group rounded-xl p-1 border cursor-pointer transition-all aspect-square flex flex-col items-center justify-center overflow-hidden bg-slate-800/60',
-                          isSelected
-                            ? 'border-blue-500 ring-2 ring-blue-500/40 shadow-xs'
-                            : 'border-slate-700 hover:border-slate-500'
-                        )}
-                      >
-                        <img src={av.url} alt={av.name} className="w-full h-full object-cover rounded-lg group-hover:scale-105 transition-transform" />
-                        {isSelected && (
-                          <div className="absolute top-1 right-1 size-4 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-xs">
-                            <CheckCircle2 className="size-3.5" />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                {/* Gallery Mode */}
+                {avatarMode === 'gallery' && (
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <Search className="size-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                      <Input
+                        value={avatarSearch}
+                        onChange={(e) => setAvatarSearch(e.target.value)}
+                        placeholder="Search 36+ realistic avatars..."
+                        className="pl-8 text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2 max-h-[380px] overflow-y-auto pr-1">
+                      {filteredAvatars.map((av) => (
+                        <div
+                          key={av.id}
+                          onClick={() => selectAvatar(av)}
+                          className={cn(
+                            'group relative rounded-xl overflow-hidden border-2 cursor-pointer transition-all aspect-square',
+                            agent.avatarUrl === av.url
+                              ? 'border-purple-500 ring-2 ring-purple-500/30'
+                              : 'border-slate-800 hover:border-slate-600'
+                          )}
+                        >
+                          <img src={av.url} alt={av.name} className="size-full object-cover group-hover:scale-105 transition-transform" />
+                          {agent.avatarUrl === av.url && (
+                            <div className="absolute top-1 right-1 size-3.5 rounded-full bg-purple-600 text-white flex items-center justify-center">
+                              <CheckCircle2 className="size-2.5" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Generator Mode */}
+                {avatarMode === 'generate' && (
+                  <div className="space-y-3">
+                    <Label className="text-xs font-semibold text-slate-300">Prompt AI to Generate Realistic Avatar</Label>
+                    <Textarea
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[80px]"
+                    />
+                    <Button
+                      type="button"
+                      disabled={isGeneratingAiAvatar}
+                      onClick={async () => {
+                        setIsGeneratingAiAvatar(true);
+                        setTimeout(() => {
+                          const generated = AVATAR_CATALOG[Math.floor(Math.random() * AVATAR_CATALOG.length)];
+                          onChange({ ...agent, avatarUrl: generated.url });
+                          setIsGeneratingAiAvatar(false);
+                          toast.success('✨ Synthesized high-resolution AI avatar!');
+                        }, 1200);
+                      }}
+                      className="w-full h-8 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white gap-1.5 shadow-md"
+                    >
+                      <Sparkles className="size-3.5" />
+                      {isGeneratingAiAvatar ? 'Synthesizing Avatar...' : 'Generate Realistic Face'}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Upload Mode */}
+                {avatarMode === 'upload' && (
+                  <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center space-y-2 hover:border-purple-500 transition-colors cursor-pointer">
+                    <Upload className="size-6 text-slate-400 mx-auto" />
+                    <p className="text-xs font-semibold text-slate-200">Upload Photo</p>
+                    <p className="text-[10px] text-slate-400">PNG, JPG or WebP up to 5MB</p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* ── DESIGNER: STYLE (Exact from Screenshot 2) ── */}
+            {/* ── STYLE TAB ── */}
             {designerSubTab === 'style' && (
-              <div className="space-y-5">
-                {/* 1. COLOR SCHEME (8 Swatches with letter A) */}
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                    COLOR SCHEME
-                  </Label>
-                  <div className="grid grid-cols-4 gap-2.5 pt-1">
-                    {COLOR_SCHEMES.map((scheme) => {
-                      const isSelected = agent.style?.colorSchemeId === scheme.id;
-                      return (
-                        <div
-                          key={scheme.id}
-                          onClick={() => applyColorScheme(scheme)}
-                          className={cn(
-                            'size-14 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-center shadow-xs relative overflow-hidden',
-                            isSelected
-                              ? 'border-blue-500 ring-2 ring-blue-500/50 scale-105'
-                              : 'border-slate-700 hover:border-slate-500'
-                          )}
-                          style={{
-                            background: `linear-gradient(135deg, ${scheme.bg}, ${scheme.endBg})`,
-                          }}
+                  <Label className="text-xs font-bold text-slate-300 uppercase tracking-wider">COLOR SCHEMES</Label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {COLOR_SCHEMES.map((scheme) => (
+                      <div
+                        key={scheme.id}
+                        onClick={() => applyColorScheme(scheme)}
+                        className={cn(
+                          'p-2 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center gap-1 aspect-square relative',
+                          agent.brandColor === scheme.letterColor
+                            ? 'border-purple-500 ring-2 ring-purple-500/20 shadow-md'
+                            : 'border-slate-800 hover:border-slate-700 bg-slate-800/40'
+                        )}
+                        style={{
+                          background: `linear-gradient(135deg, ${scheme.bg}, ${scheme.endBg})`,
+                        }}
+                      >
+                        <span
+                          className="text-lg font-black"
+                          style={{ color: scheme.titleColor }}
                         >
-                          <div
-                            className="size-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-xs border border-black/10"
-                            style={{
-                              background: scheme.textBg,
-                              color: scheme.letterColor,
-                            }}
-                          >
-                            A
-                          </div>
-                        </div>
-                      );
-                    })}
+                          A
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[48px]">
+                          {scheme.name}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* 2. AGENT BACKGROUND STYLE (Start & End Gradients) */}
-                <div className="space-y-2 pt-2 border-t border-slate-800">
-                  <Label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                    AGENT BACKGROUND STYLE
-                  </Label>
-
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-slate-400">Start Color</span>
-                      <div className="flex items-center gap-2 p-1.5 rounded-lg bg-slate-800 border border-slate-700">
-                        <input
-                          type="color"
-                          value={agent.style?.agentBackgroundStart || '#C5E3FA'}
-                          onChange={(e) =>
-                            onChange({
-                              ...agent,
-                              style: { ...(agent.style as any), agentBackgroundStart: e.target.value, pageBackgroundStart: e.target.value },
-                            })
-                          }
-                          className="size-6 rounded border-0 cursor-pointer bg-transparent"
-                        />
-                        <span className="text-xs font-mono font-bold text-slate-200">
-                          {agent.style?.agentBackgroundStart || '#C5E3FA'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <span className="text-[10px] text-slate-400">End Color</span>
-                      <div className="flex items-center gap-2 p-1.5 rounded-lg bg-slate-800 border border-slate-700">
-                        <input
-                          type="color"
-                          value={agent.style?.agentBackgroundEnd || '#D6E1E7'}
-                          onChange={(e) =>
-                            onChange({
-                              ...agent,
-                              style: { ...(agent.style as any), agentBackgroundEnd: e.target.value, pageBackgroundEnd: e.target.value },
-                            })
-                          }
-                          className="size-6 rounded border-0 cursor-pointer bg-transparent"
-                        />
-                        <span className="text-xs font-mono font-bold text-slate-200">
-                          {agent.style?.agentBackgroundEnd || '#D6E1E7'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. AGENT TITLE (Title Color, Name, Role) */}
-                <div className="space-y-3 pt-2 border-t border-slate-800">
-                  <Label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                    AGENT TITLE
-                  </Label>
-
+                <div className="space-y-3 pt-3 border-t border-slate-800">
                   <div className="space-y-1">
-                    <span className="text-[10px] text-slate-400">Title Color</span>
-                    <div className="flex items-center gap-2 p-1.5 rounded-lg bg-slate-800 border border-slate-700">
+                    <span className="text-[10px] text-slate-400">Primary Brand Color</span>
+                    <div className="flex items-center gap-2">
                       <input
                         type="color"
-                        value={agent.style?.titleColor || '#0A1551'}
-                        onChange={(e) =>
-                          onChange({
-                            ...agent,
-                            style: { ...(agent.style as any), titleColor: e.target.value },
-                          })
-                        }
+                        value={agent.brandColor || '#0284c7'}
+                        onChange={(e) => onChange({ ...agent, brandColor: e.target.value })}
                         className="size-6 rounded border-0 cursor-pointer bg-transparent"
                       />
                       <span className="text-xs font-mono font-bold text-slate-200">
-                        {agent.style?.titleColor || '#0A1551'}
+                        {agent.brandColor || '#0284c7'}
                       </span>
                     </div>
                   </div>
@@ -398,7 +412,7 @@ export function AgentBuildTab({
                   </div>
 
                   <div className="space-y-1">
-                    <span className="text-[10px] text-slate-400">Agent Role</span>
+                    <span className="text-[10px] text-slate-400">Agent Role Title</span>
                     <Input
                       value={agent.roleTitle}
                       onChange={(e) => onChange({ ...agent, roleTitle: e.target.value })}
@@ -422,7 +436,10 @@ export function AgentBuildTab({
             <div className="grid grid-cols-4 gap-1 text-[11px] font-bold">
               <button
                 type="button"
-                onClick={() => setChatbotSubTab('layout')}
+                onClick={() => {
+                  setChatbotSubTab('layout');
+                  onPreviewPageChange?.('conversation');
+                }}
                 className={cn(
                   'py-2.5 text-center transition-all border-b-2',
                   chatbotSubTab === 'layout'
@@ -434,7 +451,10 @@ export function AgentBuildTab({
               </button>
               <button
                 type="button"
-                onClick={() => setChatbotSubTab('welcome')}
+                onClick={() => {
+                  setChatbotSubTab('welcome');
+                  onPreviewPageChange?.('greeting');
+                }}
                 className={cn(
                   'py-2.5 text-center transition-all border-b-2',
                   chatbotSubTab === 'welcome'
@@ -446,7 +466,10 @@ export function AgentBuildTab({
               </button>
               <button
                 type="button"
-                onClick={() => setChatbotSubTab('navigation')}
+                onClick={() => {
+                  setChatbotSubTab('navigation');
+                  onPreviewPageChange?.('conversation');
+                }}
                 className={cn(
                   'py-2.5 text-center transition-all border-b-2',
                   chatbotSubTab === 'navigation'
@@ -458,7 +481,10 @@ export function AgentBuildTab({
               </button>
               <button
                 type="button"
-                onClick={() => setChatbotSubTab('greeting')}
+                onClick={() => {
+                  setChatbotSubTab('greeting');
+                  onPreviewPageChange?.('conversation');
+                }}
                 className={cn(
                   'py-2.5 text-center transition-all border-b-2',
                   chatbotSubTab === 'greeting'
@@ -669,6 +695,16 @@ export function AgentBuildTab({
                     className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100"
                   />
                 </div>
+
+                <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                  <Label className="text-xs font-bold text-slate-300">Avatar Bubble Greeting Tooltip</Label>
+                  <p className="text-[11px] text-slate-400">Shown next to the circular avatar bubble</p>
+                  <Input
+                    value={chatbotConfig.greetingBubble || `👋 Need help? Chat with ${agent.name}!`}
+                    onChange={(e) => updateChatbotConfig((prev) => ({ ...prev, greetingBubble: e.target.value }))}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100"
+                  />
+                </div>
               </div>
             )}
 
@@ -815,33 +851,107 @@ export function AgentBuildTab({
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="p-3.5 rounded-xl bg-slate-800 border border-slate-700 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-200 capitalize">{activeChannel} Integration</span>
-              <Badge variant="outline" className="text-[10px] text-blue-400 border-blue-500/30">
-                Ready
+              <span className="text-xs font-bold text-slate-200 capitalize">{activeChannel} Channel</span>
+              <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30">
+                Ready to Deploy
               </Badge>
             </div>
             <p className="text-[11px] text-slate-400">
-              Configure parameters, webhooks, phone routes, or direct messaging rules for {activeChannel}.
+              Configure parameters, automated routing, webhooks, and rules for {activeChannel}.
             </p>
           </div>
 
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-slate-300">Channel Status</Label>
+          {/* Standalone Channel Settings */}
+          {activeChannel === 'standalone' && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Public Agent URL</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={`https://fieseros.com/chat/${agent.slug || agent.id}`}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://fieseros.com/chat/${agent.slug || agent.id}`);
+                      toast.success('Agent URL copied to clipboard!');
+                    }}
+                    className="h-8 px-2 text-xs"
+                  >
+                    <Copy className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Full-Page Background Mode</Label>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                  <span className="text-xs text-slate-200">Show Brand Gradient Backdrop</span>
+                  <Switch defaultChecked />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* WhatsApp Channel Settings */}
+          {activeChannel === 'whatsapp' && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">WhatsApp Business Number</Label>
+                <Input
+                  placeholder="+1 (555) 019-2834"
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Default WhatsApp Greeting Template</Label>
+                <Textarea
+                  defaultValue={`Hi! I am ${agent.name}, your AI Assistant. How can I help you today?`}
+                  className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[60px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Phone Channel Settings */}
+          {activeChannel === 'phone' && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Dedicated AI Reception Phone Number</Label>
+                <Input
+                  placeholder="+1 (800) 555-0199"
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">After-Hours Emergency Escalation</Label>
+                <Input
+                  placeholder="+1 (555) on-call-tech"
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* General Webhook / API Parameters for Other Channels */}
+          {!['standalone', 'whatsapp', 'phone'].includes(activeChannel) && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Webhook / Dispatch Endpoint</Label>
+                <Input
+                  defaultValue={`https://api.fieseros.com/channels/${activeChannel}/webhook`}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
+                />
+              </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <span className="text-xs text-slate-200">Enable {activeChannel}</span>
+                <span className="text-xs text-slate-200">Auto-Qualify Inbound Leads</span>
                 <Switch defaultChecked />
               </div>
             </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-slate-300">Webhook / Target Endpoint</Label>
-              <Input
-                defaultValue={`https://api.fieseros.com/channels/${activeChannel}/webhook`}
-                className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
-              />
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>
