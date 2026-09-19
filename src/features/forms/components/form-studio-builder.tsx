@@ -76,7 +76,8 @@ import { UniversalPublishCenter } from './builder/universal-publish-center';
 import { UniversalStudioCanvas } from './builder/universal-studio-canvas';
 import { UniversalInspector } from './builder/universal-inspector';
 import { StudioAppDesignTab } from './builder/studio-app-design-tab';
-import type { UniversalComponentNode } from '@/lib/forms/universal-component-types';
+import { StudioShell } from '@/features/studio/studio-shell';
+import { convertFormDataToStudioProject, convertStudioProjectToFormData } from '@/lib/studio/adapters/form-adapter';
 import { generateUniversalProjectFromPrompt } from '@/lib/forms/generators/ai-universal-generator';
 import {
   FIELD_REGISTRY,
@@ -1383,82 +1384,18 @@ export function FormStudioBuilder({
                 setShowInspector(true);
               }}
               viewMode={viewMode}
-              isWidgetPaletteCollapsed={!showWidgetPalette}
-              onToggleWidgetPalette={() => setShowWidgetPalette((v) => !v)}
-              isAiCopilotCollapsed={!showAiCopilot}
-              onToggleAiCopilot={() => setShowAiCopilot((v) => !v)}
-              isPagesTreeCollapsed={!showPagesTree}
-              onTogglePagesTree={() => setShowPagesTree((v) => !v)}
-              isInspectorCollapsed={!showInspector}
-              onToggleInspector={() => setShowInspector((v) => !v)}
-              onOpenAddWidgetDialog={() => setShowWidgetPalette(true)}
-              className="flex-1 min-h-0 h-full"
-            />
-
-            {/* Right Panel: Unified Field Inspector & Widget Settings */}
-            {showInspector && (selectedField || selectedFieldId === '__media_panel__') && (
-              <aside className="w-80 lg:w-96 border-l border-border/80 bg-background flex flex-col shrink-0 z-20 h-full overflow-hidden">
-                {selectedFieldId === '__media_panel__' ? (
-                  <div className="flex-1 flex flex-col h-full overflow-hidden">
-                    <div className="h-12 border-b border-border/80 px-4 flex items-center justify-between shrink-0 bg-teal-50/50 dark:bg-teal-950/30">
-                      <span className="font-bold text-xs flex items-center gap-1.5 text-teal-950 dark:text-teal-200">
-                        <Film className="size-4 text-teal-600" />
-                        Left Hero Media Inspector
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowInspector(false)}
-                        className="size-7 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                      >
-                        <X className="size-3.5" />
-                      </Button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4">
-                      <FormSplitMediaInspector
-                        mediaPanel={
-                          formData.mediaPanel ||
-                          formData.theme?.mediaPanel || {
-                            enabled: true,
-                            position: 'left',
-                            splitRatio: '50-50',
-                            mediaType: 'image',
-                            mediaUrl: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
-                            headline: formData.name || 'Fast & Reliable Professional Service',
-                            subtitle: 'Fill out the form below to receive upfront pricing and schedule top-rated pros.',
-                            badgeText: '⭐ 5-Star Rated Service Pro',
-                            benefitsList: [
-                              'Guaranteed response within 15 minutes',
-                              'Licensed, insured & background-checked',
-                              '100% Price Match & Escrow Guarantee',
-                            ],
-                          }
-                        }
-                        onChange={updateMediaPanel}
-                        formName={formData.name}
-                      />
-                    </div>
-                  </div>
-                ) : selectedField ? (
-                  <UnifiedFieldInspector
-                    field={selectedField as unknown as Record<string, any>}
-                    allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
-                    mode={selectedField.widgetType ? 'widget_settings' : 'properties'}
-                    onFieldChange={(key, value) => handleUpdateField(selectedField.id, key as keyof FormField, value)}
-                    onConfigChange={(key, value) => handleUpdateWidgetConfig(selectedField.id, key, value)}
-                    onDuplicate={() => {
-                      const idx = formData.fields.findIndex((f) => f.id === selectedField.id);
-                      if (idx >= 0) handleDuplicateField(selectedField, idx);
-                    }}
-                    onClose={() => setShowInspector(false)}
-                    onUpdate={() => { onSave(); }}
-                  />
-                ) : null}
-              </aside>
-            )}
-          </div>
-          )
+        {/* ─── 1. BUILD TAB (UNIVERSAL ELEMENTOR STUDIO ENGINE) ──────── */}
+        {studioTab === 'build' && !isPreviewMode && (
+          <StudioShell
+            initialProject={convertFormDataToStudioProject(formData)}
+            onProjectChange={(updatedProject) => {
+              onFormDataChange((prev) => convertStudioProjectToFormData(updatedProject, prev));
+            }}
+            onSave={async () => {
+              await onSave();
+            }}
+            brandColor={formData.theme?.primaryColor || formData.primaryColor || '#059669'}
+          />
         )}
 
         {/* ─── 2. SETTINGS TAB (JOTFORM-GRADE FULL FORM SETTINGS SUITE) ──────── */}
