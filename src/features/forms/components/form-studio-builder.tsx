@@ -114,6 +114,7 @@ export function FormStudioBuilder({
   
   // Selection and Palette state
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(formData.fields[0]?.id || null);
+  const [selectedColumn, setSelectedColumn] = useState<'left' | 'right'>('right');
   const [paletteTab, setPaletteTab] = useState<'basic' | 'payments' | 'widgets'>('basic');
   const [selectedWidgetCategory, setSelectedWidgetCategory] = useState<FieldDefinition['category'] | 'all'>('all');
   const [selectedPaymentCategory, setSelectedPaymentCategory] = useState<PaymentCategory>('all');
@@ -459,6 +460,7 @@ export function FormStudioBuilder({
     }
     const newId = `r-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const currentStepId = formData.steps?.[currentStepIndex]?.id || (formData.isMultiStep ? `step_${currentStepIndex + 1}` : undefined);
+    const targetColumn = viewMode === 'split_media' ? selectedColumn : undefined;
     const newField: FormField = {
       id: newId,
       label: (def.label as string) || 'New Question',
@@ -473,6 +475,7 @@ export function FormStudioBuilder({
       },
       stepId: currentStepId,
       width: 'full',
+      layoutColumn: targetColumn,
       ...def,
     };
     onFormDataChange((prev) => ({
@@ -481,8 +484,8 @@ export function FormStudioBuilder({
     }));
     setSelectedFieldId(newId);
     setShowInspector(true);
-    toast.success(`✨ Added ${newField.label}`);
-  }, [onFormDataChange, formData.steps, formData.isMultiStep, currentStepIndex]);
+    toast.success(`✨ Added ${newField.label}${viewMode === 'split_media' ? ` to ${selectedColumn === 'left' ? 'Left Hero' : 'Right Form'} Column` : ''}`);
+  }, [onFormDataChange, formData.steps, formData.isMultiStep, currentStepIndex, viewMode, selectedColumn]);
 
   // ─── Field CRUD Operations ──────────────────────────────────────────────────
 
@@ -1170,9 +1173,19 @@ export function FormStudioBuilder({
               currentStepIndex={currentStepIndex}
               onStepChange={setCurrentStepIndex}
               selectedFieldId={selectedFieldId}
+              selectedColumn={selectedColumn}
+              onSelectColumn={setSelectedColumn}
               onSelectField={(id) => {
                 setSelectedFieldId(id);
                 setShowInspector(true);
+                if (id === '__media_panel__') {
+                  setSelectedColumn('left');
+                } else {
+                  const targetF = (formData.fields || []).find((f) => f.id === id);
+                  if (targetF?.layoutColumn) {
+                    setSelectedColumn(targetF.layoutColumn);
+                  }
+                }
               }}
               viewMode={viewMode}
               isWidgetPaletteCollapsed={!showWidgetPalette}

@@ -56,6 +56,8 @@ interface StudioFocusCanvasProps {
   onStepChange: (index: number) => void;
   selectedFieldId: string | null;
   onSelectField: (fieldId: string) => void;
+  selectedColumn?: 'left' | 'right';
+  onSelectColumn?: (col: 'left' | 'right') => void;
   viewMode: 'focus' | 'paper' | 'split_media';
   // Collapsed sidebars state & toggle triggers
   isWidgetPaletteCollapsed?: boolean;
@@ -77,6 +79,8 @@ export function StudioFocusCanvas({
   onStepChange,
   selectedFieldId,
   onSelectField,
+  selectedColumn = 'right',
+  onSelectColumn,
   viewMode,
   isWidgetPaletteCollapsed = false,
   onToggleWidgetPalette,
@@ -681,15 +685,22 @@ function StudioFieldPreview({
                   : 'lg:w-1/2';
 
               const activeStepFields = steps.length > 1 ? activeStep.fields : fields;
+              const leftColumnFields = activeStepFields.filter((f) => f.layoutColumn === 'left');
+              const rightColumnFields = activeStepFields.filter((f) => f.layoutColumn !== 'left');
+              const isLeftColumnActive = selectedColumn === 'left';
+              const isRightColumnActive = selectedColumn === 'right';
 
               return (
                 <div className={`flex flex-col ${panel.position === 'right' ? 'lg:flex-row-reverse' : 'lg:flex-row'} min-h-[550px]`}>
                   {/* LEFT HERO MEDIA COLUMN (Elementor Modular Column) */}
                   <div
-                    onClick={() => onSelectField('__media_panel__')}
+                    onClick={() => {
+                      onSelectColumn?.('left');
+                      onSelectField('__media_panel__');
+                    }}
                     className={`relative p-6 sm:p-8 text-white flex flex-col justify-between cursor-pointer group transition-all overflow-hidden ${leftWidthClass} ${
-                      isMediaSelected
-                        ? 'ring-4 ring-primary ring-offset-2 dark:ring-offset-slate-900'
+                      isLeftColumnActive || isMediaSelected
+                        ? 'ring-4 ring-emerald-500/80 ring-offset-2 dark:ring-offset-slate-900 shadow-xl'
                         : 'hover:brightness-105'
                     }`}
                     style={{ backgroundColor: panel.backgroundColor || '#0f172a' }}
@@ -717,6 +728,23 @@ function StudioFieldPreview({
                     {/* Top Action Toolbar (Edit Left Panel / Hide Left Panel) */}
                     <div className="relative z-10 flex items-center justify-between gap-2 mb-4">
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Column Status Badge */}
+                        <Badge
+                          variant="secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectColumn?.('left');
+                            onSelectField('__media_panel__');
+                          }}
+                          className={`text-[10px] font-bold gap-1 cursor-pointer transition-all ${
+                            isLeftColumnActive
+                              ? 'bg-emerald-500 text-white shadow-md font-black'
+                              : 'bg-white/20 text-white hover:bg-white/30 backdrop-blur'
+                          }`}
+                        >
+                          👈 Left Hero Column {isLeftColumnActive && '✓ (Active Target)'}
+                        </Badge>
+
                         {/* 1. Trust Badge Widget */}
                         {(panel.showBadge ?? Boolean(panel.badgeText)) && panel.badgeText && (
                           <div className="group/badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold backdrop-blur transition-all">
@@ -743,12 +771,12 @@ function StudioFieldPreview({
                           variant="secondary"
                           className={`text-[10px] font-bold gap-1 transition-opacity ${
                             isMediaSelected
-                              ? 'bg-primary text-primary-foreground opacity-100'
+                              ? 'bg-emerald-600 text-white opacity-100 shadow-xs'
                               : 'bg-white/20 text-white opacity-0 group-hover:opacity-100 backdrop-blur'
                           }`}
                         >
                           <Edit2 className="size-2.5" />
-                          <span>Edit Column</span>
+                          <span>Edit Column Settings</span>
                         </Badge>
                       </div>
                     </div>
@@ -925,11 +953,111 @@ function StudioFieldPreview({
                           ))}
                         </div>
                       )}
+
+                      {/* 4. Left Column Widgets (Added directly to Left Hero) */}
+                      {leftColumnFields.length > 0 && (
+                        <div className="space-y-3 pt-3 border-t border-white/10">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1">
+                              <span>Left Column Widgets</span>
+                              <Badge className="bg-emerald-500 text-white text-[9px] py-0 px-1 font-extrabold">{leftColumnFields.length}</Badge>
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2.5">
+                            {leftColumnFields.map((f) => {
+                              const isSelected = selectedFieldId === f.id;
+                              const widthCls = getWidthClasses(f.width);
+
+                              return (
+                                <div
+                                  key={f.id}
+                                  id={`field-card-${f.id}`}
+                                  data-field-id={f.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectColumn?.('left');
+                                    onSelectField(f.id);
+                                  }}
+                                  className={`group/card relative p-3 rounded-xl border transition-all cursor-pointer space-y-2 text-slate-900 dark:text-slate-100 ${widthCls} ${
+                                    isSelected
+                                      ? 'border-emerald-400 bg-white dark:bg-slate-900 ring-2 ring-emerald-400/30 shadow-md'
+                                      : 'border-white/20 bg-white/95 dark:bg-slate-900/95 hover:bg-white dark:hover:bg-slate-900 shadow-sm'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <label className="text-xs font-bold truncate flex items-center gap-1 text-slate-900 dark:text-slate-100">
+                                      <span className="truncate">{f.label || 'Question'}</span>
+                                      {f.required && <span className="text-rose-500">*</span>}
+                                    </label>
+                                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateField(f.id, { layoutColumn: 'right' })}
+                                        className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 text-slate-700 dark:text-slate-300 hover:text-emerald-700 transition-colors"
+                                        title="Move to Right Column"
+                                      >
+                                        Right 👉
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDuplicateField(f)}
+                                        className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                                        title="Duplicate"
+                                      >
+                                        <Copy className="size-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteField(f.id)}
+                                        className="p-1 rounded text-rose-500 hover:text-rose-700 transition-colors"
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="size-3" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <StudioFieldPreview
+                                    field={f}
+                                    inputBorderRadius={inputBorderRadius}
+                                    inputHeight={inputHeight}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 5. Add Widget to Left Column Action Button */}
+                      {onOpenAddWidgetDialog && (
+                        <div className="pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectColumn?.('left');
+                              onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
+                            }}
+                            className="w-full h-8 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-semibold gap-1.5 rounded-xl shadow-xs"
+                          >
+                            <Plus className="size-3" /> Add Widget to Left Column
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* RIGHT FORM FIELDS COLUMN (Stepped / Single Page) */}
-                  <div className={`p-6 sm:p-8 flex flex-col justify-between space-y-6 ${rightWidthClass} bg-white dark:bg-slate-900`}>
+                  <div
+                    onClick={() => onSelectColumn?.('right')}
+                    className={`p-6 sm:p-8 flex flex-col justify-between space-y-6 ${rightWidthClass} bg-white dark:bg-slate-900 transition-all ${
+                      isRightColumnActive
+                        ? 'ring-2 ring-primary/40'
+                        : ''
+                    }`}
+                  >
                     <div className="space-y-4">
                       {/* Stepper Tabs Bar (if Multi-Step) */}
                       {steps.length > 1 ? (
@@ -957,15 +1085,31 @@ function StudioFieldPreview({
                                 );
                               })}
                             </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleAddStep}
-                              className="h-7 text-[11px] gap-1 px-2 shrink-0 border-dashed"
-                            >
-                              <Plus className="size-3" /> Step
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                              <Badge
+                                variant="secondary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectColumn?.('right');
+                                }}
+                                className={`text-[10px] font-bold gap-1 cursor-pointer transition-all ${
+                                  isRightColumnActive
+                                    ? 'bg-primary text-primary-foreground shadow-xs'
+                                    : 'bg-muted text-muted-foreground'
+                                }`}
+                              >
+                                👉 Right Form {isRightColumnActive && '✓'}
+                              </Badge>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleAddStep}
+                                className="h-7 text-[11px] gap-1 px-2 shrink-0 border-dashed"
+                              >
+                                <Plus className="size-3" /> Step
+                              </Button>
+                            </div>
                           </div>
 
                           <div className="flex items-center justify-between text-[11px] text-muted-foreground font-medium">
@@ -983,22 +1127,38 @@ function StudioFieldPreview({
                               {formData.description || 'Fill in the details below to receive your upfront estimate.'}
                             </p>
                           </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={handleAddStep}
-                            className="h-7 text-[11px] gap-1 px-2.5 border-dashed shrink-0"
-                          >
-                            <Plus className="size-3" /> Convert to Multi-Step
-                          </Button>
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="secondary"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectColumn?.('right');
+                              }}
+                              className={`text-[10px] font-bold gap-1 cursor-pointer transition-all ${
+                                isRightColumnActive
+                                  ? 'bg-primary text-primary-foreground shadow-xs'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}
+                            >
+                              👉 Right Form {isRightColumnActive && '✓ (Active Target)'}
+                            </Badge>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleAddStep}
+                              className="h-7 text-[11px] gap-1 px-2.5 border-dashed shrink-0"
+                            >
+                              <Plus className="size-3" /> Convert to Multi-Step
+                            </Button>
+                          </div>
                         </div>
                       )}
 
                       {/* Right Fields Grid */}
                       <div className="flex flex-wrap gap-3">
-                        {activeStepFields.length > 0 ? (
-                          activeStepFields.map((f) => {
+                        {rightColumnFields.length > 0 ? (
+                          rightColumnFields.map((f) => {
                             const isSelected = selectedFieldId === f.id;
                             const widthCls = getWidthClasses(f.width);
 
@@ -1009,6 +1169,7 @@ function StudioFieldPreview({
                                 data-field-id={f.id}
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  onSelectColumn?.('right');
                                   onSelectField(f.id);
                                 }}
                                 className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
@@ -1024,6 +1185,16 @@ function StudioFieldPreview({
                                   </label>
 
                                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    {/* Move to Left Column Button */}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateField(f.id, { layoutColumn: 'left' })}
+                                      className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 text-slate-700 dark:text-slate-300 hover:text-emerald-700 transition-colors"
+                                      title="Move to Left Hero Column"
+                                    >
+                                      👈 Left
+                                    </button>
+
                                     <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5 text-[9px] font-bold">
                                       <button
                                         type="button"
@@ -1049,47 +1220,50 @@ function StudioFieldPreview({
                                       </button>
                                     </div>
 
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDuplicateField(f)}
-                                        className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                        title="Duplicate Block"
-                                      >
-                                        <Copy className="size-3" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeleteField(f.id)}
-                                        className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                                        title="Delete Block"
-                                      >
-                                        <Trash2 className="size-3" />
-                                      </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDuplicateField(f)}
+                                      className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                      title="Duplicate Block"
+                                    >
+                                      <Copy className="size-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteField(f.id)}
+                                      className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                                      title="Delete Block"
+                                    >
+                                      <Trash2 className="size-3" />
+                                    </button>
 
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="More Options">
-                                            <Sliders className="size-3" />
-                                          </button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="text-xs w-44">
-                                          <DropdownMenuItem onClick={() => handleDuplicateField(f)} className="gap-1.5">
-                                            <Copy className="size-3.5" /> Duplicate Field
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem onClick={() => handleMoveField(f.id, 'up')} className="gap-1.5">
-                                            <ArrowUp className="size-3.5" /> Move Up
-                                          </DropdownMenuItem>
-                                          <DropdownMenuItem onClick={() => handleMoveField(f.id, 'down')} className="gap-1.5">
-                                            <ArrowDown className="size-3.5" /> Move Down
-                                          </DropdownMenuItem>
-                                          <DropdownMenuSeparator />
-                                          <DropdownMenuItem onClick={() => handleDeleteField(f.id)} className="gap-1.5 text-rose-600">
-                                            <Trash2 className="size-3.5" /> Delete Field
-                                          </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                    </div>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="More Options">
+                                          <Sliders className="size-3" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="text-xs w-48">
+                                        <DropdownMenuItem onClick={() => handleUpdateField(f.id, { layoutColumn: 'left' })} className="gap-1.5">
+                                          👈 Move to Left Column
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDuplicateField(f)} className="gap-1.5">
+                                          <Copy className="size-3.5" /> Duplicate Field
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleMoveField(f.id, 'up')} className="gap-1.5">
+                                          <ArrowUp className="size-3.5" /> Move Up
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleMoveField(f.id, 'down')} className="gap-1.5">
+                                          <ArrowDown className="size-3.5" /> Move Down
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => handleDeleteField(f.id)} className="gap-1.5 text-rose-600">
+                                          <Trash2 className="size-3.5" /> Delete Field
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </div>
+                                </div>
 
                                 <StudioFieldPreview
                                   field={f}
@@ -1101,15 +1275,18 @@ function StudioFieldPreview({
                           })
                         ) : (
                           <div className="w-full p-8 border-2 border-dashed rounded-2xl text-center text-muted-foreground text-xs space-y-2">
-                            <p>No fields in this step yet.</p>
+                            <p>No fields in this right column step yet.</p>
                             {onOpenAddWidgetDialog && (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => onOpenAddWidgetDialog(currentStepIndex, activeStep.id)}
+                                onClick={() => {
+                                  onSelectColumn?.('right');
+                                  onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
+                                }}
                                 className="h-8 text-xs gap-1.5"
                               >
-                                <Plus className="size-3" /> Add Question to Step
+                                <Plus className="size-3" /> Add Question to Right Column
                               </Button>
                             )}
                           </div>
@@ -1117,14 +1294,17 @@ function StudioFieldPreview({
                       </div>
 
                       {/* Add Field Button inside split canvas */}
-                      {onOpenAddWidgetDialog && activeStepFields.length > 0 && (
+                      {onOpenAddWidgetDialog && (
                         <Button
                           type="button"
                           variant="ghost"
-                          onClick={() => onOpenAddWidgetDialog(currentStepIndex, activeStep.id)}
+                          onClick={() => {
+                            onSelectColumn?.('right');
+                            onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
+                          }}
                           className="w-full h-9 border border-dashed border-border text-xs text-muted-foreground hover:text-primary hover:border-primary/50 gap-1.5 rounded-xl"
                         >
-                          <Plus className="size-3.5" /> Add Another Field to this Step
+                          <Plus className="size-3.5" /> Add Widget to Right Column
                         </Button>
                       )}
                     </div>

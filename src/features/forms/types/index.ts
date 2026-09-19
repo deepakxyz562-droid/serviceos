@@ -74,6 +74,7 @@ export interface FormField {
   // ─── Schema-compatible fields (aligned with form-schema-types.ts) ────────
   helpText?: string;
   width?: 'full' | 'half' | 'third' | 'quarter';
+  layoutColumn?: 'left' | 'right';
   stepId?: string;
   defaultValue?: string | number | boolean;
   hidden?: boolean;

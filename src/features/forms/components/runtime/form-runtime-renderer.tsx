@@ -76,11 +76,19 @@ function FormMediaHeroPanel({
   formName,
   formDescription,
   primaryColor,
+  leftFields = [],
+  formData,
+  errors = {},
+  onChange,
 }: {
   mediaPanel?: import('@/lib/forms/form-schema-types').FormMediaPanel;
   formName: string;
   formDescription?: string | null;
   primaryColor: string;
+  leftFields?: FormField[];
+  formData?: Record<string, any>;
+  errors?: Record<string, string>;
+  onChange?: (fieldId: string, val: any) => void;
 }) {
   const [isMuted, setIsMuted] = useState(mediaPanel?.videoMuted ?? true);
   const showMedia = mediaPanel?.showMedia !== false;
@@ -284,6 +292,30 @@ function FormMediaHeroPanel({
               </div>
             )}
           </>
+        )}
+        {/* Left Column Form Fields / Widgets */}
+        {leftFields.length > 0 && (
+          <div className="space-y-4 pt-4 border-t border-white/10 relative z-10">
+            {leftFields.map((field) => (
+              <div key={field.id} className="space-y-1.5 text-left">
+                <label className="block text-xs font-semibold text-white/90">
+                  {field.label}
+                  {field.required && <span className="text-rose-400 ml-0.5">*</span>}
+                </label>
+                <div className="bg-white/95 dark:bg-slate-900/95 text-slate-900 dark:text-slate-100 p-3 rounded-xl backdrop-blur shadow-sm">
+                  <WidgetRuntimeDispatcher
+                    field={field as any}
+                    value={formData ? formData[field.id] : undefined}
+                    onChange={(val) => onChange?.(field.id, val)}
+                    disabled={false}
+                  />
+                </div>
+                {errors[field.id] && (
+                  <p className="text-[11px] text-rose-400">{errors[field.id]}</p>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
@@ -511,6 +543,9 @@ export function FormRuntimeRenderer({
   // Filter to the current step's fields AND evaluate conditional rules.
   // When isMultiStep is false, ALL fields are displayed together on a single page.
   const currentStepFields = schema.fields.filter((f) => {
+    // In split layout, left-column fields are rendered in the Hero Media panel
+    if (isSplitLayout && f.layoutColumn === 'left') return false;
+
     if (isMultiStep && steps.length > 1) {
       const inStep = f.stepId === currentStep.id || (!f.stepId && currentStepIndex === 0);
       if (!inStep) return false;
@@ -858,6 +893,10 @@ export function FormRuntimeRenderer({
                 formName={formName}
                 formDescription={formDescription}
                 primaryColor={primaryColor}
+                leftFields={schema.fields.filter((f) => f.layoutColumn === 'left')}
+                formData={formData}
+                errors={errors}
+                onChange={handleFieldChange}
               />
             </div>
           )}
@@ -1558,6 +1597,10 @@ export function FormRuntimeRenderer({
                 formName={formName}
                 formDescription={formDescription}
                 primaryColor={primaryColor}
+                leftFields={schema.fields.filter((f) => f.layoutColumn === 'left')}
+                formData={formData}
+                errors={errors}
+                onChange={handleFieldChange}
               />
             </div>
           )}

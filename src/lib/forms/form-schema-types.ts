@@ -65,6 +65,7 @@ export interface FormField {
   options?: FieldOption[];
   stepId?: string;
   width?: 'full' | 'half' | 'third' | 'quarter';
+  layoutColumn?: 'left' | 'right';
   validation?: {
     min?: number;
     max?: number;

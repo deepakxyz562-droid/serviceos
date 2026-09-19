@@ -340,6 +340,34 @@ export function AppointmentPropertiesPanel({
               </div>
             </div>
 
+            {/* Column Placement (Split Hero Layout) */}
+            <div className="space-y-2 pt-2 border-t border-[#374151]">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-200">Column Placement</Label>
+              <div className="grid grid-cols-2 gap-1.5 bg-[#374151] p-1 rounded-lg border border-[#1F2937]">
+                <button
+                  type="button"
+                  onClick={() => onFieldChange('layoutColumn', 'left')}
+                  className={cn(
+                    'py-1.5 text-xs font-bold rounded-md transition-all',
+                    field.layoutColumn === 'left' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-300 hover:text-white'
+                  )}
+                >
+                  👈 Left Hero
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onFieldChange('layoutColumn', 'right')}
+                  className={cn(
+                    'py-1.5 text-xs font-bold rounded-md transition-all',
+                    field.layoutColumn !== 'left' ? 'bg-[#2563EB] text-white shadow-xs' : 'text-slate-300 hover:text-white'
+                  )}
+                >
+                  Right Form 👉
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-300">Choose which column this widget displays in during Split Hero mode</p>
+            </div>
+
             {/* Duplicate Field */}
             {onDuplicate && (
               <div className="pt-4 border-t border-[#374151]">
