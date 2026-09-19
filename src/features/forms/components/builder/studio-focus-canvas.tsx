@@ -182,6 +182,26 @@ export function StudioFocusCanvas({
     toast.success('Question moved to new step');
   };
 
+  // Add Step handler
+  const handleAddStep = () => {
+    const currentSteps = formData.steps && formData.steps.length > 0
+      ? formData.steps
+      : [{ id: 'step_1', title: 'Step 1: Contact Details' }];
+    const nextStepNum = currentSteps.length + 1;
+    const newStep = {
+      id: `step_${Date.now()}`,
+      title: `Step ${nextStepNum}: Details`,
+    };
+    const updatedSteps = [...currentSteps, newStep];
+    onFormDataChange((prev) => ({
+      ...prev,
+      isMultiStep: true,
+      steps: updatedSteps,
+    }));
+    onStepChange(updatedSteps.length - 1);
+    toast.success(`Added Step ${nextStepNum}`);
+  };
+
   // Width Class Resolver for CSS Grid / Flex
   const getWidthClasses = (width?: string) => {
     switch (width) {

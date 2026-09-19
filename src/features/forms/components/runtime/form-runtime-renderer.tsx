@@ -35,6 +35,9 @@ import {
   ShieldCheck,
   Film,
   Image as ImageIcon,
+  Zap,
+  Trash2,
+  History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -44,7 +47,8 @@ import { toast } from 'sonner';
 function parseVideoEmbed(url?: string): { type: 'youtube' | 'vimeo' | 'mp4' | 'none'; embedUrl?: string } {
   if (!url) return { type: 'none' };
   const trimmed = url.trim();
-  if (trimmed.endsWith('.mp4') || trimmed.endsWith('.webm') || trimmed.endsWith('.ogg')) {
+  const isVideoExt = /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(trimmed);
+  if (isVideoExt) {
     return { type: 'mp4', embedUrl: trimmed };
   }
   const ytMatch = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
@@ -60,9 +64,6 @@ function parseVideoEmbed(url?: string): { type: 'youtube' | 'vimeo' | 'mp4' | 'n
       type: 'vimeo',
       embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=1&muted=1&loop=1`,
     };
-  }
-  if (trimmed.startsWith('http')) {
-    return { type: 'mp4', embedUrl: trimmed };
   }
   return { type: 'none' };
 }
@@ -82,7 +83,11 @@ function FormMediaHeroPanel({
   primaryColor: string;
 }) {
   const [isMuted, setIsMuted] = useState(mediaPanel?.videoMuted ?? true);
-  const videoParsed = parseVideoEmbed(mediaPanel?.videoEmbedUrl || mediaPanel?.mediaUrl);
+  const videoParsed = parseVideoEmbed(
+    mediaPanel?.mediaType === 'video' || mediaPanel?.mediaType === 'youtube' || mediaPanel?.mediaType === 'vimeo'
+      ? mediaPanel?.videoEmbedUrl || mediaPanel?.mediaUrl
+      : mediaPanel?.videoEmbedUrl
+  );
   const isMap = mediaPanel?.mediaType === 'map';
   const isGradient = mediaPanel?.mediaType === 'gradient';
   const isVideo =
@@ -92,7 +97,7 @@ function FormMediaHeroPanel({
       mediaPanel?.mediaType === 'youtube' ||
       mediaPanel?.mediaType === 'vimeo' ||
       videoParsed.type !== 'none');
-  const hasImage = Boolean(mediaPanel?.mediaUrl && !isVideo && !isMap && !isGradient);
+  const hasImage = Boolean((mediaPanel?.mediaUrl || (!isMap && !isGradient && !isVideo)) && !isVideo && !isMap && !isGradient);
 
   const headline = mediaPanel?.headline || formName;
   const subtitle = mediaPanel?.subtitle || formDescription;
@@ -357,6 +362,13 @@ export function FormRuntimeRenderer({
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // ─── Draft auto-saving and AI fast-fill state ─────────────────────────────
+  const [restoredDraft, setRestoredDraft] = useState(false);
+  const [showFastFill, setShowFastFill] = useState(false);
+  const [fastFillText, setFastFillText] = useState('');
+  const [fastFillLoading, setFastFillLoading] = useState(false);
+  const storageKey = `fieseros_draft_${formId || 'preview'}`;
+
   // ─── Phase F1: Card-by-card mode state ─────────────────────────────────────
   const [cardFieldIndex, setCardFieldIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -367,6 +379,77 @@ export function FormRuntimeRenderer({
   });
 
   const partialSavedRef = useRef<boolean>(false);
+
+  // Restore draft from localStorage on mount
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+            setFormData(parsed);
+            setRestoredDraft(true);
+          }
+        }
+      }
+    } catch {}
+  }, [storageKey]);
+
+  // Debounced draft autosave
+  useEffect(() => {
+    if (submitted) return;
+    if (Object.keys(formData).length > 0) {
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(storageKey, JSON.stringify(formData));
+        }
+      } catch {}
+    }
+  }, [formData, storageKey, submitted]);
+
+  const handleClearDraft = () => {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(storageKey);
+      }
+    } catch {}
+    setFormData({});
+    setRestoredDraft(false);
+    toast.info('Saved draft cleared');
+  };
+
+  const handleFastFillSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!fastFillText.trim()) return;
+    setFastFillLoading(true);
+    try {
+      const targetFields = schema.fields.map((f) => ({
+        id: f.id,
+        label: f.label,
+        type: f.type,
+        options: f.options,
+      }));
+      const res = await fetch('/api/forms/ai-fast-fill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: fastFillText, fields: targetFields }),
+      });
+      const data = await res.json();
+      if (data.values && Object.keys(data.values).length > 0) {
+        setFormData((prev) => ({ ...prev, ...data.values }));
+        toast.success(`✨ Auto-filled ${data.matchedFields?.length || Object.keys(data.values).length} fields instantly!`);
+        setFastFillText('');
+        setShowFastFill(false);
+      } else {
+        toast.info('No matching fields detected. Try pasting an email, phone number, address, or details.');
+      }
+    } catch {
+      toast.error('Could not process fast fill text');
+    } finally {
+      setFastFillLoading(false);
+    }
+  };
 
   useEffect(() => {
     setActiveMode(initialMode);
@@ -532,6 +615,11 @@ export function FormRuntimeRenderer({
 
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(storageKey);
+          }
+        } catch {}
         setSuccessInfo({
           title: data.successTitle || schema.settings?.successTitle || 'Thank you!',
           message: data.successMessage || schema.settings?.successMessage || 'Your submission has been received.',
@@ -775,6 +863,95 @@ export function FormRuntimeRenderer({
             <CardContent className="p-6 sm:p-8 pt-6 flex-1">
               <form onSubmit={handleSubmit} className="space-y-6">
                 <input type="text" name="_hp" className="hidden" tabIndex={-1} autoComplete="off" />
+
+                {/* ─── Restored Draft Banner ───────────────────────────────── */}
+                {restoredDraft && (
+                  <div className="flex items-center justify-between gap-3 p-3 px-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-xs animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-center gap-2">
+                      <History className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <span>Restored your previous unsubmitted draft.</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearDraft}
+                      className="h-7 text-[11px] font-semibold text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100 hover:bg-amber-500/20 rounded-lg cursor-pointer px-2"
+                    >
+                      <Trash2 className="size-3 mr-1" /> Clear
+                    </Button>
+                  </div>
+                )}
+
+                {/* ─── AI Smart Fast-Fill Accordion / Action Pill ───────────── */}
+                <div className="rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/5 via-teal-500/5 to-emerald-500/5 p-3.5 transition-all">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="size-7 rounded-lg flex items-center justify-center text-white shadow-2xs shrink-0"
+                        style={{ backgroundColor: primaryColor }}
+                      >
+                        <Zap className="size-3.5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          AI Smart Fast-Fill
+                          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-semibold">
+                            Instant
+                          </span>
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          Paste raw text, contact card, or job notes to autofill matching fields
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowFastFill(!showFastFill)}
+                      className="h-7 text-xs font-semibold rounded-lg px-2.5 cursor-pointer shrink-0 border-primary/30 text-primary hover:bg-primary/10"
+                    >
+                      <Sparkles className="size-3 mr-1" />
+                      {showFastFill ? 'Close' : 'Fast-Fill'}
+                    </Button>
+                  </div>
+
+                  {showFastFill && (
+                    <div className="mt-3 pt-3 border-t border-primary/10 space-y-2.5 animate-in fade-in duration-200">
+                      <Textarea
+                        value={fastFillText}
+                        onChange={(e) => setFastFillText(e.target.value)}
+                        placeholder="e.g. Hi, my name is Sarah Conner, email sarah@skynet.com, phone 555-0199, looking for Emergency AC repair at 100 Main St, Austin TX..."
+                        rows={3}
+                        className="text-xs bg-white dark:bg-slate-900 border-primary/30 focus-visible:ring-primary rounded-xl resize-none shadow-2xs"
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-muted-foreground">
+                          🔒 Processed safely • extracts contact info &amp; matching form choices
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={fastFillLoading || !fastFillText.trim()}
+                          onClick={handleFastFillSubmit}
+                          className="h-7 text-xs font-bold text-white rounded-lg shadow-sm gap-1.5 cursor-pointer px-3"
+                          style={{ backgroundColor: buttonColor, color: buttonTextColor }}
+                        >
+                          {fastFillLoading ? (
+                            <>
+                              <Loader2 className="size-3 animate-spin" /> Extracting...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="size-3" /> Auto-Fill Form
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
             {/* ─── Card-by-Card Mode: render ONE field at a time ─────────────── */}
             {activeMode === 'card' ? (
