@@ -67,14 +67,27 @@ export function UniversalStudioCanvas({
     hourlyRate: 85,
   });
 
+  if (!rootNode) {
+    return (
+      <div className="w-full flex-1 flex items-center justify-center p-8 text-muted-foreground text-sm">
+        No canvas root node defined.
+      </div>
+    );
+  }
+
   const renderComponentNode = (node: UniversalComponentNode) => {
+    if (!node || !node.id) return null;
     const isSelected = selectedNodeId === node.id;
     const { style = {}, props = {}, behavior = {} } = node;
 
     // Evaluate live formula if calculation field
     let calculatedVal = 0;
     if (node.type === 'calculation_field' && props.calculationFormula) {
-      calculatedVal = evaluateFormula(props.calculationFormula, formValues, 0);
+      try {
+        calculatedVal = evaluateFormula(props.calculationFormula, formValues, 0);
+      } catch {
+        calculatedVal = 0;
+      }
     }
 
     const colSpanClasses = {
@@ -82,7 +95,7 @@ export function UniversalStudioCanvas({
       6: 'col-span-12 sm:col-span-6',
       4: 'col-span-12 sm:col-span-4',
       3: 'col-span-12 sm:col-span-3',
-    }[style.colSpan || 12];
+    }[(style.colSpan as 12 | 6 | 4 | 3) || 12] || 'col-span-12';
 
     return (
       <div
@@ -105,7 +118,7 @@ export function UniversalStudioCanvas({
         {/* On-Hover Action Toolbar (Elementor Style) */}
         <div className="absolute -top-3.5 right-2 z-30 opacity-0 group-hover/node:opacity-100 transition-opacity flex items-center gap-0.5 bg-slate-900 text-white rounded-lg p-0.5 shadow-xl text-[10px]">
           <span className="px-1.5 py-0.5 font-mono text-[9px] text-slate-300 font-bold uppercase">
-            {node.type.replace('_', ' ')}
+            {(node.type || 'element').replace(/_/g, ' ')}
           </span>
           <button
             type="button"

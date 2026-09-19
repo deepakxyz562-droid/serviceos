@@ -75,6 +75,7 @@ import { StudioWidgetPalette } from './builder/studio-widget-palette';
 import { UniversalPublishCenter } from './builder/universal-publish-center';
 import { UniversalStudioCanvas } from './builder/universal-studio-canvas';
 import { UniversalInspector } from './builder/universal-inspector';
+import { StudioAppDesignTab } from './builder/studio-app-design-tab';
 import type { UniversalComponentNode } from '@/lib/forms/universal-component-types';
 import { generateUniversalProjectFromPrompt } from '@/lib/forms/generators/ai-universal-generator';
 import {
@@ -110,7 +111,7 @@ export function FormStudioBuilder({
   siteOrigin,
 }: FormStudioBuilderProps) {
   // Studio navigation
-  const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'agent' | 'templates'>('build');
+  const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'agent' | 'app' | 'templates'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [previewFormat, setPreviewFormat] = useState<'paper' | 'card' | 'agent'>('paper');
@@ -758,7 +759,7 @@ export function FormStudioBuilder({
           </div>
         </div>
 
-        {/* Center: 5 Core Lifecycle Tabs (BUILD | DESIGN | AI AGENT | SETTINGS | PUBLISH) */}
+        {/* Center: 6 Core Lifecycle Tabs (BUILD | DESIGN | APP DESIGN | AI AGENT | SETTINGS | PUBLISH) */}
         <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-border/60">
           <button
             type="button"
@@ -781,6 +782,21 @@ export function FormStudioBuilder({
           >
             <Palette className="size-3.5" />
             <span>Design</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setStudioTab('app'); setIsPreviewMode(false); }}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
+              studioTab === 'app'
+                ? 'bg-white dark:bg-slate-900 text-purple-600 dark:text-purple-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Smartphone className="size-3.5" />
+            <span>App Design</span>
+            <span className="px-1 text-[8px] bg-purple-500/20 text-purple-700 dark:text-purple-300 rounded-full font-bold">PWA</span>
           </button>
 
           <button
@@ -1118,11 +1134,13 @@ export function FormStudioBuilder({
               {/* Center Elementor Visual Responsive Canvas */}
               <div className="flex-1 min-h-0 h-full overflow-y-auto bg-slate-100 dark:bg-slate-950 p-4 flex justify-center items-start">
                 <UniversalStudioCanvas
-                  rootNode={universalProject.screens[0]?.rootNode || { id: 'root', type: 'container', children: [] }}
+                  rootNode={universalProject?.rootNode || (universalProject as any)?.screens?.[0]?.rootNode || { id: 'root', type: 'container', name: 'Root Container', category: 'layout', children: [] }}
                   selectedNodeId={selectedUniversalNodeId}
                   onSelectNode={setSelectedUniversalNodeId}
                   onUpdateNode={(nodeId, updated) => {
                     setUniversalProject((prev) => {
+                      const root = prev?.rootNode || (prev as any)?.screens?.[0]?.rootNode;
+                      if (!root) return prev;
                       const updateRecursive = (node: UniversalComponentNode): UniversalComponentNode => {
                         if (node.id === nodeId) {
                           return {
@@ -1138,41 +1156,51 @@ export function FormStudioBuilder({
                           children: node.children ? node.children.map(updateRecursive) : [],
                         };
                       };
+                      const updatedRoot = updateRecursive(root);
                       return {
                         ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: updateRecursive(s.rootNode) } : s
-                        ),
+                        rootNode: updatedRoot,
+                        ...((prev as any)?.screens ? {
+                          screens: (prev as any).screens.map((s: any, idx: number) => idx === 0 ? { ...s, rootNode: updatedRoot } : s)
+                        } : {}),
                       };
                     });
                   }}
                   onDeleteNode={(nodeId) => {
                     setUniversalProject((prev) => {
+                      const root = prev?.rootNode || (prev as any)?.screens?.[0]?.rootNode;
+                      if (!root) return prev;
                       const deleteRecursive = (node: UniversalComponentNode): UniversalComponentNode => ({
                         ...node,
                         children: node.children ? node.children.filter((c) => c.id !== nodeId).map(deleteRecursive) : [],
                       });
+                      const updatedRoot = deleteRecursive(root);
                       return {
                         ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: deleteRecursive(s.rootNode) } : s
-                        ),
+                        rootNode: updatedRoot,
+                        ...((prev as any)?.screens ? {
+                          screens: (prev as any).screens.map((s: any, idx: number) => idx === 0 ? { ...s, rootNode: updatedRoot } : s)
+                        } : {}),
                       };
                     });
                   }}
                   onDuplicateNode={(nodeId) => {
                     setUniversalProject((prev) => {
+                      const root = prev?.rootNode || (prev as any)?.screens?.[0]?.rootNode;
+                      if (!root) return prev;
                       const dupRecursive = (node: UniversalComponentNode): UniversalComponentNode => {
                         if (node.id === nodeId) {
                           return { ...node, id: `${node.id}_copy_${Date.now()}` };
                         }
                         return { ...node, children: node.children ? node.children.map(dupRecursive) : [] };
                       };
+                      const updatedRoot = dupRecursive(root);
                       return {
                         ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: dupRecursive(s.rootNode) } : s
-                        ),
+                        rootNode: updatedRoot,
+                        ...((prev as any)?.screens ? {
+                          screens: (prev as any).screens.map((s: any, idx: number) => idx === 0 ? { ...s, rootNode: updatedRoot } : s)
+                        } : {}),
                       };
                     });
                   }}
@@ -1181,21 +1209,26 @@ export function FormStudioBuilder({
                       id: `node_${Date.now()}`,
                       type: type as any,
                       name: `New ${type}`,
+                      category: 'form',
                       props: { label: `New ${type}`, placeholder: 'Enter value...' },
                       style: { padding: '8px' },
                     };
                     setUniversalProject((prev) => {
+                      const root = prev?.rootNode || (prev as any)?.screens?.[0]?.rootNode;
+                      if (!root) return prev;
                       const addRecursive = (node: UniversalComponentNode): UniversalComponentNode => {
                         if (node.id === parentId) {
                           return { ...node, children: [...(node.children || []), newNode] };
                         }
                         return { ...node, children: node.children ? node.children.map(addRecursive) : [] };
                       };
+                      const updatedRoot = addRecursive(root);
                       return {
                         ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: addRecursive(s.rootNode) } : s
-                        ),
+                        rootNode: updatedRoot,
+                        ...((prev as any)?.screens ? {
+                          screens: (prev as any).screens.map((s: any, idx: number) => idx === 0 ? { ...s, rootNode: updatedRoot } : s)
+                        } : {}),
                       };
                     });
                     setSelectedUniversalNodeId(newNode.id);
@@ -1209,7 +1242,8 @@ export function FormStudioBuilder({
               <aside className="w-80 lg:w-96 border-l border-border/80 bg-background flex flex-col shrink-0 z-20 h-full overflow-hidden">
                 <UniversalInspector
                   selectedNode={(() => {
-                    const findNode = (node: UniversalComponentNode): UniversalComponentNode | null => {
+                    const findNode = (node: UniversalComponentNode | null | undefined): UniversalComponentNode | null => {
+                      if (!node) return null;
                       if (node.id === selectedUniversalNodeId) return node;
                       for (const c of node.children || []) {
                         const res = findNode(c);
@@ -1217,13 +1251,14 @@ export function FormStudioBuilder({
                       }
                       return null;
                     };
-                    return universalProject.screens[0]?.rootNode
-                      ? findNode(universalProject.screens[0].rootNode)
-                      : null;
+                    const root = universalProject?.rootNode || (universalProject as any)?.screens?.[0]?.rootNode;
+                    return findNode(root);
                   })()}
                   onUpdateNode={(updated) => {
                     if (!selectedUniversalNodeId) return;
                     setUniversalProject((prev) => {
+                      const root = prev?.rootNode || (prev as any)?.screens?.[0]?.rootNode;
+                      if (!root) return prev;
                       const updateRecursive = (node: UniversalComponentNode): UniversalComponentNode => {
                         if (node.id === selectedUniversalNodeId) {
                           return {
@@ -1239,11 +1274,54 @@ export function FormStudioBuilder({
                           children: node.children ? node.children.map(updateRecursive) : [],
                         };
                       };
+                      const updatedRoot = updateRecursive(root);
                       return {
                         ...prev,
-                        screens: prev.screens.map((s, idx) =>
-                          idx === 0 ? { ...s, rootNode: updateRecursive(s.rootNode) } : s
-                        ),
+                        rootNode: updatedRoot,
+                        ...((prev as any)?.screens ? {
+                          screens: (prev as any).screens.map((s: any, idx: number) => idx === 0 ? { ...s, rootNode: updatedRoot } : s)
+                        } : {}),
+                      };
+                    });
+                  }}
+                  onDeleteNode={() => {
+                    if (!selectedUniversalNodeId) return;
+                    setUniversalProject((prev) => {
+                      const root = prev?.rootNode || (prev as any)?.screens?.[0]?.rootNode;
+                      if (!root) return prev;
+                      const deleteRecursive = (node: UniversalComponentNode): UniversalComponentNode => ({
+                        ...node,
+                        children: node.children ? node.children.filter((c) => c.id !== selectedUniversalNodeId).map(deleteRecursive) : [],
+                      });
+                      const updatedRoot = deleteRecursive(root);
+                      return {
+                        ...prev,
+                        rootNode: updatedRoot,
+                        ...((prev as any)?.screens ? {
+                          screens: (prev as any).screens.map((s: any, idx: number) => idx === 0 ? { ...s, rootNode: updatedRoot } : s)
+                        } : {}),
+                      };
+                    });
+                    setSelectedUniversalNodeId(null);
+                  }}
+                  onDuplicateNode={() => {
+                    if (!selectedUniversalNodeId) return;
+                    setUniversalProject((prev) => {
+                      const root = prev?.rootNode || (prev as any)?.screens?.[0]?.rootNode;
+                      if (!root) return prev;
+                      const dupRecursive = (node: UniversalComponentNode): UniversalComponentNode => {
+                        if (node.id === selectedUniversalNodeId) {
+                          return { ...node, id: `${node.id}_copy_${Date.now()}` };
+                        }
+                        return { ...node, children: node.children ? node.children.map(dupRecursive) : [] };
+                      };
+                      const updatedRoot = dupRecursive(root);
+                      return {
+                        ...prev,
+                        rootNode: updatedRoot,
+                        ...((prev as any)?.screens ? {
+                          screens: (prev as any).screens.map((s: any, idx: number) => idx === 0 ? { ...s, rootNode: updatedRoot } : s)
+                        } : {}),
                       };
                     });
                   }}
@@ -2578,6 +2656,18 @@ export function FormStudioBuilder({
               </Card>
             </div>
           </main>
+        )}
+
+        {/* ─── 4.B APP DESIGN STUDIO (PWA APP SHELL & MULTI-FORM SUITE) ─── */}
+        {studioTab === 'app' && !isPreviewMode && (
+          <div className="flex-1 flex overflow-hidden w-full h-full">
+            <StudioAppDesignTab
+              formData={formData}
+              onFormDataChange={onFormDataChange}
+              siteOrigin={siteOrigin}
+              onOpenLiveApp={handleOpenLive}
+            />
+          </div>
         )}
 
         {/* ─── 4. AI AGENT STUDIO (NATIVE TO AI FORMS) ─── */}
