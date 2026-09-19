@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FormAgentData,
   FaqPair,
@@ -18,6 +18,13 @@ import {
   Loader2,
   Upload,
   ExternalLink,
+  MessageSquareWarning,
+  Layers,
+  Search,
+  BookOpen,
+  ArrowRight,
+  Database,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +32,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+
+interface UnansweredQuestion {
+  id: string;
+  question: string;
+  count: number;
+  lastAskedAt: string;
+  source: string;
+}
 
 interface AgentTrainTabProps {
   agent: FormAgentData;
@@ -34,34 +51,79 @@ interface AgentTrainTabProps {
 
 export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   const [crawlUrlInput, setCrawlUrlInput] = useState('');
+  const [crawlMode, setCrawlMode] = useState<'sitemap' | 'single'>('sitemap');
   const [crawling, setCrawling] = useState(false);
+  const [crawledPagesCount, setCrawledPagesCount] = useState<number | null>(null);
+
   const [faqQ, setFaqQ] = useState('');
   const [faqA, setFaqA] = useState('');
   const [guardrailInput, setGuardrailInput] = useState('');
 
+  // Unanswered Questions Review Queue
+  const [unansweredList, setUnansweredList] = useState<UnansweredQuestion[]>([]);
+  const [loadingUnanswered, setLoadingUnanswered] = useState(false);
+  const [selectedUnanswered, setSelectedUnanswered] = useState<UnansweredQuestion | null>(null);
+  const [answerInput, setAnswerInput] = useState('');
+  const [resolving, setResolving] = useState(false);
+
+  // Fetch unanswered questions on load
+  const fetchUnanswered = async () => {
+    setLoadingUnanswered(true);
+    try {
+      const res = await fetch('/api/ai/knowledge/unanswered');
+      if (res.ok) {
+        const data = await res.json();
+        setUnansweredList(data.questions || []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingUnanswered(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnanswered();
+  }, []);
+
   const handleCrawlUrl = async () => {
     if (!crawlUrlInput.trim() || crawling) return;
     setCrawling(true);
+    setCrawledPagesCount(null);
 
     try {
-      const res = await fetch(`/api/forms/agents/${agent.id}/train`, {
+      const res = await fetch('/api/ai/knowledge/crawl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'url',
           url: crawlUrlInput.trim(),
+          mode: crawlMode,
+          autoIngest: true,
+          maxPages: crawlMode === 'sitemap' ? 20 : 1,
         }),
       });
 
       const data = await res.json();
-      if (res.ok && data.item) {
-        toast.success('Website indexed successfully!');
+      if (res.ok && data.success) {
+        toast.success(`Successfully crawled & indexed ${data.ingestedCount || data.pagesDiscovered} pages!`);
+        setCrawledPagesCount(data.ingestedCount || data.pagesDiscovered);
+
+        const newDocs: TrainingDocument[] = (data.ingestedDocs || []).map((d: any) => ({
+          id: d.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          name: d.title || d.url,
+          size: 45000,
+          type: 'url',
+          status: 'indexed',
+          snippet: `Crawled from ${d.url}`,
+          indexedAt: new Date().toISOString(),
+        }));
+
         onChange({
           ...agent,
           knowledge: {
             ...agent.knowledge,
             crawledUrls: [...(agent.knowledge.crawledUrls || []), crawlUrlInput.trim()],
-            documents: [...(agent.knowledge.documents || []), data.item],
+            documents: [...(agent.knowledge.documents || []), ...newDocs],
           },
         });
         setCrawlUrlInput('');
@@ -110,6 +172,52 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
     });
   };
 
+  const handleResolveUnanswered = async () => {
+    if (!selectedUnanswered || !answerInput.trim() || resolving) return;
+    setResolving(true);
+
+    try {
+      const res = await fetch('/api/ai/knowledge/unanswered', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedUnanswered.id,
+          question: selectedUnanswered.question,
+          answer: answerInput.trim(),
+          action: 'resolve',
+        }),
+      });
+
+      if (res.ok) {
+        toast.success('Answer added to Knowledge Base & question resolved!');
+
+        // Add to agent's FAQ list
+        const newFaq: FaqPair = {
+          id: `faq_${Date.now()}`,
+          question: selectedUnanswered.question,
+          answer: answerInput.trim(),
+        };
+        onChange({
+          ...agent,
+          knowledge: {
+            ...agent.knowledge,
+            faqPairs: [...(agent.knowledge.faqPairs || []), newFaq],
+          },
+        });
+
+        setUnansweredList((prev) => prev.filter((q) => q.id !== selectedUnanswered.id));
+        setSelectedUnanswered(null);
+        setAnswerInput('');
+      } else {
+        toast.error('Failed to resolve question');
+      }
+    } catch {
+      toast.error('Error submitting answer');
+    } finally {
+      setResolving(false);
+    }
+  };
+
   const handleAddGuardrail = () => {
     if (!guardrailInput.trim()) return;
     onChange({
@@ -134,14 +242,38 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
 
   return (
     <div className="space-y-4">
-      {/* ── 1. WEBSITE CRAWLER ── */}
+      {/* ── 1. AUTOMATED SITEMAP & WEBPAGE CRAWLER ── */}
       <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
-          <CardTitle className="text-xs font-bold flex items-center gap-1.5">
-            <Globe className="size-3.5 text-blue-600" /> Webpage Knowledge Crawler
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xs font-bold flex items-center gap-1.5">
+              <Globe className="size-3.5 text-blue-600" /> Automated Sitemap & URL Crawler (SiteGPT Parity)
+            </CardTitle>
+            <div className="flex items-center gap-1 text-[11px] bg-muted/60 p-0.5 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setCrawlMode('sitemap')}
+                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                  crawlMode === 'sitemap' ? 'bg-white dark:bg-slate-800 shadow-xs text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                🗺️ Full Sitemap.xml
+              </button>
+              <button
+                type="button"
+                onClick={() => setCrawlMode('single')}
+                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                  crawlMode === 'single' ? 'bg-white dark:bg-slate-800 shadow-xs text-foreground' : 'text-muted-foreground'
+                }`}
+              >
+                📄 Single URL
+              </button>
+            </div>
+          </div>
           <CardDescription className="text-[11px]">
-            AI crawls your website or booking page to index procedures, pricing, and FAQs.
+            {crawlMode === 'sitemap'
+              ? 'Automatically discovers and indexes all subpages from your sitemap.xml into vector embeddings.'
+              : 'Crawls and indexes a specific landing page, service page, or pricing sheet.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-0 space-y-3">
@@ -149,7 +281,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
             <Input
               value={crawlUrlInput}
               onChange={(e) => setCrawlUrlInput(e.target.value)}
-              placeholder="https://example.com/services"
+              placeholder={crawlMode === 'sitemap' ? 'https://example.com/sitemap.xml' : 'https://example.com/pricing'}
               className="text-xs h-8"
               disabled={crawling}
             />
@@ -158,16 +290,26 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
               size="sm"
               onClick={handleCrawlUrl}
               disabled={crawling || !crawlUrlInput.trim()}
-              className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white shrink-0 gap-1"
+              className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white shrink-0 gap-1.5"
             >
               {crawling ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3" />}
-              <span>Index URL</span>
+              <span>{crawling ? 'Crawling...' : 'Crawl & Index'}</span>
             </Button>
           </div>
+
+          {crawledPagesCount !== null && (
+            <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200">
+              <span className="flex items-center gap-1.5 font-semibold">
+                <CheckCircle2 className="size-3.5 text-emerald-500" />
+                Indexed {crawledPagesCount} pages into Agent RAG Knowledge Base
+              </span>
+            </div>
+          )}
 
           {/* List of Crawled Sources */}
           {agent.knowledge?.crawledUrls?.length > 0 && (
             <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Indexed Sources</p>
               {agent.knowledge.crawledUrls.map((url, idx) => (
                 <div
                   key={idx}
@@ -176,8 +318,8 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                   <span className="font-mono text-[11px] text-foreground truncate max-w-[280px]">
                     {url}
                   </span>
-                  <Badge variant="secondary" className="text-[9px] text-emerald-600 bg-emerald-50">
-                    ✓ Indexed
+                  <Badge variant="secondary" className="text-[9px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950">
+                    ✓ Active Vector Sync
                   </Badge>
                 </div>
               ))}
@@ -186,14 +328,77 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
         </CardContent>
       </Card>
 
-      {/* ── 2. DOCUMENTS & PDF UPLOADER ── */}
+      {/* ── 2. UNANSWERED QUESTIONS REVIEW INBOX ── */}
+      <Card className="rounded-xl border-amber-200 dark:border-amber-900/40 bg-amber-50/20 dark:bg-amber-950/10 shadow-xs">
+        <CardHeader className="p-4 pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xs font-bold flex items-center gap-1.5 text-amber-900 dark:text-amber-200">
+              <MessageSquareWarning className="size-3.5 text-amber-500" /> Unanswered Questions Review Queue
+              {unansweredList.length > 0 && (
+                <Badge className="bg-amber-500 text-white text-[9px] px-1.5 py-0 h-4">
+                  {unansweredList.length} Pending
+                </Badge>
+              )}
+            </CardTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={fetchUnanswered}
+              disabled={loadingUnanswered}
+              className="h-6 text-[10px] gap-1 text-muted-foreground"
+            >
+              <RefreshCw className={`size-2.5 ${loadingUnanswered ? 'animate-spin' : ''}`} /> Refresh
+            </Button>
+          </div>
+          <CardDescription className="text-[11px]">
+            Queries asked by visitors where AI confidence was low. Click to add a 1-click answer to your knowledge base.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 pt-0 space-y-2">
+          {unansweredList.length === 0 ? (
+            <div className="p-3 text-center text-xs text-muted-foreground bg-muted/20 border border-dashed rounded-lg">
+              ✨ All customer queries are currently answered by your Knowledge Base!
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {unansweredList.slice(0, 5).map((q) => (
+                <div
+                  key={q.id}
+                  className="p-2.5 bg-white dark:bg-slate-900 border border-amber-200/80 dark:border-amber-900/60 rounded-xl flex items-center justify-between gap-2 shadow-xs"
+                >
+                  <div className="space-y-0.5 max-w-[260px]">
+                    <p className="text-xs font-bold text-foreground truncate">"{q.question}"</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Asked {q.count} time{q.count > 1 ? 's' : ''} • Source: {q.source}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedUnanswered(q);
+                      setAnswerInput('');
+                    }}
+                    className="h-7 text-[11px] bg-amber-600 hover:bg-amber-700 text-white gap-1 shrink-0"
+                  >
+                    <Plus className="size-3" /> Answer &amp; Train
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── 3. DOCUMENTS & PDF / NOTION / ZENDESK UPLOADER ── */}
       <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-xs font-bold flex items-center gap-1.5">
-            <FileText className="size-3.5 text-blue-600" /> Training Documents & PDFs
+            <FileText className="size-3.5 text-blue-600" /> Training Documents, PDFs &amp; Notion
           </CardTitle>
           <CardDescription className="text-[11px]">
-            Upload brochures, medical policies, or warranty terms.
+            Upload brochures, medical policies, warranty terms, or Notion/Zendesk docs.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 pt-0 space-y-2">
@@ -213,7 +418,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                   </p>
                 </div>
               </div>
-              <Badge className="bg-emerald-100 text-emerald-700 text-[9px] border-none">
+              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[9px] border-none">
                 Active
               </Badge>
             </div>
@@ -226,7 +431,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
             onClick={() => {
               const mockDoc: TrainingDocument = {
                 id: `doc_${Date.now()}`,
-                name: 'New_Dental_Guidelines.pdf',
+                name: 'Service_Catalog_Warranty.pdf',
                 size: 180000,
                 type: 'pdf',
                 status: 'indexed',
@@ -239,20 +444,20 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                   documents: [...(agent.knowledge.documents || []), mockDoc],
                 },
               });
-              toast.success('Document uploaded and indexed!');
+              toast.success('Document uploaded and indexed into knowledge base!');
             }}
             className="w-full text-xs h-8 border-dashed border-border hover:border-blue-500 gap-1.5"
           >
-            <Upload className="size-3.5 text-blue-600" /> Upload PDF or Doc
+            <Upload className="size-3.5 text-blue-600" /> Upload PDF, Doc, or Notion Page
           </Button>
         </CardContent>
       </Card>
 
-      {/* ── 3. FAQ BUILDER ── */}
+      {/* ── 4. FAQ BUILDER ── */}
       <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-xs font-bold flex items-center gap-1.5">
-            <HelpCircle className="size-3.5 text-blue-600" /> Q&A FAQ Knowledge Pairs
+            <HelpCircle className="size-3.5 text-blue-600" /> Q&amp;A FAQ Knowledge Pairs
           </CardTitle>
           <CardDescription className="text-[11px]">
             Deterministic answers for common customer questions.
@@ -306,11 +511,11 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
         </CardContent>
       </Card>
 
-      {/* ── 4. SYSTEM PROMPT & STRICT GUARDRAILS ── */}
+      {/* ── 5. SYSTEM PROMPT & STRICT GUARDRAILS ── */}
       <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-xs font-bold flex items-center gap-1.5">
-            <ShieldAlert className="size-3.5 text-blue-600" /> System Instructions & Guardrails
+            <ShieldAlert className="size-3.5 text-blue-600" /> System Instructions &amp; Guardrails
           </CardTitle>
           <CardDescription className="text-[11px]">
             Set strict boundaries and behavioral rules for this AI agent.
@@ -372,6 +577,63 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Answer & Train Dialog */}
+      {selectedUnanswered && (
+        <Dialog open={Boolean(selectedUnanswered)} onOpenChange={() => setSelectedUnanswered(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold flex items-center gap-1.5">
+                <Sparkles className="size-4 text-amber-500" /> Answer Customer Question &amp; Train AI
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Provide the correct answer below. It will be indexed immediately so your AI agent can answer accurately in future chats.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 py-2">
+              <div className="p-3 bg-muted/40 rounded-xl border space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Visitor Question</p>
+                <p className="text-xs font-semibold text-foreground">"{selectedUnanswered.question}"</p>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Your Official Answer</Label>
+                <Textarea
+                  value={answerInput}
+                  onChange={(e) => setAnswerInput(e.target.value)}
+                  placeholder="e.g. Yes, we offer a 10-year structural warranty on all residential projects..."
+                  rows={4}
+                  className="text-xs"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedUnanswered(null)}
+                className="text-xs h-8"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleResolveUnanswered}
+                disabled={!answerInput.trim() || resolving}
+                className="text-xs h-8 bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+              >
+                {resolving ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                <span>Add to Knowledge Base</span>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

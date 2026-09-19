@@ -45,8 +45,15 @@ export function AgentPublishTab({
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  const [widgetPosition, setWidgetPosition] = useState<'bottom-right' | 'bottom-left' | 'bottom-center'>(
+    agent.channels?.chatbot?.position || 'bottom-right'
+  );
+  const [greetingText, setGreetingText] = useState(
+    agent.channels?.chatbot?.greetingBubble || '👋 Have questions or want a quote? Ask our AI!'
+  );
+
   const standaloneUrl = `${siteOrigin}/chat/${agent.slug || 'clara-dental'}`;
-  const embedScript = `<script src="${siteOrigin}/widget/agent.js" data-agent-id="${agent.id}" data-color="${agent.brandColor || '#059669'}" async></script>`;
+  const embedScript = `<script src="${siteOrigin}/widget/agent.js" data-agent-id="${agent.id}" data-position="${widgetPosition}" data-greeting="${encodeURIComponent(greetingText)}" data-color="${agent.brandColor || '#059669'}" async></script>`;
 
   const copyToClipboard = (text: string, type: 'code' | 'link') => {
     navigator.clipboard.writeText(text);
@@ -63,16 +70,16 @@ export function AgentPublishTab({
 
   return (
     <div className="space-y-4">
-      {/* ── 1. WEB CHATBOT EMBED WIDGET ── */}
+      {/* ── 1. WEB CHATBOT & FLOATING POPUP WIDGET ── */}
       <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquare className="size-4 text-blue-600" />
               <div>
-                <CardTitle className="text-xs font-bold">1. Website Chatbot Embed Widget</CardTitle>
+                <CardTitle className="text-xs font-bold">1. Floating Popup &amp; Embeddable Chat Widget</CardTitle>
                 <CardDescription className="text-[11px]">
-                  Add your AI agent to any website (WordPress, Shopify, Webflow, React, HTML).
+                  Customizable bottom-right / bottom-left floating popup widget for WordPress, Shopify, Webflow, React, and HTML.
                 </CardDescription>
               </div>
             </div>
@@ -91,6 +98,56 @@ export function AgentPublishTab({
           </div>
         </CardHeader>
         <CardContent className="p-4 pt-0 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-muted/30 border border-border/60 rounded-xl">
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold">Widget Position</label>
+              <div className="flex gap-1">
+                {(['bottom-right', 'bottom-left', 'bottom-center'] as const).map((pos) => (
+                  <button
+                    key={pos}
+                    type="button"
+                    onClick={() => {
+                      setWidgetPosition(pos);
+                      onChange({
+                        ...agent,
+                        channels: {
+                          ...agent.channels,
+                          chatbot: { ...agent.channels.chatbot, position: pos as any },
+                        },
+                      });
+                    }}
+                    className={`flex-1 text-[11px] py-1 px-2 rounded-lg font-medium border transition-all ${
+                      widgetPosition === pos
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-background hover:bg-muted border-border'
+                    }`}
+                  >
+                    {pos === 'bottom-right' ? '↘️ Right' : pos === 'bottom-left' ? '↙️ Left' : '⬇️ Center'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold">Greeting Bubble Tooltip</label>
+              <Input
+                value={greetingText}
+                onChange={(e) => {
+                  setGreetingText(e.target.value);
+                  onChange({
+                    ...agent,
+                    channels: {
+                      ...agent.channels,
+                      chatbot: { ...agent.channels.chatbot, greetingBubble: e.target.value },
+                    },
+                  });
+                }}
+                placeholder="👋 Have questions? Ask our AI!"
+                className="text-xs h-7"
+              />
+            </div>
+          </div>
+
           <div className="p-3 bg-slate-950 text-slate-100 rounded-xl font-mono text-[11px] relative">
             <pre className="overflow-x-auto whitespace-pre-wrap">{embedScript}</pre>
             <Button

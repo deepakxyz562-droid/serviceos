@@ -133,21 +133,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Query Knowledge Base for Context
+    // 2. Query Knowledge Base for Context & Citations
     //    Use workspaceId for standalone forms, tenantId for CRM-bound.
     const kbScope = workspaceId || tenantId;
     let kbContext = '';
+    const citations: Array<{ id: number; title: string; url?: string; snippet: string }> = [];
+
     if (kbScope) {
       try {
         const searchResults = await searchKnowledgeBase(kbScope, message, 4);
         if (searchResults.length > 0) {
           kbContext = searchResults
-            .map((r) => `[Document: ${r.title}]\n${r.snippet}`)
+            .map((r, i) => {
+              const srcUrl = (r.documentTitle?.startsWith('http') ? r.documentTitle : undefined) || (r.content.match(/Source URL:\s*([^\s\n]+)/)?.[1]);
+              citations.push({
+                id: i + 1,
+                title: r.documentTitle || `Document ${i + 1}`,
+                url: srcUrl,
+                snippet: r.content.slice(0, 240),
+              });
+              return `[Source ${i + 1}: ${r.documentTitle}]\n${r.content}`;
+            })
             .join('\n\n');
+        } else if (message.length > 15 && !['hi', 'hello', 'hey', 'start'].includes(message.trim().toLowerCase())) {
+          // Record potential unanswered query
+          try {
+            const { recordUnansweredQuestion } = await import('@/lib/ai-unanswered-questions');
+            recordUnansweredQuestion(kbScope, message, 'chat');
+          } catch { /* ignore */ }
         }
       } catch (e) {
         console.warn('[agent-chat] KB search skipped/empty:', e);
       }
+    }
+
+    // ─── Human Handoff / Escalation Action ─────────────────────────────────
+    if (action === 'request_human') {
+      return NextResponse.json(
+        {
+          reply: `I have alerted our team! A representative from ${tenantName} will join this chat or reach out to you shortly. You can also leave your phone or email below.`,
+          humanHandoff: true,
+          status: 'human_requested',
+          businessName: tenantName,
+        },
+        { headers: CORS_HEADERS },
+      );
     }
 
     // 3. Fetch Existing Business Services & Today's Open Slots
@@ -177,9 +207,11 @@ ${kbContext || 'We provide top-tier professional field services with guaranteed 
 
 YOUR CAPABILITIES:
 1. Answer visitor questions accurately using the knowledge base and services listed above.
-2. If the user wants to book or schedule, offer clear time slots (e.g. 09:00 AM, 11:30 AM, 02:00 PM, 04:30 PM).
-3. If they give their name, phone, or preferred time, encourage them to confirm their booking.
-4. Keep replies concise, helpful, friendly, and under 3 paragraphs.
+2. CITATION INSTRUCTION: When your answer uses facts from the Knowledge Base sources above, append citation markers like [1] or [2] right after the referenced sentence.
+3. If the user wants to book or schedule, offer clear time slots (e.g. 09:00 AM, 11:30 AM, 02:00 PM, 04:30 PM).
+4. If they give their name, phone, or preferred time, encourage them to confirm their booking.
+5. If the user asks to speak with a real human agent or support team, politely let them know they can click the "Talk to a Human" button or leave their contact details.
+6. Keep replies concise, helpful, friendly, and under 3 paragraphs.
 
 SPECIAL PROTOCOL FOR CARDS:
 If the user expresses clear interest in booking or asks for available dates/slots, append this EXACT JSON block at the very end of your response on its own line:
@@ -236,6 +268,7 @@ If the user asks for a price/quote and matches a known service, you can optional
       {
         reply: rawReply,
         card: cardData,
+        citations: citations.length > 0 ? citations : undefined,
         businessName: tenantName,
       },
       { headers: CORS_HEADERS },
