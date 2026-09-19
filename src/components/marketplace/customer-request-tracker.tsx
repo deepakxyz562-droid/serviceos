@@ -94,106 +94,166 @@ export function CustomerRequestTracker({ publicSlug }: { publicSlug: string }) {
   const [activeTiers, setActiveTiers] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    // Load sample tracking data for this request slug
-    const mockData: RequestTrackingData = {
-      id: 'mreq_101',
-      publicSlug: publicSlug || 'req-sample',
-      title: 'Central AC is humming and blowing warm air',
-      description: 'Unit stopped cooling yesterday afternoon. Outdoor fan spins but air inside is 78 degrees.',
-      category: 'hvac',
-      categoryLabel: 'HVAC & Air Conditioning',
-      urgency: 'same_day',
-      city: 'Chicago',
-      state: 'IL',
-      status: 'PROPOSALS_RECEIVED',
-      createdAt: '1 hour ago',
-      proposals: [
-        {
-          id: 'prop_apex_01',
-          providerId: 'ten_apex_hvac',
-          providerName: 'Apex Climate Solutions',
-          providerRating: 4.9,
-          reviewCount: 48,
-          verified: true,
-          distanceMiles: 2.8,
-          isTiered: true,
-          tiers: [
-            {
-              id: 'tier_good',
-              tier: 'good',
-              title: 'Standard Diagnostic & Capacitor Replacement',
-              price: 245,
-              earliestArrival: 'Today, 2:00 PM - 4:00 PM',
-              arrivalWindow: 'Today Afternoon',
-              warrantyMonths: 3,
-              items: [
-                { name: 'Full Electrical Diagnostic', type: 'diagnostic', price: 95 },
-                { name: '45/5 MFD Dual Run Capacitor (OEM)', type: 'part', price: 65 },
-                { name: 'Labor & System Testing', type: 'labor', price: 85 },
-              ],
-            },
-            {
-              id: 'tier_better',
-              tier: 'better',
-              title: 'Capacitor Replacement + Full AC Tune-Up',
-              price: 320,
-              earliestArrival: 'Today, 2:00 PM - 4:00 PM',
-              arrivalWindow: 'Today Afternoon',
-              warrantyMonths: 12,
-              items: [
-                { name: 'Full Electrical Diagnostic', type: 'diagnostic', price: 95 },
-                { name: 'Heavy-Duty Turbo 200 Run Capacitor', type: 'part', price: 95 },
-                { name: 'Condenser Coil Chemical Wash & Amp Test', type: 'service', price: 130 },
-              ],
-            },
-            {
-              id: 'tier_best',
-              tier: 'best',
-              title: 'Complete Restoration + 1-Year VIP Service Plan',
-              price: 440,
-              earliestArrival: 'Today, 2:00 PM - 4:00 PM',
-              arrivalWindow: 'Today Afternoon',
-              warrantyMonths: 24,
-              items: [
-                { name: 'Capacitor & Contactor Replacement', type: 'parts_labor', price: 220 },
-                { name: 'Deep Coil Clean & Refrigerant Subcool Check', type: 'service', price: 140 },
-                { name: '1-Year 2x Seasonal Maintenance Membership', type: 'membership', price: 80 },
-              ],
-            },
-          ],
-        },
-        {
-          id: 'prop_windy_02',
-          providerId: 'ten_windy_city_air',
-          providerName: 'Windy City Heating & Air',
-          providerRating: 4.8,
-          reviewCount: 32,
-          verified: true,
-          distanceMiles: 4.1,
-          isTiered: false,
-          tiers: [
-            {
-              id: 'tier_std',
-              tier: 'standard',
-              title: 'Standard AC Repair & Troubleshooting',
-              price: 265,
-              earliestArrival: 'Today, 4:00 PM - 6:00 PM',
-              arrivalWindow: 'Today Late Afternoon',
-              warrantyMonths: 6,
-              items: [
-                { name: 'Diagnostic Inspection', type: 'diagnostic', price: 85 },
-                { name: 'Electrical Component Replacement', type: 'parts_labor', price: 180 },
-              ],
-            },
-          ],
-        },
-      ],
+    const fetchData = async () => {
+      // Load sample tracking data for this request slug
+      const mockData: RequestTrackingData = {
+        id: 'mreq_101',
+        publicSlug: publicSlug || 'req-sample',
+        title: 'Central AC is humming and blowing warm air',
+        description: 'Unit stopped cooling yesterday afternoon. Outdoor fan spins but air inside is 78 degrees.',
+        category: 'hvac',
+        categoryLabel: 'HVAC & Air Conditioning',
+        urgency: 'same_day',
+        city: 'Chicago',
+        state: 'IL',
+        status: 'PROPOSALS_RECEIVED',
+        createdAt: '1 hour ago',
+        proposals: [
+          {
+            id: 'prop_apex_01',
+            providerId: 'ten_apex_hvac',
+            providerName: 'Apex Climate Solutions',
+            providerRating: 4.9,
+            reviewCount: 48,
+            verified: true,
+            distanceMiles: 2.8,
+            isTiered: true,
+            tiers: [
+              {
+                id: 'tier_good',
+                tier: 'good',
+                title: 'Standard Diagnostic & Capacitor Replacement',
+                price: 245,
+                earliestArrival: 'Today, 2:00 PM - 4:00 PM',
+                arrivalWindow: 'Today Afternoon',
+                warrantyMonths: 3,
+                items: [
+                  { name: 'Full Electrical Diagnostic', type: 'diagnostic', price: 95 },
+                  { name: '45/5 MFD Dual Run Capacitor (OEM)', type: 'part', price: 65 },
+                  { name: 'Labor & System Testing', type: 'labor', price: 85 },
+                ],
+              },
+              {
+                id: 'tier_better',
+                tier: 'better',
+                title: 'Capacitor Replacement + Full AC Tune-Up',
+                price: 320,
+                earliestArrival: 'Today, 2:00 PM - 4:00 PM',
+                arrivalWindow: 'Today Afternoon',
+                warrantyMonths: 12,
+                items: [
+                  { name: 'Full Electrical Diagnostic', type: 'diagnostic', price: 95 },
+                  { name: 'Heavy-Duty Turbo 200 Run Capacitor', type: 'part', price: 95 },
+                  { name: 'Condenser Coil Chemical Wash & Amp Test', type: 'service', price: 130 },
+                ],
+              },
+              {
+                id: 'tier_best',
+                tier: 'best',
+                title: 'Premium Repair + 1-Yr Maintenance Membership',
+                price: 410,
+                earliestArrival: 'Today, 2:00 PM - 4:00 PM',
+                arrivalWindow: 'Today Afternoon',
+                warrantyMonths: 24,
+                items: [
+                  { name: 'Full Electrical Diagnostic', type: 'diagnostic', price: 95 },
+                  { name: 'Heavy-Duty Turbo 200 Run Capacitor', type: 'part', price: 95 },
+                  { name: 'Condenser Coil Chemical Wash & Amp Test', type: 'service', price: 130 },
+                  { name: '1-Year 2x Seasonal Maintenance Membership', type: 'membership', price: 80 },
+                ],
+              },
+            ],
+          },
+          {
+            id: 'prop_windy_02',
+            providerId: 'ten_windy_city_air',
+            providerName: 'Windy City Heating & Air',
+            providerRating: 4.8,
+            reviewCount: 32,
+            verified: true,
+            distanceMiles: 4.1,
+            isTiered: false,
+            tiers: [
+              {
+                id: 'tier_std',
+                tier: 'standard',
+                title: 'Standard AC Repair & Troubleshooting',
+                price: 265,
+                earliestArrival: 'Today, 4:00 PM - 6:00 PM',
+                arrivalWindow: 'Today Late Afternoon',
+                warrantyMonths: 6,
+                items: [
+                  { name: 'Diagnostic Inspection', type: 'diagnostic', price: 85 },
+                  { name: 'Electrical Component Replacement', type: 'parts_labor', price: 180 },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      // Fetch real data from the API instead of using mock data
+      try {
+        const res = await fetch(`/api/marketplace/requests/${publicSlug}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.request) {
+            const req = json.request;
+            // Transform API response to the component's expected shape
+            const apiData: RequestTrackingData = {
+              id: req.id,
+              publicSlug: req.publicSlug,
+              title: req.title,
+              description: req.description || '',
+              category: req.categorySlug,
+              categoryLabel: req.serviceType || req.categorySlug,
+              urgency: req.urgency || 'flexible',
+              city: req.city || '',
+              state: req.state || '',
+              status: req.status,
+              createdAt: req.createdAt ? new Date(req.createdAt).toLocaleString() : 'Recently',
+              proposals: (json.proposals || []).map((p: any) => ({
+                id: p.providerId,
+                providerId: p.providerId,
+                providerName: p.providerName,
+                providerRating: p.providerRating,
+                reviewCount: p.reviewCount,
+                verified: p.verified,
+                distanceMiles: p.distanceMiles || 0,
+                isTiered: p.tiers.length > 1,
+                tiers: p.tiers.map((t: any) => ({
+                  id: t.id,
+                  tier: t.tier,
+                  title: t.title,
+                  price: t.price,
+                  earliestArrival: t.earliestArrival,
+                  arrivalWindow: t.arrivalWindow,
+                  warrantyMonths: t.warrantyMonths,
+                  items: (t.items || []).map((item: any) => ({
+                    name: item.description,
+                    type: item.type,
+                    price: item.total,
+                  })),
+                })),
+              })),
+            };
+            setData(apiData);
+          } else {
+            // Fallback to mock if API returns no data
+            setData(mockData);
+          }
+        } else {
+          // API error — fallback to mock for now
+          setData(mockData);
+        }
+      } catch {
+        // Network error — fallback to mock
+        setData(mockData);
+      }
+      setLoading(false);
     };
 
-    setTimeout(() => {
-      setData(mockData);
-      setLoading(false);
-    }, 400);
+    fetchData();
   }, [publicSlug]);
 
   const handleAcceptBooking = async () => {

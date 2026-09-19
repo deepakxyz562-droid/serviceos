@@ -172,7 +172,7 @@ export function RequestWizard({ initialCategory }: { initialCategory?: string })
 
       const data = await res.json();
       if (data.success && data.request) {
-        router.push(`/request/track/${data.request.publicSlug || 'req-sample'}`);
+        router.push(`/requests/${data.request.publicSlug || 'req-sample'}`);
       } else {
         alert(data.error || 'Failed to submit request');
       }

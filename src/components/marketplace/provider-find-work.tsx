@@ -106,11 +106,20 @@ export function ProviderFindWork() {
       if (selectedCategory !== 'all') params.set('category', selectedCategory);
       if (selectedUrgency !== 'all') params.set('urgency', selectedUrgency);
       params.set('maxDistance', String(maxDistance));
+      // Pass tenantId from the auth user — the opportunities API requires it
+      // for matching + eligibility checks.
+      const authRes = await fetch('/api/auth/me');
+      const authData = await authRes.json();
+      if (authData?.user?.tenantId) {
+        params.set('tenantId', authData.user.tenantId);
+      }
 
       const res = await fetch(`/api/marketplace/provider/opportunities?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
-        setOpportunities(data.opportunities || []);
+        // API returns recommended + open arrays — merge for display
+        const merged = [...(data.recommended || []), ...(data.open || [])];
+        setOpportunities(merged);
       }
     } catch (err) {
       console.error('Error fetching opportunities:', err);

@@ -250,6 +250,7 @@ model Tenant {
   providerProposals        ProviderProposal[]
   marketplaceBookings      MarketplaceBooking[]
   marketplaceReviews       MarketplaceReview[]
+  providerProfile          MarketplaceProviderProfile?
   payouts           Payout[]
   featuredListings  FeaturedListing[]
   aiCredits         AICredit[]
@@ -1917,8 +1918,9 @@ model Customer {
   invitations          Invitation[]
   recurringJobSchedules RecurringJobSchedule[] @relation("CustomerRecurringJobs")
   scheduledMessages   ScheduledMessage[] @relation("CustomerScheduledMessages")
-  marketplaceRequests MarketplaceRequest[]
-  marketplaceBookings MarketplaceBooking[]
+  // NOTE: Marketplace back-references removed — marketplace requests/bookings
+  // now use MarketplaceCustomer (platform-level), not Customer (tenant-scoped).
+  // The FSM bridge creates a Customer row when a marketplace booking converts.
 
   // ── ISSUE-3: Nested repeating collections for the redesigned customer form ──
   properties           Property[]
@@ -5671,8 +5673,8 @@ model FeaturedListing {
 model MarketplaceRequest {
   id                  String    @id @default(cuid())
   publicSlug          String    @unique @default(cuid())
-  customerId          String?
-  customerName        String
+  marketplaceCustomerId String?  // ← platform-level customer (nullable for anonymous posts)
+  customerName        String    // denormalized for display
   customerPhone       String
   customerEmail       String?
   
@@ -5711,7 +5713,7 @@ model MarketplaceRequest {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  customer            Customer? @relation(fields: [customerId], references: [id])
+  marketplaceCustomer MarketplaceCustomer? @relation(fields: [marketplaceCustomerId], references: [id])
   media               MarketplaceRequestMedia[]
   matches             MarketplaceProviderMatch[]
   proposals           ProviderProposal[]
@@ -5720,6 +5722,7 @@ model MarketplaceRequest {
   @@index([status])
   @@index([categorySlug])
   @@index([city, state])
+  @@index([marketplaceCustomerId])
   @@index([createdAt])
 }
 
@@ -5778,6 +5781,7 @@ model ProviderProposal {
   request          MarketplaceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   tenant           Tenant             @relation(fields: [tenantId], references: [id])
   items            ProposalItem[]
+  messages         ProposalMessage[]
 
   @@index([requestId, status])
   @@index([tenantId])
@@ -5802,12 +5806,14 @@ model MarketplaceBooking {
   requestId          String   @unique
   proposalId         String
   tenantId           String
-  customerId         String
+  marketplaceCustomerId String  // ← platform-level customer who booked
   
-  // Bridge links to existing Fieseros CRM entities
+  // Bridge links to existing Fieseros CRM entities (populated when a Fieseros
+  // subscriber accepts the booking via fsm-bridge.ts)
   leadId             String?  @unique
   quoteId            String?  @unique
   jobId              String?  @unique
+  crmCustomerId      String?  // ← links to tenant-scoped Customer (created by FSM bridge)
   
   agreedPrice        Float
   marketplaceFeeRate Float    @default(0.05) // e.g. 5%
@@ -5817,18 +5823,18 @@ model MarketplaceBooking {
   scheduledStart     DateTime
   scheduledEnd       DateTime?
   
-  addressUnlocked    Boolean  @default(true)
+  addressUnlocked    Boolean  @default(false) // ← privacy: locked until booking confirmed
   status             String   @default("CONFIRMED") // CONFIRMED | IN_PROGRESS | COMPLETED | CANCELLED
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   request            MarketplaceRequest @relation(fields: [requestId], references: [id])
   tenant             Tenant             @relation(fields: [tenantId], references: [id])
-  customer           Customer           @relation(fields: [customerId], references: [id])
+  marketplaceCustomer MarketplaceCustomer @relation(fields: [marketplaceCustomerId], references: [id])
   job                Job?               @relation(fields: [jobId], references: [id])
 
   @@index([tenantId, status])
-  @@index([customerId])
+  @@index([marketplaceCustomerId])
 }
 
 model MarketplaceReview {
@@ -5847,6 +5853,165 @@ model MarketplaceReview {
   job         Job?     @relation(fields: [jobId], references: [id])
 
   @@index([tenantId, rating])
+}
+
+// ─── Phase 0: Platform-level Customer + Provider Profile + Chat ───────────
+
+/**
+ * MarketplaceCustomer — platform-level customer (NOT tenant-scoped).
+ *
+ * A homeowner who posts "AC repair" doesn't belong to any business until
+ * they book one. This model is separate from the tenant-scoped `Customer`.
+ * When a customer books a Fieseros subscriber, fsm-bridge.ts creates a
+ * `Customer` row in that subscriber's CRM and links it via
+ * `MarketplaceBooking.crmCustomerId`.
+ *
+ * Auth: OTP via /api/auth/customer/send-otp (reuses existing infra).
+ */
+model MarketplaceCustomer {
+  id              String   @id @default(cuid())
+  phone           String   @unique  // primary identifier (OTP auth)
+  email           String?  @unique
+  name            String?
+  avatarUrl       String?
+  
+  // OTP verification state
+  otpVerified     Boolean  @default(false)
+  otpCode         String?
+  otpExpiresAt    DateTime?
+  
+  // Notification preferences
+  notifyByEmail   Boolean  @default(true)
+  notifyBySms     Boolean  @default(true)
+  notifyByPush    Boolean  @default(true)
+  
+  // Favorites (providers the customer has saved)
+  favoriteTenantIds String[] @default([])
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  requests        MarketplaceRequest[]
+  bookings        MarketplaceBooking[]
+  messages        ProposalMessage[]
+  
+  @@index([phone])
+  @@index([email])
+}
+
+/**
+ * MarketplaceProviderProfile — 1:1 with Tenant.
+ *
+ * Holds marketplace-specific fields that don't belong on Tenant itself:
+ * services, service areas, availability rules, portfolio, notification prefs.
+ * Created lazily when a provider opts into the marketplace.
+ */
+model MarketplaceProviderProfile {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique  // 1:1 with Tenant
+  
+  // Business description for the marketplace listing
+  tagline         String?
+  bio             String?
+  portfolioUrls   String[] @default([])
+  
+  // Availability rules (JSON: business hours, blackout dates, capacity)
+  availabilityJson String  @default("{}")
+  
+  // Marketplace notification preferences
+  notifyNewOpportunities Boolean @default(true)
+  notifyNewProposal      Boolean @default(true)
+  notifyBookingConfirmed Boolean @default(true)
+  notificationFrequency  String  @default("immediate") // immediate | digest_30m | daily
+  
+  // Provider "Find Work" preferences
+  maxDistanceMiles  Float? @default(50)
+  minBudgetFilter    Float? @default(0)
+  preferredCategories String[] @default([])
+  
+  // Verification summary (mirrors Tenant flags for fast marketplace queries)
+  verificationSummary String @default("{}") // {identity, business, license, insurance}
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  services        MarketplaceProviderService[]
+  serviceAreas    MarketplaceProviderServiceArea[]
+  
+  @@index([tenantId])
+}
+
+/**
+ * MarketplaceProviderService — relational (NOT JSON).
+ *
+ * A provider's offered services. Used for matching, filtering, and SEO.
+ * Keeping this relational (not JSON) enables:
+ *   WHERE serviceSlug IN ('ac_repair', 'furnace_repair') → index scan
+ * instead of JSON path queries.
+ */
+model MarketplaceProviderService {
+  id              String   @id @default(cuid())
+  profileId       String   // ← MarketplaceProviderProfile.id
+  serviceSlug     String   // e.g. 'ac_repair', 'furnace_repair', 'leak_detection'
+  serviceName     String   // display label
+  description     String?
+  basePrice       Float?
+  priceType       String?  // fixed | hourly | starting_from | custom_quote
+  isPrimary       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  
+  profile         MarketplaceProviderProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId])
+  @@index([serviceSlug])
+}
+
+/**
+ * MarketplaceProviderServiceArea — relational (NOT JSON).
+ *
+ * The geographic areas a provider serves. Used for matching queries.
+ */
+model MarketplaceProviderServiceArea {
+  id              String   @id @default(cuid())
+  profileId       String   // ← MarketplaceProviderProfile.id
+  city            String
+  state           String
+  postalCode      String?
+  latitude        Float?
+  longitude       Float?
+  radiusMiles     Float    @default(25)
+  createdAt       DateTime @default(now())
+  
+  profile         MarketplaceProviderProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  
+  @@index([profileId])
+  @@index([city, state])
+  @@index([postalCode])
+}
+
+/**
+ * ProposalMessage — per-proposal chat between customer and provider.
+ *
+ * Privacy: customer contact info (phone/email) is NOT in the message body.
+ * Messages are routed through the marketplace. Contact is revealed only
+ * after booking (via MarketplaceBooking.addressUnlocked).
+ */
+model ProposalMessage {
+  id              String   @id @default(cuid())
+  proposalId      String
+  marketplaceCustomerId String  // ← who sent the message
+  senderType      String   // 'customer' | 'provider'
+  body            String
+  attachmentsJson String   @default("[]")  // [{url, type}]
+  readAt          DateTime?
+  createdAt       DateTime @default(now())
+  
+  proposal        ProviderProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  customer        MarketplaceCustomer @relation(fields: [marketplaceCustomerId], references: [id])
+  
+  @@index([proposalId, createdAt])
+  @@index([marketplaceCustomerId])
 }
 
 model AICredit {
