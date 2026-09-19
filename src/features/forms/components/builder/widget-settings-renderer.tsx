@@ -63,9 +63,10 @@ export function WidgetSettingsRenderer({
   onUpdate,
 }: WidgetSettingsRendererProps) {
   // If mode is explicitly 'widget_settings', show widget settings.
-  // If mode is explicitly 'properties', show question properties.
+  // Layout and content blocks (Image, Map, Video, etc.) always surface their content settings immediately.
+  const isLayoutWidget = definition.category === 'layout' || field.type === 'control_widget' || Boolean(field.widgetType);
   const isWidget = Boolean(field.widgetType) && definition.category !== 'basic';
-  const isWidgetSettingsMode = mode === 'widget_settings' && isWidget;
+  const isWidgetSettingsMode = (mode === 'widget_settings' && isWidget) || isLayoutWidget;
   const [subTab, setSubTab] = useState<SubTab>('general');
   const [widgetTab, setWidgetTab] = useState<'general' | 'custom_css'>('general');
 
@@ -82,14 +83,11 @@ export function WidgetSettingsRenderer({
       ? (field[setting.key] ?? setting.default ?? '')
       : isUniversalAdvanced
         ? (widgetConfig[setting.key] ?? field[setting.key] ?? setting.default ?? '')
-        : (widgetConfig[setting.key] ?? setting.default ?? '');
+        : (widgetConfig[setting.key] ?? field[setting.key] ?? setting.default ?? '');
 
     const onChange = (v: unknown) => {
-      if (isUniversalGeneral) {
-        onFieldChange(setting.key, v);
-      } else {
-        onConfigChange(setting.key, v);
-      }
+      onFieldChange(setting.key, v);
+      onConfigChange(setting.key, v);
     };
 
     if (setting.condition) {

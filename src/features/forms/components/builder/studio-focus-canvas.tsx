@@ -225,6 +225,7 @@ function StudioFieldPreview({
   inputBorderRadius: string;
   inputHeight: string;
 }) {
+  const cfg = (field.widgetConfig as Record<string, any>) || {};
   const fieldRadius = field.borderRadius && field.borderRadius !== 'inherit' ? field.borderRadius : inputBorderRadius;
   const fieldHeightCls =
     (field.inputHeight && field.inputHeight !== 'inherit' ? field.inputHeight : inputHeight) === 'compact'
@@ -234,13 +235,14 @@ function StudioFieldPreview({
       : 'h-11 text-xs';
 
   // 1. Static Image Widget
-  if (field.type === 'static_image' || field.type === 'image_display') {
-    const imageUrl = field.imageUrl || (field.options?.[0]?.value as string) || '';
-    const altText = field.altText || field.label || 'Image preview';
-    const alignment = field.alignment || 'center';
+  if (field.type === 'static_image' || field.type === 'image_display' || field.widgetType === 'static_image') {
+    const imageUrl = field.imageUrl || cfg.imageUrl || (field.options?.[0]?.value as string) || '';
+    const altText = field.altText || cfg.altText || field.label || 'Image preview';
+    const alignment = field.alignment || cfg.alignment || 'center';
     const alignCls = alignment === 'left' ? 'justify-start text-left' : alignment === 'right' ? 'justify-end text-right' : 'justify-center text-center';
-    const maxW = field.maxWidthPercent ? `${field.maxWidthPercent}%` : '100%';
-    const customRadius = field.imageBorderRadius || '12px';
+    const maxW = field.maxWidthPercent || cfg.maxWidthPercent ? `${field.maxWidthPercent || cfg.maxWidthPercent}%` : '100%';
+    const customRadius = field.imageBorderRadius || cfg.borderRadius || '12px';
+    const caption = field.caption || cfg.caption;
 
     return (
       <div className={`w-full flex flex-col ${alignCls} py-1`}>
@@ -258,16 +260,18 @@ function StudioFieldPreview({
             <p className="text-[10px] text-muted-foreground mt-0.5">Click to configure image URL in Field Settings</p>
           </div>
         )}
-        {field.caption && <p className="text-[11px] text-muted-foreground mt-1.5 italic">{field.caption}</p>}
+        {caption && <p className="text-[11px] text-muted-foreground mt-1.5 italic">{caption}</p>}
       </div>
     );
   }
 
   // 2. Map Embed Widget
-  if (field.type === 'map_embed' || field.type === 'interactive_map') {
-    const address = field.address || field.placeholder || 'Austin, TX';
-    const zoom = field.zoom || 13;
-    const heightPx = field.heightPx || 200;
+  if (field.type === 'map_embed' || field.type === 'interactive_map' || field.widgetType === 'map_embed') {
+    const address = field.address || cfg.address || field.placeholder || 'Austin, TX';
+    const zoom = field.zoom || cfg.zoom || 13;
+    const heightPx = field.heightPx || cfg.heightPx || 220;
+    const badgeText = field.badgeText || cfg.badgeText || '📍 Live Verified Service Area';
+    const showBadge = field.showDispatchBadge ?? cfg.showDispatchBadge ?? true;
 
     return (
       <div className="w-full rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 relative shadow-sm" style={{ height: `${heightPx}px` }}>
@@ -276,17 +280,19 @@ function StudioFieldPreview({
           title={field.label || 'Map Widget'}
           className="w-full h-full border-0 pointer-events-none opacity-85"
         />
-        <div className="absolute top-2 left-2 z-10 bg-slate-900/90 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-1 shadow-md">
-          <MapPin className="size-3 text-rose-400" />
-          <span className="truncate max-w-[180px]">{address}</span>
-        </div>
+        {showBadge && (
+          <div className="absolute top-2 left-2 z-10 bg-slate-900/90 backdrop-blur text-white text-[10px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-md">
+            <MapPin className="size-3 text-rose-400" />
+            <span className="truncate max-w-[200px]">{badgeText || address}</span>
+          </div>
+        )}
       </div>
     );
   }
 
   // 3. Video Embed Widget
-  if (field.type === 'video_embed' || field.type === 'video_player') {
-    const videoUrl = field.videoUrl || (field.options?.[0]?.value as string) || '';
+  if (field.type === 'video_embed' || field.type === 'video_player' || field.widgetType === 'video_embed') {
+    const videoUrl = field.videoUrl || cfg.videoUrl || (field.options?.[0]?.value as string) || '';
     const isYt = videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be');
     const isVim = videoUrl.includes('vimeo.com');
 
@@ -323,9 +329,9 @@ function StudioFieldPreview({
   }
 
   // 4. Divider Widget
-  if (field.type === 'divider') {
-    const style = field.dividerStyle || 'solid';
-    const thickness = field.thicknessPx || 1;
+  if (field.type === 'divider' || field.widgetType === 'divider') {
+    const style = field.dividerStyle || cfg.dividerStyle || 'solid';
+    const thickness = field.thicknessPx || cfg.thicknessPx || 1;
     const borderStyleClass = style === 'dashed' ? 'border-dashed' : style === 'dotted' ? 'border-dotted' : 'border-solid';
 
     return (
@@ -340,23 +346,26 @@ function StudioFieldPreview({
   }
 
   // 5. Heading Widget
-  if (field.type === 'heading') {
+  if (field.type === 'heading' || field.widgetType === 'heading') {
+    const title = field.label || cfg.headingText || 'Section Heading';
+    const subtitle = field.helpText || cfg.helpText;
     return (
       <div className="w-full py-1">
         <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
-          {field.label || 'Section Heading'}
+          {title}
         </h3>
-        {field.helpText && <p className="text-xs text-muted-foreground mt-0.5">{field.helpText}</p>}
+        {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
       </div>
     );
   }
 
   // 6. Paragraph / Text Widget
-  if (field.type === 'paragraph') {
+  if (field.type === 'paragraph' || field.widgetType === 'paragraph') {
+    const text = field.label || field.placeholder || cfg.paragraphText || 'Enter informative descriptive text here...';
     return (
       <div className="w-full py-1">
         <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-          {field.label || field.placeholder || 'Enter informative descriptive text here...'}
+          {text}
         </p>
       </div>
     );
@@ -781,30 +790,47 @@ function StudioFieldPreview({
                                       </button>
                                     </div>
 
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <button className="p-1 rounded text-muted-foreground hover:text-foreground">
-                                          <Sliders className="size-3" />
-                                        </button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="text-xs w-44">
-                                        <DropdownMenuItem onClick={() => handleDuplicateField(f)} className="gap-1.5">
-                                          <Copy className="size-3.5" /> Duplicate Field
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleMoveField(f.id, 'up')} className="gap-1.5">
-                                          <ArrowUp className="size-3.5" /> Move Up
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleMoveField(f.id, 'down')} className="gap-1.5">
-                                          <ArrowDown className="size-3.5" /> Move Down
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem onClick={() => handleDeleteField(f.id)} className="gap-1.5 text-rose-600">
-                                          <Trash2 className="size-3.5" /> Delete Field
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDuplicateField(f)}
+                                        className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                        title="Duplicate Block"
+                                      >
+                                        <Copy className="size-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteField(f.id)}
+                                        className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                                        title="Delete Block"
+                                      >
+                                        <Trash2 className="size-3" />
+                                      </button>
+
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="More Options">
+                                            <Sliders className="size-3" />
+                                          </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="text-xs w-44">
+                                          <DropdownMenuItem onClick={() => handleDuplicateField(f)} className="gap-1.5">
+                                            <Copy className="size-3.5" /> Duplicate Field
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleMoveField(f.id, 'up')} className="gap-1.5">
+                                            <ArrowUp className="size-3.5" /> Move Up
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem onClick={() => handleMoveField(f.id, 'down')} className="gap-1.5">
+                                            <ArrowDown className="size-3.5" /> Move Down
+                                          </DropdownMenuItem>
+                                          <DropdownMenuSeparator />
+                                          <DropdownMenuItem onClick={() => handleDeleteField(f.id)} className="gap-1.5 text-rose-600">
+                                            <Trash2 className="size-3.5" /> Delete Field
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
                                   </div>
-                                </div>
 
                                 <StudioFieldPreview
                                   field={f}
@@ -1018,10 +1044,28 @@ function StudioFieldPreview({
                               </button>
                             </div>
 
+                            {/* Direct Duplicate & Delete Action Buttons */}
+                            <button
+                              type="button"
+                              onClick={() => handleDuplicateField(field)}
+                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              title="Duplicate Block"
+                            >
+                              <Copy className="size-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteField(field.id)}
+                              className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                              title="Delete Block"
+                            >
+                              <Trash2 className="size-3" />
+                            </button>
+
                             {/* More Actions Menu */}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800">
+                                <button className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800" title="More Options">
                                   <Sliders className="size-3" />
                                 </button>
                               </DropdownMenuTrigger>
@@ -1205,9 +1249,27 @@ function StudioFieldPreview({
                               </button>
                             </div>
 
+                            {/* Direct Duplicate & Delete Action Buttons */}
+                            <button
+                              type="button"
+                              onClick={() => handleDuplicateField(f)}
+                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              title="Duplicate Block"
+                            >
+                              <Copy className="size-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteField(f.id)}
+                              className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                              title="Delete Block"
+                            >
+                              <Trash2 className="size-3" />
+                            </button>
+
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button className="p-1 rounded text-muted-foreground hover:text-foreground">
+                                <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="More Options">
                                   <Sliders className="size-3" />
                                 </button>
                               </DropdownMenuTrigger>

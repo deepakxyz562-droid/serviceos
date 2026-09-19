@@ -108,6 +108,16 @@ export function StudioWidgetPalette({
     return results.filter((f) => !basicIds.has(f.id) && !f.unavailable);
   }, [searchQuery, selectedWidgetCategory]);
 
+  const CONTENT_BLOCK_IDS = useMemo(() => new Set(['static_image', 'map_embed', 'video_embed', 'heading', 'paragraph', 'divider']), []);
+
+  const contentWidgets = useMemo(() => {
+    return filteredBasic.filter((def) => CONTENT_BLOCK_IDS.has(def.id));
+  }, [filteredBasic, CONTENT_BLOCK_IDS]);
+
+  const formInputFields = useMemo(() => {
+    return filteredBasic.filter((def) => !CONTENT_BLOCK_IDS.has(def.id));
+  }, [filteredBasic, CONTENT_BLOCK_IDS]);
+
   return (
     <aside
       className={`w-80 lg:w-88 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200/90 dark:border-slate-800 shrink-0 h-full overflow-hidden select-none z-20 shadow-sm ${className}`}
@@ -210,40 +220,94 @@ export function StudioWidgetPalette({
         </button>
       </div>
 
-      {/* Tab 1: Basic Fields */}
+      {/* Tab 1: Basic Fields (Content & Media Blocks + Standard Form Inputs) */}
       {activeTab === 'basic' && (
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-1">
-            Standard Form Inputs
-          </p>
-          <div className="grid grid-cols-1 gap-1.5">
-            {filteredBasic.map((def) => {
-              const Icon = resolveIcon(def.icon);
-              return (
-                <button
-                  key={def.id}
-                  type="button"
-                  onClick={() => onAddRegistryField(def.id)}
-                  className="group w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 text-left transition-all shadow-2xs cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/50 text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 flex items-center justify-center shrink-0 transition-colors">
-                      <Icon className="size-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-foreground group-hover:text-emerald-950 dark:group-hover:text-emerald-200 truncate">
-                        {def.name}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground line-clamp-1">
-                        {def.description}
-                      </p>
-                    </div>
-                  </div>
-                  <Plus className="size-4 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0" />
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-4">
+          {/* Section A: Elementor-Style Content & Media Blocks */}
+          {contentWidgets.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                  <span>🎨 Content &amp; Media Blocks</span>
+                </p>
+                <Badge variant="secondary" className="text-[9px] py-0 px-1.5 font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  Elementor Style
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 gap-1.5">
+                {contentWidgets.map((def) => {
+                  const Icon = resolveIcon(def.icon);
+                  return (
+                    <button
+                      key={def.id}
+                      type="button"
+                      onClick={() => onAddRegistryField(def.id)}
+                      className="group w-full flex items-center justify-between p-2.5 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 bg-emerald-50/30 dark:bg-emerald-950/20 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-left transition-all shadow-2xs cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="size-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 transition-colors">
+                          <Icon className="size-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-bold text-foreground group-hover:text-emerald-950 dark:group-hover:text-emerald-200 truncate">
+                              {def.name}
+                            </p>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground line-clamp-1">
+                            {def.description}
+                          </p>
+                        </div>
+                      </div>
+                      <Plus className="size-4 text-emerald-600 transition-transform group-hover:scale-110 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Section B: Standard Form Inputs */}
+          {formInputFields.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Standard Form Inputs
+                </p>
+                <span className="text-[10px] text-muted-foreground">{formInputFields.length} fields</span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-1.5">
+                {formInputFields.map((def) => {
+                  const Icon = resolveIcon(def.icon);
+                  return (
+                    <button
+                      key={def.id}
+                      type="button"
+                      onClick={() => onAddRegistryField(def.id)}
+                      className="group w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 text-left transition-all shadow-2xs cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/50 text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 flex items-center justify-center shrink-0 transition-colors">
+                          <Icon className="size-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-foreground group-hover:text-emerald-950 dark:group-hover:text-emerald-200 truncate">
+                            {def.name}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground line-clamp-1">
+                            {def.description}
+                          </p>
+                        </div>
+                      </div>
+                      <Plus className="size-4 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

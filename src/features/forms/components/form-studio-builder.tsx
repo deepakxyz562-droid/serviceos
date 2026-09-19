@@ -278,6 +278,9 @@ export function FormStudioBuilder({
         buttonColor: formData.theme?.buttonColor || formData.primaryColor || '#059669',
         buttonTextColor: formData.theme?.buttonTextColor || '#ffffff',
         showTopBorder: formData.theme?.showTopBorder ?? false,
+        backgroundImageUrl: formData.theme?.backgroundImageUrl,
+        backgroundOverlayOpacity: formData.theme?.backgroundOverlayOpacity,
+        backgroundBlur: formData.theme?.backgroundBlur,
         layout: previewFormat === 'card'
           ? 'card'
           : previewFormat === 'agent'
@@ -461,9 +464,13 @@ export function FormStudioBuilder({
       placeholder: (def.placeholder as string) || '',
       options: (def.options as any) || undefined,
       widgetType: def.widgetType as string | undefined,
-      widgetConfig: def.widgetConfig as Record<string, unknown> | undefined,
+      widgetConfig: {
+        ...(def.widgetConfig as Record<string, unknown> || {}),
+        ...def,
+      },
       stepId: currentStepId,
       width: 'full',
+      ...def,
     };
     onFormDataChange((prev) => ({
       ...prev,
@@ -933,6 +940,20 @@ export function FormStudioBuilder({
                 📑 Stepper
               </button>
             </div>
+            <Separator orientation="vertical" className="h-4" />
+
+            {/* Background & Theme Customizer Button */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setThemeModalOpen(true)}
+              className="h-7 px-2.5 text-[11px] font-bold gap-1.5 rounded-lg border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 cursor-pointer shadow-2xs"
+              title="Customize Form Background Image, Backdrop Blur & Theme"
+            >
+              <Palette className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>🎨 Background &amp; Theme</span>
+            </Button>
           </div>
 
           {/* Right: Workspace Panels Segmented Toggles */}
