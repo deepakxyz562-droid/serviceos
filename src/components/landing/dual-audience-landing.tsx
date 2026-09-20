@@ -111,6 +111,10 @@ import { GooglePlayBadge } from '@/components/brand/google-play-badge';
 // and these sections load on demand.
 import { CrmPricing } from './crm-pricing';
 import { MarketplaceCompact } from './marketplace-compact';
+import { InteractiveJobSimulator } from '@/components/landing/interactive-job-simulator';
+import { AiWorkersShowcase } from '@/components/landing/ai-workers-showcase';
+import { TechnicianWorkspaceShowcase } from '@/components/landing/technician-workspace-showcase';
+import { MarketplaceGrowthSection } from '@/components/landing/marketplace-growth-section';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -129,8 +133,8 @@ export type Audience = 'crm' | 'forms' | 'marketplace';
 // stats without verifiable evidence — app store reviewers flag these.
 const stats = [
   { value: '25+', label: 'Industries served' },
-  { value: '3-in-1', label: 'Email · SMS · Push' },
-  { value: '14-day', label: 'Free trial' },
+  { value: '100', label: 'Lifetime Jobs Free' },
+  { value: '3-in-1', label: 'Email · SMS · WhatsApp' },
   { value: '99.9%', label: 'Uptime target' },
 ];
 
@@ -146,7 +150,7 @@ const industryChips = [
 // Hero trust badges — conversion confidence
 const heroTrustBadges = [
   { icon: Clock, label: 'Live in under 10 minutes' },
-  { icon: Wallet, label: 'Get started for $5/month' },
+  { icon: Wallet, label: 'Start Free — 100 Lifetime Jobs' },
   { icon: ShieldCheck, label: 'No credit card required' },
   { icon: Mail, label: 'Email & SMS work day one' },
 ];
@@ -181,8 +185,8 @@ const problemPains = [
 // "35% fewer no-shows") implied aggregated customer results we cannot evidence.
 const roiMetrics = [
   { target: 25, suffix: '+', label: 'Industries supported', description: 'From plumbing to pet services' },
-  { target: 3, suffix: '', label: 'Notification channels', description: 'Email, SMS, and Push built in' },
-  { target: 14, suffix: '', label: 'Day free trial', description: 'Full access, no card required' },
+  { target: 3, suffix: '', label: 'Notification channels', description: 'Email, SMS, and WhatsApp built in' },
+  { target: 100, suffix: '', label: 'Lifetime Jobs Free', description: 'Full access, no card required' },
   { target: 24, suffix: '/7', label: 'AI receptionist', description: 'Answers every call, day or night' },
 ];
 
@@ -1496,21 +1500,21 @@ function HeroFork({
         <div className="mb-4 flex justify-center">
           <Badge className="gap-1.5 border-emerald-200 bg-white/80 px-3.5 py-1 text-emerald-800 backdrop-blur hover:bg-white dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 shadow-xs">
             <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            2026 AI Operating System for Field Service &amp; Verified Local Pros
+            AI-Powered Operating System for Service Businesses
           </Badge>
         </div>
 
         <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl md:text-6xl lg:text-7xl leading-[1.08] max-w-5xl mx-auto">
-          Run your service business.{' '}
+          Run every job{' '}
           <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">
-            Automate calls, dispatch &amp; forms.
+            from lead to paid.
           </span>
         </h1>
         <p className="mx-auto mt-4 max-w-3xl text-base text-muted-foreground sm:text-lg lg:text-xl leading-relaxed">
-          The complete platform for contractors and local service pros: Field Service OS, 24/7 AI Voice Receptionist, 20,391 smart form templates, and a 3-bid on-demand customer marketplace with <strong>$0 upfront lead fees</strong>.
+          Fieseros brings leads, customers, quotes, scheduling, dispatch, technicians, invoices, payments, and AI into one operating system — while the Fieseros Marketplace helps you win more work.
         </p>
 
-        {/* ── 2026 Consumer AI Fast Quote Search Bar ── */}
+        {/* ── Consumer / Homeowner Fast Quote Search Bar ── */}
         <div className="mt-8 max-w-3xl mx-auto">
           <form
             onSubmit={handleHomeownerSearch}
@@ -1522,7 +1526,7 @@ function HeroFork({
                 type="text"
                 value={homeownerInput}
                 onChange={(e) => setHomeownerInput(e.target.value)}
-                placeholder="What service do you need? (e.g. AC not cooling, burst pipe, house cleaning...)"
+                placeholder="What service do you need? (e.g. AC not cooling, boiler leak, electrical...)"
                 className="w-full bg-transparent text-sm sm:text-base text-foreground placeholder:text-muted-foreground focus:outline-none py-2"
               />
             </div>
@@ -1530,7 +1534,7 @@ function HeroFork({
               type="submit"
               className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 sm:h-12 px-6 rounded-xl shadow-md gap-1.5"
             >
-              <span>Get 3 Free Bids</span>
+              <span>Get Free Quotes</span>
               <ArrowRight className="h-4 w-4" />
             </Button>
           </form>
@@ -1559,13 +1563,13 @@ function HeroFork({
           {/* Trust Guarantees */}
           <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
             <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-semibold">
-              <ShieldCheck className="h-3.5 w-3.5" /> 100% Identity-Verified Pros
+              <ShieldCheck className="h-3.5 w-3.5" /> Verified Local Contractors
             </span>
             <span className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5 text-teal-600" /> 3 Tiered Bids in ~10 Mins
+              <Clock className="h-3.5 w-3.5 text-teal-600" /> Fast Response Times
             </span>
             <span className="flex items-center gap-1">
-              <Lock className="h-3.5 w-3.5 text-amber-600" /> Money Protected in Escrow
+              <Lock className="h-3.5 w-3.5 text-amber-600" /> Secure Payment &amp; Release
             </span>
           </div>
         </div>
@@ -1579,9 +1583,19 @@ function HeroFork({
               size="lg"
               className="h-12 px-7 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40 rounded-xl"
             >
-              Start 14-Day Free Trial <ArrowRight className="w-4 h-4 ml-2" />
+              Start Free — $0 <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
-          ) : null}
+          ) : (
+            <Button
+              asChild
+              size="lg"
+              className="h-12 px-7 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40 rounded-xl"
+            >
+              <Link href="/register">
+                Start Free — $0 <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
+          )}
 
           <Button
             asChild
@@ -1606,9 +1620,9 @@ function HeroFork({
             </Button>
           ) : null}
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">Get started for $5/month &bull; No credit card required &bull; Live in under 10 minutes</p>
+        <p className="mt-2 text-xs text-muted-foreground">100 Lifetime Jobs included &bull; No credit card required &bull; Live in under 10 minutes</p>
 
-        {/* Audience Fork — 3 Modes (Contractor CRM, AI Forms & Templates, 3-Bid Marketplace) */}
+        {/* Audience Fork — 3 Modes (Contractor CRM, AI Forms & Templates, Marketplace) */}
         <div className="mx-auto mt-9 max-w-4xl">
           <p className="mb-3 text-xs uppercase tracking-widest text-muted-foreground font-bold">Choose your experience</p>
           <div className="grid gap-3 sm:grid-cols-3 text-left">
@@ -1693,7 +1707,7 @@ function HeroFork({
                     {audience === 'marketplace' ? <Check className="h-4 w-4 text-white shrink-0" /> : null}
                   </div>
                   <p className={cn('mt-1 text-xs leading-snug', audience === 'marketplace' ? 'text-amber-50' : 'text-muted-foreground')}>
-                    Post in 60s. Get 3 verified bids in 10 mins. Escrow protection.
+                    Post in 60s. Get verified bids. Secure escrow payment.
                   </p>
                 </div>
               </div>
@@ -1701,8 +1715,10 @@ function HeroFork({
           </div>
         </div>
 
-        {/* ── 2026 Interactive Hero Simulator ── */}
-        <InteractiveHeroSimulator onGetStarted={onGetStarted} />
+        {/* ── 2026 Interactive Job Lifecycle Simulator ── */}
+        <div className="mt-10">
+          <InteractiveJobSimulator onGetStarted={onGetStarted} />
+        </div>
 
         {/* Trust badges row */}
         <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
@@ -2832,16 +2848,16 @@ function CrmThreeBidMarketplace({ onGetStarted }: { onGetStarted?: () => void })
         <div className="mb-12 text-center">
           <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-300 mb-3 font-semibold px-3 py-1">
             <Store className="w-3.5 h-3.5 mr-1.5 text-amber-600" />
-            3-Bid Marketplace · AllBetter Model · Escrow Guarantee
+            Demand &amp; Marketplace Network
           </Badge>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-foreground tracking-tight">
-            Get 3 verified bids in 10 minutes — <br className="hidden sm:inline" />
+            Win high-intent local jobs — <br className="hidden sm:inline" />
             <span className="bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 bg-clip-text text-transparent dark:from-amber-400 dark:via-orange-400 dark:to-rose-400">
-              or win high-intent jobs with $0 lead fees
+              without paying upfront for dead leads
             </span>
           </h2>
           <p className="text-muted-foreground mt-4 max-w-3xl mx-auto text-base sm:text-lg leading-relaxed">
-            The modern marketplace model. Homeowners post tasks in 60 seconds with escrow protection. Verified contractors bid for free and only pay a fair 2.5%–8% fee when winning the job.
+            A fair marketplace model. Customers post requests with clear requirements. Verified contractors bid with transparent pricing and only pay a modest completion fee when the job is won and completed.
           </p>
         </div>
 
@@ -2855,7 +2871,7 @@ function CrmThreeBidMarketplace({ onGetStarted }: { onGetStarted?: () => void })
               </div>
               <div>
                 <h3 className="text-lg font-bold text-foreground">For Homeowners &amp; Property Managers</h3>
-                <p className="text-xs text-muted-foreground">Fast, transparent &amp; 100% risk-free</p>
+                <p className="text-xs text-muted-foreground">Fast, transparent &amp; verified pros</p>
               </div>
             </div>
 
@@ -2868,18 +2884,18 @@ function CrmThreeBidMarketplace({ onGetStarted }: { onGetStarted?: () => void })
                 },
                 {
                   step: '2',
-                  title: 'Receive 3 Upfront Bids in ~10 Mins',
-                  desc: 'Verified, background-checked local pros review your request and submit binding price quotes with estimated arrival times.',
+                  title: 'Receive Upfront Verified Quotes',
+                  desc: 'Verified local pros review your request and submit transparent price estimates with estimated arrival times.',
                 },
                 {
                   step: '3',
-                  title: '100% Escrow Protection',
-                  desc: 'Funds are held securely. Your contractor only gets paid after you inspect and sign off on the completed work.',
+                  title: 'Secure Payment Protection',
+                  desc: 'Funds are held safely and released when you inspect and sign off on the completed work.',
                 },
                 {
                   step: '4',
-                  title: 'Live Telemetry & GPS Tracking',
-                  desc: 'Track your technician on the live map in real-time as they drive to your address.',
+                  title: 'Live Updates & Tracking',
+                  desc: 'Stay informed with real-time status updates and technician arrival notifications.',
                 },
               ].map((item) => (
                 <div key={item.step} className="flex items-start gap-3.5">
@@ -3220,10 +3236,31 @@ export function DualAudienceLanding({
         <CrmProblem />
         <CrmHowItWorks />
         <CrmFeatures />
+
+        {/* Dedicated 24/7 AI Workers Showcase */}
+        <section id="ai-team" className="border-t bg-muted/20 py-16 sm:py-24">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <AiWorkersShowcase onGetStarted={onGetStarted} />
+          </div>
+        </section>
+
+        {/* Field Technician Mobile Workspace */}
+        <section id="technician-mobile" className="border-t bg-background py-16 sm:py-24">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <TechnicianWorkspaceShowcase />
+          </div>
+        </section>
+
+        {/* Marketplace Demand & Network Growth */}
+        <section id="marketplace-growth" className="border-t bg-muted/30 py-16 sm:py-24">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <MarketplaceGrowthSection />
+          </div>
+        </section>
+
         <CrmAiFormShowcase />
         <CrmThreeBidMarketplace onGetStarted={onGetStarted} />
         <CrmChannels />
-        <CrmAiReceptionist onGetStarted={onGetStarted} />
         <CrmRoiMetrics />
         <CrmVsCompetitors onGetStarted={onGetStarted} />
         <CrmTestimonials />

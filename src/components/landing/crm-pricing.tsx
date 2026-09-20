@@ -372,9 +372,12 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                 </CardHeader>
                 <CardContent className="flex-1">
                   <div className="mb-5">
-                    {/* Issue 6: treat monthlyPrice === 0 the same as null (Enterprise = Custom).
-                        Previously a DB-stored 0 for Enterprise rendered as "$0/mo" instead of "Custom". */}
-                    {(plan.monthlyPrice !== null && plan.monthlyPrice !== undefined && plan.monthlyPrice > 0) ? (
+                    {plan.monthlyPrice === 0 ? (
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl font-extrabold text-foreground">$0</span>
+                        <span className="text-muted-foreground text-sm">/mo (100 Jobs Free)</span>
+                      </div>
+                    ) : (plan.monthlyPrice !== null && plan.monthlyPrice !== undefined && plan.monthlyPrice > 0) ? (
                       <>
                         {/* Strikethrough original price + Save % badge */}
                         {plan.originalMonthlyPrice > 0 && (
