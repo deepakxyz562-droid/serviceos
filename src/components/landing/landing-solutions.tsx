@@ -102,10 +102,10 @@ export const solutionsLinks = {
   ],
   aiAndTools: [
     {
-      label: 'GPTSite™ AI Employee',
-      desc: '24/7 AI chatbot receptionist that answers questions & books jobs',
+      label: 'GPTSite™ AI Website Builder',
+      desc: 'AI website & high-converting service landing page generator',
       href: '/gptsite',
-      icon: Bot,
+      icon: Globe,
       badge: 'New',
     },
     {
@@ -176,13 +176,19 @@ export const solutionsLinks = {
   ],
   freeTools: [
     { label: 'Free Invoice Generator', href: '/invoice-generator' },
+    { label: 'Free Roofing & Estimate Calculator', href: '/gptform' },
+    { label: '20,000+ Form Templates', href: '/templates' },
+    { label: 'Free Public Booking Page Generator', href: '/request' },
+    { label: 'Service Labor & Parts Calculator', href: '/gptform' },
+    { label: 'Digital Signature & Sign-Off Tool', href: '/gptform' },
+    { label: 'Contractor Receipt PDF Maker', href: '/invoice-generator' },
   ],
 };
 
 // Footer link groups
 export const footerLinks = {
   product: [
-    { label: 'GPTSite™ AI Employee', href: '/gptsite' },
+    { label: 'GPTSite™ AI Website Builder', href: '/gptsite' },
     { label: 'GPTForm™ Smart Forms', href: '/gptform' },
     { label: '20,000+ Form Templates', href: '/templates' },
     { label: 'CRM Overview', href: '/#crm-features' },

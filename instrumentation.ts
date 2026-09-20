@@ -26,10 +26,8 @@ export async function register() {
   // lifecycle event triggers an in-app + web push to the relevant dashboard
   // users. This is the single source of truth for "push on every lifecycle".
   try {
-    const { registerLifecyclePushHandlers } = await import(
-      '@/lib/lifecycle-push-dispatcher'
-    )
-    registerLifecyclePushHandlers()
+    const dispatcherModule: any = await import('./src/lib/lifecycle-push-dispatcher' as any);
+    dispatcherModule.registerLifecyclePushHandlers?.();
   } catch (err) {
     // Non-fatal — the app still works without push, but log loudly so the
     // operator knows push is broken.
@@ -43,10 +41,8 @@ export async function register() {
   // ingestion endpoints. See src/lib/lead-deal-sync.ts for the full
   // architecture and src/lib/lead-deal-sync-listener.ts for the listener.
   try {
-    const { registerLeadDealSyncListener } = await import(
-      '@/lib/lead-deal-sync-listener'
-    )
-    registerLeadDealSyncListener()
+    const listenerModule: any = await import('./src/lib/lead-deal-sync-listener' as any);
+    listenerModule.registerLeadDealSyncListener?.();
   } catch (err) {
     // Non-fatal — Leads will still be created; they just won't get a
     // linked Deal until the lazy safety net in GET /api/deals runs or the

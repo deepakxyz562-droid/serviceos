@@ -297,23 +297,46 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
             Simple, <span className="text-emerald-600">Transparent Pricing</span>
           </h2>
-          <p className="text-muted-foreground mt-3">Start free for 14 days. No credit card required. Email, SMS & Push notifications included on every plan. WhatsApp available with your own Meta API.</p>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto text-sm sm:text-base">
+            Start free with 100 Lifetime Jobs. No credit card required. Email, SMS &amp; In-App notifications included on every plan.
+          </p>
 
-          <div className="flex items-center justify-center gap-3 mt-6">
-            <span className={cn('text-sm font-medium', !yearly ? 'text-foreground' : 'text-muted-foreground')}>Monthly</span>
+          {/* Segmented Pill Switcher */}
+          <div className="inline-flex items-center p-1.5 rounded-full bg-slate-200/80 dark:bg-slate-800 border border-slate-300/80 dark:border-slate-700 shadow-inner mt-6">
             <button
               type="button"
-              onClick={() => setYearly(!yearly)}
-              className="relative w-14 h-7 rounded-full bg-muted border border-border transition-colors"
-              aria-label="Toggle yearly pricing"
+              onClick={() => setYearly(false)}
+              className={cn(
+                'px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5',
+                !yearly
+                  ? 'bg-white dark:bg-slate-900 text-foreground shadow-md'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
             >
-              <span className={cn('absolute top-0.5 h-6 w-6 rounded-full bg-emerald-600 shadow-sm transition-transform',
-                yearly ? 'translate-x-7' : 'translate-x-0.5')} />
+              <span>Monthly</span>
             </button>
-            <span className={cn('text-sm font-medium flex items-center gap-1', yearly ? 'text-foreground' : 'text-muted-foreground')}>
-              Yearly
-              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Save ~17%</Badge>
-            </span>
+            <button
+              type="button"
+              onClick={() => setYearly(true)}
+              className={cn(
+                'px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-2',
+                yearly
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <span>Yearly</span>
+              <span
+                className={cn(
+                  'text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide transition-colors',
+                  yearly
+                    ? 'bg-white/20 text-white'
+                    : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                )}
+              >
+                Save ~17%
+              </span>
+            </button>
           </div>
         </div>
 

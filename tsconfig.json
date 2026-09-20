@@ -48,6 +48,8 @@
     "e2e",
     "prisma/seed-users.ts",
     "prisma/seed.ts",
-    "prisma/seed-crm.ts"
+    "prisma/seed-crm.ts",
+    "prisma",
+    "scratch"
   ]
 }

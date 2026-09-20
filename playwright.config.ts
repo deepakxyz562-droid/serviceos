@@ -47,14 +47,10 @@ export default defineConfig({
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      // Firefox is slower in CI — skip on PRs until the suite is stable
-      onlyIn: !process.env.CI ? undefined : ['chromium'],
     },
     {
       name: 'mobile-chrome',
       use: { ...devices['Pixel 5'] },
-      // Run mobile tests only on main (not every PR) to save CI minutes
-      onlyIn: !process.env.CI ? undefined : ['chromium'],
     },
   ],
   // Start the dev server automatically before running tests.
