@@ -117,6 +117,26 @@ export function generateToken(user: AuthUser, originalIat?: number): string {
   );
 }
 
+/**
+ * Convenience alias for signing tokens from various auth providers (SAML, SSO, OAuth).
+ */
+export function signToken(
+  user: { id?: string; userId?: string; email: string; name?: string; role: string; tenantId?: string | null; workspaceId?: string | null },
+  originalIat?: number
+): string {
+  return generateToken(
+    {
+      id: user.userId || user.id || '',
+      email: user.email,
+      name: user.name || user.email.split('@')[0],
+      role: user.role as any,
+      tenantId: user.tenantId || null,
+      workspaceId: user.workspaceId || null,
+    },
+    originalIat
+  );
+}
+
 export function verifyToken(token: string): AuthUser | null {
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
