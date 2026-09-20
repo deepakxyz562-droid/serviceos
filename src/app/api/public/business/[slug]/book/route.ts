@@ -356,6 +356,7 @@ export async function POST(
       console.warn('[public-business/book] Job creation failed (non-fatal, Lead was created):', jobErr)
     }
 
+    if (job?.id) {
       // Backlink: record the jobId on the Lead's notesJson so the CRM can
       // deep-link from the Lead card to the Job / tracking page.
       try {
@@ -374,8 +375,6 @@ export async function POST(
       } catch (backlinkErr) {
         console.warn('[public-business/book] lead backlink failed (non-fatal):', backlinkErr)
       }
-    } catch (jobErr) {
-      console.error('[public-business/book] job creation failed (lead still created):', jobErr)
     }
 
     // Fire-and-forget: notify the business owner via Email + in-app Bell
