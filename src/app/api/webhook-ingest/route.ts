@@ -12,6 +12,21 @@ export async function POST(request: NextRequest) {
 
     switch (event) {
       case 'NEW_JOB': {
+        // PL1.1: Enforce lifetime job limit on webhook-ingested jobs
+        if (data.tenantId) {
+          const { checkLifetimeJobLimit } = await import('@/lib/plan-gate');
+          const quota = await checkLifetimeJobLimit(data.tenantId);
+          if (!quota.ok) {
+            return NextResponse.json(
+              {
+                error: 'LIFETIME_JOB_LIMIT_REACHED',
+                message: 'This tenant has reached the 100 free lifetime jobs limit.',
+              },
+              { status: 403 },
+            );
+          }
+        }
+
         const job = await db.job.create({
           data: {
             title: data.title || 'New Job',
@@ -32,6 +47,11 @@ export async function POST(request: NextRequest) {
             workspaceId: data.workspaceId,
           },
         })
+
+        if (data.tenantId) {
+          const { incrementTenantJobCount } = await import('@/lib/plan-gate');
+          incrementTenantJobCount(data.tenantId).catch(() => {});
+        }
 
         // Update webhook source last sync time
         if (source) {

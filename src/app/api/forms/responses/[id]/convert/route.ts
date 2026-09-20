@@ -93,6 +93,24 @@ export async function POST(
     }
 
     if (target === 'job') {
+      // PL1.1: Enforce lifetime job limit on form response → job conversion
+      if (authUser?.tenantId) {
+        const { checkLifetimeJobLimit, incrementTenantJobCount } = await import('@/lib/plan-gate');
+        const quota = await checkLifetimeJobLimit(authUser.tenantId);
+        if (!quota.ok) {
+          return NextResponse.json(
+            {
+              error: 'LIFETIME_JOB_LIMIT_REACHED',
+              message: 'You have reached the 100 free lifetime jobs limit. Upgrade to Fieseros CRM to create unlimited jobs.',
+              count: quota.count,
+              limit: quota.limit,
+              upgradeUrl: '/billing',
+            },
+            { status: 403 },
+          );
+        }
+      }
+
       const job = await db.job.create({
         data: {
           title: `${serviceType} - ${name}`,
@@ -112,6 +130,11 @@ export async function POST(
         where: { id: response.id },
         data: { jobId: job.id },
       });
+
+      const tenantToIncrement = authUser?.tenantId || effectiveTenantId;
+      if (tenantToIncrement) {
+        incrementTenantJobCount(tenantToIncrement).catch(() => {});
+      }
 
       return NextResponse.json({
         success: true,

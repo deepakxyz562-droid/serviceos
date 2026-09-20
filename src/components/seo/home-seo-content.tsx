@@ -192,6 +192,7 @@ export function HomeSeoContent() {
             Build it. Grow it. Run it. — The Operating System for Service Businesses
           </h1>
           <p className="text-lg leading-relaxed text-muted-foreground mb-4">
+            <strong className="text-emerald-600">Run your first 100 jobs free.</strong>{' '}
             Fieseros is the only platform that does all three.{' '}
             <strong className="text-foreground">Build</strong> a website that
             generates leads. <strong className="text-foreground">Grow</strong> with

@@ -66,11 +66,16 @@ export async function POST(request: NextRequest) {
     // never breaks. Existing launch_special subscribers keep their plan.
     const requestedPlan = (body.plan || body.planCode || '').trim();
     const defaultSignupPlan = await resolveSignupDefaultPlan();
-    const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise'];
+    const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise', 'free'];
+
+    // PL1.5: Support free plan signup (100 lifetime jobs + free forms)
+    // When plan='free', user gets the free ecosystem: Forms + Leads + 100 Jobs
     const signupPlan = requestedPlan && validPlans.includes(requestedPlan)
       ? requestedPlan
       : defaultSignupPlan;
 
+    // Free plan: no trial, no expiration, 100 lifetime jobs
+    const isFreePlan = signupPlan === 'free';
     const isStandalone = signupPlan === 'standalone_starter' || signupPlan === 'standalone_business';
 
     const tenant = await db.tenant.create({
@@ -83,8 +88,8 @@ export async function POST(request: NextRequest) {
         city: city || null,
         website: website || null,
         plan: signupPlan,
-        planStatus: 'trial',
-        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
+        planStatus: isFreePlan ? 'active' : 'trial',
+        trialEndsAt: isFreePlan ? null : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial (skip for free)
         marketplaceOptIn: false,
         marketplaceTermsAcceptedAt: null,
         // Registered businesses created by owner are claimed by default for CRM,
@@ -92,9 +97,9 @@ export async function POST(request: NextRequest) {
         claimed: isStandalone ? false : true,
         listingTier: isStandalone ? 'none' : 'claimed',
         publicProfileEnabled: isStandalone ? false : true,
-        signupMode: isStandalone ? 'standalone' : 'crm_trial',
-        onboardingCompleted: isStandalone ? true : false,
-        onboardingStep: isStandalone ? 4 : 1,
+        signupMode: isStandalone ? 'standalone' : (isFreePlan ? 'free' : 'crm_trial'),
+        onboardingCompleted: isStandalone || isFreePlan ? true : false,
+        onboardingStep: isStandalone || isFreePlan ? 4 : 1,
       },
     });
 

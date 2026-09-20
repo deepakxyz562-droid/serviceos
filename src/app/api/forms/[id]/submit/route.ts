@@ -344,6 +344,21 @@ export async function POST(
               if (customer) customerId = customer.id;
             }
 
+            // PL1.1: Enforce lifetime job limit on form submit → job creation
+            if (validTenantId) {
+              const { checkLifetimeJobLimit } = await import('@/lib/plan-gate');
+              const quota = await checkLifetimeJobLimit(validTenantId);
+              if (!quota.ok) {
+                actionResults.create_booking = {
+                  success: false,
+                  error: 'LIFETIME_JOB_LIMIT_REACHED',
+                  message: 'You have reached the 100 free lifetime jobs limit.',
+                  upgradeUrl: '/billing',
+                };
+                break; // Skip job creation
+              }
+            }
+
             const job = await db.job.create({
               data: {
                 title,
@@ -359,6 +374,11 @@ export async function POST(
                 workspaceId: form.workspaceId,
               },
             });
+
+            if (validTenantId) {
+              const { incrementTenantJobCount } = await import('@/lib/plan-gate');
+              incrementTenantJobCount(validTenantId).catch(() => {});
+            }
 
             await db.formResponse.update({
               where: { id: response.id },
@@ -385,6 +405,21 @@ export async function POST(
               if (customer) customerId = customer.id;
             }
 
+            // PL1.1: Enforce lifetime job limit (second job creation path)
+            if (validTenantId) {
+              const { checkLifetimeJobLimit } = await import('@/lib/plan-gate');
+              const quota = await checkLifetimeJobLimit(validTenantId);
+              if (!quota.ok) {
+                actionResults.create_job = {
+                  success: false,
+                  error: 'LIFETIME_JOB_LIMIT_REACHED',
+                  message: 'You have reached the 100 free lifetime jobs limit.',
+                  upgradeUrl: '/billing',
+                };
+                break;
+              }
+            }
+
             const job = await db.job.create({
               data: {
                 title,
@@ -400,6 +435,11 @@ export async function POST(
                 workspaceId: form.workspaceId,
               },
             });
+
+            if (validTenantId) {
+              const { incrementTenantJobCount } = await import('@/lib/plan-gate');
+              incrementTenantJobCount(validTenantId).catch(() => {});
+            }
 
             await db.formResponse.update({
               where: { id: response.id },
