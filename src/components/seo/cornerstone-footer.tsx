@@ -106,11 +106,14 @@ export function CornerstoneFooter() {
                 </span>
               </Link>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                The all-in-one operating system for field service and trade businesses. Dispatching, CRM, invoicing, payments, and 24/7 AI Receptionist built for growth.
+                An all-in-one software platform and local marketplace designed to help field service companies and trade businesses run their operations, build websites, and find customers.
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-800/80 text-emerald-400 text-xs font-semibold">
+                <ShieldCheck className="size-3.5" /> 100% Direct Payouts (0% Commission)
+              </span>
               <div className="flex items-center">
                 <GooglePlayBadge size="sm" />
               </div>
