@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import HomePageClient from '@/components/home/home-page-client';
 import { FeaturedEuropeanLocation } from '@/components/home/featured-european-location';
 import { HomeSeoContent } from '@/components/seo/home-seo-content';
+import { LandingFooter } from '@/components/landing/landing-solutions';
 
 /**
  * The HTTP-only auth cookie name. Mirrors `TOKEN_NAME` in `src/lib/auth.ts`.
@@ -162,6 +163,8 @@ export default async function HomePage() {
       {!hasAuthCookie && <HomeSeoContent />}
       {/* Hourly-rotating European city spotlight — server-rendered */}
       {!hasAuthCookie && <FeaturedEuropeanLocation />}
+      {/* Global Cornerstone Footer at the very bottom of the page */}
+      {!hasAuthCookie && <LandingFooter />}
     </>
   );
 }

@@ -3287,7 +3287,6 @@ export function DualAudienceLanding({
         <CrmForProviders onGetStarted={onGetStarted} />
       </main>
 
-      <LandingFooter />
       <StickyCta audience={audience} onPick={handleAudiencePick} onGetStarted={onGetStarted} />
     </div>
   );
