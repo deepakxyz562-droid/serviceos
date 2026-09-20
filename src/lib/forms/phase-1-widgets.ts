@@ -121,13 +121,9 @@ const WIDGET_SPECS: WidgetSpec[] = [
     ] },
     { key: 'defaultToCurrent', label: 'Default to current time', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Pre-fill with current date and time.' },
   ]],
-  ['appointment', 'Appointment Booking', 'datetime', 'CalendarCheck', 'Time-slot booking with availability', 'POPULAR', 'pro', [
-    { key: 'duration', label: 'Duration (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 480 },
-    { key: 'interval', label: 'Slot interval (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 120 },
-    { key: 'leadTime', label: 'Min lead time (hours)', type: 'number', group: 'field_specific', default: 24, min: 0 },
-    { key: 'rollingDays', label: 'Booking window (days in advance)', type: 'number', group: 'field_specific', default: 30, min: 1, max: 365 },
-    { key: 'maxPerSlot', label: 'Max attendees per slot', type: 'number', group: 'field_specific', default: 1, min: 1, max: 50 },
-  ]],
+  // NOTE: 'appointment' is defined in field-registry.ts with a richer settingsSchema
+  // (10+ settings including slotDuration, interval, rollingDays, timezone, etc.)
+  // Removed from phase-1 to avoid duplicate ID in FIELD_REGISTRY.
   ['birth_date', 'Birth Date', 'datetime', 'Cake', 'Date picker with min/max age', '', 'free', [
     { key: 'minAge', label: 'Min age', type: 'number', group: 'field_specific', default: 0, min: 0 },
     { key: 'maxAge', label: 'Max age', type: 'number', group: 'field_specific', default: 120 },

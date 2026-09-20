@@ -58,10 +58,34 @@ model Tenant {
   suspendedAt       DateTime?
   suspensionReason  String?
   whiteLabelJson    String   @default("{}")
+  // ── Google Calendar 2-Way Sync (G2.1) ──────────────────────────────────
+  googleCalendarRefreshToken String?  // encrypted OAuth refresh token
+  googleCalendarEmail        String?  // the connected Google account email
+  googleCalendarSyncEnabled  Boolean @default(false)
+  // ── SSO/SAML (G3 — Enterprise SSO) ──────────────────────────────────────
+  samlEnabled        Boolean @default(false)
+  samlEntryUrl       String?  // IdP login URL (where to redirect for SAML auth)
+  samlCert           String?  // IdP X.509 certificate (base64)
+  samlIssuer         String?  // Entity ID / issuer
+  samlAttributeEmail String?  // which SAML attribute maps to email (default: email)
+  samlAttributeName  String?  // which SAML attribute maps to name (default: name)
+  oidcEnabled        Boolean @default(false)
+  oidcClientId       String?
+  oidcClientSecret   String?  // encrypted
+  oidcDiscoveryUrl   String?  // /.well-known/openid-configuration URL
+  // ── HIPAA Compliance (G4) ─────────────────────────────────────────────
+  hipaaMode          Boolean @default(false)
+  baaAccepted        Boolean @default(false)
+  baaAcceptedAt      DateTime?
+  baaAcceptedById    String?
+  phiEncryptionEnabled Boolean @default(false)
   region            String   @default("us-east-1")
   mrr               Float    @default(0)
   arr               Float    @default(0)
   churnRate         Float    @default(0)
+
+  // ── Standalone E-Signature (G5 — Jotform Sign competitor) ───────────────
+  signDocuments     SignDocument[]
 
   // ── Marketplace Eligibility (Phase 1: Revenue Architecture) ────────────
   // A tenant must satisfy ALL gates to receive marketplace leads:
@@ -8771,4 +8795,108 @@ model VapiProviderConfig {
   defaultWebhookUrl      String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+
+// ─── Standalone E-Signature (G5 — Jotform Sign competitor) ────────────────
+
+/**
+ * SignDocument — a document sent for e-signature.
+ *
+ * Similar to Jotform Sign / DocuSign: upload a document, add signature
+ * fields, send to recipients for signing, track status, generate audit PDF.
+ */
+model SignDocument {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  title           String
+  description     String?
+  documentUrl     String   // URL to the original PDF/DOCX
+  documentHash    String?  // SHA-256 hash for tamper detection
+  status          String   @default("draft") // draft, sent, partially_signed, completed, voided, expired
+  senderId        String?  // User who sent the document
+  
+  // Signers (recipients)
+  signers         SignRequest[]
+  
+  // Signature field positions (on the document)
+  fields          SignField[]
+  
+  // Audit trail
+  auditTrailJson  String   @default("[]") // [{ event, timestamp, ip, userAgent, userId, details }]
+  
+  // Completion
+  completedAt     DateTime?
+  auditPdfUrl     String?  // generated audit certificate PDF URL
+  
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
+  
+  @@index([tenantId])
+  @@index([status])
+  @@index([senderId])
+}
+
+/**
+ * SignRequest — a recipient's signing request within a SignDocument.
+ *
+ * Each document can have multiple signers with sequential signing order.
+ */
+model SignRequest {
+  id              String   @id @default(cuid())
+  documentId      String
+  signerName      String
+  signerEmail     String
+  signerPhone     String?
+  signingOrder    Int      @default(1) // 1 = first, 2 = second, etc.
+  status          String   @default("pending") // pending, viewed, signed, declined, expired
+  accessToken     String   @unique // secure token for /sign/[token] access
+  
+  // Signature data
+  signatureImage  String?  // base64 PNG of the signature
+  signedAt        DateTime?
+  signerIp        String?
+  signerUserAgent String?
+  
+  // Decline
+  declineReason   String?
+  declinedAt      DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  document        SignDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  @@index([documentId])
+  @@index([status])
+  @@index([accessToken])
+}
+
+/**
+ * SignField — a signature field placement on a document.
+ *
+ * Defines where on the document each signer should sign.
+ */
+model SignField {
+  id              String   @id @default(cuid())
+  documentId      String
+  signerRequestId String?  // which signer signs this field (null = any signer)
+  type            String   @default("signature") // signature, initial, date, text, checkbox
+  label           String   @default("Signature")
+  pageNumber       Int      @default(1) // which page (1-indexed)
+  xPosition       Float    @default(0.1) // relative X position (0-1)
+  yPosition       Float    @default(0.1) // relative Y position (0-1)
+  width           Float    @default(0.3) // relative width (0-1)
+  height          Float    @default(0.1) // relative height (0-1)
+  required        Boolean  @default(true)
+  value           String?  // filled value (signature image, text, etc.)
+  
+  createdAt       DateTime @default(now())
+  
+  document        SignDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  @@index([documentId])
 }

@@ -245,6 +245,10 @@ const TABLE_MAP: Record<string, string> = {
   availability: 'Availability',
   serviceAvailability: 'ServiceAvailability',
   holidayCalendar: 'HolidayCalendar',
+  // ── Standalone E-Signature (Jotform Sign / DocuSign Parity) ──
+  signDocument: 'SignDocument',
+  signRequest: 'SignRequest',
+  signField: 'SignField',
   // ── AI Receptionist (Phase R2) ──
   // These models extend AiAgent/AiCall with IVR menus, escalation policies,
   // discrete call tags, and per-tenant billing counters. The tables MUST

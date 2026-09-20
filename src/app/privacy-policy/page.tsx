@@ -411,9 +411,11 @@ export default function PrivacyPolicyPage() {
                 <p className="text-muted-foreground leading-relaxed mb-6">
                   Your data is stored on secure servers hosted by Amazon Web
                   Services (AWS) in data centers located in the United States and
-                  the European Union. We employ database encryption at rest
-                  (AES-256) and in transit (TLS 1.2+) for all data storage and
-                  transmission.
+                  the European Union. We employ encryption in transit (TLS 1.2+)
+                  for all data transmission. Sensitive credentials (API keys,
+                  OAuth tokens) are encrypted at rest using AES-256-GCM.
+                  Database-level encryption at rest for all data is available on
+                  Enterprise plans.
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
@@ -424,7 +426,7 @@ export default function PrivacyPolicyPage() {
                   information, including:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
-                  <li>Encryption of data in transit (TLS 1.2+) and at rest (AES-256)</li>
+                  <li>Encryption of data in transit (TLS 1.2+); AES-256-GCM encryption at rest for sensitive credentials; full database encryption at rest available on Enterprise plans</li>
                   <li>Role-based access controls (RBAC) with least-privilege principles</li>
                   <li>Multi-factor authentication (MFA) for account access</li>
                   <li>Regular security audits and penetration testing</li>

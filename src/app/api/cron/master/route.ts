@@ -110,6 +110,11 @@ const DAILY_CRONS: Array<{ name: string; path: string; description: string }> = 
     path: '/api/cron/past-due-escalation',
     description: 'Escalates past-due tenants (1d reminder, 3d urgent, 7d suspend) + daily digest to platform owner',
   },
+  {
+    name: 'data-retention',
+    path: '/api/cron/data-retention',
+    description: 'Enforces data retention policies — archives or deletes old data per tenant config',
+  },
 ]
 
 // ── Monthly cron (only runs on the 1st of each month) ────────────────────
