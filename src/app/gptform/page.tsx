@@ -38,12 +38,21 @@ import {
   LayoutTemplate,
   Mail,
   Lock,
+  Split,
+  MessageCircle,
+  FileSpreadsheet,
+  CheckCircle,
+  Clock,
+  QrCode,
+  ArrowUpRight,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -65,42 +74,76 @@ import { cn } from '@/lib/utils';
 const EXAMPLE_PRESETS = [
   {
     label: '🏗️ Roofing Estimate',
-    prompt: 'Roofing estimate form with square footage, architectural shingle options, photo upload notes, e-signature and credit card deposit.',
+    prompt: 'Create a roofing estimate form with roof size in sq ft, architectural material options, damage photos, customer e-signature and deposit payment.',
   },
   {
     label: '🔧 HVAC Service',
-    prompt: 'HVAC repair and diagnostic form with equipment brand dropdown, photo notes of condenser, emergency time slot, and Stripe payment.',
+    prompt: 'Create an HVAC repair request form with brand dropdown, issue description, outdoor unit photo upload, emergency appointment booking, and diagnostic fee payment.',
   },
   {
     label: '🏠 Home Inspection',
-    prompt: 'Comprehensive home inspection checklist with multi-room photo uploads, drawing notes, inspector signature, and PDF report delivery.',
+    prompt: 'Create a multi-room property inspection checklist with photo markup, inspector signature, GPS location, and automatic PDF delivery.',
   },
   {
     label: '🧹 Cleaning Quote',
-    prompt: 'Residential cleaning quote calculator with bedroom/bathroom counters, deep cleaning add-ons, frequency discount, and instant online booking.',
+    prompt: 'Create a residential cleaning calculator with bedroom/bathroom counters, deep cleaning add-on options, recurring frequency discounts, and online booking.',
   },
   {
     label: '📋 Customer Intake',
-    prompt: 'General service customer intake with address autocomplete, issue description, preferred service window, and SMS notification opt-in.',
+    prompt: 'Create a contractor client intake form with address autocomplete, project timeline, budget range, and SMS notification opt-in.',
   },
   {
     label: '💳 Payment & Deposit',
-    prompt: 'Contractor deposit checkout form with milestone payment breakdown, digital sign-off, and 0% platform fee credit card processing.',
+    prompt: 'Create a contractor deposit checkout form with milestone payment breakdown, digital sign-off, and 0% platform fee credit card processing.',
   },
 ];
 
-// ─── Curated Templates Catalog Sample ───────────────────────────────────────
+// ─── Trade-Tailored Form Collections ────────────────────────────────────────
+const TRADE_TEMPLATES = [
+  {
+    trade: 'HVAC & Heating',
+    icon: Zap,
+    items: ['Emergency Diagnostic Intake', 'Seasonal AC Tune-up Booking', 'System Replacement Estimate', 'Filter Delivery Subscription'],
+  },
+  {
+    trade: 'Plumbing',
+    icon: Wrench,
+    items: ['Emergency Pipe Leak Request', 'Water Heater Replacement Quote', 'Drain Camera Inspection Intake', 'Commercial Backflow Sign-off'],
+  },
+  {
+    trade: 'Roofing & Siding',
+    icon: LayoutTemplate,
+    items: ['Square Footage Price Calculator', 'Storm Damage Assessment & Photos', 'Roof Repair Proposal & E-Sign', 'Gutter Installation Quote'],
+  },
+  {
+    trade: 'Cleaning & Maid',
+    icon: Sparkles,
+    items: ['Deep House Cleaning Calculator', 'Move-in / Move-out Intake', 'Recurring Office Janitorial Quote', 'Window & Pressure Wash Form'],
+  },
+  {
+    trade: 'Electrical',
+    icon: ShieldCheck,
+    items: ['EV Charger Installation Quote', 'Electrical Panel Upgrade Form', 'Commercial Safety Inspection', 'Lighting & Fixture Assessment'],
+  },
+  {
+    trade: 'Landscaping & Tree',
+    icon: Globe,
+    items: ['Acreage Mowing Calculator', 'Tree Removal Permit & Quote', 'Irrigation System Maintenance', 'Hardscape Design Consultation'],
+  },
+];
+
+// ─── Popular Templates Catalog ──────────────────────────────────────────────
 const POPULAR_TEMPLATES = [
   {
-    title: 'Roofing Square Footage Calculator',
-    category: 'Roofing & Exterior',
+    title: 'Roof Replacement Estimate Calculator',
+    category: 'Roofing',
     desc: 'Live material formula calculation with pitch multiplier and customer e-signature.',
     badge: 'Popular',
     fieldsCount: 8,
   },
   {
-    title: 'HVAC Emergency Diagnostic Intake',
-    category: 'HVAC & Heating',
+    title: 'HVAC Emergency Diagnostic & Dispatch',
+    category: 'HVAC',
     desc: 'Equipment photo markup, diagnostic fee collection, and real-time technician booking.',
     badge: 'Instant Quote',
     fieldsCount: 10,
@@ -135,29 +178,52 @@ const POPULAR_TEMPLATES = [
   },
 ];
 
+function Wrench(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
+  );
+}
+
 export default function GptFormLandingPage() {
   const [demoPrompt, setDemoPrompt] = useState(
-    'Create a roofing estimate form with square footage, material selection, photos, signature and payment.'
+    'Create a roofing estimate form with roof size, photos, damage type, material selection and deposit.'
   );
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [selectedPresetPrompt, setSelectedPresetPrompt] = useState('');
 
+  // ─── 4 Interactive Form Modes State ───────────────────────────────────────
+  const [activeFormMode, setActiveFormMode] = useState<'classic' | 'card' | 'split' | 'agent'>('classic');
+
   // ─── Hero Interactive Split Preview States ────────────────────────────────
-  const [previewSqFt, setPreviewSqFt] = useState(1250);
-  const [previewMaterial, setPreviewMaterial] = useState<'standard' | 'architectural' | 'standing_seam'>('architectural');
+  const [previewSqFt, setPreviewSqFt] = useState(2500);
+  const [previewMaterial, setPreviewMaterial] = useState<'asphalt' | 'metal' | 'tile'>('metal');
   const [previewDebrisAddon, setPreviewDebrisAddon] = useState(true);
-  const [previewEmergencyAddon, setPreviewEmergencyAddon] = useState(false);
 
   // Dynamic Calculation Logic
-  const materialRate = previewMaterial === 'standard' ? 4.5 : previewMaterial === 'architectural' ? 6.2 : 8.5;
+  const materialRate = previewMaterial === 'asphalt' ? 3.2 : previewMaterial === 'metal' ? 5.4 : 7.8;
   const baseCost = Math.round(previewSqFt * materialRate);
-  const debrisCost = previewDebrisAddon ? 380 : 0;
-  const emergencyCost = previewEmergencyAddon ? 250 : 0;
-  const totalCalculated = baseCost + debrisCost + emergencyCost;
+  const debrisCost = previewDebrisAddon ? 420 : 0;
+  const totalCalculated = baseCost + debrisCost;
 
   // ─── Template search filter state ─────────────────────────────────────────
   const [templateSearch, setTemplateSearch] = useState('');
-  const [activeTemplateCategory, setActiveTemplateCategory] = useState('All');
+
+  // ─── Embed Code Snippet Tab State ─────────────────────────────────────────
+  const [activeEmbedTab, setActiveEmbedTab] = useState<'wordpress' | 'shopify' | 'webflow' | 'react' | 'html'>('wordpress');
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
 
   // Trigger Auth Gate Modal with persistent prompt
   const handleGenerateClick = (promptText?: string) => {
@@ -177,6 +243,22 @@ export default function GptFormLandingPage() {
     setAuthModalOpen(true);
   };
 
+  const handleCopyCode = () => {
+    const snippets: Record<string, string> = {
+      wordpress: '[gptform id="form_roofing_estimate_2026" theme="emerald" /]',
+      shopify: '<div class="fieseros-gptform" data-form-id="form_roofing_estimate_2026"></div>\n<script src="https://fieseros.com/embed.js" async></script>',
+      webflow: '<iframe src="https://fieseros.com/f/roofing-estimate" width="100%" height="680" frameborder="0"></iframe>',
+      react: 'import { GPTFormEmbed } from "@fieseros/react";\n\nexport default function QuotePage() {\n  return <GPTFormEmbed formId="form_roofing_estimate_2026" />;\n}',
+      html: '<iframe src="https://fieseros.com/f/roofing-estimate" style="width:100%;height:680px;border:none;" title="GPTForm"></iframe>',
+    };
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(snippets[activeEmbedTab]);
+      setCopiedSnippet(true);
+      toast.success('Snippet copied to clipboard!');
+      setTimeout(() => setCopiedSnippet(false), 2000);
+    }
+  };
+
   return (
     <AiMarketingLayout>
       {/* ─── SECTION 1: HERO & AI COMPOSER ─────────────────────────────────── */}
@@ -186,7 +268,7 @@ export default function GptFormLandingPage() {
           <div className="flex flex-wrap items-center justify-center gap-2">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-100/80 dark:bg-teal-950/60 border border-teal-300 dark:border-teal-800 text-teal-900 dark:text-teal-300 text-xs font-semibold shadow-xs">
               <Sparkles className="size-3.5 text-teal-600" />
-              <span>GPTFORM™ · AI SMART FORM BUILDER</span>
+              <span>GPTFORM™ · AI-POWERED FORMS FOR MODERN BUSINESSES</span>
             </div>
             <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-medium">
               <span>🎁 Free Tier: <strong>100 Submissions / Month Free</strong></span>
@@ -196,13 +278,13 @@ export default function GptFormLandingPage() {
           {/* Main Hero Typography */}
           <div className="space-y-4 max-w-4xl mx-auto">
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-foreground leading-[1.12]">
-              Build a form with{' '}
+              Build forms that{' '}
               <span className="bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-500 bg-clip-text text-transparent">
-                AI.
+                do the work for you.
               </span>
             </h1>
             <p className="text-base sm:text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Describe what you need. Fieseros builds the fields, logic, live price calculations, and workflow for you in seconds.
+              Create AI-powered forms that calculate prices, collect photos and signatures, take payments, book appointments and send every submission into your workflow.
             </p>
           </div>
 
@@ -213,10 +295,10 @@ export default function GptFormLandingPage() {
                 <div className="flex items-center gap-2">
                   <div className="size-2.5 rounded-full bg-teal-500 animate-pulse" />
                   <span className="text-xs font-bold text-teal-900 dark:text-teal-200">
-                    ✨ GPTForm AI Composer
+                    ✨ What do you want to build?
                   </span>
                 </div>
-                <span className="text-[11px] text-muted-foreground">What do you want to build?</span>
+                <span className="text-[11px] text-muted-foreground">AI Form &amp; Calculation Generator</span>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
                 <div className="relative">
@@ -224,7 +306,7 @@ export default function GptFormLandingPage() {
                     rows={3}
                     value={demoPrompt}
                     onChange={(e) => setDemoPrompt(e.target.value)}
-                    placeholder="Describe your form (e.g. Roofing quote with square foot formula, photo notes, e-signature and deposit payment)..."
+                    placeholder="Describe your form (e.g. Create a roofing estimate form with roof size, photos, damage type, material selection and deposit)..."
                     className="w-full text-xs sm:text-sm p-3 rounded-xl border border-border bg-slate-50/50 dark:bg-slate-800/50 focus:outline-none focus:ring-2 focus:ring-teal-500 text-foreground resize-none leading-relaxed"
                   />
                 </div>
@@ -256,7 +338,7 @@ export default function GptFormLandingPage() {
                     className="w-full sm:w-auto h-11 px-6 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs sm:text-sm rounded-xl gap-2 shadow-md cursor-pointer"
                   >
                     <Sparkles className="size-4" />
-                    <span>Generate with AI</span>
+                    <span>Create a Form with AI</span>
                   </Button>
                   <Button
                     asChild
@@ -265,102 +347,88 @@ export default function GptFormLandingPage() {
                   >
                     <Link href="/templates">
                       <LayoutTemplate className="size-4 mr-1.5 text-muted-foreground" />
-                      Explore 20,000+ Templates
+                      Browse 20,000+ Templates
                     </Link>
                   </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Subtle Trust Bar */}
+            {/* Trust Badges */}
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-[11px] text-muted-foreground mt-4">
               <span className="flex items-center gap-1.5 font-medium">
-                <Check className="size-3.5 text-teal-600 font-bold" /> Free to start (100 submissions/mo)
+                <Check className="size-3.5 text-teal-600 font-bold" /> Free to start
               </span>
               <span className="flex items-center gap-1.5 font-medium">
-                <Check className="size-3.5 text-teal-600 font-bold" /> No credit card required
+                <Check className="size-3.5 text-teal-600 font-bold" /> No code required
+              </span>
+              <span className="flex items-center gap-1.5 font-medium">
+                <Check className="size-3.5 text-teal-600 font-bold" /> Publish anywhere
               </span>
               <span className="flex items-center gap-1.5 font-medium">
                 <Check className="size-3.5 text-teal-600 font-bold" /> 0% Fieseros commission
               </span>
-              <span className="flex items-center gap-1.5 font-medium">
-                <Check className="size-3.5 text-teal-600 font-bold" /> 1-line embed anywhere
-              </span>
             </div>
           </div>
 
-          {/* ─── Hero Split Visual Preview (Left: AI Chat, Right: Live Interactive Form) ─── */}
+          {/* ─── Hero Split Visual Preview (Left: AI Prompt, Right: Generated Form) ─── */}
           <div className="max-w-5xl mx-auto pt-6 text-left">
-            <div className="text-center mb-6 space-y-1">
-              <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
-                Live Interactive Synthesis Preview
-              </Badge>
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                From Natural Dialogue to Production-Ready Form
-              </h2>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left: Conversational Stream */}
+              {/* Left Column: AI Intent Summary */}
               <div className="lg:col-span-5 p-5 rounded-2xl bg-slate-900 text-white shadow-xl space-y-4 border border-slate-800">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                   <div className="flex items-center gap-2">
-                    <Bot className="size-4 text-teal-400" />
-                    <span className="text-xs font-bold text-slate-200">Fieseros AI Stream</span>
+                    <Sparkles className="size-4 text-teal-400" />
+                    <span className="text-xs font-bold text-slate-200">AI Form Composer</span>
                   </div>
-                  <Badge className="bg-teal-500/20 text-teal-300 text-[10px]">Active Pipeline</Badge>
+                  <Badge className="bg-teal-500/20 text-teal-300 text-[10px]">Instant Synthesis</Badge>
                 </div>
 
                 <div className="space-y-3 text-xs leading-relaxed">
                   <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
-                    <p className="font-semibold text-teal-300 flex items-center gap-1">
-                      <span>👤 You</span>
-                    </p>
-                    <p className="text-slate-300">
-                      &quot;Create a roofing estimate form. Include property address, roof size in sq ft, material tier, debris removal, customer e-signature, and card deposit.&quot;
+                    <p className="font-semibold text-teal-300">Prompt:</p>
+                    <p className="text-slate-300 italic">
+                      &quot;Create a roof replacement estimate form with roof size, photos, damage type, material selection and deposit.&quot;
                     </p>
                   </div>
 
                   <div className="p-3 rounded-xl bg-teal-950/60 border border-teal-800/60 space-y-2">
                     <p className="font-semibold text-teal-300 flex items-center gap-1">
-                      <Sparkles className="size-3" />
-                      <span>Fieseros AI</span>
+                      <CheckCircle className="size-3.5 text-teal-400" />
+                      <span>Form Components Configured:</span>
                     </p>
-                    <p className="text-slate-200">
-                      Synthesized <strong>Roofing Estimate Calculator</strong> with dynamic pricing formula <code className="text-teal-300 font-mono text-[10px]">(Area × Rate) + Addons</code>, drawing notes canvas, and instant checkout.
-                    </p>
-                    <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px] text-teal-200">
-                      <span className="flex items-center gap-1">✓ Formula attached</span>
-                      <span className="flex items-center gap-1">✓ Signature bound</span>
-                      <span className="flex items-center gap-1">✓ Stripe 0% fee</span>
-                      <span className="flex items-center gap-1">✓ CRM synced</span>
-                    </div>
+                    <ul className="space-y-1.5 text-[11px] text-teal-200">
+                      <li>• Dynamic Pricing Formula: <code className="text-teal-300 font-mono">(sq_ft × rate) + addons</code></li>
+                      <li>• Photo Upload with drawing annotation tools</li>
+                      <li>• Digital customer signature field</li>
+                      <li>• 0% fee payment checkout (Stripe / Apple Pay)</li>
+                    </ul>
                   </div>
                 </div>
               </div>
 
-              {/* Right: Live Interactive Result */}
+              {/* Right Column: Actual Generated Form Preview */}
               <div className="lg:col-span-7">
                 <Card className="border-2 border-teal-500/40 shadow-2xl bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
                   <CardHeader className="bg-teal-50 dark:bg-teal-950/40 p-4 border-b border-teal-200 dark:border-teal-800/60">
                     <div className="flex items-center justify-between">
                       <div>
                         <CardTitle className="text-sm font-bold text-teal-950 dark:text-teal-200 flex items-center gap-1.5">
-                          <CheckCircle2 className="size-4 text-teal-600" /> Roofing Quote &amp; Estimate
+                          Roof Replacement Estimate
                         </CardTitle>
                         <CardDescription className="text-xs text-teal-800/80 dark:text-teal-400 mt-0.5">
-                          Interactive Live Calculation Demo · Try Adjusting Below
+                          Interactive Live Calculation Form Demo
                         </CardDescription>
                       </div>
-                      <Badge className="bg-teal-600 text-white text-[10px]">Calculations Active</Badge>
+                      <Badge className="bg-teal-600 text-white text-[10px]">Ready to Publish</Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="p-5 space-y-4 text-xs">
                     {/* Property Address */}
                     <div className="space-y-1">
-                      <label className="font-semibold text-muted-foreground">Property Address</label>
+                      <label className="font-semibold text-muted-foreground">Property address</label>
                       <Input
-                        defaultValue="742 Evergreen Terrace, Springfield"
+                        defaultValue="48 King Road, London"
                         readOnly
                         className="h-9 text-xs bg-slate-50 dark:bg-slate-800 border-border"
                       />
@@ -369,15 +437,15 @@ export default function GptFormLandingPage() {
                     {/* Roof Area Slider */}
                     <div className="space-y-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-border/80">
                       <div className="flex justify-between items-center">
-                        <span className="font-semibold text-foreground">Roof Area</span>
+                        <span className="font-semibold text-foreground">Roof size</span>
                         <span className="font-mono font-bold text-teal-600 dark:text-teal-400">
                           {previewSqFt.toLocaleString()} sq ft
                         </span>
                       </div>
                       <Slider
-                        min={500}
-                        max={3500}
-                        step={50}
+                        min={1000}
+                        max={5000}
+                        step={100}
                         value={[previewSqFt]}
                         onValueChange={([val]) => setPreviewSqFt(val)}
                         className="py-1 cursor-pointer"
@@ -386,12 +454,12 @@ export default function GptFormLandingPage() {
 
                     {/* Material Selector */}
                     <div className="space-y-1.5">
-                      <label className="font-semibold text-muted-foreground">Shingle Material</label>
+                      <label className="font-semibold text-muted-foreground">Material</label>
                       <div className="grid grid-cols-3 gap-2">
                         {[
-                          { id: 'standard', name: 'Standard 3-Tab', rate: '$4.50/sq ft' },
-                          { id: 'architectural', name: 'Architectural', rate: '$6.20/sq ft' },
-                          { id: 'standing_seam', name: 'Standing Seam', rate: '$8.50/sq ft' },
+                          { id: 'asphalt', name: 'Asphalt', rate: '£3.20/sq ft' },
+                          { id: 'metal', name: 'Metal', rate: '£5.40/sq ft' },
+                          { id: 'tile', name: 'Tile', rate: '£7.80/sq ft' },
                         ].map((m) => (
                           <button
                             key={m.id}
@@ -411,48 +479,33 @@ export default function GptFormLandingPage() {
                       </div>
                     </div>
 
-                    {/* Add-ons */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewDebrisAddon(!previewDebrisAddon)}
-                        className={cn(
-                          'p-2 rounded-lg border text-left flex items-center justify-between cursor-pointer transition',
-                          previewDebrisAddon ? 'border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200' : 'border-border'
-                        )}
-                      >
-                        <span className="text-[11px] font-medium">Debris Haul-away</span>
-                        <span className="text-[10px] font-bold">+$380</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewEmergencyAddon(!previewEmergencyAddon)}
-                        className={cn(
-                          'p-2 rounded-lg border text-left flex items-center justify-between cursor-pointer transition',
-                          previewEmergencyAddon ? 'border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200' : 'border-border'
-                        )}
-                      >
-                        <span className="text-[11px] font-medium">Emergency Rush</span>
-                        <span className="text-[10px] font-bold">+$250</span>
-                      </button>
+                    {/* Photo Upload Simulator */}
+                    <div className="p-3 rounded-xl border border-dashed border-border bg-slate-50/50 dark:bg-slate-800/50 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Camera className="size-4 text-teal-600" />
+                        <span className="font-medium text-slate-700 dark:text-slate-300">Upload roof photos</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-teal-600 bg-teal-50 dark:bg-teal-950 px-2 py-0.5 rounded-full">
+                        + Add Photos
+                      </span>
                     </div>
 
                     {/* Calculated Total Bar */}
                     <div className="p-3.5 rounded-xl bg-slate-900 text-white flex items-center justify-between">
                       <div>
                         <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-400 block">
-                          Live Estimated Total
+                          Estimated price
                         </span>
                         <span className="text-xl font-extrabold text-teal-300">
-                          ${totalCalculated.toLocaleString()}
+                          £{totalCalculated.toLocaleString()}
                         </span>
                       </div>
                       <Button
                         size="sm"
                         onClick={() => handleGenerateClick('Roofing Estimate Form')}
-                        className="bg-teal-600 hover:bg-teal-700 text-white text-xs h-8 px-3.5 font-semibold cursor-pointer"
+                        className="bg-teal-600 hover:bg-teal-700 text-white text-xs h-8 px-4 font-semibold cursor-pointer"
                       >
-                        Customize with AI →
+                        Request Estimate →
                       </Button>
                     </div>
                   </CardContent>
@@ -463,468 +516,488 @@ export default function GptFormLandingPage() {
         </div>
       </section>
 
-      {/* ─── SECTION 2: HOW IT WORKS (FROM IDEA TO WORKING FORM) ───────────── */}
+      {/* ─── SECTION 2: INTERACTIVE 4 FORM MODES SWITCHER ──────────────────── */}
       <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         <div className="text-center space-y-3 max-w-3xl mx-auto">
           <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
-            Intelligent 4-Step Synthesis
+            4 Interactive Runtime Modes
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            From Idea to Working Form in Seconds
+            One Form. Four High-Converting Experiences.
           </h2>
           <p className="text-base text-muted-foreground">
-            Describe your trade requirements in plain English, upload a PDF manual, or paste a URL. Fieseros handles the architecture.
+            Switch your form mode with a single click to match your customer experience.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Mode Switcher Tabs */}
+        <div className="flex justify-center">
+          <div className="inline-flex p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-border shadow-inner">
+            {[
+              { id: 'classic', label: 'Classic', desc: 'Traditional structured form' },
+              { id: 'card', label: 'Card', desc: 'One question at a time' },
+              { id: 'split', label: 'Split', desc: 'Media + form layout' },
+              { id: 'agent', label: 'AI Agent', desc: 'Conversational chat' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveFormMode(tab.id as any)}
+                className={cn(
+                  'px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer',
+                  activeFormMode === tab.id
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 shadow-md ring-1 ring-teal-500/30'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Interactive Mode Display */}
+        <div className="max-w-4xl mx-auto">
+          {activeFormMode === 'classic' && (
+            <Card className="p-6 border-border shadow-md space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <span className="font-bold text-sm">Classic Business Form</span>
+                <Badge variant="outline" className="text-xs">Highest Data Density</Badge>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border">
+                  <label className="font-semibold block mb-1">Customer Full Name</label>
+                  <Input placeholder="Jane Doe" readOnly className="h-8 text-xs bg-white dark:bg-slate-900" />
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border">
+                  <label className="font-semibold block mb-1">Phone Number (SMS OTP)</label>
+                  <Input placeholder="+44 7700 900077" readOnly className="h-8 text-xs bg-white dark:bg-slate-900" />
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border sm:col-span-2">
+                  <label className="font-semibold block mb-1">Service Required</label>
+                  <Input placeholder="Boiler Repair & Diagnostic Inspection" readOnly className="h-8 text-xs bg-white dark:bg-slate-900" />
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {activeFormMode === 'card' && (
+            <Card className="p-8 border-border shadow-md space-y-6 text-center max-w-xl mx-auto">
+              <span className="text-[11px] font-bold text-teal-600 uppercase tracking-wider">Question 2 of 5</span>
+              <h3 className="text-lg font-bold text-foreground">What type of property is this?</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <button type="button" className="p-4 rounded-xl border border-teal-500 bg-teal-50 dark:bg-teal-950/60 font-semibold text-xs text-teal-800 dark:text-teal-200">
+                  Residential Home
+                </button>
+                <button type="button" className="p-4 rounded-xl border border-border bg-white dark:bg-slate-900 font-semibold text-xs text-muted-foreground">
+                  Commercial Facility
+                </button>
+              </div>
+              <Button size="sm" className="bg-teal-600 text-white text-xs px-6">Continue →</Button>
+            </Card>
+          )}
+
+          {activeFormMode === 'split' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-2xl overflow-hidden border border-border shadow-md bg-slate-900 text-white">
+              <div className="p-6 bg-gradient-to-br from-teal-900/60 to-slate-900 space-y-3 flex flex-col justify-center">
+                <Badge className="bg-teal-500 text-slate-950 font-bold w-fit text-[10px]">Split Media Mode</Badge>
+                <h3 className="text-xl font-bold">HVAC Emergency Replacement</h3>
+                <p className="text-xs text-slate-300">Fast 24-hour dispatch with certified engineers across London.</p>
+              </div>
+              <div className="p-6 bg-white dark:bg-slate-900 text-foreground space-y-3">
+                <span className="text-xs font-semibold block text-muted-foreground">Select Your Urgent Need:</span>
+                <div className="space-y-2 text-xs">
+                  <div className="p-2.5 rounded-lg border border-teal-500 bg-teal-50/50 dark:bg-teal-950/40 font-medium">
+                    No Heat / Frozen Pipes (Immediate)
+                  </div>
+                  <div className="p-2.5 rounded-lg border border-border font-medium">
+                    Routine Annual Service
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeFormMode === 'agent' && (
+            <Card className="p-6 border-border shadow-md max-w-xl mx-auto space-y-3 text-xs">
+              <div className="flex items-center gap-2 pb-2 border-b">
+                <Bot className="size-4 text-teal-600" />
+                <span className="font-bold text-foreground">Conversational AI Form</span>
+              </div>
+              <div className="space-y-2">
+                <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-900 dark:text-teal-200 w-4/5">
+                  Hi James! What plumbing issue are you experiencing today?
+                </div>
+                <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 ml-auto w-3/4 text-right font-medium">
+                  The hot water heater in the basement is leaking.
+                </div>
+                <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-900 dark:text-teal-200 w-4/5">
+                  Understood. Please upload a photo of the base so we can assign the correct replacement valve.
+                </div>
+              </div>
+            </Card>
+          )}
+        </div>
+      </section>
+
+      {/* ─── SECTION 3: THE 9-STEP BUSINESS LOGIC PIPELINE ─────────────────── */}
+      <section className="py-20 bg-slate-900 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <div className="text-center space-y-3 max-w-3xl mx-auto">
+            <Badge className="bg-teal-600 text-white text-xs">Full Operational Logic</Badge>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+              A Form That Can Calculate, Understand and Act
+            </h2>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Every GPTForm™ executes a complete business pipeline from raw user input to paid confirmation and scheduled job dispatch.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2 text-center text-xs">
+            {[
+              { step: 'QUESTION', desc: 'Customer Input' },
+              { step: 'CONDITION', desc: 'Logic Branching' },
+              { step: 'CALCULATION', desc: 'Instant Pricing' },
+              { step: 'PHOTO', desc: 'Visual Evidence' },
+              { step: 'AI ANALYSIS', desc: 'Intent & Triage' },
+              { step: 'SIGNATURE', desc: 'Legal Sign-off' },
+              { step: 'PAYMENT', desc: '0% Fee Checkout' },
+              { step: 'CRM', desc: 'Customer 360' },
+              { step: 'BOOKING', desc: 'Live Calendar' },
+            ].map((item, idx) => (
+              <div key={idx} className="p-3 rounded-xl bg-slate-800/90 border border-slate-700 flex flex-col justify-between space-y-1">
+                <span className="font-extrabold text-teal-300 text-[11px]">{item.step}</span>
+                <span className="text-[10px] text-slate-400">{item.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── SECTION 4: GROUPED 5 FEATURE CATEGORIES ───────────────────────── */}
+      <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+        <div className="text-center space-y-3 max-w-2xl mx-auto">
+          <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
+            Complete Feature Matrix
+          </Badge>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+            Engineered for Precision &amp; Conversion
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Everything your trade business needs to collect structured data and get paid.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {[
             {
-              step: '01',
-              title: 'Describe & Specify',
-              desc: 'Type what you need, paste a pricing sheet, or upload an existing PDF inspection document.',
-              icon: MessageSquare,
+              category: 'Capture',
+              icon: Camera,
+              features: ['Photo & video markup', 'Voice recordings', 'GPS geofencing', 'Document upload', 'E-signatures'],
             },
             {
-              step: '02',
-              title: 'Fieseros AI Engine',
-              desc: 'Synthesizes field structure, validations, dynamic math logic, and layout hierarchy.',
-              icon: Wand2,
-            },
-            {
-              step: '03',
-              title: 'Fields, Logic & Design',
-              desc: 'Adds photo markup canvas, address GPS autocomplete, e-signatures, and payment gateway rules.',
+              category: 'Logic',
               icon: Sliders,
+              features: ['Conditional logic', 'Dynamic math formulas', 'Lead scoring', 'Calculated fields', 'Branching rules'],
             },
             {
-              step: '04',
-              title: 'Working Live Form',
-              desc: 'Embed on WordPress, Webflow, React, or share instantly via hosted public URL.',
-              icon: Globe,
+              category: 'Business',
+              icon: CreditCard,
+              features: ['Instant quotes', 'Real-time booking', '0% fee payments', 'Deposit checkout', 'Digital invoices'],
             },
-          ].map((item) => {
-            const Icon = item.icon;
+            {
+              category: 'AI Engine',
+              icon: Sparkles,
+              features: ['AI form builder', 'Conversational agent', 'Image extraction', 'Audio transcription', 'Auto-summaries'],
+            },
+            {
+              category: 'Verification',
+              icon: ShieldCheck,
+              features: ['SMS OTP verification', 'IP timestamp audit', 'Address validation', 'Spam protection', 'SSL encryption'],
+            },
+          ].map((col) => {
+            const Icon = col.icon;
             return (
-              <Card key={item.step} className="border-border hover:border-teal-400/60 transition shadow-xs relative">
-                <CardHeader className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl font-extrabold text-teal-600/40">{item.step}</span>
-                    <div className="p-2 rounded-lg bg-teal-500/10 text-teal-600">
-                      <Icon className="size-4" />
-                    </div>
+              <Card key={col.category} className="border-border hover:border-teal-400/60 transition shadow-xs">
+                <CardHeader className="space-y-2 p-4">
+                  <div className="p-2 rounded-lg bg-teal-500/10 text-teal-600 w-fit">
+                    <Icon className="size-4" />
                   </div>
-                  <CardTitle className="text-base font-bold">{item.title}</CardTitle>
-                  <CardDescription className="text-xs leading-relaxed">{item.desc}</CardDescription>
+                  <CardTitle className="text-sm font-bold">{col.category}</CardTitle>
                 </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <ul className="space-y-1.5 text-xs text-muted-foreground">
+                    {col.features.map((f) => (
+                      <li key={f} className="flex items-center gap-1.5">
+                        <Check className="size-3 text-teal-600 shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
               </Card>
             );
           })}
         </div>
       </section>
 
-      {/* ─── SECTION 3: BUILT FOR REAL BUSINESSES (6 CAPABILITY PILLARS) ───── */}
-      <section className="py-20 bg-slate-50 dark:bg-slate-900/40 border-y">
+      {/* ─── SECTION 5: PAYMENTS & DIRECT CHECKOUT ─────────────────────────── */}
+      <section id="payments" className="py-20 bg-slate-50 dark:bg-slate-900/40 border-y">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="text-center space-y-3 max-w-3xl mx-auto">
-            <Badge className="bg-teal-600 text-white text-xs">Contractor-Grade Power</Badge>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-              Not Just Forms. Smart Business Tools.
-            </h2>
-            <p className="text-base text-muted-foreground">
-              Generic form builders only collect text. GPTForm™ calculates real quotes, captures photographic proof, takes legally-binding signatures, and collects payments with 0% platform fees.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Pillar 1: Calculations */}
-            <Card className="border-border hover:border-teal-400/60 transition shadow-xs">
-              <CardHeader className="space-y-3">
-                <div className="size-10 rounded-xl bg-teal-100 dark:bg-teal-950/50 flex items-center justify-center text-teal-600">
-                  <Calculator className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">🧮 Dynamic Calculations</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Formula-based quoting engine for square footage, labor hours, tier multipliers, discounts, and custom formulas.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            {/* Pillar 2: Photos & Markup */}
-            <Card className="border-border hover:border-teal-400/60 transition shadow-xs">
-              <CardHeader className="space-y-3">
-                <div className="size-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600">
-                  <Camera className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">📸 Photo &amp; Annotation Notes</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Customers upload site photos and draw arrows, circles, and notes directly on images before submission.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            {/* Pillar 3: E-Signatures */}
-            <Card className="border-border hover:border-teal-400/60 transition shadow-xs">
-              <CardHeader className="space-y-3">
-                <div className="size-10 rounded-xl bg-purple-100 dark:bg-purple-950/50 flex items-center justify-center text-purple-600">
-                  <PenTool className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">✍️ Digital E-Signatures</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Legally-binding signature capture with IP timestamps, device audit records, and automatic PDF receipt generation.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            {/* Pillar 4: Direct Payments */}
-            <Card className="border-border hover:border-teal-400/60 transition shadow-xs">
-              <CardHeader className="space-y-3">
-                <div className="size-10 rounded-xl bg-amber-100 dark:bg-amber-950/50 flex items-center justify-center text-amber-600">
-                  <CreditCard className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">💳 0% Fee Payments</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Connect Stripe, Razorpay, or Bank Transfer. Funds flow straight to your account with zero platform commission.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            {/* Pillar 5: Real-Time Booking */}
-            <Card className="border-border hover:border-teal-400/60 transition shadow-xs">
-              <CardHeader className="space-y-3">
-                <div className="size-10 rounded-xl bg-blue-100 dark:bg-blue-950/50 flex items-center justify-center text-blue-600">
-                  <CalendarCheck className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">📅 Real-Time Booking</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Customers select available service windows based on live crew availability. Automatically syncs with dispatch.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-
-            {/* Pillar 6: Workflow Automation */}
-            <Card className="border-border hover:border-teal-400/60 transition shadow-xs">
-              <CardHeader className="space-y-3">
-                <div className="size-10 rounded-xl bg-rose-100 dark:bg-rose-950/50 flex items-center justify-center text-rose-600">
-                  <Zap className="size-5" />
-                </div>
-                <CardTitle className="text-base font-bold">⚡ Workflow Automation</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">
-                  Instantly triggers SMS confirmations via Amazon SES, assigns jobs to technicians, and creates customer records.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── SECTION 4: DYNAMIC PRICING ENGINE & FORMULA BREAKDOWN ────────── */}
-      <section className="py-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-        <div className="text-center space-y-3 max-w-2xl mx-auto">
-          <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
-            Instant Quoting Formula
-          </Badge>
-          <h2 className="text-3xl font-extrabold tracking-tight">
-            Turn Forms into Instant Quoting Tools
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Eliminate back-and-forth price calls. Let clients configure their exact specifications and see transparent instant pricing.
-          </p>
-        </div>
-
-        <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 text-white shadow-2xl border border-slate-800 space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
-            <div>
-              <span className="text-xs uppercase font-bold text-teal-400 tracking-wider">
-                Active Calculation Formula
-              </span>
-              <p className="text-sm sm:text-base font-mono font-bold text-slate-100 mt-1">
-                ({previewSqFt.toLocaleString()} sq ft × ${materialRate.toFixed(2)}) + ${debrisCost + emergencyCost} = <span className="text-teal-400">${totalCalculated.toLocaleString()}</span>
-              </p>
-            </div>
-            <Badge className="bg-teal-500/20 text-teal-300 border-teal-500/40 text-xs px-3 py-1">
-              Deterministic Math Engine
-            </Badge>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-300">
-            <div className="p-4 rounded-xl bg-slate-800/80 space-y-2">
-              <span className="font-semibold text-white block">Roof Size Factor</span>
-              <p>{previewSqFt} square feet calculated at ${materialRate.toFixed(2)} / sq ft.</p>
-              <span className="font-mono text-teal-300 font-bold block">${baseCost.toLocaleString()}</span>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-800/80 space-y-2">
-              <span className="font-semibold text-white block">Add-on Services</span>
-              <p>{previewDebrisAddon ? 'Debris removal ($380)' : 'No debris cleanup'} {previewEmergencyAddon ? '+ Emergency Rush ($250)' : ''}</p>
-              <span className="font-mono text-teal-300 font-bold block">+${debrisCost + emergencyCost}</span>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-800/80 space-y-2">
-              <span className="font-semibold text-white block">Total Client Estimate</span>
-              <p>Locked in for 30 days with instant e-sign acceptance.</p>
-              <span className="font-mono text-xl text-teal-400 font-extrabold block">${totalCalculated.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── SECTION 5: AI COPILOT ("Keep talking. Keep building.") ────────── */}
-      <section className="py-20 bg-slate-50 dark:bg-slate-900/40 border-y">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="text-center space-y-3 max-w-2xl mx-auto">
-            <Badge className="bg-teal-600 text-white text-xs">Conversational Refinements</Badge>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-              Keep Talking. Keep Building.
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              AI doesn&apos;t stop after the first draft. Refine layouts, add logic branches, and customize branding simply by chatting with your copilot.
-            </p>
-          </div>
-
-          <div className="max-w-3xl mx-auto space-y-3">
-            {[
-              {
-                user: 'Add a photo upload after the roof condition question.',
-                ai: 'Done. Added camera upload widget with annotation drawing tools.',
-              },
-              {
-                user: 'Make the address and phone fields display in two columns.',
-                ai: 'Done. Layout transformed to responsive 2-column split grid.',
-              },
-              {
-                user: 'Add a 10% discount for military and seniors.',
-                ai: 'Done. Added conditional checkbox and linked calculation discount rule.',
-              },
-              {
-                user: 'Send completed submissions to dispatch via SMS and email.',
-                ai: 'Done. Amazon SES outbound notification workflow active.',
-              },
-            ].map((dialogue, idx) => (
-              <div
-                key={idx}
-                className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-border shadow-sm space-y-2 text-xs"
-              >
-                <div className="flex items-start gap-2.5">
-                  <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-foreground font-semibold text-[10px]">
-                    You
-                  </span>
-                  <p className="text-foreground font-medium">{dialogue.user}</p>
-                </div>
-                <div className="flex items-start gap-2.5 pl-6">
-                  <Sparkles className="size-3.5 text-teal-600 shrink-0 mt-0.5" />
-                  <p className="text-teal-700 dark:text-teal-300 font-medium">{dialogue.ai}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── SECTION 6: 20,000+ TEMPLATE ENGINE WITH "CUSTOMIZE WITH AI" ───── */}
-      <section id="templates" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-        <div className="text-center space-y-3 max-w-3xl mx-auto">
-          <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
-            20,000+ Production Templates
-          </Badge>
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            Start with a Template or Build from Scratch with AI
-          </h2>
-          <p className="text-base text-muted-foreground">
-            Explore industry-specific templates built for contractors, home services, and medical/legal practices. Customize any template instantly with AI.
-          </p>
-        </div>
-
-        {/* Template Search Bar */}
-        <div className="max-w-xl mx-auto">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search 20,000+ templates (e.g. HVAC, Roofing, Cleaning, Plumbing)..."
-              value={templateSearch}
-              onChange={(e) => setTemplateSearch(e.target.value)}
-              className="pl-10 h-11 text-xs sm:text-sm rounded-xl border-border bg-background shadow-sm"
-            />
-          </div>
-        </div>
-
-        {/* Template Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {POPULAR_TEMPLATES.filter((t) =>
-            templateSearch
-              ? t.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
-                t.category.toLowerCase().includes(templateSearch.toLowerCase())
-              : true
-          ).map((tmpl) => (
-            <Card key={tmpl.title} className="border-border hover:border-teal-400/60 transition shadow-xs flex flex-col justify-between">
-              <CardHeader className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-[10px] text-teal-700 dark:text-teal-300 border-teal-300">
-                    {tmpl.category}
-                  </Badge>
-                  <span className="text-[11px] text-muted-foreground">{tmpl.fieldsCount} smart fields</span>
-                </div>
-                <CardTitle className="text-base font-bold text-foreground">{tmpl.title}</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">{tmpl.desc}</CardDescription>
-              </CardHeader>
-              <CardFooter className="pt-2 flex items-center justify-between gap-2 border-t border-border/60">
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-8 hover:border-teal-500"
-                >
-                  <Link href="/templates">Use Template</Link>
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => handleGenerateClick(`Customize ${tmpl.title} with calculation formulas and instant checkout.`)}
-                  className="bg-teal-600 hover:bg-teal-700 text-white text-xs h-8 gap-1 cursor-pointer"
-                >
-                  <Sparkles className="size-3" />
-                  <span>Customize with AI</span>
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-
-        <div className="text-center pt-4">
-          <Button asChild variant="outline" className="rounded-xl px-6 text-xs font-semibold">
-            <Link href="/templates">Browse All 20,000+ Free Templates →</Link>
-          </Button>
-        </div>
-      </section>
-
-      {/* ─── SECTION 7: SERVICE BUSINESS LIFECYCLE WORKFLOW ───────────────── */}
-      <section className="py-20 bg-slate-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="text-center space-y-3 max-w-3xl mx-auto">
-            <Badge className="bg-teal-600 text-white text-xs">Full Lifecycle Integration</Badge>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-              Forms Built for the Way Service Businesses Work
-            </h2>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Your form isn&apos;t just collecting data. It triggers the entire customer job lifecycle from instant quote to field dispatch and final payment.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-center">
-            {[
-              { step: '1. Lead Intake', desc: 'Captures details & issue photos' },
-              { step: '2. Live Quote', desc: 'Calculates price automatically' },
-              { step: '3. E-Sign', desc: 'Customer authorizes work' },
-              { step: '4. Booking', desc: 'Selects available time slot' },
-              { step: '5. Dispatch', desc: 'Assigns crew with GPS routing' },
-              { step: '6. Payment', desc: 'Collects funds (0% fee)' },
-              { step: '7. Follow-up', desc: 'Automated review & SMS' },
-            ].map((item, i) => (
-              <div key={i} className="p-3.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1">
-                <span className="text-xs font-bold text-teal-300 block">{item.step}</span>
-                <p className="text-[11px] text-slate-400">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── SECTION 8: THE UNIFIED FIESEROS ECOSYSTEM ─────────────────────── */}
-      <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-        <div className="text-center space-y-3 max-w-3xl mx-auto">
-          <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
-            One Connected Architecture
-          </Badge>
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            One Form. One Workflow. One Business OS.
-          </h2>
-          <p className="text-base text-muted-foreground">
-            GPTForm™ integrates natively with every component of the Fieseros operating system.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="border-2 border-teal-500 shadow-md">
-            <CardHeader className="space-y-2">
-              <div className="p-2 rounded-lg bg-teal-500/10 text-teal-600 w-fit">
-                <FileInput className="size-5" />
-              </div>
-              <CardTitle className="text-base font-bold">GPTForm™</CardTitle>
-              <CardDescription className="text-xs">
-                AI forms, calculations, photo notes, e-signatures &amp; direct payments.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="border-border">
-            <CardHeader className="space-y-2">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 w-fit">
-                <Globe className="size-5" />
-              </div>
-              <CardTitle className="text-base font-bold">Online Booking Portal</CardTitle>
-              <CardDescription className="text-xs">
-                Self-service customer booking pages with real-time technician calendar availability.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="border-border">
-            <CardHeader className="space-y-2">
-              <div className="p-2 rounded-lg bg-purple-500/10 text-purple-600 w-fit">
-                <Bot className="size-5" />
-              </div>
-              <CardTitle className="text-base font-bold">AI Receptionist</CardTitle>
-              <CardDescription className="text-xs">
-                24/7 AI voice phone agent that answers calls and books appointments.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card className="border-border">
-            <CardHeader className="space-y-2">
-              <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 w-fit">
-                <Layers className="size-5" />
-              </div>
-              <CardTitle className="text-base font-bold">Service OS</CardTitle>
-              <CardDescription className="text-xs">
-                Full dispatch calendar, technician mobile app, invoicing &amp; CRM.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      </section>
-
-      {/* ─── SECTION 9: ZERO-COMMISSION DIRECT PAYMENTS ────────────────────── */}
-      <section id="payments" className="py-16 bg-slate-900 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
             <div className="space-y-4">
               <Badge className="bg-teal-600 text-white text-xs">Direct Payments</Badge>
               <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-                Get Paid Directly with 0% Platform Commission
+                Turn Forms into Checkout Pages
               </h2>
-              <p className="text-sm text-slate-300 leading-relaxed">
-                Connect your preferred payment gateway. When customers submit payments or deposits, 100% of the funds flow straight to your merchant account.
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Connect the payment provider you already use and collect customer deposits and invoices directly into your merchant account without a Fieseros commission.
               </p>
-              <ul className="space-y-2 text-xs text-slate-300">
-                <li className="flex items-center gap-2">✓ Stripe Checkout, Credit Cards &amp; Apple Pay</li>
-                <li className="flex items-center gap-2">✓ Razorpay UPI QR &amp; Netbanking</li>
-                <li className="flex items-center gap-2">✓ Direct Bank Account details with 1-click copy</li>
-                <li className="flex items-center gap-2">✓ Instant digital receipt delivery via Amazon SES</li>
-              </ul>
-            </div>
-            <div className="p-6 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-700">
-                <span className="text-xs font-semibold text-teal-400">Universal Payment Gateway</span>
-                <span className="text-xs text-slate-400">0% Fieseros Fee</span>
-              </div>
-              <div className="p-3 rounded-lg bg-slate-900 text-xs flex justify-between items-center">
-                <span>Roofing Deposit &amp; Sign-off</span>
-                <span className="font-bold text-white">$1,500.00</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-2.5 rounded-lg bg-teal-600 text-center font-semibold text-xs">Pay via Card / Apple Pay</div>
-                <div className="p-2.5 rounded-lg bg-slate-700 text-center font-semibold text-xs">UPI / Bank Transfer</div>
+              <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-foreground pt-2">
+                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800 border flex items-center gap-2">
+                  <CreditCard className="size-4 text-teal-600" /> Stripe Checkout
+                </div>
+                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800 border flex items-center gap-2">
+                  <Smartphone className="size-4 text-teal-600" /> Apple Pay &amp; Google Pay
+                </div>
+                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800 border flex items-center gap-2">
+                  <Zap className="size-4 text-teal-600" /> Square &amp; PayPal
+                </div>
+                <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800 border flex items-center gap-2">
+                  <QrCode className="size-4 text-teal-600" /> Razorpay UPI &amp; Netbanking
+                </div>
               </div>
             </div>
+
+            <Card className="border-2 border-teal-500/40 shadow-xl bg-slate-900 text-white p-6 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <span className="text-xs font-bold text-teal-400">Universal Payment Checkout</span>
+                <span className="text-xs text-slate-400">0% Platform Fee</span>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-800/90 space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span>Boiler Emergency Replacement Deposit</span>
+                  <span className="font-bold text-white">£450.00</span>
+                </div>
+                <div className="flex justify-between text-slate-400 text-[11px]">
+                  <span>Remaining balance upon job completion</span>
+                  <span>£850.00</span>
+                </div>
+              </div>
+              <Button className="w-full bg-teal-600 hover:bg-teal-700 text-white text-xs h-10 font-bold">
+                Pay £450.00 via Apple Pay / Card →
+              </Button>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── SECTION 6: SERVICE-BUSINESS SPECIALIZED TEMPLATES ─────────────── */}
+      <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+        <div className="text-center space-y-3 max-w-3xl mx-auto">
+          <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
+            Tailored Trade Collections
+          </Badge>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+            Forms Built for Real Service Work
+          </h2>
+          <p className="text-base text-muted-foreground">
+            Unlike generic form builders, GPTForm™ includes pre-configured calculators, safety inspections, and sign-offs for all 25+ trades.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {TRADE_TEMPLATES.map((t) => {
+            const Icon = t.icon;
+            return (
+              <Card key={t.trade} className="border-border hover:border-teal-400/60 transition shadow-xs">
+                <CardHeader className="p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-teal-500/10 text-teal-600">
+                      <Icon className="size-4" />
+                    </div>
+                    <CardTitle className="text-sm font-bold">{t.trade}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  <ul className="space-y-2 text-xs text-muted-foreground">
+                    {t.items.map((item) => (
+                      <li key={item} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+                        <span>{item}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleGenerateClick(`Create a ${item} form for ${t.trade}`)}
+                          className="h-6 text-[10px] text-teal-600 px-2 cursor-pointer"
+                        >
+                          Use AI →
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ─── SECTION 7: 20,000+ TEMPLATE MARKETPLACE ────────────────────────── */}
+      <section id="templates" className="py-20 bg-slate-50 dark:bg-slate-900/40 border-y">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+          <div className="text-center space-y-3 max-w-2xl mx-auto">
+            <Badge className="bg-teal-600 text-white text-xs">Template Marketplace</Badge>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+              Start with a Template. Make It Yours.
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Search 20,000+ pre-built templates across industries or customize any template with AI in seconds.
+            </p>
+          </div>
+
+          <div className="max-w-xl mx-auto">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search 20,000+ templates (e.g. HVAC, Roofing, Cleaning, Plumbing)..."
+                value={templateSearch}
+                onChange={(e) => setTemplateSearch(e.target.value)}
+                className="pl-10 h-11 text-xs sm:text-sm rounded-xl border-border bg-background shadow-sm"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {POPULAR_TEMPLATES.filter((t) =>
+              templateSearch
+                ? t.title.toLowerCase().includes(templateSearch.toLowerCase()) ||
+                  t.category.toLowerCase().includes(templateSearch.toLowerCase())
+                : true
+            ).map((tmpl) => (
+              <Card key={tmpl.title} className="border-border hover:border-teal-400/60 transition shadow-xs flex flex-col justify-between">
+                <CardHeader className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-[10px] text-teal-700 dark:text-teal-300 border-teal-300">
+                      {tmpl.category}
+                    </Badge>
+                    <span className="text-[11px] text-muted-foreground">{tmpl.fieldsCount} smart fields</span>
+                  </div>
+                  <CardTitle className="text-base font-bold text-foreground">{tmpl.title}</CardTitle>
+                  <CardDescription className="text-xs leading-relaxed">{tmpl.desc}</CardDescription>
+                </CardHeader>
+                <CardFooter className="pt-2 flex items-center justify-between gap-2 border-t border-border/60">
+                  <Button asChild variant="outline" size="sm" className="text-xs h-8">
+                    <Link href="/templates">Use Template</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleGenerateClick(`Customize ${tmpl.title} with calculation formulas and instant checkout.`)}
+                    className="bg-teal-600 hover:bg-teal-700 text-white text-xs h-8 gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="size-3" />
+                    <span>Customize with AI</span>
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+
+          <div className="text-center pt-4">
+            <Button asChild variant="outline" className="rounded-xl px-6 text-xs font-semibold">
+              <Link href="/templates">Browse All 20,000+ Free Templates →</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── SECTION 8: PUBLISH ANYWHERE (WORDPRESS, SHOPIFY, EMBED) ───────── */}
+      <section className="py-20 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+        <div className="text-center space-y-3 max-w-2xl mx-auto">
+          <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
+            Universal Embedding
+          </Badge>
+          <h2 className="text-3xl font-extrabold tracking-tight">
+            Publish Anywhere in 1 Click
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Embed your smart forms on WordPress, Shopify, Webflow, Squarespace, or custom React codebases.
+          </p>
+        </div>
+
+        <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 text-white shadow-2xl border border-slate-800 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'wordpress', label: 'WordPress Plugin' },
+                { id: 'shopify', label: 'Shopify / Liquid' },
+                { id: 'webflow', label: 'Webflow Embed' },
+                { id: 'react', label: 'React / Next.js' },
+                { id: 'html', label: 'HTML 1-Line Iframe' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveEmbedTab(tab.id as any)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer',
+                    activeEmbedTab === tab.id
+                      ? 'bg-teal-600 text-white shadow-sm'
+                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <Button
+              size="sm"
+              onClick={handleCopyCode}
+              className="bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs gap-1.5 h-8 cursor-pointer"
+            >
+              {copiedSnippet ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+              <span>{copiedSnippet ? 'Copied!' : 'Copy Code'}</span>
+            </Button>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-950 font-mono text-xs text-teal-300 overflow-x-auto leading-relaxed border border-slate-800">
+            {activeEmbedTab === 'wordpress' && '[gptform id="form_roofing_estimate_2026" theme="emerald" /]'}
+            {activeEmbedTab === 'shopify' && '<div class="fieseros-gptform" data-form-id="form_roofing_estimate_2026"></div>\n<script src="https://fieseros.com/embed.js" async></script>'}
+            {activeEmbedTab === 'webflow' && '<iframe src="https://fieseros.com/f/roofing-estimate" width="100%" height="680" frameborder="0"></iframe>'}
+            {activeEmbedTab === 'react' && 'import { GPTFormEmbed } from "@fieseros/react";\n\nexport default function QuotePage() {\n  return <GPTFormEmbed formId="form_roofing_estimate_2026" />;\n}'}
+            {activeEmbedTab === 'html' && '<iframe src="https://fieseros.com/f/roofing-estimate" style="width:100%;height:680px;border:none;" title="GPTForm"></iframe>'}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── SECTION 9: CRM WORKFLOW CONNECTION ────────────────────────────── */}
+      <section className="py-20 bg-slate-900 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+          <div className="text-center space-y-3 max-w-3xl mx-auto">
+            <Badge className="bg-teal-600 text-white text-xs">CRM Integration</Badge>
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+              Your Form Shouldn&apos;t End with a Submission
+            </h2>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Every GPTForm™ submission flows seamlessly into the Fieseros operating system, auto-creating leads, assigning crew schedules, and generating invoices.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 text-center text-xs">
+            {['FORM', 'LEAD', 'CUSTOMER', 'QUOTE', 'BOOKING', 'JOB', 'INVOICE', 'PAID'].map((step, i, arr) => (
+              <div key={step} className="flex items-center gap-3">
+                <span className="px-4 py-2 rounded-xl bg-slate-800 border border-slate-700 font-extrabold text-teal-300">
+                  {step}
+                </span>
+                {i < arr.length - 1 && <ArrowRight className="size-4 text-slate-500 shrink-0" />}
+              </div>
+            ))}
+          </div>
+
+          <div className="text-center pt-4">
+            <Button asChild className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-6 h-10">
+              <Link href="/#crm-features">Explore Fieseros Service OS →</Link>
+            </Button>
           </div>
         </div>
       </section>
@@ -946,8 +1019,8 @@ export default function GptFormLandingPage() {
             {/* Free Tier */}
             <Card className="border-border bg-white dark:bg-slate-900">
               <CardHeader className="space-y-1">
-                <CardTitle className="text-lg font-bold">Free Forever</CardTitle>
-                <CardDescription className="text-xs">Zero monthly cost, no credit card</CardDescription>
+                <CardTitle className="text-lg font-bold">Free</CardTitle>
+                <CardDescription className="text-xs">3 Forms · 100 submissions/month</CardDescription>
                 <div className="pt-2">
                   <span className="text-3xl font-extrabold">$0</span>
                   <span className="text-xs text-muted-foreground"> / forever</span>
@@ -955,10 +1028,11 @@ export default function GptFormLandingPage() {
               </CardHeader>
               <CardContent className="space-y-4 text-xs">
                 <ul className="space-y-2 text-slate-700 dark:text-slate-300">
+                  <li className="flex items-center gap-2">✓ 3 Active Smart Forms</li>
                   <li className="flex items-center gap-2">✓ 100 Form Submissions / month</li>
-                  <li className="flex items-center gap-2">✓ 100 Lifetime Jobs &amp; Invoices</li>
-                  <li className="flex items-center gap-2">✓ Dynamic Calculations &amp; E-Signatures</li>
+                  <li className="flex items-center gap-2">✓ 20,000+ Templates Library</li>
                   <li className="flex items-center gap-2">✓ Direct Payments (0% fee)</li>
+                  <li className="flex items-center gap-2">✓ Universal 1-line Embed</li>
                 </ul>
                 <Button asChild variant="outline" className="w-full text-xs font-semibold hover:border-teal-500 hover:text-teal-700">
                   <Link href="/register">Start Free Now</Link>
@@ -966,54 +1040,60 @@ export default function GptFormLandingPage() {
               </CardContent>
             </Card>
 
-            {/* Plan 2: Pro CRM */}
+            {/* Plan 2: Starter */}
             <Card className="border-2 border-teal-500 shadow-lg relative bg-white dark:bg-slate-900">
               <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-teal-600 text-white px-3 py-0.5 rounded-full text-[11px] font-bold">
-                MOST POPULAR
+                RECOMMENDED
               </div>
               <CardHeader className="space-y-1 pt-6">
-                <CardTitle className="text-lg font-bold">Professional CRM</CardTitle>
-                <CardDescription className="text-xs">Complete Service OS &amp; GPTForm™ suite</CardDescription>
+                <CardTitle className="text-lg font-bold">Starter</CardTitle>
+                <CardDescription className="text-xs">For active contractors &amp; growing sites</CardDescription>
                 <div className="pt-2">
-                  <span className="text-3xl font-extrabold">$49</span>
+                  <span className="text-3xl font-extrabold">$10</span>
                   <span className="text-xs text-muted-foreground"> / month</span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 text-xs">
                 <ul className="space-y-2 text-slate-700 dark:text-slate-300">
-                  <li className="flex items-center gap-2">✓ Unlimited Form Submissions</li>
-                  <li className="flex items-center gap-2">✓ Unlimited Jobs, Invoices &amp; Estimates</li>
-                  <li className="flex items-center gap-2">✓ Real-time Dispatch Calendar &amp; GPS</li>
-                  <li className="flex items-center gap-2">✓ Online Booking Portal Included</li>
+                  <li className="flex items-center gap-2">✓ 10 Active Smart Forms</li>
+                  <li className="flex items-center gap-2">✓ 1,000 Submissions / month</li>
+                  <li className="flex items-center gap-2">✓ AI Form Synthesis &amp; Logic</li>
+                  <li className="flex items-center gap-2">✓ Dynamic Math Calculations</li>
+                  <li className="flex items-center gap-2">✓ Digital E-Signatures &amp; Booking</li>
                 </ul>
                 <Button asChild className="w-full bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold">
-                  <Link href="/register">Start 14-Day Free Trial →</Link>
+                  <Link href="/register">Get Started ($10/mo) →</Link>
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Plan 3: Scale */}
+            {/* Plan 3: Business */}
             <Card className="border-border bg-white dark:bg-slate-900">
               <CardHeader className="space-y-1">
-                <CardTitle className="text-lg font-bold">Scale / Enterprise</CardTitle>
-                <CardDescription className="text-xs">For multi-location contractors</CardDescription>
+                <CardTitle className="text-lg font-bold">Business</CardTitle>
+                <CardDescription className="text-xs">For multi-trade teams &amp; agencies</CardDescription>
                 <div className="pt-2">
-                  <span className="text-3xl font-extrabold">$99</span>
+                  <span className="text-3xl font-extrabold">$19</span>
                   <span className="text-xs text-muted-foreground"> / month</span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 text-xs">
                 <ul className="space-y-2 text-slate-700 dark:text-slate-300">
-                  <li className="flex items-center gap-2">✓ Multi-Location &amp; Multi-Brand Management</li>
-                  <li className="flex items-center gap-2">✓ 24/7 AI Voice Receptionist Phone Lines</li>
-                  <li className="flex items-center gap-2">✓ Custom CSS &amp; White-labeling</li>
-                  <li className="flex items-center gap-2">✓ Dedicated Account Manager</li>
+                  <li className="flex items-center gap-2">✓ Unlimited Smart Forms</li>
+                  <li className="flex items-center gap-2">✓ 10,000 Submissions / month</li>
+                  <li className="flex items-center gap-2">✓ Conversational AI Form Agents</li>
+                  <li className="flex items-center gap-2">✓ White-labeling &amp; Custom CSS</li>
+                  <li className="flex items-center gap-2">✓ Priority Webhook &amp; Zapier Sync</li>
                 </ul>
                 <Button asChild variant="outline" className="w-full text-xs font-semibold hover:border-teal-500 hover:text-teal-700">
-                  <Link href="/register">Scale Your Business</Link>
+                  <Link href="/register">Get Business ($19/mo)</Link>
                 </Button>
               </CardContent>
             </Card>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-center max-w-2xl mx-auto text-xs text-teal-900 dark:text-teal-200">
+            <strong>Active Fieseros CRM Subscriber?</strong> GPTForm™ Unlimited is included in your CRM plan at no extra charge.
           </div>
         </div>
       </section>
@@ -1033,7 +1113,7 @@ export default function GptFormLandingPage() {
               Is GPTForm really free to start?
             </AccordionTrigger>
             <AccordionContent className="text-xs text-muted-foreground leading-relaxed">
-              Yes. Every Fieseros account starts on the Universal Free Tier with 100 form submissions per month, 100 lifetime jobs, and access to all 20,000+ templates. No credit card is required.
+              Yes. Every account starts on the Free Tier with 100 form submissions per month, 100 lifetime jobs, and access to all 20,000+ templates. No credit card is required.
             </AccordionContent>
           </AccordionItem>
 
@@ -1069,7 +1149,7 @@ export default function GptFormLandingPage() {
       {/* ─── SECTION 12: FINAL HIGH-CONVERTING CTA ─────────────────────────── */}
       <section className="py-20 text-center max-w-4xl mx-auto px-4 space-y-6">
         <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-          Ready to Build Your First Smart Form with AI?
+          Build forms that do the work for you.
         </h2>
         <p className="text-base text-muted-foreground max-w-xl mx-auto">
           Start calculating quotes, capturing signed contracts, and taking direct payments in under 10 minutes.
@@ -1080,7 +1160,7 @@ export default function GptFormLandingPage() {
             onClick={() => handleGenerateClick()}
             className="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm h-12 px-8 rounded-xl shadow-lg cursor-pointer"
           >
-            Create Free Account →
+            Create a Form with AI →
           </Button>
           <Button
             asChild
@@ -1088,7 +1168,7 @@ export default function GptFormLandingPage() {
             size="lg"
             className="w-full sm:w-auto text-sm h-12 px-8 rounded-xl"
           >
-            <Link href="/templates">Explore 20,000+ Templates</Link>
+            <Link href="/templates">Browse 20,000+ Templates</Link>
           </Button>
         </div>
       </section>
