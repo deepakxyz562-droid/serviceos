@@ -2970,50 +2970,48 @@ function CrmThreeBidMarketplace({ onGetStarted }: { onGetStarted?: () => void })
           </div>
         </div>
 
-        {/* Curated Trade Categories Grid */}
-        <div className="rounded-2xl border border-amber-200/60 dark:border-amber-900/40 bg-card p-6 sm:p-8 shadow-xs">
+        {/* Curated Trade Categories Grid — 5 Core Ranked Industry Groupings */}
+        <div className="rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-xs">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-5 border-b border-border/70">
             <div>
               <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                <Search className="h-4.5 w-4.5 text-amber-600" /> Browse Verified Pros by Trade
+                <Search className="h-4.5 w-4.5 text-emerald-600" /> Browse Verified Pros &amp; Software by Trade
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Direct access to top-rated, background-checked contractors across every major trade.
+                Specialized workflows, forms, and verified contractor networks for every service industry.
               </p>
             </div>
-            <Link href="/marketplace" className="text-xs font-bold text-amber-600 hover:underline">
+            <Link href="/marketplace" className="text-xs font-bold text-emerald-600 hover:underline">
               View All 25+ Trades &rarr;
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 pt-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 pt-5">
             {[
-              { name: 'Plumbing', icon: Wrench, href: '/plumbing-contractors' },
-              { name: 'Electrical', icon: Zap, href: '/electrical-contractors' },
-              { name: 'HVAC & Heating', icon: Thermometer, href: '/hvac-contractors' },
-              { name: 'Roofing', icon: Home, href: '/roofing-contractors' },
-              { name: 'Cleaning', icon: Sparkles, href: '/cleaning-contractors' },
-              { name: 'Landscaping', icon: Trees, href: '/landscaping-contractors' },
-              { name: 'Pest Control', icon: Bug, href: '/pest-control-contractors' },
-              { name: 'Painting', icon: Paintbrush, href: '/painting-contractors' },
-              { name: 'Handyman', icon: Hammer, href: '/handyman-contractors' },
-              { name: 'Appliance Repair', icon: Plug, href: '/marketplace?search=Appliance' },
-              { name: 'Garage Door', icon: Key, href: '/garage-door-contractors' },
-              { name: 'Pet Care', icon: PawPrint, href: '/pet-services-contractors' },
+              { name: 'Plumbing & HVAC', icon: Wrench, href: '/plumbing-software', desc: 'Dispatch & Emergency' },
+              { name: 'Landscaping & Lawn Care', icon: Trees, href: '/landscaping-software', desc: 'Route & Recurring' },
+              { name: 'Painting & Handyman', icon: Paintbrush, href: '/handyman-software', desc: 'Quotes & Checklists' },
+              { name: 'Cleaning & Pet Care', icon: Sparkles, href: '/cleaning-business-software', desc: 'Recurring Bookings' },
+              { name: 'Electrical & Tree Care', icon: Zap, href: '/electrical-contractor-software', desc: 'Permits & Commercial' },
             ].map((item) => {
               const Icon = item.icon;
               return (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className="group flex items-center gap-2.5 rounded-xl border border-border/80 bg-background/60 p-3 text-left transition-all hover:border-amber-400 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 hover:shadow-xs"
+                  className="group flex flex-col items-start gap-2 rounded-xl border border-border/80 bg-background/60 p-3.5 text-left transition-all hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 hover:shadow-xs"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                     <Icon className="h-4 w-4" />
                   </div>
-                  <span className="text-xs font-semibold text-foreground group-hover:text-amber-700 dark:group-hover:text-amber-300 truncate">
-                    {item.name}
-                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-300 block truncate">
+                      {item.name}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground block mt-0.5">
+                      {item.desc}
+                    </span>
+                  </div>
                 </Link>
               );
             })}
@@ -3024,58 +3022,78 @@ function CrmThreeBidMarketplace({ onGetStarted }: { onGetStarted?: () => void })
   );
 }
 
-// ─── CRM: 2026 Competitive Benchmark Matrix ─────────────────────────────────
+// ─── CRM: Stack Replacement ROI & 2026 Competitive Benchmark Matrix ─────────
 
 function CrmVsCompetitors({ onGetStarted }: { onGetStarted?: () => void }) {
-  const comparisonRows = [
+  const stackReplacementRows = [
     {
-      feature: 'Upfront Lead Cost',
-      fieseros: '$0 (Pay 2.5%-8% only on win)',
-      angi: '$30 – $80 per click/lead',
-      jobber: 'No marketplace included',
-      jotform: 'No marketplace included',
+      capability: 'CRM & Pipeline Lead Stages',
+      pointSolution: 'HubSpot / Pipedrive',
+      typicalCost: '$99 / mo',
+      fieseros: '✓ Built-in Lead CRM ($0)',
     },
     {
-      feature: '24/7 AI Voice Phone Receptionist',
-      fieseros: '✓ Built-in (Vapi BYOK)',
-      angi: '❌ None',
-      jobber: '❌ $100+/mo add-on',
-      jotform: '❌ None',
+      capability: 'Real-Time Dispatch & Invoicing',
+      pointSolution: 'Jobber / ServiceTitan',
+      typicalCost: '$249 / mo',
+      fieseros: '✓ Real-time Map & 0% Fees ($0)',
     },
     {
-      feature: 'Form Templates Catalog',
-      fieseros: '20,391 Ready Templates',
-      angi: '❌ None',
-      jobber: '❌ Basic quote form only',
-      jotform: '~10,000 templates',
+      capability: '24/7 AI Voice Phone Receptionist',
+      pointSolution: 'Smith.ai / Ruby Receptionist',
+      typicalCost: '$350 / mo',
+      fieseros: '✓ Native AI Agent & Whisper Alerts ($0)',
     },
     {
-      feature: 'Calculation & Photo Markup Widgets',
-      fieseros: '200+ Smart Widgets',
-      angi: '❌ None',
-      jobber: '❌ Limited basic inputs',
-      jotform: '✓ Good widget library',
+      capability: 'Conversational AI Forms & Calculators',
+      pointSolution: 'Jotform / Typeform',
+      typicalCost: '$99 / mo',
+      fieseros: '✓ 20,391+ Smart AI Templates ($0)',
     },
     {
-      feature: '3 View Formats (Paper/Card/AI)',
-      fieseros: '✓ 3 Interactive View Modes',
-      angi: '❌ None',
-      jobber: '❌ Single web form',
-      jotform: '❌ 1 format only',
+      capability: 'Automated Reviews & Missed-Call SMS',
+      pointSolution: 'Podium / Birdeye',
+      typicalCost: '$289 / mo',
+      fieseros: '✓ Automated SMS Boosters ($0)',
     },
     {
-      feature: 'Complete CRM, GPS Dispatch & Invoicing',
-      fieseros: '✓ All-in-One Operating System',
-      angi: '❌ None (Leads only)',
-      jobber: '✓ Field service management',
-      jotform: '❌ Forms only',
+      capability: '1-Click AI Websites & Hosting',
+      pointSolution: 'Webflow / WordPress hosting',
+      typicalCost: '$92 / mo',
+      fieseros: '✓ GPTSite AI Builder ($0)',
+    },
+  ];
+
+  const superpowers = [
+    {
+      title: 'Missed-Call Text Back',
+      desc: 'Never lose a lead while on a ladder. Instantly texts missed callers within 5 seconds with an instant booking link.',
+      icon: Zap,
     },
     {
-      feature: 'Starting Monthly Price',
-      fieseros: '$5/mo founding offer',
-      angi: '$300+/mo lead trap',
-      jobber: '$49 – $199/mo + seat fees',
-      jotform: '$39 – $99/mo',
+      title: 'Automated Google Review Booster',
+      desc: 'Automatically texts happy customers a 1-click Google review link 15 minutes after job completion.',
+      icon: Star,
+    },
+    {
+      title: 'Unified 2-Way Inbox',
+      desc: 'Manage SMS, WhatsApp, Web Chat, and Email from a single synchronized conversation feed.',
+      icon: Inbox,
+    },
+    {
+      title: '1-Click AI Trade Websites',
+      desc: 'Instant SEO-optimized trade websites equipped with instant quote calculators and booking forms.',
+      icon: Globe,
+    },
+    {
+      title: 'Seasonal Database Reactivation',
+      desc: 'Re-engage past clients for spring tune-ups, gutter cleanings, and winterizations with 1 click.',
+      icon: Clock,
+    },
+    {
+      title: 'Call Tracking & Whisper Alerts',
+      desc: 'Whispers caller intent and trade type into the technician’s ear before connecting the live call.',
+      icon: Headphones,
     },
   ];
 
@@ -3084,47 +3102,81 @@ function CrmVsCompetitors({ onGetStarted }: { onGetStarted?: () => void }) {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="mb-12 text-center">
           <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 mb-3 font-semibold">
-            2026 Competitive Analysis
+            The Stack Replacement Model
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
-            Why service businesses choose <span className="text-emerald-600">Fieseros</span>
+            Replace <span className="text-emerald-600">$1,178/month</span> in Disconnected Software Subscriptions
           </h2>
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto text-sm sm:text-base">
-            Stop stitching together 5 different tools or paying thousands on pay-per-lead sites. Get everything in one modern platform.
+            Stop paying 6 different SaaS invoices every month. Fieseros unifies your entire business into one single operating system — completely free for your first 100 jobs.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        {/* Stack Replacement Table */}
+        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden mb-12">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs sm:text-sm border-collapse">
               <thead>
                 <tr className="border-b border-border bg-muted/60">
                   <th className="p-4 font-bold text-foreground">Capability</th>
-                  <th className="p-4 font-bold text-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/40">Fieseros (2026 OS)</th>
-                  <th className="p-4 font-semibold text-muted-foreground">Angi / Thumbtack</th>
-                  <th className="p-4 font-semibold text-muted-foreground">Jobber / Housecall Pro</th>
-                  <th className="p-4 font-semibold text-muted-foreground">Jotform / Typeform</th>
+                  <th className="p-4 font-semibold text-muted-foreground">Replaces Point Solution</th>
+                  <th className="p-4 font-semibold text-muted-foreground">Typical Cost</th>
+                  <th className="p-4 font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/40">Fieseros AI OS</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {comparisonRows.map((row, i) => (
-                  <tr key={row.feature} className={cn(i % 2 === 0 ? 'bg-transparent' : 'bg-muted/20')}>
-                    <td className="p-4 font-bold text-foreground">{row.feature}</td>
+                {stackReplacementRows.map((row, i) => (
+                  <tr key={row.capability} className={cn(i % 2 === 0 ? 'bg-transparent' : 'bg-muted/20')}>
+                    <td className="p-4 font-bold text-foreground">{row.capability}</td>
+                    <td className="p-4 text-muted-foreground">{row.pointSolution}</td>
+                    <td className="p-4 text-muted-foreground font-mono line-through text-red-500/80">{row.typicalCost}</td>
                     <td className="p-4 font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/30 dark:bg-emerald-950/20">{row.fieseros}</td>
-                    <td className="p-4 text-muted-foreground">{row.angi}</td>
-                    <td className="p-4 text-muted-foreground">{row.jobber}</td>
-                    <td className="p-4 text-muted-foreground">{row.jotform}</td>
                   </tr>
                 ))}
+                <tr className="bg-emerald-100/60 dark:bg-emerald-950/50 border-t-2 border-emerald-500/40 font-bold">
+                  <td className="p-4 text-foreground text-sm">Total Monthly Cost</td>
+                  <td className="p-4 text-muted-foreground">6 Disconnected Invoices</td>
+                  <td className="p-4 text-red-600 font-mono text-base line-through">$1,178 / mo</td>
+                  <td className="p-4 text-emerald-800 dark:text-emerald-200 text-base font-extrabold bg-emerald-200/40 dark:bg-emerald-900/40">
+                    $0 / 100 Free Jobs <span className="text-xs font-normal block text-emerald-700 dark:text-emerald-300">Save $14,136 / year</span>
+                  </td>
+                </tr>
               </tbody>
             </table>
+          </div>
+        </div>
+
+        {/* 6 Trade Superpowers Grid */}
+        <div className="mb-12">
+          <div className="text-center mb-8">
+            <h3 className="text-xl sm:text-2xl font-bold text-foreground">
+              6 Built-In Superpowers for Trade Contractors
+            </h3>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              Automations that capture revenue while you and your crew are out in the field.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {superpowers.map((sp) => {
+              const Icon = sp.icon;
+              return (
+                <div key={sp.title} className="rounded-xl border border-border bg-card p-5 shadow-xs transition-all hover:border-emerald-400">
+                  <div className="h-9 w-9 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center mb-3">
+                    <Icon className="h-4.5 w-4.5" />
+                  </div>
+                  <h4 className="text-sm font-bold text-foreground mb-1">{sp.title}</h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{sp.desc}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {onGetStarted ? (
           <div className="mt-8 text-center">
             <Button onClick={onGetStarted} size="lg" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 rounded-xl shadow-md">
-              Switch to Fieseros for Free <ArrowRight className="w-4 h-4 ml-2" />
+              Switch to Fieseros for Free (100 Jobs Free) <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </div>
         ) : null}
