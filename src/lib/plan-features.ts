@@ -127,6 +127,7 @@ export const PLAN_FEATURE_DEFS: PlanFeatureDef[] = [
  * regardless of `tenant.plan`. See `resolvePlanTier()`.
  */
 export const PLAN_TIERS = [
+  'free',
   'trial',
   'starter',
   'growth',
@@ -142,6 +143,26 @@ export type PlanTier = (typeof PLAN_TIERS)[number];
  * persist in the DB and are respected by all lookups.
  */
 export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
+  // Free: Full basic CRM + quotes/invoices/booking for up to 100 lifetime jobs
+  free: {
+    customers: true, leads: true, jobs: true, quotes: true, invoices: true,
+    reports: true, customer_360: true, sales_pipeline: true, reviews: true,
+    live_chat: false, sms_numbers: false, ai_receptionist: false, whatsapp: false,
+    email_integration: false, omnichannel_inbox: false, ai_assistant: false,
+    ai_quote_generator: false, ai_job_summary: false, ai_suggested_replies: false,
+    ai_form_generator: false,
+    workflows: false, form_builder: true, marketing_campaigns: false, broadcast: false,
+    customer_segments: false, template_studio: false, retargeting: false, journey_automation: false,
+    dispatch_board: false, gps_tracking: false, customer_portal: true, employee_portal: true,
+    online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,
+    before_after_photos: true, checklists: true, route_optimization: false,
+    online_payments: false, recurring_invoices: false, service_plans: true, warranties: true,
+    tax_rules: true, multi_currency: true,
+    inventory: false, purchase_orders: false, recurring_jobs: false,
+    white_label: false, api_access: false, webhooks: false, knowledge_base: true,
+    document_center: true, role_permissions: false, advanced_reports: false,
+    data_retention: false, advanced_security: false,
+  },
   // Trial: full CRM + operations + finance + KB + docs so users can explore.
   // workflows=true so trial users can experiment; everything else gated off.
   trial: {
@@ -265,6 +286,7 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
  * for prices). USD pricing.
  */
 export const PLAN_TIER_LEGEND: Record<PlanTier, string> = {
+  free: 'Free (100 jobs)',
   trial: 'free 14-day',
   starter: '$29/mo',
   growth: '$79/mo',
@@ -280,6 +302,7 @@ export const PLAN_TIER_LEGEND: Record<PlanTier, string> = {
  * mapping).
  */
 export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {
+  free: 'Free',
   trial: 'Trial',
   starter: 'Starter',
   growth: 'Professional',
@@ -526,33 +549,50 @@ export interface PlanQuotas {
   // ── P1.5: Payment transaction limits per plan (Jotform parity) ──
   // Free/trial: 10 payments/mo. Starter: 100. Growth: 1000. Business: 10000. Enterprise: unlimited (0 = unlimited)
   maxMonthlyPayments: number;
+  // ── 100 Lifetime Jobs Free Limit ──
+  // Free plan has a hard lifetime limit of 100 created jobs. Paid plans are 0 (unlimited lifetime).
+  lifetimeJobLimit: number;
 }
 
+/** Free CRM plan lifetime job allowance. */
+export const FREE_CRM_LIFETIME_JOB_LIMIT = 100;
+
 export const PLAN_QUOTAS: Record<PlanTier, PlanQuotas> = {
+  free: {
+    smsQuota: 0, emailQuota: 50, whatsappQuota: 0,
+    maxUsers: 1, maxJobs: 100,
+    maxMonthlyPayments: 0,
+    lifetimeJobLimit: 100,     // 100 lifetime jobs total
+  },
   trial: {
     smsQuota: 100, emailQuota: 200, whatsappQuota: 0,
     maxUsers: 5, maxJobs: 200,
     maxMonthlyPayments: 10,   // 10 payments during trial (Jotform Free parity)
+    lifetimeJobLimit: 0,      // unlimited during trial period
   },
   starter: {
     smsQuota: 100, emailQuota: 200, whatsappQuota: 0,
     maxUsers: 5, maxJobs: 200,
     maxMonthlyPayments: 100,  // 100 payments/month
+    lifetimeJobLimit: 0,      // unlimited
   },
   growth: {
     smsQuota: 500, emailQuota: 2000, whatsappQuota: 0,
     maxUsers: 10, maxJobs: 1000,
     maxMonthlyPayments: 1000, // 1,000 payments/month
+    lifetimeJobLimit: 0,      // unlimited
   },
   business: {
     smsQuota: 3000, emailQuota: 10000, whatsappQuota: 0,
     maxUsers: 25, maxJobs: 5000,
     maxMonthlyPayments: 10000, // 10,000 payments/month
+    lifetimeJobLimit: 0,      // unlimited
   },
   enterprise: {
     smsQuota: 10000, emailQuota: 50000, whatsappQuota: 0,
     maxUsers: 100, maxJobs: 50000,
     maxMonthlyPayments: 0,    // 0 = unlimited
+    lifetimeJobLimit: 0,      // unlimited
   },
 };
 
@@ -563,4 +603,86 @@ export const PLAN_QUOTAS: Record<PlanTier, PlanQuotas> = {
 export function getPlanQuotas(plan: string, planStatus?: string): PlanQuotas {
   const tier = resolvePlanTier(plan, planStatus);
   return PLAN_QUOTAS[tier] || PLAN_QUOTAS.starter;
+}
+
+// ─── Forms & E-Sign Standalone Plan Quotas ───────────────────────────────────
+
+export const FORMS_PLAN_TIERS = [
+  'free',
+  'bronze',
+  'silver',
+  'gold',
+] as const;
+
+export type FormsPlanTier = (typeof FORMS_PLAN_TIERS)[number];
+
+export interface FormsPlanQuotas {
+  tier: FormsPlanTier;
+  label: string;
+  monthlyPrice: number;
+  maxForms: number;             // 0 = unlimited
+  maxMonthlySubmissions: number; // monthly form submissions
+  maxMonthlyPayments: number;   // monthly payment submissions
+  storageBytes: number;         // file upload storage
+  customDomain: boolean;
+  removeBranding: boolean;
+}
+
+export const FORMS_PLAN_QUOTAS: Record<FormsPlanTier, FormsPlanQuotas> = {
+  free: {
+    tier: 'free',
+    label: 'Free',
+    monthlyPrice: 0,
+    maxForms: 3,
+    maxMonthlySubmissions: 100,
+    maxMonthlyPayments: 10,
+    storageBytes: 100 * 1024 * 1024, // 100 MB
+    customDomain: false,
+    removeBranding: false,
+  },
+  bronze: {
+    tier: 'bronze',
+    label: 'Bronze',
+    monthlyPrice: 10,
+    maxForms: 10,
+    maxMonthlySubmissions: 1000,
+    maxMonthlyPayments: 100,
+    storageBytes: 1024 * 1024 * 1024, // 1 GB
+    customDomain: false,
+    removeBranding: false,
+  },
+  silver: {
+    tier: 'silver',
+    label: 'Silver',
+    monthlyPrice: 19,
+    maxForms: 30,
+    maxMonthlySubmissions: 3000,
+    maxMonthlyPayments: 1000,
+    storageBytes: 5 * 1024 * 1024 * 1024, // 5 GB
+    customDomain: true,
+    removeBranding: true,
+  },
+  gold: {
+    tier: 'gold',
+    label: 'Gold',
+    monthlyPrice: 24,
+    maxForms: 0, // 0 = unlimited
+    maxMonthlySubmissions: 10000,
+    maxMonthlyPayments: 10000,
+    storageBytes: 20 * 1024 * 1024 * 1024, // 20 GB
+    customDomain: true,
+    removeBranding: true,
+  },
+};
+
+export function resolveFormsPlanTier(plan?: string | null): FormsPlanTier {
+  if (plan && (FORMS_PLAN_TIERS as readonly string[]).includes(plan)) {
+    return plan as FormsPlanTier;
+  }
+  return 'free';
+}
+
+export function getFormsPlanQuotas(plan?: string | null): FormsPlanQuotas {
+  const tier = resolveFormsPlanTier(plan);
+  return FORMS_PLAN_QUOTAS[tier] || FORMS_PLAN_QUOTAS.free;
 }

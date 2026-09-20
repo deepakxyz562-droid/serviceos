@@ -52,6 +52,12 @@ model Tenant {
   trialEndsAt       DateTime?
   planStartedAt     DateTime?
   planEndsAt        DateTime?
+  // ── Dual-Engine PLG Pricing & Lifetime Job Quota ──────────────────────────
+  formsPlan         String   @default("free")  // 'free' | 'bronze' | 'silver' | 'gold'
+  formsPlanStatus   String   @default("active") // 'active' | 'canceled' | 'past_due'
+  formsSubmissionsThisMonth Int @default(0)
+  formsResetMonthAt DateTime?
+  lifetimeJobsCreated Int    @default(0)       // Auto-incremented counter for 100 free lifetime jobs limit
   settingsJson      String   @default("{}")
   onboardingCompleted Boolean @default(false)
   onboardingStep    Int      @default(0)

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { requireCrmTenant } from '@/lib/require-crm-tenant';
 import { geocodeAddressOrNull as geocodeAddress } from '@/lib/geocode';
+import { checkLifetimeJobLimit, incrementTenantJobCount } from '@/lib/plan-gate';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -152,6 +153,24 @@ export async function POST(
       }
     }
 
+    // Check Lifetime Jobs quota (100 free lifetime jobs limit on Free plan)
+    const effectiveTenantId = user.tenantId || quote.tenantId;
+    if (effectiveTenantId && !user.isSuperAdmin) {
+      const quota = await checkLifetimeJobLimit(effectiveTenantId);
+      if (!quota.ok) {
+        return NextResponse.json(
+          {
+            error: 'LIFETIME_JOB_LIMIT_REACHED',
+            message: 'You have reached the 100 free lifetime jobs limit. Upgrade to Fieseros CRM Starter to create unlimited jobs.',
+            count: quota.count,
+            limit: quota.limit,
+            upgradeUrl: '/billing',
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     // ── 5. Create the Job ──────────────────────────────────────────────
     const customer = quote.customer;
     const job = await db.job.create({
@@ -184,6 +203,11 @@ export async function POST(
         }),
       },
     });
+
+    // Auto-increment tenant's lifetime jobs count
+    if (effectiveTenantId) {
+      incrementTenantJobCount(effectiveTenantId).catch(() => {});
+    }
 
     // ── 6. Link the Quote to the new Job ───────────────────────────────
     // Keep quote.status as 'accepted' — jobId is the conversion indicator.

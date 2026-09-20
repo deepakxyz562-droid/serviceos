@@ -10,7 +10,7 @@ import { logActivity } from '@/lib/activity-log'
 import { EventBus } from '@/lib/event-bus'
 import { geocodeAddressOrNull as geocodeAddress } from '@/lib/geocode'
 import { requireCrmTenant } from '@/lib/require-crm-tenant'
-import { requirePlanFeature } from '@/lib/plan-gate'
+import { requirePlanFeature, checkLifetimeJobLimit, incrementTenantJobCount } from '@/lib/plan-gate'
 import { computeNextOccurrence, nextVisitNumber, createRecurringSchedule } from '@/lib/recurring-jobs'
 import { generateVerificationPin } from '@/lib/pin'
 
@@ -670,6 +670,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check Lifetime Jobs quota (100 free lifetime jobs limit on Free plan)
+    if (authUser.tenantId && !authUser.isSuperAdmin) {
+      const quota = await checkLifetimeJobLimit(authUser.tenantId);
+      if (!quota.ok) {
+        return NextResponse.json(
+          {
+            error: 'LIFETIME_JOB_LIMIT_REACHED',
+            message: 'You have reached the 100 free lifetime jobs limit. Upgrade to Fieseros CRM Starter to create unlimited jobs.',
+            count: quota.count,
+            limit: quota.limit,
+            upgradeUrl: '/billing',
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     // Resolve workspaceId so the job has proper workspace → tenant context.
     // The Create Job form does not send workspaceId; without this, the job
     // would be created with workspaceId=null, which breaks auto-invoice
@@ -846,6 +863,11 @@ export async function POST(request: NextRequest) {
               resource: true,
             },
           })
+
+    // Auto-increment tenant's lifetime jobs count
+    if (authUser.tenantId) {
+      incrementTenantJobCount(authUser.tenantId).catch(() => {});
+    }
 
     // ─── Background side-effects (don't block the response) ──────
     // Send WhatsApp notifications + event webhooks detached so the user

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
 import { getAuthUser } from '@/lib/auth';
+import { checkLifetimeJobLimit, incrementTenantJobCount } from '@/lib/plan-gate';
 import {
   autoCloseDealAsWonByQuote,
   autoCloseDealAsWonByLead,
@@ -179,6 +180,23 @@ export async function POST(request: NextRequest) {
       ]);
     }
 
+    // Check Lifetime Jobs quota (100 free lifetime jobs limit on Free plan)
+    if (user.tenantId && !user.isSuperAdmin) {
+      const quota = await checkLifetimeJobLimit(user.tenantId);
+      if (!quota.ok) {
+        return NextResponse.json(
+          {
+            error: 'LIFETIME_JOB_LIMIT_REACHED',
+            message: 'You have reached the 100 free lifetime jobs limit. Upgrade to Fieseros CRM Starter to create unlimited jobs.',
+            count: quota.count,
+            limit: quota.limit,
+            upgradeUrl: '/billing',
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     // Create the job in the database with status 'pending'
     const job = await db.job.create({
       data: {
@@ -230,6 +248,11 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Auto-increment tenant's lifetime jobs count
+    if (user.tenantId) {
+      incrementTenantJobCount(user.tenantId).catch(() => {});
+    }
 
     // Emit job.created event via EventBus — scope to caller's tenant
     // (NOT to body-provided tenantId, which could be spoofed).

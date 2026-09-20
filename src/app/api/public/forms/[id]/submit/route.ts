@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { normalizeFormSchema } from '@/lib/forms/form-schema-types';
 import { sendFormSubmissionEmails } from '@/lib/forms/form-email-service';
+import { checkFormSubmissionLimit, incrementTenantFormSubmissionCount } from '@/lib/plan-gate';
 
 /**
  * POST /api/public/forms/[id]/submit
@@ -80,6 +81,19 @@ export async function POST(
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
     // ── 4. Save FormResponse in Database ───────────────────────────────────
+    if (form.tenantId) {
+      const subQuota = await checkFormSubmissionLimit(form.tenantId);
+      if (!subQuota.ok) {
+        return NextResponse.json(
+          {
+            error: 'This form has reached its monthly submission limit. Please contact the form owner.',
+            code: 'MONTHLY_SUBMISSION_LIMIT_REACHED',
+          },
+          { status: 429 },
+        );
+      }
+    }
+
     const response = await db.formResponse.create({
       data: {
         formId: form.id,
@@ -90,6 +104,11 @@ export async function POST(
         source: body.source || 'direct',
       },
     });
+
+    // Auto-increment monthly form submission count for the tenant
+    if (form.tenantId) {
+      incrementTenantFormSubmissionCount(form.tenantId).catch(() => {});
+    }
 
     // Increment submissions count on form
     await db.form

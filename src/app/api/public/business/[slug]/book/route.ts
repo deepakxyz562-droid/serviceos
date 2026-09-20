@@ -41,6 +41,7 @@ import { db } from '@/lib/db'
 import { notifyOwner } from '@/lib/owner-notifications'
 import { sendEmail } from '@/lib/email-send'
 import { issueCustomerMagicLink } from '@/lib/customer-magic-link'
+import { checkLifetimeJobLimit, incrementTenantJobCount } from '@/lib/plan-gate'
 
 export const runtime = 'nodejs'
 
@@ -312,40 +313,48 @@ export async function POST(
       console.warn('[public-business/book] workspace resolution failed (non-fatal):', wsErr)
     }
 
-    // Create the trackable Job. Best-effort: if this throws (e.g. schema drift),
+    // Create the trackable Job. Best-effort: if this throws or limit reached,
     // the Lead still succeeded so the owner gets notified — we just won't have
     // a tracking link / PIN for this booking.
     let job: { id: string; jobNumber: string | null } | null = null
     try {
-      job = await db.job.create({
-        data: {
-          title,
-          description,
-          status: 'pending',
-          priority: intent === 'book' ? 'high' : 'medium',
-          type: 'service',
-          address: address || null,
-          scheduledAt: preferredDate ? new Date(preferredDate) : null,
-          notes: message || null,
-          customerId: customer?.id || null,
-          customerName: name,
-          customerPhone: phone,
-          customerEmail: email || null,
-          serviceId: service?.id || null,
-          quotedAmount: service?.basePrice || null,
-          lineItemsJson: lineItemsJson,
-          verificationPin,
-          workspaceId,
-          metadataJson: JSON.stringify({
-            leadId: lead.id,
-            source,
-            intent,
-            publicBooking: true,
-            publicSlug: tenant.slug,
-          }),
-        },
-        select: { id: true, jobNumber: true },
-      })
+      const quota = await checkLifetimeJobLimit(tenant.id);
+      if (quota.ok) {
+        job = await db.job.create({
+          data: {
+            title,
+            description,
+            status: 'pending',
+            priority: intent === 'book' ? 'high' : 'medium',
+            type: 'service',
+            address: address || null,
+            scheduledAt: preferredDate ? new Date(preferredDate) : null,
+            notes: message || null,
+            customerId: customer?.id || null,
+            customerName: name,
+            customerPhone: phone,
+            customerEmail: email || null,
+            serviceId: service?.id || null,
+            quotedAmount: service?.basePrice || null,
+            lineItemsJson: lineItemsJson,
+            verificationPin,
+            workspaceId,
+            metadataJson: JSON.stringify({
+              leadId: lead.id,
+              source,
+              intent,
+              publicBooking: true,
+              publicSlug: tenant.slug,
+            }),
+          },
+          select: { id: true, jobNumber: true },
+        })
+
+        incrementTenantJobCount(tenant.id).catch(() => {});
+      }
+    } catch (jobErr) {
+      console.warn('[public-business/book] Job creation failed (non-fatal, Lead was created):', jobErr)
+    }
 
       // Backlink: record the jobId on the Lead's notesJson so the CRM can
       // deep-link from the Lead card to the Job / tracking page.

@@ -129,3 +129,184 @@ export async function requirePlanFeature(
 
   return { ok: true, planTier };
 }
+
+// ─── PLG Quota & Gate Checks ────────────────────────────────────────────────
+
+export interface LifetimeJobLimitResult {
+  ok: boolean;
+  count: number;
+  limit: number;
+  remaining: number;
+  plan: string;
+  reason?: string;
+}
+
+/**
+ * Check if the tenant has reached the 100 Lifetime Free Jobs limit.
+ *
+ * Rules:
+ * - Free tier: Hard cap at 100 lifetime jobs.
+ * - Trial tier: Allowed during trial period.
+ * - Paid tiers (starter/growth/business/enterprise): Unlimited lifetime jobs.
+ */
+export async function checkLifetimeJobLimit(
+  tenantId: string,
+): Promise<LifetimeJobLimitResult> {
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        plan: true,
+        planStatus: true,
+        lifetimeJobsCreated: true,
+      },
+    });
+
+    if (!tenant) {
+      return { ok: false, count: 0, limit: 100, remaining: 0, plan: 'unknown', reason: 'Tenant not found' };
+    }
+
+    const tier = resolvePlanTier(tenant.plan || 'starter', tenant.planStatus || 'active');
+    const count = tenant.lifetimeJobsCreated ?? 0;
+
+    // Free tier has a 100 lifetime jobs limit
+    if (tier === 'free' || tenant.plan === 'free') {
+      const limit = 100;
+      if (count >= limit) {
+        return {
+          ok: false,
+          count,
+          limit,
+          remaining: 0,
+          plan: 'free',
+          reason: 'LIFETIME_JOB_LIMIT_REACHED',
+        };
+      }
+      return {
+        ok: true,
+        count,
+        limit,
+        remaining: Math.max(0, limit - count),
+        plan: 'free',
+      };
+    }
+
+    // Trial and paid plans have unlimited lifetime jobs
+    return {
+      ok: true,
+      count,
+      limit: 0, // 0 = unlimited
+      remaining: Infinity,
+      plan: tier,
+    };
+  } catch (err) {
+    console.error('[plan-gate] checkLifetimeJobLimit failed:', err);
+    // On unexpected error, fail open to avoid blocking legitimate operations
+    return { ok: true, count: 0, limit: 0, remaining: Infinity, plan: 'unknown' };
+  }
+}
+
+/**
+ * Increment the tenant's lifetime jobs count.
+ */
+export async function incrementTenantJobCount(tenantId: string): Promise<void> {
+  try {
+    await db.tenant.update({
+      where: { id: tenantId },
+      data: {
+        lifetimeJobsCreated: { increment: 1 },
+      },
+    });
+  } catch (err) {
+    console.warn('[plan-gate] incrementTenantJobCount failed:', err);
+  }
+}
+
+export interface FormSubmissionLimitResult {
+  ok: boolean;
+  count: number;
+  limit: number;
+  plan: string;
+  reason?: string;
+}
+
+/**
+ * Check if the tenant has exceeded their monthly form submission quota.
+ */
+export async function checkFormSubmissionLimit(
+  tenantId: string,
+): Promise<FormSubmissionLimitResult> {
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        formsPlan: true,
+        formsPlanStatus: true,
+        formsSubmissionsThisMonth: true,
+        formsResetMonthAt: true,
+      },
+    });
+
+    if (!tenant) {
+      return { ok: false, count: 0, limit: 100, plan: 'free', reason: 'Tenant not found' };
+    }
+
+    // Check if monthly counter reset is needed
+    const now = new Date();
+    const lastReset = tenant.formsResetMonthAt ? new Date(tenant.formsResetMonthAt) : null;
+    let currentCount = tenant.formsSubmissionsThisMonth || 0;
+
+    if (!lastReset || lastReset.getUTCMonth() !== now.getUTCMonth() || lastReset.getUTCFullYear() !== now.getUTCFullYear()) {
+      // Auto-reset for new month
+      currentCount = 0;
+      await db.tenant.update({
+        where: { id: tenantId },
+        data: {
+          formsSubmissionsThisMonth: 0,
+          formsResetMonthAt: now,
+        },
+      }).catch(err => console.warn('[plan-gate] Reset formsSubmissionsThisMonth failed:', err));
+    }
+
+    const { getFormsPlanQuotas } = await import('@/lib/plan-features');
+    const quotas = getFormsPlanQuotas(tenant.formsPlan);
+    const limit = quotas.maxMonthlySubmissions;
+
+    if (currentCount >= limit) {
+      return {
+        ok: false,
+        count: currentCount,
+        limit,
+        plan: tenant.formsPlan || 'free',
+        reason: 'MONTHLY_FORM_SUBMISSION_LIMIT_REACHED',
+      };
+    }
+
+    return {
+      ok: true,
+      count: currentCount,
+      limit,
+      plan: tenant.formsPlan || 'free',
+    };
+  } catch (err) {
+    console.error('[plan-gate] checkFormSubmissionLimit failed:', err);
+    return { ok: true, count: 0, limit: 100, plan: 'free' };
+  }
+}
+
+/**
+ * Increment the tenant's monthly form submission count.
+ */
+export async function incrementTenantFormSubmissionCount(tenantId: string): Promise<void> {
+  try {
+    await db.tenant.update({
+      where: { id: tenantId },
+      data: {
+        formsSubmissionsThisMonth: { increment: 1 },
+      },
+    });
+  } catch (err) {
+    console.warn('[plan-gate] incrementTenantFormSubmissionCount failed:', err);
+  }
+}
+

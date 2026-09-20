@@ -47,6 +47,29 @@ export interface PricingPlan {
 
 export const FALLBACK_PRICING_PLANS: PricingPlan[] = [
   {
+    // FREE TIER — 100 Lifetime Jobs PLG entry point
+    code: 'free',
+    name: 'Free',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    originalMonthlyPrice: 0,
+    description: '100 Lifetime Jobs — Get started free, no credit card',
+    icon: Zap,
+    features: [
+      '1 User (Solo)',
+      '100 Lifetime Jobs Total',
+      'Unlimited Customers & Leads',
+      'Lead Inbox & Quick Capture',
+      'Quotes & Estimates',
+      'Invoices & Receipts',
+      'Calendar & Scheduling',
+      'Online Booking Page',
+      'Digital Signatures',
+      '100 MB Storage',
+    ],
+    cta: 'Get Started Free',
+  },
+  {
     // LAUNCH SPECIAL — $5/mo founding member offer. Monthly billing only.
     code: 'launch_special',
     name: 'Launch Special',

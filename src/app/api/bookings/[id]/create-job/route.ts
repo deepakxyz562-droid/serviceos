@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { checkLifetimeJobLimit, incrementTenantJobCount } from '@/lib/plan-gate';
 
 /**
  * POST /api/bookings/[id]/create-job
@@ -108,6 +109,23 @@ export async function POST(
       }
     }
 
+    // Check Lifetime Jobs quota (100 free lifetime jobs limit on Free plan)
+    if (user.tenantId && !user.isSuperAdmin) {
+      const quota = await checkLifetimeJobLimit(user.tenantId);
+      if (!quota.ok) {
+        return NextResponse.json(
+          {
+            error: 'LIFETIME_JOB_LIMIT_REACHED',
+            message: 'You have reached the 100 free lifetime jobs limit. Upgrade to Fieseros CRM Starter to create unlimited jobs.',
+            count: quota.count,
+            limit: quota.limit,
+            upgradeUrl: '/billing',
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     // Determine initial job status
     const jobStatus = booking.employeeId ? 'assigned' : 'pending';
 
@@ -188,6 +206,11 @@ export async function POST(
 
       return { job, booking: updatedBooking };
     });
+
+    // Auto-increment tenant's lifetime jobs count
+    if (user.tenantId) {
+      incrementTenantJobCount(user.tenantId).catch(() => {});
+    }
 
     // Best-effort EventBus emit (don't fail the request if EventBus errors)
     try {

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { EventBus } from '@/lib/event-bus';
 import { normalizePhone, normalizeEmail } from '@/lib/customer-normalize';
+import { checkLifetimeJobLimit, incrementTenantJobCount } from '@/lib/plan-gate';
 
 // POST /api/leads/convert - Convert lead to job
 export async function POST(request: NextRequest) {
@@ -155,6 +156,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check Lifetime Jobs quota (100 free lifetime jobs limit on Free plan)
+    if (tenantId && !authUser.isSuperAdmin) {
+      const quota = await checkLifetimeJobLimit(tenantId);
+      if (!quota.ok) {
+        return NextResponse.json(
+          {
+            error: 'LIFETIME_JOB_LIMIT_REACHED',
+            message: 'You have reached the 100 free lifetime jobs limit. Upgrade to Fieseros CRM Starter to create unlimited jobs.',
+            count: quota.count,
+            limit: quota.limit,
+            upgradeUrl: '/billing',
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     const job = await db.job.create({
       data: {
         title: jobTitle,
@@ -189,6 +207,11 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Auto-increment tenant's lifetime jobs count
+    if (tenantId) {
+      incrementTenantJobCount(tenantId).catch(() => {});
+    }
 
     // If the lead had an assigned employee, update their name/phone on the job
     if (lead.assignedToId) {

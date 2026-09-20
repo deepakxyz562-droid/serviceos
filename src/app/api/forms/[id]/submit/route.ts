@@ -5,6 +5,7 @@ import { sendEmail } from '@/lib/email-send';
 import { EventBus } from '@/lib/event-bus';
 import { notifyOwner } from '@/lib/owner-notifications';
 import { checkFormSpam, getClientIp } from '@/lib/form-spam-guard';
+import { checkFormSubmissionLimit, incrementTenantFormSubmissionCount } from '@/lib/plan-gate';
 
 // ─── POST /api/forms/[id]/submit ───────────────────────────────────────────
 // CRITICAL route: Form submission with action execution
@@ -128,7 +129,21 @@ export async function POST(
     if (validTenantId) {
       try {
         const t = await db.tenant.findUnique({ where: { id: validTenantId }, select: { id: true } });
-        if (!t) validTenantId = null;
+        if (!t) {
+          validTenantId = null;
+        } else {
+          // Check monthly form submission quota
+          const subQuota = await checkFormSubmissionLimit(validTenantId);
+          if (!subQuota.ok) {
+            return NextResponse.json(
+              {
+                error: 'This form has reached its monthly submission limit. Please contact the form owner.',
+                code: 'MONTHLY_SUBMISSION_LIMIT_REACHED',
+              },
+              { status: 429 },
+            );
+          }
+        }
       } catch { validTenantId = null; }
     }
 
@@ -154,6 +169,11 @@ export async function POST(
         } : {}),
       },
     });
+
+    // Auto-increment monthly form submission count for the tenant
+    if (validTenantId) {
+      incrementTenantFormSubmissionCount(validTenantId).catch(() => {});
+    }
 
     // ─── 3a. Process payment if the form has a payment field ───────────
     // After creating the FormResponse, charge the customer via the gateway.
