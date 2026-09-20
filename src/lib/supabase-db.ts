@@ -241,6 +241,10 @@ const TABLE_MAP: Record<string, string> = {
   // Supabase SQL editor).
   publicChatSession: 'PublicChatSession',
   publicChatMessage: 'PublicChatMessage',
+  // ── Scheduling & Availability Engine (Calendly-Style) ──
+  availability: 'Availability',
+  serviceAvailability: 'ServiceAvailability',
+  holidayCalendar: 'HolidayCalendar',
   // ── AI Receptionist (Phase R2) ──
   // These models extend AiAgent/AiCall with IVR menus, escalation policies,
   // discrete call tags, and per-tenant billing counters. The tables MUST
