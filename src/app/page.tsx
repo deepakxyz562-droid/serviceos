@@ -57,7 +57,7 @@ export const metadata: Metadata = {
   // marketplace, AI Receptionist) + target industries, so Google's AI Overview
   // accurately represents the platform's capabilities.
   description:
-    'Fieseros is the all-in-one operating system for field service and trade businesses. The platform combines CRM, scheduling, dispatch, invoicing, payments, a verified service-provider marketplace, and a 24/7 AI Receptionist for HVAC, plumbing, electrical, cleaning, and landscaping contractors.',
+    'An all-in-one software platform and local marketplace designed to help field service companies and trade businesses run their operations, build websites, and find customers.',
   keywords: [
     'field service software',
     'service business software',

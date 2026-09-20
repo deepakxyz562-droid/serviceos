@@ -189,31 +189,25 @@ export function HomeSeoContent() {
         {/* ── Hero / H1 ─────────────────────────────────────────────────── */}
         <div className="mb-16">
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl lg:text-5xl mb-6">
-            Build it. Grow it. Run it. — The Operating System for Service Businesses
+            Run Operations. Build Websites. Find Customers. — The All-in-One Platform &amp; Marketplace for Service Businesses
           </h1>
           <p className="text-lg leading-relaxed text-muted-foreground mb-4">
             <strong className="text-emerald-600">Run your first 100 jobs free.</strong>{' '}
-            Fieseros is the only platform that does all three.{' '}
-            <strong className="text-foreground">Build</strong> a website that
-            generates leads. <strong className="text-foreground">Grow</strong> with
-            SEO, Google Ads, and local marketing.{' '}
-            <strong className="text-foreground">Run</strong> your entire business —{' '}
+            Fieseros is an all-in-one software platform and local marketplace designed to help field service companies and trade businesses run their operations, build websites and AI forms, and find local customers.
+          </p>
+          <p className="text-base leading-relaxed text-muted-foreground mb-4">
+            Manage your entire workflow — from{' '}
             <Link href="/scheduling-and-dispatch" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
               scheduling and dispatch
             </Link>
             ,{' '}
             <Link href="/invoicing-and-payments" className="font-medium text-emerald-700 underline-offset-4 hover:underline">
-              invoicing
+              invoicing and payments
             </Link>
-            , CRM, and AI automation — from one dashboard. Built for plumbers,
-            HVAC, electricians, cleaners, landscapers, and 20+ other service
-            industries.
+            , and customer CRM to 24/7 AI voice receptionist and verified marketplace listings — from one unified dashboard. Built for plumbers, HVAC, electricians, cleaners, landscapers, roofers, and 25+ service industries.
           </p>
           <p className="text-base leading-relaxed text-muted-foreground">
-            Whether you run a one-person operation or manage a team of 50+
-            technicians, Fieseros adapts to your workflow. From the first customer
-            call to the final payment, every step is tracked, automated, and
-            optimized — so you can focus on the work, not the paperwork.
+            Whether you run a solo trade business or manage a fleet of 50+ technicians, Fieseros adapts to your exact daily operations. Every customer inquiry, quote, job schedule, and invoice is tracked, automated, and synchronized.
           </p>
         </div>
 
