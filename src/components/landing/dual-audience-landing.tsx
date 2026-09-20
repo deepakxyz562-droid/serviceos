@@ -398,9 +398,6 @@ export function DualAudienceLanding({ onGetStarted, onSignIn, onTryDemo }: DualA
             <Link href="/#pricing" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
               Pricing
             </Link>
-            <Link href="/templates" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
-              Templates
-            </Link>
           </nav>
 
           {/* Right Action CTAs */}
@@ -1100,7 +1097,7 @@ export function DualAudienceLanding({ onGetStarted, onSignIn, onTryDemo }: DualA
               Start Free (100 Jobs Free) →
             </Button>
             <Button asChild variant="outline" size="lg" className="w-full sm:w-auto text-sm h-12 px-8 rounded-2xl hover:border-emerald-500 hover:text-emerald-700">
-              <Link href="/templates">Explore 20,000+ Templates</Link>
+              <Link href="/gptform">Explore GPTForm™ AI Forms</Link>
             </Button>
           </div>
         </div>
