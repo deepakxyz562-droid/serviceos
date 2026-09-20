@@ -42,17 +42,17 @@ export function AiMarketingFooter() {
             </ul>
           </div>
 
-          {/* Col 2: Free Markdown & Document Converters */}
+          {/* Col 2: Free Tools */}
           <div className="space-y-3">
-            <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Document Converters</h4>
+            <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Free Tools</h4>
             <ul className="space-y-2 text-slate-400">
-              <li><Link href="#converters" className="hover:text-emerald-400 transition">PDF to Markdown</Link></li>
-              <li><Link href="#converters" className="hover:text-emerald-400 transition">DOCX to Markdown</Link></li>
-              <li><Link href="#converters" className="hover:text-emerald-400 transition">HTML to Markdown</Link></li>
-              <li><Link href="#converters" className="hover:text-emerald-400 transition">Notion to Markdown</Link></li>
-              <li><Link href="#converters" className="hover:text-emerald-400 transition">Google Docs to Markdown</Link></li>
-              <li><Link href="#converters" className="hover:text-emerald-400 transition">CSV to Markdown</Link></li>
-              <li><Link href="#converters" className="hover:text-emerald-400 transition">Webpage to Markdown</Link></li>
+              <li><Link href="/invoice-generator" className="text-emerald-400 hover:underline transition font-medium">Free Invoice Generator</Link></li>
+              <li><Link href="/estimate-generator" className="hover:text-emerald-400 transition">Free Estimate Generator</Link></li>
+              <li><Link href="/proposal-generator" className="hover:text-emerald-400 transition">Free Proposal Generator</Link></li>
+              <li><Link href="/job-cost-calculator" className="hover:text-emerald-400 transition">Job Cost Calculator</Link></li>
+              <li><Link href="/material-cost-estimator" className="hover:text-emerald-400 transition">Material Cost Estimator</Link></li>
+              <li><Link href="/home-maintenance-planner" className="hover:text-emerald-400 transition">Home Maintenance Planner</Link></li>
+              <li><Link href="/tools" className="text-emerald-400 font-semibold hover:underline transition">Browse All Free Tools →</Link></li>
             </ul>
           </div>
 
@@ -100,7 +100,7 @@ export function AiMarketingFooter() {
 
         {/* Bottom copyright */}
         <div className="pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} Fieseros AI. Built for high-growth service businesses.</p>
+          <p>© {new Date().getFullYear()} Fieseros. Built for high-growth service businesses.</p>
           <div className="flex items-center gap-4">
             <span>Powered by Amazon SES &amp; OpenAI/Anthropic/Gemini</span>
           </div>
