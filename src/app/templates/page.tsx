@@ -138,7 +138,7 @@ export default function TemplatesGalleryPage() {
               <h3 className="font-semibold text-foreground mb-1">Product</h3>
               <ul className="space-y-1">
                 <li><Link href="/gptform" className="hover:text-emerald-600 hover:underline">GPTForm™ Builder</Link></li>
-                <li><Link href="/gptsite" className="hover:text-emerald-600 hover:underline">GPTSite™ AI Employee</Link></li>
+                <li><Link href="/#ai-receptionist" className="hover:text-emerald-600 hover:underline">24/7 AI Receptionist</Link></li>
                 <li><Link href="/" className="hover:text-emerald-600 hover:underline">Home</Link></li>
               </ul>
             </div>

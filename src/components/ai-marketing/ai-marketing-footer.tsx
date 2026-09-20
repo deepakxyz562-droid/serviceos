@@ -16,7 +16,7 @@ export function AiMarketingFooter() {
               </span>
             </Link>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Turn your website into a 24/7 AI employee. Answer customer questions, offer live calendar booking slots, generate responsive forms, and automatically sync leads into Fieseros CRM.
+              The AI Operating System for local service businesses. Generate smart quote calculation forms, offer live calendar booking slots, collect direct payments, and sync leads into Fieseros CRM.
             </p>
           </div>
 
@@ -33,13 +33,12 @@ export function AiMarketingFooter() {
           <div className="space-y-3">
             <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Products</h4>
             <ul className="space-y-2 text-slate-400">
-              <li><Link href="/gptsite" className="hover:text-emerald-400 transition">GPTSite™ AI Employee</Link></li>
               <li><Link href="/gptform" className="hover:text-emerald-400 transition">GPTForm™ Smart Forms</Link></li>
               <li><Link href="/templates" className="hover:text-emerald-400 transition">20,000+ Form Templates</Link></li>
-              <li><Link href="/gptsite#knowledge" className="hover:text-emerald-400 transition">Website Knowledge Scraper</Link></li>
-              <li><Link href="/gptsite#wordpress" className="hover:text-emerald-400 transition">WordPress Connector Plugin</Link></li>
-              <li><Link href="/gptform#runtime" className="hover:text-emerald-400 transition">Universal 1-Line Embed</Link></li>
-              <li><Link href="/gptform#payments" className="hover:text-emerald-400 transition">33 Direct Pay Gateways</Link></li>
+              <li><Link href="/#ai-receptionist" className="hover:text-emerald-400 transition">24/7 AI Voice Receptionist</Link></li>
+              <li><Link href="/features" className="hover:text-emerald-400 transition">Field Service OS</Link></li>
+              <li><Link href="/scheduling-and-dispatch" className="hover:text-emerald-400 transition">Scheduling &amp; Dispatch</Link></li>
+              <li><Link href="/gptform#payments" className="hover:text-emerald-400 transition">Direct Pay Gateways</Link></li>
             </ul>
           </div>
 

@@ -102,13 +102,6 @@ export const solutionsLinks = {
   ],
   aiAndTools: [
     {
-      label: 'GPTSite™ AI Website Builder',
-      desc: 'AI website & high-converting service landing page generator',
-      href: '/gptsite',
-      icon: Globe,
-      badge: 'New',
-    },
-    {
       label: 'GPTForm™ Smart Forms',
       desc: '200+ responsive widgets, photo drawing notes & 33 gateways',
       href: '/gptform',
@@ -188,7 +181,6 @@ export const solutionsLinks = {
 // Footer link groups
 export const footerLinks = {
   product: [
-    { label: 'GPTSite™ AI Website Builder', href: '/gptsite' },
     { label: 'GPTForm™ Smart Forms', href: '/gptform' },
     { label: '20,000+ Form Templates', href: '/templates' },
     { label: 'CRM Overview', href: '/#crm-features' },

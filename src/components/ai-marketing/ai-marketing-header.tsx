@@ -17,6 +17,10 @@ import {
   Zap,
   Bot,
   CreditCard,
+  Briefcase,
+  Wrench,
+  Home,
+  CheckCircle2,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
@@ -30,16 +34,6 @@ import {
 export function AiMarketingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleTryDemoClick = (e: React.MouseEvent) => {
-    const el = document.getElementById('demo') || document.getElementById('demo-url-input');
-    if (el) {
-      e.preventDefault();
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const input = document.getElementById('demo-url-input') as HTMLInputElement | null;
-      if (input) input.focus();
-    }
-  };
-
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="max-w-7xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -52,7 +46,7 @@ export function AiMarketingHeader() {
                 Fieseros <span className="text-emerald-600 font-extrabold">AI</span>
               </span>
               <span className="text-[10px] text-muted-foreground font-medium -mt-1">
-                AI Employee &amp; Smart Forms
+                Smart Forms &amp; Service OS
               </span>
             </div>
           </Link>
@@ -66,125 +60,91 @@ export function AiMarketingHeader() {
                   Products <ChevronDown className="size-3.5 opacity-60" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-72 p-2">
-                <DropdownMenuItem asChild>
-                  <Link href="/gptsite" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <Bot className="size-4 text-emerald-600 mt-0.5" />
-                    <div>
-                      <p className="font-semibold text-xs text-foreground">GPTSite™ AI Employee</p>
-                      <p className="text-[11px] text-muted-foreground">Answers FAQs &amp; books appointments 24/7</p>
-                    </div>
-                  </Link>
-                </DropdownMenuItem>
+              <DropdownMenuContent align="start" className="w-80 p-2 shadow-xl">
                 <DropdownMenuItem asChild>
                   <Link href="/gptform" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <FileInput className="size-4 text-teal-600 mt-0.5" />
+                    <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600">
+                      <FileInput className="size-4" />
+                    </div>
                     <div>
-                      <p className="font-semibold text-xs text-foreground">GPTForm™ Smart Forms &amp; 200+ Widgets</p>
-                      <p className="text-[11px] text-muted-foreground">Paper, Card &amp; AI Chatbot runtime modes</p>
+                      <p className="font-semibold text-xs text-foreground">GPTForm™ Smart Forms</p>
+                      <p className="text-[11px] text-muted-foreground">AI form builder, live quote calculators &amp; 0% fee payments</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/gptform#payments" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <CreditCard className="size-4 text-purple-600 mt-0.5" />
+                  <Link href="/#ai-receptionist" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                    <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600">
+                      <Bot className="size-4" />
+                    </div>
                     <div>
-                      <p className="font-semibold text-xs text-foreground">33 Payment Gateways (0% Fee)</p>
-                      <p className="text-[11px] text-muted-foreground">UPI QR, BNPL 4x, Cards, Invoices</p>
+                      <p className="font-semibold text-xs text-foreground">24/7 AI Voice Receptionist</p>
+                      <p className="text-[11px] text-muted-foreground">Answers phone calls, quotes prices &amp; books appointments</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/gptsite#wordpress" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <FileCode className="size-4 text-blue-600 mt-0.5" />
+                  <Link href="/#crm-features" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                    <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600">
+                      <Layers className="size-4" />
+                    </div>
                     <div>
-                      <p className="font-semibold text-xs text-foreground">WordPress Plugin &amp; JS Embed</p>
-                      <p className="text-[11px] text-muted-foreground">1-line JS embed for any CMS</p>
+                      <p className="font-semibold text-xs text-foreground">Field Service OS</p>
+                      <p className="text-[11px] text-muted-foreground">Dispatch, technician mobile app, invoicing &amp; CRM</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Free Tools Dropdown */}
+            {/* Templates Link */}
+            <Link
+              href="/templates"
+              className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium"
+            >
+              Templates <span className="ml-1 text-[10px] font-bold bg-teal-500/10 text-teal-600 dark:text-teal-400 px-1.5 py-0.5 rounded-full">20K+</span>
+            </Link>
+
+            {/* Solutions Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-1 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
-                  Tools <ChevronDown className="size-3.5 opacity-60" />
+                  Solutions <ChevronDown className="size-3.5 opacity-60" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-72 p-2">
+              <DropdownMenuContent align="start" className="w-72 p-2 shadow-xl">
                 <DropdownMenuItem asChild>
-                  <Link href="#tools" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <Wand2 className="size-4 text-emerald-600 mt-0.5" />
-                    <div>
-                      <p className="font-semibold text-xs text-foreground">AI Form &amp; FAQ Generator</p>
-                      <p className="text-[11px] text-muted-foreground">Generate complete forms from any URL</p>
-                    </div>
+                  <Link href="/field-service-software" className="flex items-center gap-2.5 p-2 rounded-md cursor-pointer text-xs font-medium">
+                    <Wrench className="size-4 text-emerald-600" />
+                    <span>Contractors &amp; Field Service</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="#converters" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <FileCode className="size-4 text-teal-600 mt-0.5" />
-                    <div>
-                      <p className="font-semibold text-xs text-foreground">PDF / DOCX to Markdown</p>
-                      <p className="text-[11px] text-muted-foreground">Convert documents for AI knowledge</p>
-                    </div>
+                  <Link href="/cleaning-business-software" className="flex items-center gap-2.5 p-2 rounded-md cursor-pointer text-xs font-medium">
+                    <Home className="size-4 text-teal-600" />
+                    <span>Home &amp; Cleaning Services</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="#calculator" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <Zap className="size-4 text-amber-600 mt-0.5" />
-                    <div>
-                      <p className="font-semibold text-xs text-foreground">Chatbot ROI Calculator</p>
-                      <p className="text-[11px] text-muted-foreground">Calculate lead capture increase</p>
-                    </div>
+                  <Link href="/plumbing-software" className="flex items-center gap-2.5 p-2 rounded-md cursor-pointer text-xs font-medium">
+                    <Zap className="size-4 text-amber-600" />
+                    <span>Plumbing &amp; HVAC Services</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/marketplace" className="flex items-center gap-2.5 p-2 rounded-md cursor-pointer text-xs font-medium">
+                    <Briefcase className="size-4 text-purple-600" />
+                    <span>Verified Pro Marketplace</span>
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Alternatives Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition">
-                  Alternatives <ChevronDown className="size-3.5 opacity-60" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64 p-2">
-                <DropdownMenuItem asChild>
-                  <Link href="#compare-jotform" className="p-2 text-xs font-medium cursor-pointer">
-                    vs. Jotform Alternative
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="#compare-sitegpt" className="p-2 text-xs font-medium cursor-pointer">
-                    vs. SiteGPT Alternative
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="#compare-typeform" className="p-2 text-xs font-medium cursor-pointer">
-                    vs. Typeform Alternative
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="#compare-googleforms" className="p-2 text-xs font-medium cursor-pointer">
-                    vs. Google Forms Alternative
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <Link href="/templates" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
-              20,000+ Templates
-            </Link>
-            <Link href="/gptform" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
-              GPTForm (AI Forms)
-            </Link>
-            <Link href="/gptsite" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
-              GPTSite (AI Agent)
-            </Link>
-            <Link href="/gptform#pricing" className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium">
+            {/* Pricing Link */}
+            <Link
+              href="/gptform#pricing"
+              className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition font-medium"
+            >
               Pricing
             </Link>
           </nav>
@@ -192,17 +152,19 @@ export function AiMarketingHeader() {
 
         {/* Right Actions */}
         <div className="hidden sm:flex items-center gap-3">
-          <Link href="/?auth=signin" className="text-xs font-semibold text-muted-foreground hover:text-foreground px-3 py-2">
+          <Link
+            href="/login"
+            className="text-xs font-semibold text-muted-foreground hover:text-foreground px-3 py-2 transition"
+          >
             Sign In
           </Link>
           <Button
             size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm gap-1.5 cursor-pointer"
-            onClick={handleTryDemoClick}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm gap-1.5 px-4 h-9 rounded-lg cursor-pointer"
             asChild
           >
-            <Link href="/gptsite#demo">
-              <Sparkles className="size-3.5" /> Try Live Demo
+            <Link href="/register">
+              Create Free Account <ArrowRight className="size-3.5" />
             </Link>
           </Button>
         </div>
@@ -218,30 +180,13 @@ export function AiMarketingHeader() {
 
       {/* Mobile dropdown */}
       {mobileMenuOpen && (
-        <div className="sm:hidden border-t bg-background p-4 space-y-3">
-          <Link
-            href="/gptsite#demo"
-            onClick={(e) => {
-              setMobileMenuOpen(false);
-              handleTryDemoClick(e);
-            }}
-            className="block text-sm font-medium text-foreground py-1"
-          >
-            ✨ Live AI Demo
-          </Link>
-          <Link
-            href="/gptsite"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
-          >
-            GPTSite™ AI Employee
-          </Link>
+        <div className="sm:hidden border-t bg-background p-4 space-y-3 shadow-lg">
           <Link
             href="/gptform"
             onClick={() => setMobileMenuOpen(false)}
-            className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
+            className="block text-sm font-semibold text-foreground py-1"
           >
-            GPTForm™ Smart Forms
+            ✨ GPTForm™ AI Smart Forms
           </Link>
           <Link
             href="/templates"
@@ -255,25 +200,22 @@ export function AiMarketingHeader() {
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
           >
-            Pricing ($7/mo CRM add-on)
+            Pricing (Free Tier: 100 Free Forms/mo)
           </Link>
-          <div className="pt-2 border-t flex flex-col gap-2">
+          <div className="pt-3 border-t flex flex-col gap-2">
             <Link
-              href="/?auth=signin"
+              href="/login"
               className="text-center text-xs font-semibold text-muted-foreground hover:text-foreground py-2"
               onClick={() => setMobileMenuOpen(false)}
             >
               Sign In
             </Link>
             <Button
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-              onClick={(e) => {
-                setMobileMenuOpen(false);
-                handleTryDemoClick(e);
-              }}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-10 font-semibold"
+              onClick={() => setMobileMenuOpen(false)}
               asChild
             >
-              <Link href="/gptsite#demo">Launch Your AI Employee</Link>
+              <Link href="/register">Create Free Account</Link>
             </Button>
           </div>
         </div>

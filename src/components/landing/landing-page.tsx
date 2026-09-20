@@ -509,7 +509,6 @@ const seoFeatures = [
 const footerLinks = {
   product: [
     { label: 'Features', href: '#features' },
-    { label: 'GPTSite™ AI Employee', href: '/gptsite' },
     { label: 'GPTForm™ Smart Forms', href: '/gptform' },
     { label: '20,000+ Form Templates', href: '/templates' },
     { label: 'AI Voice Receptionist', href: '#ai-receptionist' },
@@ -519,7 +518,6 @@ const footerLinks = {
   industries: seoIndustries,
   compare: seoCompare,
   resources: [
-    { label: 'GPTSite™ AI Employee', href: '/gptsite' },
     { label: 'GPTForm™ Smart Forms', href: '/gptform' },
     { label: '20,000+ Form Templates', href: '/templates' },
     { label: 'Contractor Marketplace', href: '/marketplace' },

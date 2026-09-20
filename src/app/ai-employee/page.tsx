@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function AiEmployeeRedirectPage() {
-  redirect('/gptsite');
+  redirect('/#ai-receptionist');
 }

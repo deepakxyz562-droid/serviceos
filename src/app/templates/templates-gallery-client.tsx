@@ -998,7 +998,7 @@ export function TemplatesGalleryClient({
                         <div className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-start gap-2.5">
                           <Bot className="size-4 text-emerald-600 shrink-0 mt-0.5" />
                           <div>
-                            <p className="font-bold text-foreground">GPTSite AI Agent Sync</p>
+                            <p className="font-bold text-foreground">AI Voice &amp; Chatbot Sync</p>
                             <p className="text-[11px] text-muted-foreground">Voice &amp; chatbot assistants can fill or trigger this form automatically.</p>
                           </div>
                         </div>

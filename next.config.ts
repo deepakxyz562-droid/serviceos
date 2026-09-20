@@ -75,7 +75,12 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/ai-employee',
-        destination: '/gptsite',
+        destination: '/#ai-receptionist',
+        permanent: true,
+      },
+      {
+        source: '/gptsite',
+        destination: '/',
         permanent: true,
       },
     ];

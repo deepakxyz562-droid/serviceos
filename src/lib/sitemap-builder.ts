@@ -253,7 +253,6 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     // ─── Core ────────────────────────────────────────────────────────────
     { path: "", priority: 1.0, changeFreq: "weekly" },
     { path: "/gptform", priority: 1.0, changeFreq: "weekly" },
-    { path: "/gptsite", priority: 1.0, changeFreq: "weekly" },
     { path: "/templates", priority: 1.0, changeFreq: "daily" },
 
     // ─── Marketplace ─────────────────────────────────────────────────────
