@@ -495,7 +495,7 @@ export function FormStudioBuilder({
     const newField: FormField = {
       id: newId,
       label: `Payment via ${gw.name}`,
-      type: 'short_answer',
+      type: 'payment_gateway',
       required: true,
       widgetType: `payment_${gw.id}`,
       stepId: currentStepId,
@@ -2114,6 +2114,127 @@ export function FormStudioBuilder({
                       onCheckedChange={(v) => updateSetting('allowBrowserAutocomplete', v)}
                     />
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* ─── Conditional Logic Rules (P2.2) ───────────────────────────── */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Conditional Logic</CardTitle>
+                  <CardDescription className="text-xs">
+                    Show or hide fields based on user responses. E.g., &quot;If Service Type = AC Repair, show AC Model field.&quot;
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {(formData.rules as any[] || []).length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center py-4">
+                      No conditional rules yet. Add one below.
+                    </p>
+                  )}
+                  {(formData.rules as any[] || []).map((rule, idx) => (
+                    <div key={rule.id || idx} className="flex items-center gap-2 p-2 rounded-lg border border-border/60 bg-muted/30">
+                      <span className="text-[10px] font-mono text-muted-foreground shrink-0">IF</span>
+                      <select
+                        className="text-[10px] bg-background border border-border rounded px-1.5 py-1 flex-1"
+                        value={rule.sourceFieldId || ''}
+                        onChange={(e) => {
+                          const newRules = [...(formData.rules as any[] || [])];
+                          newRules[idx] = { ...rule, sourceFieldId: e.target.value };
+                          onFormDataChange((prev) => ({ ...prev, rules: newRules }));
+                        }}
+                      >
+                        <option value="">Select field...</option>
+                        {formData.fields.map((f) => (
+                          <option key={f.id} value={f.id}>{f.label}</option>
+                        ))}
+                      </select>
+                      <select
+                        className="text-[10px] bg-background border border-border rounded px-1.5 py-1"
+                        value={rule.operator || 'equals'}
+                        onChange={(e) => {
+                          const newRules = [...(formData.rules as any[] || [])];
+                          newRules[idx] = { ...rule, operator: e.target.value };
+                          onFormDataChange((prev) => ({ ...prev, rules: newRules }));
+                        }}
+                      >
+                        <option value="equals">equals</option>
+                        <option value="not_equals">not equals</option>
+                        <option value="contains">contains</option>
+                        <option value="is_empty">is empty</option>
+                        <option value="is_not_empty">is not empty</option>
+                      </select>
+                      <Input
+                        className="text-[10px] h-7 w-20"
+                        placeholder="value"
+                        value={rule.value || ''}
+                        onChange={(e) => {
+                          const newRules = [...(formData.rules as any[] || [])];
+                          newRules[idx] = { ...rule, value: e.target.value };
+                          onFormDataChange((prev) => ({ ...prev, rules: newRules }));
+                        }}
+                      />
+                      <span className="text-[10px] font-mono text-muted-foreground shrink-0">THEN</span>
+                      <select
+                        className="text-[10px] bg-background border border-border rounded px-1.5 py-1"
+                        value={rule.action || 'show'}
+                        onChange={(e) => {
+                          const newRules = [...(formData.rules as any[] || [])];
+                          newRules[idx] = { ...rule, action: e.target.value };
+                          onFormDataChange((prev) => ({ ...prev, rules: newRules }));
+                        }}
+                      >
+                        <option value="show">Show</option>
+                        <option value="hide">Hide</option>
+                        <option value="require">Require</option>
+                      </select>
+                      <select
+                        className="text-[10px] bg-background border border-border rounded px-1.5 py-1 flex-1"
+                        value={rule.targetFieldId || ''}
+                        onChange={(e) => {
+                          const newRules = [...(formData.rules as any[] || [])];
+                          newRules[idx] = { ...rule, targetFieldId: e.target.value };
+                          onFormDataChange((prev) => ({ ...prev, rules: newRules }));
+                        }}
+                      >
+                        <option value="">Select target field...</option>
+                        {formData.fields.map((f) => (
+                          <option key={f.id} value={f.id}>{f.label}</option>
+                        ))}
+                      </select>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="size-7 p-0 text-muted-foreground hover:text-red-500 shrink-0"
+                        onClick={() => {
+                          const newRules = (formData.rules as any[] || []).filter((_, i) => i !== idx);
+                          onFormDataChange((prev) => ({ ...prev, rules: newRules }));
+                        }}
+                      >
+                        <Trash2 className="size-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs w-full"
+                    onClick={() => {
+                      const newRule = {
+                        id: `rule_${Date.now()}`,
+                        sourceFieldId: '',
+                        operator: 'equals',
+                        value: '',
+                        action: 'show',
+                        targetFieldId: '',
+                      };
+                      onFormDataChange((prev) => ({
+                        ...prev,
+                        rules: [...(prev.rules as any[] || []), newRule],
+                      }));
+                    }}
+                  >
+                    <Plus className="size-3.5 mr-1" /> Add Conditional Rule
+                  </Button>
                 </CardContent>
               </Card>
             </div>

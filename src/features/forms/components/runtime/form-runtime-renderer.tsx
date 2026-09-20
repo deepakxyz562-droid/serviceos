@@ -580,7 +580,7 @@ export function FormRuntimeRenderer({
       if (!inStep) return false;
     }
 
-    // Evaluate schema.rules (show/hide rules targeting this field).
+    // Evaluate schema.rules (show/hide/require rules targeting this field).
     const rules = schema.rules || [];
     const targetingRules = rules.filter((r) => r.targetFieldId === f.id);
     if (targetingRules.length === 0) return true;
@@ -597,6 +597,22 @@ export function FormRuntimeRenderer({
     }
     return true;
   });
+
+  // ─── P2.3: Evaluate 'require' rules — dynamically make fields required ──
+  // A 'require' rule makes the target field required when the source field
+  // matches the condition. This is separate from show/hide — the field is
+  // visible but its required state changes based on user input.
+  const dynamicallyRequiredFields = useMemo(() => {
+    const rules = schema.rules || [];
+    const requireRules = rules.filter((r) => r.action === 'require');
+    const requiredSet = new Set<string>();
+    for (const rule of requireRules) {
+      if (rule.targetFieldId && evaluateConditionalRule(rule, formData)) {
+        requiredSet.add(rule.targetFieldId);
+      }
+    }
+    return requiredSet;
+  }, [schema.rules, formData]);
 
   // Auto-evaluate calculation widgets and inject their result into formData.
   // This effect runs after every formData change so dependent fields re-evaluate.
@@ -660,7 +676,9 @@ export function FormRuntimeRenderer({
   const validateStep = (fieldsToValidate: FormField[]) => {
     const newErrors: Record<string, string> = {};
     for (const field of fieldsToValidate) {
-      if (field.required) {
+      // Check both static required flag AND dynamic require rules (P2.3)
+      const isRequired = field.required || dynamicallyRequiredFields.has(field.id);
+      if (isRequired) {
         const val = formData[field.id];
         if (
           val === undefined ||

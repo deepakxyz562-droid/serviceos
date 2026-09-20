@@ -523,43 +523,36 @@ export interface PlanQuotas {
   whatsappQuota: number;
   maxUsers: number;
   maxJobs: number;
+  // ── P1.5: Payment transaction limits per plan (Jotform parity) ──
+  // Free/trial: 10 payments/mo. Starter: 100. Growth: 1000. Business: 10000. Enterprise: unlimited (0 = unlimited)
+  maxMonthlyPayments: number;
 }
 
 export const PLAN_QUOTAS: Record<PlanTier, PlanQuotas> = {
   trial: {
-    smsQuota: 100,       // 100 SMS during trial
-    emailQuota: 200,     // 200 emails during trial
-    whatsappQuota: 0,    // BYO
-    maxUsers: 5,
-    maxJobs: 200,
+    smsQuota: 100, emailQuota: 200, whatsappQuota: 0,
+    maxUsers: 5, maxJobs: 200,
+    maxMonthlyPayments: 10,   // 10 payments during trial (Jotform Free parity)
   },
   starter: {
-    smsQuota: 100,       // 100 SMS/month
-    emailQuota: 200,     // 200 emails/month
-    whatsappQuota: 0,    // BYO
-    maxUsers: 5,
-    maxJobs: 200,
+    smsQuota: 100, emailQuota: 200, whatsappQuota: 0,
+    maxUsers: 5, maxJobs: 200,
+    maxMonthlyPayments: 100,  // 100 payments/month
   },
   growth: {
-    smsQuota: 500,       // 500 SMS/month
-    emailQuota: 2000,    // 2,000 emails/month
-    whatsappQuota: 0,    // BYO
-    maxUsers: 10,
-    maxJobs: 1000,
+    smsQuota: 500, emailQuota: 2000, whatsappQuota: 0,
+    maxUsers: 10, maxJobs: 1000,
+    maxMonthlyPayments: 1000, // 1,000 payments/month
   },
   business: {
-    smsQuota: 3000,      // 3,000 SMS/month (Unlimited 2-way texting with FUP)
-    emailQuota: 10000,   // 10,000 emails/month
-    whatsappQuota: 0,    // BYO
-    maxUsers: 25,
-    maxJobs: 5000,
+    smsQuota: 3000, emailQuota: 10000, whatsappQuota: 0,
+    maxUsers: 25, maxJobs: 5000,
+    maxMonthlyPayments: 10000, // 10,000 payments/month
   },
   enterprise: {
-    smsQuota: 10000,     // 10,000 SMS/month
-    emailQuota: 50000,   // 50,000 emails/month
-    whatsappQuota: 0,    // BYO
-    maxUsers: 100,
-    maxJobs: 50000,
+    smsQuota: 10000, emailQuota: 50000, whatsappQuota: 0,
+    maxUsers: 100, maxJobs: 50000,
+    maxMonthlyPayments: 0,    // 0 = unlimited
   },
 };
 

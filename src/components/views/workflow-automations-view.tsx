@@ -745,16 +745,36 @@ export function WorkflowAutomationsView() {
     setFormActions((prev) => prev.map((a) => a.id === id ? { ...a, config } : a));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim()) { toast.error('Automation name is required'); return; }
     if (!formTriggerType) { toast.error('Please select a trigger'); return; }
     if (formActions.length === 0) { toast.error('Add at least one action'); return; }
 
     setSaving(true);
-    setTimeout(() => {
+
+    try {
       const triggerInfo = ALL_TRIGGERS.find((t) => t.value === formTriggerType);
+      const payload = {
+        name: formName,
+        description: formDescription,
+        triggerType: formTriggerType,
+        triggerCategory: triggerInfo?.category || '',
+        conditions: formConditions,
+        conditionLogic: formConditionLogic,
+        actions: formActions,
+      };
 
       if (editingAutomationId) {
+        // Update existing
+        const res = await fetch(`/api/workflows/${editingAutomationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('Failed to update automation');
+        const data = await res.json();
+
+        // Also update local state for immediate UI feedback
         setAutomations((prev) => prev.map((a) => a.id === editingAutomationId ? {
           ...a,
           name: formName, description: formDescription,
@@ -764,8 +784,17 @@ export function WorkflowAutomationsView() {
         } : a));
         toast.success('Automation updated');
       } else {
+        // Create new
+        const res = await fetch('/api/workflows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('Failed to create automation');
+        const data = await res.json();
+
         const newAutomation: WorkflowAutomation = {
-          id: `wa_${Date.now()}`,
+          id: data.automation?.id || `wa_${Date.now()}`,
           name: formName, description: formDescription,
           triggerType: formTriggerType, triggerCategory: triggerInfo?.category || '',
           conditions: formConditions, conditionLogic: formConditionLogic,
@@ -780,7 +809,11 @@ export function WorkflowAutomationsView() {
       setSaving(false);
       setShowCreateDialog(false);
       setEditingAutomationId(null);
-    }, 400);
+    } catch (error) {
+      console.error('[workflow-automations] Save failed:', error);
+      toast.error('Failed to save automation. Please try again.');
+      setSaving(false);
+    }
   };
 
   // ============================================================

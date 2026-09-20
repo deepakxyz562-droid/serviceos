@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { requirePlanFeature } from '@/lib/plan-gate'
 
-// GET /api/audit-logs - List audit logs with filters
+// GET /api/audit-logs - List audit logs with filters (enterprise-only, tenant-scoped)
 export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthUser()
+
+    // P3.3: Gate behind enterprise plan (advanced_security feature)
+    const gate = await requirePlanFeature('advanced_security')
+    if (!gate.ok) {
+      return NextResponse.json(
+        { error: 'Audit logs require the Enterprise plan (Advanced Security feature).' },
+        { status: 403 },
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
     const action = searchParams.get('action')
@@ -16,6 +27,11 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50')
 
     const where: Record<string, unknown> = {}
+
+    // P3.3: Enforce tenant scoping — prevent cross-tenant data access
+    if (authUser?.tenantId) {
+      where.tenantId = authUser.tenantId
+    }
 
     if (userId) where.userId = userId
     if (action) where.action = { contains: action }

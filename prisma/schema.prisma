@@ -1381,6 +1381,14 @@ model FormResponse {
   utmMedium   String?    // UTM campaign medium
   utmCampaign String?    // UTM campaign name
   status      String   @default("completed") // new, in_progress, approved, rejected, spam, archived
+  // ── Payment fields (P1.2 — real payment processing) ──────────────────────
+  paymentStatus    String?  // pending | succeeded | failed | refunded | disputed
+  transactionId    String?  // gateway transaction/charge ID
+  paymentMethod    String?  // stripe | paypal | razorpay | square | etc.
+  paymentAmount    Float?   // amount charged (in major currency units)
+  paymentCurrency  String?  // USD, EUR, INR, etc.
+  paymentGatewayId String?  // which gateway was used (e.g. 'stripe_checkout')
+  paidAt           DateTime? // when payment was confirmed
   tenantId    String?
   workspaceId String?
   createdAt   DateTime @default(now())

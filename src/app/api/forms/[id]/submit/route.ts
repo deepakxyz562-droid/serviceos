@@ -94,6 +94,33 @@ export async function POST(
       );
     }
 
+    // ─── 2b. Payment field detection ────────────────────────────────────
+    // If the form has a payment_gateway field, extract payment info for
+    // processing AFTER the FormResponse is created (step 3).
+    const formFields = safeJsonParse(form.fieldsJson, []) as Array<Record<string, unknown>>;
+    const paymentField = formFields.find(
+      (f) => f.type === 'payment_gateway' || (f.widgetType && String(f.widgetType).startsWith('payment_')),
+    );
+
+    let paymentData: {
+      gatewayId?: string;
+      amount?: number;
+      currency?: string;
+      paymentMethodId?: string;
+      hasPayment: boolean;
+    } = { hasPayment: false };
+
+    if (paymentField) {
+      const widgetConfig = (paymentField.widgetConfig || {}) as Record<string, unknown>;
+      paymentData = {
+        gatewayId: widgetConfig.gatewayId as string || String(paymentField.widgetType || '').replace('payment_', ''),
+        amount: widgetConfig.amount as number || 0,
+        currency: widgetConfig.currency as string || 'USD',
+        paymentMethodId: body.paymentMethodId as string | undefined,
+        hasPayment: true,
+      };
+    }
+
     // ─── 3. Store the response ────────────────────────────────────────
     // Defensive: validate tenantId exists before linking (avoids FK errors
     // when a form was created against a tenant that no longer exists).
@@ -114,8 +141,61 @@ export async function POST(
         source,
         tenantId: validTenantId,
         workspaceId: form.workspaceId,
+        // Audit trail fields (P3.2 — e-signature compliance)
+        ipAddress: getClientIp(request) || null,
+        userAgent: request.headers.get('user-agent') || null,
+        completedAt: new Date(),
+        // Payment fields — mark as pending if payment is required
+        ...(paymentData.hasPayment ? {
+          paymentStatus: 'pending',
+          paymentAmount: paymentData.amount,
+          paymentCurrency: paymentData.currency,
+          paymentGatewayId: paymentData.gatewayId,
+        } : {}),
       },
     });
+
+    // ─── 3a. Process payment if the form has a payment field ───────────
+    // After creating the FormResponse, charge the customer via the gateway.
+    // The FormResponse ID is passed as metadata so the webhook can update it.
+    let paymentResult: { transactionId?: string; paymentStatus?: string; clientSecret?: string } | null = null;
+
+    if (paymentData.hasPayment && paymentData.gatewayId) {
+      try {
+        const chargeRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/forms/${form.id}/charge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gatewayId: paymentData.gatewayId,
+            amount: paymentData.amount,
+            currency: paymentData.currency,
+            customer: { name: respondentName, email: respondent },
+            paymentMethodId: paymentData.paymentMethodId,
+            formResponseId: response.id,
+          }),
+        });
+        const chargeData = await chargeRes.json();
+        if (chargeData.success) {
+          paymentResult = {
+            transactionId: chargeData.transactionId,
+            paymentStatus: chargeData.paymentStatus,
+            clientSecret: chargeData.clientSecret,
+          };
+        } else {
+          // Payment failed — update FormResponse status
+          await db.formResponse.update({
+            where: { id: response.id },
+            data: { paymentStatus: 'failed' },
+          }).catch(() => {});
+        }
+      } catch (chargeError) {
+        console.error('[form submit] Payment processing failed:', chargeError);
+        await db.formResponse.update({
+          where: { id: response.id },
+          data: { paymentStatus: 'failed' },
+        }).catch(() => {});
+      }
+    }
 
     // ─── 4. Read submission actions and field mapping ─────────────────
     const submissionActions: string[] = safeJsonParse(form.submissionActions, []) as string[];
@@ -673,6 +753,8 @@ export async function POST(
       success: true,
       response: updatedResponse,
       actionResults,
+      // Include payment info if payment was processed
+      ...(paymentResult ? { payment: paymentResult } : {}),
     }, { status: 201 });
   } catch (error) {
     console.error('Form submission error:', error);
