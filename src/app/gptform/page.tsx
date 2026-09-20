@@ -1224,7 +1224,7 @@ export default function GptFormLandingPage() {
             },
             {
               q: 'Can I white-label GPTForm for my customers?',
-              a: 'Yes, on the Business plan. You can remove all Fieseros branding, add your own logo and custom domain, and publish fully white-labelled forms directly from your client's website.',
+              a: "Yes, on the Business plan. You can remove all Fieseros branding, add your own logo and custom domain, and publish fully white-labelled forms directly from your client's website.",
             },
             {
               q: 'How does GPTForm AI compare to Jotform AI?',
