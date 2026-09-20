@@ -8,6 +8,7 @@ import {
   Globe,
   Check,
   ChevronRight,
+  ChevronLeft,
   type LucideIcon,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -202,18 +203,39 @@ export const FALLBACK_PRICING_PLANS: PricingPlan[] = [
 
 export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
   const [yearly, setYearly] = React.useState(false);
-  // Plan catalog — fetched from /api/plans/public (no auth required) on
-  // mount so prices stay in sync with the DB (editable by super-admins
-  // without a deploy). Falls back to FALLBACK_PRICING_PLANS on any fetch
-  // failure. We merge DB-backed prices/names/popular flags into the
-  // curated marketing copy (features + icon + description stay hardcoded
-  // so the landing page reads well — DB feature flags aren't curated for
-  // marketing).
-  // Issue 6 fix: start with an EMPTY list + a `loading` flag so the first
-  // paint shows a skeleton (no hardcoded prices) instead of the fallback
-  // prices that get visibly swapped out a moment later (the "flicker").
   const [plans, setPlans] = React.useState<PricingPlan[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
+  const [canScrollRight, setCanScrollRight] = React.useState(true);
+  const [activeSlideIndex, setActiveSlideIndex] = React.useState(0);
+
+  const checkScrollability = React.useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    setCanScrollLeft(scrollLeft > 10);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+    const cardWidth = 320;
+    const index = Math.round(scrollLeft / cardWidth);
+    setActiveSlideIndex(Math.min(Math.max(index, 0), Math.max(plans.length - 1, 0)));
+  }, [plans.length]);
+
+  const handleScroll = (direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const scrollAmount = 330;
+    scrollRef.current.scrollBy({
+      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      behavior: 'smooth',
+    });
+  };
+
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', checkScrollability, { passive: true });
+    checkScrollability();
+    return () => el.removeEventListener('scroll', checkScrollability);
+  }, [checkScrollability, plans]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -301,170 +323,232 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
             Start free with 100 Lifetime Jobs. No credit card required. Email, SMS &amp; In-App notifications included on every plan.
           </p>
 
-          {/* Segmented Pill Switcher */}
-          <div className="inline-flex items-center p-1.5 rounded-full bg-slate-200/80 dark:bg-slate-800 border border-slate-300/80 dark:border-slate-700 shadow-inner mt-6">
-            <button
-              type="button"
-              onClick={() => setYearly(false)}
-              className={cn(
-                'px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5',
-                !yearly
-                  ? 'bg-white dark:bg-slate-900 text-foreground shadow-md'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <span>Monthly</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setYearly(true)}
-              className={cn(
-                'px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-2',
-                yearly
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <span>Yearly</span>
-              <span
+          {/* Segmented Pill Switcher & Slider Navigation */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
+            <div className="inline-flex items-center p-1.5 rounded-full bg-slate-200/80 dark:bg-slate-800 border border-slate-300/80 dark:border-slate-700 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setYearly(false)}
                 className={cn(
-                  'text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide transition-colors',
-                  yearly
-                    ? 'bg-white/20 text-white'
-                    : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                  'px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer',
+                  !yearly
+                    ? 'bg-white dark:bg-slate-900 text-foreground shadow-md'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                Save ~17%
-              </span>
-            </button>
+                <span>Monthly</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setYearly(true)}
+                className={cn(
+                  'px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer',
+                  yearly
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <span>Yearly</span>
+                <span
+                  className={cn(
+                    'text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide transition-colors',
+                    yearly
+                      ? 'bg-white/20 text-white'
+                      : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                  )}
+                >
+                  Save ~17%
+                </span>
+              </button>
+            </div>
+
+            {/* Slider Navigation Arrows */}
+            <div className="hidden sm:flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleScroll('left')}
+                disabled={!canScrollLeft}
+                aria-label="Previous pricing plans"
+                className={cn(
+                  'size-9 rounded-full border flex items-center justify-center transition cursor-pointer shadow-xs',
+                  canScrollLeft
+                    ? 'bg-white dark:bg-slate-900 border-border text-foreground hover:border-emerald-500 hover:text-emerald-600'
+                    : 'bg-muted/50 border-border/50 text-muted-foreground/40 cursor-not-allowed'
+                )}
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleScroll('right')}
+                disabled={!canScrollRight}
+                aria-label="Next pricing plans"
+                className={cn(
+                  'size-9 rounded-full border flex items-center justify-center transition cursor-pointer shadow-xs',
+                  canScrollRight
+                    ? 'bg-white dark:bg-slate-900 border-border text-foreground hover:border-emerald-500 hover:text-emerald-600'
+                    : 'bg-muted/50 border-border/50 text-muted-foreground/40 cursor-not-allowed'
+                )}
+              >
+                <ChevronRight className="size-4" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {loading ? (
-            // Issue 6 fix: skeleton during the initial fetch so the user
-            // never sees hardcoded fallback prices that get swapped out.
-            Array.from({ length: 4 }).map((_, i) => (
-              <Card key={`skeleton-${i}`} className="border-border h-full flex flex-col">
-                <CardHeader className="pb-2">
-                  <div className="w-10 h-10 rounded-lg bg-muted mb-3" />
-                  <div className="h-5 w-24 bg-muted rounded mb-2" />
-                  <div className="h-3 w-32 bg-muted rounded" />
-                </CardHeader>
-                <CardContent className="flex-1 space-y-2">
-                  <div className="h-9 w-20 bg-muted rounded mb-4" />
-                  {Array.from({ length: 6 }).map((_, j) => (
-                    <div key={j} className="h-3 w-full bg-muted rounded" />
-                  ))}
-                </CardContent>
-                <CardFooter>
-                  <div className="h-9 w-full bg-muted rounded" />
-                </CardFooter>
-              </Card>
-            ))
-          ) : (
-            plans.map((plan) => {
-            const Icon = plan.icon;
-            const monthlySave = discountPct(plan.originalMonthlyPrice, plan.monthlyPrice ?? 0);
-            const yearlySave = discountPct(
-              plan.originalMonthlyPrice * 12,
-              plan.yearlyPrice ?? 0,
-            );
-            return (
-              <Card
-                key={plan.code}
-                className={cn(
-                  'relative bg-white border h-full flex flex-col transition-all',
-                  plan.popular
-                    ? 'border-emerald-500 shadow-lg shadow-emerald-100 ring-1 ring-emerald-500/20'
-                    : 'border-border hover:border-emerald-300 hover:shadow-md',
-                )}
-              >
-                {plan.popular ? (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-emerald-600 text-white font-semibold border-0 px-3 shadow-md">Most Popular</Badge>
-                  </div>
-                ) : null}
-                <CardHeader className="pb-2">
-                  <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center mb-3',
-                    plan.popular ? 'bg-emerald-50 border border-emerald-100' : 'bg-muted border border-border')}>
-                    <Icon className={cn('w-5 h-5', plan.popular ? 'text-emerald-600' : 'text-muted-foreground')} />
-                  </div>
-                  <CardTitle className="text-foreground text-lg">{plan.name}</CardTitle>
-                  <CardDescription className="text-muted-foreground">{plan.description}</CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1">
-                  <div className="mb-5">
-                    {plan.monthlyPrice === 0 ? (
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-4xl font-extrabold text-foreground">$0</span>
-                        <span className="text-muted-foreground text-sm">/mo (100 Jobs Free)</span>
-                      </div>
-                    ) : (plan.monthlyPrice !== null && plan.monthlyPrice !== undefined && plan.monthlyPrice > 0) ? (
-                      <>
-                        {/* Strikethrough original price + Save % badge */}
-                        {plan.originalMonthlyPrice > 0 && (
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-sm text-muted-foreground line-through">
-                              ${yearly ? plan.originalMonthlyPrice * 12 : plan.originalMonthlyPrice}
-                            </span>
-                            {(() => {
-                              const pct = yearly ? yearlySave : monthlySave;
-                              return pct > 0 ? (
-                                <Badge className="bg-amber-100 text-amber-700 border-0 text-xs px-1.5 py-0">
-                                  Save {pct}%
-                                </Badge>
-                              ) : null;
-                            })()}
-                          </div>
-                        )}
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-4xl font-extrabold text-foreground">
-                            ${yearly ? Math.round((plan.yearlyPrice ?? 0) / 12) : plan.monthlyPrice}
-                          </span>
-                          <span className="text-muted-foreground text-sm">/mo</span>
-                        </div>
-                        {yearly && plan.yearlyPrice !== null ? (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            ${plan.yearlyPrice}/year billed annually
-                          </p>
-                        ) : null}
-                      </>
-                    ) : (
-                      <div className="text-4xl font-bold text-foreground">Custom</div>
-                    )}
-                  </div>
-                  <ul className="space-y-2.5">
-                    {plan.features.map((feature, idx) => {
-                      // The first feature in each higher-tier plan is a
-                      // header line like "Everything in Starter, plus:" —
-                      // render it without a check icon for visual emphasis.
-                      const isHeader = idx === 0 && /^everything in/i.test(feature);
-                      return (
-                        <li key={feature} className="flex items-start gap-2.5 text-sm">
-                          {!isHeader && <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />}
-                          <span className={cn(isHeader ? 'text-foreground font-semibold' : 'text-foreground/80')}>
-                            {feature}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </CardContent>
-                <CardFooter>
-                  <Button
-                    onClick={onGetStarted}
-                    className={cn('w-full',
+        {/* Pricing Cards Horizontal Snap Slider Carousel */}
+        <div className="relative">
+          <div
+            ref={scrollRef}
+            className="flex gap-5 overflow-x-auto snap-x snap-mandatory scroll-smooth pb-6 pt-3 px-1 scrollbar-none"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <Card key={`skeleton-${i}`} className="border-border h-full flex flex-col w-[285px] sm:w-[305px] lg:w-[320px] shrink-0 snap-start">
+                  <CardHeader className="pb-2">
+                    <div className="w-10 h-10 rounded-lg bg-muted mb-3" />
+                    <div className="h-5 w-24 bg-muted rounded mb-2" />
+                    <div className="h-3 w-32 bg-muted rounded" />
+                  </CardHeader>
+                  <CardContent className="flex-1 space-y-2">
+                    <div className="h-9 w-20 bg-muted rounded mb-4" />
+                    {Array.from({ length: 6 }).map((_, j) => (
+                      <div key={j} className="h-3 w-full bg-muted rounded" />
+                    ))}
+                  </CardContent>
+                  <CardFooter>
+                    <div className="h-9 w-full bg-muted rounded" />
+                  </CardFooter>
+                </Card>
+              ))
+            ) : (
+              plans.map((plan) => {
+                const Icon = plan.icon;
+                const monthlySave = discountPct(plan.originalMonthlyPrice, plan.monthlyPrice ?? 0);
+                const yearlySave = discountPct(
+                  plan.originalMonthlyPrice * 12,
+                  plan.yearlyPrice ?? 0,
+                );
+                return (
+                  <Card
+                    key={plan.code}
+                    className={cn(
+                      'relative bg-white dark:bg-slate-900 border h-full flex flex-col justify-between transition-all w-[285px] sm:w-[305px] lg:w-[320px] shrink-0 snap-start shadow-xs',
                       plan.popular
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm'
-                        : 'bg-white hover:bg-muted text-foreground border border-border')}
+                        ? 'border-emerald-500 shadow-lg shadow-emerald-100 dark:shadow-emerald-950/40 ring-1 ring-emerald-500/30'
+                        : 'border-border hover:border-emerald-300 hover:shadow-md',
+                    )}
                   >
-                    {plan.cta} <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </CardFooter>
-              </Card>
-            );
-          })
+                    {plan.popular ? (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <Badge className="bg-emerald-600 text-white font-semibold border-0 px-3 shadow-md text-[11px]">
+                          Most Popular
+                        </Badge>
+                      </div>
+                    ) : null}
+                    <div>
+                      <CardHeader className="pb-2">
+                        <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center mb-3',
+                          plan.popular ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-100 dark:border-emerald-800' : 'bg-muted border border-border')}>
+                          <Icon className={cn('w-5 h-5', plan.popular ? 'text-emerald-600' : 'text-muted-foreground')} />
+                        </div>
+                        <CardTitle className="text-foreground text-lg">{plan.name}</CardTitle>
+                        <CardDescription className="text-muted-foreground text-xs leading-relaxed">{plan.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div>
+                          {plan.monthlyPrice === 0 ? (
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-4xl font-extrabold text-foreground">$0</span>
+                              <span className="text-muted-foreground text-sm">/mo (100 Jobs Free)</span>
+                            </div>
+                          ) : (plan.monthlyPrice !== null && plan.monthlyPrice !== undefined && plan.monthlyPrice > 0) ? (
+                            <>
+                              {plan.originalMonthlyPrice > 0 && (
+                                <div className="flex items-center gap-2 mb-0.5">
+                                  <span className="text-sm text-muted-foreground line-through">
+                                    ${yearly ? plan.originalMonthlyPrice * 12 : plan.originalMonthlyPrice}
+                                  </span>
+                                  {(() => {
+                                    const pct = yearly ? yearlySave : monthlySave;
+                                    return pct > 0 ? (
+                                      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-0 text-xs px-1.5 py-0">
+                                        Save {pct}%
+                                      </Badge>
+                                    ) : null;
+                                  })()}
+                                </div>
+                              )}
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-4xl font-extrabold text-foreground">
+                                  ${yearly ? Math.round((plan.yearlyPrice ?? 0) / 12) : plan.monthlyPrice}
+                                </span>
+                                <span className="text-muted-foreground text-sm">/mo</span>
+                              </div>
+                              {yearly && plan.yearlyPrice !== null ? (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  ${plan.yearlyPrice}/year billed annually
+                                </p>
+                              ) : null}
+                            </>
+                          ) : (
+                            <div className="text-4xl font-bold text-foreground">Custom</div>
+                          )}
+                        </div>
+                        <ul className="space-y-2.5">
+                          {plan.features.map((feature, idx) => {
+                            const isHeader = idx === 0 && /^everything in/i.test(feature);
+                            return (
+                              <li key={feature} className="flex items-start gap-2 text-xs sm:text-sm">
+                                {!isHeader && <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />}
+                                <span className={cn(isHeader ? 'text-foreground font-semibold' : 'text-foreground/80')}>
+                                  {feature}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </CardContent>
+                    </div>
+                    <CardFooter className="pt-4 border-t border-border/60">
+                      <Button
+                        onClick={onGetStarted}
+                        className={cn('w-full text-xs sm:text-sm font-semibold h-10 cursor-pointer',
+                          plan.popular
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-800 hover:bg-muted text-foreground border border-border')}
+                      >
+                        {plan.cta} <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+
+          {/* Slider Pagination Dots */}
+          {plans.length > 0 && (
+            <div className="flex items-center justify-center gap-1.5 mt-2">
+              {plans.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    if (!scrollRef.current) return;
+                    scrollRef.current.scrollTo({ left: i * 320, behavior: 'smooth' });
+                  }}
+                  aria-label={`Jump to slide ${i + 1}`}
+                  className={cn(
+                    'h-1.5 rounded-full transition-all duration-300 cursor-pointer',
+                    activeSlideIndex === i
+                      ? 'w-6 bg-emerald-600'
+                      : 'w-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400'
+                  )}
+                />
+              ))}
+            </div>
           )}
         </div>
 

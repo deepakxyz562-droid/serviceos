@@ -56,17 +56,17 @@ export function AiMarketingFooter() {
             </ul>
           </div>
 
-          {/* Col 3: AI Tools & Free Generators */}
+          {/* Col 3: Templates & Solutions */}
           <div className="space-y-3">
-            <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Free Tools &amp; Generators</h4>
+            <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Templates &amp; Solutions</h4>
             <ul className="space-y-2 text-slate-400">
-              <li><Link href="/invoice-generator" className="text-emerald-400 hover:underline transition font-medium">Free Invoice Generator</Link></li>
-              <li><Link href="/estimate-generator" className="hover:text-emerald-400 transition">Free Estimate Generator</Link></li>
-              <li><Link href="/proposal-generator" className="hover:text-emerald-400 transition">Free Proposal Generator</Link></li>
-              <li><Link href="/job-cost-calculator" className="hover:text-emerald-400 transition">Job Cost Calculator</Link></li>
-              <li><Link href="/material-cost-estimator" className="hover:text-emerald-400 transition">Material Cost Estimator</Link></li>
-              <li><Link href="/home-maintenance-planner" className="hover:text-emerald-400 transition">Home Maintenance Planner</Link></li>
-              <li><Link href="/tools" className="text-emerald-400 font-semibold hover:underline transition">Browse All Free Tools →</Link></li>
+              <li><Link href="/templates/quote" className="hover:text-emerald-400 transition">Quote &amp; Estimate Forms</Link></li>
+              <li><Link href="/templates/intake" className="hover:text-emerald-400 transition">Client Intake Templates</Link></li>
+              <li><Link href="/templates/booking" className="hover:text-emerald-400 transition">Booking &amp; Dispatch Forms</Link></li>
+              <li><Link href="/templates/industries/home_services" className="hover:text-emerald-400 transition">Home Services Templates</Link></li>
+              <li><Link href="/templates/industries/fitness" className="hover:text-emerald-400 transition">Fitness &amp; Wellness Forms</Link></li>
+              <li><Link href="/templates/industries/professional_services" className="hover:text-emerald-400 transition">Professional Services</Link></li>
+              <li><Link href="/templates" className="text-emerald-400 font-semibold hover:underline transition">Browse All 20,000+ Templates →</Link></li>
             </ul>
           </div>
 
