@@ -578,12 +578,6 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
               </button>
               <div className="absolute left-0 top-full pt-3 invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 z-50">
                 <div className="w-72 rounded-xl border border-border bg-white shadow-xl p-2 grid grid-cols-1 gap-1">
-                  <a href="/gptsite" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
-                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
-                      <Bot className="size-4 text-emerald-600" /> GPTSite™ AI Employee
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">24/7 Q&amp;A, appointment booking &amp; CRM lead capture</p>
-                  </a>
                   <a href="/gptform" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
                     <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
                       <FileInput className="size-4 text-emerald-600" /> GPTForm™ Smart Forms
@@ -663,7 +657,6 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
             <div className="px-4 py-4 space-y-3">
               <div className="pb-2 border-b">
                 <p className="text-xs uppercase tracking-wider text-emerald-700 font-bold mb-1">AI &amp; Forms</p>
-                <a href="/gptsite" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>✨ GPTSite™ AI Employee</a>
                 <a href="/gptform" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📝 GPTForm™ Smart Forms</a>
                 <a href="/templates" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📋 20,000+ Templates</a>
                 <a href="/marketplace" className="block text-sm font-medium text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>🌐 Contractor Marketplace</a>
@@ -1334,21 +1327,21 @@ function AiReceptionistSection({ onGetStarted }: { onGetStarted: () => void }) {
           {/* AI Website Employee & Conversational Forms Spotlight */}
           <motion.div variants={staggerItem} className="mt-8 grid md:grid-cols-2 gap-4">
             <a
-              href="/gptsite"
-              className="p-5 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-emerald-500/[0.08] hover:border-emerald-400/40 transition-all group flex items-center justify-between"
+              href="#ai-receptionist"
+              className="p-5 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-purple-500/[0.08] hover:border-purple-400/40 transition-all group flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
-                <div className="size-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-300">
-                  <Bot className="size-5" />
+                <div className="size-10 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-300">
+                  <PhoneCall className="size-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors">
-                    24/7 GPTSite™ AI Employee &amp; Chatbot
+                  <h4 className="text-sm font-bold text-white group-hover:text-purple-300 transition-colors">
+                    24/7 AI Voice Receptionist
                   </h4>
-                  <p className="text-xs text-slate-400">Trained on your website to answer questions &amp; book calendar slots</p>
+                  <p className="text-xs text-slate-400">Answers phone calls, quotes prices &amp; books calendar slots</p>
                 </div>
               </div>
-              <ArrowRight className="size-4 text-slate-400 group-hover:text-emerald-300 group-hover:translate-x-1 transition-all shrink-0" />
+              <ArrowRight className="size-4 text-slate-400 group-hover:text-purple-300 group-hover:translate-x-1 transition-all shrink-0" />
             </a>
 
             <a
