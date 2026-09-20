@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FormSchema, FormField } from '@/lib/forms/form-schema-types';
 import { WidgetRuntimeDispatcher } from './widgets/widget-runtime-dispatcher';
 import { ConversationalAgentRuntime } from './conversational-agent-runtime';
