@@ -312,28 +312,30 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
   };
 
   return (
-    <section id="pricing" className="border-t bg-muted/30 py-14 sm:py-20">
+    <section id="pricing" className="border-t border-slate-800 bg-slate-950 text-white py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <div className="mb-10 text-center">
-          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Pricing</Badge>
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-            Simple, <span className="text-emerald-600">Transparent Pricing</span>
+        <div className="mb-12 text-center">
+          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 mb-3 font-semibold text-xs px-3 py-1">
+            0% Transaction Fee Platform
+          </Badge>
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white">
+            Simple, <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Transparent Pricing</span>
           </h2>
-          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto text-sm sm:text-base">
-            Start free with 100 Lifetime Jobs. No credit card required. Email, SMS &amp; In-App notifications included on every plan.
+          <p className="text-slate-400 mt-3 max-w-2xl mx-auto text-sm sm:text-base leading-relaxed">
+            Start free with 100 Lifetime Jobs. No credit card required. Email, SMS &amp; Mobile Crew PWA included on every plan.
           </p>
 
           {/* Segmented Pill Switcher & Slider Navigation */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
-            <div className="inline-flex items-center p-1.5 rounded-full bg-slate-200/80 dark:bg-slate-800 border border-slate-300/80 dark:border-slate-700 shadow-inner">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
+            <div className="inline-flex items-center p-1.5 rounded-full bg-slate-900 border border-slate-800 shadow-inner">
               <button
                 type="button"
                 onClick={() => setYearly(false)}
                 className={cn(
-                  'px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer',
+                  'px-6 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer',
                   !yearly
-                    ? 'bg-white dark:bg-slate-900 text-foreground shadow-md'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white'
                 )}
               >
                 <span>Monthly</span>
@@ -342,10 +344,10 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                 type="button"
                 onClick={() => setYearly(true)}
                 className={cn(
-                  'px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer',
+                  'px-6 py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-2 cursor-pointer',
                   yearly
                     ? 'bg-emerald-600 text-white shadow-md'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-slate-400 hover:text-white'
                 )}
               >
                 <span>Yearly</span>
@@ -354,7 +356,7 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                     'text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide transition-colors',
                     yearly
                       ? 'bg-white/20 text-white'
-                      : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-emerald-500/20 text-emerald-300'
                   )}
                 >
                   Save ~17%
@@ -372,8 +374,8 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                 className={cn(
                   'size-9 rounded-full border flex items-center justify-center transition cursor-pointer shadow-xs',
                   canScrollLeft
-                    ? 'bg-white dark:bg-slate-900 border-border text-foreground hover:border-emerald-500 hover:text-emerald-600'
-                    : 'bg-muted/50 border-border/50 text-muted-foreground/40 cursor-not-allowed'
+                    ? 'bg-slate-900 border-slate-700 text-slate-200 hover:border-emerald-500 hover:text-emerald-400'
+                    : 'bg-slate-900/40 border-slate-800 text-slate-600 cursor-not-allowed'
                 )}
               >
                 <ChevronLeft className="size-4" />
@@ -386,8 +388,8 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                 className={cn(
                   'size-9 rounded-full border flex items-center justify-center transition cursor-pointer shadow-xs',
                   canScrollRight
-                    ? 'bg-white dark:bg-slate-900 border-border text-foreground hover:border-emerald-500 hover:text-emerald-600'
-                    : 'bg-muted/50 border-border/50 text-muted-foreground/40 cursor-not-allowed'
+                    ? 'bg-slate-900 border-slate-700 text-slate-200 hover:border-emerald-500 hover:text-emerald-400'
+                    : 'bg-slate-900/40 border-slate-800 text-slate-600 cursor-not-allowed'
                 )}
               >
                 <ChevronRight className="size-4" />
@@ -405,20 +407,20 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
           >
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <Card key={`skeleton-${i}`} className="border-border h-full flex flex-col w-[285px] sm:w-[305px] lg:w-[320px] shrink-0 snap-start">
+                <Card key={`skeleton-${i}`} className="border-slate-800 bg-slate-900/60 h-full flex flex-col w-[285px] sm:w-[305px] lg:w-[320px] shrink-0 snap-start">
                   <CardHeader className="pb-2">
-                    <div className="w-10 h-10 rounded-lg bg-muted mb-3" />
-                    <div className="h-5 w-24 bg-muted rounded mb-2" />
-                    <div className="h-3 w-32 bg-muted rounded" />
+                    <div className="w-10 h-10 rounded-lg bg-slate-800 mb-3" />
+                    <div className="h-5 w-24 bg-slate-800 rounded mb-2" />
+                    <div className="h-3 w-32 bg-slate-800 rounded" />
                   </CardHeader>
                   <CardContent className="flex-1 space-y-2">
-                    <div className="h-9 w-20 bg-muted rounded mb-4" />
+                    <div className="h-9 w-20 bg-slate-800 rounded mb-4" />
                     {Array.from({ length: 6 }).map((_, j) => (
-                      <div key={j} className="h-3 w-full bg-muted rounded" />
+                      <div key={j} className="h-3 w-full bg-slate-800 rounded" />
                     ))}
                   </CardContent>
                   <CardFooter>
-                    <div className="h-9 w-full bg-muted rounded" />
+                    <div className="h-9 w-full bg-slate-800 rounded" />
                   </CardFooter>
                 </Card>
               ))
@@ -434,66 +436,66 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                   <Card
                     key={plan.code}
                     className={cn(
-                      'relative bg-white dark:bg-slate-900 border h-full flex flex-col justify-between transition-all w-[285px] sm:w-[305px] lg:w-[320px] shrink-0 snap-start shadow-xs',
+                      'relative bg-slate-900/90 border h-full flex flex-col justify-between transition-all w-[285px] sm:w-[305px] lg:w-[320px] shrink-0 snap-start shadow-xl',
                       plan.popular
-                        ? 'border-emerald-500 shadow-lg shadow-emerald-100 dark:shadow-emerald-950/40 ring-1 ring-emerald-500/30'
-                        : 'border-border hover:border-emerald-300 hover:shadow-md',
+                        ? 'border-emerald-500 shadow-2xl shadow-emerald-950/40 ring-1 ring-emerald-500/40'
+                        : 'border-slate-800 hover:border-slate-700 hover:shadow-2xl',
                     )}
                   >
                     {plan.popular ? (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-emerald-600 text-white font-semibold border-0 px-3 shadow-md text-[11px]">
+                        <Badge className="bg-emerald-500 text-slate-950 font-black border-0 px-3.5 py-0.5 shadow-md text-[11px] uppercase tracking-wider">
                           Most Popular
                         </Badge>
                       </div>
                     ) : null}
                     <div>
                       <CardHeader className="pb-2">
-                        <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center mb-3',
-                          plan.popular ? 'bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-100 dark:border-emerald-800' : 'bg-muted border border-border')}>
-                          <Icon className={cn('w-5 h-5', plan.popular ? 'text-emerald-600' : 'text-muted-foreground')} />
+                        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                          plan.popular ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-slate-800 border border-slate-700')}>
+                          <Icon className={cn('w-5 h-5', plan.popular ? 'text-emerald-400' : 'text-slate-400')} />
                         </div>
-                        <CardTitle className="text-foreground text-lg">{plan.name}</CardTitle>
-                        <CardDescription className="text-muted-foreground text-xs leading-relaxed">{plan.description}</CardDescription>
+                        <CardTitle className="text-white text-xl font-bold">{plan.name}</CardTitle>
+                        <CardDescription className="text-slate-400 text-xs leading-relaxed">{plan.description}</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div>
                           {plan.monthlyPrice === 0 ? (
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-4xl font-extrabold text-foreground">$0</span>
-                              <span className="text-muted-foreground text-sm">/mo (100 Jobs Free)</span>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-4xl font-extrabold text-white">$0</span>
+                              <span className="text-slate-400 text-sm">/mo (100 Jobs Free)</span>
                             </div>
                           ) : (plan.monthlyPrice !== null && plan.monthlyPrice !== undefined && plan.monthlyPrice > 0) ? (
                             <>
                               {plan.originalMonthlyPrice > 0 && (
                                 <div className="flex items-center gap-2 mb-0.5">
-                                  <span className="text-sm text-muted-foreground line-through">
+                                  <span className="text-sm text-slate-500 line-through">
                                     ${yearly ? plan.originalMonthlyPrice * 12 : plan.originalMonthlyPrice}
                                   </span>
                                   {(() => {
                                     const pct = yearly ? yearlySave : monthlySave;
                                     return pct > 0 ? (
-                                      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border-0 text-xs px-1.5 py-0">
+                                      <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs px-2 py-0 font-bold">
                                         Save {pct}%
                                       </Badge>
                                     ) : null;
                                   })()}
                                 </div>
                               )}
-                              <div className="flex items-baseline gap-1">
-                                <span className="text-4xl font-extrabold text-foreground">
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="text-4xl font-extrabold text-white">
                                   ${yearly ? Math.round((plan.yearlyPrice ?? 0) / 12) : plan.monthlyPrice}
                                 </span>
-                                <span className="text-muted-foreground text-sm">/mo</span>
+                                <span className="text-slate-400 text-sm">/mo</span>
                               </div>
                               {yearly && plan.yearlyPrice !== null ? (
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p className="text-xs text-slate-400 mt-1">
                                   ${plan.yearlyPrice}/year billed annually
                                 </p>
                               ) : null}
                             </>
                           ) : (
-                            <div className="text-4xl font-bold text-foreground">Custom</div>
+                            <div className="text-3xl font-extrabold text-white">Custom</div>
                           )}
                         </div>
                         <ul className="space-y-2.5">
@@ -501,8 +503,8 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                             const isHeader = idx === 0 && /^everything in/i.test(feature);
                             return (
                               <li key={feature} className="flex items-start gap-2 text-xs sm:text-sm">
-                                {!isHeader && <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />}
-                                <span className={cn(isHeader ? 'text-foreground font-semibold' : 'text-foreground/80')}>
+                                {!isHeader && <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />}
+                                <span className={cn(isHeader ? 'text-white font-bold' : 'text-slate-300')}>
                                   {feature}
                                 </span>
                               </li>
@@ -511,13 +513,13 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                         </ul>
                       </CardContent>
                     </div>
-                    <CardFooter className="pt-4 border-t border-border/60">
+                    <CardFooter className="pt-4 border-t border-slate-800">
                       <Button
                         onClick={onGetStarted}
-                        className={cn('w-full text-xs sm:text-sm font-semibold h-10 cursor-pointer',
+                        className={cn('w-full text-xs sm:text-sm font-bold h-11 rounded-xl cursor-pointer shadow-md transition',
                           plan.popular
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
-                            : 'bg-white dark:bg-slate-800 hover:bg-muted text-foreground border border-border')}
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700')}
                       >
                         {plan.cta} <ChevronRight className="w-4 h-4 ml-1" />
                       </Button>
@@ -543,8 +545,8 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                   className={cn(
                     'h-1.5 rounded-full transition-all duration-300 cursor-pointer',
                     activeSlideIndex === i
-                      ? 'w-6 bg-emerald-600'
-                      : 'w-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400'
+                      ? 'w-6 bg-emerald-500'
+                      : 'w-2 bg-slate-700 hover:bg-slate-600'
                   )}
                 />
               ))}
@@ -552,8 +554,8 @@ export function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
           )}
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          <strong className="text-foreground">All plans include</strong> Email, SMS, Push & In-App notifications, lead capture, invoicing, and the Live Demo.
+        <p className="text-center text-xs text-slate-400 mt-8">
+          <strong className="text-slate-200">All plans include</strong> 0% platform commission, Email, SMS, Push &amp; In-App notifications, live dispatch, and technician mobile PWA.
         </p>
       </div>
     </section>

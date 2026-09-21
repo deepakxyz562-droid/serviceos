@@ -110,7 +110,6 @@ import { GooglePlayBadge } from '@/components/brand/google-play-badge';
 // landing page into a single 70.6 KiB chunk. Now the initial chunk is smaller
 // and these sections load on demand.
 import { CrmPricing } from './crm-pricing';
-import { MarketplaceCompact } from './marketplace-compact';
 import { AiHeroCommand } from './2026/ai-hero-command';
 import { OldWayVsFieseros } from './2026/old-way-vs-fieseros';
 import { ConversationalCrmGrid } from './2026/conversational-crm-grid';
@@ -505,11 +504,11 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/80 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 pt-[env(safe-area-inset-top,0px)]">
+    <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/90 backdrop-blur-md text-white pt-[env(safe-area-inset-top,0px)]">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <a href="#top" className="flex items-center gap-2.5 group shrink-0" aria-label="Fieseros home" onClick={(e) => { e.preventDefault(); setMobileOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
           <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
-          <span className="text-xl font-bold tracking-tight text-foreground">Fieseros</span>
+          <span className="text-xl font-bold tracking-tight text-white">Fieseros</span>
         </a>
 
         {/* ── Desktop Navigation (5 Clean Grouped Items) ── */}
@@ -518,24 +517,24 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
           <SolutionsMegaMenu />
           <Link
             href="/marketplace"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 px-2.5 py-1.5 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 px-2.5 py-1.5 rounded-lg transition-colors"
           >
-            <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <Store className="h-4 w-4 text-emerald-400" />
             <span>Marketplace</span>
-            <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 px-1.5 py-0.2 rounded-full">
+            <span className="text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800/60 px-1.5 py-0.2 rounded-full">
               Pros
             </span>
           </Link>
           <Link
             href="/requests"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 px-2.5 py-1.5 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 px-2.5 py-1.5 rounded-lg transition-colors"
           >
-            <ClipboardList className="h-4 w-4 text-emerald-600" />
+            <ClipboardList className="h-4 w-4 text-teal-400" />
             <span>My Requests</span>
           </Link>
           <a
             href="#pricing"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 px-2.5 py-1.5 rounded-lg transition-colors"
+            className="text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
             onClick={(e) => crmAnchorClick('#pricing', e)}
           >
             Pricing
@@ -548,7 +547,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
           <Button
             asChild
             size="sm"
-            className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 font-semibold shadow-sm text-xs sm:text-sm h-9 px-3 rounded-lg"
+            className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-500 font-semibold shadow-sm text-xs sm:text-sm h-9 px-3.5 rounded-xl cursor-pointer"
           >
             <Link href="/request">
               <span>Post Request</span>
@@ -561,10 +560,10 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
             variant="ghost"
             size="sm"
             onClick={() => setEmpLoginOpen(true)}
-            className="text-xs text-muted-foreground hover:text-foreground gap-1.5 h-9 px-2.5 rounded-lg"
+            className="text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 gap-1.5 h-9 px-2.5 rounded-lg cursor-pointer"
             title="Field technician and staff portal"
           >
-            <Key className="h-3.5 w-3.5 text-muted-foreground" />
+            <Key className="h-3.5 w-3.5 text-slate-400" />
             <span className="hidden lg:inline">Employee Login</span>
           </Button>
           {onSignIn ? (
@@ -572,7 +571,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
               variant="ghost"
               size="sm"
               onClick={onSignIn}
-              className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground h-9 px-3 rounded-lg"
+              className="text-xs sm:text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 h-9 px-3 rounded-lg cursor-pointer"
             >
               Sign In
             </Button>
@@ -582,7 +581,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
               variant="outline"
               size="sm"
               onClick={onGetStarted}
-              className="gap-1.5 border-emerald-600/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold text-xs sm:text-sm h-9 px-3.5 rounded-lg"
+              className="gap-1.5 border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/40 font-semibold text-xs sm:text-sm h-9 px-3.5 rounded-xl cursor-pointer"
             >
               Start Trial
             </Button>
@@ -591,7 +590,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
 
         <button
           onClick={() => setMobileOpen(!mobileOpen)}
-          className="md:hidden text-foreground inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mr-2 rounded-lg hover:bg-muted/60 active:bg-muted transition-colors"
+          className="md:hidden text-white inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mr-2 rounded-lg hover:bg-slate-800 transition-colors"
           aria-label="Toggle menu"
           aria-expanded={mobileOpen}
         >
@@ -601,13 +600,13 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
 
       {/* ── Mobile Drawer ── */}
       {mobileOpen ? (
-        <div className="md:hidden border-t bg-background max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] px-3 py-3 space-y-2">
+        <div className="md:hidden border-t border-slate-800 bg-slate-950 text-white max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] px-3 py-3 space-y-2">
           <Accordion type="single" collapsible className="w-full space-y-2">
             {/* Product Section */}
-            <AccordionItem value="product" className="border rounded-xl px-3 bg-card">
-              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3">
+            <AccordionItem value="product" className="border border-slate-800 rounded-xl px-3 bg-slate-900">
+              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-white">
                 <div className="flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-emerald-600" />
+                  <Wrench className="h-4 w-4 text-emerald-400" />
                   <span>Platform &amp; Features</span>
                 </div>
               </AccordionTrigger>
@@ -616,7 +615,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
                   <a
                     key={item.href}
                     href={item.href}
-                    className="block text-xs font-medium text-muted-foreground hover:text-foreground p-2 rounded-lg hover:bg-muted/60"
+                    className="block text-xs font-medium text-slate-300 hover:text-white p-2 rounded-lg hover:bg-slate-800"
                     onClick={(e) => {
                       setMobileOpen(false);
                       if (item.href.startsWith('/#')) crmAnchorClick(item.href.replace('/', ''), e);
@@ -625,24 +624,24 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
                     {item.label}
                   </a>
                 ))}
-                <div className="pt-2 border-t border-border/60">
+                <div className="pt-2 border-t border-slate-800">
                   <a
                     href="#ai-receptionist"
-                    className="flex items-center justify-between text-xs font-semibold text-emerald-600 p-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                    className="flex items-center justify-between text-xs font-semibold text-emerald-400 p-2 rounded-lg hover:bg-emerald-950/40"
                     onClick={(e) => crmAnchorClick('#ai-receptionist', e)}
                   >
                     <span>24/7 AI Receptionist</span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full uppercase">AI Voice</span>
+                    <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded-full uppercase">AI Voice</span>
                   </a>
                 </div>
               </AccordionContent>
             </AccordionItem>
 
             {/* Solutions Section */}
-            <AccordionItem value="solutions" className="border rounded-xl px-3 bg-card">
-              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3">
+            <AccordionItem value="solutions" className="border border-slate-800 rounded-xl px-3 bg-slate-900">
+              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-white">
                 <div className="flex items-center gap-2">
-                  <Briefcase className="h-4 w-4 text-emerald-600" />
+                  <Briefcase className="h-4 w-4 text-emerald-400" />
                   <span>Solutions &amp; Trades</span>
                 </div>
               </AccordionTrigger>
@@ -2588,26 +2587,33 @@ function CrmResources() {
 
 function CrmFaq() {
   return (
-    <section id="faq" className="border-t bg-background py-14 sm:py-20">
-      <div className="mx-auto max-w-3xl px-4 sm:px-6">
-        <div className="mb-10 text-center">
-          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">FAQ</Badge>
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-            Frequently Asked <span className="text-emerald-600">Questions</span>
+    <section id="faq" className="border-t border-slate-800 bg-slate-950 text-white py-16 sm:py-24">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6">
+        <div className="mb-12 text-center">
+          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 mb-3 font-semibold text-xs px-3 py-1">
+            Answers &amp; Knowledge Base
+          </Badge>
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white">
+            Frequently Asked <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Questions</span>
           </h2>
+          <p className="text-slate-400 text-sm sm:text-base mt-2 max-w-xl mx-auto">
+            Everything you need to know about the Fieseros AI Operating System, 0% platform fee policy, and data portability.
+          </p>
         </div>
-        <Card className="bg-white border-border">
-          <CardContent className="p-0">
-            <Accordion type="single" collapsible className="w-full">
-              {faqs.map((faq, i) => (
-                <AccordionItem key={i} value={`item-${i}`} className="border-border px-6">
-                  <AccordionTrigger className="text-foreground hover:text-emerald-600 hover:no-underline text-left">{faq.question}</AccordionTrigger>
-                  <AccordionContent className="text-muted-foreground leading-relaxed">{faq.answer}</AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </CardContent>
-        </Card>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden p-2 sm:p-4">
+          <Accordion type="single" collapsible className="w-full">
+            {faqs.map((faq, i) => (
+              <AccordionItem key={i} value={`item-${i}`} className="border-b border-slate-800/80 last:border-b-0 px-4 sm:px-6 py-2">
+                <AccordionTrigger className="text-white hover:text-emerald-400 hover:no-underline text-left font-bold text-sm sm:text-base py-4 cursor-pointer">
+                  {faq.question}
+                </AccordionTrigger>
+                <AccordionContent className="text-slate-400 leading-relaxed text-xs sm:text-sm pb-4">
+                  {faq.answer}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
       </div>
     </section>
   );
@@ -3210,11 +3216,11 @@ function StickyCta({
   const [hidden, setHidden] = React.useState(false);
   if (hidden) return null;
   return (
-    <div className="sticky bottom-0 z-40 border-t bg-background/95 backdrop-blur px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] sm:px-6 shadow-[0_-2px_12px_rgba(0,0,0,0.04)]">
+    <div className="sticky bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 backdrop-blur-md px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] sm:px-6 shadow-2xl text-white">
       <div className="mx-auto max-w-6xl flex items-center gap-2 sm:gap-3">
         <div className="flex-1 min-w-0 hidden sm:block">
-          <p className="text-xs text-muted-foreground truncate">
-            Fieseros AI Operating System &bull; CRM &bull; AI Voice Receptionist &bull; 20,391 Templates &bull; 3-Bid Marketplace
+          <p className="text-xs text-slate-400 truncate">
+            Fieseros AI Operating System &bull; Natural Language CRM &bull; AI Voice Receptionist &bull; 0% Commission Payments
           </p>
         </div>
         <div className="flex items-center gap-2 flex-1 sm:flex-none justify-end">
@@ -3222,14 +3228,14 @@ function StickyCta({
             variant="outline"
             size="sm"
             asChild
-            className="gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 text-xs min-h-10"
+            className="gap-1 border-amber-500/40 text-amber-300 hover:bg-amber-950/40 text-xs min-h-9 cursor-pointer"
           >
             <Link href="/request">
               <Store className="h-3.5 w-3.5" /> Post Request
             </Link>
           </Button>
           {onGetStarted ? (
-            <Button size="sm" onClick={onGetStarted} className="gap-1 bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-semibold min-h-10 px-4">
+            <Button size="sm" onClick={onGetStarted} className="gap-1 bg-emerald-600 text-white hover:bg-emerald-500 text-xs font-bold min-h-9 px-4 cursor-pointer shadow-md">
               Start Free Trial <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           ) : null}
@@ -3238,7 +3244,7 @@ function StickyCta({
           type="button"
           onClick={() => setHidden(true)}
           aria-label="Dismiss"
-          className="ml-1 inline-flex items-center justify-center min-h-10 min-w-10 p-2 rounded-lg text-muted-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+          className="ml-1 inline-flex items-center justify-center min-h-9 min-w-9 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
         >
           <X className="h-4 w-4" />
         </button>
@@ -3333,8 +3339,98 @@ export function DualAudienceLanding({
         {/* 11. Role-Based Product Proof (Owner, Dispatcher, Tech, Customer) */}
         <RoleBasedProof />
 
-        {/* 12. Marketplace Discovery Hub */}
-        <MarketplaceCompact />
+        {/* 12. Zero-Commission Contractor Marketplace Discovery */}
+        <section id="marketplace-3bid" className="py-20 bg-slate-950 text-white border-b border-slate-800 relative overflow-hidden">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 p-8 sm:p-12 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 blur-[100px] pointer-events-none" />
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+                    <Store className="size-3.5" />
+                    <span>BUILT-IN DEMAND &amp; DIRECT BOOKINGS</span>
+                  </div>
+                  <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
+                    Get discovered on the{' '}
+                    <span className="bg-gradient-to-r from-amber-400 to-teal-400 bg-clip-text text-transparent">
+                      Fieseros Marketplace
+                    </span>
+                  </h2>
+                  <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                    Unlike legacy software that only manages existing clients, Fieseros gives your business a verified public profile on our local trade directory where property owners search, compare quotes, and book services — with <strong>0% platform commission</strong>.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
+                      <p className="text-xs font-bold text-amber-400">0% Commission</p>
+                      <p className="text-[11px] text-slate-400">Keep 100% of every customer booking and payment.</p>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
+                      <p className="text-xs font-bold text-teal-400">Verified Badge</p>
+                      <p className="text-[11px] text-slate-400">Showcase insurance, licenses, and verified reviews.</p>
+                    </div>
+                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
+                      <p className="text-xs font-bold text-emerald-400">Direct CRM Sync</p>
+                      <p className="text-[11px] text-slate-400">Incoming requests land directly in your live dispatch board.</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 pt-3">
+                    <Link
+                      href="/marketplace"
+                      className="h-11 px-6 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg transition cursor-pointer"
+                    >
+                      Explore Verified Pro Directory <ArrowRight className="size-4" />
+                    </Link>
+                    <Link
+                      href="/request"
+                      className="h-11 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs sm:text-sm font-semibold flex items-center gap-2 transition cursor-pointer"
+                    >
+                      Post Service Request →
+                    </Link>
+                  </div>
+                </div>
+                <div className="lg:col-span-5">
+                  <div className="p-6 rounded-2xl bg-slate-950 border border-amber-500/30 shadow-2xl space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Live Verified Profile</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold">● Active in Directory</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="size-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-black text-base shrink-0">
+                        PS
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white">ProSkill Plumbing &amp; HVAC</h4>
+                        <p className="text-xs text-slate-400">Phoenix, AZ · Rated 4.9 ★ (128 Reviews)</p>
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 space-y-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Service Coverage:</span>
+                        <span className="text-white font-medium">25 km radius</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Direct Bookings:</span>
+                        <span className="text-teal-400 font-bold">24/7 AI Receptionist</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Platform Take Rate:</span>
+                        <span className="text-emerald-400 font-bold">0% (Keep Everything)</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md cursor-pointer">
+                        Direct Booking
+                      </button>
+                      <button type="button" className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs border border-slate-700 cursor-pointer">
+                        Call Verified Pro
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* 13. Transparent Pricing Plans */}
         <CrmPricing onGetStarted={onGetStarted} />
