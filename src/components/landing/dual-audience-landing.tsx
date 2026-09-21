@@ -111,6 +111,17 @@ import { GooglePlayBadge } from '@/components/brand/google-play-badge';
 // and these sections load on demand.
 import { CrmPricing } from './crm-pricing';
 import { MarketplaceCompact } from './marketplace-compact';
+import { AiHeroCommand } from './2026/ai-hero-command';
+import { OldWayVsFieseros } from './2026/old-way-vs-fieseros';
+import { ConversationalCrmGrid } from './2026/conversational-crm-grid';
+import { AiTeamShowcase } from './2026/ai-team-showcase';
+import { LifecycleStory } from './2026/lifecycle-story';
+import { FieldExperienceSplit } from './2026/field-experience-split';
+import { RevenueCommandCenter } from './2026/revenue-command-center';
+import { StackReplacementTable } from './2026/stack-replacement-table';
+import { IndustryInteractiveSelector } from './2026/industry-interactive-selector';
+import { RoleBasedProof } from './2026/role-based-proof';
+import { InteractiveFormTour } from '@/components/gptform/interactive-form-tour';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -3266,25 +3277,107 @@ export function DualAudienceLanding({
       <Navbar onGetStarted={onGetStarted} onSignIn={onSignIn} audience={audience} onPick={handleAudiencePick} />
 
       <main className="flex-1">
-        <HeroFork audience={audience} onPick={handleAudiencePick} onTryDemo={onTryDemo} onGetStarted={onGetStarted} />
+        {/* 01. 2026 AI Hero Command ⌘K Theatre */}
+        <section className="relative overflow-hidden pt-12 pb-20 md:pt-16 md:pb-28 border-b bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <AiHeroCommand onGetStarted={onGetStarted} />
+          </div>
+        </section>
 
-        <TrustBar />
-        <CrmProblem />
-        <CrmHowItWorks />
-        <CrmFeatures />
-        <CrmAiFormShowcase />
-        <CrmThreeBidMarketplace onGetStarted={onGetStarted} />
-        <CrmChannels />
-        <CrmAiReceptionist onGetStarted={onGetStarted} />
-        <CrmRoiMetrics />
-        <CrmVsCompetitors onGetStarted={onGetStarted} />
-        <CrmTestimonials />
-        <CrmPersonas />
-        <CrmBuiltFor />
+        {/* 02. The Old Way vs Fieseros Way */}
+        <OldWayVsFieseros />
+
+        {/* 03. One Prompt → Your Entire CRM (12-Domain Interactive Terminal) */}
+        <ConversationalCrmGrid />
+
+        {/* 04. The Specialized AI Team (6 Autonomous Teammates) */}
+        <AiTeamShowcase />
+
+        {/* 05. End-to-End Service Lifecycle Story (Lead to Paid) */}
+        <LifecycleStory />
+
+        {/* 06. GPTForm Interactive AI Form Builder Tour */}
+        <section id="ai-forms" className="py-20 bg-slate-950 text-white border-b border-slate-800 relative overflow-hidden">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+            <div className="text-center space-y-3 max-w-3xl mx-auto">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-semibold">
+                <Sparkles className="size-3.5 animate-pulse" />
+                <span>AI FORM ENGINE &amp; WIDGET STUDIO</span>
+              </div>
+              <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white">
+                Describe the process.{' '}
+                <span className="bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">
+                  Fieseros builds the form.
+                </span>
+              </h2>
+              <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
+                Interactive formula calculations, damage photo uploads, offline mobile sign-offs, and 0% fee deposit payments connected straight to your work orders.
+              </p>
+            </div>
+            <InteractiveFormTour />
+          </div>
+        </section>
+
+        {/* 07. Field Experience: Office Dispatch ↔ Mobile PWA Split Screen */}
+        <FieldExperienceSplit />
+
+        {/* 08. Revenue Command Center */}
+        <RevenueCommandCenter />
+
+        {/* 09. All-in-One Stack Replacement ROI Table ($2,347/mo Replaced) */}
+        <StackReplacementTable onGetStarted={onGetStarted} />
+
+        {/* 10. Industry Interactive Selector (25+ Trades) */}
+        <IndustryInteractiveSelector onGetStarted={onGetStarted} />
+
+        {/* 11. Role-Based Product Proof (Owner, Dispatcher, Tech, Customer) */}
+        <RoleBasedProof />
+
+        {/* 12. Marketplace Discovery Hub */}
+        <MarketplaceCompact />
+
+        {/* 13. Transparent Pricing Plans */}
         <CrmPricing onGetStarted={onGetStarted} />
-        <CrmResources />
+
+        {/* 14. Search & AI Answer Engine Optimized FAQ */}
         <CrmFaq />
-        <CrmForProviders onGetStarted={onGetStarted} />
+
+        {/* 15. High-Impact Closing CTA */}
+        <section className="py-20 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white border-t border-slate-800 text-center relative overflow-hidden">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 relative z-10">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+              <Sparkles className="size-3.5" />
+              <span>START IN UNDER 5 MINUTES</span>
+            </div>
+            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight">
+              Stop managing your software.{' '}
+              <span className="bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-300 bg-clip-text text-transparent">
+                Tell Fieseros what needs to happen.
+              </span>
+            </h2>
+            <p className="text-sm sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+              CRM. Jobs. Scheduling. Dispatch. AI Voice. Calculations. Invoicing. Marketing. 0% Commission Payments.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
+              <Button
+                size="lg"
+                onClick={onGetStarted}
+                className="h-13 px-9 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base rounded-2xl shadow-xl cursor-pointer transition hover:scale-105"
+              >
+                Start Free Forever →
+              </Button>
+              <Link
+                href="/gptform"
+                className="h-13 px-7 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-sm font-semibold flex items-center gap-2 transition"
+              >
+                Explore GPTForm Studio →
+              </Link>
+            </div>
+            <p className="text-xs text-slate-500 pt-2">
+              No credit card required &bull; Free tier includes first 100 jobs &bull; Cancel anytime
+            </p>
+          </div>
+        </section>
       </main>
 
       <StickyCta audience={audience} onPick={handleAudiencePick} onGetStarted={onGetStarted} />
