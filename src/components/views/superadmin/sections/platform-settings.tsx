@@ -245,7 +245,26 @@ export function PlatformSettingsSection() {
               <Label htmlFor="support-email">Support Email</Label>
               <Input id="support-email" type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Default Theme Mode</Label>
+                <Select
+                  defaultValue="light"
+                  onValueChange={(val) => {
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('fieseros_platform_default_theme', val);
+                    }
+                    toast.success(`Platform default theme set to ${val.toUpperCase()}`);
+                  }}
+                >
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Light (Default)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">☀️ Light (Default)</SelectItem>
+                    <SelectItem value="dark">🌙 Dark (Obsidian)</SelectItem>
+                    <SelectItem value="system">💻 System Preference</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label>Default Currency</Label>
                 <Select value={currency} onValueChange={setCurrency}>
@@ -266,7 +285,7 @@ export function PlatformSettingsSection() {
               </div>
             </div>
             <div className="pt-2">
-              <Button onClick={saveGeneral}><Save className="size-4 mr-2" />Save Changes</Button>
+              <Button onClick={saveGeneral} className="bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer"><Save className="size-4 mr-2" />Save Changes</Button>
             </div>
           </CardContent>
         </Card>

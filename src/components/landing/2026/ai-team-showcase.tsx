@@ -150,21 +150,21 @@ export function AiTeamShowcase() {
   const ActiveIcon = activeTeammate.icon;
 
   return (
-    <section className="py-20 bg-slate-950 text-white border-b border-slate-800 relative overflow-hidden">
+    <section className="py-20 bg-slate-50 text-slate-900 border-b border-border dark:bg-slate-950 dark:text-white dark:border-slate-800 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-400 text-xs font-semibold">
             <Bot className="size-3.5" />
             <span>SPECIALIZED AI TEAMMATES</span>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
-            Your business doesn't need another chatbot.{' '}
-            <span className="bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground dark:text-white leading-tight">
+            Your business doesn&apos;t need another chatbot.{' '}
+            <span className="bg-gradient-to-r from-blue-600 via-teal-600 to-emerald-600 dark:from-blue-400 dark:via-teal-400 dark:to-emerald-400 bg-clip-text text-transparent">
               It needs an AI team.
             </span>
           </h2>
-          <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base text-muted-foreground dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
             Meet your 6 autonomous AI teammates. Each is a specialist trained in trade business workflows, scheduling algorithms, and revenue collection.
           </p>
         </div>
@@ -181,13 +181,13 @@ export function AiTeamShowcase() {
                 onClick={() => setSelectedTeammateId(teammate.id)}
                 className={`p-6 rounded-3xl border transition-all duration-300 flex flex-col justify-between space-y-5 cursor-pointer ${
                   isSelected
-                    ? 'bg-slate-900 border-teal-500/80 ring-2 ring-teal-500/30 shadow-xl'
-                    : 'bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60'
+                    ? 'bg-white border-teal-500 ring-2 ring-teal-500/20 shadow-xl dark:bg-slate-900 dark:border-teal-500/80 dark:ring-teal-500/30'
+                    : 'bg-card border-border hover:border-slate-300 hover:bg-white/80 shadow-xs dark:bg-slate-950 dark:border-slate-800 dark:hover:border-slate-700 dark:hover:bg-slate-900/60'
                 }`}
               >
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className={`size-11 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center ${teammate.accentColor}`}>
+                    <div className={`size-11 rounded-2xl bg-slate-100 border border-slate-200 dark:bg-slate-900 dark:border-slate-800 flex items-center justify-center ${teammate.accentColor}`}>
                       <IconComponent className="size-6" />
                     </div>
                     <Badge variant="outline" className={`text-[10px] font-bold ${teammate.badgeBg}`}>
@@ -196,17 +196,17 @@ export function AiTeamShowcase() {
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-black text-white">{teammate.title}</h3>
-                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                    <h3 className="text-lg font-black text-foreground dark:text-white">{teammate.title}</h3>
+                    <p className="text-xs text-muted-foreground dark:text-slate-400 mt-1 leading-relaxed">
                       {teammate.tagline}
                     </p>
                   </div>
 
                   {/* Capabilities */}
-                  <ul className="space-y-2 pt-2 border-t border-slate-800/80">
+                  <ul className="space-y-2 pt-2 border-t border-border dark:border-slate-800/80">
                     {teammate.capabilities.map((cap, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-slate-300">
-                        <CheckCircle2 className="size-3.5 text-teal-400 shrink-0 mt-0.5" />
+                      <li key={i} className="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
+                        <CheckCircle2 className="size-3.5 text-teal-600 dark:text-teal-400 shrink-0 mt-0.5" />
                         <span>{cap}</span>
                       </li>
                     ))}
@@ -214,10 +214,10 @@ export function AiTeamShowcase() {
                 </div>
 
                 {/* Example Interaction Box */}
-                <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800/90 text-[11px] space-y-1.5">
-                  <p className="text-[9px] uppercase tracking-wider font-bold text-slate-400">Live Execution:</p>
-                  <p className="font-mono text-slate-200">{teammate.livePromptExample.prompt}</p>
-                  <p className="text-teal-400 font-bold">{teammate.livePromptExample.result}</p>
+                <div className="p-3 rounded-2xl bg-muted/60 border border-border dark:bg-slate-950/80 dark:border-slate-800/90 text-[11px] space-y-1.5">
+                  <p className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground dark:text-slate-400">Live Execution:</p>
+                  <p className="font-mono text-foreground dark:text-slate-200">{teammate.livePromptExample.prompt}</p>
+                  <p className="text-teal-700 dark:text-teal-400 font-bold">{teammate.livePromptExample.result}</p>
                 </div>
               </div>
             );

@@ -112,30 +112,30 @@ export function FieldExperienceSplit() {
   const currentStage = STAGES.find((s) => s.id === activeJobStatus) || STAGES[2];
 
   return (
-    <section className="py-20 bg-slate-950 text-white border-b border-slate-800 relative overflow-hidden">
+    <section className="py-20 bg-background text-foreground border-b border-border dark:bg-slate-950 dark:text-white dark:border-slate-800 relative overflow-hidden">
       {/* Background ambient glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-gradient-to-r from-amber-500/10 via-teal-500/10 to-emerald-500/10 blur-[130px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 relative z-10">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs font-semibold">
             <Wrench className="size-3.5" />
             <span>REAL-TIME OFFICE ↔ FIELD SYNCHRONIZATION</span>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground dark:text-white leading-tight">
             Your office sees the business.{' '}
-            <span className="bg-gradient-to-r from-amber-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-amber-600 via-teal-600 to-emerald-600 dark:from-amber-400 dark:via-teal-300 dark:to-emerald-400 bg-clip-text text-transparent">
               Your technicians see the work.
             </span>
           </h2>
-          <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base text-muted-foreground dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
             Zero paper clipboards. Zero missing parts notes. The office dispatch board and field technician mobile PWA app stay synchronized in real time.
           </p>
         </div>
 
         {/* Live Interactive Status Stepper Bar */}
-        <div className="max-w-5xl mx-auto bg-slate-900/90 rounded-2xl p-2 border border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2 backdrop-blur-md shadow-2xl">
+        <div className="max-w-5xl mx-auto bg-muted/60 dark:bg-slate-900/90 rounded-2xl p-2 border border-border dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-2 backdrop-blur-md shadow-lg dark:shadow-2xl">
           {STAGES.map((st) => {
             const isActive = activeJobStatus === st.id;
             return (
@@ -145,20 +145,20 @@ export function FieldExperienceSplit() {
                 onClick={() => setActiveJobStatus(st.id)}
                 className={`p-3.5 rounded-xl text-left transition-all duration-300 cursor-pointer relative overflow-hidden ${
                   isActive
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg font-bold scale-[1.02]'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/70 border border-transparent'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md font-bold scale-[1.02]'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-background/80 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800/70 border border-transparent'
                 }`}
               >
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-extrabold tracking-wide">{st.step}</span>
-                  <span className={`font-mono text-[11px] ${isActive ? 'text-slate-900 font-bold' : 'text-slate-500'}`}>
+                  <span className={`font-mono text-[11px] ${isActive ? 'text-slate-950 font-bold' : 'text-muted-foreground dark:text-slate-500'}`}>
                     {st.time}
                   </span>
                 </div>
-                <p className={`text-xs font-semibold truncate ${isActive ? 'text-slate-950' : 'text-slate-300'}`}>
+                <p className={`text-xs font-semibold truncate ${isActive ? 'text-slate-950' : 'text-foreground dark:text-slate-300'}`}>
                   {st.title}
                 </p>
-                <p className={`text-[11px] truncate mt-0.5 ${isActive ? 'text-slate-900/80' : 'text-slate-500'}`}>
+                <p className={`text-[11px] truncate mt-0.5 ${isActive ? 'text-slate-950/80' : 'text-muted-foreground dark:text-slate-500'}`}>
                   {st.desc}
                 </p>
               </button>
@@ -171,37 +171,37 @@ export function FieldExperienceSplit() {
           {/* ═══════════════════════════════════════════════════════════════════
               LEFT: OFFICE DISPATCH & OPERATIONS COMMAND (7 cols)
           ══════════════════════════════════════════════════════════════════════ */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-800 bg-slate-900/80 p-6 sm:p-7 flex flex-col justify-between shadow-2xl space-y-6 relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2.5 text-sm sm:text-base font-bold text-white">
-                <Laptop className="size-5 text-teal-400" />
+          <div className="lg:col-span-7 rounded-3xl border border-border bg-card p-6 sm:p-7 flex flex-col justify-between shadow-xl dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-2xl space-y-6 relative">
+            <div className="flex items-center justify-between pb-4 border-b border-border dark:border-slate-800">
+              <div className="flex items-center gap-2.5 text-sm sm:text-base font-bold text-foreground dark:text-white">
+                <Laptop className="size-5 text-teal-600 dark:text-teal-400" />
                 <span>Office Live Dispatch &amp; Operations Command</span>
               </div>
-              <Badge className="bg-teal-500/20 text-teal-300 border-teal-500/40 text-xs px-2.5 py-1">
+              <Badge className="bg-teal-500/10 text-teal-700 border-teal-500/30 dark:bg-teal-500/20 dark:text-teal-300 dark:border-teal-500/40 text-xs px-2.5 py-1">
                 Live Desktop Web
               </Badge>
             </div>
 
             {/* Dynamic Stage Banner */}
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+            <div className="p-4 rounded-2xl bg-muted/60 border border-border dark:bg-slate-950 dark:border-slate-800 space-y-2">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-xs font-bold text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Radio className="size-3.5 animate-pulse text-emerald-400" />
+                <span className="text-xs font-bold text-teal-700 dark:text-teal-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Radio className="size-3.5 animate-pulse text-emerald-600 dark:text-emerald-400" />
                   {currentStage.officeTitle}
                 </span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/30 font-semibold font-mono">
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/30 font-semibold font-mono">
                   {currentStage.officeBadge}
                 </span>
               </div>
-              <p className="text-sm font-semibold text-slate-200">{currentStage.officeDetail}</p>
-              <p className="text-xs text-slate-400 flex items-center gap-1.5">
-                <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+              <p className="text-sm font-semibold text-foreground dark:text-slate-200">{currentStage.officeDetail}</p>
+              <p className="text-xs text-muted-foreground dark:text-slate-400 flex items-center gap-1.5">
+                <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 {currentStage.officeAction}
               </p>
             </div>
 
             {/* Visual Dispatch Board Representation */}
-            <div className="relative aspect-[16/9] w-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner group">
+            <div className="relative aspect-[16/9] w-full rounded-2xl overflow-hidden bg-background border border-border dark:bg-slate-950 dark:border-slate-800 shadow-inner group">
               <Image
                 src="/images/landing/step-dispatch.png"
                 alt="Office Dispatch Board"
@@ -222,17 +222,17 @@ export function FieldExperienceSplit() {
 
             {/* 3 Fleet KPI Metric Cards */}
             <div className="grid grid-cols-3 gap-3 pt-1 text-center text-xs">
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <p className="text-[11px] text-slate-400 font-medium">Active Fleet</p>
-                <p className="text-base font-extrabold text-white mt-0.5">8 Technicians</p>
+              <div className="p-3 rounded-xl bg-muted/60 border border-border dark:bg-slate-950 dark:border-slate-800">
+                <p className="text-[11px] text-muted-foreground dark:text-slate-400 font-medium">Active Fleet</p>
+                <p className="text-base font-extrabold text-foreground dark:text-white mt-0.5">8 Technicians</p>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <p className="text-[11px] text-slate-400 font-medium">Scheduled Jobs</p>
-                <p className="text-base font-extrabold text-teal-400 mt-0.5">23 Work Orders</p>
+              <div className="p-3 rounded-xl bg-muted/60 border border-border dark:bg-slate-950 dark:border-slate-800">
+                <p className="text-[11px] text-muted-foreground dark:text-slate-400 font-medium">Scheduled Jobs</p>
+                <p className="text-base font-extrabold text-teal-600 dark:text-teal-400 mt-0.5">23 Work Orders</p>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                <p className="text-[11px] text-slate-400 font-medium">Today's Pipeline</p>
-                <p className="text-base font-extrabold text-emerald-400 mt-0.5">£8,940</p>
+              <div className="p-3 rounded-xl bg-muted/60 border border-border dark:bg-slate-950 dark:border-slate-800">
+                <p className="text-[11px] text-muted-foreground dark:text-slate-400 font-medium">Today&apos;s Pipeline</p>
+                <p className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">£8,940</p>
               </div>
             </div>
           </div>
@@ -240,38 +240,38 @@ export function FieldExperienceSplit() {
           {/* ═══════════════════════════════════════════════════════════════════
               RIGHT: FIELD TECHNICIAN MOBILE PWA APP (5 cols)
           ══════════════════════════════════════════════════════════════════════ */}
-          <div className="lg:col-span-5 rounded-3xl border border-slate-800 bg-slate-900/80 p-6 sm:p-7 flex flex-col justify-between shadow-2xl space-y-6 relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2.5 text-sm sm:text-base font-bold text-white">
-                <Smartphone className="size-5 text-amber-400" />
+          <div className="lg:col-span-5 rounded-3xl border border-border bg-card p-6 sm:p-7 flex flex-col justify-between shadow-xl dark:border-slate-800 dark:bg-slate-900/80 dark:shadow-2xl space-y-6 relative">
+            <div className="flex items-center justify-between pb-4 border-b border-border dark:border-slate-800">
+              <div className="flex items-center gap-2.5 text-sm sm:text-base font-bold text-foreground dark:text-white">
+                <Smartphone className="size-5 text-amber-600 dark:text-amber-400" />
                 <span>Technician Mobile PWA App</span>
               </div>
-              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs px-2.5 py-1">
+              <Badge className="bg-amber-500/10 text-amber-700 border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40 text-xs px-2.5 py-1">
                 iOS &amp; Android PWA
               </Badge>
             </div>
 
             {/* Smartphone Simulated Card */}
-            <div className="p-5 rounded-2xl bg-slate-950 border border-amber-500/30 shadow-xl space-y-4 relative">
+            <div className="p-5 rounded-2xl bg-muted/50 border border-amber-500/30 shadow-md dark:bg-slate-950 dark:shadow-xl space-y-4 relative">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
                   {currentStage.mobileTitle}
                 </span>
-                <span className="text-[11px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-semibold">
+                <span className="text-[11px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300 font-semibold">
                   {currentStage.mobileBadge}
                 </span>
               </div>
 
               {/* Dynamic Content based on active tab */}
               {activeJobStatus === 'assigned' && (
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-white">
+                <div className="p-3.5 rounded-xl bg-card border border-border dark:bg-slate-900 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-foreground dark:text-white">
                     <span>Emergency Boiler Service</span>
-                    <span className="text-emerald-400">£450.00</span>
+                    <span className="text-emerald-600 dark:text-emerald-400">£450.00</span>
                   </div>
-                  <p className="text-xs text-slate-300">Customer: Sarah Watson · 48 King Road</p>
+                  <p className="text-xs text-muted-foreground dark:text-slate-300">Customer: Sarah Watson · 48 King Road</p>
                   <div className="flex items-center gap-2 pt-2">
-                    <button type="button" className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 transition">
+                    <button type="button" className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 transition cursor-pointer">
                       Accept Job Packet
                     </button>
                   </div>
@@ -279,66 +279,66 @@ export function FieldExperienceSplit() {
               )}
 
               {activeJobStatus === 'en_route' && (
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
-                  <div className="flex items-center gap-2 text-xs font-bold text-teal-400">
+                <div className="p-3.5 rounded-xl bg-card border border-border dark:bg-slate-900 dark:border-slate-800 space-y-2.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-teal-700 dark:text-teal-400">
                     <Navigation className="size-4 animate-bounce" />
                     <span>Live GPS Navigation · 12 min ETA</span>
                   </div>
-                  <p className="text-xs text-slate-300">Destination: 48 King Road, London W1</p>
-                  <div className="p-2 rounded-lg bg-teal-950/60 border border-teal-500/30 text-[11px] text-teal-300">
+                  <p className="text-xs text-muted-foreground dark:text-slate-300">Destination: 48 King Road, London W1</p>
+                  <div className="p-2 rounded-lg bg-teal-50 border border-teal-200 dark:bg-teal-950/60 dark:border-teal-500/30 text-[11px] text-teal-800 dark:text-teal-300">
                     ✓ SMS Tracking link sent to customer phone (+44 7911 123456)
                   </div>
                 </div>
               )}
 
               {activeJobStatus === 'on_site' && (
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
-                  <div className="text-xs font-bold text-white flex items-center justify-between">
+                <div className="p-3.5 rounded-xl bg-card border border-border dark:bg-slate-900 dark:border-slate-800 space-y-2.5">
+                  <div className="text-xs font-bold text-foreground dark:text-white flex items-center justify-between">
                     <span>On-Site Safety Checklist</span>
-                    <span className="text-xs text-emerald-400 font-mono">4/4 Complete</span>
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-mono font-bold">4/4 Complete</span>
                   </div>
-                  <div className="space-y-1.5 text-xs text-slate-300">
-                    <div className="flex items-center gap-2"><Check className="size-3.5 text-emerald-400" /> Gas supply isolated</div>
-                    <div className="flex items-center gap-2"><Check className="size-3.5 text-emerald-400" /> Burner pressure checked</div>
-                    <div className="flex items-center gap-2"><Check className="size-3.5 text-emerald-400" /> Replacement valve fitted</div>
-                    <div className="flex items-center gap-2"><Check className="size-3.5 text-emerald-400" /> 2 Before/after photos uploaded</div>
+                  <div className="space-y-1.5 text-xs text-slate-700 dark:text-slate-300">
+                    <div className="flex items-center gap-2"><Check className="size-3.5 text-emerald-600 dark:text-emerald-400" /> Gas supply isolated</div>
+                    <div className="flex items-center gap-2"><Check className="size-3.5 text-emerald-600 dark:text-emerald-400" /> Burner pressure checked</div>
+                    <div className="flex items-center gap-2"><Check className="size-3.5 text-emerald-600 dark:text-emerald-400" /> Replacement valve fitted</div>
+                    <div className="flex items-center gap-2"><Check className="size-3.5 text-emerald-600 dark:text-emerald-400" /> 2 Before/after photos uploaded</div>
                   </div>
                 </div>
               )}
 
               {activeJobStatus === 'completed' && (
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
-                  <div className="text-xs font-bold text-white flex items-center justify-between">
+                <div className="p-3.5 rounded-xl bg-card border border-border dark:bg-slate-900 dark:border-slate-800 space-y-2.5">
+                  <div className="text-xs font-bold text-foreground dark:text-white flex items-center justify-between">
                     <span>Customer Sign-Off &amp; Payment</span>
-                    <span className="text-xs text-emerald-400 font-bold">PAID</span>
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold">PAID</span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-xs text-emerald-300 space-y-1">
+                  <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-500/30 text-xs text-emerald-800 dark:text-emerald-300 space-y-1">
                     <div className="flex justify-between font-mono font-bold">
                       <span>Total Collected:</span>
                       <span>£450.00</span>
                     </div>
-                    <p className="text-[11px] text-emerald-400">Payment via Apple Pay · 0% platform fee</p>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400">Payment via Apple Pay · 0% platform fee</p>
                   </div>
                 </div>
               )}
 
-              <p className="text-xs text-slate-400 font-medium">
+              <p className="text-xs text-muted-foreground dark:text-slate-400 font-medium">
                 {currentStage.techActionText}
               </p>
             </div>
 
             {/* Offline PWA Capabilities List */}
-            <ul className="space-y-2.5 pt-1 text-xs text-slate-300">
+            <ul className="space-y-2.5 pt-1 text-xs text-slate-700 dark:text-slate-300">
               <li className="flex items-center gap-2.5">
-                <CheckCircle2 className="size-4 text-amber-400 shrink-0" />
+                <CheckCircle2 className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span>Full offline job packets &amp; GPS customer directions</span>
               </li>
               <li className="flex items-center gap-2.5">
-                <CheckCircle2 className="size-4 text-amber-400 shrink-0" />
+                <CheckCircle2 className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span>On-site photo uploads with before/after damage notes</span>
               </li>
               <li className="flex items-center gap-2.5">
-                <CheckCircle2 className="size-4 text-amber-400 shrink-0" />
+                <CheckCircle2 className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
                 <span>Digital customer signature &amp; instant sign-off capture</span>
               </li>
             </ul>

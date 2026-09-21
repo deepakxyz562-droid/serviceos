@@ -242,8 +242,8 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
         className={cn(
           'inline-flex items-center gap-1 text-sm font-medium transition-colors px-2.5 py-1.5 rounded-lg cursor-pointer',
           open
-            ? 'text-white bg-slate-800'
-            : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            ? 'text-slate-900 bg-slate-100 dark:text-white dark:bg-slate-800'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/60'
         )}
       >
         Product
@@ -252,11 +252,11 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
 
       {open && (
         <div className="absolute left-0 top-full z-50 pt-2 animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="w-[580px] rounded-2xl border border-slate-800 bg-slate-950 text-white shadow-2xl overflow-hidden">
+          <div className="w-[580px] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-2xl overflow-hidden">
             <div className="p-4 grid grid-cols-12 gap-3">
               {/* Left Column: Core CRM Features */}
               <div className="col-span-7 space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-2.5 mb-1.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2.5 mb-1.5">
                   Core Platform
                 </p>
                 {solutionsLinks.features.slice(0, 5).map((item) => {
@@ -270,16 +270,16 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
                         setOpen(false);
                         if (isAnchor && onAnchorClick) onAnchorClick(item.href.replace('/', ''), e);
                       }}
-                      className="flex items-start gap-3 p-2 rounded-xl hover:bg-slate-900 transition-colors group"
+                      className="flex items-start gap-3 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors group"
                     >
-                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0 mt-0.5">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0 mt-0.5">
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <span className="text-xs font-semibold text-slate-200 group-hover:text-emerald-400 transition-colors block truncate">
+                        <span className="text-xs font-semibold text-slate-900 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors block truncate">
                           {item.label}
                         </span>
-                        <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
                           {item.desc}
                         </p>
                       </div>
@@ -289,9 +289,9 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
               </div>
 
               {/* Right Column: AI & Free Tools */}
-              <div className="col-span-5 flex flex-col justify-between border-l border-slate-800 pl-3">
+              <div className="col-span-5 flex flex-col justify-between border-l border-slate-200 dark:border-slate-800 pl-3">
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-1 mb-1.5">
                     AI &amp; Tools
                   </p>
                   {solutionsLinks.aiAndTools.map((item) => {
@@ -305,22 +305,22 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
                           setOpen(false);
                           if (isAnchor && onAnchorClick) onAnchorClick(item.href.replace('/', ''), e);
                         }}
-                        className="block p-2.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-900 hover:border-emerald-500/40 transition-all group"
+                        className="block p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-900 hover:border-emerald-500/40 transition-all group"
                       >
                         <div className="flex items-center justify-between gap-1.5 mb-1">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <Icon className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                            <span className="text-xs font-semibold text-slate-200 truncate group-hover:text-emerald-400 transition-colors">
+                            <Icon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <span className="text-xs font-semibold text-slate-900 dark:text-slate-200 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                               {item.label}
                             </span>
                           </div>
                           {item.badge && (
-                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/60 shrink-0 uppercase tracking-tight">
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 shrink-0 uppercase tracking-tight">
                               {item.badge}
                             </span>
                           )}
                         </div>
-                        <p className="text-[10.5px] text-slate-400 leading-tight">
+                        <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight">
                           {item.desc}
                         </p>
                       </a>
@@ -329,8 +329,8 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
                 </div>
 
                 {/* Mobile app pill card */}
-                <div className="mt-2 p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-center">
-                  <p className="text-[10.5px] font-medium text-emerald-300 mb-1.5">
+                <div className="mt-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 text-center">
+                  <p className="text-[10.5px] font-medium text-emerald-800 dark:text-emerald-300 mb-1.5">
                     Field app for crews
                   </p>
                   <div className="flex justify-center">
@@ -341,12 +341,12 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
             </div>
 
             {/* Bottom Strip */}
-            <div className="border-t border-slate-800 bg-slate-900/80 px-4 py-2.5 flex items-center justify-between text-xs">
-              <span className="text-slate-400">Looking for software by industry?</span>
+            <div className="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 px-4 py-2.5 flex items-center justify-between text-xs">
+              <span className="text-slate-500 dark:text-slate-400">Looking for software by industry?</span>
               <a
                 href="/field-service-software"
                 onClick={() => setOpen(false)}
-                className="font-medium text-emerald-400 hover:underline inline-flex items-center gap-1"
+                className="font-medium text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
               >
                 Browse all trades <ArrowRight className="h-3 w-3" />
               </a>
@@ -387,8 +387,8 @@ export function SolutionsMegaMenu() {
         className={cn(
           'inline-flex items-center gap-1 text-sm font-medium transition-colors px-2.5 py-1.5 rounded-lg cursor-pointer',
           open
-            ? 'text-white bg-slate-800'
-            : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+            ? 'text-slate-900 bg-slate-100 dark:text-white dark:bg-slate-800'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/60'
         )}
       >
         Solutions
@@ -397,15 +397,15 @@ export function SolutionsMegaMenu() {
 
       {open && (
         <div className="absolute left-0 top-full z-50 pt-2 animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="w-[min(58rem,calc(100vw-2rem))] rounded-2xl border border-slate-800 bg-slate-950 text-white shadow-2xl overflow-hidden">
+          <div className="w-[min(58rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-2xl overflow-hidden">
             <div className="grid grid-cols-12">
               {/* Industries — 5/12 cols, split into two sub-columns */}
-              <div className="col-span-5 p-5 border-r border-slate-800">
+              <div className="col-span-5 p-5 border-r border-slate-200 dark:border-slate-800">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
                     Industries Served
                   </h4>
-                  <span className="text-[10px] text-teal-400 font-medium bg-teal-500/10 border border-teal-500/30 px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] text-teal-700 dark:text-teal-400 font-medium bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/30 px-1.5 py-0.5 rounded">
                     25+ Trades
                   </span>
                 </div>
@@ -415,7 +415,7 @@ export function SolutionsMegaMenu() {
                       key={link.href}
                       href={link.href}
                       onClick={() => setOpen(false)}
-                      className="text-xs text-slate-300 hover:text-teal-400 hover:bg-slate-900 rounded px-1.5 py-1 transition-colors truncate block"
+                      className="text-xs text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-900 rounded px-1.5 py-1 transition-colors truncate block"
                     >
                       {link.label}
                     </a>
@@ -424,8 +424,8 @@ export function SolutionsMegaMenu() {
               </div>
 
               {/* Growth Services — 4/12 cols */}
-              <div className="col-span-4 p-5 border-r border-slate-800">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
+              <div className="col-span-4 p-5 border-r border-slate-200 dark:border-slate-800">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
                   Agency Growth Services
                 </h4>
                 <div className="space-y-1.5">
@@ -436,16 +436,16 @@ export function SolutionsMegaMenu() {
                         key={link.href}
                         href={link.href}
                         onClick={() => setOpen(false)}
-                        className="flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-900 transition-colors group"
+                        className="flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors group"
                       >
-                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0 mt-0.5">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0 mt-0.5">
                           <Icon className="h-3.5 w-3.5" />
                         </div>
                         <div className="min-w-0">
-                          <span className="text-xs font-semibold text-slate-200 group-hover:text-emerald-400 transition-colors block truncate">
+                          <span className="text-xs font-semibold text-slate-900 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors block truncate">
                             {link.label}
                           </span>
-                          <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5 leading-tight">
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 leading-tight">
                             {link.desc}
                           </p>
                         </div>
@@ -458,7 +458,7 @@ export function SolutionsMegaMenu() {
               {/* Compare — 3/12 cols */}
               <div className="col-span-3 p-5 flex flex-col justify-between">
                 <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
                     Compare
                   </h4>
                   <ul className="space-y-1">
@@ -467,12 +467,12 @@ export function SolutionsMegaMenu() {
                         <a
                           href={link.href}
                           onClick={() => setOpen(false)}
-                          className="block p-1.5 rounded-lg hover:bg-slate-900 transition-colors group"
+                          className="block p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors group"
                         >
-                          <span className="text-xs font-medium text-slate-300 group-hover:text-white transition-colors block">
+                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-950 dark:group-hover:text-white transition-colors block">
                             {link.label}
                           </span>
-                          <span className="text-[10px] text-slate-500 block truncate">
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 block truncate">
                             {link.desc}
                           </span>
                         </a>
@@ -482,26 +482,26 @@ export function SolutionsMegaMenu() {
                 </div>
 
                 {/* Free Tools mini link */}
-                <div className="mt-4 pt-3 border-t border-slate-800">
+                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
                   <a
                     href="/invoice-generator"
                     onClick={() => setOpen(false)}
-                    className="flex items-center justify-between text-xs text-slate-400 hover:text-emerald-400 font-medium group"
+                    className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium group"
                   >
                     <span>Free Invoice Tool</span>
-                    <ArrowRight className="h-3 w-3 text-slate-400 group-hover:text-emerald-400 transition-transform group-hover:translate-x-0.5" />
+                    <ArrowRight className="h-3 w-3 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-transform group-hover:translate-x-0.5" />
                   </a>
                 </div>
               </div>
             </div>
 
             {/* Bottom CTA Strip */}
-            <div className="border-t border-slate-800 bg-slate-900/80 px-5 py-2.5 flex items-center justify-between text-xs">
-              <p className="text-slate-400">Need verified local service pros or want to list your business?</p>
+            <div className="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 px-5 py-2.5 flex items-center justify-between text-xs">
+              <p className="text-slate-600 dark:text-slate-400">Need verified local service pros or want to list your business?</p>
               <a
                 href="/marketplace"
                 onClick={() => setOpen(false)}
-                className="font-semibold text-teal-400 hover:text-teal-300 inline-flex items-center gap-1 whitespace-nowrap"
+                className="font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 inline-flex items-center gap-1 whitespace-nowrap"
               >
                 Browse Marketplace <ArrowRight className="h-3 w-3" />
               </a>

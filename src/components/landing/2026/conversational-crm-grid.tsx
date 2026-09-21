@@ -120,21 +120,21 @@ export function ConversationalCrmGrid() {
   const IconComponent = currentDomain.icon;
 
   return (
-    <section className="py-20 bg-slate-900/80 text-white border-b border-slate-800 relative overflow-hidden">
+    <section className="py-20 bg-background text-foreground border-b border-border dark:bg-slate-900/80 dark:text-white dark:border-slate-800 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-700 dark:text-teal-400 text-xs font-semibold">
             <Terminal className="size-3.5" />
             <span>CONVERSATIONAL CRM</span>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground dark:text-white leading-tight">
             Every CRM action.{' '}
-            <span className="bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-teal-600 to-emerald-600 dark:from-teal-400 dark:to-emerald-400 bg-clip-text text-transparent">
               One conversational prompt.
             </span>
           </h2>
-          <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base text-muted-foreground dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
             Instead of navigating complex menus and 40 different dashboard filters, simply ask Fieseros. It understands context, queries your database, and executes real actions.
           </p>
         </div>
@@ -143,7 +143,7 @@ export function ConversationalCrmGrid() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Domain Chips List (4.5 cols) */}
           <div className="lg:col-span-5 space-y-2">
-            <p className="text-xs uppercase font-bold tracking-wider text-slate-400 mb-3">
+            <p className="text-xs uppercase font-bold tracking-wider text-muted-foreground dark:text-slate-400 mb-3">
               Select a CRM Domain to Query:
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
@@ -158,14 +158,14 @@ export function ConversationalCrmGrid() {
                     onClick={() => setSelectedDomainId(domain.id)}
                     className={`p-3.5 rounded-2xl text-left border transition-all flex items-center justify-between cursor-pointer ${
                       isSelected
-                        ? 'bg-teal-500 text-slate-950 border-teal-400 shadow-md ring-2 ring-teal-500/30'
-                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900'
+                        ? 'bg-teal-600 text-white dark:bg-teal-500 dark:text-slate-950 border-teal-500 shadow-md ring-2 ring-teal-500/30'
+                        : 'bg-card border-border text-foreground hover:border-slate-300 hover:bg-muted/60 dark:bg-slate-950 dark:border-slate-800 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-900'
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <div
                         className={`size-7 rounded-lg flex items-center justify-center shrink-0 ${
-                          isSelected ? 'bg-slate-950 text-teal-400' : 'bg-slate-900 text-slate-400'
+                          isSelected ? 'bg-white/20 text-white dark:bg-slate-950 dark:text-teal-400' : 'bg-muted text-muted-foreground dark:bg-slate-900 dark:text-slate-400'
                         }`}
                       >
                         <DomainIcon className="size-4" />
@@ -180,45 +180,45 @@ export function ConversationalCrmGrid() {
           </div>
 
           {/* Interactive AI Response Terminal (7.5 cols) */}
-          <div className="lg:col-span-7 rounded-3xl border border-slate-700 bg-slate-950 p-6 sm:p-8 space-y-6 shadow-2xl">
+          <div className="lg:col-span-7 rounded-3xl border border-border bg-card p-6 sm:p-8 space-y-6 shadow-xl dark:border-slate-700 dark:bg-slate-950 dark:shadow-2xl">
             {/* Terminal Window Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+            <div className="flex items-center justify-between pb-4 border-b border-border dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <div className="size-8 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold">
+                <div className="size-8 rounded-xl bg-teal-500/10 text-teal-600 dark:bg-teal-500/20 dark:text-teal-400 flex items-center justify-center font-bold">
                   <IconComponent className="size-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-foreground dark:text-white flex items-center gap-1.5">
                     Fieseros AI CRM Engine
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 font-mono font-medium">
                       Real-time Action
                     </span>
                   </p>
-                  <p className="text-[11px] text-slate-400">Domain: {currentDomain.category}</p>
+                  <p className="text-[11px] text-muted-foreground dark:text-slate-400">Domain: {currentDomain.category}</p>
                 </div>
               </div>
 
-              <Badge variant="outline" className="text-[10px] text-teal-400 border-teal-500/30 bg-teal-500/10">
+              <Badge variant="outline" className="text-[10px] text-teal-700 dark:text-teal-400 border-teal-500/30 bg-teal-500/10">
                 ⌘ Query Active
               </Badge>
             </div>
 
             {/* Prompt Inquiry Box */}
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1.5">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-teal-400">
+            <div className="p-4 rounded-2xl bg-muted/60 border border-border dark:bg-slate-900 dark:border-slate-800 space-y-1.5">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-teal-700 dark:text-teal-400">
                 User Question / Command:
               </span>
-              <p className="text-sm sm:text-base font-mono font-semibold text-white">
-                "{currentDomain.prompt}"
+              <p className="text-sm sm:text-base font-mono font-semibold text-foreground dark:text-white">
+                &quot;{currentDomain.prompt}&quot;
               </p>
             </div>
 
             {/* AI Answer & Synthesis */}
-            <div className="p-5 rounded-2xl bg-teal-950/30 border border-teal-500/30 space-y-3">
-              <div className="flex items-center gap-1.5 text-teal-400 font-bold text-xs">
+            <div className="p-5 rounded-2xl bg-teal-50/70 border border-teal-200 dark:bg-teal-950/30 dark:border-teal-500/30 space-y-3">
+              <div className="flex items-center gap-1.5 text-teal-700 dark:text-teal-400 font-bold text-xs">
                 <Sparkles className="size-4" /> Fieseros Synthesis:
               </div>
-              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
                 {currentDomain.response}
               </p>
 
@@ -227,7 +227,7 @@ export function ConversationalCrmGrid() {
                 {currentDomain.metrics.map((metric, idx) => (
                   <span
                     key={idx}
-                    className="px-3 py-1 rounded-xl bg-slate-900 text-teal-300 border border-teal-500/30 text-xs font-mono font-bold"
+                    className="px-3 py-1 rounded-xl bg-white text-teal-800 border border-teal-200 shadow-xs dark:bg-slate-900 dark:text-teal-300 dark:border-teal-500/30 text-xs font-mono font-bold"
                   >
                     ✓ {metric}
                   </span>
@@ -237,7 +237,7 @@ export function ConversationalCrmGrid() {
 
             {/* 1-Click Action Button */}
             <div className="pt-2">
-              <Button className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-2 shadow-lg cursor-pointer transition hover:scale-[1.01]">
+              <Button className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-2 shadow-md cursor-pointer transition hover:scale-[1.01]">
                 <span>{currentDomain.actionLabel}</span>
               </Button>
             </div>

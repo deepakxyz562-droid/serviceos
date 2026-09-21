@@ -473,17 +473,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     }
   }, [isStandaloneTenant, currentView, setCurrentView]);
 
-  // Sync dark mode to <html> so that <body> (which carries `bg-background`
-  // but lives outside this wrapper) also picks up the dark background vars.
-  // The wrapper is `fixed inset-0` and covers the full viewport, so this is
-  // purely defensive — it ensures any sub-pixel rendering gap below the
-  // wrapper is the same color as the nav, invisible in both light and dark.
-  useEffect(() => {
-    const root = document.documentElement;
-    if (darkMode) root.classList.add('dark');
-    else root.classList.remove('dark');
-    return () => { root.classList.remove('dark'); };
-  }, [darkMode]);
+  // Theme is handled at root level by next-themes <ThemeProvider>.
 
   // ─── Keep-alive view cache (Tier 2 performance fix) ─────────────────────
   // A7: The view-history logic (which views to keep mounted + display:none

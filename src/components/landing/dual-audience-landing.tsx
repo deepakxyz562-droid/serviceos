@@ -110,6 +110,7 @@ import { GooglePlayBadge } from '@/components/brand/google-play-badge';
 // landing page into a single 70.6 KiB chunk. Now the initial chunk is smaller
 // and these sections load on demand.
 import { CrmPricing } from './crm-pricing';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { AiHeroCommand } from './2026/ai-hero-command';
 import { OldWayVsFieseros } from './2026/old-way-vs-fieseros';
 import { ConversationalCrmGrid } from './2026/conversational-crm-grid';
@@ -504,11 +505,11 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/90 backdrop-blur-md text-white pt-[env(safe-area-inset-top,0px)]">
+    <header className="sticky top-0 z-50 border-b border-border/80 bg-background/90 backdrop-blur-md text-foreground dark:border-slate-800 dark:bg-slate-950/90 dark:text-white pt-[env(safe-area-inset-top,0px)]">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <a href="#top" className="flex items-center gap-2.5 group shrink-0" aria-label="Fieseros home" onClick={(e) => { e.preventDefault(); setMobileOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
           <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
-          <span className="text-xl font-bold tracking-tight text-white">Fieseros</span>
+          <span className="text-xl font-bold tracking-tight text-foreground dark:text-white">Fieseros</span>
         </a>
 
         {/* ── Desktop Navigation (5 Clean Grouped Items) ── */}
@@ -517,24 +518,24 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
           <SolutionsMegaMenu />
           <Link
             href="/marketplace"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 px-2.5 py-1.5 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/60 px-2.5 py-1.5 rounded-lg transition-colors"
           >
-            <Store className="h-4 w-4 text-emerald-400" />
+            <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
             <span>Marketplace</span>
-            <span className="text-[10px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800/60 px-1.5 py-0.2 rounded-full">
+            <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 px-1.5 py-0.2 rounded-full">
               Pros
             </span>
           </Link>
           <Link
             href="/requests"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 px-2.5 py-1.5 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/60 px-2.5 py-1.5 rounded-lg transition-colors"
           >
-            <ClipboardList className="h-4 w-4 text-teal-400" />
+            <ClipboardList className="h-4 w-4 text-teal-600 dark:text-teal-400" />
             <span>My Requests</span>
           </Link>
           <a
             href="#pricing"
-            className="text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+            className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/60 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
             onClick={(e) => crmAnchorClick('#pricing', e)}
           >
             Pricing
@@ -543,6 +544,9 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
 
         {/* ── Right Actions ── */}
         <div className="hidden sm:flex items-center gap-2">
+          {/* Theme Switcher */}
+          <ThemeToggle showDropdown />
+
           {/* Post Request CTA */}
           <Button
             asChild
@@ -560,7 +564,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
             variant="ghost"
             size="sm"
             onClick={() => setEmpLoginOpen(true)}
-            className="text-xs text-slate-300 hover:text-white hover:bg-slate-800/60 gap-1.5 h-9 px-2.5 rounded-lg cursor-pointer"
+            className="text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/60 gap-1.5 h-9 px-2.5 rounded-lg cursor-pointer"
             title="Field technician and staff portal"
           >
             <Key className="h-3.5 w-3.5 text-slate-400" />
@@ -571,7 +575,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
               variant="ghost"
               size="sm"
               onClick={onSignIn}
-              className="text-xs sm:text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/60 h-9 px-3 rounded-lg cursor-pointer"
+              className="text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/60 h-9 px-3 rounded-lg cursor-pointer"
             >
               Sign In
             </Button>
@@ -581,32 +585,35 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
               variant="outline"
               size="sm"
               onClick={onGetStarted}
-              className="gap-1.5 border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/40 font-semibold text-xs sm:text-sm h-9 px-3.5 rounded-xl cursor-pointer"
+              className="gap-1.5 border-emerald-600/30 text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300 hover:bg-emerald-500/10 font-semibold text-xs sm:text-sm h-9 px-3.5 rounded-xl cursor-pointer"
             >
               Start Trial
             </Button>
           ) : null}
         </div>
 
-        <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          className="md:hidden text-white inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mr-2 rounded-lg hover:bg-slate-800 transition-colors"
-          aria-label="Toggle menu"
-          aria-expanded={mobileOpen}
-        >
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-1 md:hidden">
+          <ThemeToggle />
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="text-foreground dark:text-white inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mr-2 rounded-lg hover:bg-muted dark:hover:bg-slate-800 transition-colors"
+            aria-label="Toggle menu"
+            aria-expanded={mobileOpen}
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       {/* ── Mobile Drawer ── */}
       {mobileOpen ? (
-        <div className="md:hidden border-t border-slate-800 bg-slate-950 text-white max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] px-3 py-3 space-y-2">
+        <div className="md:hidden border-t border-border bg-background text-foreground dark:border-slate-800 dark:bg-slate-950 dark:text-white max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] px-3 py-3 space-y-2">
           <Accordion type="single" collapsible className="w-full space-y-2">
             {/* Product Section */}
-            <AccordionItem value="product" className="border border-slate-800 rounded-xl px-3 bg-slate-900">
-              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-white">
+            <AccordionItem value="product" className="border border-border dark:border-slate-800 rounded-xl px-3 bg-card dark:bg-slate-900">
+              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-foreground dark:text-white">
                 <div className="flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-emerald-400" />
+                  <Wrench className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   <span>Platform &amp; Features</span>
                 </div>
               </AccordionTrigger>
@@ -615,7 +622,7 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
                   <a
                     key={item.href}
                     href={item.href}
-                    className="block text-xs font-medium text-slate-300 hover:text-white p-2 rounded-lg hover:bg-slate-800"
+                    className="block text-xs font-medium text-muted-foreground hover:text-foreground p-2 rounded-lg hover:bg-muted dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800"
                     onClick={(e) => {
                       setMobileOpen(false);
                       if (item.href.startsWith('/#')) crmAnchorClick(item.href.replace('/', ''), e);
@@ -624,24 +631,24 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
                     {item.label}
                   </a>
                 ))}
-                <div className="pt-2 border-t border-slate-800">
+                <div className="pt-2 border-t border-border dark:border-slate-800">
                   <a
                     href="#ai-receptionist"
-                    className="flex items-center justify-between text-xs font-semibold text-emerald-400 p-2 rounded-lg hover:bg-emerald-950/40"
+                    className="flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400 p-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                     onClick={(e) => crmAnchorClick('#ai-receptionist', e)}
                   >
                     <span>24/7 AI Receptionist</span>
-                    <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.5 rounded-full uppercase">AI Voice</span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-1.5 py-0.5 rounded-full uppercase">AI Voice</span>
                   </a>
                 </div>
               </AccordionContent>
             </AccordionItem>
 
             {/* Solutions Section */}
-            <AccordionItem value="solutions" className="border border-slate-800 rounded-xl px-3 bg-slate-900">
-              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-white">
+            <AccordionItem value="solutions" className="border border-border dark:border-slate-800 rounded-xl px-3 bg-card dark:bg-slate-900">
+              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-foreground dark:text-white">
                 <div className="flex items-center gap-2">
-                  <Briefcase className="h-4 w-4 text-emerald-400" />
+                  <Briefcase className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                   <span>Solutions &amp; Trades</span>
                 </div>
               </AccordionTrigger>
@@ -3284,7 +3291,7 @@ export function DualAudienceLanding({
 
       <main className="flex-1">
         {/* 01. 2026 AI Hero Command ⌘K Theatre */}
-        <section className="relative overflow-hidden pt-12 pb-20 md:pt-16 md:pb-28 border-b bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white">
+        <section className="relative overflow-hidden pt-12 pb-20 md:pt-16 md:pb-28 border-b border-border bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white dark:border-slate-800">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <AiHeroCommand onGetStarted={onGetStarted} />
           </div>
@@ -3303,20 +3310,20 @@ export function DualAudienceLanding({
         <LifecycleStory />
 
         {/* 06. GPTForm Interactive AI Form Builder Tour */}
-        <section id="ai-forms" className="py-20 bg-slate-950 text-white border-b border-slate-800 relative overflow-hidden">
+        <section id="ai-forms" className="py-20 bg-slate-50 text-slate-900 border-b border-border dark:bg-slate-950 dark:text-white dark:border-slate-800 relative overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
             <div className="text-center space-y-3 max-w-3xl mx-auto">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-semibold">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-600 dark:text-teal-400 text-xs font-semibold">
                 <Sparkles className="size-3.5 animate-pulse" />
                 <span>AI FORM ENGINE &amp; WIDGET STUDIO</span>
               </div>
-              <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white">
+              <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground dark:text-white">
                 Describe the process.{' '}
-                <span className="bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-teal-500 to-emerald-600 dark:from-teal-400 dark:to-emerald-400 bg-clip-text text-transparent">
                   Fieseros builds the form.
                 </span>
               </h2>
-              <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
+              <p className="text-sm sm:text-base text-muted-foreground dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
                 Interactive formula calculations, damage photo uploads, offline mobile sign-offs, and 0% fee deposit payments connected straight to your work orders.
               </p>
             </div>
@@ -3340,27 +3347,27 @@ export function DualAudienceLanding({
         <RoleBasedProof />
 
         {/* 12. Zero-Commission Contractor Marketplace Discovery */}
-        <section id="marketplace-3bid" className="py-20 bg-slate-950 text-white border-b border-slate-800 relative overflow-hidden">
+        <section id="marketplace-3bid" className="py-20 bg-background text-foreground border-b border-border dark:bg-slate-950 dark:text-white dark:border-slate-800 relative overflow-hidden">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 p-8 sm:p-12 shadow-2xl relative overflow-hidden">
+            <div className="rounded-3xl border border-border bg-gradient-to-br from-white via-slate-50 to-slate-100 dark:border-slate-800 dark:from-slate-900 dark:via-slate-900/90 dark:to-slate-950 p-8 sm:p-12 shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 blur-[100px] pointer-events-none" />
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
                 <div className="lg:col-span-7 space-y-4">
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-semibold">
                     <Store className="size-3.5" />
                     <span>BUILT-IN DEMAND &amp; DIRECT BOOKINGS</span>
                   </div>
-                  <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-white leading-tight">
+                  <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-foreground dark:text-white leading-tight">
                     Get discovered on the{' '}
-                    <span className="bg-gradient-to-r from-amber-400 to-teal-400 bg-clip-text text-transparent">
+                    <span className="bg-gradient-to-r from-amber-500 to-teal-600 dark:from-amber-400 dark:to-teal-400 bg-clip-text text-transparent">
                       Fieseros Marketplace
                     </span>
                   </h2>
-                  <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
+                  <p className="text-muted-foreground dark:text-slate-300 text-sm sm:text-base leading-relaxed">
                     Unlike legacy software that only manages existing clients, Fieseros gives your business a verified public profile on our local trade directory where property owners search, compare quotes, and book services — with <strong>0% platform commission</strong>.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
+                    <div className="p-3.5 rounded-2xl bg-card border border-border dark:bg-slate-950/80 dark:border-slate-800 space-y-1">
                       <p className="text-xs font-bold text-amber-400">0% Commission</p>
                       <p className="text-[11px] text-slate-400">Keep 100% of every customer booking and payment.</p>
                     </div>

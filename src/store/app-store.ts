@@ -53,6 +53,7 @@ interface AppState {
   // Dark mode
   darkMode: boolean;
   toggleDarkMode: () => void;
+  setDarkMode: (dark: boolean) => void;
 
   // Search
   searchQuery: string;
@@ -213,6 +214,7 @@ export const useAppStore = create<AppState>()(
   // Dark mode
   darkMode: false,
   toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+  setDarkMode: (dark: boolean) => set({ darkMode: dark }),
 
   // Search
   searchQuery: '',

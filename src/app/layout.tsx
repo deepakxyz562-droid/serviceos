@@ -120,6 +120,8 @@ export const metadata: Metadata = {
 const IS_DEV = process.env.NODE_ENV !== 'production';
 const SW_URL = IS_DEV ? '/sw.js?dev=1' : '/sw.js';
 
+import { ThemeProvider } from "@/providers/theme-provider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -205,19 +207,26 @@ export default function RootLayout({
         <StructuredData
           data={[getOrganizationSchema(), getWebsiteSchema()]}
         />
-        <QueryProvider>
-          {children}
-          <Toaster position="top-center" />
-          <PwaProvider />
-          {/* Launch Special marketing popup — shows on EVERY page for
-              unauthenticated users (after 5s delay). Dismissible with 7-day
-              cookie. Rendered in root layout so it works on all routes. */}
-          <LaunchSpecialModal />
-          <CookieConsentBanner />
-          {/* P3-1 (SEO): Core Web Vitals RUM — reports field CLS/INP/LCP/FCP/TTFB
-              to /api/vitals for production performance monitoring. */}
-          <WebVitalsReporter />
-        </QueryProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange={false}
+        >
+          <QueryProvider>
+            {children}
+            <Toaster position="top-center" />
+            <PwaProvider />
+            {/* Launch Special marketing popup — shows on EVERY page for
+                unauthenticated users (after 5s delay). Dismissible with 7-day
+                cookie. Rendered in root layout so it works on all routes. */}
+            <LaunchSpecialModal />
+            <CookieConsentBanner />
+            {/* P3-1 (SEO): Core Web Vitals RUM — reports field CLS/INP/LCP/FCP/TTFB
+                to /api/vitals for production performance monitoring. */}
+            <WebVitalsReporter />
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

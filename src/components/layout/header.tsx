@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTheme } from 'next-themes';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { ViewType } from '@/types/workflow';
@@ -146,13 +147,27 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const {
     currentView,
     darkMode,
-    toggleDarkMode,
+    setDarkMode,
     toggleLeftSidebar,
     toggleMobileSidebar,
     searchQuery,
     setSearchQuery,
     auth,
   } = useAppStore();
+
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDark = mounted ? resolvedTheme === 'dark' : darkMode;
+
+  const handleToggleTheme = useCallback(() => {
+    const nextDark = !isDark;
+    setTheme(nextDark ? 'dark' : 'light');
+    setDarkMode(nextDark);
+  }, [isDark, setTheme, setDarkMode]);
 
   const isMobile = useIsMobile();
   const isCanvas = currentView === 'canvas';
@@ -514,11 +529,11 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         <Button
           variant="ghost"
           size="icon"
-          onClick={toggleDarkMode}
+          onClick={handleToggleTheme}
           className="hidden sm:flex h-9 w-9"
           aria-label="Toggle dark mode"
         >
-          {darkMode ? (
+          {isDark ? (
             <Sun className="size-4" />
           ) : (
             <Moon className="size-4" />
@@ -568,9 +583,9 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
               Settings
             </DropdownMenuItem>
             {/* Dark mode toggle — mobile only (desktop has the icon button) */}
-            <DropdownMenuItem className="cursor-pointer gap-2 sm:hidden" onClick={toggleDarkMode}>
-              {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
-              {darkMode ? 'Light mode' : 'Dark mode'}
+            <DropdownMenuItem className="cursor-pointer gap-2 sm:hidden" onClick={handleToggleTheme}>
+              {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+              {isDark ? 'Light mode' : 'Dark mode'}
             </DropdownMenuItem>
             {/* Install app — lets users re-trigger install after dismissing banner */}
             <DropdownMenuItem className="cursor-pointer gap-2" onClick={handleInstallClick}>
