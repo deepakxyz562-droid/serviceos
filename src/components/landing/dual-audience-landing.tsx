@@ -65,12 +65,20 @@ function Navbar({
   onGetStarted?: () => void;
   onSignIn?: () => void;
 }) {
+  const [scrolled, setScrolled] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [empLoginOpen, setEmpLoginOpen] = React.useState(false);
   const [empEmail, setEmpEmail] = React.useState('');
   const [empPassword, setEmpPassword] = React.useState('');
   const [empLoading, setEmpLoading] = React.useState(false);
   const [empError, setEmpError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -124,8 +132,15 @@ function Navbar({
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border/80 bg-background/80 backdrop-blur-xl text-foreground pt-[env(safe-area-inset-top,0px)] transition-all">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+    <header
+      className={cn(
+        'fixed inset-x-0 top-0 z-50 transition-all duration-300 pt-[env(safe-area-inset-top,0px)]',
+        scrolled
+          ? 'border-b border-border/70 bg-background/85 backdrop-blur-xl shadow-xs'
+          : 'bg-transparent'
+      )}
+    >
+      <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <a
           href="#top"
           className="flex items-center gap-2.5 group shrink-0"

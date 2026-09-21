@@ -240,10 +240,10 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
         aria-expanded={open}
         aria-haspopup="true"
         className={cn(
-          'inline-flex items-center gap-1 text-sm font-medium transition-colors px-2.5 py-1.5 rounded-lg cursor-pointer',
+          'inline-flex items-center gap-1 text-sm font-medium transition-colors px-3 py-2 rounded-full cursor-pointer',
           open
-            ? 'text-slate-900 bg-slate-100 dark:text-white dark:bg-slate-800'
-            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/60'
+            ? 'text-navy bg-surface'
+            : 'text-muted-foreground hover:text-navy hover:bg-surface'
         )}
       >
         Product
@@ -252,11 +252,11 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
 
       {open && (
         <div className="absolute left-0 top-full z-50 pt-2 animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="w-[580px] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-2xl overflow-hidden">
+          <div className="w-[580px] rounded-3xl border border-border bg-background text-foreground shadow-2xl overflow-hidden">
             <div className="p-4 grid grid-cols-12 gap-3">
               {/* Left Column: Core CRM Features */}
               <div className="col-span-7 space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2.5 mb-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-2.5 mb-1.5">
                   Core Platform
                 </p>
                 {solutionsLinks.features.slice(0, 5).map((item) => {
@@ -270,16 +270,16 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
                         setOpen(false);
                         if (isAnchor && onAnchorClick) onAnchorClick(item.href.replace('/', ''), e);
                       }}
-                      className="flex items-start gap-3 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors group"
+                      className="flex items-start gap-3 p-2 rounded-2xl hover:bg-surface transition-colors group"
                     >
-                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0 mt-0.5">
+                      <div className="p-1.5 rounded-xl bg-accent text-accent-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors shrink-0 mt-0.5">
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
-                        <span className="text-xs font-semibold text-slate-900 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors block truncate">
+                        <span className="text-xs font-semibold text-navy group-hover:text-primary transition-colors block truncate">
                           {item.label}
                         </span>
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
+                        <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
                           {item.desc}
                         </p>
                       </div>
@@ -289,9 +289,9 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
               </div>
 
               {/* Right Column: AI & Free Tools */}
-              <div className="col-span-5 flex flex-col justify-between border-l border-slate-200 dark:border-slate-800 pl-3">
+              <div className="col-span-5 flex flex-col justify-between border-l border-border pl-3">
                 <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-1 mb-1.5">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground px-1 mb-1.5">
                     AI &amp; Tools
                   </p>
                   {solutionsLinks.aiAndTools.map((item) => {
@@ -305,22 +305,22 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
                           setOpen(false);
                           if (isAnchor && onAnchorClick) onAnchorClick(item.href.replace('/', ''), e);
                         }}
-                        className="block p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 hover:bg-slate-100 dark:hover:bg-slate-900 hover:border-emerald-500/40 transition-all group"
+                        className="block p-2.5 rounded-2xl border border-border bg-surface hover:bg-background hover:border-primary/40 transition-all group shadow-xs"
                       >
                         <div className="flex items-center justify-between gap-1.5 mb-1">
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <Icon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <span className="text-xs font-semibold text-slate-900 dark:text-slate-200 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                            <Icon className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <span className="text-xs font-semibold text-navy truncate group-hover:text-primary transition-colors">
                               {item.label}
                             </span>
                           </div>
                           {item.badge && (
-                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800/60 shrink-0 uppercase tracking-tight">
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-accent text-accent-foreground border border-primary/20 shrink-0 uppercase tracking-tight">
                               {item.badge}
                             </span>
                           )}
                         </div>
-                        <p className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-tight">
+                        <p className="text-[10.5px] text-muted-foreground leading-tight">
                           {item.desc}
                         </p>
                       </a>
@@ -329,8 +329,8 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
                 </div>
 
                 {/* Mobile app pill card */}
-                <div className="mt-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 text-center">
-                  <p className="text-[10.5px] font-medium text-emerald-800 dark:text-emerald-300 mb-1.5">
+                <div className="mt-2 p-2.5 rounded-2xl bg-accent border border-primary/20 text-center">
+                  <p className="text-[10.5px] font-medium text-accent-foreground mb-1.5">
                     Field app for crews
                   </p>
                   <div className="flex justify-center">
@@ -341,12 +341,12 @@ export function ProductMegaMenu({ onAnchorClick }: { onAnchorClick?: (href: stri
             </div>
 
             {/* Bottom Strip */}
-            <div className="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 px-4 py-2.5 flex items-center justify-between text-xs">
-              <span className="text-slate-500 dark:text-slate-400">Looking for software by industry?</span>
+            <div className="border-t border-border bg-surface px-4 py-2.5 flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Looking for software by industry?</span>
               <a
                 href="/field-service-software"
                 onClick={() => setOpen(false)}
-                className="font-medium text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
+                className="font-medium text-primary hover:underline inline-flex items-center gap-1"
               >
                 Browse all trades <ArrowRight className="h-3 w-3" />
               </a>
@@ -385,10 +385,10 @@ export function SolutionsMegaMenu() {
         aria-expanded={open}
         aria-haspopup="true"
         className={cn(
-          'inline-flex items-center gap-1 text-sm font-medium transition-colors px-2.5 py-1.5 rounded-lg cursor-pointer',
+          'inline-flex items-center gap-1 text-sm font-medium transition-colors px-3 py-2 rounded-full cursor-pointer',
           open
-            ? 'text-slate-900 bg-slate-100 dark:text-white dark:bg-slate-800'
-            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800/60'
+            ? 'text-navy bg-surface'
+            : 'text-muted-foreground hover:text-navy hover:bg-surface'
         )}
       >
         Solutions
@@ -397,15 +397,15 @@ export function SolutionsMegaMenu() {
 
       {open && (
         <div className="absolute left-0 top-full z-50 pt-2 animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="w-[min(58rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-slate-900 dark:text-white shadow-2xl overflow-hidden">
+          <div className="w-[min(58rem,calc(100vw-2rem))] rounded-3xl border border-border bg-background text-foreground shadow-2xl overflow-hidden">
             <div className="grid grid-cols-12">
               {/* Industries — 5/12 cols, split into two sub-columns */}
-              <div className="col-span-5 p-5 border-r border-slate-200 dark:border-slate-800">
+              <div className="col-span-5 p-5 border-r border-border">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                     Industries Served
                   </h4>
-                  <span className="text-[10px] text-teal-700 dark:text-teal-400 font-medium bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/30 px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] text-accent-foreground font-medium bg-accent border border-primary/20 px-1.5 py-0.5 rounded-full">
                     25+ Trades
                   </span>
                 </div>
@@ -415,7 +415,7 @@ export function SolutionsMegaMenu() {
                       key={link.href}
                       href={link.href}
                       onClick={() => setOpen(false)}
-                      className="text-xs text-slate-600 dark:text-slate-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-slate-100 dark:hover:bg-slate-900 rounded px-1.5 py-1 transition-colors truncate block"
+                      className="text-xs text-muted-foreground hover:text-navy hover:bg-surface rounded-lg px-2 py-1 transition-colors truncate block font-medium"
                     >
                       {link.label}
                     </a>
@@ -424,8 +424,8 @@ export function SolutionsMegaMenu() {
               </div>
 
               {/* Growth Services — 4/12 cols */}
-              <div className="col-span-4 p-5 border-r border-slate-200 dark:border-slate-800">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
+              <div className="col-span-4 p-5 border-r border-border">
+                <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-3">
                   Agency Growth Services
                 </h4>
                 <div className="space-y-1.5">
@@ -436,16 +436,16 @@ export function SolutionsMegaMenu() {
                         key={link.href}
                         href={link.href}
                         onClick={() => setOpen(false)}
-                        className="flex items-start gap-2.5 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors group"
+                        className="flex items-start gap-2.5 p-2 rounded-2xl hover:bg-surface transition-colors group"
                       >
-                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0 mt-0.5">
+                        <div className="p-1.5 rounded-xl bg-accent text-accent-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors shrink-0 mt-0.5">
                           <Icon className="h-3.5 w-3.5" />
                         </div>
                         <div className="min-w-0">
-                          <span className="text-xs font-semibold text-slate-900 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors block truncate">
+                          <span className="text-xs font-semibold text-navy group-hover:text-primary transition-colors block truncate">
                             {link.label}
                           </span>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 leading-tight">
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5 leading-tight">
                             {link.desc}
                           </p>
                         </div>
@@ -455,53 +455,62 @@ export function SolutionsMegaMenu() {
                 </div>
               </div>
 
-              {/* Compare — 3/12 cols */}
-              <div className="col-span-3 p-5 flex flex-col justify-between">
+              {/* Comparisons & Free Tools — 3/12 cols */}
+              <div className="col-span-3 p-5 flex flex-col justify-between bg-surface">
                 <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-3">
                     Compare
                   </h4>
-                  <ul className="space-y-1">
+                  <div className="space-y-1">
                     {solutionsLinks.compare.map((link) => (
-                      <li key={link.href}>
-                        <a
-                          href={link.href}
-                          onClick={() => setOpen(false)}
-                          className="block p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors group"
-                        >
-                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-950 dark:group-hover:text-white transition-colors block">
-                            {link.label}
-                          </span>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500 block truncate">
-                            {link.desc}
-                          </span>
-                        </a>
-                      </li>
+                      <a
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setOpen(false)}
+                        className="block text-xs font-medium text-muted-foreground hover:text-navy hover:underline py-1"
+                      >
+                        {link.label}
+                      </a>
                     ))}
-                  </ul>
+                  </div>
+
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mt-4 mb-2">
+                    Popular Free Tools
+                  </h4>
+                  <div className="space-y-1">
+                    {solutionsLinks.freeTools.slice(0, 3).map((link) => (
+                      <a
+                        key={link.label}
+                        href={link.href}
+                        onClick={() => setOpen(false)}
+                        className="block text-xs text-muted-foreground hover:text-navy hover:underline py-0.5"
+                      >
+                        {link.label}
+                      </a>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Free Tools mini link */}
-                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <div className="pt-3 border-t border-border">
                   <a
-                    href="/invoice-generator"
+                    href="/pricing"
                     onClick={() => setOpen(false)}
-                    className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium group"
+                    className="text-xs font-semibold text-primary hover:underline flex items-center justify-between"
                   >
-                    <span>Free Invoice Tool</span>
-                    <ArrowRight className="h-3 w-3 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-transform group-hover:translate-x-0.5" />
+                    <span>View Transparent Pricing</span>
+                    <ArrowRight className="h-3 w-3" />
                   </a>
                 </div>
               </div>
             </div>
 
-            {/* Bottom CTA Strip */}
-            <div className="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 px-5 py-2.5 flex items-center justify-between text-xs">
-              <p className="text-slate-600 dark:text-slate-400">Need verified local service pros or want to list your business?</p>
+            {/* Bottom Bar: Marketplace Callout */}
+            <div className="border-t border-border bg-surface px-5 py-3 flex items-center justify-between text-xs">
+              <p className="text-muted-foreground">Need verified local service pros or want to list your business?</p>
               <a
                 href="/marketplace"
                 onClick={() => setOpen(false)}
-                className="font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 inline-flex items-center gap-1 whitespace-nowrap"
+                className="font-semibold text-primary hover:underline inline-flex items-center gap-1 whitespace-nowrap"
               >
                 Browse Marketplace <ArrowRight className="h-3 w-3" />
               </a>
@@ -521,27 +530,27 @@ export function LandingFooter() {
   const industriesB = solutionsLinks.industries.slice(half);
 
   return (
-    <footer className="bg-slate-950 text-white mt-auto pb-[env(safe-area-inset-bottom,0px)] border-t border-slate-800">
+    <footer className="bg-background text-foreground mt-auto pb-[env(safe-area-inset-bottom,0px)] border-t border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14">
         {/* Top 6-column Grid */}
         <div className="grid grid-cols-2 md:grid-cols-12 gap-8">
           {/* Brand Column (3/12 cols) */}
           <div className="col-span-2 md:col-span-3">
             <div className="flex items-center gap-2.5 mb-4">
-              <BrandMark size={32} className="shadow-black/20" />
-              <span className="text-xl font-bold text-white tracking-tight">Fieseros</span>
+              <BrandMark size={32} className="shadow-xs" />
+              <span className="text-xl font-bold text-navy tracking-tight">Fieseros</span>
             </div>
-            <p className="text-slate-400 text-sm max-w-xs leading-relaxed">
+            <p className="text-muted-foreground text-sm max-w-xs leading-relaxed">
               The AI Operating System for Local Services. Run your business with the CRM. Find trusted pros on the marketplace. Automate everything.
             </p>
             <div className="flex flex-wrap gap-2 mt-4">
-              <Badge variant="outline" className="border-slate-800 bg-slate-900 text-slate-300 text-[11px]">25 industries</Badge>
-              <Badge variant="outline" className="border-slate-800 bg-slate-900 text-slate-300 text-[11px]">Verified Pros</Badge>
-              <Badge variant="outline" className="border-slate-800 bg-slate-900 text-slate-300 text-[11px]">24/7 AI Voice</Badge>
+              <Badge variant="outline" className="border-border bg-surface text-navy text-[11px] rounded-full">25 industries</Badge>
+              <Badge variant="outline" className="border-border bg-surface text-navy text-[11px] rounded-full">Verified Pros</Badge>
+              <Badge variant="outline" className="border-border bg-surface text-navy text-[11px] rounded-full">24/7 AI Voice</Badge>
             </div>
             {/* Google Play Download */}
             <div className="mt-5">
-              <p className="text-slate-400 text-xs mb-2 font-medium">
+              <p className="text-muted-foreground text-xs mb-2 font-medium">
                 For technicians &amp; customers
               </p>
               <GooglePlayBadge size="sm" />
@@ -549,21 +558,21 @@ export function LandingFooter() {
             {/* Company + Legal on Desktop under brand */}
             <div className="hidden md:grid grid-cols-2 gap-4 mt-6">
               <div>
-                <h4 className="text-white font-semibold text-xs mb-3 uppercase tracking-wide">Company</h4>
+                <h4 className="text-navy font-bold text-xs mb-3 uppercase tracking-wide">Company</h4>
                 <ul className="space-y-2">
                   {footerLinks.company.map((link) => (
                     <li key={link.label}>
-                      <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors">{link.label}</a>
+                      <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors">{link.label}</a>
                     </li>
                   ))}
                 </ul>
               </div>
               <div>
-                <h4 className="text-white font-semibold text-xs mb-3 uppercase tracking-wide">Legal</h4>
+                <h4 className="text-navy font-bold text-xs mb-3 uppercase tracking-wide">Legal</h4>
                 <ul className="space-y-2">
                   {footerLinks.legal.map((link) => (
                     <li key={link.label}>
-                      <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors">{link.label}</a>
+                      <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors">{link.label}</a>
                     </li>
                   ))}
                 </ul>
@@ -573,11 +582,11 @@ export function LandingFooter() {
 
           {/* Product Column (2/12 cols) */}
           <div className="col-span-1 md:col-span-2">
-            <h4 className="text-white font-semibold text-sm mb-4">Product</h4>
+            <h4 className="text-navy font-bold text-sm mb-4">Product</h4>
             <ul className="space-y-2.5">
               {footerLinks.product.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors">{link.label}</a>
+                  <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors">{link.label}</a>
                 </li>
               ))}
             </ul>
@@ -586,24 +595,24 @@ export function LandingFooter() {
           {/* Marketplace Column (2/12 cols) — DEDICATED FIRST-CLASS COLUMN */}
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-1.5 mb-4">
-              <h4 className="text-white font-semibold text-sm">Marketplace</h4>
-              <span className="text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+              <h4 className="text-navy font-bold text-sm">Marketplace</h4>
+              <span className="text-[9px] font-semibold bg-accent text-accent-foreground px-2 py-0.5 rounded-full uppercase tracking-wider">
                 Directory
               </span>
             </div>
             <ul className="space-y-2.5">
               {footerLinks.marketplace.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors">{link.label}</a>
+                  <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors">{link.label}</a>
                 </li>
               ))}
             </ul>
 
-            <h4 className="text-white font-semibold text-sm mb-3 mt-6">Services</h4>
+            <h4 className="text-navy font-bold text-sm mb-3 mt-6">Services</h4>
             <ul className="space-y-2">
               {solutionsLinks.services.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors truncate block">{link.label}</a>
+                  <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors truncate block">{link.label}</a>
                 </li>
               ))}
             </ul>
@@ -611,19 +620,19 @@ export function LandingFooter() {
 
           {/* Industries Column (3/12 cols) — Split in 2 sub-columns */}
           <div className="col-span-2 md:col-span-3">
-            <h4 className="text-white font-semibold text-sm mb-4">Industries Served</h4>
+            <h4 className="text-navy font-bold text-sm mb-4">Industries Served</h4>
             <div className="grid grid-cols-2 gap-x-2 gap-y-2.5">
               <ul className="space-y-2">
                 {industriesA.map((link) => (
                   <li key={link.href}>
-                    <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors truncate block">{link.label}</a>
+                    <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors truncate block">{link.label}</a>
                   </li>
                 ))}
               </ul>
               <ul className="space-y-2">
                 {industriesB.map((link) => (
                   <li key={link.href}>
-                    <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors truncate block">{link.label}</a>
+                    <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors truncate block">{link.label}</a>
                   </li>
                 ))}
               </ul>
@@ -632,19 +641,19 @@ export function LandingFooter() {
 
           {/* Compare & Free Tools (2/12 cols) */}
           <div className="col-span-2 md:col-span-2">
-            <h4 className="text-white font-semibold text-sm mb-4">Compare</h4>
+            <h4 className="text-navy font-bold text-sm mb-4">Compare</h4>
             <ul className="space-y-2.5">
               {solutionsLinks.compare.map((link) => (
                 <li key={link.href}>
-                  <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors">{link.label}</a>
+                  <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors">{link.label}</a>
                 </li>
               ))}
             </ul>
-            <h4 className="text-white font-semibold text-sm mb-3 mt-6">Free Tools</h4>
+            <h4 className="text-navy font-bold text-sm mb-3 mt-6">Free Tools</h4>
             <ul className="space-y-2">
               {solutionsLinks.freeTools.map((link) => (
                 <li key={link.href}>
-                  <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors">{link.label}</a>
+                  <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors">{link.label}</a>
                 </li>
               ))}
             </ul>
@@ -652,32 +661,32 @@ export function LandingFooter() {
         </div>
 
         {/* Mobile-only Company + Legal */}
-        <div className="md:hidden grid grid-cols-2 gap-8 mt-8 pt-8 border-t border-slate-800">
+        <div className="md:hidden grid grid-cols-2 gap-8 mt-8 pt-8 border-t border-border">
           <div>
-            <h4 className="text-white font-semibold text-sm mb-4">Company</h4>
+            <h4 className="text-navy font-bold text-sm mb-4">Company</h4>
             <ul className="space-y-2.5">
               {footerLinks.company.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors">{link.label}</a>
+                  <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors">{link.label}</a>
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <h4 className="text-white font-semibold text-sm mb-4">Legal</h4>
+            <h4 className="text-navy font-bold text-sm mb-4">Legal</h4>
             <ul className="space-y-2.5">
               {footerLinks.legal.map((link) => (
                 <li key={link.label}>
-                  <a href={link.href} className="text-slate-400 text-xs hover:text-white transition-colors">{link.label}</a>
+                  <a href={link.href} className="text-muted-foreground text-xs hover:text-navy hover:underline transition-colors">{link.label}</a>
                 </li>
               ))}
             </ul>
           </div>
         </div>
 
-        <Separator className="bg-slate-800 my-8" />
+        <Separator className="bg-border my-8" />
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
           <p>© {new Date().getFullYear()} Fieseros. All rights reserved.</p>
           <p>AI Operating System for Local Service Businesses &amp; Verified Pro Marketplace</p>
         </div>
