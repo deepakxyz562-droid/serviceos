@@ -34,10 +34,20 @@ import {
   Smartphone,
   CheckCircle2,
   HelpCircle,
+  FileInput,
+  Home,
+  Briefcase,
+  Wrench,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -51,11 +61,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import {
-  ProductMegaMenu,
-  SolutionsMegaMenu,
-  LandingFooter,
-} from '@/components/landing/landing-solutions';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { HeroDemo } from '@/components/gptform/flow/hero-demo';
 import { StudioDemo } from '@/components/gptform/flow/studio-demo';
@@ -76,6 +81,7 @@ export default function GptFormPage() {
   const [empPassword, setEmpPassword] = useState('');
   const [empLoading, setEmpLoading] = useState(false);
   const [empError, setEmpError] = useState<string | null>(null);
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -108,13 +114,11 @@ export default function GptFormPage() {
     }
   };
 
-  const scrollToAnchor = (href: string, e?: React.MouseEvent) => {
-    if (e) e.preventDefault();
-    setMobileOpen(false);
-    const target = document.querySelector(href);
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const getTierPrice = (base: number) => {
+    if (billingPeriod === 'yearly') {
+      return (base * (10 / 12)).toFixed(2).replace(/\.00$/, '');
     }
+    return base.toString();
   };
 
   // Structured Data Schema for SEO
@@ -129,7 +133,7 @@ export default function GptFormPage() {
         offers: {
           '@type': 'Offer',
           price: '0',
-          priceCurrency: 'GBP',
+          priceCurrency: 'USD',
         },
         description:
           'AI-powered form builder and conversational intake engine that converts website visitors into booked appointments and structured CRM leads.',
@@ -173,69 +177,150 @@ export default function GptFormPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* ── Frosted Navbar matching new clever-form design ── */}
+      {/* ── Frosted Header (Older navigation content + new modern styling) ── */}
       <header
         className={cn(
           'sticky top-0 z-50 w-full transition-all duration-200 pt-[env(safe-area-inset-top,0px)]',
           scrolled
             ? 'border-b border-border/70 bg-hero/95 backdrop-blur-xl shadow-xs'
-            : 'border-b border-border/50 bg-hero/80 backdrop-blur-md'
+            : 'border-b border-border/50 bg-hero/85 backdrop-blur-md'
         )}
       >
         <div className="page-shell flex h-16 items-center justify-between">
           {/* Brand Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group shrink-0" aria-label="Fieseros home">
-            <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
-            <div className="flex flex-col">
-              <span className="text-base sm:text-lg font-bold tracking-tight text-foreground flex items-center gap-1.5">
-                Fieseros <span className="text-emerald-600 font-extrabold text-xs px-1.5 py-0.5 rounded-md bg-emerald-500/10">GPTForm</span>
-              </span>
-            </div>
-          </Link>
+          <div className="flex items-center gap-6">
+            <Link href="/" className="flex items-center gap-2.5 group shrink-0" aria-label="Fieseros AI home">
+              <BrandMark size={32} className="shadow-emerald-500/20 group-hover:scale-105 transition-transform" />
+              <div className="flex flex-col">
+                <span className="text-base font-bold tracking-tight text-foreground flex items-center gap-1.5 leading-none">
+                  Fieseros <span className="text-emerald-600 font-extrabold">AI</span>
+                </span>
+                <span className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                  Smart Forms &amp; Service OS
+                </span>
+              </div>
+            </Link>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1">
-            <ProductMegaMenu onAnchorClick={scrollToAnchor} />
-            <SolutionsMegaMenu />
-            <Link
-              href="/marketplace"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted px-3 py-2 rounded-lg transition-colors"
-            >
-              <Store className="h-3.5 w-3.5 text-emerald-600" />
-              <span>Marketplace</span>
-              <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">
-                Pros
-              </span>
-            </Link>
-            <Link
-              href="/requests"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted px-3 py-2 rounded-lg transition-colors"
-            >
-              <ClipboardList className="h-3.5 w-3.5 text-emerald-600" />
-              <span>My Requests</span>
-            </Link>
-          </nav>
+            {/* Desktop Navigation Links */}
+            <nav className="hidden md:flex items-center gap-1 text-sm font-medium">
+              {/* Products Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition cursor-pointer text-xs font-semibold">
+                    Products <ChevronDown className="size-3.5 opacity-60" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-80 p-2 shadow-xl border border-border bg-card">
+                  <DropdownMenuItem asChild>
+                    <Link href="/gptform" className="flex items-start gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-muted">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600">
+                        <FileInput className="size-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-xs text-foreground">GPTForm™ Smart Forms</p>
+                        <p className="text-[11px] text-muted-foreground">AI form builder, live quote calculators &amp; 0% fee payments</p>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/#ai-receptionist" className="flex items-start gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-muted">
+                      <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600">
+                        <Bot className="size-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-xs text-foreground">24/7 AI Voice Receptionist</p>
+                        <p className="text-[11px] text-muted-foreground">Answers phone calls, quotes prices &amp; books appointments</p>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/#crm-features" className="flex items-start gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-muted">
+                      <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600">
+                        <Layers className="size-4" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-xs text-foreground">Field Service OS</p>
+                        <p className="text-[11px] text-muted-foreground">Dispatch, technician mobile app, invoicing &amp; CRM</p>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Templates Link */}
+              <Link
+                href="/templates"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition text-xs font-semibold"
+              >
+                <span>Templates</span>
+                <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">
+                  20K+
+                </span>
+              </Link>
+
+              {/* Solutions Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1 px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition cursor-pointer text-xs font-semibold">
+                    Solutions <ChevronDown className="size-3.5 opacity-60" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-72 p-2 shadow-xl border border-border bg-card">
+                  <DropdownMenuItem asChild>
+                    <Link href="/field-service-software" className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer text-xs font-medium hover:bg-muted">
+                      <Wrench className="size-4 text-emerald-600" />
+                      <span>Contractors &amp; Field Service</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/cleaning-business-software" className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer text-xs font-medium hover:bg-muted">
+                      <Home className="size-4 text-teal-600" />
+                      <span>Home &amp; Cleaning Services</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/plumbing-software" className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer text-xs font-medium hover:bg-muted">
+                      <Zap className="size-4 text-amber-600" />
+                      <span>Plumbing &amp; HVAC Services</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/marketplace" className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer text-xs font-medium hover:bg-muted">
+                      <Briefcase className="size-4 text-purple-600" />
+                      <span>Verified Pro Marketplace</span>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Pricing Link */}
+              <a
+                href="#pricing"
+                className="px-3 py-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition text-xs font-semibold"
+              >
+                Pricing
+              </a>
+            </nav>
+          </div>
 
           {/* Right Actions */}
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2.5">
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted h-9 px-3.5 rounded-lg transition cursor-pointer"
+            >
+              Sign In
+            </button>
+
             <Button
               asChild
               size="sm"
               className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-4 rounded-lg cursor-pointer shadow-xs"
             >
-              <Link href="/request">
-                <span>Post Request</span>
+              <a href="#studio">
+                <span>Build Form Free</span>
                 <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setAuthModalOpen(true)}
-              className="text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted h-9 px-3 rounded-lg cursor-pointer"
-            >
-              Sign In
+              </a>
             </Button>
 
             <ThemeToggle showDropdown />
@@ -260,28 +345,42 @@ export default function GptFormPage() {
         {mobileOpen && (
           <div className="border-t border-border bg-card p-4 sm:hidden animate-fade-in shadow-xl">
             <nav className="grid gap-2">
-              <Link
-                href="/request"
+              <a
+                href="#studio"
                 className="flex items-center justify-center gap-2 rounded-lg bg-emerald-600 p-3 text-xs font-bold text-white"
                 onClick={() => setMobileOpen(false)}
               >
-                Post Request <ArrowRight className="size-3.5" />
-              </Link>
+                Build Form Free <ArrowRight className="size-3.5" />
+              </a>
               <Link
-                href="/marketplace"
+                href="/templates"
                 className="flex items-center justify-between rounded-lg p-2.5 text-xs font-semibold text-foreground hover:bg-muted"
                 onClick={() => setMobileOpen(false)}
               >
-                <span>Marketplace</span>
-                <Badge className="bg-emerald-500/10 text-emerald-700 text-[10px]">Pros</Badge>
+                <span>Templates Library</span>
+                <Badge className="bg-emerald-500/10 text-emerald-700 text-[10px]">20K+</Badge>
               </Link>
               <Link
-                href="/requests"
+                href="/field-service-software"
                 className="rounded-lg p-2.5 text-xs font-semibold text-foreground hover:bg-muted"
                 onClick={() => setMobileOpen(false)}
               >
-                My Requests
+                Field Service Software
               </Link>
+              <Link
+                href="/marketplace"
+                className="rounded-lg p-2.5 text-xs font-semibold text-foreground hover:bg-muted"
+                onClick={() => setMobileOpen(false)}
+              >
+                Pro Marketplace
+              </Link>
+              <a
+                href="#pricing"
+                className="rounded-lg p-2.5 text-xs font-semibold text-foreground hover:bg-muted"
+                onClick={() => setMobileOpen(false)}
+              >
+                Pricing Plans
+              </a>
               <button
                 onClick={() => {
                   setMobileOpen(false);
@@ -289,7 +388,7 @@ export default function GptFormPage() {
                 }}
                 className="w-full text-left rounded-lg p-2.5 text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
               >
-                Sign In / Employee Login
+                Sign In
               </button>
             </nav>
           </div>
@@ -376,13 +475,13 @@ export default function GptFormPage() {
                 variant="outline"
                 className="h-12 px-6 font-semibold text-sm rounded-xl cursor-pointer"
               >
-                <a href="#templates">Explore 12+ Templates</a>
+                <a href="#templates">Explore 20K+ Templates</a>
               </Button>
             </div>
 
             {/* Micro value props */}
             <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-muted-foreground">
-              {['Free forever tier', '100 submissions / month', 'No credit card required', '0% payment fees'].map(
+              {['Free forever tier ($0)', '100 submissions / month', 'No credit card required', '0% payment fees'].map(
                 (item) => (
                   <span key={item} className="flex items-center gap-1.5">
                     <Check className="size-3.5 text-emerald-600 font-bold" />
@@ -510,104 +609,171 @@ export default function GptFormPage() {
       {/* ── SECTION 9: CONNECTED 7-STEP WORKFLOW PIPELINE ── */}
       <ConnectedPipeline />
 
-      {/* ── SECTION 10: TRANSPARENT PRICING ── */}
+      {/* ── SECTION 10: PRICING (Restored exact older content & structure) ── */}
       <section id="pricing" className="section-pad bg-background">
         <div className="page-shell">
-          <div className="section-heading text-center mx-auto max-w-2xl mb-12">
-            <p className="eyebrow justify-center text-emerald-600">TRANSPARENT PRICING</p>
+          <div className="section-heading text-center mx-auto max-w-2xl mb-10">
+            <Badge className="bg-emerald-600 text-white text-xs px-3 py-1 font-semibold">Simple Transparent Pricing</Badge>
             <h2 className="mt-3 font-display text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
-              Build your first customer journey today.
+              Start Free. Upgrade As You Scale.
             </h2>
             <p className="mt-3 text-base text-muted-foreground">
-              Start completely free. Scale capacity only as your inbound lead volume grows.
+              Get 3 forms and 100 free submissions every month at $0 — forever.
             </p>
-          </div>
 
-          <div className="mx-auto grid max-w-4xl gap-6 md:grid-cols-3">
-            {[
-              {
-                name: 'Free Starter',
-                price: '£0',
-                period: 'forever',
-                popular: false,
-                features: [
-                  '100 submissions / month',
-                  'AI Prompt Studio Builder',
-                  'Classic, Card & Chat runtimes',
-                  'Website JavaScript embed',
-                  '0% Platform transaction fees',
-                ],
-              },
-              {
-                name: 'Pro Operator',
-                price: '£29',
-                period: '/ month',
-                popular: true,
-                features: [
-                  '2,500 submissions / month',
-                  'AI Natural Language Agent',
-                  'Live Google/Outlook calendar lock',
-                  'Dynamic formula calculators',
-                  'Custom domain & brand removal',
-                  'Instant SMS & Webhook dispatch',
-                ],
-              },
-              {
-                name: 'Business Enterprise',
-                price: '£89',
-                period: '/ month',
-                popular: false,
-                features: [
-                  'Unlimited submissions',
-                  'Multi-branch / Multi-clinic routing',
-                  'Custom AI system prompt tuning',
-                  'Dedicated Webhook & API sync',
-                  'Custom SLA & Priority 24/7 support',
-                ],
-              },
-            ].map((plan) => (
-              <div
-                key={plan.name}
-                className={cn(
-                  'flex flex-col justify-between rounded-2xl border p-6 transition-all duration-300 relative',
-                  plan.popular
-                    ? 'border-emerald-600 bg-emerald-500/5 shadow-xl ring-2 ring-emerald-600'
-                    : 'border-border bg-card shadow-xs'
-                )}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-emerald-600 px-3 py-0.5 text-[10px] font-extrabold uppercase text-white shadow-xs">
-                    Most Popular
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-display text-lg font-bold text-foreground">{plan.name}</h3>
-                  <div className="mt-4 flex items-baseline gap-1">
-                    <span className="font-display text-4xl font-extrabold text-foreground">{plan.price}</span>
-                    <span className="text-xs text-muted-foreground">{plan.period}</span>
-                  </div>
-                  <div className="my-5 h-px bg-border/60" />
-                  <ul className="space-y-2.5 text-xs text-muted-foreground">
-                    {plan.features.map((feat) => (
-                      <li key={feat} className="flex items-center gap-2">
-                        <Check className="size-3.5 text-emerald-600 shrink-0 font-bold" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <Button
+            {/* Monthly / Yearly Billing Toggle */}
+            <div className="flex items-center justify-center gap-3 mt-6">
+              <div className="inline-flex items-center p-1 rounded-full bg-muted border border-border">
+                <button
+                  type="button"
+                  onClick={() => setBillingPeriod('monthly')}
                   className={cn(
-                    'mt-7 w-full text-xs font-bold h-10 cursor-pointer rounded-xl',
-                    plan.popular
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      : 'bg-muted hover:bg-muted/80 text-foreground'
+                    'px-4 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer',
+                    billingPeriod === 'monthly'
+                      ? 'bg-background text-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  Get Started <ArrowRight className="size-3.5 ml-1.5" />
-                </Button>
+                  Monthly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingPeriod('yearly')}
+                  className={cn(
+                    'px-4 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer flex items-center gap-1.5',
+                    billingPeriod === 'yearly'
+                      ? 'bg-background text-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Yearly
+                  <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 px-1.5 py-0.5 rounded-full font-bold">
+                    Save ~17%
+                  </span>
+                </button>
               </div>
-            ))}
+            </div>
+          </div>
+
+          <div className="mx-auto grid max-w-5xl gap-6 md:grid-cols-3">
+            {/* Free Tier */}
+            <div className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6 shadow-xs">
+              <div>
+                <h3 className="font-display text-lg font-bold text-foreground">Free</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">3 Forms · 100 submissions/month</p>
+                <div className="pt-3 pb-1">
+                  <span className="font-display text-4xl font-extrabold text-foreground">$0</span>
+                  <span className="text-xs text-muted-foreground"> / forever</span>
+                </div>
+                <div className="my-5 h-px bg-border/60" />
+                <ul className="space-y-2.5 text-xs text-muted-foreground">
+                  {[
+                    '3 Active Smart Forms',
+                    '100 Submissions / month',
+                    '180+ Templates Library',
+                    'Direct Payments (0% fee)',
+                    'Universal 1-line Embed',
+                  ].map((f) => (
+                    <li key={f} className="flex items-center gap-2">
+                      <Check className="size-3.5 text-emerald-600 shrink-0 font-bold" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                className="mt-7 w-full text-xs font-semibold h-10 cursor-pointer rounded-xl hover:border-emerald-600 hover:text-emerald-600"
+              >
+                <Link href="/register?plan=free">Start Free Now</Link>
+              </Button>
+            </div>
+
+            {/* Starter Tier — Recommended Dark Card */}
+            <div className="flex flex-col justify-between rounded-2xl border-2 border-emerald-500 bg-slate-900 text-white p-6 shadow-xl relative">
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-3 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap shadow-sm">
+                RECOMMENDED
+              </div>
+              <div>
+                <h3 className="font-display text-lg font-bold text-white">Starter</h3>
+                <p className="text-xs text-slate-400 mt-0.5">For active businesses &amp; growing sites</p>
+                <div className="pt-3 pb-1 flex items-baseline gap-1">
+                  <span className="font-display text-4xl font-extrabold text-emerald-300">${getTierPrice(10)}</span>
+                  <span className="text-xs text-slate-400"> / {billingPeriod === 'yearly' ? 'mo, billed yearly' : 'month'}</span>
+                </div>
+                <div className="my-5 h-px bg-slate-800" />
+                <ul className="space-y-2.5 text-xs text-slate-200">
+                  {[
+                    '10 Active Smart Forms',
+                    '1,000 Submissions / month',
+                    'AI Form Synthesis & Logic',
+                    'Dynamic Math Calculations',
+                    'Digital E-Signatures & Booking',
+                  ].map((f) => (
+                    <li key={f} className="flex items-center gap-2">
+                      <Check className="size-3.5 text-emerald-400 shrink-0 font-bold" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Button
+                asChild
+                className="mt-7 w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-10 cursor-pointer rounded-xl shadow-md"
+              >
+                <Link href={`/register?plan=starter&interval=${billingPeriod}`}>
+                  Get Started (${getTierPrice(10)}/mo) →
+                </Link>
+              </Button>
+            </div>
+
+            {/* Business Tier */}
+            <div className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6 shadow-xs">
+              <div>
+                <h3 className="font-display text-lg font-bold text-foreground">Business</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">For multi-team organizations &amp; agencies</p>
+                <div className="pt-3 pb-1 flex items-baseline gap-1">
+                  <span className="font-display text-4xl font-extrabold text-foreground">${getTierPrice(19)}</span>
+                  <span className="text-xs text-muted-foreground"> / {billingPeriod === 'yearly' ? 'mo, billed yearly' : 'month'}</span>
+                </div>
+                <div className="my-5 h-px bg-border/60" />
+                <ul className="space-y-2.5 text-xs text-muted-foreground">
+                  {[
+                    'Unlimited Smart Forms',
+                    '10,000 Submissions / month',
+                    'Conversational AI Form Agents',
+                    'White-labeling & Custom CSS',
+                    'Priority Webhook Sync',
+                  ].map((f) => (
+                    <li key={f} className="flex items-center gap-2">
+                      <Check className="size-3.5 text-emerald-600 shrink-0 font-bold" />
+                      <span>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <Button
+                asChild
+                variant="outline"
+                className="mt-7 w-full text-xs font-semibold h-10 cursor-pointer rounded-xl hover:border-emerald-600 hover:text-emerald-600"
+              >
+                <Link href={`/register?plan=business&interval=${billingPeriod}`}>
+                  Get Business (${getTierPrice(19)}/mo)
+                </Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* CRM Subscriber Perk Banner */}
+          <div className="mt-10 p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border border-emerald-500/20 max-w-2xl mx-auto flex items-start gap-3.5 shadow-xs">
+            <Sparkles className="size-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-foreground">
+              <p className="font-bold mb-0.5">Active Fieseros CRM Subscriber?</p>
+              <p className="text-muted-foreground">
+                GPTForm™ Unlimited (Business tier features) is included in your CRM subscription at no extra charge.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -625,24 +791,24 @@ export default function GptFormPage() {
           <Accordion type="single" collapsible className="w-full space-y-3">
             {[
               {
+                q: 'How does the AI Form Generator work?',
+                a: 'You describe what your form should do in natural language. GPTForm extracts fields, math calculation formulas, validation logic, and styling rules in under 10 seconds. You can edit, customize, or publish immediately.',
+              },
+              {
+                q: 'What is an AI Form Agent?',
+                a: 'An AI Form Agent transforms your form into a natural, interactive conversation. Visitors can chat, describe requirements, upload photos, and select dates while the bot validates the input and compiles structured form submissions.',
+              },
+              {
+                q: 'Can customers make payments directly through the form?',
+                a: 'Yes. Connect your Stripe account to collect deposits, full invoice payments, or recurring subscriptions directly. Fieseros charges 0% platform transaction fees.',
+              },
+              {
                 q: 'Can I add GPTForm to my existing website without rebuilding?',
-                a: 'Yes. GPTForm is built to sit seamlessly inside your current website. Simply copy and paste the 1-line script or iframe snippet into WordPress, Webflow, Shopify, Wix, Squarespace, or custom code.',
+                a: 'Yes. Simply copy and paste the 1-line script or iframe snippet into WordPress, Webflow, Shopify, Wix, Squarespace, or custom HTML.',
               },
               {
                 q: 'How does live calendar booking prevent double-bookings?',
                 a: 'GPTForm connects directly to your Google Calendar, Outlook 365, or ServiceOS CRM schedule. It computes travel buffers and real-time technician availability so only genuine open slots are offered.',
-              },
-              {
-                q: 'Are answers from the AI chat transferred into the form automatically?',
-                a: 'Yes. All details gathered during the conversation (customer symptoms, urgency, preferred doctor/technician, contact details) automatically populate into the form so your customers never repeat themselves.',
-              },
-              {
-                q: 'Can I customize the styling, colors, and branding?',
-                a: 'Absolutely. You can customize primary accent colors, font families, dark/light themes, submit button labels, and add custom CSS or upload your logo.',
-              },
-              {
-                q: 'How do 0% transaction fee payments work?',
-                a: 'You connect your own Stripe account. Deposits and payments go straight into your merchant account, and Fieseros charges 0% platform commission.',
               },
             ].map((item, idx) => (
               <AccordionItem
@@ -699,8 +865,106 @@ export default function GptFormPage() {
         </div>
       </section>
 
-      {/* ── SECTION 13: PRESERVED FULL SEO LANDING FOOTER ── */}
-      <LandingFooter />
+      {/* ── SECTION 13: 5-COLUMN CORNERSTONE FOOTER (Restored exact older content) ── */}
+      <footer className="border-t border-border bg-slate-950 text-slate-300 py-16 px-4 sm:px-6 lg:px-8">
+        <div className="page-shell space-y-12">
+          {/* Top Brand & SEO Definition Row */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-8 border-b border-slate-800">
+            <div className="space-y-2 max-w-md">
+              <Link href="/" className="flex items-center gap-2.5">
+                <BrandMark size={32} className="shadow-black/20" />
+                <span className="text-lg font-bold text-white tracking-tight">
+                  Fieseros <span className="text-emerald-400">Service OS</span>
+                </span>
+              </Link>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                An all-in-one software platform and local marketplace designed to help field service companies and trade businesses run their operations, build websites, and find customers.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-950/60 border border-emerald-800/80 text-emerald-400 text-xs font-semibold">
+                <ShieldCheck className="size-3.5" /> 100% Direct Payouts (0% Commission)
+              </span>
+            </div>
+          </div>
+
+          {/* 5-Column Cornerstone Navigation Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-8 text-xs">
+            {/* Col 1: Platform */}
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Platform</h4>
+              <ul className="space-y-2 text-slate-400">
+                <li><Link href="/customer-crm" className="hover:text-emerald-400 transition">Customer CRM</Link></li>
+                <li><Link href="/scheduling-and-dispatch" className="hover:text-emerald-400 transition">Scheduling &amp; Dispatch</Link></li>
+                <li><Link href="/invoicing-and-payments" className="hover:text-emerald-400 transition">Quotes &amp; Invoicing</Link></li>
+                <li><Link href="/technician-app" className="hover:text-emerald-400 transition">Technician App</Link></li>
+                <li><Link href="/automations" className="hover:text-emerald-400 transition">Automations</Link></li>
+              </ul>
+            </div>
+
+            {/* Col 2: AI & Forms */}
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">AI &amp; Forms</h4>
+              <ul className="space-y-2 text-slate-400">
+                <li><Link href="/gptform" className="text-emerald-400 font-semibold hover:underline transition">GPTForm™ AI Platform</Link></li>
+                <li><Link href="/#ai-receptionist" className="hover:text-emerald-400 transition">24/7 AI Voice Receptionist</Link></li>
+                <li><Link href="/templates" className="hover:text-emerald-400 transition">20,000+ Form Templates</Link></li>
+                <li><Link href="/templates/quote" className="hover:text-emerald-400 transition">Quote Calculators</Link></li>
+              </ul>
+            </div>
+
+            {/* Col 3: Free Tools */}
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Free Tools</h4>
+              <ul className="space-y-2 text-slate-400">
+                <li><Link href="/invoice-generator" className="hover:text-emerald-400 transition">Invoice Generator</Link></li>
+                <li><Link href="/estimate-generator" className="hover:text-emerald-400 transition">Estimate Generator</Link></li>
+                <li><Link href="/proposal-generator" className="hover:text-emerald-400 transition">Proposal Generator</Link></li>
+                <li><Link href="/job-cost-calculator" className="hover:text-emerald-400 transition">Job Cost Calculator</Link></li>
+                <li><Link href="/tools" className="text-emerald-400 hover:underline transition">All Free Tools →</Link></li>
+              </ul>
+            </div>
+
+            {/* Col 4: Industries */}
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Industries</h4>
+              <ul className="space-y-2 text-slate-400">
+                <li><Link href="/hvac-software" className="hover:text-emerald-400 transition">HVAC Software</Link></li>
+                <li><Link href="/plumbing-software" className="hover:text-emerald-400 transition">Plumbing Software</Link></li>
+                <li><Link href="/electrical-contractor-software" className="hover:text-emerald-400 transition">Electrical Software</Link></li>
+                <li><Link href="/cleaning-business-software" className="hover:text-emerald-400 transition">Cleaning Business</Link></li>
+                <li><Link href="/roofing-software" className="hover:text-emerald-400 transition">Roofing Software</Link></li>
+              </ul>
+            </div>
+
+            {/* Col 5: Company */}
+            <div className="space-y-3">
+              <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">Company</h4>
+              <ul className="space-y-2 text-slate-400">
+                <li><Link href="/marketplace" className="hover:text-emerald-400 transition">Pro Marketplace</Link></li>
+                <li><a href="#pricing" className="hover:text-emerald-400 transition">Pricing Plans</a></li>
+                <li><Link href="/blog" className="hover:text-emerald-400 transition">Contractor Blog</Link></li>
+                <li><Link href="/terms-of-service" className="hover:text-emerald-400 transition">Terms of Service</Link></li>
+                <li><Link href="/privacy-policy" className="hover:text-emerald-400 transition">Privacy Policy</Link></li>
+                <li><Link href="/contact-us" className="hover:text-emerald-400 transition">Contact Us</Link></li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom Copyright, Tagline & Infrastructure */}
+          <div className="pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+            <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
+              <p className="text-slate-400 font-medium">AI-powered forms and customer conversations by Fieseros.</p>
+              <span className="hidden sm:inline text-slate-700">•</span>
+              <p>© {new Date().getFullYear()} Fieseros. All rights reserved.</p>
+            </div>
+            <div className="flex items-center gap-4 text-slate-400 font-medium">
+              <a href="#top" className="hover:text-emerald-400 transition">Back to top ↑</a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
