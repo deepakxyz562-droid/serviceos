@@ -177,13 +177,6 @@ function Navbar({
             <ClipboardList className="h-4 w-4 text-primary" />
             <span>My Requests</span>
           </Link>
-          <a
-            href="#pricing"
-            className="text-sm font-medium text-muted-foreground hover:text-navy hover:bg-surface px-3 py-2 rounded-full transition-colors cursor-pointer"
-            onClick={(e) => scrollToAnchor('#pricing', e)}
-          >
-            Pricing
-          </a>
         </nav>
 
         {/* ── Right Actions ── */}
@@ -199,16 +192,6 @@ function Navbar({
             </Link>
           </Button>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setEmpLoginOpen(true)}
-            className="text-xs text-muted-foreground hover:text-navy hover:bg-surface gap-1.5 h-9 px-3 rounded-full cursor-pointer"
-            title="Field technician and staff portal"
-          >
-            <Key className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="hidden lg:inline">Employee Login</span>
-          </Button>
           {onSignIn ? (
             <Button
               variant="ghost"
@@ -366,14 +349,17 @@ function Navbar({
                 Browse
               </span>
             </Link>
-            <a
-              href="#pricing"
+            <Link
+              href="/requests"
               className="flex items-center justify-between p-2.5 text-xs font-medium text-navy hover:bg-surface rounded-xl transition-colors"
-              onClick={(e) => scrollToAnchor('#pricing', e)}
+              onClick={() => setMobileOpen(false)}
             >
-              <span>Pricing Plans</span>
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-primary" />
+                <span>My Requests</span>
+              </div>
               <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-            </a>
+            </Link>
             <Link
               href="/invoice-generator"
               className="flex items-center justify-between p-2.5 text-xs font-medium text-navy hover:bg-surface rounded-xl transition-colors"
@@ -411,18 +397,6 @@ function Navbar({
                 Sign In
               </Button>
             ) : null}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full min-h-10 text-muted-foreground hover:text-navy text-xs gap-1.5 rounded-full"
-              onClick={() => {
-                setEmpLoginOpen(true);
-                setMobileOpen(false);
-              }}
-            >
-              <Key className="h-3.5 w-3.5" />
-              Employee / Field Staff Login
-            </Button>
           </div>
         </div>
       ) : null}
