@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
   googleAuthUrl.searchParams.set('response_type', 'code');
   googleAuthUrl.searchParams.set('scope', 'openid email profile');
   googleAuthUrl.searchParams.set('access_type', 'offline');
-  googleAuthUrl.searchParams.set('prompt', 'consent');
+  googleAuthUrl.searchParams.set('prompt', 'select_account');
   googleAuthUrl.searchParams.set('state', state);
 
   return NextResponse.redirect(googleAuthUrl.toString());
