@@ -107,9 +107,9 @@ Return ONLY valid JSON.`;
     try {
       const aiResult = await callOpenRouter({
         messages: [{ role: 'user', content: systemPrompt }],
-        response_format: { type: 'json_object' },
         temperature: 0.3,
-        max_tokens: 3000,
+        maxTokens: 3000,
+        json: true,
       });
 
       if (aiResult?.content) {

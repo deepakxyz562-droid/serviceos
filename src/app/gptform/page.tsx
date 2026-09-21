@@ -83,6 +83,12 @@ import {
 } from '@/components/ui/accordion';
 import { AiMarketingLayout } from '@/components/ai-marketing/ai-marketing-layout';
 import { InteractiveFormTour } from '@/components/gptform/interactive-form-tour';
+import { AiLivePreview } from '@/components/gptform/sections/ai-live-preview';
+import { CustomerTrustStrip } from '@/components/gptform/sections/customer-trust-strip';
+import { TestimonialsSection } from '@/components/gptform/sections/testimonials-section';
+import { SecurityBadges } from '@/components/gptform/sections/security-badges';
+import { ComparisonTable } from '@/components/gptform/sections/comparison-table';
+import { MobileStickyCta } from '@/components/gptform/sections/mobile-sticky-cta';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -179,7 +185,7 @@ const TEMPLATES_EXPLORER_DATA = [
     category: 'Home Services',
     desc: 'Equipment photo capture, symptom triaging, emergency slot booking, and diagnostic fee collection.',
     badge: 'High Conversion',
-    badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',
+    badgeColor: 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300',
     fieldsCount: 10,
     tags: ['HVAC', 'Booking', 'Emergency', 'Photos'],
   },
@@ -249,7 +255,7 @@ const TEMPLATES_EXPLORER_DATA = [
     category: 'Healthcare & Dental',
     desc: 'Breed and weight selector, vaccination record attachment, special care notes, and booking slot.',
     badge: 'Fast Intake',
-    badgeColor: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300',
+    badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
     fieldsCount: 8,
     tags: ['Pets', 'Care', 'Uploads', 'Scheduling'],
   },
@@ -337,6 +343,16 @@ export default function GptFormLandingPage() {
   const calcWarrantyCost = calcWarrantyAddon ? 320 : 0;
   const calcTotal = calcBaseCost + calcDebrisCost + calcWarrantyCost;
   const depositAmount = Math.round(calcTotal * 0.2);
+
+  // ─── Hero Step Tabs State ──────────────────────────────────────────────────
+  const [activeHeroStep, setActiveHeroStep] = useState(0);
+  const HERO_STEPS = [
+    { label: 'Create with AI', desc: 'Describe your form in plain English. The AI generates a complete multi-step form with fields, logic, and branding in seconds.' },
+    { label: 'Customize', desc: 'Fine-tune fields, add calculation formulas, upload brand assets, and configure conditional logic — all visually.' },
+    { label: 'Publish', desc: 'Embed with a single line of code on WordPress, Shopify, Webflow, or any HTML site. Mobile-optimized out of the box.' },
+    { label: 'Collect', desc: 'Capture submissions, photos, e-signatures, and payments with 0% commission. Auto-sync leads to your CRM.' },
+    { label: 'Automate', desc: 'Trigger follow-up emails, SMS reminders, invoice generation, and workflow automations on every submission.' },
+  ];
 
   // ─── 4 Runtime Modes State ────────────────────────────────────────────────
   const [activeRuntimeMode, setActiveRuntimeMode] = useState<'classic' | 'card' | 'split' | 'agent'>('agent');
@@ -535,17 +551,37 @@ export default function GptFormLandingPage() {
               Create forms with AI, turn them into conversational experiences, calculate quotes, book appointments, collect payments, and automatically send the data where it needs to go.
             </p>
 
-            {/* Sequence Pills */}
-            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs font-semibold text-teal-800 dark:text-teal-300">
-              {['Create with AI', 'Customize', 'Publish', 'Collect', 'Automate'].map((step, idx) => (
-                <div key={step} className="flex items-center gap-1.5 bg-teal-50 dark:bg-teal-950/50 px-2.5 py-1 rounded-lg border border-teal-200 dark:border-teal-800">
-                  <span className="size-4 rounded-full bg-teal-600 text-white text-[10px] flex items-center justify-center font-bold">
-                    {idx + 1}
-                  </span>
-                  <span>{step}</span>
-                  {idx < 4 && <ChevronRight className="size-3 text-teal-400 ml-0.5" />}
-                </div>
-              ))}
+            {/* Interactive Step Tabs (clickable) */}
+            <div className="space-y-2.5 pt-1">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-teal-800 dark:text-teal-300">
+                {HERO_STEPS.map((step, idx) => (
+                  <div key={step.label} className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setActiveHeroStep(idx)}
+                      className={cn(
+                        'flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition cursor-pointer',
+                        activeHeroStep === idx
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                          : 'bg-teal-50 dark:bg-teal-950/50 border-teal-200 dark:border-teal-800 hover:border-teal-400'
+                      )}
+                    >
+                      <span className={cn(
+                        'size-4 rounded-full text-[10px] flex items-center justify-center font-bold',
+                        activeHeroStep === idx ? 'bg-white text-teal-600' : 'bg-teal-600 text-white'
+                      )}>
+                        {idx + 1}
+                      </span>
+                      <span>{step.label}</span>
+                    </button>
+                    {idx < HERO_STEPS.length - 1 && <ChevronRight className="size-3 text-teal-400" />}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed bg-slate-50 dark:bg-slate-800/50 rounded-lg px-3 py-2 border border-border">
+                <strong className="text-foreground">{HERO_STEPS[activeHeroStep].label}:</strong>{' '}
+                {HERO_STEPS[activeHeroStep].desc}
+              </p>
             </div>
 
             {/* Action CTAs */}
@@ -572,11 +608,17 @@ export default function GptFormLandingPage() {
               </Button>
             </div>
 
-            {/* Micro-trust strip */}
+            {/* Micro-trust strip — 0% commission promoted to front */}
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground pt-1">
-              {['No credit card required', 'Free forever plan', 'Universal 1-line embed', '0% payment commission'].map((t) => (
-                <span key={t} className="flex items-center gap-1.5 font-medium">
-                  <Check className="size-3.5 text-teal-600 font-bold" /> {t}
+              {[
+                { text: '0% payment commission', highlight: true },
+                { text: 'Free forever plan' },
+                { text: 'No credit card required' },
+                { text: 'Universal 1-line embed' },
+              ].map((t) => (
+                <span key={t.text} className="flex items-center gap-1.5 font-medium">
+                  <Check className={cn('size-3.5 font-bold', t.highlight ? 'text-emerald-600' : 'text-teal-600')} />
+                  {t.highlight ? <strong className="text-foreground">{t.text}</strong> : t.text}
                 </span>
               ))}
             </div>
@@ -638,12 +680,18 @@ export default function GptFormLandingPage() {
                 <div className="pt-2 border-t border-border/60">
                   <Button
                     type="button"
-                    onClick={() => handleTriggerAuthGate(demoPrompt)}
+                    onClick={() => {
+                      const event = new CustomEvent('gptform-generate');
+                      window.dispatchEvent(event);
+                    }}
                     className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs h-10 rounded-xl gap-2 shadow-sm cursor-pointer"
                   >
                     <Sparkles className="size-3.5" />
                     Generate Form with AI →
                   </Button>
+                  <p className="text-[10px] text-center text-muted-foreground mt-1.5">
+                    No signup needed — see a real AI-generated form instantly.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -762,8 +810,27 @@ export default function GptFormLandingPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* ─── AI LIVE PREVIEW: Real AI-generated form from the prompt ─── */}
+          <div className="rounded-2xl border-2 border-dashed border-teal-500/30 bg-teal-50/30 dark:bg-teal-950/20 p-4 sm:p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="size-2 rounded-full bg-teal-500 animate-pulse" />
+              <span className="text-xs font-bold text-teal-950 dark:text-teal-200">
+                AI-Generated Form Preview
+              </span>
+              <Badge variant="outline" className="text-[9px] text-teal-700 dark:text-teal-400 border-teal-300 ml-auto">
+                Real AI · No Signup
+              </Badge>
+            </div>
+            <AiLivePreview prompt={demoPrompt} onGetStarted={handleTriggerAuthGate} />
+          </div>
         </div>
       </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 01.5 — CUSTOMER TRUST STRIP
+      ══════════════════════════════════════════════════════════════════════ */}
+      <CustomerTrustStrip />
 
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 1.5 — INTERACTIVE AI FORM BUILDER TOUR & GUIDED WALKTHROUGH
@@ -1883,6 +1950,16 @@ export default function GptFormLandingPage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 11.5 — CUSTOMER TESTIMONIALS
+      ══════════════════════════════════════════════════════════════════════ */}
+      <TestimonialsSection />
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 11.6 — COMPETITOR COMPARISON TABLE
+      ══════════════════════════════════════════════════════════════════════ */}
+      <ComparisonTable onGetStarted={() => handleTriggerAuthGate()} />
+
+      {/* ═══════════════════════════════════════════════════════════════════
           SECTION 12 — PRICING: SIMPLE TRANSPARENT PRICING
       ══════════════════════════════════════════════════════════════════════ */}
       <section id="pricing" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
@@ -2067,6 +2144,11 @@ export default function GptFormLandingPage() {
       </section>
 
       {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 13.5 — SECURITY & COMPLIANCE BADGES
+      ══════════════════════════════════════════════════════════════════════ */}
+      <SecurityBadges />
+
+      {/* ═══════════════════════════════════════════════════════════════════
           SECTION 14 — FINAL CALL-TO-ACTION
       ══════════════════════════════════════════════════════════════════════ */}
       <section className="py-20 text-center bg-gradient-to-b from-teal-50/70 to-background dark:from-teal-950/20 dark:to-background border-t">
@@ -2202,6 +2284,11 @@ export default function GptFormLandingPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MOBILE STICKY CTA BAR (mobile only, fixed bottom)
+      ══════════════════════════════════════════════════════════════════════ */}
+      <MobileStickyCta onGetStarted={() => handleTriggerAuthGate()} />
     </AiMarketingLayout>
   );
 }
