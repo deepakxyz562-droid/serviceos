@@ -68,8 +68,6 @@ import { JourneySection } from '@/components/gptform/flow/journey-section';
 import { ModeDemo } from '@/components/gptform/flow/mode-demo';
 import { AgentExtract } from '@/components/gptform/flow/agent-extract';
 import { SmartLogic } from '@/components/gptform/flow/smart-logic';
-import { TemplateGrid } from '@/components/gptform/flow/template-preview-dialog';
-import { ConnectedPipeline } from '@/components/gptform/flow/pipeline-section';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -475,7 +473,7 @@ export default function GptFormPage() {
                 variant="outline"
                 className="h-12 px-6 font-semibold text-sm rounded-xl cursor-pointer"
               >
-                <a href="#templates">Explore 20K+ Templates</a>
+                <Link href="/templates">Explore 20K+ Templates</Link>
               </Button>
             </div>
 
@@ -587,29 +585,7 @@ export default function GptFormPage() {
         </div>
       </section>
 
-      {/* ── SECTION 8: CURATED TEMPLATES CATALOG WITH INTERACTIVE MODAL ── */}
-      <section id="templates" className="section-pad bg-background">
-        <div className="page-shell">
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end mb-10">
-            <div className="section-heading mb-0 max-w-2xl">
-              <p className="eyebrow text-emerald-600">CURATED TEMPLATE CATALOG</p>
-              <h2 className="mt-3 font-display text-3xl sm:text-5xl font-bold tracking-tight text-foreground">
-                Start with a workflow engineered for your trade.
-              </h2>
-              <p className="mt-3 text-base text-muted-foreground">
-                Choose a battle-tested template, preview it across all 4 modes, and customize fields with the AI Copilot.
-              </p>
-            </div>
-          </div>
-
-          <TemplateGrid />
-        </div>
-      </section>
-
-      {/* ── SECTION 9: CONNECTED 7-STEP WORKFLOW PIPELINE ── */}
-      <ConnectedPipeline />
-
-      {/* ── SECTION 10: PRICING (Restored exact older content & structure) ── */}
+      {/* ── SECTION 8: PRICING (Restored exact older content & structure) ── */}
       <section id="pricing" className="section-pad bg-background">
         <div className="page-shell">
           <div className="section-heading text-center mx-auto max-w-2xl mb-10">
@@ -859,7 +835,7 @@ export default function GptFormPage() {
               variant="outline"
               className="border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white font-semibold text-sm h-12 px-6 rounded-xl cursor-pointer"
             >
-              <a href="#templates">Explore Templates</a>
+              <Link href="/templates">Explore Templates</Link>
             </Button>
           </div>
         </div>
