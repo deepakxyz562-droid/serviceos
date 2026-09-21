@@ -83,7 +83,6 @@ import {
 } from '@/components/ui/accordion';
 import { AiMarketingLayout } from '@/components/ai-marketing/ai-marketing-layout';
 import { InteractiveFormTour } from '@/components/gptform/interactive-form-tour';
-import { AiLivePreview } from '@/components/gptform/sections/ai-live-preview';
 import { CustomerTrustStrip } from '@/components/gptform/sections/customer-trust-strip';
 import { TestimonialsSection } from '@/components/gptform/sections/testimonials-section';
 import { SecurityBadges } from '@/components/gptform/sections/security-badges';
@@ -346,6 +345,7 @@ export default function GptFormLandingPage() {
 
   // ─── Hero Step Tabs State ──────────────────────────────────────────────────
   const [activeHeroStep, setActiveHeroStep] = useState(0);
+  const [heroStudioTab, setHeroStudioTab] = useState<'prompt' | 'canvas' | 'runtime' | 'checkout'>('runtime');
   const HERO_STEPS = [
     { label: 'Create with AI', desc: 'Describe your form in plain English. The AI generates a complete multi-step form with fields, logic, and branding in seconds.' },
     { label: 'Customize', desc: 'Fine-tune fields, add calculation formulas, upload brand assets, and configure conditional logic — all visually.' },
@@ -622,205 +622,450 @@ export default function GptFormLandingPage() {
             </div>
           </div>
 
-          {/* ─── INTERACTIVE HERO PRODUCT CANVAS ─── */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left AI Composer Box (5 cols) */}
-            <Card className="lg:col-span-5 border-2 border-teal-500/30 shadow-xl bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
-              <CardHeader className="p-4 bg-teal-50/70 dark:bg-teal-950/40 border-b border-teal-100 dark:border-teal-900/50 flex flex-row items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="size-2 rounded-full bg-teal-500 animate-pulse" />
-                  <span className="text-xs font-bold text-teal-950 dark:text-teal-200">Start with a Sentence. Get a Working Form.</span>
-                </div>
-                <Badge variant="outline" className="text-[10px] text-teal-700 dark:text-teal-300 border-teal-300">
-                  AI Form Engine
-                </Badge>
-              </CardHeader>
-              <CardContent className="p-4 space-y-4">
-                {/* Prompt Textarea */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                    Describe what you need:
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={demoPrompt}
-                    onChange={(e) => setDemoPrompt(e.target.value)}
-                    placeholder="Describe your form in plain English..."
-                    className="w-full text-xs sm:text-sm p-3 rounded-xl border border-border bg-slate-50/60 dark:bg-slate-800/60 focus:outline-none focus:ring-2 focus:ring-teal-500 text-foreground resize-none leading-relaxed"
-                  />
-                </div>
-
-                {/* Preset Chips */}
-                <div className="space-y-1.5">
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                    Instant Industry Presets:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {HERO_PRESETS.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => handleSelectPreset(preset)}
-                        className={cn(
-                          'px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer border',
-                          selectedPresetId === preset.id
-                            ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-teal-400'
-                        )}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Compile CTA */}
-                <div className="pt-2 border-t border-border/60">
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      const event = new CustomEvent('gptform-generate');
-                      window.dispatchEvent(event);
-                    }}
-                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs h-10 rounded-xl gap-2 shadow-sm cursor-pointer"
-                  >
-                    <Sparkles className="size-3.5" />
-                    Generate Form with AI →
-                  </Button>
-                  <p className="text-[10px] text-center text-muted-foreground mt-1.5">
-                    No signup needed — see a real AI-generated form instantly.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Right Live Interactive Form Preview (7 cols) */}
-            <Card className="lg:col-span-7 border-2 border-teal-500/40 shadow-2xl bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
-              <CardHeader className="bg-teal-50/90 dark:bg-teal-950/50 p-4 border-b border-teal-200 dark:border-teal-800/60 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-sm font-bold text-teal-950 dark:text-teal-200 flex items-center gap-2">
-                    <span>{HERO_PRESETS.find((p) => p.id === selectedPresetId)?.title || 'Custom AI Form'}</span>
-                  </CardTitle>
-                  <CardDescription className="text-xs text-teal-800/80 dark:text-teal-400 mt-0.5">
-                    Live Calculation Engine · Real-time Dynamic Logic · Ready to Publish
-                  </CardDescription>
-                </div>
-                <Badge className="bg-teal-600 text-white text-[10px]">Interactive Demo</Badge>
-              </CardHeader>
-
-              <CardContent className="p-5 space-y-4 text-xs">
-                {/* Simulated Property / Service Field */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="font-semibold text-muted-foreground">Service Address / Location</label>
-                    <Input defaultValue="48 King Road, London" readOnly className="h-9 text-xs bg-slate-50 dark:bg-slate-800 border-border" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-semibold text-muted-foreground">Urgency Level</label>
-                    <Input defaultValue="Standard Inspection (Within 48h)" readOnly className="h-9 text-xs bg-slate-50 dark:bg-slate-800 border-border" />
-                  </div>
-                </div>
-
-                {/* Roof Area / Quantity Slider */}
-                <div className="space-y-2 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-border/80">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-foreground">Area / Scope Size</span>
-                    <span className="font-mono font-bold text-teal-600 dark:text-teal-400">
-                      {calcSqFt.toLocaleString()} sq ft
-                    </span>
-                  </div>
-                  <Slider
-                    min={1000}
-                    max={5000}
-                    step={100}
-                    value={[calcSqFt]}
-                    onValueChange={([val]) => setCalcSqFt(val)}
-                    className="py-1 cursor-pointer"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Drag slider to adjust dynamic formula calculation in real time.</p>
-                </div>
-
-                {/* Material / Service Tier Selector */}
-                <div className="space-y-1.5">
-                  <label className="font-semibold text-muted-foreground">Material / Service Tier</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: 'asphalt', name: 'Asphalt Shingle', rate: '£3.40/sq ft' },
-                      { id: 'metal', name: 'Architectural Metal', rate: '£5.80/sq ft' },
-                      { id: 'tile', name: 'Spanish Tile', rate: '£8.20/sq ft' },
-                    ].map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setCalcMaterial(m.id as any)}
-                        className={cn(
-                          'p-2.5 rounded-xl border text-left transition cursor-pointer',
-                          calcMaterial === m.id
-                            ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/60 text-teal-950 dark:text-teal-200 ring-1 ring-teal-500'
-                            : 'border-border bg-white dark:bg-slate-800 text-muted-foreground hover:bg-slate-50 dark:hover:bg-slate-700'
-                        )}
-                      >
-                        <p className="font-bold text-[11px] truncate">{m.name}</p>
-                        <p className="text-[10px] opacity-80">{m.rate}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Debris Add-on Toggle */}
-                <div className="flex items-center justify-between p-3 rounded-xl border border-dashed border-border bg-slate-50/50 dark:bg-slate-800/50">
-                  <div className="flex items-center gap-2">
-                    <Camera className="size-4 text-teal-600" />
-                    <span className="font-medium text-slate-700 dark:text-slate-300">Site debris removal add-on</span>
-                  </div>
+          {/* ─── LIVECHAT-INSPIRED CAPABILITY SWITCHER & REAL PRODUCT STUDIO ─── */}
+          <div className="space-y-6">
+            {/* LiveChat-style Capability Selector Bar */}
+            <div className="flex items-center justify-start lg:justify-center overflow-x-auto pb-2 scrollbar-none gap-2">
+              {[
+                { id: 'runtime', label: '1. Live Customer Intake & Calculator', icon: Smartphone, badge: 'Dynamic Runtime' },
+                { id: 'prompt', label: '2. AI Prompt to Form', icon: Sparkles, badge: 'Instant AI' },
+                { id: 'canvas', label: '3. Visual Studio & Field Logic', icon: Sliders, badge: 'Visual Editor' },
+                { id: 'checkout', label: '4. 0% Fee Stripe & CRM Pipeline', icon: ShieldCheck, badge: '0% Platform Fee' },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = heroStudioTab === tab.id;
+                return (
                   <button
+                    key={tab.id}
                     type="button"
-                    onClick={() => setCalcDebrisAddon(!calcDebrisAddon)}
+                    onClick={() => setHeroStudioTab(tab.id as any)}
                     className={cn(
-                      'text-[10px] font-semibold px-2.5 py-1 rounded-full transition cursor-pointer',
-                      calcDebrisAddon
-                        ? 'bg-teal-600 text-white'
-                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                      'flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer border shadow-xs',
+                      isActive
+                        ? 'bg-slate-900 text-white border-slate-900 dark:bg-teal-600 dark:border-teal-500 shadow-md ring-2 ring-teal-500/20'
+                        : 'bg-white dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-border hover:bg-slate-50 dark:hover:bg-slate-800'
                     )}
                   >
-                    {calcDebrisAddon ? '✓ +£450' : '+ Add £450'}
+                    <Icon className={cn('size-3.5', isActive ? 'text-teal-400' : 'text-teal-600 dark:text-teal-400')} />
+                    <span>{tab.label}</span>
+                    <span className={cn(
+                      'text-[10px] px-1.5 py-0.5 rounded-full font-bold ml-0.5',
+                      isActive
+                        ? 'bg-white/20 text-white'
+                        : 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
+                    )}>
+                      {tab.badge}
+                    </span>
                   </button>
+                );
+              })}
+            </div>
+
+            {/* Main Studio Frame with Browser Chrome */}
+            <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+              {/* Studio Top Navigation Chrome */}
+              <div className="bg-slate-100 dark:bg-slate-800/90 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="size-3 rounded-full bg-rose-400/80" />
+                    <div className="size-3 rounded-full bg-amber-400/80" />
+                    <div className="size-3 rounded-full bg-emerald-400/80" />
+                  </div>
+                  <div className="hidden sm:flex items-center gap-1 px-3 py-1 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] text-muted-foreground font-mono">
+                    <Lock className="size-3 text-emerald-600" />
+                    <span>fieseros.com/gptform/builder/studio</span>
+                  </div>
                 </div>
 
-                {/* Dynamic Estimated Total Bar */}
-                <div className="p-3.5 rounded-xl bg-slate-900 text-white flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-400 block">
-                      Live Calculated Total
-                    </span>
-                    <span className="text-2xl font-extrabold text-teal-300">
-                      £{calcTotal.toLocaleString()}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300">
+                    ● Studio Engine Active
+                  </Badge>
                   <Button
                     size="sm"
-                    onClick={() => handleTriggerAuthGate('Roofing Estimate Form')}
-                    className="bg-teal-600 hover:bg-teal-700 text-white text-xs h-9 px-5 font-semibold cursor-pointer rounded-lg"
+                    onClick={() => handleTriggerAuthGate(demoPrompt)}
+                    className="bg-teal-600 hover:bg-teal-700 text-white text-xs h-7 px-3 rounded-lg font-semibold cursor-pointer"
                   >
-                    Publish This Form →
+                    Build This Form →
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
 
-          {/* ─── AI LIVE PREVIEW: Real AI-generated form from the prompt ─── */}
-          <div className="rounded-2xl border-2 border-dashed border-teal-500/30 bg-teal-50/30 dark:bg-teal-950/20 p-4 sm:p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="size-2 rounded-full bg-teal-500 animate-pulse" />
-              <span className="text-xs font-bold text-teal-950 dark:text-teal-200">
-                AI-Generated Form Preview
-              </span>
-              <Badge variant="outline" className="text-[9px] text-teal-700 dark:text-teal-400 border-teal-300 ml-auto">
-                Real AI · No Signup
-              </Badge>
+              {/* Studio Body Content Based on Selected Tab */}
+              <div className="p-4 sm:p-6 lg:p-8">
+                {/* TAB 1 / DEFAULT: Live Customer Runtime & Calculator */}
+                {heroStudioTab === 'runtime' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    {/* Left AI Composer (5 cols) */}
+                    <Card className="lg:col-span-5 border border-teal-500/30 shadow-md bg-slate-50/50 dark:bg-slate-900/50 rounded-xl overflow-hidden">
+                      <CardHeader className="p-4 bg-teal-50/70 dark:bg-teal-950/40 border-b border-teal-100 dark:border-teal-900/50 flex flex-row items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="size-3.5 text-teal-600 animate-pulse" />
+                          <span className="text-xs font-bold text-teal-950 dark:text-teal-200">Natural Language Prompt</span>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] text-teal-700 dark:text-teal-300 border-teal-300">
+                          AI Prompt Engine
+                        </Badge>
+                      </CardHeader>
+                      <CardContent className="p-4 space-y-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                            Describe what you need:
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={demoPrompt}
+                            onChange={(e) => setDemoPrompt(e.target.value)}
+                            placeholder="Describe your form in plain English..."
+                            className="w-full text-xs sm:text-sm p-3 rounded-xl border border-border bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500 text-foreground resize-none leading-relaxed"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            Instant Industry Presets:
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {HERO_PRESETS.map((preset) => (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => handleSelectPreset(preset)}
+                                className={cn(
+                                  'px-2.5 py-1 rounded-lg text-[11px] font-medium transition cursor-pointer border',
+                                  selectedPresetId === preset.id
+                                    ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                                    : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-teal-400'
+                                )}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-border/60">
+                          <Button
+                            type="button"
+                            onClick={() => handleTriggerAuthGate(demoPrompt)}
+                            className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs h-10 rounded-xl gap-2 shadow-sm cursor-pointer"
+                          >
+                            <Sparkles className="size-3.5" />
+                            Build a Form with AI →
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Right Live Interactive Form Runtime (7 cols) */}
+                    <Card className="lg:col-span-7 border-2 border-teal-500/40 shadow-xl bg-white dark:bg-slate-900 rounded-xl overflow-hidden">
+                      <CardHeader className="bg-teal-50/90 dark:bg-teal-950/50 p-4 border-b border-teal-200 dark:border-teal-800/60 flex flex-row items-center justify-between">
+                        <div>
+                          <CardTitle className="text-sm font-bold text-teal-950 dark:text-teal-200 flex items-center gap-2">
+                            <span>{HERO_PRESETS.find((p) => p.id === selectedPresetId)?.title || 'Custom AI Form'}</span>
+                          </CardTitle>
+                          <CardDescription className="text-xs text-teal-800/80 dark:text-teal-400 mt-0.5">
+                            Live Calculation Engine · Real-time Dynamic Logic · Customer Intake Preview
+                          </CardDescription>
+                        </div>
+                        <Badge className="bg-teal-600 text-white text-[10px]">Live Runtime</Badge>
+                      </CardHeader>
+
+                      <CardContent className="p-5 space-y-4 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="font-semibold text-muted-foreground">Service Address / Location</label>
+                            <Input defaultValue="48 King Road, London" readOnly className="h-9 text-xs bg-slate-50 dark:bg-slate-800 border-border" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="font-semibold text-muted-foreground">Urgency Level</label>
+                            <Input defaultValue="Standard Inspection (Within 48h)" readOnly className="h-9 text-xs bg-slate-50 dark:bg-slate-800 border-border" />
+                          </div>
+                        </div>
+
+                        {/* Roof Area / Quantity Slider */}
+                        <div className="space-y-2 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-border/80">
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-foreground">Area / Scope Size</span>
+                            <span className="font-mono font-bold text-teal-600 dark:text-teal-400">
+                              {calcSqFt.toLocaleString()} sq ft
+                            </span>
+                          </div>
+                          <Slider
+                            min={1000}
+                            max={5000}
+                            step={100}
+                            value={[calcSqFt]}
+                            onValueChange={([val]) => setCalcSqFt(val)}
+                            className="py-1 cursor-pointer"
+                          />
+                          <p className="text-[10px] text-muted-foreground">Drag slider to adjust dynamic formula calculation in real time.</p>
+                        </div>
+
+                        {/* Material / Service Tier Selector */}
+                        <div className="space-y-1.5">
+                          <label className="font-semibold text-muted-foreground">Material / Service Tier</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: 'asphalt', name: 'Asphalt Shingle', rate: '£3.40/sq ft' },
+                              { id: 'metal', name: 'Architectural Metal', rate: '£5.80/sq ft' },
+                              { id: 'tile', name: 'Spanish Tile', rate: '£8.20/sq ft' },
+                            ].map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setCalcMaterial(m.id as any)}
+                                className={cn(
+                                  'p-2.5 rounded-xl border text-left transition cursor-pointer',
+                                  calcMaterial === m.id
+                                    ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/60 text-teal-950 dark:text-teal-200 ring-1 ring-teal-500'
+                                    : 'border-border bg-white dark:bg-slate-800 text-muted-foreground hover:bg-slate-50 dark:hover:bg-slate-700'
+                                )}
+                              >
+                                <p className="font-bold text-[11px] truncate">{m.name}</p>
+                                <p className="text-[10px] opacity-80">{m.rate}</p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Debris Add-on Toggle */}
+                        <div className="flex items-center justify-between p-3 rounded-xl border border-dashed border-border bg-slate-50/50 dark:bg-slate-800/50">
+                          <div className="flex items-center gap-2">
+                            <Camera className="size-4 text-teal-600" />
+                            <span className="font-medium text-slate-700 dark:text-slate-300">Site debris removal add-on</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setCalcDebrisAddon(!calcDebrisAddon)}
+                            className={cn(
+                              'text-[10px] font-semibold px-2.5 py-1 rounded-full transition cursor-pointer',
+                              calcDebrisAddon
+                                ? 'bg-teal-600 text-white'
+                                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                            )}
+                          >
+                            {calcDebrisAddon ? '✓ +£450' : '+ Add £450'}
+                          </button>
+                        </div>
+
+                        {/* Dynamic Estimated Total Bar */}
+                        <div className="p-3.5 rounded-xl bg-slate-900 text-white flex items-center justify-between">
+                          <div>
+                            <span className="text-[10px] uppercase font-semibold tracking-wider text-slate-400 block">
+                              Live Calculated Total
+                            </span>
+                            <span className="text-2xl font-extrabold text-teal-300">
+                              £{calcTotal.toLocaleString()}
+                            </span>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleTriggerAuthGate(selectedPreset?.title || 'Roofing Estimate Form')}
+                            className="bg-teal-600 hover:bg-teal-700 text-white text-xs h-9 px-5 font-semibold cursor-pointer rounded-lg"
+                          >
+                            Publish This Form →
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {/* TAB 2: AI Prompt to Form */}
+                {heroStudioTab === 'prompt' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    <Card className="lg:col-span-6 border border-teal-500/30 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Bot className="size-4 text-teal-600" />
+                          <span className="text-xs font-bold text-foreground">AI Natural Language Compiler</span>
+                        </div>
+                        <Badge className="bg-teal-600 text-white text-[10px]">Instant Structuring</Badge>
+                      </div>
+                      <textarea
+                        rows={4}
+                        value={demoPrompt}
+                        onChange={(e) => setDemoPrompt(e.target.value)}
+                        className="w-full text-xs p-3.5 rounded-xl border border-border bg-white dark:bg-slate-800 text-foreground resize-none leading-relaxed focus:ring-2 focus:ring-teal-500 outline-none"
+                      />
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase">Try Examples:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {HERO_PRESETS.slice(0, 3).map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => handleSelectPreset(p)}
+                              className="px-2.5 py-1 rounded-lg text-[11px] border border-border bg-white dark:bg-slate-800 hover:border-teal-400 text-slate-700 dark:text-slate-300"
+                            >
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => handleTriggerAuthGate(demoPrompt)}
+                        className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs h-10 rounded-xl"
+                      >
+                        <Sparkles className="size-3.5 mr-2" />
+                        Compile Form in 3 Seconds →
+                      </Button>
+                    </Card>
+
+                    <Card className="lg:col-span-6 border border-border bg-white dark:bg-slate-900 rounded-xl p-5 space-y-4">
+                      <div className="flex items-center justify-between border-b pb-3">
+                        <span className="text-xs font-bold text-foreground">Generated Schema Blueprint</span>
+                        <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-300">Ready</Badge>
+                      </div>
+                      <div className="space-y-2.5 text-xs">
+                        {[
+                          { name: '1. Service Location', type: 'Google Maps Autocomplete', req: true },
+                          { name: '2. Roof Area (sq ft)', type: 'Dynamic Formula Slider', req: true },
+                          { name: '3. Material Tier', type: 'Single Choice Cards with Multiplier', req: true },
+                          { name: '4. Photo of Damage', type: 'Multi-file Upload (JPG, PNG)', req: false },
+                          { name: '5. Total Price Breakdown', type: 'Live Computed Currency Field', req: true },
+                          { name: '6. Stripe Deposit (20%)', type: 'Zero-Fee Payment Gate', req: true },
+                        ].map((field, i) => (
+                          <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-border">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200">{field.name}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono bg-white dark:bg-slate-900 px-2 py-0.5 rounded border border-border">
+                              {field.type}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
+                )}
+
+                {/* TAB 3: Visual Studio & Field Logic */}
+                {heroStudioTab === 'canvas' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    <Card className="lg:col-span-7 border border-border bg-white dark:bg-slate-900 rounded-xl p-5 space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b">
+                        <span className="text-xs font-bold text-foreground">Field Structure & Branching Conditions</span>
+                        <Badge variant="outline" className="text-[10px] text-teal-600 border-teal-300">6 Active Fields</Badge>
+                      </div>
+                      <div className="space-y-2 text-xs">
+                        {[
+                          { title: 'Customer Contact Info', icon: UserCheck, logic: 'Required · Phone validation enabled' },
+                          { title: 'Project Scope & Dimensions', icon: Sliders, logic: 'Formula: sqFt * materialMultiplier' },
+                          { title: 'Material Tier Selection', icon: Layers, logic: 'Branches to custom warranty selector' },
+                          { title: 'Emergency Dispatch Time', icon: Calendar, logic: 'IF Urgent = Yes, Show immediate booking slot' },
+                          { title: 'Customer Digital Signature', icon: FileCheck, logic: 'Required before payment checkout' },
+                        ].map((item, idx) => {
+                          const ItemIcon = item.icon;
+                          return (
+                            <div key={idx} className="p-3 rounded-lg border border-border bg-slate-50/70 dark:bg-slate-800/50 flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="size-7 rounded-md bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center font-bold text-xs">
+                                  <ItemIcon className="size-3.5" />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-foreground">{item.title}</p>
+                                  <p className="text-[10px] text-muted-foreground">{item.logic}</p>
+                                </div>
+                              </div>
+                              <span className="text-[10px] text-teal-600 dark:text-teal-400 font-semibold cursor-pointer hover:underline">
+                                Edit Logic
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </Card>
+
+                    <Card className="lg:col-span-5 border border-teal-500/30 bg-teal-50/20 dark:bg-teal-950/20 rounded-xl p-5 space-y-4">
+                      <div className="flex items-center justify-between pb-2 border-b border-teal-100 dark:border-teal-900">
+                        <span className="text-xs font-bold text-teal-950 dark:text-teal-200">Field Inspector</span>
+                        <Badge className="bg-teal-600 text-white text-[10px]">Configuring Formula</Badge>
+                      </div>
+                      <div className="space-y-3 text-xs">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase">Formula Expression</label>
+                          <div className="p-2.5 mt-1 rounded-lg bg-slate-900 text-teal-300 font-mono text-[11px]">
+                            {`total = (sq_ft * unit_rate) + add_on`}
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-border space-y-1">
+                          <p className="font-semibold text-foreground text-xs">Conditional Display Rule</p>
+                          <p className="text-[10px] text-muted-foreground">Show Deposit Card ONLY when calculated total is greater than £0.</p>
+                        </div>
+                        <Button
+                          onClick={() => handleTriggerAuthGate('Visual Studio')}
+                          className="w-full bg-teal-600 hover:bg-teal-700 text-white text-xs h-9 rounded-lg font-semibold"
+                        >
+                          Save &amp; Deploy to Live →
+                        </Button>
+                      </div>
+                    </Card>
+                  </div>
+                )}
+
+                {/* TAB 4: 0% Fee Stripe & CRM Pipeline */}
+                {heroStudioTab === 'checkout' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                    <Card className="lg:col-span-6 border border-emerald-500/30 bg-white dark:bg-slate-900 rounded-xl p-5 space-y-4">
+                      <div className="flex items-center justify-between pb-2 border-b">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="size-4 text-emerald-600" />
+                          <span className="text-xs font-bold text-foreground">0% Platform Fee Stripe Checkout</span>
+                        </div>
+                        <Badge className="bg-emerald-600 text-white text-[10px]">Zero Platform Fee</Badge>
+                      </div>
+                      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-border space-y-3 text-xs">
+                        <div className="flex justify-between font-semibold text-foreground">
+                          <span>Roofing Estimate Deposit (20%)</span>
+                          <span>£{depositAmount.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground text-[11px]">
+                          <span>Platform Commission Fee</span>
+                          <span className="text-emerald-600 font-bold">£0.00 (0%)</span>
+                        </div>
+                        <div className="pt-2 border-t border-border flex justify-between font-bold text-foreground">
+                          <span>Net Payout to Your Bank</span>
+                          <span className="text-teal-600">£{depositAmount.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Input defaultValue="•••• •••• •••• 4242" readOnly className="h-9 text-xs bg-slate-50 dark:bg-slate-800 font-mono" />
+                        <Button
+                          onClick={() => handleTriggerAuthGate('Payment Checkout')}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-10 rounded-xl font-semibold"
+                        >
+                          <ShieldCheck className="size-4 mr-2" />
+                          Collect Payment via Stripe →
+                        </Button>
+                      </div>
+                    </Card>
+
+                    <Card className="lg:col-span-6 border border-border bg-white dark:bg-slate-900 rounded-xl p-5 space-y-4">
+                      <div className="flex items-center justify-between pb-2 border-b">
+                        <div className="flex items-center gap-2">
+                          <Workflow className="size-4 text-teal-600" />
+                          <span className="text-xs font-bold text-foreground">Automated Post-Submission Pipeline</span>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] text-teal-600 border-teal-300">Live Dispatch</Badge>
+                      </div>
+                      <div className="space-y-2.5 text-xs">
+                        {[
+                          { step: '1. Lead Sync', action: 'Create Deal in HubSpot & Salesforce CRM with full form metadata' },
+                          { step: '2. SMS Notification', action: 'Dispatch instant SMS alert to assigned project manager' },
+                          { step: '3. PDF Invoice', action: 'Auto-generate branded estimate PDF with customer e-signature' },
+                          { step: '4. Calendar Dispatch', action: 'Reserve site inspection slot on Google & Outlook Calendar' },
+                        ].map((wf, idx) => (
+                          <div key={idx} className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-border flex items-start gap-2.5">
+                            <span className="font-bold text-teal-600 shrink-0">{wf.step}:</span>
+                            <span className="text-muted-foreground">{wf.action}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
+                )}
+              </div>
             </div>
-            <AiLivePreview prompt={demoPrompt} onGetStarted={handleTriggerAuthGate} />
           </div>
         </div>
       </section>
@@ -859,13 +1104,13 @@ export default function GptFormLandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           <div className="text-center space-y-3 max-w-2xl mx-auto">
             <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
-              Why Conversational Forms Win
+              Conversational Experience
             </Badge>
             <h2 className="text-3xl font-bold tracking-tight">
-              Static Forms are Broken. AI Conversations Convert.
+              Designed for Higher Completion. Compare Static Forms vs Conversational Intake.
             </h2>
             <p className="text-sm text-muted-foreground">
-              Traditional forms feel like homework. GPTForm turns the same questions into a fluid, guided dialogue designed for higher completion rates.
+              Traditional static forms cause drop-offs with overwhelming walls of inputs. GPTForm turns the same questions into a fluid, guided dialogue with instant price estimates and calendar booking.
             </p>
           </div>
 
