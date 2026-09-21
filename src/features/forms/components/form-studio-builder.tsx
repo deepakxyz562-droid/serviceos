@@ -2245,82 +2245,18 @@ export function FormStudioBuilder({
         {studioTab === 'publish' && (
           <main className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center">
             <div className="w-full max-w-4xl space-y-6 pb-24">
-              {/* Universal 3-Way Publishing Engine */}
+              {/* Universal 5-Pillar Publishing Engine */}
               <UniversalPublishCenter
-                project={generateUniversalProjectFromPrompt(formData.name || 'Service App', 'general')}
+                formId={formData.id}
+                formSlug={formData.slug || (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'service-form')}
+                formName={formData.name || 'Untitled Form'}
+                formDescription={formData.description}
+                privacyLevel={privacyLevel}
+                onPrivacyChange={(v) => setPrivacyLevel(v)}
                 siteOrigin={siteOrigin}
               />
 
-              {/* Section 1: Direct Link */}
-              <Card className="rounded-2xl border-border/80 shadow-md bg-gradient-to-b from-card to-emerald-500/5">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold tracking-wider text-emerald-700 dark:text-emerald-400 uppercase">
-                      DIRECT LINK OF YOUR FORM
-                    </CardTitle>
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 text-[10px] font-bold">
-                      Ready to share
-                    </Badge>
-                  </div>
-                  <CardDescription className="text-xs">
-                    Your form is securely published and ready to use at this address
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Share with link box */}
-                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-border/80 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                        SHARE WITH LINK
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <Select
-                          value={privacyLevel}
-                          onValueChange={(v: any) => setPrivacyLevel(v)}
-                        >
-                          <SelectTrigger className="h-7 text-[11px] font-semibold bg-white dark:bg-slate-800 rounded-lg px-2 border-slate-200 cursor-pointer">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="public" className="text-xs">🌐 Public Form</SelectItem>
-                            <SelectItem value="private" className="text-xs">🔒 Private Form</SelectItem>
-                            <SelectItem value="password" className="text-xs">🔑 Password Protected</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <Input
-                        value={liveUrl}
-                        readOnly
-                        className="h-10 text-xs font-mono bg-white dark:bg-slate-950 flex-1 border-slate-200 dark:border-slate-800 select-all"
-                      />
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          size="sm"
-                          onClick={() => copyToClipboard(liveUrl, 'Direct Form URL')}
-                          className="h-10 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-xl shadow-xs cursor-pointer"
-                        >
-                          <Copy className="size-3.5" /> Copy Link
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={handleOpenLive}
-                          className="h-10 gap-1.5 text-xs font-semibold rounded-xl border-slate-200 dark:border-slate-800 cursor-pointer"
-                          title="Open in new tab"
-                        >
-                          <ExternalLink className="size-3.5 text-emerald-600" />
-                          <span>Open in new tab</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Section 2: Invite By Email */}
+              {/* Direct Invite By Email */}
               <Card className="rounded-2xl border-border/80 shadow-xs hover:border-emerald-500/40 transition-colors">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -2328,7 +2264,7 @@ export function FormStudioBuilder({
                     Invite By Email
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Send personalized direct email invitations with your form link
+                    Send personalized direct email invitations with your form link to clients or team members
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -2367,216 +2303,6 @@ export function FormStudioBuilder({
                     {sendingInvite ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
                     Send Invitations
                   </Button>
-                </CardContent>
-              </Card>
-
-              {/* Section 3: Share Form (Social & Instant Sharing) */}
-              <Card className="rounded-2xl border-border/80 shadow-xs hover:border-emerald-500/40 transition-colors">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <Share className="size-4 text-blue-600" />
-                    Share Form
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Share your form link in various social posts and through email.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.open(
-                          `https://api.whatsapp.com/send?text=${encodeURIComponent(`Please fill out this form: ${liveUrl}`)}`,
-                          '_blank'
-                        )
-                      }
-                      className="p-3 rounded-xl border border-border/80 bg-card hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/40 flex flex-col items-center gap-1.5 text-center transition-all cursor-pointer group"
-                    >
-                      <MessageCircle className="size-5 text-emerald-600 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-semibold text-foreground">WhatsApp</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.open(
-                          `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(liveUrl)}`,
-                          '_blank'
-                        )
-                      }
-                      className="p-3 rounded-xl border border-border/80 bg-card hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-950/40 flex flex-col items-center gap-1.5 text-center transition-all cursor-pointer group"
-                    >
-                      <Globe className="size-5 text-blue-600 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-semibold text-foreground">Facebook</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.open(
-                          `https://twitter.com/intent/tweet?url=${encodeURIComponent(liveUrl)}&text=${encodeURIComponent(`Please complete: ${formData.name || 'Form'}`)}`,
-                          '_blank'
-                        )
-                      }
-                      className="p-3 rounded-xl border border-border/80 bg-card hover:bg-sky-50 hover:border-sky-300 dark:hover:bg-sky-950/40 flex flex-col items-center gap-1.5 text-center transition-all cursor-pointer group"
-                    >
-                      <Sparkles className="size-5 text-sky-500 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-semibold text-foreground">X / Twitter</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.open(
-                          `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(liveUrl)}`,
-                          '_blank'
-                        )
-                      }
-                      className="p-3 rounded-xl border border-border/80 bg-card hover:bg-indigo-50 hover:border-indigo-300 dark:hover:bg-indigo-950/40 flex flex-col items-center gap-1.5 text-center transition-all cursor-pointer group"
-                    >
-                      <FileText className="size-5 text-indigo-600 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-semibold text-foreground">LinkedIn</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        window.open(
-                          `mailto:?subject=${encodeURIComponent(formData.name || 'Form')}&body=${encodeURIComponent(`Please complete this form: ${liveUrl}`)}`
-                        )
-                      }
-                      className="p-3 rounded-xl border border-border/80 bg-card hover:bg-amber-50 hover:border-amber-300 dark:hover:bg-amber-950/40 flex flex-col items-center gap-1.5 text-center transition-all cursor-pointer group"
-                    >
-                      <Mail className="size-5 text-amber-600 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-semibold text-foreground">Email</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setQrModalOpen(true)}
-                      className="p-3 rounded-xl border border-border/80 bg-card hover:bg-emerald-50 hover:border-emerald-300 dark:hover:bg-emerald-950/40 flex flex-col items-center gap-1.5 text-center transition-all cursor-pointer group"
-                    >
-                      <QrCode className="size-5 text-emerald-600 group-hover:scale-110 transition-transform" />
-                      <span className="text-xs font-semibold text-foreground">QR Code</span>
-                    </button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Section 4: CREATE AI AGENTS (Native Jotform AI parity) */}
-              <Card className="rounded-2xl border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 shadow-xs">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-                      <Bot className="size-4 text-emerald-600" />
-                      CREATE AI AGENTS
-                    </CardTitle>
-                    <Badge className="bg-emerald-600 text-white text-[10px] font-bold">2026 AI Agent Suite</Badge>
-                  </div>
-                  <CardDescription className="text-xs">
-                    Turn your forms into AI-powered conversations. Let form fillers complete your form quickly and accurately with an AI Agent.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-4 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-emerald-200/80 dark:border-emerald-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                    <div className="flex items-center gap-3">
-                      <div className="size-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-                        🤖
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-foreground">
-                          Clara: {formData.name || 'Service'} Assistant
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          2 Conversations · Voice &amp; Chat Enabled · Last active today
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setStudioTab('agent')}
-                        className="h-8 text-xs font-semibold rounded-xl border-emerald-300 dark:border-emerald-800 cursor-pointer"
-                      >
-                        Edit Agent
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => setStudioTab('agent')}
-                        className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs gap-1.5 cursor-pointer"
-                      >
-                        <Sparkles className="size-3.5" /> Create AI Agent
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Section 5: Create App */}
-              <Card className="rounded-2xl border-border/80 shadow-xs hover:border-emerald-500/40 transition-colors">
-                <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Smartphone className="size-4 text-emerald-600" />
-                      <p className="text-sm font-bold text-foreground">Create App</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Create an app to store all of your forms in one place and easily share them with others. Start with this form!
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAppModalOpen(true)}
-                    className="h-9 text-xs font-bold rounded-xl border-slate-200 dark:border-slate-800 shrink-0 gap-1.5 cursor-pointer"
-                  >
-                    <Smartphone className="size-3.5 text-emerald-600" />
-                    Create App
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Section 6: Embed on Website */}
-              <Card className="rounded-2xl border-border/80 shadow-xs">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <Code className="size-4 text-blue-600" />
-                    Embed on Website
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Choose an embed format to seamlessly integrate this form into your website or web app
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* 1-Line JS Embed */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-semibold">1-Line JS Embed (WordPress, Wix, Webflow, Shopify, HTML)</Label>
-                      <Badge variant="outline" className="text-[10px] text-emerald-600 font-bold bg-emerald-50 dark:bg-emerald-950/40">
-                        Recommended
-                      </Badge>
-                    </div>
-                    <div className="flex gap-2">
-                      <Textarea value={embedScript} readOnly rows={2} className="text-xs font-mono bg-muted/20 resize-none select-all" />
-                      <Button size="sm" variant="outline" onClick={() => copyToClipboard(embedScript, 'Embed script')} className="h-full gap-1 text-xs shrink-0 font-semibold cursor-pointer">
-                        <Copy className="size-3.5" /> Copy
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* iFrame Embed */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">iFrame Embed Code</Label>
-                    <div className="flex gap-2">
-                      <Textarea value={embedIframe} readOnly rows={2} className="text-xs font-mono bg-muted/20 resize-none select-all" />
-                      <Button size="sm" variant="outline" onClick={() => copyToClipboard(embedIframe, 'iFrame code')} className="h-full gap-1 text-xs shrink-0 font-semibold cursor-pointer">
-                        <Copy className="size-3.5" /> Copy
-                      </Button>
-                    </div>
-                  </div>
                 </CardContent>
               </Card>
             </div>
