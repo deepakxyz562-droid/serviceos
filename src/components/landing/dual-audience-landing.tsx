@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { solutionsLinks, ProductMegaMenu, SolutionsMegaMenu, LandingFooter } from '@/components/landing/landing-solutions';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { cn } from '@/lib/utils';
 
 // ─── Flow 2026 Modular Sections ───────────────────────────────────────────
 import { FlowHero } from './flow/flow-hero';
