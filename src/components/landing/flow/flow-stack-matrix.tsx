@@ -21,7 +21,7 @@ const tools = [
   ['Twilio SMS', '$120'],
   ['Google Voice AI', '$250'],
   ['Jotform', '$39'],
-  ['Loom + Docs', '$343'],
+  ['Docs & Team SOPs', '$49'],
 ];
 
 export function FlowStackMatrix() {
@@ -36,7 +36,7 @@ export function FlowStackMatrix() {
             Stop paying for a stack of disconnected tools.
           </h2>
           <p className="mt-4 text-muted-foreground text-sm sm:text-base leading-relaxed">
-            Replace <span className="font-semibold text-navy">$2,347/month</span> in point solutions, broken
+            Replace <span className="font-semibold text-navy">$2,053+/month</span> in point solutions, broken
             Zapier webhooks, and separate logins with one unified AI-native operating system.
           </p>
         </div>
@@ -70,7 +70,7 @@ export function FlowStackMatrix() {
             </ul>
             <div className="mt-4 flex items-center justify-between rounded-2xl bg-destructive/10 px-4 py-3.5">
               <span className="text-sm font-bold text-destructive">17 tools · 17 logins</span>
-              <span className="text-xl font-extrabold text-destructive">$2,347/mo</span>
+              <span className="text-xl font-extrabold text-destructive">$2,053/mo</span>
             </div>
           </motion.div>
 

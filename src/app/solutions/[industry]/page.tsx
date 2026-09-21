@@ -120,12 +120,12 @@ const INDUSTRY_DETAILS: Record<
   },
   dental: {
     title: 'AI Patient Intake & Practice Automation for Dental Clinics',
-    tagline: 'HIPAA-Compliant Patient Onboarding, PPO Insurance Verification & Smart Booking',
+    tagline: 'Secure Encrypted Patient Onboarding, Insurance Card Capture & Smart Booking',
     description:
-      'Streamline dental front-desk operations. Patients complete medical history and insurance upload on their phone before stepping foot in the clinic.',
+      'Streamline dental front-desk operations. Patients complete medical history and insurance card upload on their phone before stepping foot in the clinic.',
     features: [
       {
-        title: 'HIPAA-Compliant Digital Intake',
+        title: 'Secure 256-Bit Encrypted Intake',
         desc: 'Zero paper clipboards. Encrypted digital medical history, allergy checks, and e-signatures.',
       },
       {

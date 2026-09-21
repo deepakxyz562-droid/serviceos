@@ -19,16 +19,16 @@ const testimonials = [
   },
   {
     quote:
-      'Quotes go out before we leave the driveway. Our close rate went from 41% to 68% in one quarter.',
+      'Quotes go out before we leave the driveway. Customers approve and pay deposits on-site before we even start the van.',
     name: 'Tom Ashby',
     role: 'Ashby Roofing · 22 crew',
   },
 ];
 
 const badges = [
-  { icon: ShieldCheck, title: 'Field-tested reliability', body: '99.98% uptime across 4M+ dispatched jobs.' },
+  { icon: ShieldCheck, title: 'Field-tested reliability', body: 'High-availability infrastructure built for uninterrupted daily operations.' },
   { icon: CloudOff, title: 'Offline mobile sync', body: 'Basements, lofts, dead zones — it keeps working.' },
-  { icon: WorkflowIcon, title: 'Zero double-entry', body: 'One record from first call to paid invoice.' },
+  { icon: WorkflowIcon, title: 'Zero double-entry', body: 'One connected record from first call to paid invoice.' },
 ];
 
 export function FlowProof() {
