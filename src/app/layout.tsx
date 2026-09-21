@@ -177,6 +177,12 @@ export default function RootLayout({
             __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('${SW_URL}',{scope:'/'}).catch(function(){})}`,
           }}
         />
+        {/* Theme pre-hydration initializer: synchronizes default platform theme before render to eliminate FOUC */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme')||localStorage.getItem('fieseros_platform_default_theme');if(!t){var m=document.cookie.match(/fieseros_default_theme=([^;]+)/);if(m)t=m[1];}if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches&&t!=='light')){document.documentElement.classList.add('dark');}else if(t==='light'){document.documentElement.classList.remove('dark');}}catch(e){}})()`,
+          }}
+        />
         {/* Google Analytics 4 (gtag.js) with Consent Mode v2.
             Loaded on every page. Default consent is "denied" until the
             cookie banner receives an explicit accept. See

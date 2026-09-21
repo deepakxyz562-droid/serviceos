@@ -50,6 +50,20 @@ export function ThemeToggle({
 
   const isDark = resolvedTheme === 'dark';
 
+  const handleSelectTheme = (nextTheme: string) => {
+    setTheme(nextTheme);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('theme', nextTheme);
+        localStorage.setItem('fieseros_platform_default_theme', nextTheme);
+        document.cookie = `fieseros_default_theme=${nextTheme}; path=/; max-age=31536000; SameSite=Lax`;
+        window.dispatchEvent(new Event('theme-change'));
+      } catch {
+        // ignore
+      }
+    }
+  };
+
   if (showDropdown) {
     return (
       <DropdownMenu>
@@ -58,42 +72,43 @@ export function ThemeToggle({
             variant={variant}
             size={size}
             className={cn(
-              'size-9 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors relative',
+              'size-9 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors relative cursor-pointer',
               className
             )}
             aria-label="Select theme"
+            title="Select Theme (Light / Dark / System)"
           >
             <Sun className="size-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-amber-500" />
             <Moon className="absolute size-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-teal-400" />
             <span className="sr-only">Toggle theme</span>
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-36 rounded-xl border border-border shadow-lg">
+        <DropdownMenuContent align="end" className="w-36 rounded-xl border border-border bg-card text-foreground dark:border-slate-800 dark:bg-slate-900 shadow-xl">
           <DropdownMenuItem
-            onClick={() => setTheme('light')}
+            onClick={() => handleSelectTheme('light')}
             className={cn(
               'gap-2 font-medium cursor-pointer',
-              theme === 'light' && 'text-emerald-600 dark:text-emerald-400 font-semibold'
+              theme === 'light' && 'text-emerald-600 dark:text-emerald-400 font-semibold bg-muted/60'
             )}
           >
             <Sun className="size-4 text-amber-500" />
             <span>Light</span>
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => setTheme('dark')}
+            onClick={() => handleSelectTheme('dark')}
             className={cn(
               'gap-2 font-medium cursor-pointer',
-              theme === 'dark' && 'text-emerald-600 dark:text-emerald-400 font-semibold'
+              theme === 'dark' && 'text-emerald-600 dark:text-emerald-400 font-semibold bg-muted/60'
             )}
           >
             <Moon className="size-4 text-teal-400" />
             <span>Dark</span>
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => setTheme('system')}
+            onClick={() => handleSelectTheme('system')}
             className={cn(
               'gap-2 font-medium cursor-pointer',
-              theme === 'system' && 'text-emerald-600 dark:text-emerald-400 font-semibold'
+              theme === 'system' && 'text-emerald-600 dark:text-emerald-400 font-semibold bg-muted/60'
             )}
           >
             <Laptop className="size-4 text-slate-400" />
@@ -108,7 +123,7 @@ export function ThemeToggle({
     <Button
       variant={variant}
       size={size}
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      onClick={() => handleSelectTheme(isDark ? 'light' : 'dark')}
       className={cn(
         'size-9 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors relative cursor-pointer',
         className

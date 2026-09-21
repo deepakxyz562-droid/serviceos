@@ -60,18 +60,40 @@ export function ThemeBrandingSection() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('fieseros_platform_default_theme') as 'light' | 'dark' | 'system' | null;
+      const stored = (localStorage.getItem('fieseros_platform_default_theme') || localStorage.getItem('theme')) as 'light' | 'dark' | 'system' | null;
       if (stored) {
         setDefaultPlatformTheme(stored);
+        if (stored === 'dark' || stored === 'light') {
+          setPreviewMode(stored);
+        }
       }
     }
   }, []);
 
-  function saveBranding() {
+  const applyPlatformTheme = (mode: 'light' | 'dark' | 'system') => {
+    setDefaultPlatformTheme(mode);
+    setPreviewMode(mode === 'dark' ? 'dark' : 'light');
+    setTheme(mode);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('fieseros_platform_default_theme', defaultPlatformTheme);
+      try {
+        localStorage.setItem('theme', mode);
+        localStorage.setItem('fieseros_platform_default_theme', mode);
+        document.cookie = `fieseros_default_theme=${mode}; path=/; max-age=31536000; SameSite=Lax`;
+        const isDark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+        window.dispatchEvent(new Event('theme-change'));
+      } catch {
+        // ignore
+      }
     }
-    setTheme(defaultPlatformTheme);
+  };
+
+  function saveBranding() {
+    applyPlatformTheme(defaultPlatformTheme);
     toast.success(`Platform theme & branding updated! Default theme is now ${defaultPlatformTheme.toUpperCase()}`);
   }
 
@@ -101,7 +123,7 @@ export function ThemeBrandingSection() {
                   Site-Wide Default Theme
                 </Label>
                 <Badge variant="outline" className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
-                  Default: Light Mode
+                  {defaultPlatformTheme === 'dark' ? 'Default: Dark Mode' : defaultPlatformTheme === 'system' ? 'Default: System' : 'Default: Light Mode'}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
@@ -111,10 +133,7 @@ export function ThemeBrandingSection() {
               <div className="grid grid-cols-3 gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    setDefaultPlatformTheme('light');
-                    setPreviewMode('light');
-                  }}
+                  onClick={() => applyPlatformTheme('light')}
                   className={cn(
                     'flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 text-xs font-medium transition-all cursor-pointer',
                     defaultPlatformTheme === 'light'
@@ -129,10 +148,7 @@ export function ThemeBrandingSection() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setDefaultPlatformTheme('dark');
-                    setPreviewMode('dark');
-                  }}
+                  onClick={() => applyPlatformTheme('dark')}
                   className={cn(
                     'flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 text-xs font-medium transition-all cursor-pointer',
                     defaultPlatformTheme === 'dark'
@@ -147,9 +163,7 @@ export function ThemeBrandingSection() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setDefaultPlatformTheme('system');
-                  }}
+                  onClick={() => applyPlatformTheme('system')}
                   className={cn(
                     'flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 text-xs font-medium transition-all cursor-pointer',
                     defaultPlatformTheme === 'system'

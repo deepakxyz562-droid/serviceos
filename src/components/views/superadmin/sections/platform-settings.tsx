@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Settings, Save, Shield, DollarSign, Loader2, CheckCircle2 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -88,13 +89,44 @@ const TIMEZONES = ['UTC', 'America/New_York', 'America/Los_Angeles', 'Europe/Lon
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function PlatformSettingsSection() {
+  const { theme, setTheme } = useTheme();
   const [platformName, setPlatformName] = useState('Fieseros');
   const [supportEmail, setSupportEmail] = useState('support@fieseros.com');
   const [currency, setCurrency] = useState<string>('USD');
   const [timezone, setTimezone] = useState<string>('UTC');
+  const [defaultThemeMode, setDefaultThemeMode] = useState<string>('light');
   const [quotas, setQuotas] = useState(QUOTAS);
   const [policies, setPolicies] = useState(POLICIES);
   const [modules, setModules] = useState(DEFAULT_MODULES);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('fieseros_platform_default_theme') || localStorage.getItem('theme') || 'light';
+      setDefaultThemeMode(stored);
+    }
+  }, []);
+
+  const handleThemeChange = (val: string) => {
+    setDefaultThemeMode(val);
+    setTheme(val);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('theme', val);
+        localStorage.setItem('fieseros_platform_default_theme', val);
+        document.cookie = `fieseros_default_theme=${val}; path=/; max-age=31536000; SameSite=Lax`;
+        const isDark = val === 'dark' || (val === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+        window.dispatchEvent(new Event('theme-change'));
+      } catch {
+        // ignore
+      }
+    }
+    toast.success(`Platform default theme set to ${val.toUpperCase()}`);
+  };
 
   // Revenue toggles — fetched from /api/superadmin/revenue-toggles
   const [revenueToggles, setRevenueToggles] = useState<RevenueToggle[]>([]);
@@ -249,13 +281,8 @@ export function PlatformSettingsSection() {
               <div className="space-y-2">
                 <Label>Default Theme Mode</Label>
                 <Select
-                  defaultValue="light"
-                  onValueChange={(val) => {
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('fieseros_platform_default_theme', val);
-                    }
-                    toast.success(`Platform default theme set to ${val.toUpperCase()}`);
-                  }}
+                  value={defaultThemeMode}
+                  onValueChange={handleThemeChange}
                 >
                   <SelectTrigger className="w-full"><SelectValue placeholder="Light (Default)" /></SelectTrigger>
                   <SelectContent>

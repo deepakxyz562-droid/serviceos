@@ -223,8 +223,6 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
 
         {/* ── Right Actions ── */}
         <div className="hidden sm:flex items-center gap-2">
-          <ThemeToggle showDropdown />
-
           <Button
             asChild
             size="sm"
@@ -266,6 +264,10 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
               Start Trial
             </Button>
           ) : null}
+
+          {/* Theme Toggle at the right end of the page header */}
+          <div className="h-5 w-px bg-border dark:bg-slate-800 mx-1" />
+          <ThemeToggle showDropdown />
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
