@@ -140,7 +140,7 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   orderable_list: w(() => import('./productivity/orderable-list')),
   unique_id_generator: w(() => import('./productivity/unique-id-generator')),
   terms_and_conditions: w(() => import('./productivity/terms-and-conditions')),
-  cloudflare_turnstile: w(() => import('./productivity/terms-and-conditions')),
+  cloudflare_turnstile: w(() => import('./security/cloudflare-turnstile')),
 
   // ─── Payment Gateways ─────────────────────────────────────────────────────────
   payment_stripe_elements: w(() => import('./payment/stripe-elements')),

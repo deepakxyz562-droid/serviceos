@@ -201,6 +201,76 @@ export async function bookAppointment(
       uid: booking.id,
     });
 
+    // 6. ACTUALLY send a confirmation — email if we have one, else SMS to the
+    // phone number on file. Previously this step was skipped and the message
+    // below claimed a confirmation was sent when none was. We now call the
+    // real sendEmail() / sendSmsMessage() implementations and report honestly.
+    const confirmationSentTo: string[] = [];
+
+    if (customer.email) {
+      try {
+        const { sendEmail } = await import('@/lib/email-send');
+        const emailHtml = [
+          `<p>Hi ${customer.name},</p>`,
+          `<p>Your appointment is confirmed:</p>`,
+          `<ul>`,
+          `<li><strong>Service:</strong> ${serviceName}</li>`,
+          `<li><strong>When:</strong> ${new Date(slotStartTime).toLocaleString()}</li>`,
+          `<li><strong>Duration:</strong> ${duration} minutes</li>`,
+          `</ul>`,
+          `<p>You can add this appointment to your calendar using the attached invite.</p>`,
+          customer.notes ? `<p><em>Notes:</em> ${customer.notes}</p>` : '',
+          `<p>— Fieseros Booking</p>`,
+        ].join('\n');
+        const emailRes = await sendEmail({
+          to: customer.email,
+          subject: `Appointment confirmed — ${serviceName}`,
+          html: emailHtml,
+          text: `Hi ${customer.name},\n\nYour appointment is confirmed:\n- Service: ${serviceName}\n- When: ${new Date(slotStartTime).toLocaleString()}\n- Duration: ${duration} minutes\n\n— Fieseros Booking`,
+          tenantId,
+          usageType: 'transactional',
+        });
+        if (emailRes.success) {
+          confirmationSentTo.push(`email (${customer.email})`);
+        } else {
+          console.warn(
+            `[ai-tools bookAppointment] email confirmation failed for ${customer.email}:`,
+            emailRes.error,
+          );
+        }
+      } catch (emailErr) {
+        console.error('[ai-tools bookAppointment] email send threw:', emailErr);
+      }
+    }
+
+    if (customer.phone) {
+      try {
+        const { sendSmsMessage } = await import('@/lib/sms-send');
+        const smsText = `Hi ${customer.name}, your ${serviceName} appointment is confirmed for ${new Date(slotStartTime).toLocaleString()} (${duration} min). — Fieseros`;
+        const smsRes = await sendSmsMessage({
+          to: customer.phone,
+          message: smsText,
+          tenantId,
+        });
+        if (smsRes.success) {
+          confirmationSentTo.push(`SMS (${customer.phone})`);
+        } else {
+          console.warn(
+            `[ai-tools bookAppointment] SMS confirmation failed for ${customer.phone}:`,
+            smsRes.error,
+          );
+        }
+      } catch (smsErr) {
+        console.error('[ai-tools bookAppointment] SMS send threw:', smsErr);
+      }
+    }
+
+    const when = new Date(slotStartTime).toLocaleString();
+    const baseMsg = `Booking confirmed! ${customer.name} is scheduled for ${serviceName} on ${when}. Duration: ${duration} minutes.`;
+    const message = confirmationSentTo.length
+      ? `${baseMsg} Confirmation sent to ${confirmationSentTo.join(' and ')}.`
+      : `${baseMsg} Confirmation pending — no email/SMS could be sent (no provider configured or no contact info).`;
+
     return {
       success: true,
       bookingId: booking.id,
@@ -211,7 +281,7 @@ export async function bookAppointment(
         customerName: customer.name,
       },
       icsContent,
-      message: `Booking confirmed! ${customer.name} is scheduled for ${serviceName} on ${new Date(slotStartTime).toLocaleString()}. Duration: ${duration} minutes. A confirmation has been sent to ${customer.email || customer.phone}.`,
+      message,
     };
   } catch (error: any) {
     console.error('[ai-tools bookAppointment]', error);

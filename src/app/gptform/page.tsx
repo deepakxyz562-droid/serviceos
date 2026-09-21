@@ -156,7 +156,7 @@ const HERO_PRESETS = [
   },
 ];
 
-// ─── 20,000+ Template Catalog Explorer ──────────────────────────────────────
+// ─── 180+ Template Catalog Explorer ──────────────────────────────────────
 const TEMPLATE_CATEGORIES = [
   'All',
   'Home Services',
@@ -396,7 +396,7 @@ export default function GptFormLandingPage() {
   const [previewTemplateModal, setPreviewTemplateModal] = useState<typeof TEMPLATES_EXPLORER_DATA[0] | null>(null);
 
   // ─── Embed Tab State ──────────────────────────────────────────────────────
-  const [activeEmbedTab, setActiveEmbedTab] = useState<'wordpress' | 'shopify' | 'webflow' | 'react' | 'html'>('wordpress');
+  const [activeEmbedTab, setActiveEmbedTab] = useState<'wordpress' | 'webflow' | 'html' | 'javascript'>('javascript');
   const [copiedSnippet, setCopiedSnippet] = useState(false);
 
   // ─── Pricing Billing Period State ─────────────────────────────────────────
@@ -480,18 +480,16 @@ export default function GptFormLandingPage() {
 
   // ─── Embed Code Snippets ──────────────────────────────────────────────────
   const embedSnippets: Record<string, string> = {
-    wordpress: '[gptform id="form_roofing_quote_2026" theme="emerald" mode="agent" /]',
-    shopify: '<div class="fieseros-gptform" data-form-id="form_roofing_quote_2026" data-mode="agent"></div>\n<script src="https://fieseros.com/embed.js" async></script>',
-    webflow: '<iframe\n  src="https://fieseros.com/f/roofing-quote"\n  width="100%"\n  height="680"\n  frameborder="0"\n  title="GPTForm">\n</iframe>',
-    react: 'import { GPTFormEmbed } from "@fieseros/react";\n\nexport default function QuotePage() {\n  return (\n    <GPTFormEmbed\n      formId="form_roofing_quote_2026"\n      mode="agent"\n      accentColor="#0d9488"\n    />\n  );\n}',
-    html: '<iframe\n  src="https://fieseros.com/f/roofing-quote"\n  style="width:100%;height:680px;border:none;border-radius:16px;"\n  title="GPTForm">\n</iframe>',
+    javascript: '<!-- Add this snippet anywhere on your page -->\n<div data-fieseros-form="your-form-slug"></div>\n<script src="https://fieseros.com/embed/agent.js" async></script>',
+    wordpress: '[fieseros_form id="your-form-slug" height="680px"]',
+    webflow: '<iframe\n  src="https://fieseros.com/f/your-form-slug"\n  width="100%"\n  height="680"\n  frameborder="0"\n  title="GPTForm">\n</iframe>',
+    html: '<iframe\n  src="https://fieseros.com/f/your-form-slug"\n  style="width:100%;height:680px;border:none;border-radius:16px;"\n  title="GPTForm">\n</iframe>',
   };
 
   const embedNotes: Record<string, string> = {
-    wordpress: '// WordPress Shortcode — Powered by Fieseros GPTForm Plugin',
-    shopify: '// Shopify Section / Liquid Template Tag',
+    javascript: '// Universal JavaScript Embed — auto-detects and renders by form slug',
+    wordpress: '// WordPress Shortcode — Powered by Fieseros Plugin',
     webflow: '// Webflow Embed Block (Responsive HTML5)',
-    react: '// Next.js / React 19 Component Integration',
     html: '// Universal HTML5 iframe — compatible with any CMS',
   };
 
@@ -537,18 +535,18 @@ export default function GptFormLandingPage() {
 
             {/* Main Headline */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.08]">
-              Build forms with AI.{' '}
+              Describe your form.{' '}
               <span className="bg-gradient-to-r from-teal-600 via-emerald-500 to-teal-600 bg-clip-text text-transparent">
-                Turn them into conversations.
+                AI builds it.
               </span>
             </h1>
 
             {/* Core Value Proposition Subtitle */}
             <p className="text-lg sm:text-xl font-medium text-foreground/90">
-              AI forms that do more than collect data.
+              Build forms with AI. Turn every submission into action.
             </p>
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed max-w-2xl">
-              Create forms with AI, turn them into conversational experiences, calculate quotes, book appointments, collect payments, and automatically send the data where it needs to go.
+              Create smart forms, calculators, and conversational AI agents from a simple prompt. Customize visually, publish anywhere, and turn every submission into a qualified lead, booked job, and collected payment.
             </p>
 
             {/* Interactive Step Tabs (clickable) */}
@@ -603,7 +601,7 @@ export default function GptFormLandingPage() {
               >
                 <a href="#templates">
                   <LayoutTemplate className="size-4 mr-2 text-muted-foreground" />
-                  Explore 20,000+ Templates
+                  Explore 180+ Templates
                 </a>
               </Button>
             </div>
@@ -867,7 +865,7 @@ export default function GptFormLandingPage() {
               Static Forms are Broken. AI Conversations Convert.
             </h2>
             <p className="text-sm text-muted-foreground">
-              Traditional forms feel like homework. GPTForm turns the same questions into a fluid, guided dialogue that delivers up to 3.2x higher completion rates.
+              Traditional forms feel like homework. GPTForm turns the same questions into a fluid, guided dialogue designed for higher completion rates.
             </p>
           </div>
 
@@ -880,7 +878,7 @@ export default function GptFormLandingPage() {
                   <span>The Old Way: Static Web Forms</span>
                 </div>
                 <Badge variant="secondary" className="bg-red-50 text-red-700 dark:bg-red-950/50 text-[10px]">
-                  ~68% Abandonment Rate
+                  High Abandonment Risk
                 </Badge>
               </div>
               <ul className="space-y-2.5 text-xs text-muted-foreground">
@@ -914,7 +912,7 @@ export default function GptFormLandingPage() {
                   <span>The GPTForm Way: Conversational AI</span>
                 </div>
                 <Badge className="bg-teal-600 text-white text-[10px]">
-                  3.2x Higher Conversion
+                  Designed for Higher Completion
                 </Badge>
               </div>
               <ul className="space-y-2.5 text-xs text-slate-700 dark:text-slate-300">
@@ -936,7 +934,7 @@ export default function GptFormLandingPage() {
                 </li>
               </ul>
               <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40 text-teal-900 dark:text-teal-200 text-[11px] font-medium border border-teal-200 dark:border-teal-800">
-                Visitors complete the intake in under 45 seconds with zero typing fatigue.
+                Visitors complete the intake quickly with zero typing fatigue.
               </div>
             </Card>
           </div>
@@ -1437,7 +1435,7 @@ export default function GptFormLandingPage() {
               Collect Payments Directly When the Form is Completed.
             </h2>
             <p className="text-base text-muted-foreground leading-relaxed">
-              Connect your Stripe, Apple Pay, Google Pay, Square, or Razorpay merchant account. Collect client deposits, consultation fees, or full payments with <strong>0% GPTForm platform commission</strong>.
+              Connect your Stripe merchant account. Collect client deposits, consultation fees, or full payments with <strong>0% GPTForm platform commission</strong>. Apple Pay and Google Pay are supported via Stripe.
             </p>
 
             <div className="p-4 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-xs text-teal-900 dark:text-teal-200 space-y-1">
@@ -1451,8 +1449,8 @@ export default function GptFormLandingPage() {
               {[
                 { icon: CreditCard, label: 'Stripe Checkout' },
                 { icon: Smartphone, label: 'Apple Pay & Google Pay' },
-                { icon: Zap, label: 'Square & PayPal' },
-                { icon: QrCode, label: 'Razorpay UPI & Cards' },
+                { icon: Zap, label: '0% Platform Commission' },
+                { icon: QrCode, label: 'Direct Merchant Payout' },
               ].map(({ icon: Icon, label }) => (
                 <div key={label} className="p-3 rounded-xl bg-white dark:bg-slate-800 border flex items-center gap-2.5 shadow-xs">
                   <Icon className="size-4 text-teal-600 shrink-0" />
@@ -1669,7 +1667,7 @@ export default function GptFormLandingPage() {
       <section id="templates" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
         <div className="text-center space-y-3 max-w-2xl mx-auto">
           <Badge variant="outline" className="text-xs text-teal-700 dark:text-teal-300 border-teal-300">
-            20,000+ Pre-Built Templates
+            180+ Professional Templates
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
             Start with a Template. Or Start with AI.
@@ -1704,7 +1702,7 @@ export default function GptFormLandingPage() {
                 <LayoutTemplate className="size-4 text-teal-600" />
                 <span>📚 Start from a Template</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Pick from 20,000+ templates for quotes, bookings, intake, and payments.</p>
+              <p className="text-xs text-muted-foreground mt-1">Pick from 180+ templates for quotes, bookings, intake, and payments.</p>
             </div>
             <Button
               asChild
@@ -1723,7 +1721,7 @@ export default function GptFormLandingPage() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search 20,000+ templates (e.g. Roofing, HVAC, Cleaning, Dental)..."
+              placeholder="Search 180+ templates (e.g. Roofing, HVAC, Cleaning, Dental)..."
               value={templateSearchQuery}
               onChange={(e) => setTemplateSearchQuery(e.target.value)}
               className="pl-10 h-11 text-xs sm:text-sm rounded-xl border-border bg-background shadow-xs"
@@ -1802,7 +1800,7 @@ export default function GptFormLandingPage() {
             variant="outline"
             className="rounded-xl px-8 text-xs font-semibold h-10 hover:border-teal-500 hover:text-teal-700"
           >
-            <Link href="/templates">Browse All 20,000+ Free Templates →</Link>
+            <Link href="/templates">Browse All 180+ Free Templates →</Link>
           </Button>
         </div>
       </section>
@@ -1883,7 +1881,7 @@ export default function GptFormLandingPage() {
             Put It Anywhere. 1-Line Embed.
           </h2>
           <p className="text-sm text-muted-foreground">
-            Embed your forms and conversational agents on WordPress, Shopify, Webflow, Squarespace, or custom React codebases.
+            Embed your forms and conversational agents on WordPress, Webflow, Squarespace, Wix, or any HTML site.
           </p>
         </div>
 
@@ -1909,10 +1907,9 @@ export default function GptFormLandingPage() {
           <div className="overflow-x-auto pb-1">
             <div className="flex gap-2 min-w-max">
               {[
-                { id: 'wordpress', label: 'WordPress Plugin' },
-                { id: 'shopify', label: 'Shopify Liquid' },
-                { id: 'webflow', label: 'Webflow Embed' },
-                { id: 'react', label: 'React / Next.js' },
+                { id: 'javascript', label: 'JavaScript' },
+                { id: 'wordpress', label: 'WordPress' },
+                { id: 'webflow', label: 'Webflow' },
                 { id: 'html', label: 'Plain HTML' },
               ].map((tab) => (
                 <button
@@ -2019,7 +2016,7 @@ export default function GptFormLandingPage() {
             </CardHeader>
             <CardContent className="space-y-4 text-xs">
               <ul className="space-y-2 text-slate-700 dark:text-slate-300">
-                {['3 Active Smart Forms', '100 Submissions / month', '20,000+ Templates Library', 'Direct Payments (0% fee)', 'Universal 1-line Embed'].map((f) => (
+                {['3 Active Smart Forms', '100 Submissions / month', '180+ Templates Library', 'Direct Payments (0% fee)', 'Universal 1-line Embed'].map((f) => (
                   <li key={f} className="flex items-start gap-2">
                     <Check className="size-3.5 text-teal-600 shrink-0 mt-0.5" /> {f}
                   </li>
@@ -2070,7 +2067,7 @@ export default function GptFormLandingPage() {
             </CardHeader>
             <CardContent className="space-y-4 text-xs">
               <ul className="space-y-2 text-slate-700 dark:text-slate-300">
-                {['Unlimited Smart Forms', '10,000 Submissions / month', 'Conversational AI Form Agents', 'White-labeling & Custom CSS', 'Priority Webhook & Zapier Sync'].map((f) => (
+                {['Unlimited Smart Forms', '10,000 Submissions / month', 'Conversational AI Form Agents', 'White-labeling & Custom CSS', 'Priority Webhook Sync'].map((f) => (
                   <li key={f} className="flex items-start gap-2">
                     <Check className="size-3.5 text-teal-600 shrink-0 mt-0.5" /> {f}
                   </li>
@@ -2116,11 +2113,11 @@ export default function GptFormLandingPage() {
             },
             {
               q: 'Can customers make payments directly through the form?',
-              a: 'Yes. Connect your Stripe, Apple Pay, Google Pay, Square, or Razorpay account. GPTForm charges 0% platform commission on transactions.',
+              a: 'Yes. Connect your Stripe account to collect deposits, consultation fees, and full payments directly through the form. Apple Pay and Google Pay are supported via Stripe. GPTForm charges 0% platform commission on transactions — payments go straight to your connected merchant account.',
             },
             {
-              q: 'Can I embed GPTForm on my WordPress, Webflow, or Shopify site?',
-              a: 'Yes. GPTForm provides ready shortcodes for WordPress, Liquid snippets for Shopify, HTML5 iframes for Webflow/Squarespace, and a dedicated React/Next.js package.',
+              q: 'Can I embed GPTForm on my WordPress, Webflow, or Squarespace site?',
+              a: 'Yes. GPTForm provides a universal JavaScript embed snippet (one line of code), a WordPress plugin with [fieseros_form] shortcode, and HTML5 iframes compatible with Webflow, Squarespace, Wix, or any CMS that supports iframes.',
             },
             {
               q: 'Can I use GPTForm without subscribing to the full Fieseros CRM?',
@@ -2157,7 +2154,7 @@ export default function GptFormLandingPage() {
             Build your first AI-powered form today.
           </h2>
           <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-            Get started free today with 100 submissions/month, 20,000+ templates, and conversational AI agents.
+            Get started free today with 100 submissions/month, 180+ templates, and conversational AI agents.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             <Button
@@ -2175,7 +2172,7 @@ export default function GptFormLandingPage() {
               size="lg"
               className="h-12 px-8 text-sm font-semibold rounded-xl hover:border-teal-500 hover:text-teal-700"
             >
-              <Link href="/templates">Browse 20,000+ Templates</Link>
+              <Link href="/templates">Browse 180+ Templates</Link>
             </Button>
           </div>
         </div>

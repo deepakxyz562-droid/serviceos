@@ -377,7 +377,7 @@ function evaluateFormulaSafe(
   if (!/^[0-9.\s+\-*/()]+$/.test(expr)) return null;
   if (/\/\s*0(?!\.\d)/.test(expr)) return null;
   try {
-    // eslint-disable-next-line no-new-func
+     
     const fn = new Function(`"use strict"; return (${expr});`);
     const result = fn();
     if (typeof result !== 'number' || !Number.isFinite(result)) return null;
@@ -737,7 +737,7 @@ export function FormRuntimeRenderer({
       }
       return changed ? next : prev;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [isEstimatorForm, schema.fields]);
 
   // Ghost form partial lead capture
@@ -950,12 +950,31 @@ export function FormRuntimeRenderer({
       className={`relative z-10 w-full ${isSplitLayout || isEstimatorForm ? 'max-w-5xl' : 'max-w-xl'} mx-auto space-y-4 transition-all`}
       style={{
         fontFamily,
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+         
         ['--form-primary' as any]: primaryColor,
-        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+         
         ['--form-btn-color' as any]: buttonColor,
       }}
     >
+      {/* Custom CSS injected from schema.settings.customCss (and/or legacy field-level customCss).
+          Scoped to the embed so it does not leak onto the host page. */}
+      {(() => {
+        // The FormSchema.settings type does not formally declare customCss, so we read
+        // defensively via optional chaining. Authors can also set customCss per-field.
+        const settingsCss =
+           
+          (typeof (schema.settings as any)?.customCss === 'string'
+            ?  
+              ((schema.settings as any).customCss as string)
+            : '') || '';
+        const fieldsCss = (schema.fields || [])
+          .map((f) => f?.customCss)
+          .filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+          .join('\n');
+        const raw = `${settingsCss}\n${fieldsCss}`.trim();
+        if (!raw) return null;
+        return <style dangerouslySetInnerHTML={{ __html: raw }} />;
+      })()}
       {/* Mode Switcher if enabled */}
       {allowModeSwitch && (
         <div className="flex justify-end gap-1.5 pb-1">

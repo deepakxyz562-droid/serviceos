@@ -171,6 +171,30 @@ function getNestedValue(obj: Record<string, any>, path: string): any {
   return path.split('.').reduce((current, key) => current?.[key], obj)
 }
 
+/**
+ * Replace every `{{path.to.value}}` template reference in `input` with the
+ * corresponding value from `data` (resolved via getNestedValue). Unknown
+ * references are left in place so authors can spot misconfiguration.
+ *
+ * Used by send_email / send_sms (and reusable by future action handlers) so
+ * automations can interpolate payload values like `{{customer.name}}` into
+ * message bodies and recipients.
+ */
+function resolveTemplate(input: string, data: Record<string, any>): string {
+  if (!input || typeof input !== 'string') return input
+  const matches = input.match(/\{\{([^}]+)\}\}/g)
+  if (!matches) return input
+  let resolved = input
+  for (const match of matches) {
+    const path = match.slice(2, -2).trim()
+    const value = getNestedValue(data, path)
+    if (value !== undefined && value !== null) {
+      resolved = resolved.replace(match, String(value))
+    }
+  }
+  return resolved
+}
+
 // ─── Action Executor ─────────────────────────────────────────────────────────
 
 /**
@@ -331,15 +355,66 @@ export async function executeAction(
         return { success: true, result: { jobId: job.id } }
       }
       case 'send_email': {
-        // In production, integrate with email service
-        console.log(`[TriggerEngine] Sending email to ${action.config.to}: ${action.config.subject}`)
-        return { success: true, result: { emailSent: true } }
+        // Send a REAL email via the email provider system (email-send.ts).
+        // Resolves {{var}} template references against the event payload so
+        // automations can address the recipient by name, job title, etc.
+        try {
+          const { sendEmail } = await import('@/lib/email-send')
+          const to = action.config.to || action.config.recipient || action.config.email || ''
+          const subject = action.config.subject || action.config.title || 'Notification'
+          const body = action.config.body || action.config.message || action.config.html || ''
+          if (!to) {
+            return { success: false, error: 'No recipient specified for send_email' }
+          }
+          // Resolve template variables {{path.to.value}} against payload.data
+          const resolvedTo = resolveTemplate(to, payload.data)
+          const resolvedSubject = resolveTemplate(subject, payload.data)
+          const resolvedBody = resolveTemplate(body, payload.data)
+          const result = await sendEmail({
+            to: resolvedTo,
+            subject: resolvedSubject,
+            html: resolvedBody,
+            text: resolvedBody,
+            tenantId: payload.tenantId || undefined,
+            usageType: 'transactional',
+          })
+          return {
+            success: result.success,
+            result: { emailSent: result.success, messageId: result.messageId, providerUsed: result.providerUsed },
+            error: result.error,
+          }
+        } catch (emailErr) {
+          console.error('[TriggerEngine] Email send failed:', emailErr)
+          return { success: false, error: String(emailErr) }
+        }
       }
       case 'send_sms': {
-        // In production, integrate with SMS service (Twilio, etc.)
-        console.log(`[TriggerEngine] Sending SMS to ${action.config.to}: ${action.config.message}`)
-        return { success: true, result: { smsSent: true } }
+        // Send a REAL SMS via the SMS provider system (sms-send.ts).
+        try {
+          const { sendSmsMessage } = await import('@/lib/sms-send')
+          const to = action.config.to || action.config.recipient || action.config.phone || ''
+          const message = action.config.message || action.config.body || action.config.text || ''
+          if (!to) {
+            return { success: false, error: 'No recipient specified for send_sms' }
+          }
+          const resolvedTo = resolveTemplate(to, payload.data)
+          const resolvedMessage = resolveTemplate(message, payload.data)
+          const result = await sendSmsMessage({
+            to: resolvedTo,
+            message: resolvedMessage,
+            tenantId: payload.tenantId || undefined,
+          })
+          return {
+            success: result.success,
+            result: { smsSent: result.success, messageId: result.messageId, simulated: result.simulated, provider: result.provider },
+            error: result.error,
+          }
+        } catch (smsErr) {
+          console.error('[TriggerEngine] SMS send failed:', smsErr)
+          return { success: false, error: String(smsErr) }
+        }
       }
+
       case 'remove_tag': {
         const leadId = payload.data.leadId
         if (leadId) {
@@ -442,6 +517,92 @@ export async function executeAction(
         }
         const r = await approveInvoice(invoiceId)
         return { success: r.success, result: r, error: r.error }
+      }
+
+      case 'create_quote': {
+        // Create a Quote record from the workflow context. The node-registry
+        // declares `createQuote` with `amount` (required) and `description`
+        // (optional). We resolve the lead/customer from the trigger payload
+        // when present, fall back to creating an orphan quote (with a warning)
+        // so automation authors can attach a customer afterwards.
+        const amount = Number(action.config.amount || 0)
+        const description =
+          action.config.description || action.config.notes || 'Created by workflow automation'
+
+        // Resolve tenant from config → payload → payload.data
+        const tenantId =
+          action.config.tenantId || payload.tenantId || payload.data.tenantId || null
+
+        // Resolve lead / customer context from the trigger payload.
+        // Lead-based triggers (lead.created, lead.updated, lead.assigned) put
+        // the lead record under `payload.data.lead` (or flat fields).
+        const leadId =
+          action.config.leadId ||
+          payload.data.leadId ||
+          payload.data.lead?.id ||
+          null
+        let customerId: string | null =
+          action.config.customerId ||
+          payload.data.customerId ||
+          payload.data.customer?.id ||
+          null
+        let customerName: string | undefined =
+          payload.data.customerName || payload.data.customer?.name || payload.data.lead?.name
+
+        // If we have a leadId but no customerId, look the lead up to pull the
+        // linked customer (and a fallback title).
+        if (leadId && !customerId) {
+          try {
+            const lead = await db.lead.findUnique({ where: { id: leadId } })
+            if (lead) {
+              customerId = lead.customerId || null
+              customerName = customerName || lead.name
+            }
+          } catch (leadErr) {
+            console.warn('[TriggerEngine] create_quote: lead lookup failed:', leadErr)
+          }
+        }
+
+        const title =
+          action.config.title ||
+          (customerName ? `Quote for ${customerName}` : 'Draft Quote')
+
+        try {
+          const quote = await db.quote.create({
+            data: {
+              title,
+              description: description || null,
+              itemsJson: '[]',
+              addOnsJson: '[]',
+              subtotal: amount,
+              tax: 0,
+              taxRate: 0,
+              discount: 0,
+              discountType: 'fixed',
+              total: amount,
+              currency: action.config.currency || 'USD',
+              status: 'draft',
+              tenantId,
+              customerId,
+              leadId,
+              jobId:
+                action.config.jobId || payload.data.jobId || payload.data.job?.id || null,
+              validUntil: action.config.validUntil
+                ? new Date(action.config.validUntil)
+                : null,
+            },
+          })
+          return { success: true, result: { quoteId: quote.id, quote } }
+        } catch (quoteErr) {
+          console.error('[TriggerEngine] create_quote failed:', quoteErr)
+          return {
+            success: false,
+            error:
+              quoteErr instanceof Error
+                ? quoteErr.message
+                : String(quoteErr),
+          }
+        }
       }
 
       default:
