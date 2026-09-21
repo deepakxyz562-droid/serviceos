@@ -23,8 +23,23 @@ function splitOutsideParens(str: string): string[] {
   return parts;
 }
 
+/**
+ * Checks if the instruction is a full conversational/creative prompt
+ * (e.g. "Create a roofing estimate form with roof size in sq ft...")
+ * rather than a simple raw comma-separated field list (e.g. "Name, Email, Phone, Map").
+ */
+function isDescriptivePrompt(instruction: string): boolean {
+  const trimmed = instruction.trim().toLowerCase();
+  if (/^(create|build|generate|make|design|set\s*up|new)\s+/i.test(trimmed)) return true;
+  if (trimmed.includes('estimate') || trimmed.includes('calculator') || trimmed.includes('quote') || trimmed.includes('booking')) return true;
+  if (trimmed.length > 50 && !trimmed.includes('(')) return true;
+  return false;
+}
+
 function parseCommaOrListPrompt(instruction: string): FormField[] | null {
-  // Check if instruction contains multiple items like "name, email, service listing (AC, Plumbing), message, map"
+  // If it's a natural language request, do NOT use naive comma splitting.
+  if (isDescriptivePrompt(instruction)) return null;
+
   const parts = splitOutsideParens(instruction);
   if (parts.length < 2 && !instruction.includes('(')) return null;
 
@@ -93,13 +108,13 @@ function parseCommaOrListPrompt(instruction: string): FormField[] | null {
     }
 
     // 4. Payment / Stripe
-    if (lower.includes('stripe') || lower.includes('payment') || lower.includes('credit card') || lower.includes('paypal') || lower.includes('checkout')) {
+    if (lower.includes('stripe') || lower.includes('payment') || lower.includes('credit card') || lower.includes('paypal') || lower.includes('checkout') || lower.includes('deposit')) {
       const isPaypal = lower.includes('paypal');
       fields.push({
         id: `widget_pay_${Date.now()}_${index++}`,
         type: 'control_widget',
         widgetType: isPaypal ? 'paypal_smart_buttons' : 'stripe_checkout',
-        label: isPaypal ? 'PayPal Checkout' : 'Secure Credit Card Payment',
+        label: isPaypal ? 'PayPal Checkout' : 'Secure Deposit Payment',
         required: true,
         width: 'full',
         widgetConfig: { currency: 'USD', amount: 50 },
@@ -109,7 +124,7 @@ function parseCommaOrListPrompt(instruction: string): FormField[] | null {
 
     // 5. Service Listing / Dropdown with options
     const optionsMatch = part.match(/\(([^)]+)\)|:\s*(.+)$/);
-    if (optionsMatch || lower.includes('service') || lower.includes('listing') || lower.includes('dropdown') || lower.includes('select')) {
+    if (optionsMatch || lower.includes('service') || lower.includes('listing') || lower.includes('dropdown') || lower.includes('select') || lower.includes('material')) {
       let rawOptions: string[] = ['Standard Service', 'Emergency Repair', 'Routine Maintenance'];
       if (optionsMatch) {
         const optionStr = optionsMatch[1] || optionsMatch[2];
@@ -192,6 +207,324 @@ function parseCommaOrListPrompt(instruction: string): FormField[] | null {
   return fields.length > 0 ? fields : null;
 }
 
+/**
+ * Synthesizes high-converting domain forms (Roofing, Dental, Cleaning, HVAC, Intake)
+ * with multi-step workflows, calculation fields, material options, photos, e-sign, and payments.
+ */
+function synthesizePresetForm(prompt: string): FormSchema | null {
+  const lower = prompt.toLowerCase();
+
+  if (lower.includes('roof') || (lower.includes('material') && lower.includes('sq ft'))) {
+    return {
+      version: 1,
+      steps: [
+        { id: 'step_1', title: '01 Instant quote', description: 'Tell us about the roof' },
+        { id: 'step_2', title: '02 Book inspection', description: 'Select property location & upload photos' },
+        { id: 'step_3', title: '03 Secure deposit', description: 'Authorize signature & secure deposit' },
+      ],
+      fields: [
+        {
+          id: 'roof_address',
+          type: 'address',
+          label: 'Service Address / Location',
+          placeholder: 'e.g. 48 King Road, London',
+          required: true,
+          stepId: 'step_1',
+          width: 'full',
+        },
+        {
+          id: 'roof_area',
+          type: 'numerical',
+          label: 'Approximate Roof Area (sq ft)',
+          placeholder: '2400',
+          required: true,
+          stepId: 'step_1',
+          width: 'half',
+        },
+        {
+          id: 'urgency_level',
+          type: 'dropdown',
+          label: 'Inspection Urgency Level',
+          required: true,
+          stepId: 'step_1',
+          width: 'half',
+          options: [
+            { label: 'Standard Inspection (Within 48h)', value: 'standard_48h' },
+            { label: 'Priority Inspection (Within 24h)', value: 'priority_24h' },
+            { label: 'Emergency Same-Day Response', value: 'emergency_same_day' },
+          ],
+        },
+        {
+          id: 'roof_material',
+          type: 'radio',
+          label: 'Architectural Material Options',
+          required: true,
+          stepId: 'step_1',
+          width: 'full',
+          options: [
+            { label: 'Standard Asphalt Shingle (£3.40 / sq ft)', value: 'standard_asphalt' },
+            { label: 'Architectural Metal Standing Seam (£5.80 / sq ft)', value: 'architectural_metal' },
+            { label: 'Spanish Clay Tile (£8.20 / sq ft)', value: 'spanish_tile' },
+          ],
+        },
+        {
+          id: 'damage_photos',
+          type: 'control_widget',
+          widgetType: 'image_upload_with_notes',
+          label: 'Upload Roof & Damage Photos',
+          required: false,
+          stepId: 'step_2',
+          width: 'full',
+          widgetConfig: { maxFiles: 10, requireNotes: true },
+        },
+        {
+          id: 'inspection_slot',
+          type: 'control_widget',
+          widgetType: 'calendar_booking',
+          label: 'Preferred Inspection Date & Time',
+          required: true,
+          stepId: 'step_2',
+          width: 'full',
+          widgetConfig: { slotDurationMin: 45 },
+        },
+        {
+          id: 'customer_name',
+          type: 'short_answer',
+          label: 'Full Name',
+          placeholder: 'John Doe',
+          required: true,
+          stepId: 'step_2',
+          width: 'half',
+        },
+        {
+          id: 'customer_phone',
+          type: 'phone',
+          label: 'Mobile Phone Number',
+          placeholder: '+44 7700 900077',
+          required: true,
+          stepId: 'step_2',
+          width: 'half',
+        },
+        {
+          id: 'customer_email',
+          type: 'email',
+          label: 'Email Address',
+          placeholder: 'john@example.com',
+          required: true,
+          stepId: 'step_2',
+          width: 'full',
+        },
+        {
+          id: 'customer_signature',
+          type: 'control_widget',
+          widgetType: 'e_signature',
+          label: 'Customer Authorization E-Signature',
+          required: true,
+          stepId: 'step_3',
+          width: 'full',
+          widgetConfig: { clearable: true },
+        },
+        {
+          id: 'deposit_payment',
+          type: 'control_widget',
+          widgetType: 'stripe_checkout',
+          label: 'Secure Inspection Deposit',
+          required: true,
+          stepId: 'step_3',
+          width: 'full',
+          widgetConfig: { currency: 'GBP', amount: 99 },
+        },
+      ],
+      rules: [],
+      theme: {
+        primaryColor: '#059669',
+        backgroundColor: '#ffffff',
+        textColor: '#0f172a',
+        borderRadius: '12px',
+        layout: 'card',
+      },
+      settings: {
+        submitButtonText: 'Confirm & Secure Estimate',
+        successTitle: 'Estimate Request Received!',
+        successMessage: 'Your live calculation has been saved and your inspection slot has been reserved.',
+        actions: {
+          createCrmLead: { enabled: true },
+          sendEmailNotification: { enabled: true },
+        },
+      },
+    };
+  }
+
+  if (lower.includes('dental') || lower.includes('clinic') || lower.includes('patient')) {
+    return {
+      version: 1,
+      steps: [
+        { id: 'step_1', title: '01 Patient Details', description: 'Tell us who you are' },
+        { id: 'step_2', title: '02 Select Treatment', description: 'Pick service & doctor' },
+        { id: 'step_3', title: '03 Appointment Slot', description: 'Confirm booking' },
+      ],
+      fields: [
+        { id: 'patient_name', type: 'short_answer', label: 'Patient Full Name', required: true, stepId: 'step_1', width: 'half' },
+        { id: 'patient_phone', type: 'phone', label: 'Phone Number', required: true, stepId: 'step_1', width: 'half' },
+        { id: 'patient_email', type: 'email', label: 'Email Address', required: true, stepId: 'step_1', width: 'full' },
+        {
+          id: 'treatment_type',
+          type: 'dropdown',
+          label: 'Select Treatment',
+          required: true,
+          stepId: 'step_2',
+          width: 'full',
+          options: [
+            { label: 'General Checkup & Clean (£75)', value: 'checkup' },
+            { label: 'Emergency Toothache / Pain Relief (£110)', value: 'emergency' },
+            { label: 'Cosmetic Teeth Whitening (£295)', value: 'whitening' },
+            { label: 'Dental Implant Consultation (£95)', value: 'implant' },
+          ],
+        },
+        {
+          id: 'insurance_upload',
+          type: 'control_widget',
+          widgetType: 'image_upload_with_notes',
+          label: 'Insurance Card / Referral Photo',
+          required: false,
+          stepId: 'step_2',
+          width: 'full',
+        },
+        {
+          id: 'booking_slot',
+          type: 'control_widget',
+          widgetType: 'calendar_booking',
+          label: 'Preferred Appointment Slot',
+          required: true,
+          stepId: 'step_3',
+          width: 'full',
+        },
+      ],
+      rules: [],
+      theme: { primaryColor: '#0284c7', backgroundColor: '#ffffff', textColor: '#0f172a', borderRadius: '12px', layout: 'card' },
+      settings: {
+        submitButtonText: 'Confirm Dental Booking',
+        successTitle: 'Appointment Confirmed',
+        successMessage: 'We have reserved your dental appointment slot and sent an SMS confirmation.',
+      },
+    };
+  }
+
+  if (lower.includes('clean') || lower.includes('maid') || lower.includes('housekeeping')) {
+    return {
+      version: 1,
+      steps: [
+        { id: 'step_1', title: '01 Scope & Rooms', description: 'Estimate cleaning scope' },
+        { id: 'step_2', title: '02 Schedule & Frequency', description: 'Pick date & discounts' },
+      ],
+      fields: [
+        { id: 'property_address', type: 'address', label: 'Property Address', required: true, stepId: 'step_1', width: 'full' },
+        { id: 'bedroom_count', type: 'numerical', label: 'Number of Bedrooms', placeholder: '3', required: true, stepId: 'step_1', width: 'half' },
+        { id: 'bathroom_count', type: 'numerical', label: 'Number of Bathrooms', placeholder: '2', required: true, stepId: 'step_1', width: 'half' },
+        {
+          id: 'clean_frequency',
+          type: 'radio',
+          label: 'Cleaning Frequency (Save up to 20%)',
+          required: true,
+          stepId: 'step_1',
+          width: 'full',
+          options: [
+            { label: 'One-Time Deep Clean', value: 'one_time' },
+            { label: 'Weekly Service (20% Off)', value: 'weekly' },
+            { label: 'Bi-Weekly Service (15% Off)', value: 'bi_weekly' },
+          ],
+        },
+        { id: 'customer_name', type: 'short_answer', label: 'Full Name', required: true, stepId: 'step_2', width: 'half' },
+        { id: 'customer_phone', type: 'phone', label: 'Phone Number', required: true, stepId: 'step_2', width: 'half' },
+        {
+          id: 'booking_date',
+          type: 'control_widget',
+          widgetType: 'calendar_booking',
+          label: 'Preferred First Cleaning Slot',
+          required: true,
+          stepId: 'step_2',
+          width: 'full',
+        },
+      ],
+      rules: [],
+      theme: { primaryColor: '#059669', backgroundColor: '#ffffff', textColor: '#0f172a', borderRadius: '12px', layout: 'card' },
+      settings: {
+        submitButtonText: 'Book Cleaning Service',
+        successTitle: 'Booking Request Received',
+        successMessage: 'We have dispatched your cleaning request to our scheduling coordinator.',
+      },
+    };
+  }
+
+  if (lower.includes('hvac') || lower.includes('ac') || lower.includes('heat') || lower.includes('furnace')) {
+    return {
+      version: 1,
+      steps: [
+        { id: 'step_1', title: '01 HVAC Problem', description: 'Diagnose the issue' },
+        { id: 'step_2', title: '02 Location & Dispatch', description: 'Book technician' },
+      ],
+      fields: [
+        { id: 'hvac_address', type: 'address', label: 'Service Location', required: true, stepId: 'step_1', width: 'full' },
+        {
+          id: 'system_type',
+          type: 'dropdown',
+          label: 'Equipment Type',
+          required: true,
+          stepId: 'step_1',
+          width: 'half',
+          options: [
+            { label: 'Central AC System', value: 'central_ac' },
+            { label: 'Gas Furnace / Heating', value: 'gas_furnace' },
+            { label: 'Heat Pump / Mini-Split', value: 'heat_pump' },
+            { label: 'Commercial Rooftop HVAC', value: 'commercial_hvac' },
+          ],
+        },
+        {
+          id: 'urgency_level',
+          type: 'radio',
+          label: 'Urgency Level',
+          required: true,
+          stepId: 'step_1',
+          width: 'half',
+          options: [
+            { label: 'Emergency (No heat/cooling) — Within 2h', value: 'emergency' },
+            { label: 'Standard Diagnostic — Within 24h', value: 'standard' },
+          ],
+        },
+        {
+          id: 'equipment_photo',
+          type: 'control_widget',
+          widgetType: 'image_upload_with_notes',
+          label: 'Photo of Equipment Model Badge / Error',
+          required: false,
+          stepId: 'step_1',
+          width: 'full',
+        },
+        { id: 'customer_name', type: 'short_answer', label: 'Full Name', required: true, stepId: 'step_2', width: 'half' },
+        { id: 'customer_phone', type: 'phone', label: 'Phone Number', required: true, stepId: 'step_2', width: 'half' },
+        {
+          id: 'dispatch_slot',
+          type: 'control_widget',
+          widgetType: 'calendar_booking',
+          label: 'Select Dispatch Window',
+          required: true,
+          stepId: 'step_2',
+          width: 'full',
+        },
+      ],
+      rules: [],
+      theme: { primaryColor: '#d97706', backgroundColor: '#ffffff', textColor: '#0f172a', borderRadius: '12px', layout: 'card' },
+      settings: {
+        submitButtonText: 'Dispatch HVAC Tech',
+        successTitle: 'Emergency Tech Dispatched',
+        successMessage: 'Your technician has received your ticket and will call with an exact arrival ETA.',
+      },
+    };
+  }
+
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -207,83 +540,97 @@ export async function POST(request: NextRequest) {
     let provider = 'fieseros-smart-rules';
     let model = 'copilot-instant-v2';
 
-    // ─── Fast Zero-Token Heuristic Parser ───────────────────────────────────────
-    // If user provided a multi-field specification list (e.g. "Name, Email, Service Listing (AC Repair, Plumbing), Message, Map in footer")
-    const parsedListFields = parseCommaOrListPrompt(instruction);
-    if (parsedListFields && (parsedListFields.length >= 3 || (!currentSchema.fields || currentSchema.fields.length === 0))) {
-      updatedSchema = {
-        version: 1,
-        steps: [{ id: 'step_1', title: 'Details' }],
-        fields: parsedListFields,
-        rules: currentSchema.rules || [],
-        theme: {
-          primaryColor: currentSchema.theme?.primaryColor || '#059669',
-          backgroundColor: currentSchema.theme?.backgroundColor || '#ffffff',
-          textColor: currentSchema.theme?.textColor || '#0f172a',
-          borderRadius: currentSchema.theme?.borderRadius || '12px',
-          layout: 'classic',
-        },
-        settings: {
-          submitButtonText: 'Submit Request',
-          successTitle: 'Thank you!',
-          successMessage: 'Your submission has been received.',
-          actions: currentSchema.settings?.actions || {},
-        },
-      };
-    } else if (lower.includes('map') && (lower.includes('footer') || lower.includes('bottom') || lower.includes('end') || lower.includes('add'))) {
-      const currentFields = [...(currentSchema.fields || [])];
-      currentFields.push({
-        id: `widget_map_${Date.now()}`,
-        type: 'control_widget',
-        widgetType: 'route_planner_map',
-        label: 'Interactive Service Route & Location Map',
-        required: false,
-        width: 'full',
-        widgetConfig: { provider: 'managed', travelMode: 'DRIVING', unit: 'miles' },
-      });
-      updatedSchema = { ...currentSchema, fields: currentFields };
-    } else if (lower.includes('stripe') || lower.includes('payment') || lower.includes('credit card')) {
-      const currentFields = [...(currentSchema.fields || [])];
-      currentFields.push({
-        id: `widget_pay_${Date.now()}`,
-        type: 'control_widget',
-        widgetType: 'stripe_checkout',
-        label: 'Secure Credit Card Payment (Stripe)',
-        required: true,
-        width: 'full',
-        widgetConfig: { provider: 'managed', currency: 'USD', amount: 50 },
-      });
-      updatedSchema = { ...currentSchema, fields: currentFields };
-    } else if (lower.includes('photo') || lower.includes('damage') || lower.includes('image')) {
-      const currentFields = [...(currentSchema.fields || [])];
-      currentFields.push({
-        id: `widget_photo_${Date.now()}`,
-        type: 'control_widget',
-        widgetType: 'image_upload_with_notes',
-        label: 'Upload Photos with Notes',
-        required: false,
-        width: 'full',
-        widgetConfig: { maxFiles: 10, requireNotes: true },
-      });
-      updatedSchema = { ...currentSchema, fields: currentFields };
-    } else if (lower.includes('signature') || lower.includes('sign')) {
-      const currentFields = [...(currentSchema.fields || [])];
-      currentFields.push({
-        id: `widget_sign_${Date.now()}`,
-        type: 'control_widget',
-        widgetType: 'e_signature',
-        label: 'Customer Signature',
-        required: true,
-        width: 'full',
-      });
-      updatedSchema = { ...currentSchema, fields: currentFields };
+    // ─── 1. Check for Domain Presets / Full Estimator Form Requests ──────────────
+    if (!currentSchema.fields || currentSchema.fields.length === 0 || /create|build|generate|make|quote|estimate|calculator/i.test(instruction)) {
+      const preset = synthesizePresetForm(instruction);
+      if (preset) {
+        updatedSchema = preset;
+        provider = 'fieseros-domain-engine';
+        model = 'trade-estimator-v3';
+      }
     }
 
-    // ─── If LLM is available and instruction is conversational/open-ended ────────
+    // ─── 2. Fast Shorthand List Parser (e.g. "Name, Email, Phone, Map") ──────────
+    if (!updatedSchema) {
+      const parsedListFields = parseCommaOrListPrompt(instruction);
+      if (parsedListFields && (parsedListFields.length >= 2 || (!currentSchema.fields || currentSchema.fields.length === 0))) {
+        updatedSchema = {
+          version: 1,
+          steps: [{ id: 'step_1', title: 'Details' }],
+          fields: parsedListFields,
+          rules: currentSchema.rules || [],
+          theme: {
+            primaryColor: currentSchema.theme?.primaryColor || '#059669',
+            backgroundColor: currentSchema.theme?.backgroundColor || '#ffffff',
+            textColor: currentSchema.theme?.textColor || '#0f172a',
+            borderRadius: currentSchema.theme?.borderRadius || '12px',
+            layout: 'classic',
+          },
+          settings: {
+            submitButtonText: 'Submit Request',
+            successTitle: 'Thank you!',
+            successMessage: 'Your submission has been received.',
+            actions: currentSchema.settings?.actions || {},
+          },
+        };
+      }
+    }
+
+    // ─── 3. Single-Action Incremental Modifiers ──────────────────────────────────
+    if (!updatedSchema) {
+      if (lower.includes('map') && (lower.includes('footer') || lower.includes('bottom') || lower.includes('end') || lower.includes('add'))) {
+        const currentFields = [...(currentSchema.fields || [])];
+        currentFields.push({
+          id: `widget_map_${Date.now()}`,
+          type: 'control_widget',
+          widgetType: 'route_planner_map',
+          label: 'Interactive Service Route & Location Map',
+          required: false,
+          width: 'full',
+          widgetConfig: { provider: 'managed', travelMode: 'DRIVING', unit: 'miles' },
+        });
+        updatedSchema = { ...currentSchema, fields: currentFields };
+      } else if (lower.includes('stripe') || lower.includes('payment') || lower.includes('credit card') || lower.includes('deposit')) {
+        const currentFields = [...(currentSchema.fields || [])];
+        currentFields.push({
+          id: `widget_pay_${Date.now()}`,
+          type: 'control_widget',
+          widgetType: 'stripe_checkout',
+          label: 'Secure Deposit Payment',
+          required: true,
+          width: 'full',
+          widgetConfig: { provider: 'managed', currency: 'USD', amount: 50 },
+        });
+        updatedSchema = { ...currentSchema, fields: currentFields };
+      } else if (lower.includes('photo') || lower.includes('damage') || lower.includes('image')) {
+        const currentFields = [...(currentSchema.fields || [])];
+        currentFields.push({
+          id: `widget_photo_${Date.now()}`,
+          type: 'control_widget',
+          widgetType: 'image_upload_with_notes',
+          label: 'Upload Photos with Notes',
+          required: false,
+          width: 'full',
+          widgetConfig: { maxFiles: 10, requireNotes: true },
+        });
+        updatedSchema = { ...currentSchema, fields: currentFields };
+      } else if (lower.includes('signature') || lower.includes('sign')) {
+        const currentFields = [...(currentSchema.fields || [])];
+        currentFields.push({
+          id: `widget_sign_${Date.now()}`,
+          type: 'control_widget',
+          widgetType: 'e_signature',
+          label: 'Customer Signature',
+          required: true,
+          width: 'full',
+        });
+        updatedSchema = { ...currentSchema, fields: currentFields };
+      }
+    }
+
+    // ─── 4. LLM Fallback for open-ended conversational prompts ───────────────────
     if (!updatedSchema) {
       try {
-        const widgetSample = FIELD_REGISTRY.slice(0, 30).map((w) => `${w.id} (${w.name})`).join(', ');
-
         const systemPrompt = `You are the Fieseros AI Form Studio Co-Pilot.
 You receive a FormSchema JSON and a user prompt to build or modify form questions, options, widgets, and layout.
 
@@ -303,9 +650,8 @@ Standard Field Types:
 
 Rules:
 1. For widgets, set type="control_widget" and widgetType to the appropriate widget ID.
-2. If the user asks for a Map in the footer/bottom, append the route_planner_map or nearest_location_finder at the end of the fields array.
-3. If the user specifies service options (e.g. "Service listing (AC Repair, Plumbing, Heating)"), output type="dropdown" with options: [{ label: "AC Repair", value: "ac_repair" }, ...].
-4. Return ONLY valid JSON matching FormSchema (no markdown formatting, no explanations).`;
+2. If the user asks for estimates/calculations, include numerical fields for scope (e.g. sq ft) and dropdown/radio for tiers with price rates.
+3. Return ONLY valid JSON matching FormSchema (no markdown formatting, no explanations).`;
 
         const userMessage = `Current Form Schema:
 ${JSON.stringify(currentSchema, null, 2)}
@@ -338,7 +684,7 @@ Return the updated FormSchema JSON object.`;
       }
     }
 
-    // ─── Ultimate fallback if still null ────────────────────────────────────────
+    // ─── 5. Ultimate fallback if still null ──────────────────────────────────────
     if (!updatedSchema) {
       const currentFields = [...(currentSchema.fields || [])];
       currentFields.push({
@@ -368,4 +714,3 @@ Return the updated FormSchema JSON object.`;
     );
   }
 }
-

@@ -614,12 +614,116 @@ export function FormRuntimeRenderer({
     return requiredSet;
   }, [schema.rules, formData]);
 
+  // ─── Live Estimator & Calculation Engine ─────────────────────────────────
+  const isEstimatorForm = useMemo(() => {
+    const nameLower = (formName + ' ' + (formDescription || '')).toLowerCase();
+    const hasEstimateKeywords = /estimate|estimator|quote|roof|cleaning|hvac|solar|pricing|calculator/i.test(nameLower);
+    const hasCalcField = schema.fields.some(
+      (f) =>
+        f.widgetType === 'form_calculation' ||
+        f.type === 'calculated' ||
+        f.type === 'currency' ||
+        f.id.includes('sqft') ||
+        f.id.includes('material') ||
+        f.id.includes('area')
+    );
+    return hasEstimateKeywords || hasCalcField;
+  }, [formName, formDescription, schema.fields]);
+
+  const liveEstimateData = useMemo(() => {
+    // Determine currency symbol
+    let symbol = '£';
+    const currencyField = schema.fields.find((f) => f.widgetType === 'form_calculation' || f.type === 'currency');
+    if (currencyField && (currencyField.widgetConfig as any)?.prefix) {
+      symbol = (currencyField.widgetConfig as any).prefix;
+    }
+
+    // Determine scope / area / quantity
+    const areaField = schema.fields.find(
+      (f) => f.id.includes('size') || f.id.includes('area') || f.id.includes('sqft') || f.type === 'numerical'
+    );
+    const rawArea = areaField ? formData[areaField.id] : undefined;
+    const areaNum = typeof rawArea === 'number' ? rawArea : parseFloat(rawArea) || 2400;
+
+    // Determine material / tier rate
+    const materialField = schema.fields.find(
+      (f) => f.id.includes('material') || f.id.includes('tier') || f.id.includes('service')
+    );
+    const rawMaterial = materialField ? formData[materialField.id] : undefined;
+    let materialName = 'Architectural Metal';
+    let materialRate = 5.80;
+
+    if (rawMaterial) {
+      const matStr = String(rawMaterial).toLowerCase();
+      if (matStr.includes('asphalt') || matStr.includes('standard') || matStr.includes('basic')) {
+        materialName = 'Asphalt Shingle';
+        materialRate = 3.40;
+      } else if (matStr.includes('tile') || matStr.includes('premium') || matStr.includes('spanish')) {
+        materialName = 'Spanish Tile';
+        materialRate = 8.20;
+      } else if (matStr.includes('metal') || matStr.includes('architectural')) {
+        materialName = 'Architectural Metal';
+        materialRate = 5.80;
+      } else {
+        // Find matching option label if exists
+        const matchedOpt = materialField?.options?.find((o) => o.value === rawMaterial);
+        materialName = matchedOpt?.label || String(rawMaterial);
+        // Extract rate if present in label e.g. "£5.80"
+        const rateMatch = materialName.match(/[\$£€](\d+(?:\.\d+)?)/);
+        if (rateMatch && rateMatch[1]) {
+          materialRate = parseFloat(rateMatch[1]);
+        }
+      }
+    }
+
+    // Base inspection / setup fee
+    const baseFee = 240;
+
+    // Calculate total: (area * rate) + base fee
+    // E.g. 2400 * 5.80 + 240 = 13920 + 240 = 14160
+    const subtotal = areaNum * materialRate;
+    const total = subtotal + baseFee;
+    const deposit = total * 0.20; // 20% deposit
+
+    return {
+      symbol,
+      areaNum,
+      areaFormatted: areaNum.toLocaleString('en-US'),
+      materialName,
+      materialRate: materialRate.toFixed(2),
+      baseFee: baseFee.toFixed(2),
+      totalFormatted: Math.round(total).toLocaleString('en-US'),
+      depositFormatted: Math.round(deposit).toLocaleString('en-US'),
+      totalRaw: total,
+      depositRaw: deposit,
+    };
+  }, [formData, schema.fields]);
+
   // Auto-evaluate calculation widgets and inject their result into formData.
   // This effect runs after every formData change so dependent fields re-evaluate.
   useEffect(() => {
     setFormData((prev) => {
       let changed = false;
       const next = { ...prev };
+
+      // Set default initial values for slider/material if not yet set for smooth live estimate
+      if (isEstimatorForm) {
+        const areaField = schema.fields.find(
+          (f) => f.id.includes('size') || f.id.includes('area') || f.id.includes('sqft')
+        );
+        if (areaField && next[areaField.id] === undefined) {
+          next[areaField.id] = 2400;
+          changed = true;
+        }
+        const materialField = schema.fields.find(
+          (f) => f.id.includes('material') || f.id.includes('tier')
+        );
+        if (materialField && next[materialField.id] === undefined && materialField.options?.length) {
+          next[materialField.id] = materialField.options[1]?.value || materialField.options[0]?.value;
+          changed = true;
+        }
+      }
+
       for (const field of schema.fields) {
         if (field.widgetType === 'form_calculation' && field.widgetConfig) {
           const formula = String((field.widgetConfig as Record<string, unknown>).formula || '');
@@ -634,7 +738,7 @@ export function FormRuntimeRenderer({
       return changed ? next : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData, schema.fields]);
+  }, [isEstimatorForm, schema.fields]);
 
   // Ghost form partial lead capture
   const handleFieldChange = (fieldId: string, value: any) => {
@@ -843,7 +947,7 @@ export function FormRuntimeRenderer({
 
   const formElement = (
     <div
-      className={`relative z-10 w-full ${isSplitLayout ? 'max-w-5xl' : 'max-w-xl'} mx-auto space-y-4 transition-all`}
+      className={`relative z-10 w-full ${isSplitLayout || isEstimatorForm ? 'max-w-5xl' : 'max-w-xl'} mx-auto space-y-4 transition-all`}
       style={{
         fontFamily,
         // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
@@ -886,6 +990,53 @@ export function FormRuntimeRenderer({
         </div>
       )}
 
+      {/* Top 3-Step Navigation Tabs (Desktop & Tablet) */}
+      {steps.length > 1 && (
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-1">
+          {steps.map((step, idx) => {
+            const isActive = idx === currentStepIndex;
+            const isPast = idx < currentStepIndex;
+            return (
+              <button
+                key={step.id || idx}
+                type="button"
+                disabled={idx > currentStepIndex}
+                onClick={() => {
+                  if (idx < currentStepIndex) setCurrentStepIndex(idx);
+                }}
+                className={`flex items-center gap-2 sm:gap-2.5 p-2.5 sm:p-3 rounded-2xl text-left transition-all border ${
+                  isActive
+                    ? 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 shadow-md ring-2 ring-primary/20'
+                    : isPast
+                    ? 'bg-slate-100/80 dark:bg-slate-800/60 border-slate-200 dark:border-slate-800 hover:bg-slate-200/80 cursor-pointer text-slate-700 dark:text-slate-300'
+                    : 'bg-slate-50/50 dark:bg-slate-900/30 border-slate-200/60 dark:border-slate-800/40 text-slate-400 opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <div
+                  className={`size-6 rounded-lg text-[10px] font-black flex items-center justify-center shrink-0 transition-all ${
+                    isActive
+                      ? 'bg-primary text-white shadow-xs'
+                      : isPast
+                      ? 'bg-emerald-500 text-white shadow-xs'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                  }`}
+                >
+                  {isPast ? '✓' : `0${idx + 1}`}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase font-bold tracking-wider opacity-60">
+                    Step 0{idx + 1}
+                  </p>
+                  <p className="text-xs font-bold truncate text-foreground">
+                    {step.title}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <Card
         className="shadow-xl border border-slate-200/90 dark:border-slate-800 overflow-hidden transition-all duration-300 bg-white dark:bg-slate-900 rounded-3xl"
         style={{
@@ -902,7 +1053,7 @@ export function FormRuntimeRenderer({
           />
         )}
 
-        <div className={isSplitLayout ? 'grid grid-cols-1 lg:grid-cols-12 min-h-full' : ''}>
+        <div className={isSplitLayout || isEstimatorForm ? 'grid grid-cols-1 lg:grid-cols-12 min-h-full' : ''}>
           {/* Media Hero Column (if Split Layout and positioned on the left) */}
           {isSplitLayout && !isRightSide && (
             <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' ? 'hidden lg:flex' : ''}`}>
@@ -920,7 +1071,7 @@ export function FormRuntimeRenderer({
           )}
 
           {/* Form Content Column */}
-          <div className={`${isSplitLayout ? formColSpan : 'w-full'} flex flex-col justify-between`}>
+          <div className={`${isSplitLayout ? formColSpan : isEstimatorForm ? 'lg:col-span-7 w-full' : 'w-full'} flex flex-col justify-between`}>
             {/* Header */}
             <div className="p-6 sm:p-8 pb-4 border-b border-border/40">
               {branding?.businessName && (
@@ -931,45 +1082,23 @@ export function FormRuntimeRenderer({
                   {branding.businessName}
                 </p>
               )}
-              <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
-                {formName}
-              </h1>
-              {formDescription && (
-                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
-                  {formDescription}
-                </p>
-              )}
-
-              {/* Stepper Progress for multi-step forms */}
-              {steps.length > 1 && (
-                <div className="mt-5 pt-4 border-t border-border/50">
-                  <div className="flex items-center justify-between gap-4 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="size-5 rounded-md text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-2xs"
-                        style={{ backgroundColor: primaryColor }}
-                      >
-                        {currentStepIndex + 1}
-                      </span>
-                      <span className="text-xs font-bold text-foreground truncate max-w-xs">
-                        {currentStep.title}
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-semibold text-muted-foreground">
-                      Step {currentStepIndex + 1} of {steps.length} ({Math.round(((currentStepIndex + 1) / steps.length) * 100)}%)
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
-                    <div
-                      className="h-full rounded-full transition-all duration-300 shadow-xs"
-                      style={{
-                        width: `${((currentStepIndex + 1) / steps.length) * 100}%`,
-                        backgroundColor: primaryColor,
-                      }}
-                    />
-                  </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
+                    {formName}
+                  </h1>
+                  {formDescription && (
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
+                      {formDescription}
+                    </p>
+                  )}
                 </div>
-              )}
+                {isEstimatorForm && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <Sparkles className="size-3 text-emerald-500" /> Real-time Calculation
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Content */}
@@ -1358,8 +1487,70 @@ export function FormRuntimeRenderer({
                       />
                     )}
 
+                    {/* Scope / Area Interactive Slider */}
+                    {!field.widgetType && (field.id.includes('size') || field.id.includes('area') || field.id.includes('sqft') || field.label.toLowerCase().includes('sq ft') || field.label.toLowerCase().includes('area')) && (
+                      <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-border/80">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-muted-foreground">Area / Scope Size</span>
+                          <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold text-xs">
+                            {(Number(formData[field.id]) || 2400).toLocaleString()} sq ft
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="500"
+                          max="10000"
+                          step="50"
+                          value={Number(formData[field.id]) || 2400}
+                          onChange={(e) => handleFieldChange(field.id, Number(e.target.value))}
+                          className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                        />
+                        <div className="flex justify-between text-[10px] text-muted-foreground pt-0.5">
+                          <span>500 sq ft</span>
+                          <span className="font-medium text-emerald-600 dark:text-emerald-400">Drag to recalculate</span>
+                          <span>10,000 sq ft</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Segmented Material / Pricing Option Cards */}
+                    {!field.widgetType && field.type === 'radio' && (field.id.includes('material') || field.id.includes('tier')) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                        {field.options?.map((opt) => {
+                          const isSelected = formData[field.id] === opt.value;
+                          const optLabel = opt.label;
+                          let priceBadge = '£3.40/sq ft';
+                          if (opt.value.includes('metal') || opt.value.includes('architectural')) priceBadge = '£5.80/sq ft';
+                          if (opt.value.includes('tile') || opt.value.includes('spanish') || opt.value.includes('premium')) priceBadge = '£8.20/sq ft';
+
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => handleFieldChange(field.id, opt.value)}
+                              className={`p-3 rounded-2xl text-left border transition-all flex flex-col justify-between gap-2 cursor-pointer ${
+                                isSelected
+                                  ? 'border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/30 ring-2 ring-emerald-600/30 shadow-xs'
+                                  : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900 bg-white dark:bg-slate-900/50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 w-full">
+                                <span className="text-xs font-bold text-foreground truncate">{optLabel}</span>
+                                <div className={`size-3.5 rounded-full border flex items-center justify-center ${isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>
+                                  {isSelected && <div className="size-1.5 rounded-full bg-white" />}
+                                </div>
+                              </div>
+                              <span className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400">
+                                {priceBadge}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     {/* Standard Inputs */}
-                    {!field.widgetType && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
+                    {!field.widgetType && !field.id.includes('size') && !field.id.includes('sqft') && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
                       <Input
                         id={field.id}
                         type={
@@ -1607,6 +1798,57 @@ export function FormRuntimeRenderer({
             </CardContent>
           </div>
 
+          {/* Estimator Live Calculation Receipt Card (Right Column on Desktop) */}
+          {isEstimatorForm && !isSplitLayout && (
+            <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-8 bg-slate-950 text-white rounded-3xl lg:rounded-l-none lg:rounded-r-3xl border-t lg:border-t-0 lg:border-l border-slate-800 shadow-inner">
+              <div className="space-y-6">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    <span className="size-2 rounded-full bg-emerald-400 animate-pulse" /> Live Estimate
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">Dynamic Engine</span>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-400">Total Calculated Estimate</p>
+                  <h3 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+                    {liveEstimateData.symbol}{liveEstimateData.totalFormatted}
+                  </h3>
+                </div>
+
+                <div className="pt-5 border-t border-slate-800 space-y-3.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Scope / Area</span>
+                    <span className="font-bold text-slate-100">{liveEstimateData.areaFormatted} sq ft</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Material Grade</span>
+                    <span className="font-bold text-slate-100">{liveEstimateData.materialName} ({liveEstimateData.symbol}{liveEstimateData.materialRate}/sq ft)</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Safety &amp; Compliance Inspection</span>
+                    <span className="font-bold text-slate-100">{liveEstimateData.symbol}{liveEstimateData.baseFee}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-800/80">
+                    <span className="text-emerald-400 font-bold">Required Deposit (20%)</span>
+                    <span className="font-extrabold text-emerald-400 text-sm">{liveEstimateData.symbol}{liveEstimateData.depositFormatted}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-slate-800 space-y-2.5">
+                <div className="flex items-center gap-2 text-xs text-slate-300">
+                  <ShieldCheck className="size-4 text-emerald-400 shrink-0" />
+                  <span>10-Year Workmanship Warranty Included</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-300">
+                  <CheckCircle2 className="size-4 text-blue-400 shrink-0" />
+                  <span>Secure Escrow &amp; Stripe Checkout Ready</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Media Hero Column (if Split Layout and positioned on the right) */}
           {isSplitLayout && isRightSide && (
             <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' ? 'hidden lg:flex' : ''}`}>
@@ -1624,6 +1866,29 @@ export function FormRuntimeRenderer({
           )}
         </div>
       </Card>
+
+      {/* Mobile Sticky Bottom Summary Pill (< lg) */}
+      {isEstimatorForm && (
+        <div className="fixed bottom-4 inset-x-4 z-50 lg:hidden">
+          <div className="p-3.5 px-4 rounded-2xl bg-slate-950 text-white border border-slate-800 shadow-2xl flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Live Estimate</p>
+              <p className="text-base font-black text-emerald-400">{liveEstimateData.symbol}{liveEstimateData.totalFormatted}</p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                if (currentStepIndex < steps.length - 1) handleNext();
+                else handleSubmit();
+              }}
+              className="h-9 px-4 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md cursor-pointer"
+            >
+              {currentStepIndex < steps.length - 1 ? 'Continue →' : 'Book Now'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 

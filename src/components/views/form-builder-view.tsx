@@ -660,7 +660,7 @@ export function FormBuilderView() {
             className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5"
             onClick={() => setShowAiWebsiteDialog(true)}
           >
-            <Sparkles className="size-4 text-emerald-600" /> Create with AI from Website
+            <Sparkles className="size-4 text-emerald-600" /> Create with AI
           </Button>
           <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleOpenCreate}>
             <Plus className="size-4 mr-1.5" /> Create Form
@@ -882,7 +882,7 @@ export function FormBuilderView() {
                   className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5"
                   onClick={() => setShowAiWebsiteDialog(true)}
                 >
-                  <Sparkles className="size-4 text-emerald-600" /> Create with AI from Website
+                  <Sparkles className="size-4 text-emerald-600" /> Create with AI
                 </Button>
                 <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleOpenCreate}>
                   <Plus className="size-4 mr-1.5" /> Create Form

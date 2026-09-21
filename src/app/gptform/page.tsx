@@ -82,6 +82,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import { AiMarketingLayout } from '@/components/ai-marketing/ai-marketing-layout';
+import { InteractiveFormTour } from '@/components/gptform/interactive-form-tour';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -761,6 +762,28 @@ export default function GptFormLandingPage() {
               </CardContent>
             </Card>
           </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 1.5 — INTERACTIVE AI FORM BUILDER TOUR & GUIDED WALKTHROUGH
+      ══════════════════════════════════════════════════════════════════════ */}
+      <section id="ai-form-builder-tour" className="py-16 sm:py-20 bg-slate-950 text-white border-b border-slate-800 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+          <div className="text-center space-y-3 max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-semibold">
+              <Sparkles className="size-3.5 animate-pulse" />
+              <span>INTERACTIVE PRODUCT TOUR</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+              See the AI Form Builder in Action
+            </h2>
+            <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
+              Take an interactive guided tour through our 3-pane Studio Builder: prompt with natural language, customize fields and calculation logic, and test on the live mobile simulator.
+            </p>
+          </div>
+
+          <InteractiveFormTour />
         </div>
       </section>
 
