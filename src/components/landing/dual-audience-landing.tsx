@@ -3476,6 +3476,9 @@ export function DualAudienceLanding({
         </section>
       </main>
 
+      {/* Global Comprehensive Footer */}
+      <LandingFooter />
+
       <StickyCta audience={audience} onPick={handleAudiencePick} onGetStarted={onGetStarted} />
     </div>
   );
