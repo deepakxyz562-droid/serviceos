@@ -71,38 +71,38 @@ const ACCENT_STYLES: Record<
   { icon: string; bullet: string; ring: string }
 > = {
   teal: {
-    icon: 'bg-teal-500/15 text-teal-400',
-    bullet: 'bg-teal-500/10 text-teal-300 border-teal-500/30',
+    icon: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
+    bullet: 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/30',
     ring: 'ring-teal-500/20',
   },
   emerald: {
-    icon: 'bg-emerald-500/15 text-emerald-400',
-    bullet: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+    icon: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    bullet: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
     ring: 'ring-emerald-500/20',
   },
   amber: {
-    icon: 'bg-amber-500/15 text-amber-400',
-    bullet: 'bg-amber-500/10 text-amber-300 border-amber-500/30',
+    icon: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+    bullet: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30',
     ring: 'ring-amber-500/20',
   },
 };
 
 export function TestimonialsSection() {
   return (
-    <section className="w-full bg-slate-950 py-20 text-white sm:py-24">
+    <section className="w-full bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white py-20 sm:py-24 border-y border-border dark:border-slate-800">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Section header */}
         <div className="mx-auto max-w-3xl text-center">
           <Badge
             variant="outline"
-            className="border-teal-500/40 bg-teal-500/10 text-[11px] font-semibold uppercase tracking-wider text-teal-300"
+            className="border-teal-500/40 bg-teal-500/10 text-[11px] font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-300"
           >
             Why teams choose GPTForm
           </Badge>
-          <h2 className="mt-4 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          <h2 className="mt-4 text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
             Built for outcomes, not just data collection.
           </h2>
-          <p className="mt-4 text-base text-slate-400 sm:text-lg">
+          <p className="mt-4 text-base text-slate-600 dark:text-slate-400 sm:text-lg">
             Every GPTForm feature exists to move your customer from a question to a completed job — faster, with less friction.
           </p>
         </div>
@@ -116,17 +116,17 @@ export function TestimonialsSection() {
               <div
                 key={uc.title}
                 className={cn(
-                  'flex flex-col rounded-2xl border border-slate-800 bg-slate-900/60 p-6 ring-1 backdrop-blur',
+                  'flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-card text-card-foreground dark:bg-slate-900/60 p-6 ring-1 backdrop-blur shadow-sm',
                   styles.ring
                 )}
               >
                 <div className={cn('flex size-10 items-center justify-center rounded-xl', styles.icon)}>
                   <Icon className="size-5" />
                 </div>
-                <h3 className="mt-4 text-base font-bold text-white">
+                <h3 className="mt-4 text-base font-bold text-slate-900 dark:text-white">
                   {uc.title}
                 </h3>
-                <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-400">
+                <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
                   {uc.desc}
                 </p>
                 <div className="mt-4">

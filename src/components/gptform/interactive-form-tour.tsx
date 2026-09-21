@@ -155,19 +155,19 @@ export function InteractiveFormTour() {
   return (
     <div className="w-full space-y-6">
       {/* Top Header & Tour Controls */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-slate-900/90 text-white p-5 rounded-2xl border border-slate-800 backdrop-blur-md shadow-2xl">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-card text-card-foreground p-5 rounded-2xl border border-slate-200 dark:bg-slate-900/90 dark:text-white dark:border-slate-800 backdrop-blur-md shadow-xl">
         <div className="flex items-center gap-3.5">
-          <div className="size-10 rounded-xl bg-teal-500/20 border border-teal-500/40 text-teal-400 flex items-center justify-center font-bold shrink-0">
+          <div className="size-10 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-600 dark:bg-teal-500/20 dark:border-teal-500/40 dark:text-teal-400 flex items-center justify-center font-bold shrink-0">
             <Sparkles className="size-5 animate-pulse" />
           </div>
           <div>
-            <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
               Interactive Product Tour · AI Form Studio
               <Badge className="bg-teal-500 text-slate-950 font-bold text-xs px-2.5 py-0.5">
                 Live Studio Demo
               </Badge>
             </h3>
-            <p className="text-xs sm:text-sm text-slate-400">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
               Explore the 3-pane AI studio: Prompt Co-pilot (Left), Visual Field Canvas (Center), Real-time Mobile Preview (Right).
             </p>
           </div>
@@ -175,7 +175,7 @@ export function InteractiveFormTour() {
 
         {/* Step Navigation Pill */}
         <div className="flex items-center gap-2.5 self-stretch lg:self-auto justify-between lg:justify-end flex-wrap">
-          <div className="flex items-center gap-1 bg-slate-800/90 rounded-xl p-1 border border-slate-700">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/90 rounded-xl p-1 border border-slate-200 dark:border-slate-700">
             {TOUR_STEPS.map((s, idx) => (
               <button
                 key={s.id}
@@ -184,7 +184,7 @@ export function InteractiveFormTour() {
                 className={`size-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   currentStepIdx === idx && showSpotlight
                     ? 'bg-teal-500 text-slate-950 shadow-md font-extrabold'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700/60'
                 }`}
                 title={s.title}
               >
@@ -197,16 +197,16 @@ export function InteractiveFormTour() {
             <button
               type="button"
               onClick={() => setIsPlayingAuto(!isPlayingAuto)}
-              className="h-9 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+              className="h-9 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold dark:text-slate-200 flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 cursor-pointer"
             >
-              {isPlayingAuto ? <Pause className="size-3.5 text-amber-400" /> : <Play className="size-3.5 text-teal-400" />}
+              {isPlayingAuto ? <Pause className="size-3.5 text-amber-500 dark:text-amber-400" /> : <Play className="size-3.5 text-teal-600 dark:text-teal-400" />}
               <span>{isPlayingAuto ? 'Pause' : 'Auto Play'}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setShowSpotlight(!showSpotlight)}
-              className="h-9 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 cursor-pointer"
+              className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 text-xs font-medium border border-slate-200 dark:border-slate-700 cursor-pointer"
             >
               {showSpotlight ? 'Hide Tour Bubble' : 'Show Tour Bubble'}
             </button>
@@ -215,23 +215,23 @@ export function InteractiveFormTour() {
       </div>
 
       {/* ─── MAIN TOUR CONTAINER FRAME ─── */}
-      <div className="relative rounded-3xl border border-slate-800 bg-slate-950 overflow-hidden shadow-2xl">
+      <div className="relative rounded-3xl border border-slate-200 dark:border-slate-800 bg-card dark:bg-slate-950 overflow-hidden shadow-2xl">
         {/* Top Window Chrome Header Bar */}
-        <div className="bg-slate-900/95 px-5 py-3.5 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
+        <div className="bg-slate-100 dark:bg-slate-900/95 px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <div className="size-3 rounded-full bg-rose-500/80" />
             <div className="size-3 rounded-full bg-amber-500/80" />
             <div className="size-3 rounded-full bg-emerald-500/80" />
-            <span className="text-xs sm:text-sm font-bold text-slate-200 ml-2 font-mono truncate max-w-sm">
+            <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 ml-2 font-mono truncate max-w-sm">
               Vehicle Inspection &amp; Roofing Estimator Form 2026
             </span>
-            <Badge variant="outline" className="text-[10px] text-teal-400 border-teal-500/30 bg-teal-500/10 hidden md:inline-flex">
+            <Badge variant="outline" className="text-[10px] text-teal-700 dark:text-teal-400 border-teal-500/30 bg-teal-500/10 hidden md:inline-flex">
               ● Live Calculation Active
             </Badge>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" className="h-8 text-xs bg-slate-800 border-slate-700 text-slate-200">
+            <Button size="sm" variant="outline" className="h-8 text-xs bg-card dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200">
               Save Draft
             </Button>
             <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-md">
@@ -241,21 +241,21 @@ export function InteractiveFormTour() {
         </div>
 
         {/* ─── 3-PANE STUDIO INTERFACE (Grid-12: 4 cols / 4 cols / 4 cols) ─── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[640px] relative bg-slate-900/40 divide-y lg:divide-y-0 lg:divide-x divide-slate-800">
+        <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[640px] relative bg-slate-50/50 dark:bg-slate-900/40 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800">
           {/* ═══════════════════════════════════════════════════════════════════
               PANE 1: AI ASSISTANT / COPILOT (4 cols)
           ══════════════════════════════════════════════════════════════════════ */}
-          <div className="lg:col-span-4 bg-slate-950/80 flex flex-col justify-between p-5 space-y-4">
+          <div className="lg:col-span-4 bg-card dark:bg-slate-950/80 flex flex-col justify-between p-5 space-y-4">
             <div className="space-y-4">
               {/* Top Toggle */}
-              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setActiveTab('assistant')}
                   className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     activeTab === 'assistant'
                       ? 'bg-teal-500 text-slate-950 shadow-sm font-extrabold'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   <Bot className="size-4" /> AI Assistant
@@ -266,7 +266,7 @@ export function InteractiveFormTour() {
                   className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                     activeTab === 'fields'
                       ? 'bg-teal-500 text-slate-950 shadow-sm font-extrabold'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   + Add Fields
@@ -276,42 +276,42 @@ export function InteractiveFormTour() {
               {/* Chat Thread */}
               <div className="space-y-3.5">
                 {/* User Prompt Bubble */}
-                <div className="p-4 rounded-2xl rounded-tr-xs bg-slate-900 text-slate-200 border border-slate-800 text-xs leading-relaxed space-y-1.5 shadow-sm">
-                  <p className="font-bold text-teal-400 text-[10px] uppercase tracking-wider">User Request</p>
-                  <p className="text-slate-300">
+                <div className="p-4 rounded-2xl rounded-tr-xs bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800 text-xs leading-relaxed space-y-1.5 shadow-sm">
+                  <p className="font-bold text-teal-700 dark:text-teal-400 text-[10px] uppercase tracking-wider">User Request</p>
+                  <p className="text-slate-700 dark:text-slate-300">
                     "Build me a vehicle &amp; roof inspection estimate form with scope slider in sq ft, material choice, damage photo upload, and 20% deposit payment."
                   </p>
                 </div>
 
                 {/* AI Assistant Response Bubble */}
-                <div className="p-4 rounded-2xl rounded-tl-xs bg-teal-950/40 text-slate-200 border border-teal-500/30 text-xs leading-relaxed space-y-2.5 shadow-sm">
-                  <div className="flex items-center gap-2 text-teal-400 font-bold text-xs">
+                <div className="p-4 rounded-2xl rounded-tl-xs bg-teal-50 dark:bg-teal-950/40 text-slate-800 dark:text-slate-200 border border-teal-200 dark:border-teal-500/30 text-xs leading-relaxed space-y-2.5 shadow-sm">
+                  <div className="flex items-center gap-2 text-teal-700 dark:text-teal-400 font-bold text-xs">
                     <Sparkles className="size-4" /> Fieseros AI Form Engine
                   </div>
-                  <p className="text-slate-300">
+                  <p className="text-slate-700 dark:text-slate-300">
                     Structured a 3-step inspection &amp; estimate form with live area formula calculations, vehicle details, damage photo capture, and instant Stripe deposit checkout.
                   </p>
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    <span className="px-2.5 py-1 rounded-md bg-teal-500/20 text-teal-300 text-[11px] font-mono font-semibold">8 Fields</span>
-                    <span className="px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300 text-[11px] font-mono font-semibold">Live Formula</span>
-                    <span className="px-2.5 py-1 rounded-md bg-blue-500/20 text-blue-300 text-[11px] font-mono font-semibold">Stripe Deposit</span>
+                    <span className="px-2.5 py-1 rounded-md bg-teal-500/15 text-teal-800 dark:bg-teal-500/20 dark:text-teal-300 text-[11px] font-mono font-semibold">8 Fields</span>
+                    <span className="px-2.5 py-1 rounded-md bg-emerald-500/15 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 text-[11px] font-mono font-semibold">Live Formula</span>
+                    <span className="px-2.5 py-1 rounded-md bg-blue-500/15 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300 text-[11px] font-mono font-semibold">Stripe Deposit</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Bottom AI Input Bar */}
-            <div className="pt-3 border-t border-slate-800/80 space-y-2.5">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span className="cursor-pointer hover:text-teal-400">💬 Prompt Suggestions</span>
-                <span className="cursor-pointer hover:text-teal-400 flex items-center gap-1"><RotateCcw className="size-3" /> Reset</span>
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800/80 space-y-2.5">
+              <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span className="cursor-pointer hover:text-teal-600 dark:hover:text-teal-400">💬 Prompt Suggestions</span>
+                <span className="cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 flex items-center gap-1"><RotateCcw className="size-3" /> Reset</span>
               </div>
               <div className="relative">
                 <input
                   type="text"
                   readOnly
                   value="Add conditional logic: If scope > 3000 sq ft, apply 10% discount..."
-                  className="w-full h-11 pl-3.5 pr-11 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 focus:outline-none"
+                  className="w-full h-11 pl-3.5 pr-11 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-300 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -326,13 +326,13 @@ export function InteractiveFormTour() {
           {/* ═══════════════════════════════════════════════════════════════════
               PANE 2: FIELD CANVAS BUILDER (4 cols)
           ══════════════════════════════════════════════════════════════════════ */}
-          <div className="lg:col-span-4 bg-slate-900/30 p-5 space-y-3.5 overflow-y-auto">
+          <div className="lg:col-span-4 bg-slate-50/50 dark:bg-slate-900/30 p-5 space-y-3.5 overflow-y-auto">
             {/* Section Header */}
-            <div className="flex items-center justify-between bg-slate-900 p-3 rounded-xl border border-slate-800">
+            <div className="flex items-center justify-between bg-card dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <span className="text-slate-300 font-bold text-xs">Section 1: Details &amp; Scope</span>
+                <span className="text-slate-800 dark:text-slate-300 font-bold text-xs">Section 1: Details &amp; Scope</span>
               </div>
-              <Badge className="bg-slate-800 text-teal-400 border-slate-700 text-xs font-bold">
+              <Badge className="bg-slate-100 dark:bg-slate-800 text-teal-700 dark:text-teal-400 border-slate-300 dark:border-slate-700 text-xs font-bold">
                 4 Active Fields
               </Badge>
             </div>
@@ -342,24 +342,24 @@ export function InteractiveFormTour() {
               onClick={() => setSelectedFieldId('f_scope')}
               className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-2 shadow-sm ${
                 selectedFieldId === 'f_scope'
-                  ? 'border-teal-500 bg-teal-950/30 ring-1 ring-teal-500/50 shadow-md'
-                  : 'border-slate-800 bg-slate-900/80 hover:border-slate-700'
+                  ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/30 ring-1 ring-teal-500/50 shadow-md'
+                  : 'border-slate-200 dark:border-slate-800 bg-card dark:bg-slate-900/80 hover:border-slate-300 dark:hover:border-slate-700'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-slate-500 text-xs">⋮⋮</span>
-                <div className="size-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                <span className="text-slate-400 dark:text-slate-500 text-xs">⋮⋮</span>
+                <div className="size-7 rounded-lg bg-amber-500/15 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
                   <Hash className="size-4" />
                 </div>
                 <div className="truncate">
-                  <p className="text-xs font-bold text-white truncate">* Scope Area (Sq Ft)</p>
-                  <p className="text-[11px] text-teal-400 font-medium">Formula: SqFt × Rate + £240</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">* Scope Area (Sq Ft)</p>
+                  <p className="text-[11px] text-teal-700 dark:text-teal-400 font-medium">Formula: SqFt × Rate + £240</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-slate-400">
-                <button type="button" className="p-1 hover:text-white" title="Settings"><Settings className="size-3.5" /></button>
-                <button type="button" className="p-1 hover:text-white" title="Duplicate"><Copy className="size-3.5" /></button>
-                <button type="button" className="p-1 hover:text-rose-400" title="Delete"><Trash2 className="size-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-900 dark:hover:text-white" title="Settings"><Settings className="size-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-900 dark:hover:text-white" title="Duplicate"><Copy className="size-3.5" /></button>
+                <button type="button" className="p-1 hover:text-rose-500 dark:hover:text-rose-400" title="Delete"><Trash2 className="size-3.5" /></button>
               </div>
             </div>
 
@@ -368,23 +368,23 @@ export function InteractiveFormTour() {
               onClick={() => setSelectedFieldId('f_date')}
               className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-2 shadow-sm ${
                 selectedFieldId === 'f_date'
-                  ? 'border-teal-500 bg-teal-950/30 ring-1 ring-teal-500/50 shadow-md'
-                  : 'border-slate-800 bg-slate-900/80 hover:border-slate-700'
+                  ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/30 ring-1 ring-teal-500/50 shadow-md'
+                  : 'border-slate-200 dark:border-slate-800 bg-card dark:bg-slate-900/80 hover:border-slate-300 dark:hover:border-slate-700'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-slate-500 text-xs">⋮⋮</span>
-                <div className="size-7 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center shrink-0 border border-teal-500/30">
+                <span className="text-slate-400 dark:text-slate-500 text-xs">⋮⋮</span>
+                <div className="size-7 rounded-lg bg-teal-500/15 text-teal-600 dark:bg-teal-500/20 dark:text-teal-400 flex items-center justify-center shrink-0 border border-teal-500/30">
                   <Calendar className="size-4" />
                 </div>
                 <div className="truncate">
-                  <p className="text-xs font-bold text-white truncate">* Inspection Date &amp; Time</p>
-                  <p className="text-[11px] text-slate-400">Calendar Picker · Required</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">* Inspection Date &amp; Time</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Calendar Picker · Required</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-slate-400">
-                <button type="button" className="p-1 hover:text-white"><Settings className="size-3.5" /></button>
-                <button type="button" className="p-1 hover:text-white"><Copy className="size-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-900 dark:hover:text-white"><Settings className="size-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-900 dark:hover:text-white"><Copy className="size-3.5" /></button>
               </div>
             </div>
 
@@ -393,23 +393,23 @@ export function InteractiveFormTour() {
               onClick={() => setSelectedFieldId('f_material')}
               className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-2 shadow-sm ${
                 selectedFieldId === 'f_material'
-                  ? 'border-teal-500 bg-teal-950/30 ring-1 ring-teal-500/50 shadow-md'
-                  : 'border-slate-800 bg-slate-900/80 hover:border-slate-700'
+                  ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/30 ring-1 ring-teal-500/50 shadow-md'
+                  : 'border-slate-200 dark:border-slate-800 bg-card dark:bg-slate-900/80 hover:border-slate-300 dark:hover:border-slate-700'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-slate-500 text-xs">⋮⋮</span>
-                <div className="size-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                <span className="text-slate-400 dark:text-slate-500 text-xs">⋮⋮</span>
+                <div className="size-7 rounded-lg bg-blue-500/15 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
                   <Type className="size-4" />
                 </div>
                 <div className="truncate">
-                  <p className="text-xs font-bold text-white truncate">* Architectural Material Tier</p>
-                  <p className="text-[11px] text-slate-400">3 Interactive Choice Cards</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">* Architectural Material Tier</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">3 Interactive Choice Cards</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-slate-400">
-                <button type="button" className="p-1 hover:text-white"><Settings className="size-3.5" /></button>
-                <button type="button" className="p-1 hover:text-white"><Copy className="size-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-900 dark:hover:text-white"><Settings className="size-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-900 dark:hover:text-white"><Copy className="size-3.5" /></button>
               </div>
             </div>
 
@@ -418,46 +418,46 @@ export function InteractiveFormTour() {
               onClick={() => setSelectedFieldId('f_gps')}
               className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-2 shadow-sm ${
                 selectedFieldId === 'f_gps'
-                  ? 'border-teal-500 bg-teal-950/30 ring-1 ring-teal-500/50 shadow-md'
-                  : 'border-slate-800 bg-slate-900/80 hover:border-slate-700'
+                  ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/30 ring-1 ring-teal-500/50 shadow-md'
+                  : 'border-slate-200 dark:border-slate-800 bg-card dark:bg-slate-900/80 hover:border-slate-300 dark:hover:border-slate-700'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-slate-500 text-xs">⋮⋮</span>
-                <div className="size-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+                <span className="text-slate-400 dark:text-slate-500 text-xs">⋮⋮</span>
+                <div className="size-7 rounded-lg bg-emerald-500/15 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
                   <MapPin className="size-4" />
                 </div>
                 <div className="truncate">
-                  <p className="text-xs font-bold text-white truncate">* Service Location / Address</p>
-                  <p className="text-[11px] text-slate-400">Google Places Auto-complete</p>
+                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">* Service Location / Address</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">Google Places Auto-complete</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-slate-400">
-                <button type="button" className="p-1 hover:text-white"><Settings className="size-3.5" /></button>
-                <button type="button" className="p-1 hover:text-white"><Copy className="size-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-900 dark:hover:text-white"><Settings className="size-3.5" /></button>
+                <button type="button" className="p-1 hover:text-slate-900 dark:hover:text-white"><Copy className="size-3.5" /></button>
               </div>
             </div>
 
             {/* Bottom Toolbar */}
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-around text-xs font-bold text-slate-400">
-              <span className="flex items-center gap-1 hover:text-white cursor-pointer"><Settings className="size-3.5" /> Settings</span>
-              <span className="flex items-center gap-1 hover:text-white cursor-pointer"><Zap className="size-3.5 text-amber-400" /> Workflows</span>
-              <span className="flex items-center gap-1 hover:text-white cursor-pointer"><FileCheck className="size-3.5 text-teal-400" /> Webhooks</span>
-              <span className="flex items-center gap-1 hover:text-white cursor-pointer"><ShieldCheck className="size-3.5 text-blue-400" /> Permissions</span>
+            <div className="bg-card dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-around text-xs font-bold text-slate-600 dark:text-slate-400">
+              <span className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer"><Settings className="size-3.5" /> Settings</span>
+              <span className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer"><Zap className="size-3.5 text-amber-500 dark:text-amber-400" /> Workflows</span>
+              <span className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer"><FileCheck className="size-3.5 text-teal-600 dark:text-teal-400" /> Webhooks</span>
+              <span className="flex items-center gap-1 hover:text-slate-900 dark:hover:text-white cursor-pointer"><ShieldCheck className="size-3.5 text-blue-500 dark:text-blue-400" /> Permissions</span>
             </div>
           </div>
 
           {/* ═══════════════════════════════════════════════════════════════════
               PANE 3: LIVE MOBILE & CALCULATION SIMULATOR (4 cols)
           ══════════════════════════════════════════════════════════════════════ */}
-          <div className="lg:col-span-4 p-5 bg-slate-950/90 flex flex-col items-center justify-between space-y-4">
+          <div className="lg:col-span-4 p-5 bg-card dark:bg-slate-950/90 flex flex-col items-center justify-between space-y-4">
             {/* Device Switcher */}
-            <div className="flex items-center gap-1.5 bg-slate-900 p-1.5 rounded-xl border border-slate-800 w-full max-w-[290px] justify-between">
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 w-full max-w-[290px] justify-between">
               <button
                 type="button"
                 onClick={() => setActiveDevice('mobile')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer ${
-                  activeDevice === 'mobile' ? 'bg-teal-500 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'
+                  activeDevice === 'mobile' ? 'bg-teal-500 text-slate-950 font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <Smartphone className="size-3.5" /> Mobile
@@ -466,7 +466,7 @@ export function InteractiveFormTour() {
                 type="button"
                 onClick={() => setActiveDevice('desktop')}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1 cursor-pointer ${
-                  activeDevice === 'desktop' ? 'bg-teal-500 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'
+                  activeDevice === 'desktop' ? 'bg-teal-500 text-slate-950 font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
                 <Laptop className="size-3.5" /> Desktop
@@ -475,7 +475,7 @@ export function InteractiveFormTour() {
                 type="button"
                 onClick={() => setActiveDevice('qr')}
                 className={`p-1.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center cursor-pointer ${
-                  activeDevice === 'qr' ? 'bg-teal-500 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-white'
+                  activeDevice === 'qr' ? 'bg-teal-500 text-slate-950 font-extrabold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
                 title="Scan QR Code"
               >
@@ -484,27 +484,27 @@ export function InteractiveFormTour() {
             </div>
 
             {/* Smartphone Mockup Frame */}
-            <div className="w-full max-w-[300px] bg-slate-900 rounded-[36px] p-3 border-4 border-slate-800 shadow-2xl relative overflow-hidden">
+            <div className="w-full max-w-[300px] bg-slate-200 dark:bg-slate-900 rounded-[36px] p-3 border-4 border-slate-300 dark:border-slate-800 shadow-2xl relative overflow-hidden">
               {/* Dynamic Island / Notch */}
-              <div className="w-24 h-4 bg-slate-950 rounded-full mx-auto mb-3 flex items-center justify-center">
-                <div className="size-2 rounded-full bg-slate-800 mr-2" />
+              <div className="w-24 h-4 bg-slate-300 dark:bg-slate-950 rounded-full mx-auto mb-3 flex items-center justify-center">
+                <div className="size-2 rounded-full bg-slate-400 dark:bg-slate-800 mr-2" />
                 <div className="size-1.5 rounded-full bg-teal-500" />
               </div>
 
               {/* Mobile Screen Content */}
-              <div className="bg-slate-950 rounded-2xl p-3.5 space-y-3 text-xs text-slate-100 max-h-[440px] overflow-y-auto border border-slate-800">
-                <div className="pb-2 border-b border-slate-800">
-                  <p className="font-extrabold text-sm text-white leading-tight">
+              <div className="bg-card dark:bg-slate-950 rounded-2xl p-3.5 space-y-3 text-xs text-card-foreground dark:text-slate-100 max-h-[440px] overflow-y-auto border border-slate-200 dark:border-slate-800">
+                <div className="pb-2 border-b border-slate-200 dark:border-slate-800">
+                  <p className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight">
                     Roofing Replacement Estimator
                   </p>
-                  <p className="text-[10px] text-slate-400">48 King Road, London W1</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">48 King Road, London W1</p>
                 </div>
 
                 {/* Scope Slider Field in Mobile Frame */}
-                <div className="space-y-1.5 p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                   <div className="flex justify-between items-center text-[11px]">
-                    <span className="font-semibold text-slate-400">Area Scope</span>
-                    <span className="font-bold text-teal-400 font-mono">
+                    <span className="font-semibold text-slate-600 dark:text-slate-400">Area Scope</span>
+                    <span className="font-bold text-teal-700 dark:text-teal-400 font-mono">
                       {fieldSliderValue.toLocaleString()} sq ft
                     </span>
                   </div>
@@ -515,14 +515,14 @@ export function InteractiveFormTour() {
                     step="100"
                     value={fieldSliderValue}
                     onChange={(e) => setFieldSliderValue(Number(e.target.value))}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-teal-500"
                   />
                   <p className="text-[9px] text-slate-500">Drag to recalculate total instantly</p>
                 </div>
 
                 {/* Material Selection in Mobile Frame */}
                 <div className="space-y-1.5">
-                  <span className="font-semibold text-[11px] text-slate-400">Material Tier</span>
+                  <span className="font-semibold text-[11px] text-slate-600 dark:text-slate-400">Material Tier</span>
                   <div className="grid grid-cols-3 gap-1.5">
                     {[
                       { id: 'asphalt', name: 'Asphalt', price: '£3.40/ft' },
@@ -535,8 +535,8 @@ export function InteractiveFormTour() {
                         onClick={() => setSelectedMaterial(mat.id as any)}
                         className={`p-2 rounded-xl text-center border cursor-pointer transition ${
                           selectedMaterial === mat.id
-                            ? 'border-teal-500 bg-teal-500/20 text-teal-300 font-bold shadow-xs'
-                            : 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white'
+                            ? 'border-teal-500 bg-teal-500/20 text-teal-800 dark:text-teal-300 font-bold shadow-xs'
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                         }`}
                       >
                         <p className="truncate text-[10px] font-bold">{mat.name}</p>
@@ -568,7 +568,7 @@ export function InteractiveFormTour() {
               </div>
             </div>
 
-            <p className="text-xs text-slate-400 text-center font-medium">
+            <p className="text-xs text-slate-500 dark:text-slate-400 text-center font-medium">
               ⓘ Interactive live preview with real-time formula evaluation.
             </p>
           </div>

@@ -55,24 +55,24 @@ export function AskApproveExecute({ onGetStarted }: { onGetStarted?: () => void 
   };
 
   return (
-    <section className="py-20 bg-slate-950 text-white border-b border-slate-800 relative overflow-hidden">
+    <section className="py-20 bg-background text-foreground border-b border-border dark:bg-slate-950 dark:text-white dark:border-slate-800 relative overflow-hidden transition-colors">
       {/* Ambient glow */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[300px] bg-gradient-to-r from-teal-500/10 via-emerald-500/10 to-cyan-500/10 blur-[120px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12 relative z-10">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-700 dark:text-teal-400 text-xs font-semibold">
             <ShieldCheck className="size-3.5" />
             <span>HUMAN-IN-THE-LOOP AI EXECUTION</span>
           </div>
-          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground dark:text-white leading-tight">
             Ask. Approve.{' '}
-            <span className="bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-300 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-500 dark:from-teal-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
               Execute.
             </span>
           </h2>
-          <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base text-muted-foreground dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
             Fieseros never silently makes important changes to your business. It proposes a plan, you review the impact, and only then does it execute — keeping you in control.
           </p>
         </div>
@@ -83,33 +83,33 @@ export function AskApproveExecute({ onGetStarted }: { onGetStarted?: () => void 
           <div
             className={`rounded-3xl border p-6 space-y-5 transition-all duration-300 ${
               phase === 'idle'
-                ? 'border-teal-500/50 bg-slate-900 shadow-xl ring-2 ring-teal-500/20'
-                : 'border-slate-800 bg-slate-900/60 opacity-70'
+                ? 'border-teal-500/50 bg-card shadow-xl ring-2 ring-teal-500/20 dark:bg-slate-900'
+                : 'border-border bg-card/60 opacity-70 dark:border-slate-800 dark:bg-slate-900/60'
             }`}
           >
             <div className="flex items-center justify-between">
-              <div className="size-10 rounded-xl bg-teal-500/20 text-teal-400 flex items-center justify-center font-black text-sm">
+              <div className="size-10 rounded-xl bg-teal-500/20 text-teal-600 dark:text-teal-400 flex items-center justify-center font-black text-sm">
                 01
               </div>
-              <Badge variant="outline" className="text-[10px] border-teal-500/30 bg-teal-500/10 text-teal-400 font-bold">
+              <Badge variant="outline" className="text-[10px] border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-400 font-bold">
                 ASK
               </Badge>
             </div>
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Wand2 className="size-4 text-teal-400" /> You Ask
+              <h3 className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                <Wand2 className="size-4 text-teal-600 dark:text-teal-400" /> You Ask
               </h3>
-              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              <p className="text-xs text-muted-foreground dark:text-slate-400 mt-1.5 leading-relaxed">
                 Tell Fieseros what outcome you want in plain English.
               </p>
             </div>
 
             {/* Prompt box */}
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-              <p className="text-[10px] uppercase font-bold tracking-wider text-teal-400 flex items-center gap-1.5">
+            <div className="p-4 rounded-2xl bg-muted/50 border border-border dark:bg-slate-950 dark:border-slate-800 space-y-2">
+              <p className="text-[10px] uppercase font-bold tracking-wider text-teal-700 dark:text-teal-400 flex items-center gap-1.5">
                 <Terminal className="size-3" /> Command
               </p>
-              <p className="text-xs font-mono text-white leading-relaxed">
+              <p className="text-xs font-mono text-foreground dark:text-white leading-relaxed">
                 &ldquo;Optimize tomorrow&rsquo;s schedule across all 8 technicians.&rdquo;
               </p>
             </div>
@@ -118,7 +118,7 @@ export function AskApproveExecute({ onGetStarted }: { onGetStarted?: () => void 
               type="button"
               onClick={handleAsk}
               disabled={phase !== 'idle'}
-              className="w-full h-10 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs gap-2 cursor-pointer disabled:opacity-50"
+              className="w-full h-10 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs gap-2 cursor-pointer disabled:opacity-50"
             >
               <Sparkles className="size-3.5" /> Ask Fieseros →
             </Button>
@@ -128,42 +128,42 @@ export function AskApproveExecute({ onGetStarted }: { onGetStarted?: () => void 
           <div
             className={`rounded-3xl border p-6 space-y-5 transition-all duration-300 ${
               phase === 'reviewing' || phase === 'approved' || phase === 'executed'
-                ? 'border-amber-500/50 bg-slate-900 shadow-xl ring-2 ring-amber-500/20'
-                : 'border-slate-800 bg-slate-900/60 opacity-50'
+                ? 'border-amber-500/50 bg-card shadow-xl ring-2 ring-amber-500/20 dark:bg-slate-900'
+                : 'border-border bg-card/60 opacity-50 dark:border-slate-800 dark:bg-slate-900/60'
             }`}
           >
             <div className="flex items-center justify-between">
-              <div className="size-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black text-sm">
+              <div className="size-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-black text-sm">
                 02
               </div>
-              <Badge variant="outline" className="text-[10px] border-amber-500/30 bg-amber-500/10 text-amber-400 font-bold">
+              <Badge variant="outline" className="text-[10px] border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold">
                 {phase === 'approved' || phase === 'executed' ? '✓ APPROVED' : 'REVIEW'}
               </Badge>
             </div>
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Eye className="size-4 text-amber-400" /> Fieseros Proposes
+              <h3 className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                <Eye className="size-4 text-amber-600 dark:text-amber-400" /> Fieseros Proposes
               </h3>
-              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              <p className="text-xs text-muted-foreground dark:text-slate-400 mt-1.5 leading-relaxed">
                 See exactly what will change before anything happens.
               </p>
             </div>
 
             {/* Proposed changes summary */}
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+            <div className="p-4 rounded-2xl bg-muted/50 border border-border dark:bg-slate-950 dark:border-slate-800 space-y-3">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-amber-400">Schedule Analysis</span>
-                <span className="font-mono text-slate-400">23 jobs · 8 techs</span>
+                <span className="font-bold text-amber-700 dark:text-amber-400">Schedule Analysis</span>
+                <span className="font-mono text-muted-foreground dark:text-slate-400">23 jobs · 8 techs</span>
               </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                 I can reduce estimated travel time by{' '}
-                <span className="font-bold text-emerald-400">42 minutes</span> by changing{' '}
-                <span className="font-bold text-white">4 assignments</span>.
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">42 minutes</span> by changing{' '}
+                <span className="font-bold text-foreground dark:text-white">4 assignments</span>.
               </p>
 
               {/* Proposed change list */}
               {phase !== 'idle' && (
-                <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                <div className="space-y-1.5 pt-2 border-t border-border dark:border-slate-800">
                   {PROPOSED_CHANGES.map((change, idx) => {
                     const Icon = change.icon;
                     const isApproved = phase === 'approved' || phase === 'executed';
@@ -172,14 +172,14 @@ export function AskApproveExecute({ onGetStarted }: { onGetStarted?: () => void 
                         key={idx}
                         className={`flex items-start gap-2 text-xs p-2 rounded-lg transition-all ${
                           isApproved
-                            ? 'bg-emerald-950/40 border border-emerald-500/30'
-                            : 'bg-slate-900 border border-slate-800'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30'
+                            : 'bg-card border border-border dark:bg-slate-900 dark:border-slate-800'
                         }`}
                       >
-                        <Icon className={`size-3.5 shrink-0 mt-0.5 ${isApproved ? 'text-emerald-400' : 'text-slate-500'}`} />
+                        <Icon className={`size-3.5 shrink-0 mt-0.5 ${isApproved ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
                         <div className="min-w-0">
-                          <p className="font-bold text-white">{change.label}</p>
-                          <p className="text-[11px] text-slate-400 truncate">{change.detail}</p>
+                          <p className="font-bold text-foreground dark:text-white">{change.label}</p>
+                          <p className="text-[11px] text-muted-foreground dark:text-slate-400 truncate">{change.detail}</p>
                         </div>
                       </div>
                     );
@@ -206,49 +206,49 @@ export function AskApproveExecute({ onGetStarted }: { onGetStarted?: () => void 
           <div
             className={`rounded-3xl border p-6 space-y-5 transition-all duration-300 ${
               phase === 'executed'
-                ? 'border-emerald-500/50 bg-slate-900 shadow-xl ring-2 ring-emerald-500/20'
-                : 'border-slate-800 bg-slate-900/60 opacity-50'
+                ? 'border-emerald-500/50 bg-card shadow-xl ring-2 ring-emerald-500/20 dark:bg-slate-900'
+                : 'border-border bg-card/60 opacity-50 dark:border-slate-800 dark:bg-slate-900/60'
             }`}
           >
             <div className="flex items-center justify-between">
-              <div className="size-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black text-sm">
+              <div className="size-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-sm">
                 03
               </div>
-              <Badge variant="outline" className="text-[10px] border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-bold">
+              <Badge variant="outline" className="text-[10px] border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold">
                 {phase === 'executed' ? '✓ DONE' : 'EXECUTE'}
               </Badge>
             </div>
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <CheckCircle2 className="size-4 text-emerald-400" /> Fieseros Executes
+              <h3 className="text-base font-bold text-foreground dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" /> Fieseros Executes
               </h3>
-              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              <p className="text-xs text-muted-foreground dark:text-slate-400 mt-1.5 leading-relaxed">
                 Changes applied across CRM, dispatch, and customer comms.
               </p>
             </div>
 
             {/* Execution results */}
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+            <div className="p-4 rounded-2xl bg-muted/50 border border-border dark:bg-slate-950 dark:border-slate-800 space-y-2">
               {phase === 'executed' ? (
                 <>
                   {EXECUTION_RESULTS.map((result, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center gap-2 text-xs p-2 rounded-lg bg-emerald-950/40 border border-emerald-500/30"
+                      className="flex items-center gap-2 text-xs p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30"
                     >
-                      <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-                      <span className="text-emerald-200 font-semibold">{result}</span>
+                      <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="text-emerald-800 dark:text-emerald-200 font-semibold">{result}</span>
                     </div>
                   ))}
-                  <div className="pt-2 mt-2 border-t border-slate-800 text-center">
-                    <p className="text-sm font-black text-emerald-400">✓ All Actions Completed</p>
-                    <p className="text-[11px] text-slate-500 font-mono mt-0.5">0.4s execution time</p>
+                  <div className="pt-2 mt-2 border-t border-border dark:border-slate-800 text-center">
+                    <p className="text-sm font-black text-emerald-600 dark:text-emerald-400">✓ All Actions Completed</p>
+                    <p className="text-[11px] text-muted-foreground dark:text-slate-500 font-mono mt-0.5">0.4s execution time</p>
                   </div>
                 </>
               ) : (
                 <div className="text-center py-6 space-y-2">
-                  <AlertTriangle className="size-6 text-slate-600 mx-auto" />
-                  <p className="text-xs text-slate-500 font-medium">
+                  <AlertTriangle className="size-6 text-muted-foreground mx-auto" />
+                  <p className="text-xs text-muted-foreground font-medium">
                     Awaiting approval in Step 02
                   </p>
                 </div>
@@ -260,7 +260,7 @@ export function AskApproveExecute({ onGetStarted }: { onGetStarted?: () => void 
                 type="button"
                 onClick={handleReset}
                 variant="outline"
-                className="w-full h-10 rounded-xl border-slate-700 text-slate-300 hover:bg-slate-800 font-semibold text-xs gap-2 cursor-pointer"
+                className="w-full h-10 rounded-xl border-border text-foreground hover:bg-muted font-semibold text-xs gap-2 cursor-pointer dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
               >
                 <RotateCcw className="size-3.5" /> Try Another Prompt
               </Button>
@@ -269,14 +269,14 @@ export function AskApproveExecute({ onGetStarted }: { onGetStarted?: () => void 
         </div>
 
         {/* Bottom reassurance bar */}
-        <div className="max-w-4xl mx-auto rounded-2xl bg-slate-900/80 border border-slate-800 p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="max-w-4xl mx-auto rounded-2xl bg-card border border-border dark:bg-slate-900/80 dark:border-slate-800 p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
           <div className="flex items-center gap-3 text-center sm:text-left">
-            <div className="size-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <div className="size-9 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
               <ShieldCheck className="size-5" />
             </div>
             <div>
-              <p className="text-xs font-bold text-white">You always approve before AI acts</p>
-              <p className="text-[11px] text-slate-400">No silent changes to jobs, schedules, or customer records.</p>
+              <p className="text-xs font-bold text-foreground dark:text-white">You always approve before AI acts</p>
+              <p className="text-[11px] text-muted-foreground dark:text-slate-400">No silent changes to jobs, schedules, or customer records.</p>
             </div>
           </div>
           {onGetStarted ? (

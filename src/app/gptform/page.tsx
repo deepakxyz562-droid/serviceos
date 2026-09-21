@@ -833,17 +833,17 @@ export default function GptFormLandingPage() {
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 1.5 — INTERACTIVE AI FORM BUILDER TOUR & GUIDED WALKTHROUGH
       ══════════════════════════════════════════════════════════════════════ */}
-      <section id="ai-form-builder-tour" className="py-16 sm:py-20 bg-slate-950 text-white border-b border-slate-800 relative overflow-hidden">
+      <section id="ai-form-builder-tour" className="py-16 sm:py-20 bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white border-b border-border dark:border-slate-800 relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
           <div className="text-center space-y-3 max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 text-xs font-semibold">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-600 dark:text-teal-400 text-xs font-semibold">
               <Sparkles className="size-3.5 animate-pulse" />
               <span>INTERACTIVE PRODUCT TOUR</span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+            <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
               See the AI Form Builder in Action
             </h2>
-            <p className="text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
+            <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">
               Take an interactive guided tour through our 3-pane Studio Builder: prompt with natural language, customize fields and calculation logic, and test on the live mobile simulator.
             </p>
           </div>
@@ -1108,14 +1108,14 @@ export default function GptFormLandingPage() {
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 04 — SMART FORM CAPABILITIES (MORE THAN FIELDS)
       ══════════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-slate-900 text-white">
+      <section className="py-20 bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-white border-y border-border dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center space-y-3 max-w-2xl mx-auto">
             <Badge className="bg-teal-600 text-white text-xs">Smart Capabilities</Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
               More Than Fields. Built for Action.
             </h2>
-            <p className="text-sm text-slate-300">
+            <p className="text-sm text-slate-600 dark:text-slate-300">
               Unlike static forms, every GPTForm combines real-time calculation, AI triaging, evidence capture, and native payment processing.
             </p>
           </div>
@@ -1157,13 +1157,13 @@ export default function GptFormLandingPage() {
               return (
                 <div
                   key={cap.title}
-                  className="p-6 rounded-2xl bg-slate-800/80 border border-slate-700/80 space-y-3 hover:border-teal-500/60 transition shadow-sm"
+                  className="p-6 rounded-2xl bg-card text-card-foreground border border-slate-200 dark:border-slate-700/80 dark:bg-slate-800/80 space-y-3 hover:border-teal-500/60 transition shadow-sm"
                 >
-                  <div className="p-2.5 rounded-xl bg-teal-500/20 text-teal-300 w-fit">
+                  <div className="p-2.5 rounded-xl bg-teal-500/15 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300 w-fit">
                     <Icon className="size-5" />
                   </div>
-                  <h3 className="font-bold text-base text-white">{cap.title}</h3>
-                  <p className="text-xs text-slate-300 leading-relaxed">{cap.desc}</p>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-white">{cap.title}</h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{cap.desc}</p>
                 </div>
               );
             })}
@@ -1461,24 +1461,24 @@ export default function GptFormLandingPage() {
           </div>
 
           {/* Live Checkout Card Mockup */}
-          <Card className="border-2 border-teal-500/40 shadow-xl bg-slate-900 text-white p-6 space-y-4 rounded-3xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <span className="text-xs font-bold text-teal-400">Universal Payment Checkout</span>
-              <span className="text-xs text-emerald-400 font-semibold">0% Platform Fee</span>
+          <Card className="border-2 border-teal-500/40 shadow-xl bg-card text-card-foreground dark:bg-slate-900 dark:text-white p-6 space-y-4 rounded-3xl">
+            <div className="flex items-center justify-between pb-3 border-b border-border dark:border-slate-800">
+              <span className="text-xs font-bold text-teal-600 dark:text-teal-400">Universal Payment Checkout</span>
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">0% Platform Fee</span>
             </div>
-            <div className="p-4 rounded-xl bg-slate-800/90 space-y-2 text-xs font-mono">
+            <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-800/90 space-y-2 text-xs font-mono">
               <div className="flex justify-between">
                 <span>Roofing Replacement Deposit (20%)</span>
-                <span className="font-bold text-white">£450.00</span>
+                <span className="font-bold text-slate-900 dark:text-white">£450.00</span>
               </div>
-              <div className="flex justify-between text-slate-400 text-[11px]">
+              <div className="flex justify-between text-slate-500 dark:text-slate-400 text-[11px]">
                 <span>Remaining balance due on completion</span>
                 <span>£850.00</span>
               </div>
-              <div className="h-px bg-slate-700 my-1" />
+              <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
               <div className="flex justify-between font-bold text-sm">
                 <span>Pay Now</span>
-                <span className="text-teal-300">£450.00</span>
+                <span className="text-teal-700 dark:text-teal-300">£450.00</span>
               </div>
             </div>
             <Button
@@ -1494,22 +1494,22 @@ export default function GptFormLandingPage() {
 
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 08 — AI FORM AGENT: CONVERSATION → STRUCTURED DATA
-      ══════════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-slate-900 text-white">
+      ═══════════════════════════════════════════════════════════════════ */}
+      <section className="py-20 bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-white border-y border-border dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center space-y-3 max-w-3xl mx-auto">
             <Badge className="bg-teal-600 text-white text-xs">Conversational AI Agent</Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
               What If Your Form Could Have a Conversation?
             </h2>
-            <p className="text-base text-slate-300">
+            <p className="text-base text-slate-600 dark:text-slate-300">
               Instead of forcing customers through 20 rigid form inputs, let them chat naturally. The AI Form Agent extracts intent, calculates rates, validates slots, and compiles structured form submissions in real time.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
             {/* Left Chat Sandbox */}
-            <Card className="border-2 border-teal-500/40 shadow-lg flex flex-col justify-between bg-white dark:bg-slate-900 rounded-2xl overflow-hidden text-foreground">
+            <Card className="border-2 border-teal-500/40 shadow-lg flex flex-col justify-between bg-card text-card-foreground dark:bg-slate-900 rounded-2xl overflow-hidden">
               <CardHeader className="p-4 bg-teal-50/80 dark:bg-teal-950/40 border-b flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="size-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1604,7 +1604,7 @@ export default function GptFormLandingPage() {
                   placeholder="Reply to the bot (e.g. 'Can I pick Wednesday instead?')..."
                   value={chatInputText}
                   onChange={(e) => setChatInputText(e.target.value)}
-                  className="text-xs h-9 bg-white dark:bg-slate-900"
+                  className="text-xs h-9 bg-card text-card-foreground dark:bg-slate-900"
                 />
                 <Button type="submit" size="sm" className="bg-teal-600 hover:bg-teal-700 text-white h-9 px-3">
                   <Send className="size-3.5" />
@@ -1613,39 +1613,39 @@ export default function GptFormLandingPage() {
             </Card>
 
             {/* Right Structured Data Conversion Visual */}
-            <Card className="border border-border shadow-md p-6 bg-slate-900 text-white rounded-2xl flex flex-col justify-between space-y-6">
+            <Card className="border border-border shadow-md p-6 bg-card text-card-foreground dark:bg-slate-900 dark:text-white rounded-2xl flex flex-col justify-between space-y-6">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <FileCheck className="size-4 text-teal-400" />
-                  <span className="text-xs font-bold text-teal-300">AUTOMATIC STRUCTURED COMPILATION</span>
+                  <FileCheck className="size-4 text-teal-600 dark:text-teal-400" />
+                  <span className="text-xs font-bold text-teal-700 dark:text-teal-300">AUTOMATIC STRUCTURED COMPILATION</span>
                 </div>
-                <h3 className="text-lg font-bold">Natural Chat → Validated Form Data</h3>
-                <p className="text-xs text-slate-300 leading-relaxed">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Natural Chat → Validated Form Data</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                   As the visitor chats, GPTForm extracts named entities, calculates prices, checks your appointment calendar, and populates the formal submission record.
                 </p>
               </div>
 
               {/* Generated Field Table */}
-              <div className="p-4 rounded-xl bg-slate-800/90 border border-slate-700 space-y-2 text-xs font-mono">
-                <div className="flex justify-between py-1 border-b border-slate-700">
-                  <span className="text-slate-400">Customer Intent:</span>
-                  <span className="text-teal-300 font-bold">Patient Appointment</span>
+              <div className="p-4 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2 text-xs font-mono">
+                <div className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400">Customer Intent:</span>
+                  <span className="text-teal-700 dark:text-teal-300 font-bold">Patient Appointment</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-700">
-                  <span className="text-slate-400">Treatment:</span>
-                  <span className="text-teal-300 font-bold">Dental Clean &amp; Checkup</span>
+                <div className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400">Treatment:</span>
+                  <span className="text-teal-700 dark:text-teal-300 font-bold">Dental Clean &amp; Checkup</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-700">
-                  <span className="text-slate-400">Assigned Doctor:</span>
-                  <span className="text-teal-300 font-bold">Dr. Sarah Mitchell</span>
+                <div className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400">Assigned Doctor:</span>
+                  <span className="text-teal-700 dark:text-teal-300 font-bold">Dr. Sarah Mitchell</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-700">
-                  <span className="text-slate-400">Slot Reserved:</span>
-                  <span className="text-emerald-400 font-bold">Tuesday 10:00 AM</span>
+                <div className="flex justify-between py-1 border-b border-slate-200 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400">Slot Reserved:</span>
+                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">Tuesday 10:00 AM</span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-slate-400">Verification Status:</span>
-                  <span className="text-emerald-400 font-bold">SMS Ready</span>
+                  <span className="text-slate-500 dark:text-slate-400">Verification Status:</span>
+                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">SMS Ready</span>
                 </div>
               </div>
 
@@ -1808,14 +1808,14 @@ export default function GptFormLandingPage() {
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 10 — WORKFLOW AUTOMATION: TRIGGER YOUR ENTIRE BUSINESS
       ══════════════════════════════════════════════════════════════════════ */}
-      <section className="py-20 bg-slate-900 text-white">
+      <section className="py-20 bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-white border-y border-border dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center space-y-3 max-w-3xl mx-auto">
             <Badge className="bg-teal-600 text-white text-xs">Powered by Fieseros Service OS</Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
               A Submission Shouldn&apos;t End at &quot;Submit&quot;
             </h2>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
               Every GPTForm™ submission connects directly into Fieseros Service OS — auto-creating leads, assigning crew schedules, and issuing invoices.
             </p>
           </div>
@@ -1834,10 +1834,10 @@ export default function GptFormLandingPage() {
                     'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer border',
                     isActive
                       ? 'bg-teal-600 text-white border-teal-500 shadow-md ring-2 ring-teal-400/40'
-                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                      : 'bg-card text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                   )}
                 >
-                  <Icon className={cn('size-3.5', isActive ? 'text-white' : 'text-teal-400')} />
+                  <Icon className={cn('size-3.5', isActive ? 'text-white' : 'text-teal-600 dark:text-teal-400')} />
                   <span>{step.label}</span>
                 </button>
               );
@@ -1845,24 +1845,24 @@ export default function GptFormLandingPage() {
           </div>
 
           {/* Active Step Details Canvas */}
-          <Card className="max-w-3xl mx-auto border-2 border-teal-500/40 bg-slate-800/90 text-white p-6 space-y-4 shadow-xl rounded-2xl">
-            <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+          <Card className="max-w-3xl mx-auto border border-slate-200 dark:border-teal-500/40 bg-card text-card-foreground dark:bg-slate-800/90 dark:text-white p-6 space-y-4 shadow-xl rounded-2xl">
+            <div className="flex items-center justify-between border-b border-border dark:border-slate-700 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="size-8 rounded-full bg-teal-600 flex items-center justify-center font-bold text-white text-xs">
                   {activeWorkflowIndex + 1}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-teal-300">
+                  <h3 className="text-base font-bold text-teal-700 dark:text-teal-300">
                     {WORKFLOW_STEPS[activeWorkflowIndex].title}
                   </h3>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     Stage: {WORKFLOW_STEPS[activeWorkflowIndex].label} · {WORKFLOW_STEPS[activeWorkflowIndex].actionLabel}
                   </p>
                 </div>
               </div>
               <Badge className="bg-teal-600 text-white text-[10px]">Automated</Badge>
             </div>
-            <p className="text-xs text-slate-200 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-200 leading-relaxed">
               {WORKFLOW_STEPS[activeWorkflowIndex].desc}
             </p>
           </Card>
@@ -1885,20 +1885,20 @@ export default function GptFormLandingPage() {
           </p>
         </div>
 
-        <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 text-white shadow-2xl border border-slate-800 space-y-6">
+        <div className="p-6 sm:p-8 rounded-3xl bg-card text-card-foreground dark:bg-slate-900 dark:text-white shadow-2xl border border-slate-200 dark:border-slate-800 space-y-6">
           {/* Header Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <Code2 className="size-4 text-teal-400" />
-              <span className="text-sm font-bold text-white">Embed Code Generator</span>
+              <Code2 className="size-4 text-teal-600 dark:text-teal-400" />
+              <span className="text-sm font-bold text-slate-900 dark:text-white">Embed Code Generator</span>
               <Badge className="bg-teal-600 text-white text-[9px] px-1.5">Universal</Badge>
             </div>
             <Button
               size="sm"
               onClick={handleCopyEmbedCode}
-              className="bg-slate-800 hover:bg-slate-700 text-teal-300 text-xs gap-1.5 h-8 cursor-pointer self-start sm:self-auto"
+              className="bg-slate-100 hover:bg-slate-200 text-teal-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-teal-300 border border-slate-200 dark:border-transparent text-xs gap-1.5 h-8 cursor-pointer self-start sm:self-auto"
             >
-              {copiedSnippet ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+              {copiedSnippet ? <Check className="size-3.5 text-emerald-500 dark:text-emerald-400" /> : <Copy className="size-3.5" />}
               <span>{copiedSnippet ? 'Copied!' : 'Copy Snippet'}</span>
             </Button>
           </div>
@@ -1920,7 +1920,7 @@ export default function GptFormLandingPage() {
                     'px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap',
                     activeEmbedTab === tab.id
                       ? 'bg-teal-600 text-white shadow-sm'
-                      : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
                   )}
                 >
                   {tab.label}
@@ -1930,9 +1930,9 @@ export default function GptFormLandingPage() {
           </div>
 
           {/* Code Block */}
-          <div className="rounded-xl overflow-hidden border border-slate-800">
-            <div className="px-4 py-2 bg-slate-800/80 flex items-center justify-between">
-              <span className="text-[10px] font-mono text-slate-400">{embedNotes[activeEmbedTab]}</span>
+          <div className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800/80 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
+              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">{embedNotes[activeEmbedTab]}</span>
               <div className="flex gap-1.5">
                 <div className="size-2.5 rounded-full bg-red-500/60" />
                 <div className="size-2.5 rounded-full bg-yellow-500/60" />

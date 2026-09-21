@@ -507,27 +507,27 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
 
 function CrmFaq() {
   return (
-    <section id="faq" className="border-t border-slate-800 bg-slate-950 text-white py-16 sm:py-24">
+    <section id="faq" className="border-t border-border bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-white py-16 sm:py-24">
       <div className="mx-auto max-w-4xl px-4 sm:px-6">
         <div className="mb-12 text-center">
-          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-400 mb-3 font-semibold text-xs px-3 py-1">
+          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-3 font-semibold text-xs px-3 py-1">
             Answers &amp; Knowledge Base
           </Badge>
-          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white">
-            Frequently Asked <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">Questions</span>
+          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-slate-900 dark:text-white">
+            Frequently Asked <span className="bg-gradient-to-r from-emerald-500 to-teal-500 dark:from-emerald-400 dark:to-teal-400 bg-clip-text text-transparent">Questions</span>
           </h2>
-          <p className="text-slate-400 text-sm sm:text-base mt-2 max-w-xl mx-auto">
+          <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base mt-2 max-w-xl mx-auto">
             Everything you need to know about the Fieseros AI Operating System, 0% platform fee policy, and data portability.
           </p>
         </div>
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-2xl overflow-hidden p-2 sm:p-4">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-card text-card-foreground shadow-xl overflow-hidden p-2 sm:p-4">
           <Accordion type="single" collapsible className="w-full">
             {faqs.map((faq, i) => (
-              <AccordionItem key={i} value={`item-${i}`} className="border-b border-slate-800/80 last:border-b-0 px-4 sm:px-6 py-2">
-                <AccordionTrigger className="text-white hover:text-emerald-400 hover:no-underline text-left font-bold text-sm sm:text-base py-4 cursor-pointer">
+              <AccordionItem key={i} value={`item-${i}`} className="border-b border-slate-100 dark:border-slate-800/80 last:border-b-0 px-4 sm:px-6 py-2">
+                <AccordionTrigger className="text-slate-900 hover:text-emerald-600 dark:text-white dark:hover:text-emerald-400 hover:no-underline text-left font-bold text-sm sm:text-base py-4 cursor-pointer">
                   {faq.question}
                 </AccordionTrigger>
-                <AccordionContent className="text-slate-400 leading-relaxed text-xs sm:text-sm pb-4">
+                <AccordionContent className="text-slate-600 dark:text-slate-400 leading-relaxed text-xs sm:text-sm pb-4">
                   {faq.answer}
                 </AccordionContent>
               </AccordionItem>
@@ -707,16 +707,16 @@ export function DualAudienceLanding({
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
                     <div className="p-3.5 rounded-2xl bg-card border border-border dark:bg-slate-950/80 dark:border-slate-800 space-y-1">
-                      <p className="text-xs font-bold text-amber-400">0% Commission</p>
-                      <p className="text-[11px] text-slate-400">Keep 100% of every customer booking and payment.</p>
+                      <p className="text-xs font-bold text-amber-500 dark:text-amber-400">0% Commission</p>
+                      <p className="text-[11px] text-muted-foreground dark:text-slate-400">Keep 100% of every customer booking and payment.</p>
                     </div>
-                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
-                      <p className="text-xs font-bold text-teal-400">Verified Badge</p>
-                      <p className="text-[11px] text-slate-400">Showcase insurance, licenses, and verified reviews.</p>
+                    <div className="p-3.5 rounded-2xl bg-card border border-border dark:bg-slate-950/80 dark:border-slate-800 space-y-1">
+                      <p className="text-xs font-bold text-teal-600 dark:text-teal-400">Verified Badge</p>
+                      <p className="text-[11px] text-muted-foreground dark:text-slate-400">Showcase insurance, licenses, and verified reviews.</p>
                     </div>
-                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
-                      <p className="text-xs font-bold text-emerald-400">Direct CRM Sync</p>
-                      <p className="text-[11px] text-slate-400">Incoming requests land directly in your live dispatch board.</p>
+                    <div className="p-3.5 rounded-2xl bg-card border border-border dark:bg-slate-950/80 dark:border-slate-800 space-y-1">
+                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Direct CRM Sync</p>
+                      <p className="text-[11px] text-muted-foreground dark:text-slate-400">Incoming requests land directly in your live dispatch board.</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 pt-3">
@@ -728,46 +728,46 @@ export function DualAudienceLanding({
                     </Link>
                     <Link
                       href="/request"
-                      className="h-11 px-6 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs sm:text-sm font-semibold flex items-center gap-2 transition cursor-pointer"
+                      className="h-11 px-6 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-xs sm:text-sm font-semibold flex items-center gap-2 transition cursor-pointer"
                     >
                       Post Service Request →
                     </Link>
                   </div>
                 </div>
                 <div className="lg:col-span-5">
-                  <div className="p-6 rounded-2xl bg-slate-950 border border-amber-500/30 shadow-2xl space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Live Verified Profile</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold">● Active in Directory</span>
+                  <div className="p-6 rounded-2xl bg-card text-card-foreground border border-amber-500/30 shadow-2xl space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-border dark:border-slate-800">
+                      <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Live Verified Profile</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold">● Active in Directory</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="size-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center font-black text-base shrink-0">
+                      <div className="size-12 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black text-base shrink-0">
                         PS
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-white">ProSkill Plumbing &amp; HVAC</h4>
-                        <p className="text-xs text-slate-400">Phoenix, AZ · Rated 4.9 ★ (128 Reviews)</p>
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">ProSkill Plumbing &amp; HVAC</h4>
+                        <p className="text-xs text-muted-foreground dark:text-slate-400">Phoenix, AZ · Rated 4.9 ★ (128 Reviews)</p>
                       </div>
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 space-y-1.5">
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-1.5">
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Service Coverage:</span>
-                        <span className="text-white font-medium">25 km radius</span>
+                        <span className="text-muted-foreground dark:text-slate-400">Service Coverage:</span>
+                        <span className="text-slate-900 dark:text-white font-medium">25 km radius</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Direct Bookings:</span>
-                        <span className="text-teal-400 font-bold">24/7 AI Receptionist</span>
+                        <span className="text-muted-foreground dark:text-slate-400">Direct Bookings:</span>
+                        <span className="text-teal-600 dark:text-teal-400 font-bold">24/7 AI Receptionist</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-slate-400">Platform Take Rate:</span>
-                        <span className="text-emerald-400 font-bold">0% (Keep Everything)</span>
+                        <span className="text-muted-foreground dark:text-slate-400">Platform Take Rate:</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">0% (Keep Everything)</span>
                       </div>
                     </div>
                     <div className="flex gap-2 pt-1">
                       <button type="button" className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md cursor-pointer">
                         Direct Booking
                       </button>
-                      <button type="button" className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-semibold text-xs border border-slate-700 cursor-pointer">
+                      <button type="button" className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-300 font-semibold text-xs border border-slate-300 dark:border-slate-700 cursor-pointer">
                         Call Verified Pro
                       </button>
                     </div>
@@ -785,19 +785,19 @@ export function DualAudienceLanding({
         <CrmFaq />
 
         {/* 18. High-Impact Closing CTA */}
-        <section className="py-20 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-white border-t border-slate-800 text-center relative overflow-hidden">
+        <section className="py-20 bg-gradient-to-b from-slate-100 via-white to-slate-100 text-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-white border-t border-border dark:border-slate-800 text-center relative overflow-hidden">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 relative z-10">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
               <Sparkles className="size-3.5" />
               <span>START IN UNDER 5 MINUTES</span>
             </div>
-            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-white leading-tight">
+            <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
               Stop managing your software.{' '}
-              <span className="bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-300 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-400 dark:from-teal-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
                 Tell Fieseros what needs to happen.
               </span>
             </h2>
-            <p className="text-sm sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-sm sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
               CRM. Jobs. Scheduling. Dispatch. AI Voice. Calculations. Invoicing. Marketing. 0% Commission Payments.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
@@ -810,7 +810,7 @@ export function DualAudienceLanding({
               </Button>
               <Link
                 href="/gptform"
-                className="h-13 px-7 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 text-sm font-semibold flex items-center gap-2 transition"
+                className="h-13 px-7 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-sm font-semibold flex items-center gap-2 transition"
               >
                 Explore GPTForm Studio →
               </Link>
