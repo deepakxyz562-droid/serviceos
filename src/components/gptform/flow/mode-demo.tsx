@@ -214,7 +214,7 @@ export function ModeDemo() {
                     <Sparkles className="size-3 text-emerald-600" />
                     Structured Automatically
                   </span>
-                  <Badge className="bg-emerald-600 text-white text-[9px] px-1.5 py-0">99.8% Match</Badge>
+                  <Badge className="bg-emerald-600 text-white text-[9px] px-1.5 py-0">AI Extracted</Badge>
                 </div>
                 <div className="space-y-1.5 pt-1">
                   <p className="text-foreground">
@@ -232,7 +232,7 @@ export function ModeDemo() {
                 </div>
                 <div className="pt-2 border-t border-emerald-500/20">
                   <Button size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 cursor-pointer">
-                    Book &amp; Dispatch to CRM
+                    Confirm Booking &amp; Submit
                   </Button>
                 </div>
               </div>

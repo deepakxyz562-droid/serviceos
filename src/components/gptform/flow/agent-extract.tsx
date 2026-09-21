@@ -95,8 +95,8 @@ export function AgentExtract() {
                 ['Service Type', 'Dental Check-up & Clean'],
                 ['Assigned Doctor', 'Dr. Sarah Mitchell, DDS'],
                 ['Locked Timeslot', 'Tuesday · 10:30 AM'],
-                ['Lead Score', 'High Intent (99.4%)'],
-                ['Status', 'Ready to Dispatch'],
+                ['Triage Priority', 'High / Preferred Slot'],
+                ['Status', 'Verified Submission'],
               ].map(([key, val]) => (
                 <div key={key} className="flex items-center justify-between border-b border-emerald-500/10 pb-2">
                   <span className="text-muted-foreground text-[11px]">{key}</span>

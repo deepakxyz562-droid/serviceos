@@ -45,35 +45,24 @@ export type TemplateItem = {
 
 export const TEMPLATES_DATA: TemplateItem[] = [
   {
-    id: 'dental-intake',
-    title: 'Dental Patient Intake & Live Booking',
-    industry: 'Dental Care',
-    category: 'Healthcare & Dental',
-    description: 'Captures dental symptoms, insurance card photo OCR, medical consent, and calendar slot selection.',
-    fieldsCount: 8,
-    features: ['Calendar Slot Lock', 'Insurance OCR', 'SMS Confirmation'],
-    icon: CalendarCheck,
-    accent: 'green',
-  },
-  {
     id: 'roof-estimate',
     title: 'Roofing Damage Inspection & Estimator',
     industry: 'Roofing & Exterior',
     category: 'Estimates & Inspection',
-    description: 'Instant sq ft material formula, drone photo upload, damage severity tags, and digital signature.',
+    description: 'Instant sq ft material formula, damage photo uploads, urgent hazard tags, and digital signature.',
     fieldsCount: 9,
-    features: ['Live Price Formula', 'Photo Upload', 'E-Signature'],
+    features: ['Live Price Formula', 'Photo Upload', 'Digital E-Signature'],
     icon: ShieldCheck,
     accent: 'purple',
   },
   {
     id: 'hvac-emergency',
-    title: 'HVAC Emergency Diagnostic & Dispatch',
+    title: 'HVAC Emergency Diagnostic & Booking',
     industry: 'Heating & Air Conditioning',
     category: 'Emergency & Field Service',
-    description: 'Equipment brand selector, error code lookup, technician emergency dispatch, and diagnostic deposit.',
+    description: 'Equipment brand selector, symptoms checklist, urgent dispatch alerts, and diagnostic deposit payment.',
     fieldsCount: 7,
-    features: ['Urgency Routing', 'Diagnostic Deposit', 'PWA Dispatch'],
+    features: ['Urgency Routing', 'Diagnostic Deposit', 'Instant SMS Alert'],
     icon: Zap,
     accent: 'blue',
   },
@@ -93,22 +82,33 @@ export const TEMPLATES_DATA: TemplateItem[] = [
     title: 'Plumbing Service Call & Sign-Off',
     industry: 'Plumbing & Gas',
     category: 'Emergency & Field Service',
-    description: 'Leak evidence photos, GPS address validation, technician assignment, and on-site sign-off.',
+    description: 'Leak evidence photos, address autocomplete, preferred arrival slot, and on-site customer signature.',
     fieldsCount: 8,
-    features: ['GPS Geocoding', 'Photo Markup', 'On-Site Sign-Off'],
+    features: ['Address Lookup', 'Photo Upload', 'Digital Sign-Off'],
     icon: MessageCircle,
     accent: 'purple',
   },
   {
-    id: 'commercial-onboard',
-    title: 'Commercial Client Service Agreement',
+    id: 'consultation-booking',
+    title: 'Consultation & Client Onboarding Intake',
     industry: 'Consulting & B2B',
     category: 'B2B & Onboarding',
-    description: 'Company profile, SLA selection, billing credentials, and automated CRM company creation.',
+    description: 'Company profile capture, service requirements, calendar booking slot, and real-time webhook sync.',
     fieldsCount: 6,
-    features: ['B2B Verification', 'SLA Contract', 'CRM Sync'],
+    features: ['Calendar Slot Lock', 'Service Questionnaire', 'Webhook Sync'],
     icon: FormInput,
     accent: 'blue',
+  },
+  {
+    id: 'dental-intake',
+    title: 'Dental Patient Intake & Appointment',
+    industry: 'Dental Care',
+    category: 'Healthcare & Dental',
+    description: 'Captures dental symptoms, insurance card photo upload, medical consent, and calendar slot selection.',
+    fieldsCount: 8,
+    features: ['Calendar Booking', 'Insurance Card Photo', 'SMS Confirmation'],
+    icon: CalendarCheck,
+    accent: 'green',
   },
 ];
 
@@ -202,7 +202,7 @@ export function TemplatePreviewDialog({
               <div className="space-y-3 text-xs">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="font-semibold block mb-1">Customer / Patient Name</label>
+                    <label className="font-semibold block mb-1">Customer Name</label>
                     <div className="h-9 rounded-lg border border-border bg-background px-3 flex items-center text-muted-foreground">
                       Sarah Jenkins
                     </div>
@@ -215,9 +215,9 @@ export function TemplatePreviewDialog({
                   </div>
                 </div>
                 <div>
-                  <label className="font-semibold block mb-1">Specific Issue / Request</label>
+                  <label className="font-semibold block mb-1">Service Details / Address</label>
                   <div className="h-14 rounded-lg border border-border bg-background p-2.5 text-muted-foreground">
-                    Standard service request with photo attachment and booking verification.
+                    Residential repair request with attached photos and preferred Tuesday time slot.
                   </div>
                 </div>
                 <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 cursor-pointer">
@@ -229,7 +229,7 @@ export function TemplatePreviewDialog({
             {experience === 'Card' && (
               <div className="py-4 text-center space-y-3">
                 <p className="text-[10px] font-bold uppercase text-emerald-600">Question 1 of {template.fieldsCount}</p>
-                <p className="text-base font-bold text-foreground">Select your primary service option</p>
+                <p className="text-base font-bold text-foreground">Select your primary service requirement</p>
                 <div className="space-y-2 text-left max-w-sm mx-auto">
                   {template.features.map((feat, idx) => (
                     <div
@@ -257,12 +257,12 @@ export function TemplatePreviewDialog({
                     <Bot className="size-3.5" />
                   </div>
                   <div className="rounded-xl rounded-tl-sm bg-muted p-3 text-foreground leading-relaxed">
-                    Hello! I’m the AI assistant for {template.industry}. How can I assist you today?
+                    Hello! I can help you with {template.title.toLowerCase()}. What would you like to schedule?
                   </div>
                 </div>
                 <div className="flex justify-end">
                   <div className="rounded-xl rounded-tr-sm bg-emerald-600 p-3 text-white font-medium">
-                    I need to book an appointment and get an estimate for this week.
+                    I need an inspection estimate for this Tuesday morning.
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -270,7 +270,7 @@ export function TemplatePreviewDialog({
                     <Bot className="size-3.5" />
                   </div>
                   <div className="rounded-xl rounded-tl-sm bg-muted p-3 text-foreground leading-relaxed">
-                    Got it! We have slots available on Tuesday at 10:30 AM and Thursday at 2:00 PM.
+                    Got it! We have appointment slots available on Tuesday at 10:30 AM.
                   </div>
                 </div>
               </div>
@@ -286,10 +286,10 @@ export function TemplatePreviewDialog({
                   “Hi, I have a leak near the chimney flashing and want an inspection quote as soon as possible.”
                 </div>
                 <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-1">
-                  <p className="font-bold text-emerald-700 dark:text-emerald-300 text-[11px]">AI Extraction Results</p>
+                  <p className="font-bold text-emerald-700 dark:text-emerald-300 text-[11px]">Structured Form Submission</p>
                   <p className="text-foreground"><b>Detected Issue:</b> Chimney Flashing Leak</p>
-                  <p className="text-foreground"><b>Routing:</b> Emergency Roof Repair Inspector</p>
-                  <p className="text-foreground"><b>Action:</b> Dispatched to Mobile CRM</p>
+                  <p className="text-foreground"><b>Priority:</b> Urgent Inspection Requested</p>
+                  <p className="text-foreground"><b>Action:</b> Saved to Submissions &amp; Webhook Triggered</p>
                 </div>
               </div>
             )}
@@ -298,7 +298,7 @@ export function TemplatePreviewDialog({
 
         {/* Footer Actions */}
         <div className="flex items-center justify-between border-t border-border px-6 py-4 bg-card">
-          <span className="text-xs text-muted-foreground">Ready to deploy to your website in under 2 minutes.</span>
+          <span className="text-xs text-muted-foreground">Ready to embed on your website in under 2 minutes.</span>
           <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 cursor-pointer">
             Deploy This Template <ArrowRight className="size-3.5 ml-1.5" />
           </Button>

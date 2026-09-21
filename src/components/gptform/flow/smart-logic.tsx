@@ -36,26 +36,26 @@ const FIELD_PALETTE = [
 ];
 
 export function SmartLogic() {
-  const [activeRuleTab, setActiveRuleTab] = useState<'emergency' | 'discount' | 'dispatch'>('emergency');
+  const [activeRuleTab, setActiveRuleTab] = useState<'emergency' | 'discount' | 'notification'>('emergency');
 
   const rulesData = {
     emergency: [
       { tag: 'IF', text: 'Treatment or Repair Issue is flagged "Emergency / Active Leak"', color: 'bg-purple-600 text-white' },
       { tag: 'THEN', text: 'Require Photo Upload of damaged area + Emergency Contact Number', color: 'bg-emerald-400 text-slate-950' },
-      { tag: 'AND', text: 'Set CRM Priority to "CRITICAL — Dispatch Within 60 Mins"', color: 'bg-emerald-400 text-slate-950' },
-      { tag: 'AND', text: 'Collect £89 Diagnostic Hold via Stripe Authorization Link', color: 'bg-emerald-400 text-slate-950' },
+      { tag: 'AND', text: 'Set Triage Priority to "CRITICAL — Fast-track Response"', color: 'bg-emerald-400 text-slate-950' },
+      { tag: 'AND', text: 'Collect Diagnostic Deposit via Stripe Checkout Link', color: 'bg-emerald-400 text-slate-950' },
     ],
     discount: [
       { tag: 'IF', text: 'Service Frequency selected is "Weekly or Bi-Weekly Subscription"', color: 'bg-purple-600 text-white' },
       { tag: 'THEN', text: 'Apply 20% Recurring Rate Discount to calculated subtotal', color: 'bg-emerald-400 text-slate-950' },
-      { tag: 'AND', text: 'Offer Free Re-clean Guarantee badge on final checkout card', color: 'bg-emerald-400 text-slate-950' },
-      { tag: 'AND', text: 'Auto-enroll customer into VIP Maintenance Reminder SMS', color: 'bg-emerald-400 text-slate-950' },
+      { tag: 'AND', text: 'Show Satisfaction Guarantee badge on final confirmation step', color: 'bg-emerald-400 text-slate-950' },
+      { tag: 'AND', text: 'Send VIP Maintenance Reminder SMS to Customer', color: 'bg-emerald-400 text-slate-950' },
     ],
-    dispatch: [
-      { tag: 'IF', text: 'Customer Postcode is within "Zone 1 Premium Coverage Area"', color: 'bg-purple-600 text-white' },
-      { tag: 'THEN', text: 'Assign Senior Certified Specialist (Technician #3 — Dave)', color: 'bg-emerald-400 text-slate-950' },
-      { tag: 'AND', text: 'Calculate travel buffer time and lock arrival window', color: 'bg-emerald-400 text-slate-950' },
-      { tag: 'AND', text: 'Send live technician GPS tracking SMS upon departure', color: 'bg-emerald-400 text-slate-950' },
+    notification: [
+      { tag: 'IF', text: 'Customer Address is within "Express Priority Coverage Area"', color: 'bg-purple-600 text-white' },
+      { tag: 'THEN', text: 'Send Instant Priority SMS Alert to On-Duty Service Team', color: 'bg-emerald-400 text-slate-950' },
+      { tag: 'AND', text: 'Attach Customer Damage Photos & Notes to Webhook Payload', color: 'bg-emerald-400 text-slate-950' },
+      { tag: 'AND', text: 'Send Automated Calendar Invite & SMS Confirmation to Customer', color: 'bg-emerald-400 text-slate-950' },
     ],
   };
 
@@ -68,7 +68,7 @@ export function SmartLogic() {
             Forms that respond dynamically to your customers.
           </h2>
           <p className="mt-4 text-base sm:text-lg leading-relaxed text-muted-foreground">
-            Collect exactly what you need, apply customized pricing formulas, and automatically route high-priority jobs directly to available field technicians.
+            Collect exactly what you need, apply customized pricing formulas, and automatically trigger conditional notifications and webhook integrations.
           </p>
         </div>
 
@@ -115,7 +115,7 @@ export function SmartLogic() {
               </div>
               {/* Scenario Toggles */}
               <div className="flex gap-1 rounded-lg bg-white/10 p-1">
-                {(['emergency', 'discount', 'dispatch'] as const).map((tab) => (
+                {(['emergency', 'discount', 'notification'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveRuleTab(tab)}
@@ -150,7 +150,7 @@ export function SmartLogic() {
 
             <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
               <span>Status: Active in Production</span>
-              <span className="text-emerald-400 font-semibold">0ms Evaluation Latency</span>
+              <span className="text-emerald-400 font-semibold">Real-Time Form Evaluation</span>
             </div>
           </div>
         </div>

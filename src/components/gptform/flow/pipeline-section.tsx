@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Sparkles,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const PIPELINE_STEPS = [
@@ -23,38 +24,38 @@ const PIPELINE_STEPS = [
   },
   {
     step: '02',
-    name: 'Form',
-    desc: 'Pre-filled smart form captures verified contact info, photo evidence, and e-signatures without retyping.',
+    name: 'Smart Form',
+    desc: 'Pre-filled smart form captures verified contact info, photo evidence, and digital signatures without retyping.',
     icon: FileInput,
   },
   {
     step: '03',
-    name: 'Lead',
-    desc: 'AI scores the enquiry, validates phone & email, geocodes the property, and pushes into your CRM.',
+    name: 'Lead Capture',
+    desc: 'AI structures the enquiry, validates phone & email, geocodes the address, and organizes the record.',
     icon: Users,
   },
   {
     step: '04',
-    name: 'Appointment',
-    desc: 'Calendar slot is locked in real time with travel buffers and automated 2-way SMS confirmations.',
+    name: 'Calendar Lock',
+    desc: 'Appointment slot is locked in real time with Google Calendar, Outlook, or CRM schedule availability.',
     icon: CalendarCheck,
   },
   {
     step: '05',
-    name: 'Quote',
+    name: 'Instant Quote',
     desc: 'Dynamic formula calculates materials, labor hours, and optional tiered upgrades for customer sign-off.',
     icon: Calculator,
   },
   {
     step: '06',
-    name: 'Payment',
-    desc: 'Deposit or full invoice paid securely via Stripe with 0% platform transaction fee.',
+    name: '0% Fee Payment',
+    desc: 'Deposit or invoice paid securely via your connected Stripe account with 0% Fieseros platform fee.',
     icon: DollarSign,
   },
   {
     step: '07',
-    name: 'Follow-up',
-    desc: 'Automated job packets sent to technician PWA app and automated review request sent upon completion.',
+    name: 'Automate & Sync',
+    desc: 'Instant email/SMS confirmations sent to customer, with real-time webhook sync to Zapier, your CRM, or Fieseros.',
     icon: Send,
   },
 ];
@@ -66,12 +67,17 @@ export function ConnectedPipeline() {
     <section id="integrations" className="section-pad bg-slate-950 text-white relative overflow-hidden">
       <div className="page-shell">
         <div className="section-heading text-white max-w-3xl mb-12">
-          <p className="eyebrow text-emerald-400 font-bold">CONNECTED WORKFLOW PIPELINE</p>
+          <div className="flex items-center gap-2">
+            <p className="eyebrow text-emerald-400 font-bold">CONNECTED WORKFLOW PIPELINE</p>
+            <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[10px]">
+              Works with Any Website
+            </Badge>
+          </div>
           <h2 className="mt-3 font-display text-4xl sm:text-5xl font-bold tracking-tight">
             A submission should never disappear into a static inbox.
           </h2>
           <p className="mt-3 text-base sm:text-lg text-slate-300">
-            Keep customer data moving seamlessly from the very first website interaction all the way to dispatch, invoice, and payment.
+            Keep customer data moving seamlessly from the very first website chat interaction to verified quotes, calendar slots, Stripe payments, and instant CRM webhooks.
           </p>
         </div>
 
@@ -114,13 +120,13 @@ export function ConnectedPipeline() {
                 {PIPELINE_STEPS[activeStep].step}
               </span>
               <div>
-                <h3 className="font-display text-xl font-bold text-white">Stage {PIPELINE_STEPS[activeStep].step}: {PIPELINE_STEPS[activeStep].name} Stage</h3>
-                <p className="text-xs text-slate-400">Automated end-to-end event triggering</p>
+                <h3 className="font-display text-xl font-bold text-white">Stage {PIPELINE_STEPS[activeStep].step}: {PIPELINE_STEPS[activeStep].name}</h3>
+                <p className="text-xs text-slate-400">Automated end-to-end event execution</p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-full">
               <Sparkles className="size-3.5" />
-              <span>Real-Time Webhook &amp; CRM Sync</span>
+              <span>Real-Time Webhook &amp; Instant Sync</span>
             </div>
           </div>
           <p className="mt-4 text-sm sm:text-base text-slate-200 leading-relaxed max-w-3xl">
