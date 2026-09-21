@@ -5,48 +5,6 @@
 // template theme. Includes a live preview mock of how the brand renders.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react';
-import { Palette, Upload, Image as ImageIcon, Save, Mail } from 'lucide-react';
-
-import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
-
-import { SectionHeader, DemoDataPill } from '@/components/views/superadmin/_shared';
-
-// ─── Demo data ───────────────────────────────────────────────────────────────
-
-interface ColorSwatch {
-  name: string;
-  hex: string;
-  className: string;
-}
-
-const COLORS: ColorSwatch[] = [
-  { name: 'Primary', hex: '#10b981', className: 'bg-emerald-500' },
-  { name: 'Accent', hex: '#0ea5e9', className: 'bg-sky-500' },
-  { name: 'Success', hex: '#22c55e', className: 'bg-green-500' },
-  { name: 'Warning', hex: '#f59e0b', className: 'bg-amber-500' },
-];
-
-interface EmailTemplate {
-  name: string;
-  className: string;
-}
-
-const EMAIL_TEMPLATES: EmailTemplate[] = [
-  { name: 'Welcome Email', className: 'from-emerald-500/20 to-emerald-500/5' },
-  { name: 'Invoice Email', className: 'from-sky-500/20 to-sky-500/5' },
-  { name: 'Notification Email', className: 'from-amber-500/20 to-amber-500/5' },
-];
-
-// ─── Component ───────────────────────────────────────────────────────────────
-
 import { useState, useEffect } from 'react';
 import { Palette, Upload, Image as ImageIcon, Save, Mail, Sun, Moon, Laptop, Check } from 'lucide-react';
 import { useTheme } from 'next-themes';
