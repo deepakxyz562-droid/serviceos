@@ -30,21 +30,18 @@ const cards = [
 
 export function FlowProblem() {
   return (
-    <section id="problem" className="bg-background py-24 border-b border-border relative overflow-hidden">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-12">
-        <div className="mx-auto max-w-2xl text-center space-y-3">
-          <span className="inline-flex items-center gap-2 rounded-full bg-rose-500/10 border border-rose-500/25 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-rose-600 dark:text-rose-400">
+    <section id="problem" className="bg-background py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-2xl text-center">
+          <span className="inline-flex items-center gap-2 rounded-full bg-destructive/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-destructive shadow-sm">
             <Flame className="size-3.5" /> The problem
           </span>
-          <h2 className="text-3xl font-extrabold leading-tight text-slate-900 dark:text-white sm:text-4xl tracking-tight">
+          <h2 className="mt-5 text-3xl font-extrabold leading-tight text-navy sm:text-4xl tracking-tight">
             Running a service business is chaos.
           </h2>
-          <p className="text-sm sm:text-base text-muted-foreground">
-            Contractors lose hours of billing time every day to manual data entry, missed calls, and disconnected software.
-          </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="mt-12 grid gap-5 md:grid-cols-3">
           {cards.map((c, i) => (
             <motion.article
               key={c.title}
@@ -52,22 +49,22 @@ export function FlowProblem() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.45, delay: i * 0.08 }}
-              className="group rounded-3xl border border-border bg-slate-50/50 dark:bg-slate-900/60 p-7 transition-all duration-300 hover:-translate-y-1 hover:border-rose-500/30 hover:bg-white dark:hover:bg-slate-900 shadow-md hover:shadow-xl"
+              className="group rounded-3xl border border-border bg-surface p-7 transition-all duration-300 hover:-translate-y-1 hover:border-destructive/30 hover:bg-background hover:shadow-[0_30px_70px_-45px_oklch(0.21_0.045_258/0.55)]"
             >
-              <span className="grid size-11 place-items-center rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-transform duration-300 group-hover:scale-110">
+              <span className="grid size-11 place-items-center rounded-2xl bg-destructive/10 text-destructive transition-transform duration-300 group-hover:scale-110">
                 <c.icon className="size-5" />
               </span>
-              <h3 className="mt-5 text-lg font-bold text-slate-900 dark:text-white">{c.title}</h3>
-              <p className="mt-4 text-3xl font-extrabold text-rose-600 dark:text-rose-400">{c.stat}</p>
-              <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{c.statLabel}</p>
-              <p className="mt-2 text-xs sm:text-sm text-muted-foreground">{c.sub}</p>
+              <h3 className="mt-5 text-lg font-bold text-navy">{c.title}</h3>
+              <p className="mt-4 text-3xl font-extrabold text-destructive">{c.stat}</p>
+              <p className="text-sm font-medium text-navy">{c.statLabel}</p>
+              <p className="mt-2 text-sm text-muted-foreground">{c.sub}</p>
             </motion.article>
           ))}
         </div>
 
-        <p className="text-center text-sm sm:text-base font-semibold text-slate-900 dark:text-white">
+        <p className="mt-10 text-center text-base font-semibold text-navy">
           Fieseros fixes all three —{' '}
-          <span className="text-teal-600 dark:text-teal-400 font-bold">day one, no Meta approvals required.</span>
+          <span className="text-primary font-bold">day one, no Meta approvals required.</span>
         </p>
       </div>
     </section>

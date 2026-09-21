@@ -52,18 +52,15 @@ export function FlowFaq() {
   const [open, setOpen] = useState<number | null>(0);
 
   return (
-    <section id="faq" className="py-24 bg-background">
+    <section id="faq" className="bg-background py-24">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
         <div className="text-center">
-          <span className="inline-flex rounded-full bg-teal-500/10 dark:bg-teal-500/20 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-300 border border-teal-500/20">
-            Answers & knowledge base
+          <span className="inline-flex rounded-full bg-accent px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-accent-foreground shadow-sm">
+            Answers &amp; knowledge base
           </span>
-          <h2 className="mt-5 text-3xl font-extrabold leading-tight text-foreground sm:text-4xl">
+          <h2 className="mt-5 text-3xl font-extrabold leading-tight text-navy sm:text-4xl tracking-tight">
             Everything contractors ask us.
           </h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Clear answers about features, migrations, 0% platform fee, and how AI handles your daily operations.
-          </p>
         </div>
 
         <div className="mt-10 space-y-3">
@@ -73,21 +70,18 @@ export function FlowFaq() {
               <div
                 key={f.q}
                 className={cn(
-                  'rounded-2xl border transition-all duration-200',
-                  isOpen
-                    ? 'border-teal-500/40 bg-card shadow-sm'
-                    : 'border-border/70 bg-card/60 hover:border-teal-500/30 hover:bg-card'
+                  'rounded-2xl border transition-colors',
+                  isOpen ? 'border-primary/35 bg-surface' : 'border-border bg-background hover:border-primary/25'
                 )}
               >
                 <button
                   onClick={() => setOpen(isOpen ? null : i)}
-                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors"
-                  aria-expanded={isOpen}
+                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left cursor-pointer"
                 >
-                  <span className="text-[15px] font-semibold text-foreground">{f.q}</span>
+                  <span className="text-[15px] font-semibold text-navy">{f.q}</span>
                   <Plus
                     className={cn(
-                      'size-4 shrink-0 text-teal-600 dark:text-teal-400 transition-transform duration-300',
+                      'size-4 shrink-0 text-primary transition-transform duration-300',
                       isOpen && 'rotate-45'
                     )}
                   />
@@ -101,9 +95,7 @@ export function FlowFaq() {
                       transition={{ duration: 0.25 }}
                       className="overflow-hidden"
                     >
-                      <p className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground border-t border-border/40 pt-3">
-                        {f.a}
-                      </p>
+                      <p className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground">{f.a}</p>
                     </motion.div>
                   )}
                 </AnimatePresence>

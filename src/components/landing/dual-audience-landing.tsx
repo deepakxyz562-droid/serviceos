@@ -137,7 +137,7 @@ function Navbar({
           }}
         >
           <BrandMark size={32} className="shadow-teal-500/20 group-hover:scale-105 transition-transform" />
-          <span className="text-xl font-bold tracking-tight text-foreground">Fieseros</span>
+          <span className="text-xl font-bold tracking-tight text-navy">Fieseros</span>
         </a>
 
         {/* ── Desktop Navigation ── */}
@@ -146,24 +146,24 @@ function Navbar({
           <SolutionsMegaMenu />
           <Link
             href="/marketplace"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 px-3 py-2 rounded-full transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-navy hover:bg-surface px-3 py-2 rounded-full transition-colors"
           >
-            <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <Store className="h-4 w-4 text-primary" />
             <span>Marketplace</span>
-            <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+            <span className="text-[10px] font-bold bg-accent text-accent-foreground px-2 py-0.5 rounded-full">
               Pros
             </span>
           </Link>
           <Link
             href="/requests"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 px-3 py-2 rounded-full transition-colors"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-navy hover:bg-surface px-3 py-2 rounded-full transition-colors"
           >
-            <ClipboardList className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+            <ClipboardList className="h-4 w-4 text-primary" />
             <span>My Requests</span>
           </Link>
           <a
             href="#pricing"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 px-3 py-2 rounded-full transition-colors cursor-pointer"
+            className="text-sm font-medium text-muted-foreground hover:text-navy hover:bg-surface px-3 py-2 rounded-full transition-colors cursor-pointer"
             onClick={(e) => scrollToAnchor('#pricing', e)}
           >
             Pricing
@@ -175,7 +175,7 @@ function Navbar({
           <Button
             asChild
             size="sm"
-            className="gap-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 text-white hover:opacity-90 font-semibold shadow-sm text-xs sm:text-sm h-9 px-4 rounded-full cursor-pointer"
+            className="gap-1.5 bg-primary text-primary-foreground hover:bg-brand-deep font-semibold shadow-sm text-xs sm:text-sm h-9 px-4 rounded-full cursor-pointer"
           >
             <Link href="/request">
               <span>Post Request</span>
@@ -187,7 +187,7 @@ function Navbar({
             variant="ghost"
             size="sm"
             onClick={() => setEmpLoginOpen(true)}
-            className="text-xs text-muted-foreground hover:text-foreground hover:bg-muted/60 gap-1.5 h-9 px-3 rounded-full cursor-pointer"
+            className="text-xs text-muted-foreground hover:text-navy hover:bg-surface gap-1.5 h-9 px-3 rounded-full cursor-pointer"
             title="Field technician and staff portal"
           >
             <Key className="h-3.5 w-3.5 text-muted-foreground" />
@@ -198,7 +198,7 @@ function Navbar({
               variant="ghost"
               size="sm"
               onClick={onSignIn}
-              className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 h-9 px-3 rounded-full cursor-pointer"
+              className="text-xs sm:text-sm font-medium text-muted-foreground hover:text-navy hover:bg-surface h-9 px-3 rounded-full cursor-pointer"
             >
               Sign In
             </Button>
@@ -208,7 +208,7 @@ function Navbar({
               variant="outline"
               size="sm"
               onClick={onGetStarted}
-              className="gap-1.5 border-teal-500/30 text-teal-700 dark:text-teal-300 hover:bg-teal-500/10 font-semibold text-xs sm:text-sm h-9 px-4 rounded-full cursor-pointer"
+              className="gap-1.5 border-primary/30 text-primary hover:bg-accent font-semibold text-xs sm:text-sm h-9 px-4 rounded-full cursor-pointer"
             >
               Start Trial
             </Button>
@@ -223,7 +223,7 @@ function Navbar({
           <ThemeToggle />
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="text-foreground inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mr-2 rounded-lg hover:bg-muted transition-colors"
+            className="text-navy inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mr-2 rounded-lg hover:bg-surface transition-colors"
             aria-label="Toggle menu"
             aria-expanded={mobileOpen}
           >
@@ -237,9 +237,9 @@ function Navbar({
         <div className="md:hidden border-t border-border bg-background text-foreground max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] px-4 py-4 space-y-3">
           <Accordion type="single" collapsible className="w-full space-y-2">
             <AccordionItem value="product" className="border border-border/80 rounded-2xl px-3 bg-card">
-              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-foreground">
+              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-navy">
                 <div className="flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                  <Wrench className="h-4 w-4 text-primary" />
                   <span>Platform &amp; Features</span>
                 </div>
               </AccordionTrigger>
@@ -248,7 +248,7 @@ function Navbar({
                   <a
                     key={item.href}
                     href={item.href}
-                    className="block text-xs font-medium text-muted-foreground hover:text-foreground p-2 rounded-lg hover:bg-muted"
+                    className="block text-xs font-medium text-muted-foreground hover:text-navy p-2 rounded-lg hover:bg-surface"
                     onClick={(e) => {
                       setMobileOpen(false);
                       if (item.href.startsWith('/#')) scrollToAnchor(item.href.replace('/', ''), e);
@@ -259,12 +259,12 @@ function Navbar({
                 ))}
                 <div className="pt-2 border-t border-border/60">
                   <a
-                    href="#ai-receptionist"
-                    className="flex items-center justify-between text-xs font-semibold text-teal-600 dark:text-teal-400 p-2 rounded-lg hover:bg-teal-500/10"
-                    onClick={(e) => scrollToAnchor('#ai-receptionist', e)}
+                    href="#receptionist"
+                    className="flex items-center justify-between text-xs font-semibold text-primary p-2 rounded-lg hover:bg-accent"
+                    onClick={(e) => scrollToAnchor('#receptionist', e)}
                   >
                     <span>24/7 AI Receptionist</span>
-                    <span className="text-[10px] bg-teal-500/10 text-teal-800 dark:text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded-full uppercase">
+                    <span className="text-[10px] bg-accent text-accent-foreground border border-primary/20 px-2 py-0.5 rounded-full uppercase">
                       AI Voice
                     </span>
                   </a>
@@ -273,9 +273,9 @@ function Navbar({
             </AccordionItem>
 
             <AccordionItem value="solutions" className="border border-border/80 rounded-2xl px-3 bg-card">
-              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-foreground">
+              <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-navy">
                 <div className="flex items-center gap-2">
-                  <Briefcase className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <Briefcase className="h-4 w-4 text-primary" />
                   <span>Solutions &amp; Trades</span>
                 </div>
               </AccordionTrigger>
@@ -289,7 +289,7 @@ function Navbar({
                       <a
                         key={link.href}
                         href={link.href}
-                        className="text-xs text-muted-foreground hover:text-foreground p-1.5 rounded hover:bg-muted/60 truncate block"
+                        className="text-xs text-muted-foreground hover:text-navy p-1.5 rounded hover:bg-surface truncate block"
                         onClick={() => setMobileOpen(false)}
                       >
                         {link.label}
@@ -306,7 +306,7 @@ function Navbar({
                       <a
                         key={link.href}
                         href={link.href}
-                        className="block text-xs text-muted-foreground hover:text-foreground p-1.5 rounded hover:bg-muted/60"
+                        className="block text-xs text-muted-foreground hover:text-navy p-1.5 rounded hover:bg-surface"
                         onClick={() => setMobileOpen(false)}
                       >
                         {link.label}
@@ -323,7 +323,7 @@ function Navbar({
                       <a
                         key={link.href}
                         href={link.href}
-                        className="block text-xs text-muted-foreground hover:text-foreground p-1.5 rounded hover:bg-muted/60"
+                        className="block text-xs text-muted-foreground hover:text-navy p-1.5 rounded hover:bg-surface"
                         onClick={() => setMobileOpen(false)}
                       >
                         {link.label}
@@ -339,20 +339,20 @@ function Navbar({
           <div className="rounded-2xl border border-border/80 bg-card p-2 space-y-1">
             <Link
               href="/marketplace"
-              className="flex items-center justify-between p-2.5 text-xs font-semibold text-foreground hover:bg-muted rounded-xl transition-colors"
+              className="flex items-center justify-between p-2.5 text-xs font-semibold text-navy hover:bg-surface rounded-xl transition-colors"
               onClick={() => setMobileOpen(false)}
             >
               <div className="flex items-center gap-2">
-                <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <Store className="h-4 w-4 text-primary" />
                 <span>Verified Pro Marketplace</span>
               </div>
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-semibold">
+              <span className="text-[10px] bg-accent text-accent-foreground px-2 py-0.5 rounded-full font-semibold">
                 Browse
               </span>
             </Link>
             <a
               href="#pricing"
-              className="flex items-center justify-between p-2.5 text-xs font-medium text-foreground hover:bg-muted rounded-xl transition-colors"
+              className="flex items-center justify-between p-2.5 text-xs font-medium text-navy hover:bg-surface rounded-xl transition-colors"
               onClick={(e) => scrollToAnchor('#pricing', e)}
             >
               <span>Pricing Plans</span>
@@ -360,7 +360,7 @@ function Navbar({
             </a>
             <Link
               href="/invoice-generator"
-              className="flex items-center justify-between p-2.5 text-xs font-medium text-foreground hover:bg-muted rounded-xl transition-colors"
+              className="flex items-center justify-between p-2.5 text-xs font-medium text-navy hover:bg-surface rounded-xl transition-colors"
               onClick={() => setMobileOpen(false)}
             >
               <span>Free Invoice Generator</span>
@@ -373,7 +373,7 @@ function Navbar({
             {onGetStarted ? (
               <Button
                 size="sm"
-                className="w-full min-h-11 bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold text-sm rounded-full"
+                className="w-full min-h-11 bg-primary text-primary-foreground font-semibold text-sm rounded-full hover:bg-brand-deep"
                 onClick={() => {
                   setMobileOpen(false);
                   onGetStarted();
@@ -398,7 +398,7 @@ function Navbar({
             <Button
               variant="ghost"
               size="sm"
-              className="w-full min-h-10 text-muted-foreground hover:text-foreground text-xs gap-1.5 rounded-full"
+              className="w-full min-h-10 text-muted-foreground hover:text-navy text-xs gap-1.5 rounded-full"
               onClick={() => {
                 setEmpLoginOpen(true);
                 setMobileOpen(false);
@@ -470,7 +470,7 @@ export function DualAudienceLanding({
   onSignIn,
 }: DualAudienceLandingProps) {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-teal-500/20 selection:text-teal-900 dark:selection:text-teal-200">
+    <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-navy">
       {/* ── Google AI & Structured Schema SEO Foundation ── */}
       <div className="sr-only" aria-hidden="true">
         <h2>Fieseros AI Operating System &amp; Field CRM</h2>
@@ -518,19 +518,19 @@ export function DualAudienceLanding({
         <FlowProof />
 
         {/* 10. Verified Pro Marketplace Discovery Section */}
-        <section id="marketplace-3bid" className="py-24 bg-muted/20 border-b border-border/60 relative overflow-hidden">
+        <section id="marketplace-3bid" className="py-24 bg-surface border-y border-border relative overflow-hidden">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="rounded-3xl border border-border/80 bg-gradient-to-br from-card via-card/95 to-muted/50 p-8 sm:p-12 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 blur-[100px] pointer-events-none" />
+            <div className="rounded-3xl border border-border bg-background p-8 sm:p-12 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-accent/20 blur-[100px] pointer-events-none" />
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
                 <div className="lg:col-span-7 space-y-4">
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-xs font-semibold">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent text-accent-foreground text-xs font-bold uppercase tracking-[0.14em]">
                     <Store className="size-3.5" />
                     <span>BUILT-IN DEMAND &amp; DIRECT BOOKINGS</span>
                   </div>
-                  <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground leading-tight">
+                  <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-navy leading-tight">
                     Get discovered on the{' '}
-                    <span className="bg-gradient-to-r from-amber-500 via-teal-600 to-emerald-600 dark:from-amber-400 dark:via-teal-400 dark:to-emerald-400 bg-clip-text text-transparent">
+                    <span className="text-gradient-brand">
                       Fieseros Marketplace
                     </span>
                   </h2>
@@ -538,76 +538,76 @@ export function DualAudienceLanding({
                     Unlike legacy software that only manages existing clients, Fieseros gives your business a verified public profile on our local trade directory where property owners search, compare quotes, and book services — with <strong>0% platform commission</strong>.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                    <div className="p-4 rounded-2xl bg-card border border-border/80 space-y-1 shadow-sm">
-                      <p className="text-xs font-bold text-amber-600 dark:text-amber-400">0% Commission</p>
+                    <div className="p-4 rounded-2xl bg-surface border border-border space-y-1 shadow-xs">
+                      <p className="text-xs font-bold text-primary">0% Commission</p>
                       <p className="text-[11px] text-muted-foreground">Keep 100% of every customer booking and payment.</p>
                     </div>
-                    <div className="p-4 rounded-2xl bg-card border border-border/80 space-y-1 shadow-sm">
-                      <p className="text-xs font-bold text-teal-600 dark:text-teal-400">Verified Badge</p>
+                    <div className="p-4 rounded-2xl bg-surface border border-border space-y-1 shadow-xs">
+                      <p className="text-xs font-bold text-primary">Verified Badge</p>
                       <p className="text-[11px] text-muted-foreground">Showcase insurance, licenses, and verified reviews.</p>
                     </div>
-                    <div className="p-4 rounded-2xl bg-card border border-border/80 space-y-1 shadow-sm">
-                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Direct CRM Sync</p>
+                    <div className="p-4 rounded-2xl bg-surface border border-border space-y-1 shadow-xs">
+                      <p className="text-xs font-bold text-primary">Direct CRM Sync</p>
                       <p className="text-[11px] text-muted-foreground">Incoming requests land directly in your live dispatch board.</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 pt-3">
                     <Link
                       href="/marketplace"
-                      className="h-11 px-6 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md transition cursor-pointer"
+                      className="h-11 px-6 rounded-full bg-primary hover:bg-brand-deep text-primary-foreground font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md transition cursor-pointer"
                     >
                       Explore Verified Pro Directory <ArrowRight className="size-4" />
                     </Link>
                     <Link
                       href="/request"
-                      className="h-11 px-6 rounded-full bg-muted hover:bg-muted/80 text-foreground border border-border text-xs sm:text-sm font-semibold flex items-center gap-2 transition cursor-pointer"
+                      className="h-11 px-6 rounded-full bg-surface hover:bg-accent text-navy border border-border text-xs sm:text-sm font-semibold flex items-center gap-2 transition cursor-pointer"
                     >
                       Post Service Request →
                     </Link>
                   </div>
                 </div>
                 <div className="lg:col-span-5">
-                  <div className="p-6 rounded-3xl bg-card text-card-foreground border border-amber-500/30 shadow-xl space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-border/60">
-                      <span className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Live Verified Profile</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-500/20">
+                  <div className="p-6 rounded-3xl bg-surface text-foreground border border-border shadow-xl space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-border">
+                      <span className="text-xs font-bold text-navy uppercase tracking-wider">Live Verified Profile</span>
+                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-accent text-accent-foreground font-bold border border-primary/20">
                         ● Active in Directory
                       </span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="size-12 rounded-2xl bg-teal-500/10 border border-teal-500/30 text-teal-600 dark:text-teal-400 flex items-center justify-center font-black text-base shrink-0">
+                      <div className="size-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-black text-base shrink-0 shadow-xs">
                         PS
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-foreground">ProSkill Plumbing &amp; HVAC</h4>
+                        <h4 className="text-sm font-bold text-navy">ProSkill Plumbing &amp; HVAC</h4>
                         <p className="text-xs text-muted-foreground">Phoenix, AZ · Rated 4.9 ★ (128 Reviews)</p>
                       </div>
                     </div>
-                    <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/60 text-xs space-y-2">
+                    <div className="p-3.5 rounded-2xl bg-background border border-border text-xs space-y-2">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Service Coverage:</span>
-                        <span className="text-foreground font-medium">25 km radius</span>
+                        <span className="text-navy font-medium">25 km radius</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Direct Bookings:</span>
-                        <span className="text-teal-600 dark:text-teal-400 font-bold">24/7 AI Receptionist</span>
+                        <span className="text-primary font-bold">24/7 AI Receptionist</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Platform Take Rate:</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">0% (Keep Everything)</span>
+                        <span className="text-primary font-bold">0% (Keep Everything)</span>
                       </div>
                     </div>
                     <div className="flex gap-2 pt-1">
                       <button
                         type="button"
                         onClick={onGetStarted}
-                        className="flex-1 py-2.5 rounded-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:opacity-90 text-white font-bold text-xs shadow-md cursor-pointer transition"
+                        className="flex-1 py-2.5 rounded-full bg-primary hover:bg-brand-deep text-primary-foreground font-bold text-xs shadow-md cursor-pointer transition"
                       >
                         Direct Booking
                       </button>
                       <Link
                         href="/marketplace"
-                        className="flex-1 py-2.5 rounded-full bg-muted hover:bg-muted/80 text-foreground text-center font-semibold text-xs border border-border cursor-pointer transition"
+                        className="flex-1 py-2.5 rounded-full bg-background hover:bg-surface text-navy text-center font-semibold text-xs border border-border cursor-pointer transition"
                       >
                         Call Verified Pro
                       </Link>

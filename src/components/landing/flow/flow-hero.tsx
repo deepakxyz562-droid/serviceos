@@ -31,8 +31,8 @@ import {
   Wrench,
   Zap,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { BrandMark } from '@/components/brand/brand-mark';
+import { cn } from '@/lib/utils';
 
 const oldWay = [
   { n: '01', icon: User, title: 'Open Customer Tab', sub: 'Search or create contact record' },
@@ -48,9 +48,9 @@ const steps = [
   'Understanding your request...',
   'Finding Sarah in your CRM...',
   'Checking technician availability...',
-  'Matching skills & location (Gas Safe)...',
+  'Matching skills & location...',
   'Creating £350 quote...',
-  'Preparing WhatsApp confirmation...',
+  'Preparing customer message...',
 ];
 
 const sidebar = [
@@ -91,7 +91,7 @@ export function FlowHero({ onGetStarted }: { onGetStarted?: () => void }) {
   const timers = useRef<NodeJS.Timeout[]>([]);
 
   const clear = () => {
-    timers.current.forEach((t) => clearTimeout(t));
+    timers.current.forEach(clearTimeout);
     timers.current = [];
   };
 
@@ -118,86 +118,66 @@ export function FlowHero({ onGetStarted }: { onGetStarted?: () => void }) {
   const complete = done >= steps.length;
 
   return (
-    <section id="top" className="relative overflow-hidden bg-slate-50/60 dark:bg-slate-950 pt-28 pb-20 lg:pt-36 border-b border-border">
-      {/* Ambient background glow */}
-      <div className="pointer-events-none absolute -top-40 left-1/2 size-[46rem] -translate-x-1/2 rounded-full bg-teal-500/10 dark:bg-teal-500/15 blur-3xl" />
+    <section id="top" className="relative overflow-hidden bg-surface pt-16 pb-20 lg:pt-24 lg:pb-28">
+      <div className="pointer-events-none absolute inset-0 grid-fade" />
+      <div className="pointer-events-none absolute -top-40 left-1/2 size-[46rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
 
-      <div className="relative mx-auto max-w-[84rem] px-4 sm:px-6 lg:px-8 space-y-12">
-        {/* Main Pitch */}
+      <div className="relative mx-auto max-w-[84rem] px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="mx-auto max-w-3xl text-center space-y-5"
+          className="mx-auto max-w-3xl text-center"
         >
-          <span className="inline-flex items-center gap-2 rounded-full border border-teal-500/30 bg-teal-500/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-400 shadow-xs">
-            <Sparkles className="size-3.5" /> The Workflow Revolution
+          <span className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-accent px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-accent-foreground shadow-sm">
+            The Workflow Revolution
           </span>
-          <h1 className="text-4xl font-extrabold leading-[1.08] text-slate-900 dark:text-white sm:text-5xl lg:text-6xl tracking-tight">
+          <h1 className="mt-6 text-4xl font-extrabold leading-[1.08] text-navy sm:text-5xl lg:text-6xl tracking-tight">
             Stop managing software.{' '}
-            <span className="bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-500 dark:from-teal-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent block">
-              Tell Fieseros what needs to happen.
-            </span>
+            <span className="block text-gradient-brand">Tell Fieseros what needs to happen.</span>
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg">
+          <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
             Your team shouldn&apos;t spend the day jumping between customers, jobs, calendars, quotes,
             invoices and messages. Fieseros AI turns one simple instruction into an entire connected
-            workflow across HVAC, plumbing, electrical, roofing, and cleaning trades.
+            workflow.
           </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2">
-            <button
-              type="button"
-              onClick={onGetStarted}
-              className="h-13 px-8 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base shadow-xl transition-all hover:scale-105 cursor-pointer"
-            >
-              Start Free Trial →
-            </button>
-            <a
-              href="#problem"
-              className="h-13 px-7 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-sm font-semibold flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
-            >
-              See How It Works
-            </a>
-          </div>
         </motion.div>
 
-        {/* 3-Column Interactive Command Theatre */}
-        <div className="grid items-start gap-6 lg:grid-cols-[0.95fr_1.05fr_1.25fr]">
-          {/* Column 1 — The Old Way */}
+        <div className="mt-14 grid items-start gap-6 lg:grid-cols-[0.95fr_1.05fr_1.25fr]">
+          {/* Column 1 — the old way */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
-            className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/80 p-4 shadow-xl space-y-2"
+            className="rounded-3xl border border-border bg-background/80 p-3 shadow-[0_30px_70px_-50px_oklch(0.21_0.045_258/0.6)] backdrop-blur-sm"
           >
-            <div className="flex items-center justify-between rounded-xl bg-slate-100 dark:bg-slate-800 px-3.5 py-2.5">
-              <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+            <div className="flex items-center justify-between rounded-2xl bg-surface px-3.5 py-2.5">
+              <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-navy">
                 <Clock className="size-4 text-muted-foreground" /> The old way
               </span>
-              <span className="text-xs text-muted-foreground font-mono">~14 min per job</span>
+              <span className="text-xs text-muted-foreground">~14 min per job</span>
             </div>
-            <ol className="space-y-1.5 pt-1">
+            <ol className="mt-2 space-y-1.5">
               {oldWay.map((s) => (
                 <li
                   key={s.n}
-                  className="flex items-center gap-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-950/70 px-3 py-2 transition-colors hover:border-teal-500/30"
+                  className="flex items-center gap-3 rounded-2xl border border-border/70 bg-background px-3 py-2.5 transition-colors hover:border-primary/30"
                 >
                   <span className="w-5 text-[11px] font-bold text-muted-foreground/70">{s.n}</span>
-                  <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-slate-200 dark:bg-slate-800 text-muted-foreground">
-                    <s.icon className="size-3.5" />
+                  <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-surface text-muted-foreground">
+                    <s.icon className="size-4" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-[12.5px] font-semibold text-slate-900 dark:text-white">{s.title}</span>
-                    <span className="block truncate text-[10.5px] text-muted-foreground">{s.sub}</span>
+                    <span className="block truncate text-[13px] font-semibold text-navy">{s.title}</span>
+                    <span className="block truncate text-[11px] text-muted-foreground">{s.sub}</span>
                   </span>
                 </li>
               ))}
             </ol>
-            <div className="mt-2 flex items-center gap-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3.5 py-2.5 text-rose-700 dark:text-rose-400">
-              <Clock className="size-4 shrink-0 text-rose-600 dark:text-rose-400" />
-              <p className="text-[11.5px] font-medium">
+            <div className="mt-2 flex items-center gap-2.5 rounded-2xl bg-destructive/10 px-3.5 py-3">
+              <Clock className="size-4 shrink-0 text-destructive" />
+              <p className="text-[12px] font-medium text-destructive">
                 12+ wasted administrative hours every week.
               </p>
             </div>
@@ -211,47 +191,46 @@ export function FlowHero({ onGetStarted }: { onGetStarted?: () => void }) {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="space-y-4"
           >
-            <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xl space-y-3">
-              <p className="flex items-center gap-2 text-sm font-bold text-teal-600 dark:text-teal-400">
+            <div className="rounded-3xl border border-border bg-background p-4 shadow-[0_30px_70px_-50px_oklch(0.21_0.045_258/0.6)]">
+              <p className="flex items-center gap-2 text-sm font-bold text-primary">
                 <Sparkles className="size-4" /> Ask Fieseros AI
               </p>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={3}
-                className="w-full resize-none rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3.5 py-3 text-[13px] leading-relaxed text-slate-900 dark:text-white outline-none transition-colors focus:border-teal-500/50"
+                className="mt-3 w-full resize-none rounded-2xl border border-border bg-surface px-3.5 py-3 text-[13px] leading-relaxed text-navy outline-none transition-colors focus:border-primary/50"
               />
-              <div className="flex justify-end">
+              <div className="mt-3 flex justify-end">
                 <button
-                  type="button"
                   onClick={run}
-                  className="group inline-flex items-center gap-2 rounded-xl bg-teal-600 hover:bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 cursor-pointer shadow-md"
+                  className="group inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:-translate-y-0.5 hover:bg-brand-deep cursor-pointer"
                 >
-                  {running ? 'Running...' : 'Run Command'}
+                  {running ? 'Running' : 'Run'}
                   <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
                 </button>
               </div>
             </div>
 
-            <div className="relative rounded-3xl border border-teal-500/30 bg-white dark:bg-slate-900 p-5 shadow-xl">
-              <span className="absolute -top-3.5 left-1/2 grid size-7 -translate-x-1/2 place-items-center rounded-full bg-teal-600 text-white shadow-md">
-                <Sparkles className="size-3.5" />
+            <div className="relative rounded-3xl border border-primary/25 bg-background p-4 shadow-[0_0_0_6px_var(--accent)]">
+              <span className="absolute -top-4 left-1/2 grid size-8 -translate-x-1/2 place-items-center rounded-full bg-primary text-primary-foreground shadow">
+                <Sparkles className="size-4" />
               </span>
-              <ul className="mt-1 divide-y divide-slate-100 dark:divide-slate-800/80">
+              <ul className="mt-2 divide-y divide-border/70">
                 {steps.map((s, i) => (
-                  <li key={s} className="flex items-center gap-3 py-2">
+                  <li key={s} className="flex items-center gap-3 py-2.5">
                     <span
                       className={cn(
-                        'grid size-5 shrink-0 place-items-center rounded-full transition-colors text-[10px]',
-                        i < done ? 'bg-teal-600 text-white' : 'border-2 border-slate-300 dark:border-slate-700'
+                        'grid size-5 shrink-0 place-items-center rounded-full transition-colors',
+                        i < done ? 'bg-primary text-primary-foreground' : 'border-2 border-border'
                       )}
                     >
                       {i < done && <Check className="size-3" />}
                     </span>
                     <span
                       className={cn(
-                        'text-[12.5px] transition-colors',
-                        i < done ? 'text-slate-900 dark:text-white font-medium' : 'text-muted-foreground/60'
+                        'text-[13px] transition-colors',
+                        i < done ? 'text-navy font-medium' : 'text-muted-foreground/60'
                       )}
                     >
                       {s}
@@ -265,41 +244,39 @@ export function FlowHero({ onGetStarted }: { onGetStarted?: () => void }) {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="mt-3 flex items-center gap-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 px-3 py-2.5 text-emerald-800 dark:text-emerald-300"
+                    className="mt-2 flex items-center gap-2.5 rounded-2xl bg-accent px-3.5 py-3"
                   >
-                    <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span className="text-[12.5px] font-bold">Workflow complete in 0.4s!</span>
+                    <CheckCircle2 className="size-4 text-primary shrink-0" />
+                    <span className="text-[13px] font-bold text-accent-foreground">Workflow complete!</span>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
           </motion.div>
 
-          {/* Column 3 — Live Mini-Dashboard */}
+          {/* Column 3 — dashboard */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            className="overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl"
+            className="overflow-hidden rounded-3xl border border-border bg-background shadow-[0_40px_90px_-50px_oklch(0.21_0.045_258/0.65)]"
           >
-            <div className="grid grid-cols-[8.5rem_1fr]">
-              <aside className="bg-slate-900 dark:bg-slate-950 p-3 border-r border-slate-800">
-                <div className="mb-4 flex items-center gap-1.5 px-1">
-                  <div className="size-5 rounded bg-teal-500 flex items-center justify-center text-slate-950 font-black text-[10px]">
-                    F
-                  </div>
-                  <span className="text-[12.5px] font-bold text-white">Fieseros</span>
+            <div className="grid grid-cols-[9.5rem_1fr]">
+              <aside className="bg-navy-deep p-3">
+                <div className="mb-4 flex items-center gap-2 px-1">
+                  <BrandMark size={20} className="shrink-0" />
+                  <span className="text-[13px] font-bold text-primary-foreground">Fieseros</span>
                 </div>
                 <ul className="space-y-0.5">
                   {sidebar.map((s, i) => (
                     <li key={s.label}>
                       <span
                         className={cn(
-                          'flex items-center gap-2 rounded-lg px-2 py-1 text-[11px] transition-colors',
+                          'flex items-center gap-2 rounded-xl px-2 py-1.5 text-[11.5px] transition-colors',
                           i === 1
-                            ? 'bg-teal-600/30 text-teal-300 font-semibold'
-                            : 'text-slate-400 hover:bg-slate-800'
+                            ? 'bg-white/10 font-semibold text-primary-foreground'
+                            : 'text-primary-foreground/55 hover:bg-white/5'
                         )}
                       >
                         <s.icon className="size-3.5" /> {s.label}
@@ -309,12 +286,13 @@ export function FlowHero({ onGetStarted }: { onGetStarted?: () => void }) {
                 </ul>
               </aside>
 
-              <div className="space-y-2.5 bg-slate-50/50 dark:bg-slate-900/50 p-3.5">
+              <div className="space-y-2.5 bg-surface p-3">
                 <div className="flex items-center gap-2">
-                  <div className="flex flex-1 items-center gap-2 rounded-lg border border-border bg-white dark:bg-slate-800 px-2.5 py-1 text-[11px] text-muted-foreground">
-                    <Search className="size-3.5" /> Search jobs...
+                  <div className="flex flex-1 items-center gap-2 rounded-xl border border-border bg-background px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                    <Search className="size-3.5" /> Search...
                   </div>
                   <Bell className="size-4 text-muted-foreground" />
+                  <span className="size-6 rounded-full bg-navy" />
                 </div>
 
                 <AnimatePresence>
@@ -323,133 +301,140 @@ export function FlowHero({ onGetStarted }: { onGetStarted?: () => void }) {
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="flex items-center gap-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 p-2.5 text-xs text-emerald-900 dark:text-emerald-200"
+                      className="flex items-center gap-2.5 rounded-2xl border border-primary/25 bg-accent px-3 py-2.5"
                     >
-                      <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      <span className="text-[11px] leading-tight">
-                        <strong className="block font-bold">Job Created Successfully</strong>
-                        Emergency boiler repair has been scheduled.
+                      <CheckCircle2 className="size-4 shrink-0 text-primary" />
+                      <span className="text-[11.5px] leading-tight">
+                        <span className="block font-bold text-accent-foreground">Job Created Successfully</span>
+                        <span className="block text-accent-foreground/70">
+                          Emergency boiler repair has been scheduled.
+                        </span>
                       </span>
                     </motion.div>
                   )}
                 </AnimatePresence>
 
-                {/* Job Card */}
-                <div className="rounded-xl border border-border bg-white dark:bg-slate-800 p-3 space-y-2 shadow-xs">
+                <div className="rounded-2xl border border-border bg-background p-3 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <p className="text-[12.5px] font-bold text-slate-900 dark:text-white">Emergency Boiler Repair</p>
-                    <span className="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 px-2 py-0.5 text-[9.5px] font-semibold border border-teal-200 dark:border-teal-800">
+                    <p className="text-[13px] font-bold text-navy">Emergency Boiler Repair</p>
+                    <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-accent-foreground">
                       Scheduled
                     </span>
                   </div>
-                  <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
-                    <span className="grid size-6 place-items-center rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                      <User className="size-3.5" />
+                  <div className="mt-2.5 flex items-start gap-2.5">
+                    <span className="grid size-8 place-items-center rounded-full bg-surface text-muted-foreground">
+                      <User className="size-4" />
                     </span>
-                    <div>
-                      <p className="text-[11.5px] font-semibold text-slate-900 dark:text-white">Sarah Williams</p>
-                      <p className="text-[10px]">48 King Road, London · +44 7123 456789</p>
+                    <div className="text-[11px] text-muted-foreground">
+                      <p className="text-[12px] font-semibold text-navy">Sarah Williams</p>
+                      <p>sarah@customer.com</p>
+                      <p>+44 7123 456789</p>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between border-t border-border pt-1.5 text-[10.5px]">
-                    <span className="flex items-center gap-1 text-slate-600 dark:text-slate-300 font-medium">
-                      <Clock className="size-3 text-teal-600" /> Tomorrow · 10:30 AM
+                  <p className="mt-2 flex items-center gap-1.5 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                    <Clock className="size-3.5 text-primary" /> Tomorrow · 10:30 AM
+                  </p>
+                  <div className="mt-2 flex items-start gap-2.5 border-t border-border pt-2">
+                    <span className="grid size-8 place-items-center rounded-full bg-accent text-accent-foreground">
+                      <Wrench className="size-4" />
                     </span>
-                    <span className="font-semibold text-slate-900 dark:text-white">Tech: Mike Johnson (Gas Safe)</span>
+                    <div className="text-[11px] text-muted-foreground">
+                      <p className="text-[12px] font-semibold text-navy">Mike Johnson</p>
+                      <p>Gas Certified</p>
+                      <p className="flex items-center gap-1">
+                        <MapPin className="size-3" /> 2.4 miles away
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Quote Card */}
-                <div className="rounded-xl border border-border bg-white dark:bg-slate-800 p-3 space-y-1.5 shadow-xs">
-                  <div className="flex items-center justify-between text-[12.5px] font-bold text-slate-900 dark:text-white">
-                    <span>Quote #Q-8924</span>
-                    <span className="text-teal-600 dark:text-teal-400">£350.00</span>
+                <div className="rounded-2xl border border-border bg-background p-3 shadow-sm">
+                  <div className="flex items-center justify-between text-[13px] font-bold text-navy">
+                    <span>Quote</span>
+                    <span className="text-primary">£350</span>
                   </div>
                   {[
-                    ['Diagnostic Labour', '£180'],
-                    ['Seal Kit Parts', '£120'],
-                    ['Emergency Call-out', '£50'],
+                    ['Labour', '£180'],
+                    ['Parts', '£120'],
+                    ['Emergency call-out', '£50'],
                   ].map(([k, v]) => (
-                    <div key={k} className="flex justify-between text-[10.5px] text-muted-foreground">
-                      <span>{k}</span>
-                      <span className="font-medium text-slate-800 dark:text-slate-200">{v}</span>
+                    <div key={k} className="mt-1.5 flex justify-between border-t border-border pt-1.5 text-[11px]">
+                      <span className="text-muted-foreground">{k}</span>
+                      <span className="font-medium text-navy">{v}</span>
                     </div>
                   ))}
-                  <div className="pt-1.5 flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={onGetStarted}
-                      className="flex-1 rounded-lg bg-teal-600 hover:bg-teal-700 py-1 text-[10px] font-semibold text-white transition-colors cursor-pointer"
-                    >
+                  <div className="mt-2.5 flex gap-2">
+                    <button className="flex-1 rounded-xl bg-primary py-1.5 text-[11px] font-semibold text-primary-foreground transition-colors hover:bg-brand-deep cursor-pointer">
                       View Quote
                     </button>
-                    <button
-                      type="button"
-                      onClick={onGetStarted}
-                      className="flex-1 rounded-lg border border-teal-500/40 py-1 text-[10px] font-semibold text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/50 transition-colors cursor-pointer"
-                    >
-                      Send WhatsApp Link
+                    <button className="flex-1 rounded-xl border border-primary/40 py-1.5 text-[11px] font-semibold text-primary transition-colors hover:bg-accent cursor-pointer">
+                      Send to Customer
                     </button>
                   </div>
                 </div>
 
-                {/* WhatsApp Notification Card */}
-                <div className="rounded-xl border border-border bg-white dark:bg-slate-800 p-3 space-y-1.5 shadow-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="grid size-5 place-items-center rounded-full bg-emerald-600 text-white">
-                      <MessageSquare className="size-3" />
+                <div className="rounded-2xl border border-border bg-background p-3 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="grid size-7 place-items-center rounded-full bg-primary text-primary-foreground">
+                      <MessageSquare className="size-3.5" />
                     </span>
-                    <span className="text-[11px] font-bold text-slate-900 dark:text-white">Customer Notified via WhatsApp</span>
+                    <span className="text-[11px] leading-tight">
+                      <span className="block text-[12px] font-semibold text-navy">Customer Notified</span>
+                      <span className="block text-muted-foreground">via WhatsApp · 10:32 AM</span>
+                    </span>
                   </div>
-                  <p className="rounded-lg bg-slate-50 dark:bg-slate-900 p-2 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300 border border-border/60">
-                    &quot;Hi Sarah, your boiler repair is confirmed for tomorrow at 10:30 AM. Mike will be your technician. Track him in real-time here: [live link]&quot;
+                  <p className="mt-2 rounded-xl bg-surface p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                    Hi Sarah, your boiler repair is confirmed for tomorrow at 10:30 AM. Mike will be your
+                    technician. Track him in real-time here: [tracking link]
                   </p>
+                  <button className="mt-2 inline-flex items-center gap-1.5 rounded-xl border border-border px-2.5 py-1.5 text-[11px] font-semibold text-navy transition-colors hover:bg-surface cursor-pointer">
+                    <MapPin className="size-3.5 text-primary" /> Track Technician
+                  </button>
                 </div>
               </div>
             </div>
           </motion.div>
         </div>
 
-        {/* Try it yourself Suggestion Pills */}
-        <div className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 p-6 sm:p-8 shadow-xl">
+        {/* Try it yourself */}
+        <div className="mt-8 rounded-3xl border border-border bg-background/80 p-6 sm:p-8 shadow-sm">
           <div className="grid gap-6 lg:grid-cols-[1fr_1.3fr_0.8fr] lg:items-center">
             <div>
-              <span className="inline-flex rounded-full bg-teal-500/10 border border-teal-500/30 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-teal-700 dark:text-teal-400">
+              <span className="inline-flex rounded-full bg-accent px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-accent-foreground">
                 Try it yourself
               </span>
-              <h3 className="mt-2 text-xl font-extrabold text-slate-900 dark:text-white">See how easy it is.</h3>
-              <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              <h3 className="mt-3 text-xl font-extrabold text-navy">See how easy it is.</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
                 Click a suggestion or type your own command and watch Fieseros handle the rest.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2.5">
               {suggestions.map((s, i) => (
                 <button
                   key={s.label}
-                  type="button"
                   onClick={() => {
                     setPrompt(`${s.label} — Fieseros, handle it end to end.`);
                     run();
                   }}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-semibold transition-all hover:-translate-y-0.5 cursor-pointer shadow-xs',
+                    'inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-[13px] font-semibold transition-all hover:-translate-y-0.5 cursor-pointer',
                     i === 0
-                      ? 'border-teal-600 bg-teal-600 text-white hover:bg-teal-700'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-teal-400'
+                      ? 'border-primary bg-primary text-primary-foreground hover:bg-brand-deep'
+                      : 'border-border bg-background text-navy hover:border-primary/40 hover:bg-surface'
                   )}
                 >
-                  <s.icon className="size-3.5" />
+                  <s.icon className="size-4" />
                   {s.label}
                 </button>
               ))}
             </div>
 
-            <div className="border-t lg:border-t-0 lg:border-l border-border pt-4 lg:pt-0 lg:pl-6 space-y-1">
-              <span className="grid size-8 place-items-center rounded-xl bg-teal-500/15 text-teal-600 dark:text-teal-400">
+            <div className="border-border lg:border-l lg:pl-6">
+              <span className="grid size-9 place-items-center rounded-2xl bg-accent text-accent-foreground">
                 <Zap className="size-4" />
               </span>
-              <p className="text-xs sm:text-sm font-bold leading-snug text-slate-900 dark:text-white pt-1">
+              <p className="mt-3 text-sm font-bold leading-snug text-navy">
                 One instruction.
                 <br />
                 The workflow moves forward.
@@ -458,17 +443,16 @@ export function FlowHero({ onGetStarted }: { onGetStarted?: () => void }) {
           </div>
         </div>
 
-        {/* Metrics Row */}
-        <div className="grid gap-4 rounded-3xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/60 p-6 sm:grid-cols-2 lg:grid-cols-4 shadow-sm">
+        <div className="mt-6 grid gap-4 rounded-3xl border border-border bg-background/80 p-6 sm:grid-cols-2 lg:grid-cols-4 shadow-sm">
           {metrics.map((m) => (
-            <div key={m.head} className="flex items-start gap-3 lg:border-slate-200 dark:lg:border-slate-800 lg:not-first:border-l lg:not-first:pl-4">
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-teal-50 dark:bg-teal-950 text-teal-600 dark:text-teal-400">
+            <div key={m.head} className="flex items-start gap-3 lg:border-border lg:not-first:border-l lg:not-first:pl-4">
+              <span className="grid size-9 shrink-0 place-items-center rounded-2xl bg-surface text-primary">
                 <m.icon className="size-4" />
               </span>
               <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white">{m.top}</p>
-                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{m.head}</p>
-                <p className="text-[10px] text-muted-foreground">{m.sub}</p>
+                <p className="text-sm font-bold text-navy">{m.top}</p>
+                <p className="text-sm font-semibold text-navy">{m.head}</p>
+                <p className="text-[11px] text-muted-foreground">{m.sub}</p>
               </div>
             </div>
           ))}
