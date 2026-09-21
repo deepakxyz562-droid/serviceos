@@ -116,11 +116,11 @@ export function AiHeroCommand({ onGetStarted }: { onGetStarted?: () => void }) {
   };
 
   const stepsList = [
-    { label: 'Customer Created', value: currentPreset.result.customerName, icon: User, color: 'text-blue-400' },
+    { label: 'Customer Created', value: currentPreset.result.customerName, icon: User, color: 'text-cyan-400' },
     { label: 'Work Order Scheduled', value: `${currentPreset.result.jobTitle} (${currentPreset.result.timeSlot})`, icon: Calendar, color: 'text-teal-400' },
     { label: 'Technician Assigned', value: `${currentPreset.result.technician} — ${currentPreset.result.technicianRole}`, icon: Wrench, color: 'text-amber-400' },
     { label: 'Quote & Deposit Ready', value: currentPreset.result.quoteAmount, icon: PoundSterling, color: 'text-emerald-400' },
-    { label: 'Omnichannel Sent', value: currentPreset.result.notificationChannel, icon: MessageSquare, color: 'text-indigo-400' },
+    { label: 'Omnichannel Sent', value: currentPreset.result.notificationChannel, icon: MessageSquare, color: 'text-emerald-400' },
   ];
 
   return (

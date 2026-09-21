@@ -63,7 +63,7 @@ export function RevenueCommandCenter() {
           <div className="p-6 rounded-3xl bg-card border border-border shadow-md dark:bg-slate-950 dark:border-slate-800 dark:shadow-xl space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground dark:text-slate-400">
               <span className="font-semibold">Open Quotes Pending</span>
-              <span className="text-blue-600 dark:text-blue-400 font-bold">12 Quotes</span>
+              <span className="text-teal-600 dark:text-teal-400 font-bold">12 Quotes</span>
             </div>
             <p className="text-3xl sm:text-4xl font-black text-foreground dark:text-white">£12,600</p>
             <p className="text-[11px] text-muted-foreground dark:text-slate-500">68% historical approval rate</p>
@@ -109,7 +109,7 @@ export function RevenueCommandCenter() {
             </div>
 
             <div className="p-4 rounded-2xl bg-muted/50 border border-border dark:bg-slate-900 dark:border-slate-800 space-y-1.5">
-              <span className="text-[10px] uppercase font-bold text-blue-700 dark:text-blue-400">02. Stalled Quotes</span>
+              <span className="text-[10px] uppercase font-bold text-teal-700 dark:text-teal-400">02. Stalled Quotes</span>
               <p className="text-xs font-bold text-foreground dark:text-white">6 Quotes Awaiting Follow-up</p>
               <p className="text-[11px] text-muted-foreground dark:text-slate-400">
                 £8,200 in quotes viewed over 5 days ago without customer response.

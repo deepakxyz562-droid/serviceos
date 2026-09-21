@@ -58,8 +58,8 @@ const AI_TEAM: AiTeammate[] = [
     role: '24/7 Voice & Call Intake',
     tagline: 'Answers calls, qualifies emergency inquiries, and books calendar slots.',
     icon: PhoneCall,
-    accentColor: 'text-blue-400',
-    badgeBg: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    accentColor: 'text-cyan-400',
+    badgeBg: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
     capabilities: [
       'Handles natural phone conversations with zero hold time',
       'Distinguishes emergency calls from routine maintenance',
@@ -154,13 +154,13 @@ export function AiTeamShowcase() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto space-y-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-400 text-xs font-semibold">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-700 dark:text-teal-400 text-xs font-semibold">
             <Bot className="size-3.5" />
             <span>SPECIALIZED AI TEAMMATES</span>
           </div>
           <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground dark:text-white leading-tight">
             Your business doesn&apos;t need another chatbot.{' '}
-            <span className="bg-gradient-to-r from-blue-600 via-teal-600 to-emerald-600 dark:from-blue-400 dark:via-teal-400 dark:to-emerald-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-teal-600 via-emerald-600 to-teal-500 dark:from-teal-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent">
               It needs an AI team.
             </span>
           </h2>
