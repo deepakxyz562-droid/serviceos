@@ -53,7 +53,7 @@ export function AgentPublishTab({
   );
 
   const standaloneUrl = `${siteOrigin}/chat/${agent.slug || 'clara-dental'}`;
-  const embedScript = `<script src="${siteOrigin}/widget/agent.js" data-agent-id="${agent.id}" data-position="${widgetPosition}" data-greeting="${encodeURIComponent(greetingText)}" data-color="${agent.brandColor || '#059669'}" async></script>`;
+  const embedScript = `<script src="${siteOrigin}/embed/agent.js" data-agent="${agent.id}" data-position="${widgetPosition}" data-greeting="${encodeURIComponent(greetingText)}" data-color="${agent.brandColor || '#059669'}" async></script>`;
 
   const copyToClipboard = (text: string, type: 'code' | 'link') => {
     navigator.clipboard.writeText(text);
