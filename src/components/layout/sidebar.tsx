@@ -72,6 +72,7 @@ import {
   Package,
   Share2,
   FileInput,
+  MessageSquare,
   Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -229,6 +230,7 @@ const standaloneNavSections: NavSection[] = [
       { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
       { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
       { view: 'formSubmissions', label: 'Submissions', icon: Inbox },
+      { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
       { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
       { view: 'aiReceptionist', label: 'AI Employee', icon: PhoneCall },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },

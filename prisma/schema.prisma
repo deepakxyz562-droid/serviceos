@@ -1280,6 +1280,7 @@ model Form {
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
   responses FormResponse[]
   views     FormView[]
+  publicChatSessions PublicChatSession[]
 
   @@index([tenantId])
   @@index([workspaceId])
@@ -5445,6 +5446,7 @@ model PublicChatSession {
   id              String   @id @default(cuid())
   tenantId        String?
   workspaceId     String?
+  formId          String?  // link to the form this chat is about (for GPTForm subscribers)
   visitorName     String?
   visitorPhone    String?
   visitorEmail    String?
@@ -5459,6 +5461,7 @@ model PublicChatSession {
 
   tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   workspace       Workspace? @relation(fields: [workspaceId], references: [id])
+  form            Form?    @relation(fields: [formId], references: [id], onDelete: SetNull)
   messages        PublicChatMessage[]
 
   @@index([tenantId, status])
@@ -5466,6 +5469,7 @@ model PublicChatSession {
   @@index([workspaceId, status])
   @@index([workspaceId, createdAt])
   @@index([status, lastMessageAt])
+  @@index([formId])
 }
 
 model PublicChatMessage {

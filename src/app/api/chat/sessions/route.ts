@@ -38,6 +38,9 @@ export async function GET(request: NextRequest) {
           take: 1,
           select: { body: true, senderType: true, createdAt: true },
         },
+        form: {
+          select: { id: true, name: true },
+        },
       },
     })
 
@@ -56,6 +59,7 @@ export async function GET(request: NextRequest) {
       const sortedMessages = sessionMessages
         ? [...sessionMessages].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         : []
+      const formData = s as { form?: { id: string; name: string } | null }
       return {
         id: s.id,
         visitorName: s.visitorName,
@@ -66,6 +70,8 @@ export async function GET(request: NextRequest) {
         lastMessageAt: s.lastMessageAt,
         createdAt: s.createdAt,
         lastMessage: sortedMessages[0] || null,
+        formId: s.formId,
+        formName: formData?.form?.name || null,
       }
     })
 

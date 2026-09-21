@@ -27,6 +27,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createNotification } from '@/lib/notifications'
 import { sendWebPushToUser } from '@/lib/web-push-send'
+import { sendEmail } from '@/lib/email-send'
+import { renderLiveChatNotificationEmail } from '@/lib/email-templates/live-chat-notification'
 
 export const runtime = 'nodejs'
 
@@ -107,6 +109,7 @@ export async function POST(req: NextRequest) {
   const visitorName = typeof body.visitorName === 'string' ? body.visitorName.trim() || null : null
   const visitorPhone = typeof body.visitorPhone === 'string' ? body.visitorPhone.trim() || null : null
   const visitorEmail = typeof body.visitorEmail === 'string' ? body.visitorEmail.trim() || null : null
+  const formId = typeof body.formId === 'string' ? body.formId.trim() || null : null
 
   // Validate email format if provided.
   if (visitorEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(visitorEmail)) {
@@ -157,11 +160,25 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // --- Look up form (optional, for GPTForm subscribers) -------------------
+  let formRecord: { id: string; name: string } | null = null
+  if (formId) {
+    try {
+      formRecord = await db.form.findFirst({
+        where: { id: formId, tenantId: tenant.id },
+        select: { id: true, name: true },
+      })
+    } catch (formErr) {
+      console.warn('[public-chat/session] form lookup failed:', formErr)
+    }
+  }
+
   // --- Create session + initial system message ---------------------------
   try {
     const session = await db.publicChatSession.create({
       data: {
         tenantId: tenant.id,
+        formId: formRecord?.id || null,  // link chat to the form it originated from
         visitorName,
         visitorPhone,
         visitorEmail,
@@ -197,7 +214,7 @@ export async function POST(req: NextRequest) {
           role: { in: ['owner', 'admin'] },
           isActive: true,
         },
-        select: { id: true },
+        select: { id: true, email: true },
       })
 
       const visitorLabel = visitorName || visitorEmail || 'A visitor'
@@ -208,15 +225,15 @@ export async function POST(req: NextRequest) {
           : 'A new live chat was started on your website'
 
       // Fire-and-forget — notification failures must not break chat creation.
-      // For each recipient we do TWO things:
+      // For each recipient we do THREE things:
       //   1. createNotification() → in-app bell + inbox row (polled every 60s)
       //   2. sendWebPushToUser()  → REAL Web Push to the admin's device(s).
-      //      This is what makes the chat alert behave like WhatsApp: a system
-      //      notification appears even if the admin's browser/app is CLOSED,
-      //      because the push goes through APNs (iOS) / FCM (Android) which
-      //      wake the device. sendWebPushToUser() is a safe no-op (returns
-      //      { sent: 0 }) when the admin has no PushSubscription — so admins
-      //      who haven't enabled push yet are unaffected.
+      //   3. sendEmail()          → Email notification (email-first path).
+      //      This ensures the admin knows about the chat even if:
+      //        - browser is closed
+      //        - Web Push permissions aren't granted
+      //        - admin is on mobile without the PWA installed
+      //      Email is the universal fallback that always delivers.
       //
       // The push uses tag=`livechat-{sessionId}` + requireInteraction=true so
       // the notification PERSISTS until the admin clicks it (WhatsApp-style:
@@ -234,7 +251,7 @@ export async function POST(req: NextRequest) {
             title: 'New live chat request',
             message: messageText,
             priority: 'high',
-            actionUrl: '/?view=liveChat',
+            actionUrl: `/?view=liveChat&session=${session.id}`,
             actionLabel: 'Open Live Chat',
             senderType: 'system',
             metadataJson: JSON.stringify({
@@ -253,7 +270,7 @@ export async function POST(req: NextRequest) {
             await sendWebPushToUser(r.id, tenant.id, {
               title: 'New live chat request',
               body: messageText,
-              url: '/?view=liveChat',
+              url: `/?view=liveChat&session=${session.id}`,
               tag: `livechat-${session.id}`,
               requireInteraction: true,
               data: {
@@ -265,6 +282,39 @@ export async function POST(req: NextRequest) {
             })
           } catch (pushErr) {
             console.warn('[public-chat/session] push send failed:', pushErr)
+          }
+
+          // Email notification (email-first path). Fire-and-forget —
+          // email failures must never break chat creation. This is the
+          // universal fallback that works even when Web Push permissions
+          // aren't granted or the admin's browser is closed.
+          if (r.email) {
+            try {
+              const firstMessage = typeof body.firstMessage === 'string'
+                ? body.firstMessage.slice(0, 200)
+                : null
+              const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com'}/?view=liveChat&session=${session.id}`
+              const { subject, html, text } = renderLiveChatNotificationEmail({
+                visitorName,
+                visitorEmail,
+                visitorPhone,
+                firstMessage,
+                tenantName: tenant.name,
+                sessionId: session.id,
+                dashboardUrl,
+                formName: formRecord?.name || null,
+              })
+              await sendEmail({
+                to: r.email,
+                subject,
+                html,
+                text,
+                tenantId: tenant.id,
+                usageType: 'transactional',
+              })
+            } catch (emailErr) {
+              console.warn('[public-chat/session] email send failed:', emailErr)
+            }
           }
         }),
       )

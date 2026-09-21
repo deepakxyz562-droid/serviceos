@@ -26,6 +26,7 @@
 import { db } from '@/lib/db';
 import { isTenantOnline } from '@/lib/presence';
 import { callAI, isAiConfiguredAsync } from '@/lib/ai-client';
+import { getFormChatContext } from '@/lib/forms/form-to-chat-context';
 import { sendSmsMessage } from '@/lib/sms-send';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 
@@ -66,6 +67,8 @@ export interface AutoReplyContext {
   visitorName?: string;
   visitorPhone?: string;
   customerHistory?: string;
+  /** Optional form ID — when set, the AI reply includes form-specific context. */
+  formId?: string;
 }
 
 export interface AutoReplyResult {
@@ -276,6 +279,22 @@ export async function maybeAutoReply(ctx: AutoReplyContext): Promise<AutoReplyRe
             ? config.aiSystemPrompt
             : DEFAULT_AI_SYSTEM_PROMPT;
 
+          // ── Form context (optional) ──────────────────────────────────────
+          // When the chat originated from a specific form, load the form's
+          // schema and append it as context so the AI can answer form-specific
+          // questions and guide the visitor toward providing the right info.
+          let formContextSnippet = '';
+          if (ctx.formId) {
+            const formCtx = await getFormChatContext(ctx.formId, ctx.tenantId);
+            if (formCtx) {
+              formContextSnippet = formCtx.systemPromptSnippet;
+            }
+          }
+
+          const fullSystemPrompt = formContextSnippet
+            ? systemPrompt + formContextSnippet
+            : systemPrompt;
+
           const userContent =
             ctx.customerHistory && ctx.customerHistory.trim().length > 0
               ? `Visitor history:\n${ctx.customerHistory.slice(0, 1500)}\n\nNew message:\n${ctx.visitorMessage}`
@@ -283,7 +302,7 @@ export async function maybeAutoReply(ctx: AutoReplyContext): Promise<AutoReplyRe
 
           const result = await callAI({
             messages: [
-              { role: 'system', content: systemPrompt },
+              { role: 'system', content: fullSystemPrompt },
               { role: 'user', content: userContent },
             ],
             temperature: 0.7,

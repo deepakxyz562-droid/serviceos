@@ -18,6 +18,8 @@ interface ChatSession {
   lastMessageAt: string | null
   createdAt: string
   lastMessage: { body: string; senderType: string; createdAt: string } | null
+  formId?: string | null
+  formName?: string | null
 }
 
 interface ChatMessage {
@@ -322,6 +324,12 @@ export function LiveChatView() {
                           </Badge>
                         )}
                       </div>
+                      {s.formName && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-medium text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 rounded px-1.5 py-0 mt-0.5">
+                          <FileText className="h-2.5 w-2.5" />
+                          {s.formName}
+                        </span>
+                      )}
                       {s.lastMessage && (
                         <p className="text-xs text-muted-foreground truncate mt-0.5">
                           {s.lastMessage.senderType === 'visitor' ? '' : 'You: '}

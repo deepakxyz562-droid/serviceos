@@ -20,6 +20,7 @@
     document.querySelector('script[src*="agent.js"]');
 
   var agentId = currentScript ? currentScript.getAttribute('data-agent') : null;
+  var formId = currentScript ? currentScript.getAttribute('data-form-id') : null;
   var host = currentScript ? new URL(currentScript.src).origin : 'https://fieseros.com';
 
   // ── 1. Inline Form Embedder ──────────────────────────────────────────────
@@ -87,7 +88,12 @@
   frameContainer.style.border = '1px solid rgba(0,0,0,0.08)';
 
   var chatIframe = document.createElement('iframe');
-  chatIframe.src = host + '/chat/' + encodeURIComponent(agentId);
+  // Pass formId as a query param so the chat page can tag the session with
+  // the form it originated from. This lets GPTForm subscribers see which
+  // form a chat is about in their Live Chat inbox.
+  var chatSrc = host + '/chat/' + encodeURIComponent(agentId);
+  if (formId) chatSrc += '?formId=' + encodeURIComponent(formId);
+  chatIframe.src = chatSrc;
   chatIframe.style.width = '100%';
   chatIframe.style.height = '100%';
   chatIframe.style.border = 'none';

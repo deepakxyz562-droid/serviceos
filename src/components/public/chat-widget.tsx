@@ -42,6 +42,8 @@ interface ChatWidgetProps {
   businessSlug: string
   /** Business display name — shown in the widget header. */
   businessName?: string
+  /** Optional form ID — links the chat to a specific form (for GPTForm subscribers). */
+  formId?: string
 }
 
 interface ChatMessage {
@@ -64,7 +66,7 @@ const STORAGE_KEY_PREFIX = 'fieseros_chat_'
 
 // ─── Component ────────────────────────────────────────────────────────────
 
-export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
+export function ChatWidget({ businessSlug, businessName, formId }: ChatWidgetProps) {
   const [phase, setPhase] = useState<Phase>('closed')
   const [visitorName, setVisitorName] = useState('')
   const [visitorEmail, setVisitorEmail] = useState('')
@@ -243,6 +245,7 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessSlug,
+          formId: formId || undefined,
           visitorName: name || undefined,
           visitorEmail: email || undefined,
           metadata: {
