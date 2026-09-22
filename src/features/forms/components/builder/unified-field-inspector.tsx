@@ -120,12 +120,14 @@ export function UnifiedFieldInspector({
   onClose,
   onUpdate,
 }: UnifiedFieldInspectorProps) {
-  const [activeMode, setActiveMode] = useState<'properties' | 'widget_settings'>(mode);
+  const [userModeOverride, setUserModeOverride] = useState<'properties' | 'widget_settings' | null>(null);
 
-  // Sync mode if changed from parent
-  useMemo(() => {
-    setActiveMode(mode);
-  }, [mode, field.id]);
+  // Reset override whenever switching fields
+  useEffect(() => {
+    setUserModeOverride(null);
+  }, [field.id]);
+
+  const activeMode = userModeOverride ?? mode;
 
   const definition = useMemo(() => resolveFieldDefinition(field), [field]);
 
@@ -200,7 +202,7 @@ export function UnifiedFieldInspector({
         allFields={allFieldsClean}
         onFieldChange={onFieldChange}
         onConfigChange={onConfigChange}
-        onSwitchToProperties={() => setActiveMode('properties')}
+        onSwitchToProperties={() => setUserModeOverride('properties')}
         onClose={onClose}
         onSave={onUpdate}
       />
@@ -217,7 +219,7 @@ export function UnifiedFieldInspector({
           </span>
           <button
             type="button"
-            onClick={() => setActiveMode('widget_settings')}
+            onClick={() => setUserModeOverride('widget_settings')}
             className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-xs cursor-pointer"
           >
             🪄 Formula Pad

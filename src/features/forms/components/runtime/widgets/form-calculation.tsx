@@ -101,11 +101,18 @@ export function FormCalculation({
     }
   }, [formula, allFormData]);
 
+  const lastEmittedRef = React.useRef<number | undefined>(undefined);
+  const onChangeRef = React.useRef(onChange);
+  onChangeRef.current = onChange;
+
   useEffect(() => {
-    if (calculatedResult !== value) {
-      onChange(calculatedResult);
+    if (lastEmittedRef.current !== calculatedResult) {
+      lastEmittedRef.current = calculatedResult;
+      if (typeof onChangeRef.current === 'function') {
+        onChangeRef.current(calculatedResult);
+      }
     }
-  }, [calculatedResult, value, onChange]);
+  }, [calculatedResult]);
 
   return (
     <div className="p-3.5 rounded-xl bg-muted/40 border border-border/80 flex items-center justify-between">

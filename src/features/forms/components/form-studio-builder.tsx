@@ -1247,6 +1247,7 @@ export function FormStudioBuilder({
                   </div>
                 ) : selectedField ? (
                   <UnifiedFieldInspector
+                    key={selectedField.id}
                     field={selectedField as unknown as Record<string, any>}
                     allFields={formData.fields as unknown as Array<{ id: string; label: string; type?: string; widgetType?: string }>}
                     mode={selectedField.widgetType ? 'widget_settings' : 'properties'}
