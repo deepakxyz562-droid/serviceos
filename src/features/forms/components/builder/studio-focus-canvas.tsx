@@ -34,6 +34,8 @@ import {
   Edit2,
   CheckCircle2,
   X,
+  Wand2,
+  Calculator,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1004,6 +1006,20 @@ function StudioFieldPreview({
                                       {f.required && <span className="text-rose-500">*</span>}
                                     </label>
                                     <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                      {((f.widgetType && f.widgetType.includes('calculation')) || f.type === 'calculation') && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            onSelectColumn?.('left');
+                                            onSelectField(f.id);
+                                            toast.info('Opening Formula Pad...');
+                                          }}
+                                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 flex items-center gap-1 transition-colors border border-blue-200/60"
+                                          title="Open Formula Pad 🪄"
+                                        >
+                                          <Wand2 className="size-2.5" /> Formula
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() => handleUpdateField(f.id, { layoutColumn: 'right' })}
@@ -1231,6 +1247,21 @@ function StudioFieldPreview({
                                         2C
                                       </button>
                                     </div>
+
+                                    {((f.widgetType && f.widgetType.includes('calculation')) || f.type === 'calculation') && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          onSelectColumn?.('right');
+                                          onSelectField(f.id);
+                                          toast.info('Opening Formula Pad...');
+                                        }}
+                                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 flex items-center gap-1 transition-colors border border-blue-200/60"
+                                        title="Open Formula Pad 🪄"
+                                      >
+                                        <Wand2 className="size-2.5" /> Formula
+                                      </button>
+                                    )}
 
                                     <button
                                       type="button"
@@ -1500,6 +1531,20 @@ function StudioFieldPreview({
                               </button>
                             </div>
 
+                            {((field.widgetType && field.widgetType.includes('calculation')) || field.type === 'calculation') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onSelectField(field.id);
+                                  toast.info('Opening Formula Pad...');
+                                }}
+                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 flex items-center gap-1 transition-colors border border-blue-200/60"
+                                title="Open Formula Pad 🪄"
+                              >
+                                <Wand2 className="size-2.5" /> Formula
+                              </button>
+                            )}
+
                             {/* Direct Duplicate & Delete Action Buttons */}
                             <button
                               type="button"
@@ -1709,6 +1754,20 @@ function StudioFieldPreview({
                                 33%
                               </button>
                             </div>
+
+                            {((f.widgetType && f.widgetType.includes('calculation')) || f.type === 'calculation') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onSelectField(f.id);
+                                  toast.info('Opening Formula Pad...');
+                                }}
+                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 flex items-center gap-1 transition-colors border border-blue-200/60"
+                                title="Open Formula Pad 🪄"
+                              >
+                                <Wand2 className="size-2.5" /> Formula
+                              </button>
+                            )}
 
                             {/* Direct Duplicate & Delete Action Buttons */}
                             <button

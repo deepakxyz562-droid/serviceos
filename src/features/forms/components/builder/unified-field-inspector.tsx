@@ -8,10 +8,11 @@
  * renders either the specialized JotForm PaymentPropertiesPanel (for payment gateways)
  * or the schema-driven WidgetSettingsRenderer (for standard fields and widgets).
  */
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { WidgetSettingsRenderer } from './widget-settings-renderer';
 import { PaymentPropertiesPanel } from './payment-properties-panel';
 import { AppointmentPropertiesPanel } from './appointment-properties-panel';
+import { FormCalculationFormulaPad } from './form-calculation-formula-pad';
 import {
   FIELD_REGISTRY,
   getFieldById,
@@ -119,6 +120,13 @@ export function UnifiedFieldInspector({
   onClose,
   onUpdate,
 }: UnifiedFieldInspectorProps) {
+  const [activeMode, setActiveMode] = useState<'properties' | 'widget_settings'>(mode);
+
+  // Sync mode if changed from parent
+  useMemo(() => {
+    setActiveMode(mode);
+  }, [mode, field.id]);
+
   const definition = useMemo(() => resolveFieldDefinition(field), [field]);
 
   const widgetConfig = (field.widgetConfig || {}) as Record<string, unknown>;
@@ -176,19 +184,60 @@ export function UnifiedFieldInspector({
     );
   }
 
-  // 3. Otherwise render schema-driven widget settings renderer
+  // 3. If this is a Calculation widget and mode is 'widget_settings', render JotForm Formula Pad
+  const isCalculationWidget =
+    field.widgetType === 'calculation' ||
+    field.widgetType === 'form_calculation' ||
+    field.type === 'calculation' ||
+    field.type === 'form_calculation' ||
+    definition.id === 'calculation' ||
+    definition.id === 'form_calculation';
+
+  if (isCalculationWidget && activeMode === 'widget_settings') {
+    return (
+      <FormCalculationFormulaPad
+        field={field}
+        allFields={allFieldsClean}
+        onFieldChange={onFieldChange}
+        onConfigChange={onConfigChange}
+        onSwitchToProperties={() => setActiveMode('properties')}
+        onClose={onClose}
+        onSave={onUpdate}
+      />
+    );
+  }
+
+  // 4. Otherwise render schema-driven widget settings renderer
   return (
-    <WidgetSettingsRenderer
-      definition={definition}
-      field={fieldRecord}
-      widgetConfig={widgetConfig}
-      mode={mode}
-      onFieldChange={onFieldChange}
-      onConfigChange={onConfigChange}
-      allFields={allFieldsClean}
-      onDuplicate={onDuplicate}
-      onClose={onClose}
-      onUpdate={onUpdate}
-    />
+    <div className="flex flex-col h-full">
+      {isCalculationWidget && (
+        <div className="p-2 bg-blue-50 dark:bg-blue-950/40 border-b border-blue-200/60 dark:border-blue-900/60 flex items-center justify-between shrink-0">
+          <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+            Form Calculation Field Properties
+          </span>
+          <button
+            type="button"
+            onClick={() => setActiveMode('widget_settings')}
+            className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-xs cursor-pointer"
+          >
+            🪄 Formula Pad
+          </button>
+        </div>
+      )}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <WidgetSettingsRenderer
+          definition={definition}
+          field={fieldRecord}
+          widgetConfig={widgetConfig}
+          mode={activeMode}
+          onFieldChange={onFieldChange}
+          onConfigChange={onConfigChange}
+          allFields={allFieldsClean}
+          onDuplicate={onDuplicate}
+          onClose={onClose}
+          onUpdate={onUpdate}
+        />
+      </div>
+    </div>
   );
 }

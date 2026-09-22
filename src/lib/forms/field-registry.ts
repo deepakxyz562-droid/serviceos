@@ -891,6 +891,30 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     ],
   },
   {
+    id: 'live_estimate_summary',
+    name: 'Live Estimate Summary Panel (Elementor)',
+    category: 'calculation',
+    iconName: 'Receipt',
+    description: 'Interactive 2-column live price & breakdown card mapped to left column inputs',
+    badge: 'NEW',
+    tier: 'pro',
+    createField: (label = 'Live Estimate Breakdown') => ({
+      label, type: 'control_widget', widgetType: 'live_estimate_summary',
+      widgetConfig: {
+        title: 'Estimated Investment Breakdown',
+        currencyPrefix: '$',
+        formula: '',
+        ctaButtonText: 'Lock In Estimate ⚡',
+      }, required: false,
+    }),
+    settingsSchema: [
+      { key: 'title', label: 'Panel Title', type: 'text', group: 'field_specific', default: 'Estimated Investment Breakdown' },
+      { key: 'formula', label: 'Master Calculation Formula', type: 'formula_editor', group: 'field_specific', helpText: 'Calculation formula combining left-column fields (e.g. [sqft] * [grade] + [addons])' },
+      { key: 'currencyPrefix', label: 'Currency Symbol', type: 'text', group: 'field_specific', default: '$' },
+      { key: 'ctaButtonText', label: 'CTA Button Text', type: 'text', group: 'field_specific', default: 'Lock In Estimate ⚡' },
+    ],
+  },
+  {
     id: 'currency_amount_input',
     name: 'Currency Amount Input',
     category: 'calculation',

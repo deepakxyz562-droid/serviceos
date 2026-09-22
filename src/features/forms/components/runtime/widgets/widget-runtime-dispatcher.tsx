@@ -10,6 +10,7 @@ import { NearestLocationFinder } from './nearest-location-finder';
 import { RoutePlannerMap } from './route-planner-map';
 import { ServiceAreaChecker } from './service-area-checker';
 import { FormCalculation } from './form-calculation';
+import { LiveEstimateSummaryPanel } from './live-estimate-summary-panel';
 import { SmsOtpVerification } from './sms-otp-verification';
 import { SignaturePad } from './signature-pad';
 import { VoiceRecorder } from './voice-recorder';
@@ -237,6 +238,20 @@ export function WidgetRuntimeDispatcher({
           value={value}
           onChange={onChange}
           disabled={disabled}
+        />
+      );
+
+    case 'live_estimate_summary':
+    case 'live_estimator':
+    case 'estimate_summary_panel':
+      return (
+        <LiveEstimateSummaryPanel
+          title={config.title as string | undefined}
+          formula={config.formula as string | undefined}
+          currencyPrefix={config.currencyPrefix as string | undefined}
+          lineItems={config.lineItems as any}
+          ctaButtonText={config.ctaButtonText as string | undefined}
+          allFormData={allFormData}
         />
       );
 
