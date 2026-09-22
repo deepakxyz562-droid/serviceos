@@ -88,7 +88,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'free',
     createField: (label = 'Dropdown') => ({
-      label, type: 'dropdown', options: ['Option 1', 'Option 2', 'Option 3'], required: false,
+      label, type: 'dropdown', widgetType: 'dropdown', options: ['Option 1', 'Option 2', 'Option 3'], required: false,
     }),
     settingsSchema: [
       { key: 'predefinedOptions', label: 'Predefined Options', type: 'predefined_options', group: 'field_specific', helpText: 'Quickly populate with common option sets.' },
@@ -110,7 +110,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Radio button options',
     tier: 'free',
     createField: (label = 'Single Choice') => ({
-      label, type: 'radio', options: ['Choice A', 'Choice B', 'Choice C'], required: false,
+      label, type: 'radio', widgetType: 'single_choice', options: ['Choice A', 'Choice B', 'Choice C'], required: false,
     }),
     settingsSchema: [
       { key: 'predefinedOptions', label: 'Predefined Options', type: 'predefined_options', group: 'field_specific', helpText: 'Quickly populate with common option sets.' },
@@ -135,7 +135,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Multi-select checkboxes',
     tier: 'free',
     createField: (label = 'Multiple Choice') => ({
-      label, type: 'checkbox', options: ['Type option 1', 'Type option 2', 'Type option 3', 'Type option 4'], required: false,
+      label, type: 'checkbox', widgetType: 'multiple_choice', options: ['Type option 1', 'Type option 2', 'Type option 3', 'Type option 4'], required: false,
     }),
     settingsSchema: [
       { key: 'predefinedOptions', label: 'Predefined Options', type: 'predefined_options', group: 'field_specific', helpText: 'Quickly populate with common option sets.' },
