@@ -16,13 +16,25 @@ interface SmsOtpVerificationProps {
   value?: SmsVerificationValue | null;
   onChange: (val: SmsVerificationValue | null) => void;
   disabled?: boolean;
+  /** Settings: `codeLength` (number), `expiryMinutes` (number), `provider` (string). */
+  config?: Record<string, unknown>;
 }
 
 export function SmsOtpVerification({
   value,
   onChange,
   disabled = false,
+  config,
 }: SmsOtpVerificationProps) {
+  // Settings write `codeLength`, `expiryMinutes`, and `provider`. Read them
+  // with sensible defaults so saved forms can tune OTP UX.
+  const codeLength = Math.max(4, Math.min(10, Number(config?.codeLength ?? 6)));
+  const expiryMinutes = Math.max(1, Number(config?.expiryMinutes ?? 1));
+  const expirySeconds = expiryMinutes * 60;
+  // `provider` is informational on the client (server dispatches SMS).
+  // Surface it only so config flows through; no UI change needed.
+  void config?.provider;
+
   const [phone, setPhone] = useState(value?.phone || '');
   const [otp, setOtp] = useState('');
   const [codeSent, setCodeSent] = useState(false);
@@ -59,7 +71,7 @@ export function SmsOtpVerification({
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         setCodeSent(true);
-        setCountdown(60);
+        setCountdown(expirySeconds);
         if (data.devCode) {
           setMockDevCode(data.devCode);
           toast.success(`Verification code sent! (Dev code: ${data.devCode})`);
@@ -182,7 +194,7 @@ export function SmsOtpVerification({
         <div className="p-3 bg-muted/40 border border-border/80 rounded-xl space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <ShieldCheck className="size-4 text-emerald-600" /> Enter 6-Digit SMS Code
+              <ShieldCheck className="size-4 text-emerald-600" /> Enter {codeLength}-Digit SMS Code
             </span>
             {mockDevCode && (
               <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
@@ -194,11 +206,11 @@ export function SmsOtpVerification({
           <div className="flex gap-2">
             <Input
               type="text"
-              maxLength={6}
+              maxLength={codeLength}
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
               onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleVerifyOtp())}
-              placeholder="123456"
+              placeholder={'0'.repeat(codeLength)}
               className="text-center tracking-widest font-mono text-sm font-bold flex-1"
               disabled={disabled || verifying}
             />
@@ -206,7 +218,7 @@ export function SmsOtpVerification({
               type="button"
               size="sm"
               onClick={handleVerifyOtp}
-              disabled={disabled || verifying || otp.length < 4}
+              disabled={disabled || verifying || otp.length < codeLength}
               className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
             >
               {verifying ? <Loader2 className="size-3.5 animate-spin" /> : 'Verify'}

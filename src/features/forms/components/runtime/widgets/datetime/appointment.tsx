@@ -30,9 +30,11 @@ export function Appointment({ value, onChange, config = {}, disabled, field }: W
 
   // Config parameters
   const slotMinutes = Math.max(5, num(config.slotDurationMinutes || config.duration || config.slotMinutes, 30));
-  const intervals: Array<{ from: string; to: string; days: string }> = Array.isArray(config.intervals) && config.intervals.length > 0
-    ? config.intervals
-    : [{ from: str(config.startTime, '09:00'), to: str(config.endTime, '17:00'), days: 'Weekdays' }];
+  const intervals: Array<{ from: string; to: string; days: string }> = useMemo(() => {
+    return Array.isArray(config.intervals) && config.intervals.length > 0
+      ? config.intervals
+      : [{ from: str(config.startTime, '09:00'), to: str(config.endTime, '17:00'), days: 'Weekdays' }];
+  }, [config.intervals, config.startTime, config.endTime]);
   
   const lunchtimeEnabled = bool(config.lunchtimeEnabled, false);
   const lunchStart = str(config.lunchStart, '12:00');

@@ -19,7 +19,9 @@ export function TakePhotoWidget({
   disabled,
   field,
 }: WidgetProps) {
-  const facingMode = String(config?.facingMode ?? 'environment');
+  // Settings write `cameraFacing` ('user'/'environment'). Legacy runtime read
+  // `facingMode`. Read settings key first, fall back to legacy key.
+  const facingMode = String(config?.cameraFacing ?? config?.facingMode ?? 'environment');
   const ariaLabel = String(field?.label ?? 'Take photo');
 
   const videoRef = useRef<HTMLVideoElement>(null);

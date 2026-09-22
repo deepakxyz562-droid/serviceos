@@ -12,6 +12,11 @@ export function StarRatingComments({ value, onChange, config, disabled, field }:
   const comment = String(initial.comment || '');
 
   const maxStars = Number(config.maxStars) || 5;
+  // Settings write `requireCommentBelow` (boolean or numeric threshold).
+  // Legacy runtime read `config.commentThreshold`. Read the settings key
+  // first; if it's a boolean true, threshold becomes 1 (require comment for
+  // low ratings); if it's a number, that's the threshold; fall back to the
+  // legacy `commentThreshold` key for backward compatibility.
   const rawThreshold = config.requireCommentBelow !== undefined ? config.requireCommentBelow : config.commentThreshold;
   const commentThreshold = typeof rawThreshold === 'number' ? rawThreshold : rawThreshold ? Number(rawThreshold) : 0;
 

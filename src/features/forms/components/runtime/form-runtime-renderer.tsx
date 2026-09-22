@@ -1358,30 +1358,8 @@ export function FormRuntimeRenderer({
                       {field.helpText && !['heading', 'paragraph'].includes(field.type) && (
                         <p className="text-xs text-muted-foreground">{field.helpText}</p>
                       )}
-                      {(field.type === 'control_widget' || ['dropdown','radio','checkbox'].includes(field.type) || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
+                      {(field.type === 'control_widget' || ['dropdown','radio','checkbox','short_answer','email','phone','numerical','date','time','long_answer','signature','rating','appointment','heading','paragraph','divider'].includes(field.type) || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
                         <WidgetRuntimeDispatcher field={field} value={formData[field.id]} onChange={(val) => handleFieldChange(field.id, val)} allFormData={formData} />
-                      )}
-                      {!field.widgetType && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
-                        <Input
-                          id={field.id}
-                          type={field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'numerical' ? 'number' : field.type === 'date' ? 'date' : field.type === 'time' ? 'time' : 'text'}
-                          value={formData[field.id] || ''}
-                          onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                          placeholder={field.placeholder || ''}
-                          className="text-sm h-11 rounded-xl bg-slate-50/70 dark:bg-slate-900 border-border/80 focus-visible:ring-2"
-                          style={inputStyle}
-                        />
-                      )}
-                      {field.type === 'long_answer' && (
-                        <Textarea
-                          id={field.id}
-                          value={formData[field.id] || ''}
-                          onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                          placeholder={field.placeholder || ''}
-                          rows={4}
-                          className="text-sm rounded-xl bg-slate-50/70 dark:bg-slate-900 border-border/80 focus-visible:ring-2 resize-none"
-                          style={inputStyle}
-                        />
                       )}
                       {field.type === 'heading' && (() => {
                         const cfg = (field.widgetConfig as any) || {};
@@ -1552,14 +1530,15 @@ export function FormRuntimeRenderer({
                       <p className="text-[11px] text-muted-foreground">{field.helpText}</p>
                     )}
 
-                    {/* Specialized Control Widgets + Basic Choice Fields */}
-                    {/* Route dropdown/radio/checkbox through the dispatcher so rich settings
-                        (multiSelect, search, columns, allowOther, randomize, etc.) actually apply.
+                    {/* All field types route through WidgetRuntimeDispatcher for rich runtime components.
+                        Removed inline <Input>/<Textarea> that bypassed rich components and ignored
+                        settings like maxLength, validation, mask, confirmation, country dropdown,
+                        calendar, format, decimals, thousandsSep, rows, showCounter, etc.
                         Exception: material/tier radio fields use the specialized estimator card below. */}
                     {(field.type === 'control_widget' ||
-                      (['dropdown','radio','checkbox'].includes(field.type) &&
-                       !(field.type === 'radio' && (field.id.includes('material') || field.id.includes('tier')))) ||
-                      (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
+                      ['dropdown','radio','checkbox','short_answer','email','phone','numerical','date','time','long_answer','signature','rating','appointment','heading','paragraph','divider','address','file'].includes(field.type) ||
+                      (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) &&
+                      !(field.type === 'radio' && (field.id.includes('material') || field.id.includes('tier'))) && (
                       <WidgetRuntimeDispatcher
                         field={field}
                         value={formData[field.id]}
@@ -1630,64 +1609,7 @@ export function FormRuntimeRenderer({
                       </div>
                     )}
 
-                    {/* Standard Inputs */}
-                    {!field.widgetType && !field.id.includes('size') && !field.id.includes('sqft') && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
-                      <Input
-                        id={field.id}
-                        type={
-                          field.type === 'email'
-                            ? 'email'
-                            : field.type === 'phone'
-                            ? 'tel'
-                            : field.type === 'numerical'
-                            ? 'number'
-                            : field.type === 'date'
-                            ? 'date'
-                            : field.type === 'time'
-                            ? 'time'
-                            : 'text'
-                        }
-                        value={formData[field.id] || ''}
-                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                        placeholder={field.placeholder || ''}
-                        className={`${inputHeightClass} bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 shadow-2xs ${
-                          hasError ? 'border-rose-500 ring-1 ring-rose-500' : ''
-                        }`}
-                        style={inputStyle}
-                      />
-                    )}
-
-                    {field.type === 'long_answer' && (
-                      <Textarea
-                        id={field.id}
-                        value={formData[field.id] || ''}
-                        onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                        placeholder={field.placeholder || ''}
-                        rows={3}
-                        className={`text-xs bg-slate-50/50 dark:bg-slate-900 border-border/80 focus-visible:ring-2 resize-none shadow-2xs ${
-                          hasError ? 'border-rose-500 ring-1 ring-rose-500' : ''
-                        }`}
-                        style={inputStyle}
-                      />
-                    )}
-
-                    {field.type === 'signature' && (
-                      <WidgetRuntimeDispatcher
-                        field={{ ...field, widgetType: 'signature_pad' }}
-                        value={formData[field.id]}
-                        onChange={(val) => handleFieldChange(field.id, val)}
-                        allFormData={formData}
-                      />
-                    )}
-
-                    {field.type === 'rating' && (
-                      <WidgetRuntimeDispatcher
-                        field={{ ...field, widgetType: 'star_rating' }}
-                        value={formData[field.id]}
-                        onChange={(val) => handleFieldChange(field.id, val)}
-                        allFormData={formData}
-                      />
-                    )}
+                    {/* Standard Inputs — route through dispatcher for rich runtime components */}
 
                     {/* Headings / Paragraphs — respect level, align, text, allowHTML settings */}
                     {field.type === 'heading' && (() => {

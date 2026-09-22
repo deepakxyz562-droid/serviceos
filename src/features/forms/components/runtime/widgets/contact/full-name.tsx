@@ -18,9 +18,12 @@ const SUFFIXES = ['', 'Jr.', 'Sr.', 'II', 'III', 'IV', 'PhD', 'MD'];
 
 export function FullName({ value, onChange, config, disabled, field }: WidgetProps) {
   const obj: NameValue = value && typeof value === 'object' ? (value as NameValue) : {};
-  const includeMiddle = bool(config.includeMiddle, true);
-  const includePrefix = bool(config.includePrefix, false);
-  const includeSuffix = bool(config.includeSuffix, false);
+  // Settings write `middleName`/`prefix`/`suffix`; legacy runtime read
+  // `includeMiddle`/`includePrefix`/`includeSuffix`. Read settings keys first
+  // and fall back to legacy keys for backward compatibility.
+  const includeMiddle = bool(config.middleName ?? config.includeMiddle, true);
+  const includePrefix = bool(config.prefix ?? config.includePrefix, false);
+  const includeSuffix = bool(config.suffix ?? config.includeSuffix, false);
   const ariaLabel = str(field?.label, 'Full name');
 
   const set = (patch: Partial<NameValue>) => onChange({ first: '', last: '', ...obj, ...patch });

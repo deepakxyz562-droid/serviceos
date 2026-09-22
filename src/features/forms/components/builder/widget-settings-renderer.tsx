@@ -458,8 +458,8 @@ export function WidgetSettingsRenderer({
               <Input
                 className="h-8 text-xs bg-background"
                 placeholder={setting.placeholder}
-                value={String(value ?? '')}
-                onChange={(e) => onChange(e.target.value)}
+                value={String(field.label ?? '')}
+                onChange={(e) => onFieldChange('label', e.target.value)}
               />
             )}
             {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
@@ -634,8 +634,6 @@ export function WidgetSettingsRenderer({
     }
   };
 
-  const WidgetIcon = resolveIcon(definition.iconName);
-
   const settingsForTab = (tab: SubTab): SettingField[] => {
     if (tab === 'general') {
       return isWidgetSettingsMode ? fieldSpecific : universalGeneral;
@@ -657,7 +655,7 @@ export function WidgetSettingsRenderer({
         {/* Universal Field / Widget Identity Hero Card (Always visible, even after renaming) */}
         <div className="rounded-xl border border-border/70 bg-muted/30 p-2.5 flex items-start gap-2.5 shadow-2xs">
           <div className="size-8 rounded-lg bg-emerald-600/10 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center p-1.5 shrink-0 border border-emerald-600/20">
-            <WidgetIcon className="size-4" />
+            {React.createElement(resolveIcon(definition.iconName), { className: 'size-4' })}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">

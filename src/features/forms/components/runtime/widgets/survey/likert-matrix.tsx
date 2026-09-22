@@ -9,8 +9,19 @@ interface LikertMatrixValue {
 
 export function LikertMatrix({ value, onChange, config, disabled, field }: WidgetProps) {
   const statements = (config.statements as { id: string; text: string }[]) || [];
+  // Settings write `points` (number, e.g. 5 or 7) for the scale length.
+  // Legacy runtime read `scaleLabels` (string[]). If `points` is set, generate
+  // numeric labels of that length; otherwise fall back to `scaleLabels` or
+  // the default 5-point agree/disagree scale.
+  const DEFAULT_LABELS = ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'];
   const scaleLabels =
-    (config.scaleLabels as string[]) || ['Strongly disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly agree'];
+    (Array.isArray(config.scaleLabels) && config.scaleLabels.length
+      ? (config.scaleLabels as string[])
+      : null) ??
+    (typeof config.points === 'number' && config.points > 0
+      ? Array.from({ length: config.points }, (_, i) => String(i + 1))
+      : null) ??
+    DEFAULT_LABELS;
 
   const current = (value as LikertMatrixValue) || {};
 

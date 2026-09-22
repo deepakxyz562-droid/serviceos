@@ -23,10 +23,18 @@ const FORMAT_MAP: Record<string, string> = {
 
 export function DateTime({ value, onChange, config, disabled, field }: WidgetProps) {
   const obj: DateTimeValue = value && typeof value === 'object' ? (value as DateTimeValue) : {};
-  const formatKey = str(config.format, 'yyyy-mm-dd');
+  // Settings write `dateFormat` (string), `timeFormat` ('12h'/'24h'), and
+  // `defaultToCurrent` (boolean). Legacy runtime read `format` / `use12h` /
+  // `step`. Read settings keys first, fall back to legacy keys.
+  const formatKey = str(config.dateFormat ?? config.format, 'yyyy-mm-dd');
   const fmt = FORMAT_MAP[formatKey] || 'yyyy-MM-dd';
-  const use12 = bool(config.use12h, false);
+  const timeFormat = config.timeFormat != null ? str(config.timeFormat, '') : '';
+  const use12 =
+    timeFormat
+      ? timeFormat === '12h'
+      : bool(config.use12h, false);
   const step = Math.max(1, Math.min(60, num(config.step, 15)));
+  const defaultToCurrent = bool(config.defaultToCurrent, false);
   const ariaLabel = str(field?.label, 'Date and time');
   const [open, setOpen] = React.useState(false);
 
@@ -35,6 +43,18 @@ export function DateTime({ value, onChange, config, disabled, field }: WidgetPro
     const d = parseISO(obj.date);
     return isValid(d) ? d : undefined;
   }, [obj.date]);
+
+  // Seed current date/time when `defaultToCurrent` is set and the value is
+  // empty. Runs once on mount.
+  React.useEffect(() => {
+    if (!defaultToCurrent) return;
+    if (obj.date || obj.time) return;
+    const now = new Date();
+    onChange({
+      date: format(now, 'yyyy-MM-dd'),
+      time: format(now, 'HH:mm'),
+    });
+  }, []);
 
   const set = (patch: Partial<DateTimeValue>) => onChange({ date: '', time: '', ...obj, ...patch });
 

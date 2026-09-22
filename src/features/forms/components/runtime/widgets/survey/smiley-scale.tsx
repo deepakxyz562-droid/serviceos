@@ -22,11 +22,18 @@ const FACES: Face[] = [
 export function SmileyScale({ value, onChange, config, disabled, field }: WidgetProps) {
   const current = typeof value === 'number' ? value : 0;
   const showLabels = config.showLabels !== false;
+  // Settings write `count` (number of faces). Legacy runtime hardcoded 5.
+  // Slice the FACES array to the requested count; clamp to [1, FACES.length].
+  const countRaw = Number(config.count);
+  const count = Number.isFinite(countRaw) && countRaw > 0
+    ? Math.min(FACES.length, Math.max(1, Math.floor(countRaw)))
+    : FACES.length;
+  const faces = FACES.slice(0, count);
 
   return (
     <div className="space-y-2" aria-label={String(field?.['label'] ?? 'Smiley scale')}>
       <div className="flex items-center justify-between gap-2">
-        {FACES.map((face, i) => {
+        {faces.map((face, i) => {
           const v = i + 1;
           const isSel = current === v;
           const Icon = face.Icon;
@@ -56,7 +63,7 @@ export function SmileyScale({ value, onChange, config, disabled, field }: Widget
       </div>
       {current > 0 && (
         <div className="text-center text-xs font-bold text-foreground">
-          Score: {current} / {FACES.length}
+          Score: {current} / {faces.length}
         </div>
       )}
     </div>

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Input } from '@/components/ui/input';
-import { WidgetProps, str, num } from '../widget-props';
+import { WidgetProps, str, num, bool } from '../widget-props';
 
 interface Rule {
   label: string;
@@ -21,7 +21,12 @@ const RULES: Rule[] = [
 export function Password({ value, onChange, config, disabled, field }: WidgetProps) {
   const val = str(value, '');
   const placeholder = str(config.placeholder, '••••••••');
-  const minLength = Math.max(1, num(config.minLength, 8));
+  // Settings write `minLen` (number). Legacy runtime read `minLength`. Read
+  // `minLen` first, fall back to `minLength` for backward compatibility.
+  const minLength = Math.max(1, num(config.minLen ?? config.minLength, 8));
+  // Settings write `requireSymbol` (boolean). When true, the special-character
+  // rule becomes mandatory and a validation hint is shown when missing.
+  const requireSymbol = bool(config.requireSymbol, false);
   const showStrength = config.showStrength !== false;
   const ariaLabel = str(field?.label, 'Password');
   const [show, setShow] = React.useState(false);
@@ -32,6 +37,7 @@ export function Password({ value, onChange, config, disabled, field }: WidgetPro
     score >= 90 ? 'Strong' : score >= 60 ? 'Good' : score >= 30 ? 'Fair' : val.length > 0 ? 'Weak' : '';
   const strengthColor =
     score >= 90 ? 'bg-emerald-500' : score >= 60 ? 'bg-blue-500' : score >= 30 ? 'bg-amber-500' : 'bg-red-500';
+  const missingSymbol = requireSymbol && val.length > 0 && !/[^A-Za-z0-9]/.test(val);
 
   return (
     <div className="space-y-1.5">
@@ -67,6 +73,9 @@ export function Password({ value, onChange, config, disabled, field }: WidgetPro
             <span>{val.length} chars</span>
           </div>
         </div>
+      )}
+      {missingSymbol && (
+        <p className="text-[10px] text-amber-600">A special character is required.</p>
       )}
     </div>
   );

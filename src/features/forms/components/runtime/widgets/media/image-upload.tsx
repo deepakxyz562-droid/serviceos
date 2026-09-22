@@ -19,6 +19,64 @@ const readFileAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+const loadImage = (src: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+
+/**
+ * Settings write `allowedImageTypes` (array of strings like ['png','jpg']
+ * or ['image/png','image/jpeg']). Build an `accept` attribute string.
+ * Falls back to legacy `config.accept` or 'image/*'.
+ */
+function buildAccept(config: Record<string, unknown> | undefined): string {
+  const allowed = config?.allowedImageTypes;
+  if (Array.isArray(allowed) && allowed.length) {
+    return allowed
+      .map((t) => {
+        const s = String(t).trim().toLowerCase();
+        if (!s) return '';
+        return s.startsWith('image/') ? s : `image/${s.replace(/^\./, '')}`;
+      })
+      .filter(Boolean)
+      .join(',');
+  }
+  if (typeof config?.accept === 'string' && config.accept) return config.accept;
+  return 'image/*';
+}
+
+/**
+ * Resize an image data URL to `resizeWidth` (preserving aspect ratio) when
+ * `autoResize` is enabled. Returns the original data URL when resize is
+ * disabled or fails.
+ */
+async function maybeResize(
+  dataUrl: string,
+  autoResize: boolean,
+  resizeWidth: number,
+): Promise<string> {
+  if (!autoResize || !resizeWidth || resizeWidth <= 0) return dataUrl;
+  try {
+    const img = await loadImage(dataUrl);
+    if (img.width <= resizeWidth) return dataUrl;
+    const scale = resizeWidth / img.width;
+    const w = Math.round(resizeWidth);
+    const h = Math.round(img.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return dataUrl;
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return dataUrl;
+  }
+}
+
 export function ImageUploadWidget({
   value,
   onChange,
@@ -28,7 +86,11 @@ export function ImageUploadWidget({
 }: WidgetProps) {
   const maxFiles = Number(config?.maxFiles ?? 6);
   const maxFileSizeMb = Number(config?.maxFileSizeMb ?? 5);
-  const accept = String(config?.accept ?? 'image/*');
+  const accept = buildAccept(config);
+  // Settings write `autoResize` (boolean) and `resizeWidth` (number). When
+  // both are set, uploaded images are downscaled on the client.
+  const autoResize = config?.autoResize === true;
+  const resizeWidth = Math.max(8, Number(config?.resizeWidth ?? 1024));
   const ariaLabel = String(field?.label ?? 'Image upload');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,7 +110,9 @@ export function ImageUploadWidget({
         if (file.size > maxFileSizeMb * 1024 * 1024) continue;
         if (!file.type.startsWith('image/')) continue;
         const dataUrl = await readFileAsDataUrl(file);
-        next.push({ name: file.name, size: file.size, type: file.type, dataUrl });
+        const finalUrl = await maybeResize(dataUrl, autoResize, resizeWidth);
+        const type = finalUrl.startsWith('data:image/png') && file.type !== 'image/png' ? 'image/png' : file.type;
+        next.push({ name: file.name, size: file.size, type, dataUrl: finalUrl });
       }
       onChange(next);
       if (fileInputRef.current) fileInputRef.current.value = '';

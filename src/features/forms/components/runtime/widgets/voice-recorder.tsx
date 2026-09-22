@@ -3,34 +3,76 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, Square, Play, Pause, Trash2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import type { WidgetProps } from './widget-props';
+import { str, num, bool } from './widget-props';
 
-interface VoiceRecorderProps {
-  value?: string; // audio data url / blob url
-  onChange: (audioUrl: string) => void;
-  disabled?: boolean;
-}
-
+/**
+ * Voice recorder runtime widget.
+ *
+ * Settings write `maxDurationSeconds` (number, 0 = unlimited), `format`
+ * (string, e.g. 'webm'/'mp3' — used as the recorded blob MIME hint), and
+ * `showPlayback` (boolean, default true — hide the play button when false).
+ */
 export function VoiceRecorder({
   value,
   onChange,
-  disabled = false,
-}: VoiceRecorderProps) {
+  config,
+  disabled,
+  field,
+}: WidgetProps) {
+  const ariaLabel = String(field?.label ?? 'Voice recorder');
+  const maxDurationSeconds = Math.max(0, num(config?.maxDurationSeconds, 0));
+  const format = str(config?.format, 'webm').toLowerCase();
+  const showPlayback = config?.showPlayback !== false;
+  const disabledProp = bool(disabled, false);
+
+  const audioUrl = typeof value === 'string' ? value : '';
+  const emit = (url: string) => onChange(url);
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const stopAtRef = useRef<number | null>(null);
+  // Track the recording state in a ref so the interval callback can read the
+  // latest value without re-creating the interval each tick.
+  const isRecordingRef = useRef(isRecording);
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+
+  const stopRecording = React.useCallback(() => {
+    const rec = mediaRecorderRef.current;
+    if (rec && isRecordingRef.current) {
+      rec.stop();
+      setIsRecording(false);
+    }
+  }, []);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isRecording) {
-      interval = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+      interval = setInterval(() => {
+        setRecordingSeconds((s) => {
+          const next = s + 1;
+          // Auto-stop when maxDurationSeconds is reached.
+          if (maxDurationSeconds > 0 && next >= maxDurationSeconds) {
+            stopRecording();
+          }
+          return next;
+        });
+      }, 1000);
     }
     return () => {
       if (interval) clearInterval(interval);
+      if (stopAtRef.current) {
+        clearTimeout(stopAtRef.current);
+        stopAtRef.current = null;
+      }
     };
-  }, [isRecording]);
+  }, [isRecording, maxDurationSeconds, stopRecording]);
 
   // Reset recording seconds when recording stops (separate effect to avoid
   // calling setState synchronously during the main effect body).
@@ -42,10 +84,22 @@ export function VoiceRecorder({
   }, [isRecording]);
 
   const startRecording = async () => {
-    if (!navigator.mediaDevices?.getUserMedia || disabled) return;
+    if (!navigator.mediaDevices?.getUserMedia || disabledProp) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mimeType =
+        format === 'mp3' || format === 'mpeg'
+          ? 'audio/mpeg'
+          : format === 'ogg'
+            ? 'audio/ogg'
+            : format === 'wav'
+              ? 'audio/wav'
+              : 'audio/webm';
+      const options: MediaRecorderOptions = {};
+      if (MediaRecorder.isTypeSupported(mimeType)) {
+        options.mimeType = mimeType;
+      }
+      const mediaRecorder = new MediaRecorder(stream, options);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
@@ -54,28 +108,29 @@ export function VoiceRecorder({
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        onChange(audioUrl);
+        const type = mediaRecorder.mimeType || mimeType;
+        const audioBlob = new Blob(audioChunksRef.current, { type });
+        const url = URL.createObjectURL(audioBlob);
+        emit(url);
         stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorder.start();
       setIsRecording(true);
+      // Safety net: stop after maxDurationSeconds even if the ticker misses.
+      if (maxDurationSeconds > 0) {
+        stopAtRef.current = window.setTimeout(
+          () => stopRecording(),
+          maxDurationSeconds * 1000,
+        );
+      }
     } catch {
       alert('Microphone access is required to record voice notes.');
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
   const togglePlayback = () => {
-    if (!value || !audioRef.current) return;
+    if (!audioUrl || !audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
@@ -106,22 +161,24 @@ export function VoiceRecorder({
           </div>
           <div>
             <p className="text-xs font-semibold text-foreground">
-              {isRecording ? 'Recording Voice Memo...' : value ? 'Voice Note Recorded' : 'Record Voice Note'}
+              {isRecording ? 'Recording Voice Memo...' : audioUrl ? 'Voice Note Recorded' : 'Record Voice Note'}
             </p>
             <p className="text-[11px] text-muted-foreground">
-              {isRecording ? formatSeconds(recordingSeconds) : 'Describe issues or notes by speaking'}
+              {isRecording
+                ? `${formatSeconds(recordingSeconds)}${maxDurationSeconds > 0 ? ` / ${formatSeconds(maxDurationSeconds)}` : ''}`
+                : 'Describe issues or notes by speaking'}
             </p>
           </div>
         </div>
 
         {/* Controls */}
         <div className="flex items-center gap-2">
-          {!isRecording && !value && (
+          {!isRecording && !audioUrl && (
             <Button
               type="button"
               size="sm"
               onClick={startRecording}
-              disabled={disabled}
+              disabled={disabledProp}
               className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
             >
               <Mic className="size-3.5" /> Start Recording
@@ -140,30 +197,34 @@ export function VoiceRecorder({
             </Button>
           )}
 
-          {value && (
+          {audioUrl && (
             <div className="flex items-center gap-2">
-              <audio
-                ref={audioRef}
-                src={value}
-                onEnded={() => setIsPlaying(false)}
-                className="hidden"
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={togglePlayback}
-                className="text-xs gap-1.5 h-8"
-              >
-                {isPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
-                {isPlaying ? 'Pause' : 'Play'}
-              </Button>
-              {!disabled && (
+              {showPlayback && (
+                <audio
+                  ref={audioRef}
+                  src={audioUrl}
+                  onEnded={() => setIsPlaying(false)}
+                  className="hidden"
+                />
+              )}
+              {showPlayback && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={togglePlayback}
+                  className="text-xs gap-1.5 h-8"
+                >
+                  {isPlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+                  {isPlaying ? 'Pause' : 'Play'}
+                </Button>
+              )}
+              {!disabledProp && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => onChange('')}
+                  onClick={() => emit('')}
                   className="size-8 p-0 text-muted-foreground hover:text-red-500"
                   title="Delete Recording"
                 >

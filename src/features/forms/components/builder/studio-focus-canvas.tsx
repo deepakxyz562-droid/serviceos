@@ -265,24 +265,34 @@ function StudioFieldPreview({
     const alignment = field.alignment || cfg.alignment || 'center';
     const alignCls = alignment === 'left' ? 'justify-start text-left' : alignment === 'right' ? 'justify-end text-right' : 'justify-center text-center';
     const maxW = field.maxWidthPercent || cfg.maxWidthPercent ? `${field.maxWidthPercent || cfg.maxWidthPercent}%` : '100%';
-    const customRadius = field.imageBorderRadius || cfg.borderRadius || '12px';
+    const customRadius = field.borderRadius || cfg.borderRadius || '12px';
     const caption = field.caption || cfg.caption;
+    const heightPx = field.heightPx || cfg.heightPx;
+    const linkUrl = field.linkUrl || cfg.linkUrl;
+
+    const imgEl = imageUrl ? (
+      <div className="overflow-hidden inline-block shadow-sm border border-slate-200/80 dark:border-slate-800" style={{ maxWidth: maxW, borderRadius: customRadius }}>
+        <img src={imageUrl} alt={altText} className="w-full h-auto object-cover" style={heightPx ? { maxHeight: `${heightPx}px` } : { maxHeight: '16rem' }} />
+      </div>
+    ) : (
+      <div
+        className="w-full aspect-video max-h-48 border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col items-center justify-center p-4 text-center text-muted-foreground"
+        style={{ borderRadius: customRadius }}
+      >
+        <ImageIcon className="size-8 text-slate-400 mb-2" />
+        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Image Widget</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">Click to configure image URL in Field Settings</p>
+      </div>
+    );
 
     return (
       <div className={`w-full flex flex-col ${alignCls} py-1`}>
-        {imageUrl ? (
-          <div className="overflow-hidden inline-block shadow-sm border border-slate-200/80 dark:border-slate-800" style={{ maxWidth: maxW, borderRadius: customRadius }}>
-            <img src={imageUrl} alt={altText} className="w-full h-auto object-cover max-h-64" />
-          </div>
+        {linkUrl ? (
+          <a href={linkUrl} target="_blank" rel="noopener noreferrer" className="inline-block">
+            {imgEl}
+          </a>
         ) : (
-          <div
-            className="w-full aspect-video max-h-48 border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 flex flex-col items-center justify-center p-4 text-center text-muted-foreground"
-            style={{ borderRadius: customRadius }}
-          >
-            <ImageIcon className="size-8 text-slate-400 mb-2" />
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Image Widget</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Click to configure image URL in Field Settings</p>
-          </div>
+          imgEl
         )}
         {caption && <p className="text-[11px] text-muted-foreground mt-1.5 italic">{caption}</p>}
       </div>
@@ -319,19 +329,30 @@ function StudioFieldPreview({
     const videoUrl = field.videoUrl || cfg.videoUrl || (field.options?.[0]?.value as string) || '';
     const isYt = videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be');
     const isVim = videoUrl.includes('vimeo.com');
+    const aspectRatio = cfg.aspectRatio || '16/9';
+    const borderRadius = cfg.borderRadius || '12px';
+    const autoplay = cfg.autoplay || false;
+    const muted = cfg.muted !== false;
+    const loop = cfg.loop || false;
+    const aspectClass = aspectRatio === '4/3' ? 'aspect-[4/3]' : aspectRatio === '1/1' ? 'aspect-square' : aspectRatio === '21/9' ? 'aspect-[21/9]' : 'aspect-video';
+
+    // Build YouTube embed URL with query params
+    let ytEmbedUrl = '';
+    if (isYt) {
+      const videoId = videoUrl.includes('watch?v=') ? videoUrl.split('watch?v=')[1].split('&')[0] : videoUrl.replace('https://youtu.be/', '');
+      ytEmbedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=${autoplay ? 1 : 0}&mute=${muted ? 1 : 0}&loop=${loop ? 1 : 0}&controls=1`;
+      if (loop) ytEmbedUrl += `&playlist=${videoId}`;
+    }
 
     return (
-      <div className="w-full rounded-2xl overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-slate-950 aspect-video relative flex items-center justify-center shadow-sm">
+      <div className={`w-full overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-slate-950 ${aspectClass} relative flex items-center justify-center shadow-sm`} style={{ borderRadius }}>
         {videoUrl ? (
           isYt ? (
             <iframe
-              src={
-                videoUrl.includes('watch?v=')
-                  ? videoUrl.replace('watch?v=', 'embed/').split('&')[0]
-                  : videoUrl.replace('youtu.be/', 'www.youtube.com/embed/')
-              }
+              src={ytEmbedUrl}
               title="Video"
               className="w-full h-full border-0 pointer-events-none"
+              allow="autoplay; encrypted-media"
             />
           ) : isVim ? (
             <div className="w-full h-full flex flex-col items-center justify-center text-white space-y-2">
@@ -339,7 +360,7 @@ function StudioFieldPreview({
               <p className="text-xs font-bold truncate px-4">{videoUrl}</p>
             </div>
           ) : (
-            <video src={videoUrl} className="w-full h-full object-cover" />
+            <video src={videoUrl} className="w-full h-full object-cover" autoPlay={autoplay} muted={muted} loop={loop} controls />
           )
         ) : (
           <div className="flex flex-col items-center justify-center text-center p-4 text-slate-400">
@@ -354,12 +375,14 @@ function StudioFieldPreview({
 
   // 4. Divider Widget
   if (field.type === 'divider' || field.widgetType === 'divider') {
-    const style = field.dividerStyle || cfg.dividerStyle || 'solid';
-    const thickness = field.thicknessPx || cfg.thicknessPx || 1;
+    const style = field.style || cfg.style || 'solid';
+    const thickness = field.thickness || cfg.thickness || 1;
+    const spacing = field.spacing || cfg.spacing || 'medium';
+    const spacingClass = spacing === 'compact' ? 'py-1' : spacing === 'large' ? 'py-4' : 'py-2';
     const borderStyleClass = style === 'dashed' ? 'border-dashed' : style === 'dotted' ? 'border-dotted' : 'border-solid';
 
     return (
-      <div className="w-full py-2 flex items-center">
+      <div className={`w-full ${spacingClass} flex items-center`}>
         {style === 'glow' ? (
           <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent" />
         ) : (
@@ -371,13 +394,17 @@ function StudioFieldPreview({
 
   // 5. Heading Widget
   if (field.type === 'heading' || field.widgetType === 'heading') {
-    const title = field.label || cfg.headingText || 'Section Heading';
+    const title = field.label || 'Section Heading';
     const subtitle = field.helpText || cfg.helpText;
+    const level = cfg.level || 'h3';
+    const align = cfg.align || 'left';
+    const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+    const sizeClass = level === 'h1' ? 'text-2xl' : level === 'h2' ? 'text-xl' : level === 'h4' ? 'text-sm' : 'text-base';
     return (
-      <div className="w-full py-1">
-        <h3 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+      <div className={`w-full py-1 ${alignClass}`}>
+        <div className={`${sizeClass} font-extrabold text-slate-900 dark:text-white tracking-tight`}>
           {title}
-        </h3>
+        </div>
         {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
       </div>
     );
@@ -385,12 +412,17 @@ function StudioFieldPreview({
 
   // 6. Paragraph / Text Widget
   if (field.type === 'paragraph' || field.widgetType === 'paragraph') {
-    const text = field.label || field.placeholder || cfg.paragraphText || 'Enter informative descriptive text here...';
+    const text = cfg.text || field.label || field.placeholder || 'Enter informative descriptive text here...';
+    const allowHTML = cfg.allowHTML || false;
     return (
       <div className="w-full py-1">
-        <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-          {text}
-        </p>
+        {allowHTML ? (
+          <div className="text-xs leading-relaxed text-slate-600 dark:text-slate-300" dangerouslySetInnerHTML={{ __html: text }} />
+        ) : (
+          <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+            {text}
+          </p>
+        )}
       </div>
     );
   }

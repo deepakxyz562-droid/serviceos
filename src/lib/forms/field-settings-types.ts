@@ -69,7 +69,11 @@ export interface SettingField {
 }
 
 export const UNIVERSAL_GENERAL_SETTINGS: SettingField[] = [
-  // ─── Field Label (JotForm: plain text input, no toggle for most fields) ──────
+  // ─── Field Label (toggle to enable/disable + inline text input) ──────────
+  // The label_with_toggle type renders BOTH the Switch and the text Input.
+  // The Switch toggles field.labelEnabled (boolean).
+  // The Input reads/writes field.label (string).
+  // No separate 'label' setting needed — it's built into the toggle.
   {
     key: 'labelEnabled',
     label: 'Field Label',
@@ -78,7 +82,6 @@ export const UNIVERSAL_GENERAL_SETTINGS: SettingField[] = [
     default: true,
     helpText: 'Enable/disable the field label without deleting it.',
   },
-  { key: 'label', label: 'Label Text', type: 'text', group: 'general', placeholder: 'Enter question title...', condition: { dependsOn: 'labelEnabled', equals: 'true' } },
   // ─── Sublabel / Helper Text ────────────────────────────────────────────────
   { key: 'helpText', label: 'Helper Text / Sub-label', type: 'text', group: 'general', placeholder: 'Help text shown below question...' },
   // ─── Label Alignment (segmented + "Set as form default" checkbox — JotForm) ──

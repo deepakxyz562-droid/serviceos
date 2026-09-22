@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { WidgetProps, str } from '../widget-props';
 
 /**
- * Pattern mask: '#' = digit, 'A' = letter, '*' = any char, others = literal.
- * e.g. "(###) ###-####" for US phone, "####-####-####-####" for card.
+ * Pattern mask: '#' OR '9' = digit, 'A' = letter, '*' = any char, others = literal.
+ * Settings write masks using '9' for digits (e.g. "(999) 999-9999");
+ * legacy runtime used '#'. Accept both placeholders so saved forms work.
  */
 function applyPattern(input: string, pattern: string): string {
   let out = '';
@@ -14,7 +15,7 @@ function applyPattern(input: string, pattern: string): string {
   for (let i = 0; i < input.length && pi < pattern.length; i++) {
     const ch = input[i];
     const p = pattern[pi];
-    if (p === '#') {
+    if (p === '#' || p === '9') {
       if (/\d/.test(ch)) {
         out += ch;
         pi++;
@@ -38,7 +39,7 @@ function applyPattern(input: string, pattern: string): string {
 
 export function MaskInput({ value, onChange, config, disabled, field }: WidgetProps) {
   const pattern = str(config.mask, '');
-  const placeholder = str(config.placeholder, pattern.replace(/[A#*]/g, '0'));
+  const placeholder = str(config.placeholder, pattern.replace(/[A#9*]/g, '0'));
   const ariaLabel = str(field?.label, 'Masked input');
   const val = str(value, '');
 
@@ -50,6 +51,8 @@ export function MaskInput({ value, onChange, config, disabled, field }: WidgetPr
     onChange(applyPattern(e.target.value, pattern));
   };
 
+  const isNumeric = pattern && /[9#]/.test(pattern) && !pattern.includes('A');
+
   return (
     <Input
       value={val}
@@ -57,7 +60,7 @@ export function MaskInput({ value, onChange, config, disabled, field }: WidgetPr
       placeholder={placeholder}
       disabled={disabled}
       aria-label={ariaLabel}
-      inputMode={pattern && pattern.includes('#') && !pattern.includes('A') ? 'numeric' : 'text'}
+      inputMode={isNumeric ? 'numeric' : 'text'}
     />
   );
 }

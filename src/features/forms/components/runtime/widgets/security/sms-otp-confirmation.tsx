@@ -32,13 +32,17 @@ import type { WidgetProps } from '../widget-props';
 export function SmsOtpConfirmationWidget({
   value,
   onChange,
+  config,
   disabled,
 }: WidgetProps) {
+  // Forward the full `config` so the inner component can read
+  // `codeLength`/`expiryMinutes`/`provider` written by settings.
   return (
     <SmsOtpVerification
       value={value as never}
       onChange={onChange as never}
       disabled={disabled}
+      config={config}
     />
   );
 }

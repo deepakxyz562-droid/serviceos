@@ -27,6 +27,10 @@ export function ImageChoice({ value, onChange, config, disabled, field }: Widget
   const options = toImageOptions(rawOptions);
   const multiSelect = bool(config.multiSelect, false);
   const columns = str(config.columns, '3');
+  // Settings write `imageWidth` and `imageHeight` (numbers, pixels) for the
+  // image area sizing. Fall back to undefined (CSS aspect-square) when unset.
+  const imageWidth = typeof config.imageWidth === 'number' ? Number(config.imageWidth) : undefined;
+  const imageHeight = typeof config.imageHeight === 'number' ? Number(config.imageHeight) : undefined;
   const ariaLabel = str(field?.label, 'Image choice');
 
   const selected: string[] = Array.isArray(value) ? value.map(String) : value ? [String(value)] : [];
@@ -62,7 +66,14 @@ export function ImageChoice({ value, onChange, config, disabled, field }: Widget
               checked ? 'border-primary ring-2 ring-primary/30' : 'border-border hover:border-muted-foreground/40'
             } ${disabled ? 'opacity-50' : ''}`}
           >
-            <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
+            <div
+              className="bg-muted flex items-center justify-center overflow-hidden"
+              style={
+                imageWidth || imageHeight
+                  ? { width: imageWidth, height: imageHeight, aspectRatio: undefined }
+                  : undefined
+              }
+            >
               {opt.image ? (
                 <img src={opt.image} alt={opt.label} className="h-full w-full object-cover" />
               ) : (

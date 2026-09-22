@@ -22,6 +22,35 @@ const FONTS: FontOption[] = [
 
 const COLORS = ['#0f172a', '#1d4ed8', '#be123c', '#15803d'];
 
+// Settings write `font` as a string alias ('cursive'/'handwriting'/'serif'/
+// 'sans-serif'). Map common aliases to FONTS indices; legacy runtime read
+// `fontIndex` (number) directly.
+const FONT_ALIAS_TO_INDEX: Record<string, number> = {
+  cursive: 0,
+  serif: 1,
+  handwriting: 2,
+  hand: 2,
+  'sans-serif': 3,
+  sans: 3,
+  mono: 4,
+  monospace: 4,
+};
+
+/** Resolve the configured font to a FONTS index, falling back to `fontIndex`. */
+function resolveFontIndex(config: Record<string, unknown> | undefined): number {
+  if (config && typeof config.font === 'string' && config.font.trim()) {
+    const alias = FONT_ALIAS_TO_INDEX[config.font.toLowerCase()];
+    if (typeof alias === 'number') return alias;
+    // If the string is numeric, honor it directly.
+    const asNum = Number(config.font);
+    if (Number.isFinite(asNum) && asNum >= 0 && asNum < FONTS.length) {
+      return Math.floor(asNum);
+    }
+  }
+  const idx = Number(config?.fontIndex ?? 0);
+  return Number.isFinite(idx) && idx >= 0 && idx < FONTS.length ? Math.floor(idx) : 0;
+}
+
 /**
  * Type-to-signature: renders the typed name as a stylized PNG data URL using
  * an offscreen canvas. The data URL is emitted via `onChange` so it can be
@@ -36,7 +65,7 @@ export function SignaturePadTypedWidget({
 }: WidgetProps) {
   const ariaLabel = String(field?.label ?? 'Typed signature');
   const placeholder = String(config?.placeholder ?? 'Type your full name');
-  const defaultFontIdx = Number(config?.fontIndex ?? 0);
+  const defaultFontIdx = resolveFontIndex(config);
   const width = Number(config?.width ?? 480);
   const height = Number(config?.height ?? 160);
 

@@ -21,7 +21,9 @@ export function HelloSignWidget({
 }: WidgetProps) {
   const ariaLabel = String(field?.label ?? 'HelloSign');
   const defaultEmbedUrl = String(config?.embedUrl ?? '');
-  const signatureRequestId = String(config?.signatureRequestId ?? '');
+  // Settings write `templateId`. Legacy runtime read `signatureRequestId`.
+  // Read settings key first, fall back to legacy key.
+  const signatureRequestId = String(config?.templateId ?? config?.signatureRequestId ?? '');
 
   const current: HelloSignValue =
     value && typeof value === 'object'

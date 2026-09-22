@@ -48,8 +48,12 @@ const INDUSTRIES = [
 
 export function Company({ value, onChange, config, disabled, field }: WidgetProps) {
   const obj: CompanyValue = value && typeof value === 'object' ? (value as CompanyValue) : {};
+  // Settings write `industrySuggest` (controls whether the industry select
+  // is shown). Fall back to the legacy `includeIndustry` key for backward
+  // compatibility. The other include* keys are not in saved settings yet;
+  // they keep their defaults so existing forms are unaffected.
   const includeSize = bool(config.includeSize, true);
-  const includeIndustry = bool(config.includeIndustry, true);
+  const includeIndustry = bool(config.industrySuggest ?? config.includeIndustry, true);
   const includeTitle = bool(config.includeTitle, false);
   const includeWebsite = bool(config.includeWebsite, false);
   const ariaLabel = str(field?.label, 'Company');

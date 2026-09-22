@@ -38,6 +38,11 @@ export function AvatarUploadWidget({
   const ariaLabel = String(field?.label ?? 'Avatar upload');
   const maxFileSizeMb = Number(config?.maxFileSizeMb ?? 5);
   const size = Number(config?.size ?? 128);
+  // Settings write `shape` ('circle' | 'square'). Default circle to preserve
+  // legacy appearance; render square corners when `shape === 'square'`.
+  const shape = String(config?.shape ?? 'circle').toLowerCase();
+  const isSquare = shape === 'square';
+  const frameClass = isSquare ? 'rounded-md' : 'rounded-full';
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -118,7 +123,7 @@ export function AvatarUploadWidget({
           onClick={() => !disabled && !busy && fileInputRef.current?.click()}
           disabled={disabled || busy}
           aria-label={avatar ? 'Replace avatar' : 'Upload avatar'}
-          className="block w-full h-full rounded-full overflow-hidden border-2 border-border bg-muted hover:border-emerald-400 transition-colors flex items-center justify-center"
+          className={`block w-full h-full ${frameClass} overflow-hidden border-2 border-border bg-muted hover:border-emerald-400 transition-colors flex items-center justify-center`}
         >
           {busy ? (
             <Loader2 className="size-6 animate-spin text-emerald-600" />
@@ -164,7 +169,7 @@ export function AvatarUploadWidget({
           </div>
         ) : (
           <div className="text-[11px] text-muted-foreground space-y-1">
-            <p>Click the circle to upload an avatar.</p>
+            <p>Click the {isSquare ? 'square' : 'circle'} to upload an avatar.</p>
             <p>Images auto-crop to a square. Max {maxFileSizeMb}MB.</p>
           </div>
         )}

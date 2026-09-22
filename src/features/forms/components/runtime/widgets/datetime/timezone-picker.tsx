@@ -5,7 +5,7 @@ import { Globe, Check, Search } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
-import { WidgetProps, str } from '../widget-props';
+import { WidgetProps, str, bool } from '../widget-props';
 import { cn } from '@/lib/utils';
 
 // Curated subset of common IANA timezones (UTC offsets computed via Intl).
@@ -41,10 +41,27 @@ const TZ_ENTRIES = TZ_IDS.map((id) => ({ id, label: id.replace(/_/g, ' '), offse
 export function TimezonePicker({ value, onChange, config, disabled, field }: WidgetProps) {
   const ariaLabel = str(field?.label, 'Timezone');
   const placeholder = str(config.placeholder, 'Select timezone');
+  // Settings write `defaultBrowser` (boolean) and `format` ('full' | 'abbreviated').
+  const defaultBrowser = bool(config.defaultBrowser, false);
+  const format = String(config.format ?? 'full').toLowerCase();
+  const abbreviated = format === 'abbreviated' || format === 'short';
   const [open, setOpen] = React.useState(false);
 
   const valStr = typeof value === 'string' ? value : '';
   const selected = TZ_ENTRIES.find((t) => t.id === valStr);
+
+  // When `defaultBrowser` is set and no value is present, seed the value
+  // with the browser's IANA timezone on mount.
+  React.useEffect(() => {
+    if (!defaultBrowser) return;
+    if (valStr) return;
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz && TZ_IDS.includes(tz)) onChange(tz);
+    } catch {
+      /* ignore — browser doesn't expose timezone */
+    }
+  }, []);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -63,7 +80,7 @@ export function TimezonePicker({ value, onChange, config, disabled, field }: Wid
             {selected ? (
               <>
                 <span className="font-mono text-xs text-muted-foreground">{selected.offset}</span>
-                <span className="truncate">{selected.label}</span>
+                {!abbreviated && <span className="truncate">{selected.label}</span>}
               </>
             ) : (
               <span className="text-muted-foreground">{placeholder}</span>
@@ -90,7 +107,7 @@ export function TimezonePicker({ value, onChange, config, disabled, field }: Wid
                 >
                   <Check className={cn('size-4', valStr === tz.id ? 'opacity-100' : 'opacity-0')} />
                   <span className="font-mono text-xs text-muted-foreground w-12">{tz.offset}</span>
-                  <span className="truncate">{tz.label}</span>
+                  {!abbreviated && <span className="truncate">{tz.label}</span>}
                 </CommandItem>
               ))}
             </CommandGroup>

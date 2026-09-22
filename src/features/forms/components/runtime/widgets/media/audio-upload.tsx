@@ -20,6 +20,27 @@ const readFileAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+/**
+ * Settings write `allowedAudioTypes` (array like ['mp3','wav'] or
+ * ['audio/mpeg']). Build an `accept` attribute. Falls back to legacy
+ * `config.accept` or 'audio/*'.
+ */
+function buildAudioAccept(config: Record<string, unknown> | undefined): string {
+  const allowed = config?.allowedAudioTypes;
+  if (Array.isArray(allowed) && allowed.length) {
+    return allowed
+      .map((t) => {
+        const s = String(t).trim().toLowerCase();
+        if (!s) return '';
+        return s.startsWith('audio/') ? s : `audio/${s.replace(/^\./, '')}`;
+      })
+      .filter(Boolean)
+      .join(',');
+  }
+  if (typeof config?.accept === 'string' && config.accept) return config.accept;
+  return 'audio/*';
+}
+
 export function AudioUploadWidget({
   value,
   onChange,
@@ -28,7 +49,7 @@ export function AudioUploadWidget({
   field,
 }: WidgetProps) {
   const maxFileSizeMb = Number(config?.maxFileSizeMb ?? 20);
-  const accept = String(config?.accept ?? 'audio/*');
+  const accept = buildAudioAccept(config);
   const ariaLabel = String(field?.label ?? 'Audio upload');
 
   const fileInputRef = useRef<HTMLInputElement>(null);

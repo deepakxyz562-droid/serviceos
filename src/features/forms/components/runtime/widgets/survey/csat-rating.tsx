@@ -6,7 +6,9 @@ import { WidgetProps } from '../widget-props';
 
 export function CsatRating({ value, onChange, config, disabled, field }: WidgetProps) {
   const current = typeof value === 'number' ? value : 0;
-  const max = Number(config.max) || 5;
+  // Settings write `maxRating` (number). Legacy runtime read `config.max`.
+  // Read settings key first, fall back to legacy key.
+  const max = Number(config.maxRating ?? config.max) || 5;
   const labels = (config.labels as string[]) || ['Very unsatisfied', 'Unsatisfied', 'Neutral', 'Satisfied', 'Very satisfied'];
   const showLabels = config.showLabels !== false;
 

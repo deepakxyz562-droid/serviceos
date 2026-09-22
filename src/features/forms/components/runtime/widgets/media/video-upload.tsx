@@ -20,6 +20,27 @@ const readFileAsDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+/**
+ * Settings write `allowedVideoTypes` (array like ['mp4','webm'] or
+ * ['video/mp4']). Build an `accept` attribute. Falls back to legacy
+ * `config.accept` or 'video/*'.
+ */
+function buildVideoAccept(config: Record<string, unknown> | undefined): string {
+  const allowed = config?.allowedVideoTypes;
+  if (Array.isArray(allowed) && allowed.length) {
+    return allowed
+      .map((t) => {
+        const s = String(t).trim().toLowerCase();
+        if (!s) return '';
+        return s.startsWith('video/') ? s : `video/${s.replace(/^\./, '')}`;
+      })
+      .filter(Boolean)
+      .join(',');
+  }
+  if (typeof config?.accept === 'string' && config.accept) return config.accept;
+  return 'video/*';
+}
+
 export function VideoUploadWidget({
   value,
   onChange,
@@ -28,7 +49,10 @@ export function VideoUploadWidget({
   field,
 }: WidgetProps) {
   const maxFileSizeMb = Number(config?.maxFileSizeMb ?? 50);
-  const accept = String(config?.accept ?? 'video/*');
+  const accept = buildVideoAccept(config);
+  // Settings write `maxDuration` (seconds). When set, reject videos longer
+  // than the limit after the metadata loads.
+  const maxDurationSeconds = Math.max(0, Number(config?.maxDuration ?? 0));
   const ariaLabel = String(field?.label ?? 'Video upload');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +75,21 @@ export function VideoUploadWidget({
     setBusy(true);
     try {
       const dataUrl = await readFileAsDataUrl(file);
+      // Honor `maxDuration` by probing the video's duration before
+      // accepting it. Fail gracefully if the metadata cannot be read.
+      if (maxDurationSeconds > 0) {
+        const duration = await new Promise<number>((resolve) => {
+          const probe = document.createElement('video');
+          probe.preload = 'metadata';
+          probe.onloadedmetadata = () => resolve(Number(probe.duration) || 0);
+          probe.onerror = () => resolve(0);
+          probe.src = dataUrl;
+        });
+        if (duration > maxDurationSeconds) {
+          setError(`Video exceeds ${maxDurationSeconds}s duration limit`);
+          return;
+        }
+      }
       onChange({ name: file.name, size: file.size, type: file.type, dataUrl });
     } finally {
       setBusy(false);

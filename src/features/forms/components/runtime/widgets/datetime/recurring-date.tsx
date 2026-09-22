@@ -38,7 +38,15 @@ export function RecurringDate({ value, onChange, config, disabled, field }: Widg
   const ariaLabel = str(field?.label, 'Recurring date');
   const [open, setOpen] = React.useState(false);
 
-  const set = (patch: Partial<RecurringValue>) => onChange({ startDate: '', frequency: 'weekly', interval: 1, ...obj, ...patch });
+  // Settings write `freq` and `interval` in widgetConfig. Use them as the
+  // default frequency/interval when the user hasn't picked yet.
+  const defaultFreq = (typeof config.freq === 'string' ? (config.freq as Frequency) : 'weekly');
+  const defaultInterval = Math.max(1, num(config.interval, 1));
+  const frequency: Frequency = obj.frequency || defaultFreq;
+  const interval: number = typeof obj.interval === 'number' ? obj.interval : defaultInterval;
+
+  const set = (patch: Partial<RecurringValue>) =>
+    onChange({ startDate: '', frequency: defaultFreq, interval: defaultInterval, ...obj, ...patch });
 
   const startDate = obj.startDate ? parseISO(obj.startDate) : undefined;
   const validStart = startDate && isValid(startDate) ? startDate : undefined;
@@ -46,8 +54,8 @@ export function RecurringDate({ value, onChange, config, disabled, field }: Widg
   // Compute next 3 occurrences for preview
   const occurrences = React.useMemo(() => {
     if (!validStart) return [];
-    const interval = Math.max(1, num(obj.interval, 1));
-    const freq = (obj.frequency || 'weekly') as Frequency;
+    const step = Math.max(1, interval);
+    const freq = frequency;
     const next: Date[] = [validStart];
     let d = validStart;
     const add: Record<Frequency, (date: Date, n: number) => Date> = {
@@ -57,11 +65,11 @@ export function RecurringDate({ value, onChange, config, disabled, field }: Widg
       yearly: (date, n) => addMonths(date, n * 12),
     };
     for (let i = 0; i < 3; i++) {
-      d = add[freq](d, interval);
+      d = add[freq](d, step);
       next.push(d);
     }
     return next;
-  }, [validStart, obj.interval, obj.frequency]);
+  }, [validStart, interval, frequency]);
 
   return (
     <div className="space-y-3">
@@ -93,7 +101,7 @@ export function RecurringDate({ value, onChange, config, disabled, field }: Widg
         </Popover>
 
         <Select
-          value={obj.frequency || 'weekly'}
+          value={frequency}
           onValueChange={(v) => set({ frequency: v as Frequency })}
           disabled={disabled}
         >
@@ -116,14 +124,14 @@ export function RecurringDate({ value, onChange, config, disabled, field }: Widg
             type="number"
             min={1}
             max={365}
-            value={obj.interval ?? 1}
+            value={interval}
             onChange={(e) => set({ interval: Math.max(1, Number(e.target.value) || 1) })}
             disabled={disabled}
             aria-label={`${ariaLabel} interval`}
             className="w-14 h-9 rounded-md border border-input bg-background px-2 text-sm text-center shadow-xs"
           />
           <span className="text-xs text-muted-foreground">
-            {(obj.frequency || 'weekly').replace('ly', '')}{obj.interval === 1 ? '' : 's'}
+            {frequency.replace('ly', '')}{interval === 1 ? '' : 's'}
           </span>
         </div>
       </div>

@@ -103,7 +103,9 @@ export function FormCalculation({
 
   const lastEmittedRef = React.useRef<number | undefined>(undefined);
   const onChangeRef = React.useRef(onChange);
-  onChangeRef.current = onChange;
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     if (lastEmittedRef.current !== calculatedResult) {

@@ -5,25 +5,41 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
-import { WidgetProps, normalizeOptions, str, bool } from '../widget-props';
+import { WidgetProps, normalizeOptions, str, bool, num } from '../widget-props';
 import { cn } from '@/lib/utils';
 
 export function Autocomplete({ value, onChange, config, disabled, field }: WidgetProps) {
-  const rawOptions = config.options || (field as any)?.options || [
-    'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
-    'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'Austin',
-  ];
+  // Settings write `customOptions` as a comma-separated string. Legacy
+  // runtime read `config.options` (array). Build the option list from
+  // `customOptions` first, then fall back to `config.options` / field defaults.
+  const customOptions = config.customOptions;
+  const rawOptions =
+    (typeof customOptions === 'string' && customOptions.trim()
+      ? customOptions
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : null) ||
+    config.options ||
+    (field as any)?.options || [
+      'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
+      'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'Austin',
+    ];
   const options = normalizeOptions(rawOptions);
-  const allowCustom = bool(config.allowCustom, true);
+  // Settings write `dataSource` (string) and `maxItems` (number). Honor
+  // `maxItems` by truncating the visible option list when set.
+  const maxItems = num(config.maxItems, 0);
+  const visibleOptions = maxItems > 0 ? options.slice(0, maxItems) : options;
+  const allowCustom = bool(config.allowCustom ?? config.allowCustomOptions, true);
   const placeholder = str(config.placeholder, 'Search or type...');
   const ariaLabel = str(field?.label, 'Autocomplete');
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
 
   const valStr = typeof value === 'string' ? value : '';
-  const selected = options.find((o) => o.value === valStr);
-  const filtered = options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()));
-  const showCustom = allowCustom && query && !options.some((o) => o.label.toLowerCase() === query.toLowerCase());
+  const selected = visibleOptions.find((o) => o.value === valStr);
+  const filtered = visibleOptions.filter((o) => o.label.toLowerCase().includes(query.toLowerCase()));
+  const showCustom = allowCustom && query && !visibleOptions.some((o) => o.label.toLowerCase() === query.toLowerCase());
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -39,10 +39,17 @@ export function BarcodeScannerWidget({
   const ariaLabel = String(field?.label ?? 'Barcode scanner');
   const facingMode = String(config?.facingMode ?? 'environment');
   const scanIntervalMs = Number(config?.scanIntervalMs ?? 250);
+  // Settings write `formats` as a comma-separated string. Legacy runtime
+  // expected an array. Accept both: split strings on commas into arrays.
   const formatsRaw = config?.formats;
   const formats: string[] = Array.isArray(formatsRaw)
-    ? formatsRaw.map((f) => String(f))
-    : ['code_128', 'ean_13', 'ean_8', 'code_39', 'upc_a', 'upc_e'];
+    ? formatsRaw.map((f) => String(f)).filter(Boolean)
+    : typeof formatsRaw === 'string' && formatsRaw.trim()
+      ? formatsRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : ['code_128', 'ean_13', 'ean_8', 'code_39', 'upc_a', 'upc_e'];
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
