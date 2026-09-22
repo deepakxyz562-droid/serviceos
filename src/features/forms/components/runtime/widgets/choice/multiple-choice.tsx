@@ -7,89 +7,186 @@ import { Input } from '@/components/ui/input';
 import { WidgetProps, normalizeOptions, str, bool, num } from '../widget-props';
 
 const COL_CLASS: Record<string, string> = {
-  '1': 'grid grid-cols-1 gap-2',
-  '2': 'grid grid-cols-2 gap-2',
-  '3': 'grid grid-cols-3 gap-2',
+  '1': 'grid grid-cols-1 gap-2.5',
+  '2': 'grid grid-cols-1 sm:grid-cols-2 gap-2.5',
+  '3': 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5',
+  '4': 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5',
   inline: 'flex flex-wrap gap-4',
 };
 
+const DEFAULT_SAMPLE_OPTIONS = [
+  'Type option 1',
+  'Type option 2',
+  'Type option 3',
+  'Type option 4',
+];
+
 export function MultipleChoice({ value, onChange, config, disabled, field }: WidgetProps) {
-  const options = normalizeOptions(config.options);
+  const rawOptions = config.options || (field as any)?.options;
+  const options = normalizeOptions(
+    Array.isArray(rawOptions) && rawOptions.length > 0
+      ? rawOptions
+      : DEFAULT_SAMPLE_OPTIONS
+  );
   const allowOther = bool(config.allowOther, false);
+  const otherPlaceholder = str(config.otherText, 'Other');
+  const selectAllOption = bool(config.selectAllOption, false);
+  const allowNone = bool(config.allowNone, false);
   const minSelect = Math.max(0, num(config.minSelect, 0));
   const maxSelect = Math.max(0, num(config.maxSelect, 0));
   const columns = str(config.columns, '1');
   const ariaLabel = str(field?.label, 'Multiple choice');
 
-  const selected: string[] = Array.isArray(value) ? value.map(String) : value ? [String(value)] : [];
+  const selected: string[] = Array.isArray(value)
+    ? value.map(String)
+    : value
+      ? [String(value)]
+      : [];
+
   const otherValue = '__other__';
+  const noneValue = '__none__';
   const otherSelected = selected.includes(otherValue);
+  const noneSelected = selected.includes(noneValue);
   const [otherText, setOtherText] = React.useState('');
 
+  const allOptionValues = options.map((o) => o.value);
+  const isAllSelected =
+    options.length > 0 && options.every((o) => selected.includes(o.value));
+
   const toggle = (v: string) => {
-    const has = selected.includes(v);
+    // If "None" was selected, deselect it when any regular option is clicked
+    const cleanSelected = selected.filter((s) => s !== noneValue);
+    const has = cleanSelected.includes(v);
     let next: string[];
     if (has) {
-      if (selected.length - 1 < minSelect) return; // honor min
-      next = selected.filter((s) => s !== v);
+      if (cleanSelected.length - 1 < minSelect) return; // honor min
+      next = cleanSelected.filter((s) => s !== v);
     } else {
-      if (maxSelect > 0 && selected.length + 1 > maxSelect) return; // honor max
-      next = [...selected, v];
+      if (maxSelect > 0 && cleanSelected.length + 1 > maxSelect) return; // honor max
+      next = [...cleanSelected, v];
     }
     onChange(next);
+  };
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      onChange([]);
+    } else {
+      onChange(allOptionValues);
+    }
+  };
+
+  const toggleNone = () => {
+    if (noneSelected) {
+      onChange([]);
+    } else {
+      // "None of the above" deselects everything else
+      onChange([noneValue]);
+    }
   };
 
   const otherTextUpdate = (txt: string) => {
     setOtherText(txt);
     if (otherSelected) {
-      onChange([...selected.filter((s) => s !== otherValue), txt].filter(Boolean));
+      onChange([
+        ...selected.filter((s) => s !== otherValue && s !== noneValue),
+        txt || otherValue,
+      ]);
     }
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3 w-full">
+      {selectAllOption && (
+        <div className="flex items-center gap-2.5 pb-2 mb-1 border-b border-border/60">
+          <Checkbox
+            id={`mc-select-all-${field?.id || 'all'}`}
+            checked={isAllSelected}
+            disabled={disabled}
+            onCheckedChange={toggleSelectAll}
+            className="rounded-md"
+          />
+          <Label
+            htmlFor={`mc-select-all-${field?.id || 'all'}`}
+            className="text-xs font-bold text-foreground cursor-pointer select-none"
+          >
+            Select All
+          </Label>
+        </div>
+      )}
+
       <div className={COL_CLASS[columns] || COL_CLASS['1']} aria-label={ariaLabel} role="group">
         {options.map((opt) => {
           const checked = selected.includes(opt.value);
           return (
-            <div key={opt.value} className="flex items-center gap-2">
+            <div
+              key={opt.value}
+              className="flex items-center gap-2.5 p-2 rounded-lg border border-border/50 bg-background/60 hover:bg-muted/40 transition-colors"
+            >
               <Checkbox
                 id={`mc-${opt.value}`}
                 checked={checked}
                 disabled={disabled}
                 onCheckedChange={() => toggle(opt.value)}
+                className="rounded-md"
               />
-              <Label htmlFor={`mc-${opt.value}`} className="text-sm font-normal cursor-pointer">
+              <Label htmlFor={`mc-${opt.value}`} className="text-xs font-medium text-foreground cursor-pointer flex-1">
                 {opt.label}
               </Label>
             </div>
           );
         })}
+
         {allowOther && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5 p-2 rounded-lg border border-border/50 bg-background/60 hover:bg-muted/40 transition-colors">
             <Checkbox
               id="mc-other"
               checked={otherSelected}
               disabled={disabled}
-              onCheckedChange={() => toggle(otherValue)}
+              onCheckedChange={() => {
+                if (otherSelected) {
+                  onChange(selected.filter((s) => s !== otherValue && s !== otherText));
+                } else {
+                  onChange([...selected.filter((s) => s !== noneValue), otherValue]);
+                }
+              }}
+              className="rounded-md"
             />
-            <Label htmlFor="mc-other" className="text-sm font-normal cursor-pointer">
-              Other
+            <Label htmlFor="mc-other" className="text-xs font-medium text-foreground cursor-pointer flex-1">
+              {otherPlaceholder}
+            </Label>
+          </div>
+        )}
+
+        {allowNone && (
+          <div className="flex items-center gap-2.5 p-2 rounded-lg border border-border/50 bg-background/60 hover:bg-muted/40 transition-colors">
+            <Checkbox
+              id="mc-none"
+              checked={noneSelected}
+              disabled={disabled}
+              onCheckedChange={toggleNone}
+              className="rounded-md"
+            />
+            <Label htmlFor="mc-none" className="text-xs font-medium text-muted-foreground italic cursor-pointer flex-1">
+              None of the above
             </Label>
           </div>
         )}
       </div>
+
       {otherSelected && (
         <Input
           value={otherText}
           onChange={(e) => otherTextUpdate(e.target.value)}
           disabled={disabled}
-          placeholder="Please specify..."
+          placeholder="Please specify other..."
+          className="h-8 text-xs bg-background mt-1"
           aria-label={`${ariaLabel} (other)`}
         />
       )}
+
       {(minSelect > 0 || maxSelect > 0) && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[10px] text-muted-foreground">
           {minSelect > 0 && `Min ${minSelect} `}
           {maxSelect > 0 && `Max ${maxSelect} `}
           selected: {selected.length}

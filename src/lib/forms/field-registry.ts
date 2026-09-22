@@ -91,14 +91,13 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     }),
     settingsSchema: [
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-      { key: 'defaultValue', label: 'Default Value', type: 'select', group: 'field_specific', options: [], helpText: 'Choose an option to be selected by default.' },
       { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
       { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
       { key: 'multiSelect', label: 'Allow multi-select', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users select more than one option.' },
       { key: 'searchEnabled', label: 'Enable search', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add a search box for long option lists.' },
-      { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Shuffle options on each form load (great for surveys).' },
-      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add values to be used in calculations.' },
-      { key: 'showEmptyText', label: 'Show Text in Empty Option', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Use text instead of the empty option. Treated as an empty answer.' },
+      { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load (great for surveys).' },
+      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add values to be used in calculations.' },
+      { key: 'calculationValues', label: 'Calculation Values Matrix', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
     ],
   },
   {
@@ -113,15 +112,15 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     }),
     settingsSchema: [
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-      { key: 'defaultValue', label: 'Default Value', type: 'select', group: 'field_specific', options: [], helpText: 'Choose an option to be selected by default.' },
+      { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
+        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },
+      ], helpText: 'How options are laid out visually.' },
       { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
       { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
-      { key: 'columns', label: 'Spread', type: 'segmented', group: 'field_specific', default: '1', options: [
-        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
-      ], helpText: 'How options are laid out visually.' },
       // ─── Surveying tab (JotForm 4th tab for choice fields) ──────────────────────
-      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign calculation values to each option for use in formulas.' },
       { key: 'randomize', label: 'Randomize Option Order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load to reduce order bias.' },
+      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign calculation values to each option for use in formulas.' },
+      { key: 'calculationValues', label: 'Calculation Values Matrix', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
       { key: 'allowNone', label: 'Allow "None of the above"', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add a "None of the above" option that deselects all others.' },
     ],
   },
@@ -133,21 +132,22 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Multi-select checkboxes',
     tier: 'free',
     createField: (label = 'Multiple Choice') => ({
-      label, type: 'checkbox', options: ['Item 1', 'Item 2', 'Item 3'], required: false,
+      label, type: 'checkbox', options: ['Type option 1', 'Type option 2', 'Type option 3', 'Type option 4'], required: false,
     }),
     settingsSchema: [
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-      { key: 'defaultValue', label: 'Default Value', type: 'select', group: 'field_specific', options: [], helpText: 'Choose an option to be selected by default.' },
+      { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
+        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },
+      ], helpText: 'How options are laid out visually.' },
       { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
       { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
-      { key: 'minSelect', label: 'Min selections', type: 'number', group: 'field_specific', default: 0, min: 0, helpText: 'Minimum number of options the user must select.' },
-      { key: 'maxSelect', label: 'Max selections (0 = unlimited)', type: 'number', group: 'field_specific', default: 0 },
-      { key: 'columns', label: 'Spread', type: 'segmented', group: 'field_specific', default: '1', options: [
-        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
-      ], helpText: 'How options are laid out visually.' },
+      { key: 'selectAllOption', label: 'Show "Select All" option', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Show a master checkbox to select/deselect all options.' },
       // ─── Surveying tab (JotForm 4th tab for choice fields) ──────────────────────
-      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign calculation values to each option for use in formulas.' },
+      { key: 'minSelect', label: 'Min selections', type: 'number', group: 'survey', default: 0, min: 0, helpText: 'Minimum number of options the user must select.' },
+      { key: 'maxSelect', label: 'Max selections (0 = unlimited)', type: 'number', group: 'survey', default: 0, min: 0 },
       { key: 'randomize', label: 'Randomize Option Order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load to reduce order bias.' },
+      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign calculation values to each option for use in formulas.' },
+      { key: 'calculationValues', label: 'Calculation Values Matrix', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
       { key: 'allowNone', label: 'Allow "None of the above"', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add a "None of the above" option that deselects all others.' },
     ],
   },

@@ -155,14 +155,29 @@ export function WidgetSettingsRenderer({
           </div>
         );
 
-      case 'select':
+      case 'select': {
+        const selectOptions =
+          setting.options && setting.options.length > 0
+            ? setting.options
+            : Array.isArray(field.options)
+              ? (field.options as any[]).map((o) =>
+                  typeof o === 'string'
+                    ? { label: o, value: o }
+                    : { label: String(o.label || o.value), value: String(o.value || o.label) }
+                )
+              : [];
+
+        const selectedVal = value && typeof value === 'string' && value.trim() ? value : undefined;
+
         return (
           <div key={setting.key} className="space-y-1">
             <Label className="text-[11px] font-semibold">{setting.label}</Label>
-            <Select value={String(value ?? '')} onValueChange={onChange}>
-              <SelectTrigger className="h-8 text-xs bg-background"><SelectValue placeholder="Select..." /></SelectTrigger>
+            <Select value={selectedVal} onValueChange={onChange}>
+              <SelectTrigger className="h-8 text-xs bg-background">
+                <SelectValue placeholder={setting.placeholder || 'Select...'} />
+              </SelectTrigger>
               <SelectContent>
-                {setting.options?.map((opt) => (
+                {selectOptions.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value} className="text-xs">
                     {opt.label}
                   </SelectItem>
@@ -172,6 +187,7 @@ export function WidgetSettingsRenderer({
             {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
           </div>
         );
+      }
 
       case 'color':
         return (
@@ -208,7 +224,18 @@ export function WidgetSettingsRenderer({
         );
 
       case 'options_editor':
-        return <OptionsEditor key={setting.key} setting={setting} value={value} onChange={onChange} />;
+        return (
+          <OptionsEditor
+            key={setting.key}
+            setting={setting}
+            value={value}
+            fieldOptions={field.options || widgetConfig.options}
+            onChange={(newOpts) => {
+              onFieldChange('options', newOpts);
+              onConfigChange('options', newOpts);
+            }}
+          />
+        );
 
       case 'product_editor':
         return <ProductEditor key={setting.key} setting={setting} value={value} onChange={onChange} />;
@@ -362,11 +389,12 @@ export function WidgetSettingsRenderer({
           </div>
         );
 
-      case 'gateway_picker':
+      case 'gateway_picker': {
+        const selectedGw = value && typeof value === 'string' && value.trim() ? value : undefined;
         return (
           <div key={setting.key} className="space-y-1">
             <Label className="text-[11px] font-semibold">{setting.label}</Label>
-            <Select value={String(value ?? '')} onValueChange={onChange}>
+            <Select value={selectedGw} onValueChange={onChange}>
               <SelectTrigger className="h-9 text-xs bg-background">
                 <SelectValue placeholder={setting.searchPlaceholder ?? 'Select gateway...'} />
               </SelectTrigger>
@@ -381,6 +409,7 @@ export function WidgetSettingsRenderer({
             {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
           </div>
         );
+      }
 
       case 'currency_search': {
         const query = String(value ?? '').toUpperCase();
@@ -391,22 +420,22 @@ export function WidgetSettingsRenderer({
           <div key={setting.key} className="space-y-1">
             <Label className="text-[11px] font-semibold">{setting.label}</Label>
             <Input
-              className="h-8 text-xs bg-background"
-              placeholder={setting.searchPlaceholder ?? 'Search currency...'}
+              className="h-8 text-xs bg-background font-mono"
+              placeholder={setting.placeholder ?? 'USD, EUR, GBP...'}
               value={String(value ?? '')}
               onChange={(e) => onChange(e.target.value.toUpperCase())}
             />
-            {filtered.length > 0 && filtered.length < (setting.options?.length || 0) && (
-              <div className="max-h-32 overflow-y-auto border border-border/60 rounded-md bg-background">
-                {filtered.slice(0, 8).map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => onChange(opt.value)}
-                    className="w-full text-left px-2 py-1 text-[11px] hover:bg-muted/60"
+            {filtered.length > 0 && query && (
+              <div className="flex flex-wrap gap-1 pt-1 max-h-24 overflow-y-auto">
+                {filtered.slice(0, 10).map((c) => (
+                  <Badge
+                    key={c.value}
+                    variant="outline"
+                    className="text-[10px] cursor-pointer hover:bg-muted"
+                    onClick={() => onChange(c.value)}
                   >
-                    {opt.label}
-                  </button>
+                    {c.value} ({c.label})
+                  </Badge>
                 ))}
               </div>
             )}
@@ -415,40 +444,44 @@ export function WidgetSettingsRenderer({
         );
       }
 
-      case 'label_with_toggle': {
-        const enabled = value === undefined ? setting.default !== false : Boolean(value);
+      case 'label_with_toggle':
         return (
-          <div key={setting.key} className="flex items-center justify-between p-2.5 border rounded-lg bg-background gap-3">
-            <div className="min-w-0 flex-1">
-              <Label className="text-[11px] font-semibold block">{setting.label}</Label>
-              {setting.helpText && <p className="text-[10px] text-muted-foreground mt-0.5">{setting.helpText}</p>}
+          <div key={setting.key} className="space-y-1.5 p-2.5 rounded-lg border border-border/60 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold">{setting.label}</Label>
+              <Switch
+                checked={Boolean(field[`${setting.key}_enabled`] ?? true)}
+                onCheckedChange={(c) => onFieldChange(`${setting.key}_enabled`, c)}
+              />
             </div>
-            <Switch
-              checked={enabled}
-              onCheckedChange={(v) => onChange(String(v))}
-            />
+            {Boolean(field[`${setting.key}_enabled`] ?? true) && (
+              <Input
+                className="h-8 text-xs bg-background"
+                placeholder={setting.placeholder}
+                value={String(value ?? '')}
+                onChange={(e) => onChange(e.target.value)}
+              />
+            )}
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
           </div>
         );
-      }
 
       // ─── Phase P2 — Payment & Choice specific control types ──────────────────────────
 
       case 'field_selector': {
-        const rawVal = String(value ?? '');
-        const currentVal = rawVal === '' ? '__none__' : rawVal;
+        const cleanFields = allFields.filter((f) => f.id !== field.id);
         return (
           <div key={setting.key} className="space-y-1">
             <Label className="text-[11px] font-semibold">{setting.label}</Label>
-            <Select
-              value={currentVal}
-              onValueChange={(val) => onChange(val === '__none__' ? '' : val)}
-            >
-              <SelectTrigger className="h-9 text-xs bg-background">
-                <SelectValue placeholder={setting.helpText || 'Select a form field...'} />
+            <Select value={value ? String(value) : undefined} onValueChange={onChange}>
+              <SelectTrigger className="h-8 text-xs bg-background">
+                <SelectValue placeholder={setting.placeholder ?? 'Select a form field...'} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__" className="text-xs text-muted-foreground">— None —</SelectItem>
-                {allFields.filter((f) => Boolean(f.id)).map((f) => (
+                <SelectItem value="__none__" className="text-xs">
+                  (None)
+                </SelectItem>
+                {cleanFields.map((f) => (
                   <SelectItem key={f.id} value={f.id} className="text-xs">
                     {f.label || 'Unnamed'}
                   </SelectItem>
@@ -467,11 +500,11 @@ export function WidgetSettingsRenderer({
             setting={setting}
             value={value}
             options={
-              Array.isArray(widgetConfig.options)
-                ? (widgetConfig.options as Array<{ label: string; value: string } | string>)
-                : Array.isArray(field.options)
-                  ? (field.options as Array<{ label: string; value: string } | string>)
-                  : []
+              Array.isArray(field.options) && field.options.length > 0
+                ? (field.options as Array<{ label: string; value: string } | string>)
+                : Array.isArray(widgetConfig.options) && widgetConfig.options.length > 0
+                  ? (widgetConfig.options as Array<{ label: string; value: string } | string>)
+                  : ['Type option 1', 'Type option 2', 'Type option 3', 'Type option 4']
             }
             onChange={onChange}
           />
@@ -499,12 +532,12 @@ export function WidgetSettingsRenderer({
             </div>
             <input
               type="range"
-              min={setting.min ?? 1}
-              max={setting.max ?? 1000}
+              min={setting.min ?? 0}
+              max={setting.max ?? 100}
               step={setting.step ?? 1}
               value={numVal}
               onChange={(e) => onChange(Number(e.target.value))}
-              className="w-full accent-blue-600 h-1.5 bg-muted rounded-lg cursor-pointer"
+              className="w-full accent-emerald-600 cursor-pointer"
             />
             {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
           </div>
@@ -694,13 +727,46 @@ export function WidgetSettingsRenderer({
   );
 }
 
+const PREDEFINED_OPTION_SETS = [
+  { label: 'Yes / No', items: ['Yes', 'No'] },
+  { label: 'Days of the Week', items: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] },
+  { label: 'Satisfaction Scale', items: ['Very Satisfied', 'Satisfied', 'Neutral', 'Dissatisfied', 'Very Dissatisfied'] },
+  { label: 'Agreement Scale', items: ['Strongly Agree', 'Agree', 'Neutral', 'Disagree', 'Strongly Disagree'] },
+  { label: 'Months', items: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] },
+  { label: 'Top US States', items: ['California', 'Texas', 'Florida', 'New York', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia'] },
+];
+
 function OptionsEditor({
-  setting, value, onChange,
-}: { setting: SettingField; value: unknown; onChange: (v: unknown) => void }) {
+  setting,
+  value,
+  fieldOptions,
+  onChange,
+}: {
+  setting: SettingField;
+  value: unknown;
+  fieldOptions?: unknown;
+  onChange: (v: Array<{ label: string; value: string }>) => void;
+}) {
   const [bulkMode, setBulkMode] = useState(false);
-  const opts: Array<{ label: string; value: string }> = Array.isArray(value)
-    ? (value as unknown[]).map((o) => (typeof o === 'string' ? { label: o, value: o } : (o as { label: string; value: string })))
-    : [];
+
+  const initialRaw =
+    Array.isArray(value) && value.length > 0
+      ? (value as unknown[])
+      : Array.isArray(fieldOptions) && (fieldOptions as unknown[]).length > 0
+        ? (fieldOptions as unknown[])
+        : ['Type option 1', 'Type option 2', 'Type option 3', 'Type option 4'];
+
+  const opts: Array<{ label: string; value: string }> = initialRaw.map((o, i) => {
+    if (typeof o === 'string') return { label: o, value: o };
+    if (o && typeof o === 'object') {
+      const obj = o as Record<string, unknown>;
+      const lbl = String(obj.label || obj.value || `Option ${i + 1}`);
+      const val = String(obj.value || obj.label || `option_${i + 1}`);
+      return { label: lbl, value: val };
+    }
+    return { label: `Option ${i + 1}`, value: `option_${i + 1}` };
+  });
+
   const [bulkText, setBulkText] = useState(() => opts.map((o) => o.label).join('\n'));
 
   const update = (next: Array<{ label: string; value: string }>) => {
@@ -713,13 +779,25 @@ function OptionsEditor({
       .split('\n')
       .map((l) => l.trim())
       .filter(Boolean);
-    const next = lines.map((l, i) => ({ label: l, value: `option_${i + 1}_${l.toLowerCase().replace(/\s+/g, '_').slice(0, 16)}` }));
+    const next = (lines.length > 0 ? lines : ['Option 1']).map((l, i) => ({
+      label: l,
+      value: `option_${i + 1}_${l.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 16)}`,
+    }));
     onChange(next);
     setBulkMode(false);
   };
 
+  const handleApplyPreset = (items: string[]) => {
+    const next = items.map((l, i) => ({
+      label: l,
+      value: `option_${i + 1}_${l.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 16)}`,
+    }));
+    onChange(next);
+    setBulkText(items.join('\n'));
+  };
+
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label className="text-[11px] font-semibold">{setting.label}</Label>
         <button
@@ -735,13 +813,13 @@ function OptionsEditor({
       </div>
 
       {bulkMode ? (
-        <div className="space-y-1.5 p-2 border rounded-md bg-background">
+        <div className="space-y-2 p-2.5 border rounded-lg bg-background">
           <p className="text-[10px] text-muted-foreground">Enter each option on a new line:</p>
           <Textarea
             value={bulkText}
             onChange={(e) => setBulkText(e.target.value)}
             className="text-xs font-mono min-h-[120px] bg-background"
-            placeholder="Option 1&#10;Option 2&#10;Option 3"
+            placeholder="Type option 1&#10;Type option 2&#10;Type option 3"
             rows={5}
           />
           <div className="flex items-center gap-1.5 justify-end">
@@ -757,7 +835,7 @@ function OptionsEditor({
             <Button
               type="button"
               size="sm"
-              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
               onClick={handleApplyBulk}
             >
               Save Options
@@ -768,11 +846,11 @@ function OptionsEditor({
         <div className="space-y-1.5">
           {opts.map((opt, idx) => (
             <div key={idx} className="flex items-center gap-1.5">
-              <GripVertical className="size-3 text-muted-foreground shrink-0" />
+              <GripVertical className="size-3 text-muted-foreground shrink-0 cursor-grab" />
               <Input
                 className="h-7 text-xs bg-background flex-1"
                 value={opt.label}
-                placeholder="Label"
+                placeholder={`Option ${idx + 1}`}
                 onChange={(e) => {
                   const next = [...opts];
                   next[idx] = { ...next[idx], label: e.target.value, value: e.target.value };
@@ -785,20 +863,46 @@ function OptionsEditor({
                 size="icon"
                 className="size-7 text-muted-foreground hover:text-red-500 shrink-0"
                 onClick={() => update(opts.filter((_, i) => i !== idx))}
+                disabled={opts.length <= 1}
               >
                 <X className="size-3" />
               </Button>
             </div>
           ))}
+
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 text-xs w-full gap-1"
-            onClick={() => update([...opts, { label: `Option ${opts.length + 1}`, value: `option_${opts.length + 1}` }])}
+            className="h-7 text-xs w-full gap-1 border-dashed mt-1"
+            onClick={() =>
+              update([
+                ...opts,
+                { label: `Type option ${opts.length + 1}`, value: `option_${opts.length + 1}` },
+              ])
+            }
           >
-            <Plus className="size-3" /> Add Option
+            <Plus className="size-3 text-emerald-600" /> Add Option
           </Button>
+
+          {/* Predefined Quick Preset Selector */}
+          <div className="pt-2 border-t border-border/60">
+            <span className="text-[10px] font-semibold text-muted-foreground block mb-1.5">
+              Quick Predefined Options:
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {PREDEFINED_OPTION_SETS.map((preset) => (
+                <Badge
+                  key={preset.label}
+                  variant="outline"
+                  className="text-[9px] py-0 px-1.5 bg-muted/40 hover:bg-emerald-500/10 hover:border-emerald-500/40 cursor-pointer transition-colors"
+                  onClick={() => handleApplyPreset(preset.items)}
+                >
+                  + {preset.label}
+                </Badge>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -821,8 +925,15 @@ function CalculationValuesEditor({
       ? (value as Record<string, number>)
       : {};
 
-  const normalizedOpts = options.map((o, idx) =>
-    typeof o === 'string' ? { label: o, value: `option_${idx}` } : o,
+  const effectiveOpts =
+    options && options.length > 0
+      ? options
+      : ['Type option 1', 'Type option 2', 'Type option 3', 'Type option 4'];
+
+  const normalizedOpts = effectiveOpts.map((o, idx) =>
+    typeof o === 'string'
+      ? { label: o, value: o }
+      : { label: o.label || o.value || `Option ${idx + 1}`, value: o.value || o.label || `option_${idx + 1}` }
   );
 
   const handleValueChange = (optKey: string, val: string) => {
@@ -840,9 +951,11 @@ function CalculationValuesEditor({
         <span className="text-[10px] text-muted-foreground font-mono">Scores / Values</span>
       </div>
       {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
-      
+
       {normalizedOpts.length === 0 ? (
-        <p className="text-[10px] text-muted-foreground italic py-2">Add options above first to set calculation values.</p>
+        <p className="text-[10px] text-muted-foreground italic py-2">
+          Add options above first to set calculation values.
+        </p>
       ) : (
         <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
           {normalizedOpts.map((opt) => (
