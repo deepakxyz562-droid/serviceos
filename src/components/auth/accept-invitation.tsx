@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -126,7 +126,7 @@ export function AcceptInvitation({ token, onAuthSuccess, onBackToLanding }: Acce
   // ─── Verify invitation token on mount ─────────────────────────────────────
   // Refactored: async logic moved into the effect body with a cancellation
   // guard to prevent setting state after unmount or after a token change.
-  React.useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
 
     async function verify() {

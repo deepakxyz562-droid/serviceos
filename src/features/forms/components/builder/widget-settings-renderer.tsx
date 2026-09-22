@@ -1,5 +1,6 @@
 'use client';
 
+
 /**
  * WidgetSettingsRenderer — schema-driven settings panel.
  *
@@ -11,7 +12,7 @@
  * Adding a new widget's settings means adding entries to its settingsSchema
  * — NOT touching the builder.
  */
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { GripVertical, Plus, Trash2, X, Copy, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
