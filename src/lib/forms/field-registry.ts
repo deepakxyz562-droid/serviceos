@@ -268,13 +268,8 @@ export const BASIC_FIELDS: FieldDefinition[] = [
         reminderTime: '1_day_before',
         lunchtimeEnabled: true,
         lunchStart: '12:00',
-        lunchEnd: '13:00',
         intervals: [
           { from: '09:00', to: '17:00', days: 'Weekdays' },
-          { day: 'Tuesday', startTime: '09:00', endTime: '17:00' },
-          { day: 'Wednesday', startTime: '09:00', endTime: '17:00' },
-          { day: 'Thursday', startTime: '09:00', endTime: '17:00' },
-          { day: 'Friday', startTime: '09:00', endTime: '17:00' },
         ],
       },
     }),

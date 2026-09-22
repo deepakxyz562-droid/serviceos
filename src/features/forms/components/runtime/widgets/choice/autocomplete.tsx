@@ -9,8 +9,12 @@ import { WidgetProps, normalizeOptions, str, bool } from '../widget-props';
 import { cn } from '@/lib/utils';
 
 export function Autocomplete({ value, onChange, config, disabled, field }: WidgetProps) {
-  const options = normalizeOptions(config.options);
-  const allowCustom = bool(config.allowCustom, false);
+  const rawOptions = config.options || (field as any)?.options || [
+    'New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix',
+    'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'Austin',
+  ];
+  const options = normalizeOptions(rawOptions);
+  const allowCustom = bool(config.allowCustom, true);
   const placeholder = str(config.placeholder, 'Search or type...');
   const ariaLabel = str(field?.label, 'Autocomplete');
   const [open, setOpen] = React.useState(false);

@@ -19,7 +19,12 @@ function toImageOptions(raw: unknown): ImageOption[] {
 }
 
 export function ImageChoice({ value, onChange, config, disabled, field }: WidgetProps) {
-  const options = toImageOptions(config.options);
+  const rawOptions = config.options || (field as any)?.options || [
+    { label: 'Option 1', value: 'opt_1' },
+    { label: 'Option 2', value: 'opt_2' },
+    { label: 'Option 3', value: 'opt_3' },
+  ];
+  const options = toImageOptions(rawOptions);
   const multiSelect = bool(config.multiSelect, false);
   const columns = str(config.columns, '3');
   const ariaLabel = str(field?.label, 'Image choice');

@@ -9,6 +9,7 @@ import { StructuredData } from "@/components/seo/structured-data";
 import { WebVitalsReporter } from "@/components/seo/web-vitals-reporter";
 import { Analytics } from "@/components/analytics/analytics";
 import { LaunchSpecialModal } from "@/components/landing/launch-special-modal";
+import { ChunkLoadRecovery } from "@/components/common/chunk-load-recovery";
 import { getOrganizationSchema, getWebsiteSchema } from "@/lib/seo/schemas";
 import { BRAND } from "@/lib/brand";
 
@@ -220,6 +221,7 @@ export default function RootLayout({
           disableTransitionOnChange={false}
         >
           <QueryProvider>
+            <ChunkLoadRecovery />
             {children}
             <Toaster position="top-center" />
             <PwaProvider />

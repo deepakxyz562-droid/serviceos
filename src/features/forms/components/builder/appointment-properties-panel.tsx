@@ -533,7 +533,7 @@ export function AppointmentPropertiesPanel({
                       <span className="text-[10px] text-slate-300 font-semibold block mb-1">From</span>
                       <Input
                         type="time"
-                        value={inv.from}
+                        value={inv.from || inv.startTime || '09:00'}
                         onChange={(e) => {
                           const copy = [...intervals];
                           copy[idx] = { ...copy[idx], from: e.target.value };
@@ -546,7 +546,7 @@ export function AppointmentPropertiesPanel({
                       <span className="text-[10px] text-slate-300 font-semibold block mb-1">To</span>
                       <Input
                         type="time"
-                        value={inv.to}
+                        value={inv.to || inv.endTime || '17:00'}
                         onChange={(e) => {
                           const copy = [...intervals];
                           copy[idx] = { ...copy[idx], to: e.target.value };

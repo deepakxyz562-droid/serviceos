@@ -39,7 +39,9 @@ export function FileUploadWidget({
   const extensionsRaw = config?.allowedFileTypes ?? config?.extensions;
   const extensions: string[] = Array.isArray(extensionsRaw)
     ? extensionsRaw.map((e) => String(e).toLowerCase().replace(/^\./, ''))
-    : [];
+    : typeof extensionsRaw === 'string' && extensionsRaw.trim()
+      ? extensionsRaw.split(',').map((e) => e.trim().toLowerCase().replace(/^\./, '')).filter(Boolean)
+      : [];
   const acceptAttr = extensions.length ? `.${extensions.join(',.')}` : '*';
   const ariaLabel = String(field?.label ?? 'File upload');
 

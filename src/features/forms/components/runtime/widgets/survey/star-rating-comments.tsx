@@ -12,9 +12,11 @@ export function StarRatingComments({ value, onChange, config, disabled, field }:
   const comment = String(initial.comment || '');
 
   const maxStars = Number(config.maxStars) || 5;
-  const commentThreshold = Number(config.commentThreshold) || 3; // require comment if rating ≤ threshold
+  const rawThreshold = config.requireCommentBelow !== undefined ? config.requireCommentBelow : config.commentThreshold;
+  const commentThreshold = typeof rawThreshold === 'number' ? rawThreshold : rawThreshold ? Number(rawThreshold) : 0;
 
-  const requiresComment = rating > 0 && rating <= commentThreshold;
+  // If threshold is 0, comment is never mandatory
+  const requiresComment = commentThreshold > 0 && rating > 0 && rating <= commentThreshold;
   const [touched, setTouched] = useState(false);
 
   function setRating(v: number) {

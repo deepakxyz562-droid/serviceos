@@ -21,8 +21,9 @@ function seededShuffle<T>(array: T[], seed: string): T[] {
 
 const COL_CLASS: Record<string, string> = {
   '1': 'grid grid-cols-1 gap-2',
-  '2': 'grid grid-cols-2 gap-2',
-  '3': 'grid grid-cols-3 gap-2',
+  '2': 'grid grid-cols-1 sm:grid-cols-2 gap-2',
+  '3': 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2',
+  '4': 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2',
   inline: 'flex flex-wrap gap-3',
 };
 
@@ -32,6 +33,8 @@ export function SingleChoice({ value, onChange, config, disabled, field }: Widge
   const rawOptions = config.options || (field as any)?.options;
   const baseOptions = normalizeOptions(rawOptions);
   const allowOther = bool(config.allowOther, false);
+  const allowNone = bool(config.allowNone, false);
+  const otherPlaceholder = str(config.otherText, 'Other');
   const randomize = bool(config.randomize, false);
   const columns = str(config.columns, '1');
   const ariaLabel = str(field?.label, 'Single choice');
@@ -44,7 +47,8 @@ export function SingleChoice({ value, onChange, config, disabled, field }: Widge
   }, [baseOptions, randomize, fieldId]);
 
   const valStr = typeof value === 'string' ? value : '';
-  const isOther = allowOther && valStr && !options.some((o) => o.value === valStr);
+  const isNone = allowNone && valStr === '__none__';
+  const isOther = allowOther && valStr && valStr !== '__none__' && !options.some((o) => o.value === valStr);
   const [otherText, setOtherText] = React.useState(isOther ? valStr : '');
 
   const commit = (v: string, other = '') => {
@@ -55,25 +59,37 @@ export function SingleChoice({ value, onChange, config, disabled, field }: Widge
   return (
     <div className="space-y-2">
       <RadioGroup
-        value={isOther ? '__other__' : valStr}
-        onValueChange={(v) => commit(v === '__other__' ? otherText || '' : v)}
+        value={isNone ? '__none__' : isOther ? '__other__' : valStr}
+        onValueChange={(v) => {
+          if (v === '__none__') commit('__none__');
+          else if (v === '__other__') commit(otherText || '');
+          else commit(v);
+        }}
         disabled={disabled}
         className={COL_CLASS[columns] || COL_CLASS['1']}
         aria-label={ariaLabel}
       >
         {options.map((opt) => (
           <div key={opt.value} className="flex items-center gap-2">
-            <RadioGroupItem value={opt.value} id={`sc-${opt.value}`} disabled={disabled} />
-            <Label htmlFor={`sc-${opt.value}`} className="text-sm font-normal cursor-pointer">
+            <RadioGroupItem value={opt.value} id={`sc-${fieldId}-${opt.value}`} disabled={disabled} />
+            <Label htmlFor={`sc-${fieldId}-${opt.value}`} className="text-sm font-normal cursor-pointer">
               {opt.label}
             </Label>
           </div>
         ))}
+        {allowNone && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <RadioGroupItem value="__none__" id={`sc-${fieldId}-none`} disabled={disabled} />
+            <Label htmlFor={`sc-${fieldId}-none`} className="text-sm font-normal italic cursor-pointer">
+              None of the above
+            </Label>
+          </div>
+        )}
         {allowOther && (
           <div className="flex items-center gap-2">
-            <RadioGroupItem value="__other__" id="sc-other" disabled={disabled} />
-            <Label htmlFor="sc-other" className="text-sm font-normal cursor-pointer">
-              Other
+            <RadioGroupItem value="__other__" id={`sc-${fieldId}-other`} disabled={disabled} />
+            <Label htmlFor={`sc-${fieldId}-other`} className="text-sm font-normal cursor-pointer">
+              {otherPlaceholder}
             </Label>
           </div>
         )}

@@ -73,8 +73,13 @@ export function Appointment({ value, onChange, config = {}, disabled, field }: W
     const dayOfWeek = getDay(selectedDate); // 0 = Sun, 6 = Sat
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const currentDayName = DAY_NAMES[dayOfWeek];
+
     // Check applicable intervals
-    const activeIntervals = intervals.filter((inv) => {
+    const activeIntervals = intervals.filter((inv: any) => {
+      if (!inv || typeof inv !== 'object') return false;
+      if (inv.day && inv.day !== currentDayName && inv.day !== 'Everyday') return false;
       if (inv.days === 'Everyday') return true;
       if (inv.days === 'Weekdays' && !isWeekend) return true;
       if (inv.days === 'Weekends' && isWeekend) return true;
@@ -85,22 +90,29 @@ export function Appointment({ value, onChange, config = {}, disabled, field }: W
 
     const generatedSlots: string[] = [];
 
-    // Helper to convert HH:MM to minutes from midnight
-    const toMinutes = (timeStr: string) => {
-      const [h, m] = timeStr.split(':').map(Number);
-      return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+    // Helper to convert HH:MM to minutes from midnight (guarded against undefined/null)
+    const toMinutes = (timeStr?: string | null) => {
+      if (!timeStr || typeof timeStr !== 'string') return 0;
+      const parts = timeStr.split(':').map(Number);
+      const h = Number.isFinite(parts[0]) ? parts[0] : 0;
+      const m = Number.isFinite(parts[1]) ? parts[1] : 0;
+      return h * 60 + m;
     };
 
     const lunchStartMin = lunchtimeEnabled ? toMinutes(lunchStart) : -1;
     const lunchEndMin = lunchtimeEnabled ? toMinutes(lunchEnd) : -1;
 
-    activeIntervals.forEach((inv) => {
-      const startMin = toMinutes(inv.from);
-      const endMin = toMinutes(inv.to);
+    activeIntervals.forEach((inv: any) => {
+      const fromStr = String(inv.from || inv.startTime || '09:00');
+      const toStr = String(inv.to || inv.endTime || '17:00');
+      const startMin = toMinutes(fromStr);
+      const endMin = toMinutes(toStr);
+
+      if (endMin <= startMin) return;
 
       for (let m = startMin; m + slotMinutes <= endMin; m += slotMinutes) {
         // Skip lunch break
-        if (lunchtimeEnabled && m >= lunchStartMin && m < lunchEndMin) {
+        if (lunchtimeEnabled && lunchStartMin >= 0 && lunchEndMin > lunchStartMin && m >= lunchStartMin && m < lunchEndMin) {
           continue;
         }
 
