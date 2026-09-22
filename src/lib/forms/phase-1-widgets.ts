@@ -282,11 +282,20 @@ const WIDGET_SPECS: WidgetSpec[] = [
     ] },
     { key: 'size', label: 'Output size (px)', type: 'number', group: 'field_specific', default: 200, min: 50, max: 1024 },
   ]],
-  ['qrcode_scanner', 'QR Code Scanner', 'file', 'QrCode', 'Camera-based QR scan', '', 'pro'],
+  ['qrcode_scanner', 'QR Code Scanner', 'file', 'QrCode', 'Camera-based QR scan', '', 'pro', [
+    { key: 'facingMode', label: 'Camera Facing Mode', type: 'select', group: 'field_specific', default: 'environment', options: [
+      { label: 'Rear (environment)', value: 'environment' }, { label: 'Front (user)', value: 'user' },
+    ] },
+    { key: 'scanIntervalMs', label: 'Scan Interval (ms)', type: 'number', group: 'field_specific', default: 500, min: 100, max: 5000, step: 100 },
+  ]],
   ['barcode_scanner', 'Barcode Scanner', 'file', 'Scan', 'Camera-based barcode scan', '', 'pro', [
     { key: 'formats', label: 'Supported formats (comma-sep)', type: 'text', group: 'field_specific', default: 'code128, ean13, code39' },
   ]],
-  ['nfc_tag_reader', 'NFC Tag Reader', 'file', 'Nfc', 'Web NFC tag reader', 'NEW', 'business'],
+  ['nfc_tag_reader', 'NFC Tag Reader', 'file', 'Nfc', 'Web NFC tag reader', 'NEW', 'business', [
+    { key: 'readMode', label: 'Read Mode', type: 'select', group: 'field_specific', default: 'read-only', options: [
+      { label: 'Read-only', value: 'read-only' }, { label: 'Read / Write', value: 'read-write' },
+    ] },
+  ]],
 
   // ─── Calculations (8) ──────────────────────────────────────────────────────────
   ['loan_emi', 'Loan EMI Calculator', 'calculation', 'Percent', 'Monthly installment + amortization', 'NEW', 'business', [
@@ -320,7 +329,10 @@ const WIDGET_SPECS: WidgetSpec[] = [
       { label: 'Days', value: 'days' }, { label: 'Months', value: 'months' }, { label: 'Years', value: 'years' },
     ] },
   ]],
-  ['percentage_calculator', 'Percentage Calculator', 'calculation', 'Percent', 'X is what % of Y', '', 'free'],
+  ['percentage_calculator', 'Percentage Calculator', 'calculation', 'Percent', 'X is what % of Y', '', 'free', [
+    { key: 'decimalPlaces', label: 'Decimal Places', type: 'number', group: 'field_specific', default: 2, min: 0, max: 6 },
+    { key: 'showFormula', label: 'Show Calculation Formula', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Display the formula used (e.g. X/Y × 100) under the result.' },
+  ]],
 
   // ─── Survey (7) ────────────────────────────────────────────────────────────────
   ['star_rating_comments', 'Star Rating + Comments', 'survey', 'Star', '5-star with required comment on low', 'POPULAR', 'pro', [
@@ -347,7 +359,12 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'statements', label: 'Statements (JSON array)', type: 'json', group: 'field_specific' },
     { key: 'points', label: 'Point scale', type: 'number', group: 'field_specific', default: 5, min: 3, max: 9 },
   ]],
-  ['thumb_rating', 'Thumb Rating', 'survey', 'ThumbsUp', 'Single thumb up/down', '', 'free'],
+  ['thumb_rating', 'Thumb Rating', 'survey', 'ThumbsUp', 'Single thumb up/down', '', 'free', [
+    { key: 'size', label: 'Thumb Size', type: 'select', group: 'field_specific', default: 'medium', options: [
+      { label: 'Small', value: 'small' }, { label: 'Medium', value: 'medium' }, { label: 'Large', value: 'large' },
+    ] },
+    { key: 'showLabel', label: 'Show Rating Label', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display the chosen value (Up/Down) next to the icon.' },
+  ]],
 
   // ─── Productivity (5) ──────────────────────────────────────────────────────────
   ['terms_and_conditions', 'Terms & Conditions', 'productivity', 'ScrollText', 'Scrollable legal modal + accept checkbox', 'POPULAR', 'free', [

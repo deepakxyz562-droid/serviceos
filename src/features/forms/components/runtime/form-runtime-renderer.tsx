@@ -581,6 +581,27 @@ export function FormRuntimeRenderer({
    
   }, [schema.fields]);
 
+  // ─── Default Value Initialization ────────────────────────────────────────
+  // Populate fields with their configured defaultValue on form load.
+  // Reads `formData` but intentionally omits it from deps — we only want to
+  // populate defaults once on mount (or after a draft restore), not on every
+  // keystroke. The functional `setFormData((prev) => ...)` form is used so the
+  // latest state is captured inside the updater without triggering re-runs.
+  useEffect(() => {
+    if (restoredDraft) return;
+    setFormData((prev) => {
+      const updates: Record<string, string> = {};
+      for (const field of schema.fields) {
+        const cfg = (field.widgetConfig as Record<string, unknown>) || {};
+        const dv = String(cfg.defaultValue ?? (field as Record<string, unknown>).defaultValue ?? '');
+        if (dv && !prev[field.id]) {
+          updates[field.id] = dv;
+        }
+      }
+      return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev;
+    });
+  }, [schema.fields, restoredDraft]);
+
   // Debounced draft autosave
   useEffect(() => {
     if (submitted) return;
@@ -1175,20 +1196,13 @@ export function FormRuntimeRenderer({
       )}
 
       <Card
-        className="shadow-xl border border-slate-200/90 dark:border-slate-800 overflow-hidden transition-all duration-300 bg-white dark:bg-slate-900 rounded-3xl"
+        className="p-0 py-0 gap-0 shadow-xl border border-slate-200/90 dark:border-slate-800 overflow-hidden transition-all duration-300 bg-white dark:bg-slate-900 rounded-3xl"
         style={{
           borderRadius,
           backgroundColor,
           color: textColor,
         }}
       >
-        {/* Top Accent Bar (Optional per theme) */}
-        {schema.theme?.showTopBorder && (
-          <div
-            className="h-1.5 w-full transition-all"
-            style={{ backgroundColor: primaryColor }}
-          />
-        )}
 
         <div className={isSplitLayout || isEstimatorForm ? 'grid grid-cols-1 lg:grid-cols-12 min-h-full' : ''}>
           {/* Media Hero Column (if Split Layout and positioned on the left) */}

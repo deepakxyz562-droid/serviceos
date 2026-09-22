@@ -40,6 +40,7 @@ function LazyWidgetRenderer({
   onChange,
   config,
   disabled,
+  readOnly,
   allFormData,
   field,
 }: {
@@ -48,6 +49,7 @@ function LazyWidgetRenderer({
   onChange: (v: unknown) => void;
   config: Record<string, unknown>;
   disabled?: boolean;
+  readOnly?: boolean;
   allFormData?: Record<string, unknown>;
   field: Record<string, unknown>;
 }) {
@@ -58,6 +60,7 @@ function LazyWidgetRenderer({
         onChange={onChange}
         config={config}
         disabled={disabled}
+        readOnly={readOnly}
         allFormData={allFormData}
         field={field}
       />
@@ -122,6 +125,18 @@ export function WidgetRuntimeDispatcher({
   // to pass the right shape based on widgetType.
   const config: Record<string, any> = field.widgetConfig || {};
 
+  // ─── Universal readOnly setting ───────────────────────────────────────────
+  // Honors both `field.readOnly` (top-level) and `config.readOnly` (from the
+  // universal advanced settings inspector). Treats readOnly as a softer disable
+  // for inline widgets that don't natively support the readOnly prop — the value
+  // stays visible but the user cannot interact.
+  const isReadOnly = Boolean(
+    (field as any).readOnly || config.readOnly,
+  );
+  // For interactive widgets (buttons, signature pads, etc.) readOnly behaves
+  // like disabled — the widget cannot be used to change the value.
+  const interactiveDisabled = disabled || isReadOnly;
+
   // ─── Unified runtime resolution ────────────────────────────────────────────
   // Resolve the widgetType through THREE layers before falling back to the
   // legacy switch statement:
@@ -140,6 +155,7 @@ export function WidgetRuntimeDispatcher({
         onChange={onChange}
         config={config}
         disabled={disabled}
+        readOnly={isReadOnly}
         allFormData={allFormData}
         field={field as unknown as Record<string, unknown>}
       />
@@ -167,7 +183,7 @@ export function WidgetRuntimeDispatcher({
         value={value}
         onChange={onChange}
         allFormData={allFormData}
-        disabled={disabled}
+        disabled={interactiveDisabled}
       />
     );
   }
@@ -180,7 +196,7 @@ export function WidgetRuntimeDispatcher({
           onChange={onChange}
           maxFiles={config.maxFiles || 10}
           maxFileSizeMb={config.maxFileSizeMb || 10}
-          disabled={disabled}
+          disabled={interactiveDisabled}
         />
       );
 
@@ -191,7 +207,7 @@ export function WidgetRuntimeDispatcher({
           onChange={onChange}
           branches={config.branches}
           unit={config.distanceUnit || 'miles'}
-          disabled={disabled}
+          disabled={interactiveDisabled}
         />
       );
 
@@ -204,7 +220,7 @@ export function WidgetRuntimeDispatcher({
           onChange={onChange}
           config={config}
           field={field}
-          disabled={disabled}
+          disabled={interactiveDisabled}
         />
       );
 
@@ -215,7 +231,7 @@ export function WidgetRuntimeDispatcher({
           onChange={onChange}
           allowedZipCodes={config.allowedZipCodes}
           maxRadiusMiles={config.maxRadiusMiles}
-          disabled={disabled}
+          disabled={interactiveDisabled}
         />
       );
 
@@ -229,7 +245,7 @@ export function WidgetRuntimeDispatcher({
           allFormData={allFormData}
           value={value}
           onChange={onChange}
-          disabled={disabled}
+          disabled={interactiveDisabled}
         />
       );
 
@@ -238,7 +254,7 @@ export function WidgetRuntimeDispatcher({
         <SmsOtpVerification
           value={value}
           onChange={onChange}
-          disabled={disabled}
+          disabled={interactiveDisabled}
         />
       );
 
@@ -251,7 +267,7 @@ export function WidgetRuntimeDispatcher({
           value={value}
           onChange={onChange}
           penColor={config.penColor || '#0f172a'}
-          disabled={disabled}
+          disabled={interactiveDisabled}
         />
       );
 
@@ -261,7 +277,7 @@ export function WidgetRuntimeDispatcher({
         <VoiceRecorder
           value={value}
           onChange={onChange}
-          disabled={disabled}
+          disabled={interactiveDisabled}
         />
       );
 
@@ -278,7 +294,7 @@ export function WidgetRuntimeDispatcher({
               <button
                 key={i}
                 type="button"
-                disabled={disabled}
+                disabled={interactiveDisabled}
                 onClick={() => onChange(starVal)}
                 className="p-1 text-muted-foreground hover:text-amber-400 focus:outline-none transition-colors"
               >
@@ -316,7 +332,7 @@ export function WidgetRuntimeDispatcher({
             min={config.min || 0}
             max={config.max || 100}
             step={config.step || 1}
-            disabled={disabled}
+            disabled={interactiveDisabled}
           />
         </div>
       );
@@ -347,7 +363,8 @@ export function WidgetRuntimeDispatcher({
                     <div key={cIdx} className="col-span-3 px-1">
                       <Input
                         value={row[col.key] || ''}
-                        disabled={disabled}
+                        disabled={interactiveDisabled}
+                        readOnly={isReadOnly}
                         placeholder={col.label}
                         onChange={(e) => {
                           const updated = [...rows];
@@ -359,7 +376,7 @@ export function WidgetRuntimeDispatcher({
                     </div>
                   ))}
                   <div className="col-span-3 flex justify-end pr-1">
-                    {!disabled && rows.length > 1 && (
+                    {!interactiveDisabled && rows.length > 1 && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -375,7 +392,7 @@ export function WidgetRuntimeDispatcher({
               ))}
             </div>
           </div>
-          {!disabled && (
+          {!interactiveDisabled && (
             <Button
               type="button"
               variant="outline"
@@ -420,13 +437,13 @@ export function WidgetRuntimeDispatcher({
             placeholder="0.00"
             className="pl-7 text-xs font-mono font-bold"
             disabled={disabled}
+            readOnly={isReadOnly}
           />
         </div>
       );
 
     default: {
       // Default fallback widget input
-      const isReadOnly = Boolean((field as any).readOnly || config.readOnly);
       return (
         <Input
           value={typeof value === 'string' ? value : ''}

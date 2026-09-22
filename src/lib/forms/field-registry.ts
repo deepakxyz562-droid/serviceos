@@ -52,7 +52,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Multi-line paragraph text',
     tier: 'free',
     createField: (label = 'Long Text') => ({
-      label, type: 'long_answer', placeholder: 'Enter detailed response...', required: false,
+      label, type: 'long_answer', widgetType: 'long_text', placeholder: 'Enter detailed response...', required: false,
     }),
     settingsSchema: [
       { key: 'rows', label: 'Visible rows', type: 'number', group: 'field_specific', default: 4, min: 2, max: 20 },
@@ -68,7 +68,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Numeric values',
     tier: 'free',
     createField: (label = 'Number') => ({
-      label, type: 'numerical', placeholder: '0', required: false,
+      label, type: 'numerical', widgetType: 'number', placeholder: '0', required: false,
     }),
     settingsSchema: [
       { key: 'min', label: 'Min value', type: 'number', group: 'field_specific' },
@@ -87,7 +87,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'free',
     createField: (label = 'Dropdown') => ({
-      label, type: 'dropdown', options: ['Option 1', 'Option 2', 'Option 3'], required: false,
+      label, type: 'dropdown', widgetType: 'dropdown', options: ['Option 1', 'Option 2', 'Option 3'], required: false,
     }),
     settingsSchema: [
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
@@ -109,7 +109,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Radio button options',
     tier: 'free',
     createField: (label = 'Single Choice') => ({
-      label, type: 'radio', options: ['Choice A', 'Choice B', 'Choice C'], required: false,
+      label, type: 'radio', widgetType: 'single_choice', options: ['Choice A', 'Choice B', 'Choice C'], required: false,
     }),
     settingsSchema: [
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
@@ -133,7 +133,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Multi-select checkboxes',
     tier: 'free',
     createField: (label = 'Multiple Choice') => ({
-      label, type: 'checkbox', options: ['Item 1', 'Item 2', 'Item 3'], required: false,
+      label, type: 'checkbox', widgetType: 'multiple_choice', options: ['Item 1', 'Item 2', 'Item 3'], required: false,
     }),
     settingsSchema: [
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
@@ -160,7 +160,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'free',
     createField: (label = 'Email Address') => ({
-      label, type: 'email', placeholder: 'name@example.com', required: false,
+      label, type: 'email', widgetType: 'email', placeholder: 'name@example.com', required: false,
     }),
     settingsSchema: [
       { key: 'confirmation', label: 'Require confirmation (re-enter)', type: 'toggle_with_description', group: 'field_specific', default: false },
@@ -175,7 +175,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'International phone input',
     tier: 'free',
     createField: (label = 'Phone Number') => ({
-      label, type: 'phone', placeholder: '+1 (555) 000-0000', required: false,
+      label, type: 'phone', widgetType: 'phone', placeholder: '+1 (555) 000-0000', required: false,
     }),
     settingsSchema: [
       { key: 'defaultCountry', label: 'Default country code', type: 'text', group: 'field_specific', default: 'US' },
@@ -194,7 +194,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'free',
     createField: (label = 'Date') => ({
-      label, type: 'date', required: false,
+      label, type: 'date', widgetType: 'date_picker', required: false,
     }),
     settingsSchema: [
       { key: 'format', label: 'Display format', type: 'select', group: 'field_specific', default: 'yyyy-mm-dd', options: [
@@ -219,7 +219,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     iconName: 'Clock',
     description: 'Time-of-day selection',
     tier: 'free',
-    createField: (label = 'Time') => ({ label, type: 'time', required: false }),
+    createField: (label = 'Time') => ({ label, type: 'time', widgetType: 'time_picker', required: false }),
     settingsSchema: [
       { key: 'format', label: 'Format', type: 'select', group: 'field_specific', default: '24h', options: [
         { label: '24-hour', value: '24h' }, { label: '12-hour (AM/PM)', value: '12h' },
@@ -302,7 +302,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     iconName: 'Heading',
     description: 'Bold heading text to label sections',
     tier: 'free',
-    createField: (label = 'Section Heading') => ({ label, type: 'heading' }),
+    createField: (label = 'Section Heading') => ({ label, type: 'heading', widgetType: 'heading', widgetConfig: { level: 'h3', align: 'left' } }),
     settingsSchema: [
       { key: 'level', label: 'Heading level', type: 'select', group: 'field_specific', default: 'h3', options: [
         { label: 'H1', value: 'h1' }, { label: 'H2', value: 'h2' }, { label: 'H3', value: 'h3' }, { label: 'H4', value: 'h4' },
@@ -791,7 +791,13 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'address_map_locator',
       widgetConfig: { provider: 'managed', defaultZoom: 14 }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'defaultLat', label: 'Default latitude', type: 'number', group: 'field_specific', default: 40.7128, helpText: 'Initial map center latitude.' },
+      { key: 'defaultLng', label: 'Default longitude', type: 'number', group: 'field_specific', default: -74.006, helpText: 'Initial map center longitude.' },
+      { key: 'defaultZoom', label: 'Default zoom level', type: 'number', group: 'field_specific', default: 14, min: 0, max: 21 },
+      { key: 'draggableMarker', label: 'Draggable marker', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let respondents drag the pin to fine-tune the location.' },
+      { key: 'showSearch', label: 'Show address search box', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display a search input above the map for quick geocoding.' },
+    ],
   },
   {
     id: 'adobe_sign',
@@ -806,7 +812,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'adobe_sign',
       widgetConfig: { requiresEnvelope: true }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'requiresEnvelope', label: 'Require envelope creation', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Trigger a new Adobe Sign envelope when the form is submitted.' },
+      { key: 'agreementName', label: 'Agreement name', type: 'text', group: 'field_specific', placeholder: 'Service Agreement - {{date}}', helpText: 'Template name shown in Adobe Sign. Supports merge fields.' },
+      { key: 'signerEmailField', label: 'Signer email field', type: 'field_selector', group: 'field_specific', helpText: 'Form field whose value is used as the recipient email.' },
+    ],
   },
   {
     id: 'australia_bsb_checker',
@@ -821,7 +831,9 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'australia_bsb_checker',
       widgetConfig: { autoFormat: true }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'autoFormat', label: 'Auto-format as XXX-XXX', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Insert the dash automatically while typing.' },
+    ],
   },
   {
     id: 'color_picker',
@@ -836,7 +848,12 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'color_picker',
       widgetConfig: { defaultColor: '#059669', format: 'hex' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'defaultColor', label: 'Default color', type: 'color', group: 'field_specific', default: '#059669' },
+      { key: 'format', label: 'Output format', type: 'select', group: 'field_specific', default: 'hex', options: [
+        { label: 'HEX (#RRGGBB)', value: 'hex' }, { label: 'RGB (r, g, b)', value: 'rgb' }, { label: 'HSL (h, s%, l%)', value: 'hsl' },
+      ] },
+    ],
   },
   {
     id: 'comparison_slider',
@@ -851,7 +868,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'comparison_slider',
       widgetConfig: { beforeImageUrl: '', afterImageUrl: '', startPositionPct: 50 }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'beforeImage', label: 'Before image URL', type: 'text', group: 'field_specific', placeholder: 'https://.../before.jpg' },
+      { key: 'afterImage', label: 'After image URL', type: 'text', group: 'field_specific', placeholder: 'https://.../after.jpg' },
+      { key: 'startPositionPct', label: 'Initial slider position', type: 'range', group: 'field_specific', default: 50, min: 0, max: 100, step: 1, helpText: 'Where the divider starts (0 = far left, 100 = far right).' },
+    ],
   },
   {
     id: 'digital_magazine_maker',
@@ -866,7 +887,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'digital_magazine_maker',
       widgetConfig: { flipbookUrl: '', autoPlay: false }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'embedUrl', label: 'Flipbook embed URL', type: 'text', group: 'field_specific', placeholder: 'https://.../flipbook.html', helpText: 'Direct URL to the flipbook HTML or PDF.' },
+      { key: 'autoPlay', label: 'Auto-start flipbook', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Begin flipping pages automatically on load.' },
+    ],
   },
   {
     id: 'docusign',
@@ -881,7 +905,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'docusign',
       widgetConfig: { templateId: '' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'templateId', label: 'DocuSign template ID', type: 'text', group: 'field_specific', placeholder: 'tmpl-xxxxxxxx-xxxx-xxxx', helpText: 'Envelope template to clone on submission.' },
+      { key: 'signerEmailField', label: 'Signer email field', type: 'field_selector', group: 'field_specific', helpText: 'Form field whose value is used as the recipient email.' },
+    ],
   },
   {
     id: 'draw_on_image',
@@ -899,7 +926,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
         defaultThickness: 3,
       }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'defaultThickness', label: 'Default brush thickness', type: 'range', group: 'field_specific', default: 3, min: 1, max: 20, step: 1 },
+      { key: 'sourceImage', label: 'Source image URL', type: 'text', group: 'field_specific', placeholder: 'https://.../floorplan.png', helpText: 'Background image to annotate. Leave blank to upload at runtime.' },
+    ],
   },
   {
     id: 'drawing_board',
@@ -913,7 +943,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'drawing_board',
       widgetConfig: { canvasHeight: 300, backgroundColor: '#ffffff' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'canvasHeight', label: 'Canvas height (px)', type: 'number', group: 'field_specific', default: 300, min: 100, max: 2000 },
+      { key: 'backgroundColor', label: 'Canvas background color', type: 'color', group: 'field_specific', default: '#ffffff' },
+    ],
   },
   {
     id: 'driving_distance_calculator',
@@ -928,7 +961,13 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'driving_distance_calculator',
       widgetConfig: { provider: 'managed', ratePerMile: 2.5, unit: 'miles' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'unit', label: 'Distance unit', type: 'select', group: 'field_specific', default: 'miles', options: [
+        { label: 'Kilometers', value: 'km' }, { label: 'Miles', value: 'miles' },
+      ] },
+      { key: 'originField', label: 'Origin address field', type: 'field_selector', group: 'field_specific', helpText: 'Form field containing the origin address.' },
+      { key: 'destinationField', label: 'Destination address field', type: 'field_selector', group: 'field_specific', helpText: 'Form field containing the destination address.' },
+    ],
   },
   {
     id: 'france_region_map_picker',
@@ -942,7 +981,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'france_region_map_picker',
       widgetConfig: { colorScheme: 'blue' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'colorScheme', label: 'Color scheme', type: 'select', group: 'field_specific', default: 'blue', options: [
+        { label: 'Blue', value: 'blue' }, { label: 'Green', value: 'green' }, { label: 'Red', value: 'red' }, { label: 'Purple', value: 'purple' },
+      ] },
+    ],
   },
   {
     id: 'google_analytics_4',
@@ -957,7 +1000,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label: '', type: 'control_widget', widgetType: 'google_analytics_4',
       widgetConfig: { measurementId: '' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'measurementId', label: 'GA4 Measurement ID', type: 'text', group: 'field_specific', placeholder: 'G-XXXXXXXXXX', helpText: 'Stream measurement ID from Google Analytics 4.' },
+      { key: 'eventName', label: 'Conversion event name', type: 'text', group: 'field_specific', default: 'form_submit', helpText: 'Event pushed to GA4 on successful submission.' },
+      { key: 'debug', label: 'Debug mode', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Enable GA4 debug_mode to verify events in DebugView.' },
+    ],
   },
   {
     id: 'image_scanner_ocr',
@@ -973,7 +1020,14 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'image_scanner_ocr',
       widgetConfig: { autoExtract: true, targetDocument: 'any' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'outputField', label: 'Output field', type: 'field_selector', group: 'field_specific', helpText: 'Form field to populate with the recognized text.' },
+      { key: 'language', label: 'OCR language', type: 'select', group: 'field_specific', default: 'eng', options: [
+        { label: 'English', value: 'eng' }, { label: 'Spanish', value: 'spa' }, { label: 'French', value: 'fra' },
+        { label: 'German', value: 'deu' }, { label: 'Italian', value: 'ita' }, { label: 'Portuguese', value: 'por' },
+        { label: 'Chinese (Simplified)', value: 'chi_sim' }, { label: 'Japanese', value: 'jpn' }, { label: 'Korean', value: 'kor' },
+      ] },
+    ],
   },
   {
     id: 'india_states_dropdown',
@@ -987,7 +1041,9 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'india_states_dropdown',
       widgetConfig: { includeUnionTerritories: true }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'includeUnionTerritories', label: 'Include union territories', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Show Delhi, Puducherry, J&K (UT), Ladakh, Chandigarh, etc. alongside the 28 states.' },
+    ],
   },
   {
     id: 'infinite_list',
@@ -1001,7 +1057,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'infinite_list',
       widgetConfig: { placeholder: 'Enter item...', addButtonText: '+ Add Another' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'columnNames', label: 'Column names (comma-separated)', type: 'text', group: 'field_specific', placeholder: 'Item, Quantity, Notes', helpText: 'Header labels for multi-column rows.' },
+      { key: 'addButtonText', label: 'Add button text', type: 'text', group: 'field_specific', default: '+ Add Another' },
+      { key: 'removeButtonText', label: 'Remove button text', type: 'text', group: 'field_specific', default: 'Remove' },
+    ],
   },
   {
     id: 'italian_codice_fiscale',
@@ -1016,7 +1076,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'italian_codice_fiscale',
       widgetConfig: { uppercase: true }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'uppercase', label: 'Force uppercase', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Convert the typed code to uppercase before validation.' },
+      { key: 'autoFill', label: 'Auto-fill from name + birth fields', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Compute the codice fiscale from other form fields (name, surname, DOB, place).' },
+    ],
   },
   {
     id: 'like_dislike_feedback',
@@ -1031,7 +1094,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'like_dislike_feedback',
       widgetConfig: { showLiveCounts: true }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'showCounts', label: 'Show live counts', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display the running tally next to each button.' },
+      { key: 'baseLikes', label: 'Base likes count', type: 'number', group: 'field_specific', default: 0, min: 0, helpText: 'Starting count shown before any submissions.' },
+      { key: 'baseDislikes', label: 'Base dislikes count', type: 'number', group: 'field_specific', default: 0, min: 0, helpText: 'Starting count shown before any submissions.' },
+    ],
   },
   {
     id: 'most_frequent_answer',
@@ -1047,7 +1114,9 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label: '', type: 'control_widget', widgetType: 'most_frequent_answer',
       widgetConfig: { linkedQuestionId: '', minResponsesThreshold: 5 }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'targetField', label: 'Target question field', type: 'field_selector', group: 'field_specific', helpText: 'Form field whose submitted answers are aggregated.' },
+    ],
   },
   {
     id: 'orderable_list',
@@ -1061,7 +1130,9 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'orderable_list',
       widgetConfig: { items: ['Quality', 'Speed of Service', 'Pricing', 'Communication'] }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'options', label: 'Items to rank', type: 'options_editor', group: 'field_specific' },
+    ],
   },
   {
     id: 'pdf_embedder',
@@ -1075,7 +1146,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label: '', type: 'control_widget', widgetType: 'pdf_embedder',
       widgetConfig: { pdfUrl: '', heightPx: 500 }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'url', label: 'PDF URL', type: 'text', group: 'field_specific', placeholder: 'https://.../document.pdf' },
+      { key: 'height', label: 'Viewer height (px)', type: 'number', group: 'field_specific', default: 500, min: 200, max: 4000 },
+    ],
   },
   {
     id: 'photo_watermark',
@@ -1090,7 +1164,16 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'photo_watermark',
       widgetConfig: { includeTimestamp: true, includeGps: true, watermarkPosition: 'bottom_right' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'includeTimestamp', label: 'Include timestamp', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Stamp the capture date/time on each photo.' },
+      { key: 'includeGps', label: 'Include GPS coordinates', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Stamp latitude/longitude from EXIF metadata.' },
+      { key: 'watermarkPosition', label: 'Watermark position', type: 'select', group: 'field_specific', default: 'bottom_right', options: [
+        { label: 'Top left', value: 'top_left' }, { label: 'Top right', value: 'top_right' },
+        { label: 'Bottom left', value: 'bottom_left' }, { label: 'Bottom right', value: 'bottom_right' },
+        { label: 'Center', value: 'center' },
+      ] },
+      { key: 'businessName', label: 'Business name overlay', type: 'text', group: 'field_specific', placeholder: 'Acme Plumbing Co.', helpText: 'Text drawn on the photo. Leave blank to omit.' },
+    ],
   },
   {
     id: 'speech_to_text',
@@ -1105,7 +1188,16 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'speech_to_text',
       widgetConfig: { continuous: false, language: 'en-US' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'lang', label: 'Recognition language', type: 'select', group: 'field_specific', default: 'en-US', options: [
+        { label: 'English (US)', value: 'en-US' }, { label: 'English (UK)', value: 'en-GB' },
+        { label: 'Spanish (Spain)', value: 'es-ES' }, { label: 'French (France)', value: 'fr-FR' },
+        { label: 'German', value: 'de-DE' }, { label: 'Italian', value: 'it-IT' },
+        { label: 'Portuguese (Brazil)', value: 'pt-BR' }, { label: 'Chinese (Simplified)', value: 'zh-CN' },
+        { label: 'Japanese', value: 'ja-JP' }, { label: 'Korean', value: 'ko-KR' },
+      ] },
+      { key: 'continuous', label: 'Continuous listening', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Keep transcribing until manually stopped instead of pausing on silence.' },
+    ],
   },
   {
     id: 'spreadsheet_to_form',
@@ -1120,7 +1212,9 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'spreadsheet_to_form',
       widgetConfig: { accessCodeField: 'code' }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'accessCodeField', label: 'Access code column name', type: 'text', group: 'field_specific', default: 'code', helpText: 'Spreadsheet column header matched against the entered access code.' },
+    ],
   },
   {
     id: 'star_rating_with_comments',
@@ -1135,7 +1229,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'star_rating_with_comments',
       widgetConfig: { maxStars: 5, requireCommentOnLowRating: true, threshold: 3 }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'maxStars', label: 'Maximum stars', type: 'number', group: 'field_specific', default: 5, min: 3, max: 10 },
+      { key: 'requireCommentOnLowRating', label: 'Require comment on low rating', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Force a written review when the rating is at or below the threshold.' },
+      { key: 'threshold', label: 'Low-rating threshold', type: 'number', group: 'field_specific', default: 3, min: 1, max: 10, helpText: 'Ratings at or below this value trigger the comment requirement.' },
+    ],
   },
   {
     id: 'unique_id_generator',
@@ -1149,7 +1247,12 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label: '', type: 'control_widget', widgetType: 'unique_id_generator',
       widgetConfig: { prefix: 'REF-', startNumber: 1001, padding: 5 }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'prefix', label: 'ID prefix', type: 'text', group: 'field_specific', default: 'REF-', helpText: 'Text prepended to every generated ID.' },
+      { key: 'startNumber', label: 'Starting sequence number', type: 'number', group: 'field_specific', default: 1001, min: 0 },
+      { key: 'padding', label: 'Zero-pad length', type: 'number', group: 'field_specific', default: 5, min: 0, max: 12, helpText: 'Pad the numeric portion with leading zeros (e.g. 5 → REF-01001).' },
+      { key: 'allowManualEdit', label: 'Allow manual override', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let respondents type a custom ID instead of using the generated one.' },
+    ],
   },
   {
     id: 'us_state_picker',
@@ -1163,7 +1266,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label, type: 'control_widget', widgetType: 'us_state_picker',
       widgetConfig: { returnAbbreviation: true }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'returnAbbreviation', label: 'Return abbreviation', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Submit the 2-letter postal code (CA) instead of the full name (California).' },
+      { key: 'includeTerritories', label: 'Include territories', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add DC, PR, GU, VI, AS, and MP to the list.' },
+    ],
   },
   {
     id: 'youtube_video_embed',
@@ -1177,7 +1283,11 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       label: '', type: 'control_widget', widgetType: 'youtube_video_embed',
       widgetConfig: { videoUrl: '', autoPlay: false, controls: true }, required: false,
     }),
-    settingsSchema: [],
+    settingsSchema: [
+      { key: 'url', label: 'YouTube video URL', type: 'text', group: 'field_specific', placeholder: 'https://www.youtube.com/watch?v=...' },
+      { key: 'autoplay', label: 'Autoplay', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Start playback automatically when the form loads (muted is required by browsers).' },
+      { key: 'controls', label: 'Show player controls', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display the YouTube play/pause/seek bar.' },
+    ],
   },
 ];
 
@@ -1266,6 +1376,13 @@ export const FIELD_ALIASES: Record<string, string> = {
   inventory_dropdown_v2: 'inventory_dropdown',
   australia_bsb_checker_v2: 'australia_bsb_checker',
   italian_codice_fiscale_v2: 'italian_codice_fiscale',
+
+  // ─── Appointment/Calendar aliases ──────────────────────────────────────
+  // These 3 Phase widgets don't have dedicated runtime components yet.
+  // Alias them to the existing appointment widget for now.
+  appointment_confirmation: 'appointment',
+  appointment_with_provider: 'appointment',
+  calendly_embed: 'appointment',
   dynamic_dropdowns_v2: 'dynamic_dropdowns',
   matrix_dynamique_v2: 'matrix_dynamique',
   star_rating_comments_v2: 'star_rating_comments',

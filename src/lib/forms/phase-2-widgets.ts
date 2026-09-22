@@ -79,11 +79,19 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'defaultPitch', label: 'Default Pitch Angle', type: 'number', group: 'field_specific', default: 0, min: -90, max: 90 },
     { key: 'defaultHeading', label: 'Default Heading (Degrees)', type: 'number', group: 'field_specific', default: 0, min: 0, max: 360 },
   ], 'maps'],
-  ['time_zone_from_location', 'Time Zone from Location', 'maps', 'Clock', 'Get timezone from lat/lng', 'NEW', 'pro', undefined, 'maps'],
+  ['time_zone_from_location', 'Time Zone from Location', 'maps', 'Clock', 'Get timezone from lat/lng', 'NEW', 'pro', [
+    { key: 'unit', label: 'Distance Unit (for radius queries)', type: 'select', group: 'field_specific', default: 'km', options: [
+      { label: 'Kilometers', value: 'km' }, { label: 'Miles', value: 'miles' },
+    ] },
+  ], 'maps'],
   ['delivery_zone_checker', 'Delivery Zone Checker', 'maps', 'Truck', 'Validates postal code against zones', 'NEW', 'pro', [
     { key: 'zones', label: 'Zones (JSON: [{name, prefixes}])', type: 'json', group: 'field_specific' },
   ]],
-  ['distance_matrix', 'Distance Matrix', 'maps', 'Grid', 'Multi-origin × destination distances', 'PRO', 'business'],
+  ['distance_matrix', 'Distance Matrix', 'maps', 'Grid', 'Multi-origin × destination distances', 'PRO', 'business', [
+    { key: 'unit', label: 'Distance Unit', type: 'select', group: 'field_specific', default: 'km', options: [
+      { label: 'Kilometers', value: 'km' }, { label: 'Miles', value: 'miles' },
+    ] },
+  ]],
 
   // ─── Inventory & Booking (15) ────────────────────────────────────────────
   ['inventory_dropdown', 'Inventory Dropdown', 'productivity', 'Package', 'Stock-aware dropdown with auto-disable', 'POPULAR', 'pro', [
@@ -103,7 +111,10 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'slotDuration', label: 'Slot Duration (Minutes)', type: 'number', group: 'field_specific', default: 30, min: 10, max: 240 },
     { key: 'maxPerSlot', label: 'Max Attendees per Slot', type: 'number', group: 'field_specific', default: 1, min: 1 },
   ]],
-  ['resource_scheduler', 'Resource Scheduler', 'productivity', 'CalendarClock', 'Schedule resources over week', 'PRO', 'business'],
+  ['resource_scheduler', 'Resource Scheduler', 'productivity', 'CalendarClock', 'Schedule resources over week', 'PRO', 'business', [
+    { key: 'timezone', label: 'Timezone (IANA)', type: 'text', group: 'field_specific', placeholder: 'America/New_York' },
+    { key: 'bufferMinutes', label: 'Buffer Between Bookings (min)', type: 'number', group: 'field_specific', default: 0, min: 0 },
+  ]],
   ['equipment_rental', 'Equipment Rental', 'productivity', 'Wrench', 'Item, qty, dates, deposit', '', 'business', [
     { key: 'depositRequired', label: 'Security Deposit Required', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
@@ -122,14 +133,20 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'minGroupSize', label: 'Min Group Size', type: 'number', group: 'field_specific', default: 2 },
     { key: 'maxGroupSize', label: 'Max Group Size', type: 'number', group: 'field_specific', default: 20 },
   ]],
-  ['multi_day_booking', 'Multi-Day Booking', 'productivity', 'CalendarDays', 'Multi-day event booking', '', 'business'],
+  ['multi_day_booking', 'Multi-Day Booking', 'productivity', 'CalendarDays', 'Multi-day event booking', '', 'business', [
+    { key: 'timezone', label: 'Timezone (IANA)', type: 'text', group: 'field_specific', placeholder: 'Europe/London' },
+    { key: 'bufferMinutes', label: 'Buffer Between Days (min)', type: 'number', group: 'field_specific', default: 0, min: 0 },
+  ]],
   ['appointment_confirmation', 'Appointment Confirmation', 'productivity', 'CheckCircle', 'Appointment summary + confirm', '', 'pro', [
     { key: 'requireSignature', label: 'Require Signature on Confirmation', type: 'toggle_with_description', group: 'field_specific', default: false },
   ]],
   ['delivery_window_selector', 'Delivery Window Selector', 'productivity', 'Truck', 'Pick delivery window', '', 'pro', [
     { key: 'leadTimeHours', label: 'Min Lead Time (Hours)', type: 'number', group: 'field_specific', default: 24 },
   ]],
-  ['pickup_location_selector', 'Pickup Location Selector', 'productivity', 'Store', 'Pick from pickup locations', '', 'free'],
+  ['pickup_location_selector', 'Pickup Location Selector', 'productivity', 'Store', 'Pick from pickup locations', '', 'free', [
+    { key: 'timezone', label: 'Timezone (IANA)', type: 'text', group: 'field_specific', placeholder: 'America/Los_Angeles' },
+    { key: 'bufferMinutes', label: 'Pickup Prep Buffer (min)', type: 'number', group: 'field_specific', default: 30, min: 0 },
+  ]],
   ['capacity_counter', 'Capacity Counter', 'productivity', 'Gauge', 'Shows remaining capacity', '', 'free', [
     { key: 'capacity', label: 'Total Capacity', type: 'number', group: 'field_specific', default: 50, min: 1 },
     { key: 'showRemaining', label: 'Display Remaining Spots', type: 'toggle_with_description', group: 'field_specific', default: true },
@@ -147,15 +164,35 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'codeLength', label: 'Code Length', type: 'segmented', group: 'field_specific', default: '6', options: [{ label: '4 Digits', value: '4' }, { label: '6 Digits', value: '6' }] },
     { key: 'expiryMinutes', label: 'Code Expiration (Minutes)', type: 'number', group: 'field_specific', default: 10, min: 1, max: 60 },
   ], 'otp_sms'],
-  ['friendly_captcha', 'Friendly Captcha', 'security', 'ShieldCheck', 'Friendly-captcha-style widget', 'NEW', 'free'],
+  ['friendly_captcha', 'Friendly Captcha', 'security', 'ShieldCheck', 'Friendly-captcha-style widget', 'NEW', 'free', [
+    { key: 'siteKey', label: 'Site Key', type: 'text', group: 'field_specific' },
+    { key: 'theme', label: 'Widget Theme', type: 'select', group: 'field_specific', default: 'light', options: [
+      { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }, { label: 'Auto', value: 'auto' },
+    ] },
+  ]],
   ['math_captcha', 'Math Captcha', 'security', 'Calculator', 'Simple math captcha equation', '', 'free', [
     { key: 'difficulty', label: 'Difficulty', type: 'segmented', group: 'field_specific', default: 'easy', options: [
       { label: 'Easy (Addition/Subtraction)', value: 'easy' }, { label: 'Medium (Multiplication)', value: 'medium' },
     ] },
   ]],
-  ['image_captcha_slider', 'Image Slider Captcha', 'security', 'MoveHorizontal', 'Drag-to-verify slider', 'NEW', 'free'],
-  ['identity_verification_kyc', 'Identity Verification (KYC)', 'security', 'IdCard', 'Persona/Onfido KYC verification', 'PRO', 'business', undefined, 'kyc'],
-  ['two_factor_auth', '2FA Code Input', 'security', 'KeyRound', '6-box 2FA code input', '', 'pro'],
+  ['image_captcha_slider', 'Image Slider Captcha', 'security', 'MoveHorizontal', 'Drag-to-verify slider', 'NEW', 'free', [
+    { key: 'siteKey', label: 'Site Key', type: 'text', group: 'field_specific' },
+    { key: 'theme', label: 'Widget Theme', type: 'select', group: 'field_specific', default: 'light', options: [
+      { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }, { label: 'Auto', value: 'auto' },
+    ] },
+  ]],
+  ['identity_verification_kyc', 'Identity Verification (KYC)', 'security', 'IdCard', 'Persona/Onfido KYC verification', 'PRO', 'business', [
+    { key: 'siteKey', label: 'Site Key / Public API Key', type: 'text', group: 'field_specific' },
+    { key: 'theme', label: 'Widget Theme', type: 'select', group: 'field_specific', default: 'light', options: [
+      { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }, { label: 'Auto', value: 'auto' },
+    ] },
+  ], 'kyc'],
+  ['two_factor_auth', '2FA Code Input', 'security', 'KeyRound', '6-box 2FA code input', '', 'pro', [
+    { key: 'siteKey', label: 'Site Key (TOTP secret ref)', type: 'text', group: 'field_specific' },
+    { key: 'theme', label: 'Widget Theme', type: 'select', group: 'field_specific', default: 'light', options: [
+      { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }, { label: 'Auto', value: 'auto' },
+    ] },
+  ]],
   ['password_strength_meter', 'Password Strength Meter', 'security', 'Lock', 'Password with live strength indicator', 'POPULAR', 'free', [
     { key: 'minLen', label: 'Min Password Length', type: 'number', group: 'field_specific', default: 8, min: 6 },
     { key: 'requireSymbols', label: 'Require Special Characters', type: 'toggle_with_description', group: 'field_specific', default: true },
@@ -170,28 +207,57 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'privacyUrl', label: 'Privacy Policy URL', type: 'text', group: 'field_specific' },
     { key: 'isMandatory', label: 'Mandatory Acceptance', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
-  ['consent_log', 'Consent Log', 'security', 'FileCheck', 'Logs consent with timestamp + IP', 'PRO', 'business'],
+  ['consent_log', 'Consent Log', 'security', 'FileCheck', 'Logs consent with timestamp + IP', 'PRO', 'business', [
+    { key: 'siteKey', label: 'Site Key (audit binding)', type: 'text', group: 'field_specific' },
+    { key: 'theme', label: 'Widget Theme', type: 'select', group: 'field_specific', default: 'light', options: [
+      { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }, { label: 'Auto', value: 'auto' },
+    ] },
+  ]],
 
   // ─── Regional & Identity (15) ─────────────────────────────────────────────
   ['canada_provinces', 'Canada Provinces', 'regional', 'Flag', '10 provinces + 3 territories', '', 'free', [
     { key: 'includeTerritories', label: 'Include Territories (YT, NT, NU)', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
-  ['uk_counties', 'UK Counties', 'regional', 'Flag', 'UK counties + countries', '', 'free'],
-  ['brazil_cep', 'Brazil CEP Lookup', 'regional', 'MapPin', 'CEP lookup via ViaCEP', 'NEW', 'free'],
-  ['germany_plz', 'Germany PLZ', 'regional', 'MapPin', 'German postal code lookup', '', 'free'],
-  ['gst_validator', 'GST Validator (India)', 'regional', 'Receipt', '15-char GSTIN with checksum', 'NEW', 'pro'],
-  ['abn_validator', 'ABN Validator (Australia)', 'regional', 'Building2', '11-digit ABN checksum', 'NEW', 'pro'],
-  ['vat_validator', 'VAT Validator (EU)', 'regional', 'Receipt', 'EU VAT number VIES validation', '', 'pro'],
+  ['uk_counties', 'UK Counties', 'regional', 'Flag', 'UK counties + countries', '', 'free', [
+    { key: 'includeCountries', label: 'Include UK Countries (Eng/Sco/Wal/NI)', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Show the four UK constituent countries alongside county lists.' },
+    { key: 'autoFormat', label: 'Auto-format Input', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Normalize casing and spacing as the user types.' },
+  ]],
+  ['brazil_cep', 'Brazil CEP Lookup', 'regional', 'MapPin', 'CEP lookup via ViaCEP', 'NEW', 'free', [
+    { key: 'autoFormat', label: 'Auto-format CEP (#####-###)', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Insert the hyphen as the user types.' },
+    { key: 'fillAddressFields', label: 'Auto-fill Address Fields', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Populate street, neighborhood, city, and state from the ViaCEP response.' },
+  ]],
+  ['germany_plz', 'Germany PLZ', 'regional', 'MapPin', 'German postal code lookup', '', 'free', [
+    { key: 'autoFormat', label: 'Auto-format PLZ (5 digits)', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Enforce 5-digit numeric input as the user types.' },
+    { key: 'fillCityField', label: 'Auto-fill City From PLZ', type: 'toggle_with_description', group: 'field_specific', default: true },
+  ]],
+  ['gst_validator', 'GST Validator (India)', 'regional', 'Receipt', '15-char GSTIN with checksum', 'NEW', 'pro', [
+    { key: 'autoFormat', label: 'Auto-format GSTIN', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Uppercase and group the 15-char GSTIN as the user types.' },
+    { key: 'showState', label: 'Show Derived State Code', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Display the state code parsed from GSTIN digits 1-2.' },
+  ]],
+  ['abn_validator', 'ABN Validator (Australia)', 'regional', 'Building2', '11-digit ABN checksum', 'NEW', 'pro', [
+    { key: 'autoFormat', label: 'Auto-format ABN (XX XXX XXX XXX)', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Insert the conventional spacing as the user types.' },
+    { key: 'showEntityName', label: 'Show ABN Lookup Entity Name', type: 'toggle_with_description', group: 'field_specific', default: false },
+  ]],
+  ['vat_validator', 'VAT Validator (EU)', 'regional', 'Receipt', 'EU VAT number VIES validation', '', 'pro', [
+    { key: 'autoFormat', label: 'Auto-format VAT Number', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Strip spaces and dashes before VIES validation.' },
+    { key: 'defaultCountry', label: 'Default Country Code (ISO-2)', type: 'text', group: 'field_specific', placeholder: 'DE' },
+  ]],
   ['iban_validator', 'IBAN Validator', 'regional', 'CreditCard', 'IBAN with country checksum', 'POPULAR', 'pro', [
     { key: 'formatWithSpaces', label: 'Format with 4-digit Spaces', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['ssn_validator', 'SSN Validator (US)', 'regional', 'IdCard', 'US SSN validation', '', 'pro', [
     { key: 'maskDisplay', label: 'Mask Display (***-**-1234)', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
-  ['ein_validator', 'EIN Validator (US)', 'regional', 'Building', 'US Employer ID Number (XX-XXXXXXX)', '', 'pro'],
+  ['ein_validator', 'EIN Validator (US)', 'regional', 'Building', 'US Employer ID Number (XX-XXXXXXX)', '', 'pro', [
+    { key: 'autoFormat', label: 'Auto-format EIN (XX-XXXXXXX)', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Insert the hyphen after the first two digits as the user types.' },
+    { key: 'maskDisplay', label: 'Mask Display on Submit', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Partially mask the EIN in the submission payload.' },
+  ]],
 
   // ─── Dynamic Repeaters (12) ──────────────────────────────────────────────
-  ['nested_repeater', 'Nested Repeater', 'productivity', 'ListTree', 'Repeater with sub-rows', 'NEW', 'business'],
+  ['nested_repeater', 'Nested Repeater', 'productivity', 'ListTree', 'Repeater with sub-rows', 'NEW', 'business', [
+    { key: 'maxNestingDepth', label: 'Max Nesting Depth', type: 'number', group: 'field_specific', default: 3, min: 1, max: 6 },
+    { key: 'allowAddRemove', label: 'Allow Add / Remove Sub-rows', type: 'toggle_with_description', group: 'field_specific', default: true },
+  ]],
   ['drag_drop_ranking', 'Drag & Drop Ranking', 'productivity', 'ArrowUpDown', 'HTML5 drag-drop ranking', 'POPULAR', 'pro', [
     { key: 'items', label: 'Ranking Items', type: 'options_editor', group: 'field_specific' },
     { key: 'showNumbers', label: 'Show Numbered Badges (1, 2, 3...)', type: 'toggle_with_description', group: 'field_specific', default: true },
@@ -204,8 +270,20 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'minRows', label: 'Min Rows', type: 'number', group: 'field_specific', default: 1 },
     { key: 'maxRows', label: 'Max Rows', type: 'number', group: 'field_specific', default: 10 },
   ]],
-  ['pivot_table', 'Pivot Table', 'productivity', 'Table', 'Pivot table input', 'PRO', 'business'],
-  ['csv_import', 'CSV Import', 'productivity', 'FileSpreadsheet', 'Parse CSV client-side', 'NEW', 'pro'],
+  ['pivot_table', 'Pivot Table', 'productivity', 'Table', 'Pivot table input', 'PRO', 'business', [
+    { key: 'rowField', label: 'Row Source Field', type: 'field_selector', group: 'field_specific', helpText: 'Form field whose values become the pivot rows.' },
+    { key: 'colField', label: 'Column Source Field', type: 'field_selector', group: 'field_specific', helpText: 'Form field whose values become the pivot columns.' },
+    { key: 'aggFunction', label: 'Aggregation', type: 'select', group: 'field_specific', default: 'sum', options: [
+      { label: 'Sum', value: 'sum' }, { label: 'Count', value: 'count' }, { label: 'Average', value: 'avg' },
+    ] },
+  ]],
+  ['csv_import', 'CSV Import', 'productivity', 'FileSpreadsheet', 'Parse CSV client-side', 'NEW', 'pro', [
+    { key: 'hasHeaderRow', label: 'First Row is Header', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Treat the first CSV row as column headers.' },
+    { key: 'delimiter', label: 'Delimiter', type: 'select', group: 'field_specific', default: 'comma', options: [
+      { label: 'Comma', value: 'comma' }, { label: 'Semicolon', value: 'semicolon' }, { label: 'Tab', value: 'tab' },
+    ] },
+    { key: 'maxRows', label: 'Max Rows to Import', type: 'number', group: 'field_specific', default: 1000, min: 1 },
+  ]],
   ['dynamic_dropdowns', 'Dynamic Dropdowns', 'productivity', 'GitMerge', 'Multi-level cascading dropdowns', 'NEW', 'pro', [
     { key: 'hierarchyData', label: 'Hierarchy Data (JSON or Indented Text)', type: 'json', group: 'field_specific', placeholder: '{"Make": {"Toyota": ["Camry", "Corolla"], "Ford": ["F-150", "Mustang"]}}' },
     { key: 'autoClearChild', label: 'Auto-clear Child on Parent Change', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Reset deeper dropdowns when a parent option changes.' },
@@ -221,8 +299,15 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'minRepeats', label: 'Min Repeats', type: 'number', group: 'field_specific', default: 1, min: 0 },
     { key: 'maxRepeats', label: 'Max Repeats', type: 'number', group: 'field_specific', default: 10 },
   ]],
-  ['key_value_repeater', 'Key-Value Repeater', 'productivity', 'Braces', 'Repeater of {key, value}', '', 'free'],
-  ['tag_cloud_input', 'Tag Cloud Input', 'productivity', 'Tags', 'Tag cloud toggle', '', 'free'],
+  ['key_value_repeater', 'Key-Value Repeater', 'productivity', 'Braces', 'Repeater of {key, value}', '', 'free', [
+    { key: 'keyLabel', label: 'Key Column Label', type: 'text', group: 'field_specific', default: 'Key' },
+    { key: 'valueLabel', label: 'Value Column Label', type: 'text', group: 'field_specific', default: 'Value' },
+    { key: 'maxRows', label: 'Max Rows', type: 'number', group: 'field_specific', default: 20, min: 1 },
+  ]],
+  ['tag_cloud_input', 'Tag Cloud Input', 'productivity', 'Tags', 'Tag cloud toggle', '', 'free', [
+    { key: 'maxTags', label: 'Max Tags', type: 'number', group: 'field_specific', default: 10, min: 1 },
+    { key: 'allowCustom', label: 'Allow Custom Tags', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let respondents type tags that are not in the preset list.' },
+  ]],
   ['matrix_dynamique', 'Matrix Dynamique', 'productivity', 'Grid', 'User-expandable data matrix', 'POPULAR', 'pro', [
     { key: 'rowHeaders', label: 'Row Headers (comma-separated)', type: 'text', group: 'field_specific', default: 'Row 1, Row 2, Row 3' },
     { key: 'colHeaders', label: 'Column Headers (comma-separated)', type: 'text', group: 'field_specific', default: 'Col A, Col B, Col C' },
@@ -303,9 +388,20 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'username', label: 'Channel Username or t.me link', type: 'text', group: 'field_specific' },
     { key: 'buttonText', label: 'Button Text', type: 'text', group: 'field_specific', default: 'Join our Telegram Channel' },
   ]],
-  ['tiktok_embed', 'TikTok Embed', 'social', 'Music', 'TikTok video embed', 'NEW', 'free'],
-  ['reddit_embed', 'Reddit Embed', 'social', 'MessageCircle', 'Reddit post embed', '', 'free'],
-  ['pinterest_pin', 'Pinterest Pin', 'social', 'Image', 'Pinterest pin embed', '', 'free'],
+  ['tiktok_embed', 'TikTok Embed', 'social', 'Music', 'TikTok video embed', 'NEW', 'free', [
+    { key: 'videoUrl', label: 'TikTok Video URL', type: 'text', group: 'field_specific', placeholder: 'https://www.tiktok.com/@user/video/...' },
+    { key: 'captionText', label: 'Caption Above Embed', type: 'text', group: 'field_specific' },
+  ]],
+  ['reddit_embed', 'Reddit Embed', 'social', 'MessageCircle', 'Reddit post embed', '', 'free', [
+    { key: 'postUrl', label: 'Reddit Post URL', type: 'text', group: 'field_specific', placeholder: 'https://www.reddit.com/r/...' },
+    { key: 'showParentThread', label: 'Show Parent Comment Thread', type: 'toggle_with_description', group: 'field_specific', default: false },
+  ]],
+  ['pinterest_pin', 'Pinterest Pin', 'social', 'Image', 'Pinterest pin embed', '', 'free', [
+    { key: 'pinUrl', label: 'Pinterest Pin URL', type: 'text', group: 'field_specific', placeholder: 'https://www.pinterest.com/pin/...' },
+    { key: 'size', label: 'Pin Size', type: 'select', group: 'field_specific', default: 'medium', options: [
+      { label: 'Small', value: 'small' }, { label: 'Medium', value: 'medium' }, { label: 'Large', value: 'large' },
+    ] },
+  ]],
   ['github_repo_card', 'GitHub Repo Card', 'social', 'Github', 'Live repository card with stars and forks', 'NEW', 'free', [
     { key: 'owner', label: 'GitHub Owner / Organization', type: 'text', group: 'field_specific', placeholder: 'facebook' },
     { key: 'repo', label: 'Repository Name', type: 'text', group: 'field_specific', placeholder: 'react' },

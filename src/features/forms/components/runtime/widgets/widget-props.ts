@@ -9,6 +9,8 @@ export interface WidgetProps {
   onChange: (value: unknown) => void;
   config: Record<string, unknown>;
   disabled?: boolean;
+  /** When true, the widget renders its value but the user cannot edit it. */
+  readOnly?: boolean;
   allFormData?: Record<string, unknown>;
   field?: Record<string, unknown>;
 }
