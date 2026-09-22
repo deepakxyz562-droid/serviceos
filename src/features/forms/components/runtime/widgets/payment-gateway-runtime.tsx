@@ -35,10 +35,15 @@ export interface PaymentGatewayRuntimeProps {
     amount?: number;
     currency?: string;
     details?: Record<string, any>;
+    simulated?: boolean;
   };
   onChange: (val: any) => void;
   allFormData?: Record<string, any>;
   disabled?: boolean;
+  /** When true, the widget renders its value but the user cannot edit it. */
+  readOnly?: boolean;
+  /** The form ID — used to call POST /api/forms/[id]/charge for real payments. */
+  formId?: string;
 }
 
 export function PaymentGatewayRuntime({
@@ -49,6 +54,8 @@ export function PaymentGatewayRuntime({
   onChange,
   allFormData = {},
   disabled = false,
+  readOnly = false,
+  formId,
 }: PaymentGatewayRuntimeProps) {
   // Resolve gateway definition
   const gateway: PaymentGatewayDef = useMemo(() => {
@@ -133,13 +140,42 @@ export function PaymentGatewayRuntime({
   // Falls back to simulated mode only if no STRIPE_SECRET_KEY is configured
   // (indicated by the API returning 503 or the gateway not being stripe-based).
   const handleSimulatePayment = async (methodName?: string) => {
-    if (disabled) return;
+    if (disabled || readOnly) return;
     setIsProcessing(true);
 
+    // testMode short-circuits to a clearly-marked simulated payment.
+    // No real charge is attempted — useful for previewing the form.
+    if (config.testMode === true) {
+      setTimeout(() => {
+        setIsProcessing(false);
+        const simulatedTxId = `sim_${gateway.id.substring(0, 4)}_${Date.now()}`;
+        onChange({
+          status: 'authorized',
+          gatewayId: gateway.id,
+          method: methodName || gateway.name,
+          transactionId: simulatedTxId,
+          amount: computedAmount,
+          currency,
+          authorizedAt: new Date().toISOString(),
+          simulated: true,
+          details: {
+            last4: cardNumber.replace(/\s/g, '').slice(-4) || '4242',
+            poNumber: poNumber || undefined,
+            upiId: upiId || undefined,
+          },
+        });
+      }, 800);
+      return;
+    }
+
     try {
-      // Attempt real payment processing via the charge API
-      // This calls POST /api/forms/[formId]/charge which uses Stripe SDK
-      const formId = (field as Record<string, unknown>)?.formId as string || '';
+      // Attempt real payment processing via the charge API.
+      // This calls POST /api/forms/[formId]/charge which uses the Stripe SDK
+      // (and other gateways in future). Only Stripe is implemented today —
+      // other gateways fall through to simulated mode with clear messaging.
+      if (!formId) {
+        throw new Error('missing formId');
+      }
       const chargeRes = await fetch(`/api/forms/${formId}/charge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,7 +183,8 @@ export function PaymentGatewayRuntime({
           gatewayId: gateway.id,
           amount: computedAmount,
           currency,
-          customer: { name: 'Customer', email: '' },
+          customer: { name: cardholderName || 'Customer', email: '' },
+          paymentMethodId: undefined, // Stripe Elements would attach the PM here
         }),
       });
 
@@ -222,13 +259,16 @@ export function PaymentGatewayRuntime({
 
   return (
     <div className="w-full rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs transition-all">
-      {/* Simulated payment banner — shown when gateway is not yet implemented */}
-      {gateway.implemented === false && (
+      {/* Simulated payment banner — shown when gateway is not yet implemented,
+          OR when the user explicitly enabled testMode in the inspector. */}
+      {(gateway.implemented === false || config.testMode === true) && (
         <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 flex items-center gap-2">
           <AlertCircle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
           <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
-            Test Mode — this is a simulated payment. No real charge will be made.
-            {gateway.name} is coming soon; only Stripe processes live payments.
+            {config.testMode === true
+              ? `Test Mode — this is a simulated payment. No real charge will be made. `
+              : `Test Mode — this is a simulated payment. No real charge will be made. ${gateway.name} is coming soon; only Stripe processes live payments. `}
+            {gateway.implemented !== false && `Turn off "Sandbox Test Mode" in the inspector to charge real cards.`}
           </p>
         </div>
       )}

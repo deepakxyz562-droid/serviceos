@@ -10,6 +10,7 @@
  *   - Payment (20)        - Products (10)
  */
 import type { FieldDefinition, SettingField } from './field-settings-types';
+import { buildCredentialSettings } from './payment-credentials';
 
 type WidgetSpec = [
   id: string,
@@ -476,8 +477,8 @@ const WIDGET_SPECS: WidgetSpec[] = [
 
   // 4. PayPal
   ['payment_paypal', 'PayPal', 'payment', 'Wallet', 'PayPal + Venmo + Pay in 4', 'POPULAR', 'pro', [
-    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'paypal',
-      options: [{ label: 'PayPal', value: 'paypal' }, { label: 'PayPal Pro', value: 'paypal_pro' }],
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'paypal_complete',
+      options: [{ label: 'PayPal', value: 'paypal_complete' }, { label: 'PayPal Pro', value: 'paypal_pro' }],
       helpText: 'Connected to PayPal. Add a PayPal connection to start collecting payments.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products',
       options: [
@@ -525,13 +526,13 @@ const WIDGET_SPECS: WidgetSpec[] = [
 
   // 6-10: Remaining gateways with simplified redirect-based schema
   ['payment_apple_pay', 'Apple Pay', 'payment', 'Wallet', 'Apple Pay button (Apple devices only)', 'NEW', 'pro', [
-    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'apple_pay', options: [{ label: 'Apple Pay', value: 'apple_pay' }], helpText: 'Connected to Apple Pay.' },
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'apple_google_pay', options: [{ label: 'Apple Pay & Google Pay', value: 'apple_google_pay' }], helpText: 'Connected to Apple Pay / Google Pay.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
   ['payment_google_pay', 'Google Pay', 'payment', 'Wallet', 'Google Pay button', 'NEW', 'pro', [
-    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'google_pay', options: [{ label: 'Google Pay', value: 'google_pay' }], helpText: 'Connected to Google Pay.' },
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'apple_google_pay', options: [{ label: 'Apple Pay & Google Pay', value: 'apple_google_pay' }], helpText: 'Connected to Apple Pay / Google Pay.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
@@ -569,7 +570,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
   ['payment_payu_latam', 'PayU Latam', 'payment', 'CreditCard', 'PayU Latam redirect checkout', '', 'pro', [
-    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'payu_latam', options: [{ label: 'PayU Latam', value: 'payu_latam' }], helpText: 'Connected to PayU Latam.' },
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'payu_global', options: [{ label: 'PayU', value: 'payu_global' }], helpText: 'Connected to PayU Latam.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'BRL - Brazilian Reals', value: 'BRL' }, { label: 'MXN - Mexican Pesos', value: 'MXN' }, { label: 'COP - Colombian Pesos', value: 'COP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
@@ -581,13 +582,13 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
   ['payment_twocheckout', '2Checkout', 'payment', 'CreditCard', '2Checkout redirect', '', 'pro', [
-    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'twocheckout', options: [{ label: '2Checkout', value: 'twocheckout' }], helpText: 'Connected to 2Checkout.' },
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'two_checkout', options: [{ label: '2Checkout', value: 'two_checkout' }], helpText: 'Connected to 2Checkout.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
   ['payment_worldpay', 'Worldpay', 'payment', 'CreditCard', 'Worldpay redirect', '', 'pro', [
-    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'worldpay', options: [{ label: 'Worldpay', value: 'worldpay' }], helpText: 'Connected to Worldpay.' },
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'worldpay_uk', options: [{ label: 'Worldpay UK', value: 'worldpay_uk' }], helpText: 'Connected to Worldpay UK.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
@@ -615,6 +616,26 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'CAD - Canadian Dollars', value: 'CAD' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+
+  // ─── Phase C: previously-missing widgets ────────────────────────────────────
+  ['payment_echeck_net', 'eCheck.Net', 'payment', 'Landmark', 'Direct electronic check / ACH processing via Authorize.Net', '', 'pro', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'echeck_net', options: [{ label: 'eCheck.Net', value: 'echeck_net' }], helpText: 'Connected to eCheck.Net (via Authorize.Net).' },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real bank accounts.' },
+  ], 'payment'],
+  ['payment_chargify', 'Chargify (Maxio)', 'payment', 'RefreshCw', 'B2B SaaS recurring billing & subscription engine', 'NEW', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'chargify', options: [{ label: 'Chargify (Maxio)', value: 'chargify' }], helpText: 'Connected to Chargify.' },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'subscriptions', options: [{ label: 'Sell Subscriptions', value: 'subscriptions' }, { label: 'Sell Products', value: 'products' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test subscriptions without creating real Chargify subscriptions.' },
+  ], 'payment'],
+  ['payment_stripe_ach', 'Stripe Financial ACH', 'payment', 'Building2', 'Instant bank verification & low-fee direct debit via Stripe', 'NEW', 'pro', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'stripe_ach', options: [{ label: 'Stripe ACH', value: 'stripe_ach' }], helpText: 'Connected to Stripe (ACH).' },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test ACH payments without real bank transfers.' },
   ], 'payment'],
 
 
@@ -666,25 +687,41 @@ const WIDGET_SPECS: WidgetSpec[] = [
 ];
 
 export const PHASE_1_WIDGETS: FieldDefinition[] = WIDGET_SPECS.map(
-  ([id, name, category, iconName, description, badge, tier, extraSettings, backendHandler]) => ({
-    id,
-    name,
-    category,
-    iconName,
-    description,
-    badge: (badge || undefined) as FieldDefinition['badge'],
-    tier: tier as FieldDefinition['tier'],
-    backendHandler: backendHandler as FieldDefinition['backendHandler'],
-    createField: (label?: string) => ({
-      label: label ?? name,
-      type: 'control_widget',
-      widgetType: id,
-      widgetConfig: (extraSettings || []).reduce<Record<string, unknown>>((acc, s) => {
-        if (s.default !== undefined) acc[s.key] = s.default;
-        return acc;
-      }, {}),
-      required: false,
-    }),
-    settingsSchema: extraSettings ?? [],
-  }),
+  ([id, name, category, iconName, description, badge, tier, extraSettings, backendHandler]) => {
+    // For payment widgets, inject the gateway's configFields (publishableKey,
+    // secretKey, applicationId, etc.) into the inspector so users can enter
+    // their API credentials. Reads the default gatewayId from extraSettings.
+    const isPayment = category === 'payment' && id.startsWith('payment_');
+    let settingsSchema = extraSettings ?? [];
+    let widgetConfig: Record<string, unknown> = (extraSettings || []).reduce<Record<string, unknown>>((acc, s) => {
+      if (s.default !== undefined) acc[s.key] = s.default;
+      return acc;
+    }, {});
+    if (isPayment) {
+      const gatewayIdSetting = (extraSettings || []).find((s) => s.key === 'gatewayId');
+      const defaultGatewayId = (gatewayIdSetting?.default as string) || id.replace(/^payment_/, '');
+      const credSettings = buildCredentialSettings(defaultGatewayId);
+      if (credSettings.length > 0) {
+        settingsSchema = [...settingsSchema, ...credSettings];
+      }
+    }
+    return {
+      id,
+      name,
+      category,
+      iconName,
+      description,
+      badge: (badge || undefined) as FieldDefinition['badge'],
+      tier: tier as FieldDefinition['tier'],
+      backendHandler: backendHandler as FieldDefinition['backendHandler'],
+      createField: (label?: string) => ({
+        label: label ?? name,
+        type: 'control_widget',
+        widgetType: id,
+        widgetConfig,
+        required: false,
+      }),
+      settingsSchema,
+    };
+  },
 );

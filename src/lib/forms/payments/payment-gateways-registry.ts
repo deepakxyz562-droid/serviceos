@@ -62,12 +62,12 @@ export interface PaymentGatewayDef {
 }
 
 export const PAYMENT_CATEGORIES: { id: PaymentCategory; label: string; count: number }[] = [
-  { id: 'all', label: 'All Gateways', count: 33 },
+  { id: 'all', label: 'All Gateways', count: 34 },
   { id: 'cards', label: 'Credit / Debit Cards', count: 12 },
-  { id: 'wallets', label: 'Digital Wallets', count: 6 },
-  { id: 'bnpl', label: 'Buy Now Pay Later', count: 3 },
-  { id: 'bank', label: 'Direct Bank / ACH', count: 4 },
-  { id: 'regional', label: 'Regional / Local', count: 7 },
+  { id: 'wallets', label: 'Digital Wallets', count: 7 },
+  { id: 'bnpl', label: 'Buy Now Pay Later', count: 2 },
+  { id: 'bank', label: 'Direct Bank / ACH', count: 3 },
+  { id: 'regional', label: 'Regional / Local', count: 9 },
   { id: 'offline', label: 'Offline / Invoicing', count: 1 },
 ];
 
@@ -737,6 +737,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#0A192F"/><path d="M19 11l-7 10h6l-2 8 9-11h-6l2-7z" fill="#00B0FF"/></svg>`,
     supportedPaymentTypes: ['sell_subscriptions'],
+    configFields: [
+      { key: 'apiKey', label: 'Chargify API Key', type: 'password', placeholder: 'chrg_live_...' },
+      { key: 'subdomain', label: 'Chargify Subdomain', type: 'text', placeholder: 'yourcompany' },
+    ],
   },
   // 33. Paymentwall
   {
@@ -753,6 +757,27 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: true,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#E74C3C"/><path d="M12 14h16v12H12z" stroke="#FFF" stroke-width="2.5"/><line x1="12" y1="18" x2="28" y2="18" stroke="#FFF" stroke-width="2"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'user_defined_amount', 'collect_donations'],
+  },
+  // 34. Stripe Financial ACH (Phase C addition)
+  {
+    id: 'stripe_ach',
+    fieldType: 'control_stripe_ach',
+    name: 'Stripe Financial ACH',
+    category: 'bank',
+    description: 'Instant bank verification and low-fee direct debit via Stripe ACH.',
+    badge: 'NEW',
+    currencies: ['USD'],
+    features: ['Instant Bank Verification', 'Plaid Integration', '1-3 Business Days Settlement'],
+    brandColor: '#635BFF',
+    logoBg: '#635BFF',
+    supportsZeroConfig: true,
+    iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#635BFF"/><path d="M12 16h16v8H12z" stroke="#FFF" stroke-width="2"/><path d="M16 20h8" stroke="#FFF" stroke-width="1.5"/></svg>`,
+    supportedPaymentTypes: ['sell_products', 'user_defined_amount', 'collect_donations'],
+    configFields: [
+      { key: 'publishableKey', label: 'Publishable Key', type: 'text', placeholder: 'pk_live_...' },
+      { key: 'secretKey', label: 'Secret Key', type: 'password', placeholder: 'sk_live_...' },
+    ],
+    implemented: true,
   },
 ];
 

@@ -72,6 +72,7 @@ function parseVideoEmbed(url?: string): { type: 'youtube' | 'vimeo' | 'mp4' | 'n
  * 2026 Interactive Hero Media & Map Panel (Left or Right Column)
  */
 function FormMediaHeroPanel({
+  formId,
   mediaPanel,
   formName,
   formDescription,
@@ -81,6 +82,7 @@ function FormMediaHeroPanel({
   errors = {},
   onChange,
 }: {
+  formId?: string;
   mediaPanel?: import('@/lib/forms/form-schema-types').FormMediaPanel;
   formName: string;
   formDescription?: string | null;
@@ -308,6 +310,7 @@ function FormMediaHeroPanel({
                     value={formData ? formData[field.id] : undefined}
                     onChange={(val) => onChange?.(field.id, val)}
                     disabled={false}
+                    formId={formId}
                   />
                 </div>
                 {errors[field.id] && (
@@ -1232,6 +1235,7 @@ export function FormRuntimeRenderer({
           {isSplitLayout && !isRightSide && (
             <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' ? 'hidden lg:flex' : ''}`}>
               <FormMediaHeroPanel
+                formId={formId}
                 mediaPanel={mediaPanel}
                 formName={formName}
                 formDescription={formDescription}
@@ -1425,7 +1429,7 @@ export function FormRuntimeRenderer({
                         <p className="text-xs text-muted-foreground">{field.helpText}</p>
                       )}
                       {(field.type === 'control_widget' || ['dropdown','radio','checkbox','short_answer','email','phone','numerical','date','time','long_answer','signature','rating','appointment','heading','paragraph','divider','slider','switch','toggle','multiple_choice','single_choice','calculation','form_calculation'].includes(field.type) || (field.widgetType && field.widgetType !== 'hidden')) && (
-                        <WidgetRuntimeDispatcher field={field} value={formData[field.id]} onChange={(val) => handleFieldChange(field.id, val)} allFormData={formData} />
+                        <WidgetRuntimeDispatcher field={field} value={formData[field.id]} onChange={(val) => handleFieldChange(field.id, val)} allFormData={formData} formId={formId} />
                       )}
                       {field.type === 'heading' && (() => {
                         const cfg = (field.widgetConfig as any) || {};
@@ -1464,6 +1468,7 @@ export function FormRuntimeRenderer({
                           value={formData[field.id]}
                           onChange={(val) => handleFieldChange(field.id, val)}
                           allFormData={formData}
+                          formId={formId}
                         />
                       )}
 
@@ -1610,6 +1615,7 @@ export function FormRuntimeRenderer({
                         value={formData[field.id]}
                         onChange={(val) => handleFieldChange(field.id, val)}
                         allFormData={formData}
+                        formId={formId}
                       />
                     )}
 
@@ -1704,6 +1710,7 @@ export function FormRuntimeRenderer({
                         value={undefined}
                         onChange={() => {}}
                         allFormData={formData}
+                        formId={formId}
                       />
                     )}
 
@@ -1724,6 +1731,7 @@ export function FormRuntimeRenderer({
                         value={formData[field.id]}
                         onChange={(val) => handleFieldChange(field.id, val)}
                         allFormData={formData}
+                        formId={formId}
                       />
                     )}
 
@@ -1859,6 +1867,7 @@ export function FormRuntimeRenderer({
           {isSplitLayout && isRightSide && (
             <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' ? 'hidden lg:flex' : ''}`}>
               <FormMediaHeroPanel
+                formId={formId}
                 mediaPanel={mediaPanel}
                 formName={formName}
                 formDescription={formDescription}

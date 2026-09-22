@@ -164,6 +164,10 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   payment_afterpay: w(() => import('./payment/afterpay')),
   payment_affirm: w(() => import('./payment/affirm')),
   payment_coinbase_commerce: w(() => import('./payment/coinbase-commerce')),
+  // ─── Phase C: previously-missing payment widgets ──────────────────────────
+  payment_echeck_net: w(() => import('./payment/echeck-net')),
+  payment_chargify: w(() => import('./payment/chargify')),
+  payment_stripe_ach: w(() => import('./payment/stripe-ach')),
 
   // ─── Products & Pricing ────────────────────────────────────────────────────────
   product_single: w(() => import('./product/single-product')),

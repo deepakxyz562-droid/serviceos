@@ -9,6 +9,7 @@
  *   - utility (15 misc/utility widgets)
  */
 import type { FieldDefinition, SettingField } from './field-settings-types';
+import { buildCredentialSettings } from './payment-credentials';
 
 type WidgetSpec = [
   id: string,
@@ -228,25 +229,42 @@ const WIDGET_SPECS: WidgetSpec[] = [
 ];
 
 export const PHASE_4_WIDGETS: FieldDefinition[] = WIDGET_SPECS.map(
-  ([id, name, category, iconName, description, badge, tier, extraSettings, backendHandler]) => ({
-    id,
-    name,
-    category,
-    iconName,
-    description,
-    badge: (badge || undefined) as FieldDefinition['badge'],
-    tier: tier as FieldDefinition['tier'],
-    backendHandler: backendHandler as FieldDefinition['backendHandler'],
-    createField: (label?: string) => ({
-      label: label ?? name,
-      type: 'control_widget',
-      widgetType: id,
-      widgetConfig: (extraSettings || []).reduce<Record<string, unknown>>((acc, s) => {
-        if (s.default !== undefined) acc[s.key] = s.default;
-        return acc;
-      }, {}),
-      required: false,
-    }),
-    settingsSchema: extraSettings ?? [],
-  }),
+  ([id, name, category, iconName, description, badge, tier, extraSettings, backendHandler]) => {
+    // For payment widgets, inject the gateway's configFields (publishableKey,
+    // secretKey, applicationId, etc.) into the inspector so users can enter
+    // their API credentials. Phase-4 payment widgets have no explicit gatewayId
+    // setting — derive it from the widget id (payment_dwolla → dwolla).
+    const isPayment = category === 'payment' && id.startsWith('payment_');
+    let settingsSchema = extraSettings ?? [];
+    let widgetConfig: Record<string, unknown> = (extraSettings || []).reduce<Record<string, unknown>>((acc, s) => {
+      if (s.default !== undefined) acc[s.key] = s.default;
+      return acc;
+    }, {});
+    if (isPayment) {
+      const gatewayIdSetting = (extraSettings || []).find((s) => s.key === 'gatewayId');
+      const defaultGatewayId = (gatewayIdSetting?.default as string) || id.replace(/^payment_/, '');
+      const credSettings = buildCredentialSettings(defaultGatewayId);
+      if (credSettings.length > 0) {
+        settingsSchema = [...settingsSchema, ...credSettings];
+      }
+    }
+    return {
+      id,
+      name,
+      category,
+      iconName,
+      description,
+      badge: (badge || undefined) as FieldDefinition['badge'],
+      tier: tier as FieldDefinition['tier'],
+      backendHandler: backendHandler as FieldDefinition['backendHandler'],
+      createField: (label?: string) => ({
+        label: label ?? name,
+        type: 'control_widget',
+        widgetType: id,
+        widgetConfig,
+        required: false,
+      }),
+      settingsSchema,
+    };
+  },
 );

@@ -28,6 +28,9 @@ interface WidgetRuntimeDispatcherProps {
   onChange: (val: any) => void;
   allFormData?: Record<string, any>;
   disabled?: boolean;
+  /** The form ID — propagated to payment widgets so they can call
+   *  POST /api/forms/[id]/charge for real payments. */
+  formId?: string;
 }
 
 /**
@@ -44,6 +47,7 @@ function LazyWidgetRenderer({
   readOnly,
   allFormData,
   field,
+  formId,
 }: {
   component: React.LazyExoticComponent<React.ComponentType<WidgetProps>>;
   value: unknown;
@@ -53,6 +57,7 @@ function LazyWidgetRenderer({
   readOnly?: boolean;
   allFormData?: Record<string, unknown>;
   field: Record<string, unknown>;
+  formId?: string;
 }) {
   return (
     <Suspense fallback={<div className="h-10 bg-muted/40 animate-pulse rounded" />}>
@@ -63,7 +68,7 @@ function LazyWidgetRenderer({
         disabled={disabled}
         readOnly={readOnly}
         allFormData={allFormData}
-        field={field}
+        field={formId ? { ...field, formId } : field}
       />
     </Suspense>
   );
@@ -119,6 +124,7 @@ export function WidgetRuntimeDispatcher({
   onChange,
   allFormData = {},
   disabled = false,
+  formId,
 }: WidgetRuntimeDispatcherProps) {
   const widgetType = field.widgetType || '';
   // Cast to Record<string, any> so property access returns `any` instead of `unknown`.
@@ -159,6 +165,7 @@ export function WidgetRuntimeDispatcher({
         readOnly={isReadOnly}
         allFormData={allFormData}
         field={field as unknown as Record<string, unknown>}
+        formId={formId}
       />
     );
   }
@@ -185,6 +192,8 @@ export function WidgetRuntimeDispatcher({
         onChange={onChange}
         allFormData={allFormData}
         disabled={interactiveDisabled}
+        readOnly={isReadOnly}
+        formId={formId}
       />
     );
   }
