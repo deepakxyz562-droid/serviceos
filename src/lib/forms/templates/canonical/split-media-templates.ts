@@ -547,6 +547,52 @@ const PLUMBING_MAP_SPLIT_TEMPLATE: FormTemplate = {
         subtitle: 'Our fully stocked mobile service vans are equipped for immediate pipe, sewer, and water heater repairs.',
         benefitsList: [
           'Average arrival time under 45 minutes',
+          'Upfront flat-rate pricing before work begins',
+          '100% Satisfaction & 1-Year Warranty',
+        ],
+        mobileBehavior: 'stack_top',
+      },
+    },
+    settings: {
+      formLayout: 'split_media',
+      submitButtonText: 'Dispatch Technician Now ⚡',
+      successTitle: 'Technician Dispatched!',
+      successMessage: 'A licensed master plumber has received your location and will call you in 5 minutes.',
+      actions: {
+        sendEmailNotification: { enabled: true, toEmails: [] },
+        createCrmLead: { enabled: true, source: 'split_map_plumbing' },
+      },
+    },
+  },
+  categories: ['booking', 'estimate', 'lead_generation'],
+  industries: ['plumbing', 'home_services'],
+  useCases: ['lead_capture', 'emergency_booking'],
+  audiences: ['residential', 'commercial'],
+  tags: ['split-screen', 'map-hero', 'plumbing', 'dispatch', '2026-ui'],
+  fieldTypes: ['short_answer', 'phone', 'address', 'dropdown', 'radio'],
+  source: 'curated',
+  status: 'published',
+  isFeatured: true,
+  isPublic: true,
+  rating: 4.97,
+  ratingCount: 112,
+  usageCount: 1780,
+  estimatedMinutes: 2,
+  seo: {
+    seoTitle: '2-Part Split Hero Plumbing Dispatch Form with Interactive Map',
+    seoDescription: 'High-converting side-by-side dispatch form with live service area map pin and emergency intake.',
+    seoKeywords: ['plumbing split form', 'interactive map form', 'emergency plumber dispatch'],
+    faq: [
+      {
+        question: 'Does the map update to the customer location?',
+        answer: 'The map shows your designated dispatch service hub and active service coverage area.',
+      },
+    ],
+  },
+  createdAt: '2026-03-01T00:00:00Z',
+  updatedAt: '2026-09-19T00:00:00Z',
+};
+
 // ─── 5. 2-Column Live Estimator & Calculation Form (Elementor-Style) ─────────
 const TWO_COLUMN_LIVE_ESTIMATOR_TEMPLATE: FormTemplate = {
   id: 'elementor-two-column-live-estimator',
