@@ -19,6 +19,8 @@ function classify(n: number) {
 export function NpsSlider({ value, onChange, config, disabled, field }: WidgetProps) {
   const current = typeof value === 'number' ? value : 0;
   const showLabels = config.showLabels !== false;
+  const minLabel = String(config.minLabel || 'Not likely');
+  const maxLabel = String(config.maxLabel || 'Very likely');
   const bucket = classify(current);
 
   return (
@@ -49,8 +51,8 @@ export function NpsSlider({ value, onChange, config, disabled, field }: WidgetPr
       </div>
       {showLabels && (
         <div className="flex justify-between text-[10px] text-muted-foreground font-semibold">
-          <span>0 · Very unlikely</span>
-          <span>10 · Very likely</span>
+          <span>0 · {minLabel}</span>
+          <span>10 · {maxLabel}</span>
         </div>
       )}
       {bucket && current > 0 && (

@@ -55,6 +55,10 @@ export interface PaymentGatewayDef {
     options?: Array<{ label: string; value: string }>;
     description?: string;
   }>;
+  /** Whether this gateway has a real backend that creates charges at the provider.
+   *  When false, the gateway appears in the palette with a "Coming Soon" badge
+   *  and the runtime shows a simulated payment (no real charge). */
+  implemented?: boolean;
 }
 
 export const PAYMENT_CATEGORIES: { id: PaymentCategory; label: string; count: number }[] = [
@@ -132,6 +136,7 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
       { key: 'secretKey', label: 'Secret Key', type: 'password', placeholder: 'sk_live_...' },
       { key: 'webhookSecret', label: 'Webhook Signing Secret', type: 'password', placeholder: 'whsec_...' },
     ],
+    implemented: true,
   },
   // 2. Stripe Checkout (Hosted)
   {
@@ -160,6 +165,7 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
       { key: 'publishableKey', label: 'Publishable Key', type: 'text', placeholder: 'pk_live_...' },
       { key: 'secretKey', label: 'Secret Key', type: 'password', placeholder: 'sk_live_...' },
     ],
+    implemented: true,
   },
   // 3. Square
   {

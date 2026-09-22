@@ -509,6 +509,53 @@ export function FormRuntimeRenderer({
     } catch {}
   }, [storageKey]);
 
+  // ─── Hidden Field Auto-Capture ───────────────────────────────────────────
+  // Populate hidden fields with auto-captured values (UTM params, referrer, etc.)
+  // on form load. This makes the Hidden Parameter widget actually functional
+  // for lead attribution and UTM tracking.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hiddenFields = schema.fields.filter(
+      (f) => f.widgetType === 'hidden' || (f.type === 'short_answer' && f.widgetType === 'hidden'),
+    );
+    if (hiddenFields.length === 0) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const updates: Record<string, string> = {};
+
+    for (const field of hiddenFields) {
+      const cfg = (field.widgetConfig as Record<string, unknown>) || {};
+      const autoCapture = String(cfg.autoCapture || 'none');
+      const staticValue = String(cfg.staticValue || '');
+
+      let capturedValue = '';
+
+      if (autoCapture === 'none') {
+        capturedValue = staticValue;
+      } else if (autoCapture === 'referrer') {
+        capturedValue = document.referrer || '';
+      } else if (autoCapture === 'user_agent') {
+        capturedValue = navigator.userAgent || '';
+      } else if (autoCapture === 'ip') {
+        // IP capture requires a server-side call — leave empty for now,
+        // the server will fill it in on submission via the X-Forwarded-For header.
+        capturedValue = '';
+      } else {
+        // UTM parameters and any other URL query params
+        capturedValue = params.get(autoCapture) || '';
+      }
+
+      if (capturedValue && !formData[field.id]) {
+        updates[field.id] = capturedValue;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      setFormData((prev) => ({ ...prev, ...updates }));
+    }
+   
+  }, [schema.fields]);
+
   // Debounced draft autosave
   useEffect(() => {
     if (submitted) return;
@@ -1336,8 +1383,24 @@ export function FormRuntimeRenderer({
                           style={inputStyle}
                         />
                       )}
-                      {field.type === 'heading' && (<h2 className="text-lg font-bold text-foreground pt-2">{field.label}</h2>)}
-                      {field.type === 'paragraph' && (<p className="text-sm text-muted-foreground leading-relaxed">{(field.widgetConfig as any)?.text || field.label}</p>)}
+                      {field.type === 'heading' && (() => {
+                        const cfg = (field.widgetConfig as any) || {};
+                        const level = cfg.level || 'h3';
+                        const align = cfg.align || 'left';
+                        const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+                        const sizeClass = level === 'h1' ? 'text-2xl' : level === 'h2' ? 'text-xl' : level === 'h4' ? 'text-base' : 'text-lg';
+                        const Tag = level as keyof JSX.IntrinsicElements;
+                        return <Tag className={`${sizeClass} font-bold text-foreground pt-2 ${alignClass}`}>{field.label}</Tag>;
+                      })()}
+                      {field.type === 'paragraph' && (() => {
+                        const cfg = (field.widgetConfig as any) || {};
+                        const text = cfg.text || field.label || '';
+                        const allowHTML = cfg.allowHTML || false;
+                        if (allowHTML) {
+                          return <div className="text-sm text-muted-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: text }} />;
+                        }
+                        return <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>;
+                      })()}
 
                       {/* ─── P1 fix: handle ALL remaining field types so preview shows every field ───
                           Previously these types were invisible (no render branch). Now they route
@@ -1626,16 +1689,34 @@ export function FormRuntimeRenderer({
                       />
                     )}
 
-                    {/* Headings / Paragraphs */}
-                    {field.type === 'heading' && (
-                      <h2 className="text-base font-bold text-foreground pt-2 border-b border-border/60 pb-1 w-full">
-                        {field.label}
-                      </h2>
-                    )}
-                    {field.type === 'paragraph' && (
-                      <p className="text-xs text-muted-foreground leading-relaxed w-full">
-                        {field.label}
-                      </p>
+                    {/* Headings / Paragraphs — respect level, align, text, allowHTML settings */}
+                    {field.type === 'heading' && (() => {
+                      const cfg = (field.widgetConfig as any) || {};
+                      const level = cfg.level || 'h3';
+                      const align = cfg.align || 'left';
+                      const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+                      const sizeClass = level === 'h1' ? 'text-2xl' : level === 'h2' ? 'text-xl' : level === 'h4' ? 'text-sm' : 'text-base';
+                      const Tag = level as keyof JSX.IntrinsicElements;
+                      return <Tag className={`${sizeClass} font-bold text-foreground pt-2 border-b border-border/60 pb-1 w-full ${alignClass}`}>{field.label}</Tag>;
+                    })()}
+                    {field.type === 'paragraph' && (() => {
+                      const cfg = (field.widgetConfig as any) || {};
+                      const text = cfg.text || field.label || '';
+                      const allowHTML = cfg.allowHTML || false;
+                      if (allowHTML) {
+                        return <div className="text-xs text-muted-foreground leading-relaxed w-full" dangerouslySetInnerHTML={{ __html: text }} />;
+                      }
+                      return <p className="text-xs text-muted-foreground leading-relaxed w-full">{text}</p>;
+                    })()}
+
+                    {/* ─── Divider: route through dispatcher if widgetType is set ─── */}
+                    {field.type === 'paragraph' && field.widgetType === 'divider' && (
+                      <WidgetRuntimeDispatcher
+                        field={field}
+                        value={undefined}
+                        onChange={() => {}}
+                        allFormData={formData}
+                      />
                     )}
 
                     {/* ─── P1 fix: handle ALL remaining field types (non-card mode) ───

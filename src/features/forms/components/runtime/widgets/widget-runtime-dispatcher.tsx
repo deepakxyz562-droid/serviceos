@@ -246,12 +246,14 @@ export function WidgetRuntimeDispatcher({
     case 'estimate_summary_panel':
       return (
         <LiveEstimateSummaryPanel
-          title={config.title as string | undefined}
+          headline={config.headline as string | undefined}
           formula={config.formula as string | undefined}
-          currencyPrefix={config.currencyPrefix as string | undefined}
+          currency={config.currency as string | undefined}
+          prefix={config.currency as string | undefined}
           lineItems={config.lineItems as any}
-          ctaButtonText={config.ctaButtonText as string | undefined}
+          continueText={config.continueText as string | undefined}
           allFormData={allFormData}
+          fields={field?.widgetConfig?.lineItems ? [] : []}
         />
       );
 

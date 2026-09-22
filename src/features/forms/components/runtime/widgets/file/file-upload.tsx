@@ -35,7 +35,8 @@ export function FileUploadWidget({
 }: WidgetProps) {
   const maxFiles = Number(config?.maxFiles ?? 5);
   const maxFileSizeMb = Number(config?.maxFileSizeMb ?? 10);
-  const extensionsRaw = config?.extensions;
+  // Read allowedFileTypes (schema key) with fallback to extensions (legacy key).
+  const extensionsRaw = config?.allowedFileTypes ?? config?.extensions;
   const extensions: string[] = Array.isArray(extensionsRaw)
     ? extensionsRaw.map((e) => String(e).toLowerCase().replace(/^\./, ''))
     : [];

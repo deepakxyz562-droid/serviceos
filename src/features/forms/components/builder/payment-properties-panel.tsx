@@ -404,6 +404,11 @@ export function PaymentPropertiesPanel({
                             {gateway.badge}
                           </Badge>
                         )}
+                        {gateway.implemented === false && (
+                          <Badge className="text-[9px] px-1.5 py-0 uppercase h-4 bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-0">
+                            Coming Soon
+                          </Badge>
+                        )}
                       </h4>
                       {gateway.subtitle && (
                         <p className="text-[10px] text-muted-foreground font-medium">{gateway.subtitle}</p>
@@ -417,7 +422,11 @@ export function PaymentPropertiesPanel({
                 </div>
 
                 <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2 text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                  Add a <span className="font-semibold">{gateway.name}</span> connection to start collecting payments on your form.
+                  {gateway.implemented === false ? (
+                    <>This gateway is <span className="font-semibold">coming soon</span> — payments will be simulated (no real charge). Only <span className="font-semibold">Stripe</span> processes live payments today.</>
+                  ) : (
+                    <>Add a <span className="font-semibold">{gateway.name}</span> connection to start collecting payments on your form.</>
+                  )}
                 </div>
 
                 <Button

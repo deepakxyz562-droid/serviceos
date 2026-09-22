@@ -23,6 +23,26 @@ export function DatePicker({ value, onChange, config, disabled, field }: WidgetP
   const defaultToday = bool(config.defaultToday, false);
   const ariaLabel = str(field?.label, 'Date');
 
+  // Read minDate / maxDate / disableSpecificDates from config
+  const minDateStr = str(config.minDate, '');
+  const maxDateStr = str(config.maxDate, '');
+  const disabledDatesStr = str(config.disableSpecificDates, '');
+
+  const minDate = minDateStr ? parseISO(minDateStr) : undefined;
+  const maxDate = maxDateStr ? parseISO(maxDateStr) : undefined;
+  const disabledDates = React.useMemo(() => {
+    if (!disabledDatesStr) return [];
+    return disabledDatesStr
+      .split('\n')
+      .map((d) => d.trim())
+      .filter(Boolean)
+      .map((d) => {
+        const parsed = parseISO(d);
+        return isValid(parsed) ? parsed : null;
+      })
+      .filter((d): d is Date => d !== null);
+  }, [disabledDatesStr]);
+
   const dateValue = React.useMemo(() => {
     if (!value) return defaultToday ? new Date() : undefined;
     const d = typeof value === 'string' ? parseISO(value) : value instanceof Date ? value : undefined;
@@ -39,6 +59,9 @@ export function DatePicker({ value, onChange, config, disabled, field }: WidgetP
 
   const disabledDays = (d: Date) => {
     if (disableWeekends && (d.getDay() === 0 || d.getDay() === 6)) return true;
+    if (minDate && d < minDate) return true;
+    if (maxDate && d > maxDate) return true;
+    if (disabledDates.some((dd) => dd.getTime() === d.getTime())) return true;
     return false;
   };
 

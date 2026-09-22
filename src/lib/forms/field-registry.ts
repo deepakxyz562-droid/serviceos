@@ -257,7 +257,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       widgetType: 'appointment',
       required: true,
       widgetConfig: {
-        slotDurationMin: 30,
+        slotDurationMinutes: 30,
         intervalMin: 30,
         rollingDays: 30,
         appointmentType: 'one_on_one',
@@ -266,10 +266,11 @@ export const BASIC_FIELDS: FieldDefinition[] = [
         lockTimezone: false,
         sendReminderEmail: true,
         reminderTime: '1_day_before',
-        lunchBreakStart: '12:00',
-        lunchBreakEnd: '13:00',
-        availabilityIntervals: [
-          { day: 'Monday', startTime: '09:00', endTime: '17:00' },
+        lunchtimeEnabled: true,
+        lunchStart: '12:00',
+        lunchEnd: '13:00',
+        intervals: [
+          { from: '09:00', to: '17:00', days: 'Weekdays' },
           { day: 'Tuesday', startTime: '09:00', endTime: '17:00' },
           { day: 'Wednesday', startTime: '09:00', endTime: '17:00' },
           { day: 'Thursday', startTime: '09:00', endTime: '17:00' },
@@ -295,13 +296,12 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     tier: 'free',
     createField: (label = 'Rating') => ({
       label, type: 'rating', widgetType: 'star_rating',
-      widgetConfig: { maxStars: 5 }, required: false,
+      widgetConfig: { maxStars: 5, defaultValue: 0, requireCommentBelow: 3 }, required: false,
     }),
     settingsSchema: [
       { key: 'maxStars', label: 'Max stars', type: 'number', group: 'field_specific', default: 5, min: 3, max: 10 },
       { key: 'defaultValue', label: 'Default Value', type: 'number', group: 'field_specific', default: 0, min: 0, max: 5, helpText: 'Pre-select a number of stars (0 = no default).' },
-      { key: 'requireCommentOnLowRating', label: 'Require comment on low rating', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Force users to leave a comment when rating below threshold.' },
-      { key: 'threshold', label: 'Threshold', type: 'number', group: 'field_specific', default: 3, condition: { dependsOn: 'requireCommentOnLowRating', equals: 'true' } },
+      { key: 'requireCommentBelow', label: 'Require comment on low rating', type: 'number', group: 'field_specific', default: 3, helpText: 'Force users to leave a comment when rating is at or below this number.' },
     ],
   },
   {
@@ -358,7 +358,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     iconName: 'Heading',
     description: 'Bold heading text to label sections',
     tier: 'free',
-    createField: (label = 'Section Heading') => ({ label, type: 'heading' }),
+    createField: (label = 'Section Heading') => ({ label, type: 'heading', widgetType: 'heading', widgetConfig: { level: 'h3', align: 'left' } }),
     settingsSchema: [
       { key: 'level', label: 'Heading level', type: 'select', group: 'field_specific', default: 'h3', options: [
         { label: 'H1', value: 'h1' }, { label: 'H2', value: 'h2' }, { label: 'H3', value: 'h3' }, { label: 'H4', value: 'h4' },
@@ -375,7 +375,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     iconName: 'FileText',
     description: 'Static text/description shown to user',
     tier: 'free',
-    createField: (label = 'Paragraph') => ({ label: '', type: 'paragraph', widgetConfig: { text: 'Add your descriptive text here...' } }),
+    createField: (label = 'Paragraph') => ({ label: '', type: 'paragraph', widgetType: 'paragraph', widgetConfig: { text: 'Add your descriptive text here...', allowHTML: false } }),
     settingsSchema: [
       { key: 'text', label: 'Paragraph text', type: 'textarea', group: 'field_specific' },
       { key: 'allowHTML', label: 'Allow HTML', type: 'toggle_with_description', group: 'field_specific', default: false },
@@ -388,7 +388,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     iconName: 'Minus',
     description: 'Visual separator line',
     tier: 'free',
-    createField: () => ({ label: '', type: 'paragraph', widgetType: 'divider', widgetConfig: { style: 'solid', thickness: 1, spacing: 'medium' } }),
+    createField: () => ({ label: '', type: 'control_widget', widgetType: 'divider', widgetConfig: { style: 'solid', thickness: 1, spacing: 'medium' } }),
     settingsSchema: [
       { key: 'style', label: 'Style', type: 'select', group: 'field_specific', default: 'solid', options: [
         { label: 'Solid', value: 'solid' }, { label: 'Dashed', value: 'dashed' }, { label: 'Dotted', value: 'dotted' }, { label: 'Gradient Glow', value: 'gradient' },
@@ -883,13 +883,13 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     createField: (label = 'Calculation') => ({
       label, type: 'short_answer', widgetType: 'form_calculation',
-      widgetConfig: { formula: '', decimalPlaces: 2, resultPrefix: '$', resultSuffix: '', hidden: false }, required: false,
+      widgetConfig: { formula: '', decimals: 2, prefix: '$', suffix: '', hidden: false }, required: false,
     }),
     settingsSchema: [
       { key: 'formula', label: 'Formula', type: 'formula_editor', group: 'field_specific', helpText: 'Use {{field_id}} tokens for field values. e.g. {{qty}} * {{price}}' },
-      { key: 'decimalPlaces', label: 'Decimal places', type: 'number', group: 'field_specific', default: 2, min: 0, max: 6 },
-      { key: 'resultPrefix', label: 'Prefix (e.g. $)', type: 'text', group: 'field_specific', default: '$' },
-      { key: 'resultSuffix', label: 'Suffix (e.g. USD)', type: 'text', group: 'field_specific' },
+      { key: 'decimals', label: 'Decimal places', type: 'number', group: 'field_specific', default: 2, min: 0, max: 6 },
+      { key: 'prefix', label: 'Prefix (e.g. $)', type: 'text', group: 'field_specific', default: '$' },
+      { key: 'suffix', label: 'Suffix (e.g. USD)', type: 'text', group: 'field_specific' },
       { key: 'hidden', label: 'Hidden (calculated, not shown to user)', type: 'toggle_with_description', group: 'field_specific', default: false },
     ],
   },
@@ -904,10 +904,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     createField: (label = 'Live Estimate Breakdown') => ({
       label, type: 'control_widget', widgetType: 'live_estimate_summary',
       widgetConfig: {
-        title: 'Estimated Investment Breakdown',
-        currencyPrefix: '$',
+        headline: 'Estimated Investment Breakdown',
+        currency: '$',
         formula: '',
-        ctaButtonText: 'Lock In Estimate ⚡',
+        continueText: 'Lock In Estimate ⚡',
       }, required: false,
     }),
     settingsSchema: [
@@ -1117,7 +1117,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     runtimeComponentId: 'comparison_slider',
     createField: (label = 'Comparison Slider') => ({
       label, type: 'short_answer', widgetType: 'comparison_slider',
-      widgetConfig: { beforeImageUrl: '', afterImageUrl: '', startPositionPct: 50 }, required: false,
+      widgetConfig: { beforeImage: '', afterImage: '', startPositionPct: 50 }, required: false,
     }),
     settingsSchema: [],
   },
@@ -1132,7 +1132,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     runtimeComponentId: 'digital_magazine_maker',
     createField: (label = 'Digital Magazine') => ({
       label, type: 'short_answer', widgetType: 'digital_magazine_maker',
-      widgetConfig: { flipbookUrl: '', autoPlay: false }, required: false,
+      widgetConfig: { embedUrl: '', autoPlay: false }, required: false,
     }),
     settingsSchema: [],
   },
@@ -1351,7 +1351,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     runtimeComponentId: 'orderable_list',
     createField: (label = 'Orderable List') => ({
       label, type: 'short_answer', widgetType: 'orderable_list',
-      widgetConfig: { items: ['Quality', 'Speed of Service', 'Pricing', 'Communication'] }, required: false,
+      widgetConfig: { options: ['Quality', 'Speed of Service', 'Pricing', 'Communication'] }, required: false,
     }),
     settingsSchema: [],
   },
@@ -1365,7 +1365,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     runtimeComponentId: 'pdf_embedder',
     createField: (label = 'PDF Embedder') => ({
       label: '', type: 'short_answer', widgetType: 'pdf_embedder',
-      widgetConfig: { pdfUrl: '', heightPx: 500 }, required: false,
+      widgetConfig: { url: '', height: 500 }, required: false,
     }),
     settingsSchema: [],
   },
@@ -1395,7 +1395,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     runtimeComponentId: 'speech_to_text',
     createField: (label = 'Speech to Text') => ({
       label, type: 'short_answer', widgetType: 'speech_to_text',
-      widgetConfig: { continuous: false, language: 'en-US' }, required: false,
+      widgetConfig: { continuous: false, lang: 'en-US' }, required: false,
     }),
     settingsSchema: [],
   },
@@ -1467,7 +1467,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     runtimeComponentId: 'youtube_video_embed',
     createField: (label = 'YouTube Video') => ({
       label: '', type: 'short_answer', widgetType: 'youtube_video_embed',
-      widgetConfig: { videoUrl: '', autoPlay: false, controls: true }, required: false,
+      widgetConfig: { url: '', autoplay: false, controls: true }, required: false,
     }),
     settingsSchema: [],
   },

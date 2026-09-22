@@ -54,6 +54,7 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   video_embed: w(() => import('./video-embed-widget')),
   video_player: w(() => import('./video-embed-widget')),
   divider: w(() => import('./divider-widget')),
+  scale_rating: w(() => import('./survey/nps-slider')),
 
   // ─── DateTime ────────────────────────────────────────────────────────────────
   date_picker: w(() => import('./datetime/date-picker')),
@@ -81,7 +82,7 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
 
   // ─── Media ────────────────────────────────────────────────────────────────────
   image_upload: w(() => import('./media/image-upload')),
-  image_upload_with_notes: w(() => import('./media/image-upload')),
+  image_upload_with_notes: w(() => import('./image-upload-with-notes')),
   take_photo: w(() => import('./media/take-photo')),
   take_photo_camera: w(() => import('./media/take-photo')),
   image_preview: w(() => import('./media/image-preview')),

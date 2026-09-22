@@ -54,8 +54,13 @@ export function Dropdown({ value, onChange, config, disabled, field }: WidgetPro
     return baseOptions;
   }, [baseOptions, randomize, fieldId]);
 
-  // Search state for multi-select chip mode
+  // Search state for multi-select chip mode AND single-select combobox mode.
+  // MUST be declared at top level (not inside if blocks) to comply with
+  // React's Rules of Hooks — toggling searchEnabled between renders must not
+  // change the number of useState calls.
   const [searchQuery, setSearchQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
   const filteredOptions = searchEnabled && searchQuery
     ? options.filter((opt) => opt.label.toLowerCase().includes(searchQuery.toLowerCase()))
     : options;
@@ -137,8 +142,6 @@ export function Dropdown({ value, onChange, config, disabled, field }: WidgetPro
 
   // Single-select with search: render a custom combobox-style dropdown
   if (searchEnabled) {
-    const [open, setOpen] = useState(false);
-    const [searchQ, setSearchQ] = useState('');
     const filtered = searchQ
       ? options.filter((opt) => opt.label.toLowerCase().includes(searchQ.toLowerCase()))
       : options;
