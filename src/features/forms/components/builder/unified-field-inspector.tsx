@@ -8,7 +8,7 @@
  * renders either the specialized JotForm PaymentPropertiesPanel (for payment gateways)
  * or the schema-driven WidgetSettingsRenderer (for standard fields and widgets).
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { WidgetSettingsRenderer } from './widget-settings-renderer';
 import { PaymentPropertiesPanel } from './payment-properties-panel';
 import { AppointmentPropertiesPanel } from './appointment-properties-panel';
