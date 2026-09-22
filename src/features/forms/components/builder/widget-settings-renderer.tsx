@@ -13,7 +13,7 @@
  * — NOT touching the builder.
  */
 import React, { useState } from 'react';
-import { GripVertical, Plus, Trash2, X, Copy, Check } from 'lucide-react';
+import { GripVertical, Plus, Trash2, X, Copy, Check, Lock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -99,6 +99,39 @@ export function WidgetSettingsRenderer({
 
     switch (setting.type) {
       case 'text':
+        // Payment credential fields marked secret: true are rendered as
+        // password inputs so the value is masked on screen. The backend
+        // encrypts the value (AES-256-GCM) before storing in widgetConfig,
+        // and public form-loading endpoints strip it from the JSON entirely.
+        if (setting.secret) {
+          const isEncrypted = typeof value === 'string' && value.length > 0 && value.length >= 40 && /^[A-Za-z0-9+/]+={0,2}$/.test(value);
+          return (
+            <div key={setting.key} className="space-y-1 p-2 rounded-lg border border-amber-300/60 bg-amber-50/40 dark:bg-amber-950/20">
+              <div className="flex items-center justify-between">
+                <Label className="text-[11px] font-semibold flex items-center gap-1.5">
+                  <Lock className="size-3 text-amber-600 dark:text-amber-400" />
+                  {setting.label}
+                </Label>
+                {isEncrypted && (
+                  <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/50 px-1.5 py-0.5 rounded">
+                    ✓ Encrypted
+                  </span>
+                )}
+              </div>
+              <Input
+                type="password"
+                className="h-8 text-xs bg-background font-mono"
+                placeholder={isEncrypted ? '•••••••• (stored encrypted)' : (setting.placeholder || 'Enter secret key')}
+                value={isEncrypted ? '' : String(value ?? '')}
+                onChange={(e) => onChange(e.target.value)}
+              />
+              {setting.helpText && <p className="text-[10px] text-muted-foreground leading-tight">{setting.helpText}</p>}
+              <p className="text-[9px] text-amber-700 dark:text-amber-400 leading-tight">
+                🔒 Stored AES-256 encrypted. Never sent to the browser.
+              </p>
+            </div>
+          );
+        }
         return (
           <div key={setting.key} className="space-y-1">
             <Label className="text-[11px] font-semibold">{setting.label}</Label>
@@ -315,7 +348,7 @@ export function WidgetSettingsRenderer({
                 type="number"
                 className="h-8 text-xs bg-background flex-1"
                 placeholder={String(setting.default ?? '')}
-                value={numVal}
+                value={typeof numVal === 'number' || typeof numVal === 'string' ? numVal : ''}
                 min={setting.min}
                 max={setting.max}
                 step={setting.step ?? 1}

@@ -32,10 +32,7 @@ interface StripeCheckoutValue {
 }
 
 interface StripeInstance {
-  redirectToCheckout: (opts: { sessionId: string } | { sessionUrl: string }) => Promise<{ error?: { message: string } }>;
-}
-declare global {
-  interface Window { Stripe?: (key: string) => StripeInstance }
+  redirectToCheckout: (opts: { sessionId?: string; sessionUrl?: string }) => Promise<{ error?: { message: string } }>;
 }
 
 export function StripeCheckout({ value, onChange, config, disabled, field }: WidgetProps) {

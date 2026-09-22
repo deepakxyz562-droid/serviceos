@@ -3,18 +3,20 @@
 /**
  * Authorize.Net — REAL Accept.js integration (PCI-compliant).
  *
- * CRITICAL SECURITY NOTE: The old version of this widget collected raw card
- * numbers / expiry / CVC in plain <Input> fields — a PCI-DSS violation.
- * Authorize.Net's whole point is the Accept.js SDK that tokenizes card
- * details directly in the browser, so the form (and our backend) never
- * sees the raw PAN. This version loads Accept.js and routes payment through
- * secure tokenization.
+ * Uses Authorize.Net's AcceptUI hosted card form. The user clicks "Pay" and
+ * Authorize.Net opens a secure iframe where the customer enters their card
+ * details. The card number never touches our form — Accept.js returns an
+ * opaque data token (dataDescriptor + dataValue) that we send to the backend
+ * /api/forms/[id]/charge endpoint.
  *
- * When testMode is on (or apiLoginId is not set), shows a clear warning
- * banner explaining that real card fields will be hosted by Accept.js
- * and that the form will never see the raw card number.
+ * The backend uses the user's apiLoginId + transactionKey (from widgetConfig,
+ * encrypted, OR from PaymentGatewayConfig for CRM users) to call Authorize.Net's
+ * createTransactionRequest API with the opaque token.
+ *
+ * When testMode is on (or apiLoginId/clientKey are not set), shows a clear
+ * warning banner explaining that real card fields will be hosted by Accept.js.
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Lock, ShieldCheck, Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PaymentGatewayHeader } from './payment-gateway-header';
@@ -33,15 +35,26 @@ interface AuthorizeNetValue {
   errorMessage?: string;
 }
 
-interface AcceptDispatchResponse {
-  messages: { resultCode: 'Ok' | 'Error'; message?: Array<{ code: string; text: string }> };
-  opaqueData?: { dataDescriptor: string; dataValue: string };
+interface AcceptUIResponse {
+  messages: {
+    resultCode: 'Ok' | 'Error';
+    message?: Array<{ code: string; text: string }>;
+  };
+  opaqueData?: {
+    dataDescriptor: string;
+    dataValue: string;
+  };
 }
-interface AcceptSDK {
-  dispatchData: (data: unknown, callback: (resp: AcceptDispatchResponse) => void) => void;
-}
+
+// AcceptUI is loaded via a script tag and calls a global handler function
+// when the user submits the card form. We register the handler on window.
 declare global {
-  interface Window { Accept?: AcceptSDK }
+  interface Window {
+    // The AcceptUI library triggers a global function whose name matches the
+    // data-responseHandler attribute on the AcceptUI button container.
+    // We set this dynamically in the useEffect below.
+    [key: `__authnet_handler_${string}`]: (response: AcceptUIResponse) => void;
+  }
 }
 
 export function AuthorizeNet({ value, onChange, config, disabled, field }: WidgetProps) {
@@ -55,78 +68,30 @@ export function AuthorizeNet({ value, onChange, config, disabled, field }: Widge
   const [sdkReady, setSdkReady] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const cardRef = useRef<HTMLDivElement | null>(null);
+  // Unique handler id so multiple Authorize.Net widgets on the same page
+  // don't collide.
+  const [handlerId] = useState(() => `authnet_${Math.random().toString(36).slice(2, 10)}`);
 
   const currencySymbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
   const canGoLive = !testMode && Boolean(apiLoginId) && Boolean(clientKey) && Boolean(formId);
 
-  // Load Authorize.Net Accept.js SDK.
-  useEffect(() => {
-    if (!canGoLive || typeof window === 'undefined') return;
-    if (window.Accept) {
-      const id = window.setTimeout(() => setSdkReady(true), 0);
-      return () => window.clearTimeout(id);
-    }
-    const s = document.createElement('script');
-    s.src = 'https://js.authorize.net/v1/Accept.js';
-    s.async = true;
-    s.onload = () => setSdkReady(true);
-    s.onerror = () => setErrorMsg('Failed to load Authorize.Net Accept.js SDK.');
-    document.body.appendChild(s);
-    return () => { s.remove(); };
-  }, [canGoLive]);
-
-  const handlePay = async () => {
-    if (disabled) return;
-    setProcessing(true);
-    setErrorMsg(null);
-
-    if (testMode || !canGoLive) {
-      // Simulated payment — no real Accept.js call.
-      setTimeout(() => {
-        setProcessing(false);
-        onChange({
-          status: 'succeeded', amount, currency, gatewayId: 'authorize_net',
-          transactionId: `sim_authnet_${Date.now()}`,
-          last4: '1111', simulated: true,
-        } as AuthorizeNetValue);
-      }, 900);
-      return;
-    }
-
-    if (!window.Accept) {
+  // Handler called by AcceptUI when the user submits the card form.
+  // Receives the opaque data token and forwards it to the backend.
+  // Declared BEFORE the useEffect that registers it on window so the
+  // reference is stable.
+  const handleAcceptResponse = useCallback(async (response: AcceptUIResponse) => {
+    if (response.messages.resultCode !== 'Ok' || !response.opaqueData) {
+      const msg = response.messages.message?.[0]?.text || 'Accept.js tokenization failed.';
+      setErrorMsg(msg);
       setProcessing(false);
-      setErrorMsg('Authorize.Net SDK not loaded yet. Please try again.');
+      onChange({
+        status: 'error', amount, currency, gatewayId: 'authorize_net',
+        errorMessage: msg,
+      } as AuthorizeNetValue);
       return;
     }
 
-    // In a full implementation, this is where we'd mount the Accept.js
-    // hosted card fields (AcceptUI) and call Accept.dispatchData() with
-    // the secure payment data to get an opaque token.
-    //
-    // For now, we simulate the tokenization step but make it clear in the
-    // PCI warning below that real production requires Accept.js hosted fields.
     try {
-      // TODO: Replace with real Accept.dispatchData() call once hosted
-      // card fields are wired. The result will be an opaque data token
-      // (dataDescriptor + dataValue) that gets submitted to the backend
-      // charge endpoint instead of raw card details.
-      const response: AcceptDispatchResponse = await new Promise((resolve) => {
-        // Simulate the Accept.js callback structure.
-        setTimeout(() => resolve({
-          messages: { resultCode: 'Ok' },
-          opaqueData: {
-            dataDescriptor: 'COMMON.APP.INLINE.PAYMENT',
-            dataValue: `sim_opaque_${Date.now()}`,
-          },
-        }), 800);
-      });
-
-      if (response.messages.resultCode !== 'Ok' || !response.opaqueData) {
-        throw new Error(response.messages.message?.[0]?.text || 'Accept.js tokenization failed.');
-      }
-
-      // Submit the opaque token to the backend charge endpoint.
       const res = await fetch(`/api/forms/${formId}/charge`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,17 +106,87 @@ export function AuthorizeNet({ value, onChange, config, disabled, field }: Widge
       if (data.success) {
         onChange({
           status: 'succeeded', amount, currency, gatewayId: 'authorize_net',
-          transactionId: data.transactionId, last4: '1111',
+          transactionId: data.transactionId,
           dataDescriptor: response.opaqueData.dataDescriptor,
           dataValue: response.opaqueData.dataValue,
         } as AuthorizeNetValue);
       } else {
         setErrorMsg(data.error || 'Payment failed.');
+        onChange({
+          status: 'error', amount, currency, gatewayId: 'authorize_net',
+          errorMessage: data.error,
+        } as AuthorizeNetValue);
       }
     } catch (e: unknown) {
       setProcessing(false);
       const msg = e instanceof Error ? e.message : String(e);
       setErrorMsg(msg);
+    }
+  }, [amount, currency, formId, onChange]);
+
+  // Load Authorize.Net Accept.js SDK.
+  useEffect(() => {
+    if (!canGoLive || typeof window === 'undefined') return;
+
+    // Register the response handler on window. AcceptUI calls this function
+    // with the opaque data token after the user submits the card form.
+    (window as unknown as Record<string, unknown>)[`__authnet_handler_${handlerId}`] = (
+      response: AcceptUIResponse,
+    ) => {
+      void handleAcceptResponse(response);
+    };
+
+    if ((window as unknown as { Accept?: unknown }).Accept) {
+      const id = window.setTimeout(() => setSdkReady(true), 0);
+      return () => {
+        window.clearTimeout(id);
+        delete (window as unknown as Record<string, unknown>)[`__authnet_handler_${handlerId}`];
+      };
+    }
+    const s = document.createElement('script');
+    s.src = 'https://js.authorize.net/v1/Accept.js';
+    s.async = true;
+    s.onload = () => setSdkReady(true);
+    s.onerror = () => setErrorMsg('Failed to load Authorize.Net Accept.js SDK.');
+    document.body.appendChild(s);
+    return () => {
+      s.remove();
+      delete (window as unknown as Record<string, unknown>)[`__authnet_handler_${handlerId}`];
+    };
+  }, [canGoLive, handlerId, handleAcceptResponse]);
+
+  const handlePay = async () => {
+    if (disabled) return;
+    setProcessing(true);
+    setErrorMsg(null);
+
+    // Test mode — simulate.
+    if (testMode || !canGoLive) {
+      setTimeout(() => {
+        setProcessing(false);
+        onChange({
+          status: 'succeeded', amount, currency, gatewayId: 'authorize_net',
+          transactionId: `sim_authnet_${Date.now()}`,
+          simulated: true,
+        } as AuthorizeNetValue);
+      }, 900);
+      return;
+    }
+
+    if (!sdkReady) {
+      setProcessing(false);
+      setErrorMsg('Authorize.Net SDK not loaded yet. Please try again.');
+      return;
+    }
+
+    // Trigger the AcceptUI form. AcceptUI looks for a button with the
+    // AcceptUI class + data attributes. We simulate a click on it.
+    const btn = document.querySelector<HTMLButtonElement>(`#authnet-btn-${handlerId}`);
+    if (btn) {
+      btn.click();
+    } else {
+      setProcessing(false);
+      setErrorMsg('AcceptUI button not found.');
     }
   };
 
@@ -183,19 +218,19 @@ export function AuthorizeNet({ value, onChange, config, disabled, field }: Widge
       <div className="rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 p-2 flex items-start gap-2">
         <ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
         <p className="text-[11px] text-emerald-800 dark:text-emerald-300 leading-tight">
-          <strong>PCI-DSS Compliant.</strong> This widget uses Authorize.Net&apos;s
-          Accept.js SDK to tokenize card details directly in the browser. The form
-          and our backend never see raw card numbers.
+          <strong>PCI-DSS Compliant.</strong> Card details are hosted by
+          Authorize.Net&apos;s Accept.js in a secure iframe. The form and
+          our backend never see the raw card number.
         </p>
       </div>
 
       {/* Test-mode or pre-SDK placeholder */}
       {(testMode || !canGoLive || !sdkReady) ? (
-        <div ref={cardRef} className="rounded-xl border border-dashed border-border bg-muted/40 p-4 text-center space-y-1">
+        <div className="rounded-xl border border-dashed border-border bg-muted/40 p-4 text-center space-y-1">
           <Lock className="size-5 mx-auto text-[#0C1E3C]" />
           <p className="text-xs font-semibold">
             {testMode
-              ? 'Test mode: Accept.js hosted card fields will load here when you switch to Live.'
+              ? 'Test mode: Accept.js hosted card form will load here when you switch to Live.'
               : !canGoLive
                 ? 'Add Authorize.Net API credentials in the inspector to enable live payments.'
                 : 'Loading Authorize.Net Accept.js…'}
@@ -203,11 +238,26 @@ export function AuthorizeNet({ value, onChange, config, disabled, field }: Widge
           <p className="text-[11px] text-muted-foreground">Amount: {amount.toFixed(2)} {currency}</p>
         </div>
       ) : (
-        <div ref={cardRef} className="rounded-xl border border-border bg-card p-3 min-h-[120px]">
-          {/* Accept.js hosted card fields mount here. The user never sees raw
-              card details in our form — only Authorize.Net's iframed fields. */}
-          <p className="text-[10px] text-muted-foreground text-center mt-8">
-            Card details are hosted by Authorize.Net Accept.js
+        // AcceptUI hosted card form. The button is invisible — we trigger it
+        // via .click() when the user clicks our visible "Pay" button below.
+        // AcceptUI opens a secure iframe where the customer enters their card.
+        <div className="rounded-xl border border-border bg-card p-3 min-h-[60px]">
+          <button
+            id={`authnet-btn-${handlerId}`}
+            className="AcceptUI hidden"
+            type="button"
+            data-apiLoginID={apiLoginId}
+            data-clientKey={clientKey}
+            data-acceptUIFormBtnTxt="Pay"
+            data-acceptUIFormHeaderTxt="Card Information"
+            data-paymentOptions={`{"showCreditCard":true,"showBankAccount":false}`}
+            data-responseHandler={`__authnet_handler_${handlerId}`}
+            data-billingAddressOptions={`{"show":false,"required":false}`}
+          >
+            Pay
+          </button>
+          <p className="text-[10px] text-muted-foreground text-center">
+            Click <strong>Pay {amount.toFixed(2)} {currency}</strong> below to open Authorize.Net&apos;s secure card form.
           </p>
         </div>
       )}

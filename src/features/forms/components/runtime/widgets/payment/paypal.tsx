@@ -33,7 +33,7 @@ interface PayPalButtonsInstance {
 interface PayPalSDK {
   Buttons: (cfg: {
     createOrder: (data: unknown, actions: { order: { create: (opts: unknown) => Promise<string> } }) => Promise<string>;
-    onApprove: (data: { orderID: string }, actions: { order: { capture: () => Promise<unknown> } }) => Promise<void>;
+    onApprove: (data: { orderID: string; payerID?: string; payerId?: string }, actions: { order: { capture: () => Promise<unknown> } }) => Promise<void>;
     onError: (err: unknown) => void;
   }) => PayPalButtonsInstance;
 }

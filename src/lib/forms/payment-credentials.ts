@@ -16,17 +16,16 @@ import { getPaymentGatewayById } from './payments/payment-gateways-registry';
  * configFields (e.g. apple_google_pay, clearpay — these have no API keys).
  *
  * Each credential field is rendered as either:
- *  - 'password' registry type → SettingField type 'text' with helpText
- *    telling the user to enter the key. The builder doesn't mask on screen
- *    (the inspector input is a regular text input), but stores the value
- *    under widgetConfig so the runtime can read it at submission time.
- *  - 'text' registry type → SettingField type 'text'.
+ *  - 'password' registry type → SettingField type 'text' with secret: true.
+ *    The inspector renders it as a password input (masked). The backend
+ *    encrypts the value with AES-256-GCM before storing in widgetConfig.
+ *    Public form loads strip the field entirely.
+ *  - 'text' registry type → SettingField type 'text' (public key, no secret flag).
  *  - 'select' registry type → SettingField type 'select' with options.
  *  - 'boolean' registry type → SettingField type 'toggle_with_description'.
  *
  * The fields land in the inspector under the 'field_specific' group with a
- * condition that only shows them when the user has selected a real gateway
- * (not when the gateway_picker is set to '__none__').
+ * condition that only shows them when the user has selected a real gateway.
  */
 export function buildCredentialSettings(gatewayId: string): SettingField[] {
   const gateway = getPaymentGatewayById(gatewayId);
@@ -44,10 +43,12 @@ export function buildCredentialSettings(gatewayId: string): SettingField[] {
       condition: { dependsOn: 'gatewayId', equals: gateway.id },
     };
     if (cf.type === 'password') {
-      // The builder doesn't have a native password input; using 'text' here
-      // so the value is visible (these are sandbox/test keys in 99% of cases
-      // during development). Production deploys should rotate keys.
-      base.helpText = `${cf.description || 'API secret key.'} Stored in the form definition; rotate regularly.`;
+      // Mark as secret so:
+      // 1. Inspector renders as password input (masked, with lock icon)
+      // 2. Backend encrypts with AES-256-GCM before storing in widgetConfig
+      // 3. Public form loads strip this field from the JSON entirely
+      base.secret = true;
+      base.helpText = `${cf.description || 'API secret key.'} 🔒 Stored AES-256 encrypted. Never sent to the browser.`;
     } else if (cf.type === 'select' && cf.options) {
       base.type = 'select';
       base.options = cf.options;

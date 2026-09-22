@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { encryptSecretFields } from '@/lib/payments/credentials';
 
 // ─── GET /api/forms/[id] ───────────────────────────────────────────────────
 // Get a single form with its recent responses.
@@ -94,10 +95,18 @@ export async function PUT(
     if (body.type !== undefined) updateData.type = body.type;
     if (body.status !== undefined) updateData.status = body.status;
     if (body.fieldsJson !== undefined) {
-      updateData.fieldsJson = typeof body.fieldsJson === 'string' ? body.fieldsJson : JSON.stringify(body.fieldsJson);
+      const fieldsData = typeof body.fieldsJson === 'string' ? body.fieldsJson : body.fieldsJson;
+      // Encrypt secret payment credentials before storing in DB.
+      // Walks every field's widgetConfig and encrypts any secret key found
+      // (secretKey, clientSecret, keySecret, accessToken, etc.).
+      const sanitized = encryptSecretFieldsInFields(fieldsData);
+      updateData.fieldsJson = typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized);
     }
     if (body.schemaJson !== undefined) {
-      updateData.schemaJson = typeof body.schemaJson === 'string' ? body.schemaJson : JSON.stringify(body.schemaJson);
+      const schemaData = typeof body.schemaJson === 'string' ? body.schemaJson : body.schemaJson;
+      // Same encryption pass for schemaJson-based forms (modern format).
+      const sanitized = encryptSecretFieldsInSchema(schemaData);
+      updateData.schemaJson = typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized);
     }
     if (body.submissionActions !== undefined) {
       updateData.submissionActions = typeof body.submissionActions === 'string' ? body.submissionActions : JSON.stringify(body.submissionActions);
@@ -117,7 +126,6 @@ export async function PUT(
     // request body for ordinary users. This prevents cross-tenant form
     // reassignment. Super-admins can change tenantId via a dedicated
     // superadmin endpoint (not this one).
-    // (Previously lines 75-76 allowed body.tenantId/body.workspaceId — REMOVED)
 
     if (body.slug !== undefined) updateData.slug = body.slug;
     if (body.createdById !== undefined) updateData.createdById = body.createdById;
@@ -183,4 +191,69 @@ export async function DELETE(
     console.error('Delete form error:', error);
     return NextResponse.json({ error: 'Failed to delete form' }, { status: 500 });
   }
+}
+
+// ─── Helpers: encrypt secret payment credentials on save ────────────────
+
+/**
+ * Walk a fieldsJson array (legacy format) and encrypt any secret field found
+ * in each field's widgetConfig. Leaves public keys (publishableKey, clientId,
+ * applicationId, merchantId, keyId, apiLoginId, clientKey, subdomain) untouched.
+ */
+function encryptSecretFieldsInFields(fieldsData: string | unknown[]): string | unknown[] {
+  if (typeof fieldsData === 'string') {
+    try {
+      const parsed = JSON.parse(fieldsData);
+      if (Array.isArray(parsed)) {
+        return JSON.stringify(encryptSecretFieldsInFields(parsed));
+      }
+    } catch { /* ignore */ }
+    return fieldsData;
+  }
+  if (!Array.isArray(fieldsData)) return fieldsData;
+  return fieldsData.map((field) => {
+    if (field && typeof field === 'object' && 'widgetConfig' in field) {
+      const f = field as Record<string, unknown>;
+      const wc = f.widgetConfig as Record<string, unknown> | undefined;
+      if (wc && typeof wc === 'object') {
+        return { ...f, widgetConfig: encryptSecretFields(wc) };
+      }
+    }
+    return field;
+  });
+}
+
+/**
+ * Walk a schemaJson object (modern format) and encrypt any secret field found
+ * in each field's widgetConfig. Same logic as encryptSecretFieldsInFields but
+ * for the { fields: [...], steps: [...], ... } schema structure.
+ */
+function encryptSecretFieldsInSchema(schemaData: string | Record<string, unknown>): string | Record<string, unknown> {
+  if (typeof schemaData === 'string') {
+    try {
+      const parsed = JSON.parse(schemaData);
+      if (parsed && typeof parsed === 'object') {
+        return JSON.stringify(encryptSecretFieldsInSchema(parsed));
+      }
+    } catch { /* ignore */ }
+    return schemaData;
+  }
+  if (!schemaData || typeof schemaData !== 'object') return schemaData;
+  const schema = schemaData as Record<string, unknown>;
+  const result: Record<string, unknown> = { ...schema };
+  if (Array.isArray(schema.fields)) {
+    result.fields = encryptSecretFieldsInFields(schema.fields as unknown[]) as unknown[];
+  }
+  if (Array.isArray(schema.steps)) {
+    result.steps = (schema.steps as unknown[]).map((step) => {
+      if (step && typeof step === 'object') {
+        const s = step as Record<string, unknown>;
+        if (Array.isArray(s.fields)) {
+          return { ...s, fields: encryptSecretFieldsInFields(s.fields as unknown[]) };
+        }
+      }
+      return step;
+    });
+  }
+  return result;
 }

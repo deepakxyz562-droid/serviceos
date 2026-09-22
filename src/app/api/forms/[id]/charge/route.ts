@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { db } from '@/lib/db';
+import { resolveFormCredentials } from '@/lib/payments/credentials';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/forms/[id]/charge
  *
- * Processes a real payment for a form submission.
+ * Processes a real payment for a form submission using the 2-Level Hybrid
+ * credential resolution model:
+ *
+ *   Level 1 (Standalone AI Form Builder):
+ *     The form's widgetConfig contains encrypted secret keys entered by the
+ *     form creator in the inspector. resolveFormCredentials() decrypts them.
+ *
+ *   Level 2 (FieserOS CRM User convenience):
+ *     If the form has no widgetConfig secret, look up the form owner's
+ *     PaymentGatewayConfig record (linked to an encrypted Credential row).
+ *
+ * In both cases, the user's own gateway credentials are used — funds go
+ * directly to the user's account, never the platform's.
  *
  * Body:
- *   gatewayId  — e.g. 'stripe_checkout', 'paypal_complete', 'razorpay'
+ *   gatewayId  — e.g. 'stripe_elements', 'paypal_complete', 'razorpay'
  *   amount     — amount to charge (in major currency units, e.g. 49.00)
  *   currency   — 'USD', 'EUR', 'INR', etc.
  *   customer   — { name, email }
@@ -18,9 +31,6 @@ export const dynamic = 'force-dynamic';
  *   formResponseId  — the FormResponse ID (if already created)
  *
  * Returns: { success, transactionId, paymentStatus, clientSecret? }
- *
- * Currently implements Stripe. Other gateways return a 501 with guidance
- * to use the gateway's native checkout flow.
  */
 export async function POST(
   req: NextRequest,
@@ -46,12 +56,30 @@ export async function POST(
     }
 
     // ─── Stripe (covers stripe_elements, stripe_checkout, stripe_ach) ────────
+    // Uses the form owner's Stripe secret key (Level 1 widgetConfig OR
+    // Level 2 PaymentGatewayConfig). Falls back to process.env.STRIPE_SECRET_KEY
+    // for backward compat with the old platform-key deployment.
     if (gatewayId.startsWith('stripe')) {
-      const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+      const creds = await resolveFormCredentials(formId, gatewayId);
+      let stripeSecretKey: string | undefined;
+      let isLive = true;
+
+      if (creds?.secretKey) {
+        // User's own credentials (Level 1 or Level 2).
+        stripeSecretKey = creds.secretKey as string;
+        isLive = creds.isLive !== false;
+      } else {
+        // Backward-compat fallback: platform key from env var.
+        stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+        // NOTE: This fallback will be removed in a future release. Every form
+        // should have its own Stripe credentials connected via the inspector
+        // or via the dashboard PaymentGatewayConfig.
+      }
+
       if (!stripeSecretKey) {
         return NextResponse.json(
           {
-            error: 'Stripe is not configured. Set STRIPE_SECRET_KEY in your environment.',
+            error: 'No Stripe credentials connected. Add your Stripe secret key in the form inspector (Payment section) or connect your Stripe account in Dashboard > Settings > Payments.',
             gatewayId,
           },
           { status: 503 },
@@ -62,7 +90,54 @@ export async function POST(
       const amountInCents = Math.round(Number(amount) * 100);
 
       try {
-        // Create a PaymentIntent (for Stripe Elements / direct charge)
+        // Stripe Checkout: create a Checkout Session (hosted redirect flow).
+        // For stripe_checkout, return a checkoutUrl instead of a PaymentIntent.
+        if (gatewayId === 'stripe_checkout') {
+          const session = await stripe.checkout.sessions.create({
+            mode: 'payment',
+            line_items: [{
+              price_data: {
+                currency: currency.toLowerCase(),
+                product_data: { name: `Form payment - ${formId}` },
+                unit_amount: amountInCents,
+              },
+              quantity: 1,
+            }],
+            success_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=success`,
+            cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=cancelled`,
+            customer_email: customer?.email || undefined,
+            metadata: {
+              formId,
+              formResponseId: formResponseId || '',
+              gatewayId,
+              customerName: customer?.name || '',
+            },
+          }, isLive ? undefined : { apiVersion: '2024-06-20' });
+
+          if (formResponseId) {
+            await db.formResponse.update({
+              where: { id: formResponseId },
+              data: {
+                paymentStatus: 'pending',
+                transactionId: session.id,
+                paymentMethod: 'stripe',
+                paymentAmount: Number(amount),
+                paymentCurrency: currency,
+                paymentGatewayId: gatewayId,
+              },
+            }).catch(() => { /* DB might be unavailable */ });
+          }
+
+          return NextResponse.json({
+            success: true,
+            transactionId: session.id,
+            paymentStatus: 'pending',
+            checkoutUrl: session.url,
+            gateway: 'stripe',
+          });
+        }
+
+        // Stripe Elements / Stripe ACH: create a PaymentIntent.
         const paymentIntent = await stripe.paymentIntents.create({
           amount: amountInCents,
           currency: currency.toLowerCase(),
@@ -118,23 +193,36 @@ export async function POST(
 
     // ─── eCheck.Net (via Authorize.Net) ────────────────────────────────────
     if (gatewayId === 'echeck_net') {
-      // Authorize.Net eCheck requires the Accept.js SDK to tokenize bank details.
-      // The frontend sends paymentMethodId as `echeck:routing:account` — we'd
-      // call Authorize.Net's createTransaction API here. For now, return 501
-      // with guidance.
+      // eCheck.Net rides on Authorize.Net credentials.
+      const creds = await resolveFormCredentials(formId, 'authorize_net');
+      if (!creds?.apiLoginId || !creds?.transactionKey) {
+        return NextResponse.json({
+          success: false,
+          error: 'No Authorize.Net credentials connected. Add your API Login ID and Transaction Key in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
       return NextResponse.json({
         success: false,
-        error: 'eCheck.Net real charges require Authorize.Net API credentials (apiLoginId + transactionKey) configured on the server.',
+        error: 'eCheck.Net real charges require the Accept.js SDK to tokenize bank details. This flow is not yet implemented.',
         gatewayId,
-        flow: 'server_side',
+        flow: 'client_side',
       }, { status: 501 });
     }
 
     // ─── Chargify (subscription billing) ────────────────────────────────────
     if (gatewayId === 'chargify') {
+      const creds = await resolveFormCredentials(formId, 'chargify');
+      if (!creds?.apiKey || !creds?.subdomain) {
+        return NextResponse.json({
+          success: false,
+          error: 'No Chargify credentials connected. Add your Chargify API Key and Subdomain in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
       return NextResponse.json({
         success: false,
-        error: 'Chargify real subscription creation requires Chargify API credentials (apiKey + subdomain) configured on the server.',
+        error: 'Chargify subscription creation flow is not yet implemented.',
         gatewayId,
         flow: 'server_side',
       }, { status: 501 });
@@ -142,12 +230,26 @@ export async function POST(
 
     // ─── Authorize.Net (via Accept.js opaque token) ────────────────────────
     if (gatewayId === 'authorize_net') {
-      const apiLoginId = process.env.AUTHORIZE_NET_API_LOGIN_ID;
-      const transactionKey = process.env.AUTHORIZE_NET_TRANSACTION_KEY;
+      const creds = await resolveFormCredentials(formId, 'authorize_net');
+      let apiLoginId: string | undefined;
+      let transactionKey: string | undefined;
+      let isLive = true;
+
+      if (creds?.apiLoginId && creds?.transactionKey) {
+        apiLoginId = creds.apiLoginId as string;
+        transactionKey = creds.transactionKey as string;
+        isLive = creds.isLive !== false;
+      } else {
+        // Backward-compat fallback to platform env vars.
+        apiLoginId = process.env.AUTHORIZE_NET_API_LOGIN_ID;
+        transactionKey = process.env.AUTHORIZE_NET_TRANSACTION_KEY;
+        isLive = process.env.AUTHORIZE_NET_ENVIRONMENT === 'production';
+      }
+
       if (!apiLoginId || !transactionKey) {
         return NextResponse.json({
           success: false,
-          error: 'Authorize.Net is not configured. Set AUTHORIZE_NET_API_LOGIN_ID and AUTHORIZE_NET_TRANSACTION_KEY in your environment.',
+          error: 'No Authorize.Net credentials connected. Add your API Login ID and Transaction Key in the form inspector or in Dashboard > Settings > Payments.',
           gatewayId,
         }, { status: 503 });
       }
@@ -162,8 +264,7 @@ export async function POST(
         }, { status: 400 });
       }
       try {
-        const env = process.env.AUTHORIZE_NET_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
-        const apiBase = env === 'production'
+        const apiBase = isLive
           ? 'https://api.authorize.net/xml/v1/request.api'
           : 'https://apitest.authorize.net/xml/v1/request.api';
         const amountStr = Number(amount).toFixed(2);
@@ -237,28 +338,47 @@ export async function POST(
 
     // ─── PayPal ──────────────────────────────────────────────────────────────
     if (gatewayId.startsWith('paypal')) {
-      // PayPal requires client-side PayPal SDK → create order → capture
-      // The frontend's PayPal.Buttons().createOrder() creates the order
-      // directly via the PayPal SDK; this endpoint is called only for
-      // server-side capture if needed.
+      // PayPal Smart Buttons are 100% client-side — the capture happens in
+      // the browser via the PayPal SDK. The backend /charge endpoint is only
+      // used to retrieve the user's clientId (which is public, not secret).
+      const creds = await resolveFormCredentials(formId, 'paypal_complete');
+      if (!creds?.clientId) {
+        return NextResponse.json({
+          success: false,
+          error: 'No PayPal credentials connected. Add your PayPal Client ID in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
+      // Return the clientId so the frontend can initialize the PayPal SDK.
+      // No clientSecret needed — PayPal Smart Buttons don't use it client-side.
       return NextResponse.json({
-        success: false,
-        error: 'PayPal payments are handled entirely client-side via the PayPal SDK. Use the PayPal JS SDK to create an order, then capture via /api/payments/paypal/capture.',
-        gatewayId,
+        success: true,
+        clientId: creds.clientId,
+        gateway: 'paypal',
         flow: 'client_side',
-      }, { status: 501 });
+        message: 'PayPal Smart Buttons are initialized client-side with the user\'s clientId.',
+      });
     }
 
     // ─── Razorpay ────────────────────────────────────────────────────────────
     if (gatewayId.startsWith('razorpay')) {
-      // Razorpay requires creating an order on the backend (using keyId +
-      // keySecret) so that the client-side Checkout modal can reference it.
-      const keyId = process.env.RAZORPAY_KEY_ID;
-      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+      const creds = await resolveFormCredentials(formId, 'razorpay');
+      let keyId: string | undefined;
+      let keySecret: string | undefined;
+
+      if (creds?.keyId && creds?.keySecret) {
+        keyId = creds.keyId as string;
+        keySecret = creds.keySecret as string;
+      } else {
+        // Backward-compat fallback to platform env vars.
+        keyId = process.env.RAZORPAY_KEY_ID;
+        keySecret = process.env.RAZORPAY_KEY_SECRET;
+      }
+
       if (!keyId || !keySecret) {
         return NextResponse.json({
           success: false,
-          error: 'Razorpay is not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in your environment.',
+          error: 'No Razorpay credentials connected. Add your Razorpay Key ID and Key Secret in the form inspector or in Dashboard > Settings > Payments.',
           gatewayId,
         }, { status: 503 });
       }
@@ -303,11 +423,13 @@ export async function POST(
             },
           }).catch(() => { /* DB might be unavailable */ });
         }
+        // Also return the keyId so the frontend can initialize the Checkout modal.
         return NextResponse.json({
           success: true,
           orderId: order.id,
           amount: order.amount,
           currency: order.currency,
+          keyId: keyId, // public, needed by Razorpay Checkout constructor
           gateway: 'razorpay',
         });
       } catch (razorpayError: any) {
@@ -322,20 +444,31 @@ export async function POST(
 
     // ─── Square ──────────────────────────────────────────────────────────────
     if (gatewayId === 'square_payments') {
-      // Square requires the Square OAuth token + location_id to create a payment
-      // from the card nonce the frontend sent in paymentMethodId.
-      const accessToken = process.env.SQUARE_ACCESS_TOKEN;
-      const locationId = process.env.SQUARE_LOCATION_ID;
+      const creds = await resolveFormCredentials(formId, 'square_payments');
+      let accessToken: string | undefined;
+      let locationId: string | undefined;
+      let isLive = true;
+
+      if (creds?.accessToken) {
+        accessToken = creds.accessToken as string;
+        locationId = creds.locationId as string;
+        isLive = creds.isLive !== false;
+      } else {
+        // Backward-compat fallback to platform env vars.
+        accessToken = process.env.SQUARE_ACCESS_TOKEN;
+        locationId = process.env.SQUARE_LOCATION_ID;
+        isLive = process.env.SQUARE_ENVIRONMENT === 'production';
+      }
+
       if (!accessToken || !locationId) {
         return NextResponse.json({
           success: false,
-          error: 'Square is not configured. Set SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID in your environment.',
+          error: 'No Square credentials connected. Add your Square Access Token and Location ID in the form inspector or in Dashboard > Settings > Payments.',
           gatewayId,
         }, { status: 503 });
       }
       try {
-        const env = process.env.SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
-        const apiBase = env === 'production'
+        const apiBase = isLive
           ? 'https://connect.squareup.com'
           : 'https://connect.squareupsandbox.com';
         const amountInCents = Math.round(Number(amount) * 100);
@@ -395,7 +528,7 @@ export async function POST(
     // ─── Other gateways ─────────────────────────────────────────────────────
     return NextResponse.json({
       success: false,
-      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_*`,
+      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_* (stripe_elements, stripe_checkout, stripe_ach), paypal_*, razorpay_*, square_payments, authorize_net, echeck_net, chargify.`,
       gatewayId,
     }, { status: 501 });
   } catch (error: any) {

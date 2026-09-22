@@ -57,6 +57,7 @@ interface StripeInstance {
     clientSecret: string,
     data?: { elements?: StripeElements; redirect?: 'if_required' }
   ) => Promise<{ paymentIntent?: { id: string; status: string }; error?: { message: string } }>;
+  redirectToCheckout?: (opts: { sessionId?: string; sessionUrl?: string }) => Promise<{ error?: { message: string } }>;
 }
 declare global {
   interface Window { Stripe?: (key: string) => StripeInstance }

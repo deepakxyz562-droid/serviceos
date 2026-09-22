@@ -66,6 +66,26 @@ export interface SettingField {
   searchPlaceholder?: string;
   /** For 'segmented' type: show a 'Set as form default' checkbox below the segmented control (JotForm pattern). */
   setAsFormDefault?: boolean;
+  /**
+   * For payment credential fields: when true, the inspector renders this field
+   * as a password input AND encrypts the value with AES-256-GCM before storing
+   * it in widgetConfig. Public form-loading endpoints strip this field from the
+   * JSON so it never reaches the browser.
+   *
+   * Use this for: secretKey (Stripe), clientSecret (PayPal), keySecret (Razorpay),
+   * accessToken (Square), transactionKey (Authorize.Net), privateKey (Braintree),
+   * webhookSecret (Stripe), webhookId (PayPal), apiPassword (Paysafe), apiKey
+   * (Mollie/SensePass), sharedSecret (CyberSource), passphrase (Payfast),
+   * authCode (CardPointe), apiToken (Moneris), password (BlueSnap), merchantKey
+   * (PayU India), secretWord (Skrill), serviceKey (Worldpay UK), merchantSalt
+   * (PayU India), apiSecret (iyzico).
+   *
+   * DO NOT use for: publishableKey (Stripe), clientId (PayPal), applicationId
+   * (Square), merchantId (Braintree), keyId (Razorpay), apiLoginId (Authorize.Net),
+   * clientKey (Authorize.Net), subdomain (Chargify), storeId (Moneris), accountId
+   * (Paysafe) — these are PUBLIC and safe to expose to the browser.
+   */
+  secret?: boolean;
 }
 
 export const UNIVERSAL_GENERAL_SETTINGS: SettingField[] = [

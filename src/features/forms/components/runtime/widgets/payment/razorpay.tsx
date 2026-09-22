@@ -44,9 +44,7 @@ interface RazorpayConstructor {
     modal?: { ondismiss?: () => void };
   }): RazorpayInstance;
 }
-declare global {
-  interface Window { Razorpay?: RazorpayConstructor }
-}
+
 
 export function Razorpay({ value, onChange, config, disabled, field }: WidgetProps) {
   const amount = Number(config.amount ?? 499);
@@ -65,7 +63,8 @@ export function Razorpay({ value, onChange, config, disabled, field }: WidgetPro
   // Load Razorpay checkout.js.
   useEffect(() => {
     if (!canGoLive || typeof window === 'undefined') return;
-    if (window.Razorpay) {
+    const razorpayCtor = (window as unknown as { Razorpay?: RazorpayConstructor }).Razorpay;
+    if (razorpayCtor) {
       const id = window.setTimeout(() => setSdkReady(true), 0);
       return () => window.clearTimeout(id);
     }
@@ -112,7 +111,13 @@ export function Razorpay({ value, onChange, config, disabled, field }: WidgetPro
         // for production (no server-side verification possible).
       }
 
-      const razorpay = new window.Razorpay!({
+      const RazorpayClass = (window as unknown as { Razorpay?: RazorpayConstructor }).Razorpay;
+      if (!RazorpayClass) {
+        setErrorMsg('Razorpay SDK not available.');
+        setProcessing(false);
+        return;
+      }
+      const razorpay = new RazorpayClass({
         key: keyId,
         amount: Math.round(amount * 100), // Razorpay uses smallest currency unit
         currency,

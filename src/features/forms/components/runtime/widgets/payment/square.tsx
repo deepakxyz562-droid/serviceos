@@ -38,7 +38,7 @@ interface SquarePayments {
   card: () => Promise<SquareCardPayment>;
 }
 interface SquareSDK {
-  payments: (appId: string, locId: string) => SquarePayments;
+  payments: (appId: string, locId: string) => Promise<SquarePayments>;
 }
 declare global {
   interface Window { Square?: SquareSDK }
@@ -80,10 +80,11 @@ export function Square({ value, onChange, config, disabled, field }: WidgetProps
 
   // Initialize and mount the Square Card payment object.
   useEffect(() => {
-    if (!sdkReady || !window.Square || !cardElRef.current || cardPaymentRef.current) return;
+    const square = window.Square;
+    if (!sdkReady || !square || !cardElRef.current || cardPaymentRef.current) return;
     (async () => {
       try {
-        const payments = window.Square.payments(applicationId, locationId);
+        const payments = await square.payments(applicationId, locationId);
         const card = await payments.card();
         await card.attach(cardElRef.current!);
         cardPaymentRef.current = card;
