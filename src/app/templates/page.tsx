@@ -1,12 +1,11 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { TemplatesGalleryClient } from './templates-gallery-client';
 import {
   searchTemplatesPaginated,
   TEMPLATE_CATEGORIES,
   TEMPLATE_INDUSTRIES,
 } from '@/lib/forms/templates';
-import { Sparkles, HelpCircle, CheckCircle2, ShieldCheck, Zap, Layers, ArrowRight } from 'lucide-react';
+import { Sparkles, Zap, ShieldCheck, Layers } from 'lucide-react';
 
 /**
  * /templates — Form Template Library & Customer Journey Hub.
@@ -260,96 +259,6 @@ export default function TemplatesGalleryPage() {
           </div>
         </div>
       </section>
-
-      {/* SEO Directory Footer */}
-      <footer className="border-t border-border bg-slate-900 text-slate-300 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-xs">
-            <div>
-              <h3 className="font-bold text-white text-sm mb-3">Popular Form Categories</h3>
-              <ul className="space-y-2">
-                {categories.slice(0, 7).map((c) => (
-                  <li key={c.id}>
-                    <Link
-                      href={`/templates/${c.id}`}
-                      className="text-slate-400 hover:text-emerald-400 transition-colors"
-                    >
-                      {c.label} Templates
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="font-bold text-white text-sm mb-3">Top Industry Verticals</h3>
-              <ul className="space-y-2">
-                {industries.slice(0, 7).map((i) => (
-                  <li key={i.id}>
-                    <Link
-                      href={`/templates/industries/${i.id}`}
-                      className="text-slate-400 hover:text-emerald-400 transition-colors"
-                    >
-                      {i.label} Forms
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="font-bold text-white text-sm mb-3">Featured AI Templates</h3>
-              <ul className="space-y-2">
-                {initialData.templates.slice(0, 7).map((t) => (
-                  <li key={t.id}>
-                    <Link
-                      href={`/templates/${t.categories[0] || 'general'}/${t.id}`}
-                      className="text-slate-400 hover:text-emerald-400 transition-colors truncate block"
-                    >
-                      {t.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="font-bold text-white text-sm mb-3">Platform & Solutions</h3>
-              <ul className="space-y-2">
-                <li>
-                  <Link href="/gptform" className="text-slate-400 hover:text-emerald-400 transition-colors">
-                    GPTForm™ AI Form Builder
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/#ai-receptionist" className="text-slate-400 hover:text-emerald-400 transition-colors">
-                    24/7 Voice & AI Receptionist
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/#pricing" className="text-slate-400 hover:text-emerald-400 transition-colors">
-                    Pricing & Free Plan
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/" className="text-slate-400 hover:text-emerald-400 transition-colors">
-                    Fieseros Home
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="pt-8 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-            <p>© {new Date().getFullYear()} Fieseros OS. All rights reserved. 20,000+ Online Form Templates Library.</p>
-            <div className="flex items-center gap-4">
-              <Link href="/privacy" className="hover:text-slate-400">Privacy Policy</Link>
-              <Link href="/terms" className="hover:text-slate-400">Terms of Service</Link>
-              <Link href="/security" className="hover:text-slate-400">Security & HIPAA</Link>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
