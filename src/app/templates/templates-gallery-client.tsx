@@ -79,6 +79,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { FormThumbnailPreview } from '@/components/forms/form-thumbnail-preview';
+import { FormPreviewCanvas } from '@/components/forms/form-preview-canvas';
 import type { FormTemplate } from '@/lib/forms/templates';
 import {
   TEMPLATE_CATEGORIES,
@@ -184,8 +185,7 @@ export function TemplatesGalleryClient({
 
   // Interactive Preview Modal State
   const [previewTemplate, setPreviewTemplate] = useState<FormTemplate | null>(null);
-  const [previewExperience, setPreviewExperience] = useState<Experience>('Conversational');
-  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('Create a service booking flow that qualifies the customer, collects photos, and offers an appointment.');
 
@@ -282,7 +282,6 @@ export function TemplatesGalleryClient({
   const openPreview = useCallback(async (template: FormTemplate, pushHistory = true) => {
     if (!template) return;
     setPreviewTemplate(template);
-    setPreviewExperience('Conversational');
     if (typeof window !== 'undefined' && pushHistory) {
       const primaryCat = template.categories?.[0] || 'general';
       try {
@@ -1131,229 +1130,60 @@ export function TemplatesGalleryClient({
             </DialogHeader>
 
             {/* Modal Body: Left Canvas + Right Sidebar */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] flex-1 overflow-hidden">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] flex-1 overflow-hidden min-h-0">
               {/* Left Live Interactive Canvas */}
-              <div className="bg-slate-100/70 dark:bg-slate-950/60 p-4 sm:p-6 overflow-y-auto flex flex-col items-center">
-                {/* Mode Switcher & Device Toggles */}
-                <div className="w-full max-w-2xl mb-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-border p-1 rounded-xl shadow-xs overflow-x-auto">
-                    {EXPERIENCES.map((mode) => (
-                      <button
-                        key={mode}
-                        onClick={() => setPreviewExperience(mode)}
-                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                          previewExperience === mode
-                            ? 'bg-emerald-600 text-white shadow-xs'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {mode}
-                      </button>
-                    ))}
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100/70 dark:bg-slate-950/60">
+                {/* Device Switcher Top Bar */}
+                <div className="px-5 py-2.5 border-b border-border/80 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xs flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                    <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-foreground font-bold">Live Interactive Preview</span>
+                    <span className="text-[11px] text-muted-foreground hidden sm:inline">• Test inputs & responsive layout</span>
                   </div>
 
-                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-border p-1 rounded-xl shadow-xs">
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-border p-0.5 rounded-xl shadow-xs">
                     <Button
                       variant={previewDevice === 'desktop' ? 'secondary' : 'ghost'}
-                      size="icon"
-                      className="size-7 rounded-lg"
+                      size="sm"
+                      className={`h-7 px-2.5 rounded-lg text-xs font-semibold gap-1.5 cursor-pointer ${
+                        previewDevice === 'desktop' ? 'text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold' : 'text-muted-foreground'
+                      }`}
                       onClick={() => setPreviewDevice('desktop')}
                       aria-label="Desktop preview"
                     >
                       <Monitor className="size-3.5" />
+                      <span className="hidden sm:inline">Desktop</span>
+                    </Button>
+                    <Button
+                      variant={previewDevice === 'tablet' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className={`h-7 px-2.5 rounded-lg text-xs font-semibold gap-1.5 cursor-pointer ${
+                        previewDevice === 'tablet' ? 'text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold' : 'text-muted-foreground'
+                      }`}
+                      onClick={() => setPreviewDevice('tablet')}
+                      aria-label="Tablet preview"
+                    >
+                      <Tablet className="size-3.5" />
+                      <span className="hidden sm:inline">Tablet</span>
                     </Button>
                     <Button
                       variant={previewDevice === 'mobile' ? 'secondary' : 'ghost'}
-                      size="icon"
-                      className="size-7 rounded-lg"
+                      size="sm"
+                      className={`h-7 px-2.5 rounded-lg text-xs font-semibold gap-1.5 cursor-pointer ${
+                        previewDevice === 'mobile' ? 'text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold' : 'text-muted-foreground'
+                      }`}
                       onClick={() => setPreviewDevice('mobile')}
                       aria-label="Mobile preview"
                     >
                       <Smartphone className="size-3.5" />
+                      <span className="hidden sm:inline">Mobile</span>
                     </Button>
                   </div>
                 </div>
 
-                {/* Live Preview Container */}
-                <div
-                  className={cn(
-                    'w-full transition-all duration-300 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-md overflow-hidden',
-                    previewDevice === 'mobile' ? 'max-w-[340px] my-auto' : 'max-w-2xl'
-                  )}
-                >
-                  {/* Preview Topbar Bar */}
-                  <div className="flex items-center justify-between border-b border-border bg-slate-950 px-4 py-2.5 text-white">
-                    <span className="flex items-center gap-2 text-[10px] font-bold tracking-wider">
-                      <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                      LIVE PREVIEW
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      {previewExperience} Mode
-                    </span>
-                  </div>
-
-                  {/* 4 Interactive Runtimes */}
-                  <div className="p-5 sm:p-6 min-h-[320px] flex flex-col justify-center">
-                    {/* 1. Classic Form Preview */}
-                    {previewExperience === 'Classic' && (
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="font-bold text-base text-foreground">{previewTemplate.name}</h4>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Please fill out the details below to submit your request.
-                          </p>
-                        </div>
-                        <div className="space-y-3 pt-2">
-                          <div>
-                            <label className="block text-[11px] font-semibold text-foreground mb-1">
-                              Full Name <span className="text-emerald-600">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              disabled
-                              placeholder="e.g. Jane Doe"
-                              className="w-full h-9 rounded-lg border border-border bg-slate-50 dark:bg-slate-800 px-3 text-xs text-foreground"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-semibold text-foreground mb-1">
-                              Email Address <span className="text-emerald-600">*</span>
-                            </label>
-                            <input
-                              type="email"
-                              disabled
-                              placeholder="jane@example.com"
-                              className="w-full h-9 rounded-lg border border-border bg-slate-50 dark:bg-slate-800 px-3 text-xs text-foreground"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[11px] font-semibold text-foreground mb-1">
-                              Service Scope / Notes
-                            </label>
-                            <textarea
-                              disabled
-                              rows={2}
-                              placeholder="Describe your inquiry details..."
-                              className="w-full rounded-lg border border-border bg-slate-50 dark:bg-slate-800 p-2.5 text-xs text-foreground resize-none"
-                            />
-                          </div>
-                          <Button
-                            disabled
-                            className="w-full bg-emerald-600 text-white font-bold text-xs h-9 rounded-lg"
-                          >
-                            Submit Application
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 2. Card Stepper Preview */}
-                    {previewExperience === 'Card' && (
-                      <div className="space-y-5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
-                            QUESTION 1 OF {previewTemplate.schema?.fields?.length || 6}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">15% completed</span>
-                        </div>
-                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
-                          <div className="bg-emerald-600 h-full w-[15%]" />
-                        </div>
-                        <div>
-                          <h4 className="font-extrabold text-lg text-foreground">
-                            What specific assistance do you need today?
-                          </h4>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Select the primary reason for your request.
-                          </p>
-                        </div>
-                        <div className="space-y-2 pt-2">
-                          {['New Consultation / Inquiry', 'Emergency Service Booking', 'Pricing & Quote Estimate', 'General Feedback'].map((opt, i) => (
-                            <div
-                              key={opt}
-                              className={`p-3 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
-                                i === 0
-                                  ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300'
-                                  : 'border-border hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-                              }`}
-                            >
-                              {opt}
-                            </div>
-                          ))}
-                        </div>
-                        <Button
-                          disabled
-                          className="w-full bg-emerald-600 text-white font-bold text-xs h-9 rounded-lg"
-                        >
-                          Continue →
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* 3. Conversational Chatbot Preview */}
-                    {previewExperience === 'Conversational' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2 pb-2 border-b border-border text-xs font-bold text-foreground">
-                          <span className="size-7 rounded-full bg-emerald-600 text-white flex items-center justify-center">
-                            <MessageCircle className="size-3.5" />
-                          </span>
-                          <span>Fieseros AI Concierge</span>
-                        </div>
-                        <div className="space-y-3 text-xs">
-                          <div className="max-w-[85%] rounded-2xl rounded-tl-xs bg-slate-100 dark:bg-slate-800 p-3 text-foreground leading-relaxed">
-                            Hello! 👋 I&apos;m here to guide you through {previewTemplate.name.toLowerCase()}. What type of service are you looking for?
-                          </div>
-                          <div className="ml-auto max-w-[80%] rounded-2xl rounded-tr-xs bg-emerald-600 text-white p-3 font-medium">
-                            I&apos;d like to get started with a quote and schedule an appointment.
-                          </div>
-                          <div className="max-w-[85%] rounded-2xl rounded-tl-xs bg-slate-100 dark:bg-slate-800 p-3 text-foreground leading-relaxed">
-                            Perfect! What date works best for you, and what is your preferred contact email?
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 4. AI Agent Preview */}
-                    {previewExperience === 'AI Agent' && (
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-2 pb-2 border-b border-border">
-                          <span className="size-8 rounded-xl bg-purple-600 text-white flex items-center justify-center">
-                            <Sparkles className="size-4" />
-                          </span>
-                          <div>
-                            <p className="text-xs font-bold text-foreground">Natural Language Form Agent</p>
-                            <p className="text-[10px] text-muted-foreground">Autonomous data parser & validator</p>
-                          </div>
-                        </div>
-                        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 text-xs text-muted-foreground leading-relaxed">
-                          &ldquo;Customer speaks or writes in natural language: &lsquo;Need HVAC repair for our 2,400 sq ft home this Friday morning, call me at 555-0192.&rsquo;&rdquo;
-                        </div>
-                        <div className="rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 p-3 space-y-2">
-                          <p className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider">
-                            STRUCTURED INSTANTLY BY AI
-                          </p>
-                          <div className="grid grid-cols-2 gap-2 text-[11px]">
-                            <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
-                              <span className="text-muted-foreground block text-[9px]">Goal:</span>
-                              <strong>HVAC Service Repair</strong>
-                            </div>
-                            <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
-                              <span className="text-muted-foreground block text-[9px]">Timing:</span>
-                              <strong>Friday Morning</strong>
-                            </div>
-                            <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
-                              <span className="text-muted-foreground block text-[9px]">Property Size:</span>
-                              <strong>2,400 sq ft</strong>
-                            </div>
-                            <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
-                              <span className="text-muted-foreground block text-[9px]">Contact:</span>
-                              <strong>555-0192</strong>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                {/* Real Template Runtime Canvas */}
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  <FormPreviewCanvas template={previewTemplate} device={previewDevice} />
                 </div>
               </div>
 
@@ -1386,25 +1216,23 @@ export function TemplatesGalleryClient({
 
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
-                      Workflow Lifecycle
+                      Full Details Page
                     </h4>
-                    <div className="flex flex-wrap gap-1.5">
-                      {['1. Invite', '2. Questions', '3. Validate', '4. Submit'].map((step) => (
-                        <span
-                          key={step}
-                          className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-muted-foreground"
-                        >
-                          {step}
-                        </span>
-                      ))}
-                    </div>
+                    <Link
+                      href={`/templates/${previewTemplate.categories?.[0] || 'general'}/${previewTemplate.id}`}
+                      target="_blank"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline"
+                    >
+                      <span>Open template page in new tab</span>
+                      <ExternalLink className="size-3.5" />
+                    </Link>
                   </div>
                 </div>
 
                 <div className="pt-6 border-t border-border space-y-3">
                   <Button
                     onClick={() => navigateToUseTemplate(previewTemplate)}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 rounded-xl shadow-md gap-2"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 rounded-xl shadow-md gap-2 cursor-pointer"
                   >
                     <Sparkles className="size-4" /> Use This Template
                   </Button>

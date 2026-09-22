@@ -16,6 +16,7 @@ import { VoiceRecorder } from './voice-recorder';
 import { PaymentGatewayRuntime } from './payment-gateway-runtime';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { Star, Shield, Lock, CreditCard, Sparkles, CheckSquare, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -236,17 +237,34 @@ export function WidgetRuntimeDispatcher({
       );
 
     case 'form_calculation':
+    case 'calculation':
+    case 'calculated':
       return (
         <FormCalculation
           formula={config.formula || ''}
-          prefix={config.prefix || '$'}
-          suffix={config.suffix || ''}
-          decimals={config.decimals ?? 2}
+          prefix={config.prefix || config.currencyPrefix || config.resultPrefix || '$'}
+          suffix={config.suffix || config.resultSuffix || ''}
+          decimals={config.decimals ?? config.decimalPlaces ?? 2}
           allFormData={allFormData}
-          value={value}
+          value={typeof value === 'number' ? value : 0}
           onChange={onChange}
           disabled={interactiveDisabled}
         />
+      );
+
+    case 'switch':
+    case 'toggle':
+    case 'label_with_toggle':
+      const isSwitchChecked = typeof value === 'boolean' ? value : value === 'true' || value === 1 || Boolean(config.defaultChecked);
+      return (
+        <div className="flex items-center justify-between p-3 rounded-xl border border-border/80 bg-muted/20">
+          <span className="text-xs font-semibold text-foreground">{field.label || (config.label as string) || 'Toggle Option'}</span>
+          <Switch
+            checked={isSwitchChecked}
+            onCheckedChange={(checked) => onChange(checked)}
+            disabled={interactiveDisabled}
+          />
+        </div>
       );
 
     case 'sms_otp_verification':
@@ -316,14 +334,15 @@ export function WidgetRuntimeDispatcher({
         </div>
       );
 
+    case 'slider':
     case 'slider_rating':
     case 'range_slider':
-      const sliderVal = typeof value === 'number' ? value : (config.min || 0);
+      const sliderVal = typeof value === 'number' ? value : typeof config.defaultValue === 'number' ? config.defaultValue : (config.min || 0);
       return (
         <div className="space-y-2 py-2">
           <div className="flex justify-between text-xs font-semibold text-foreground">
             <span>{config.minLabel || config.min || 0}</span>
-            <span className="text-emerald-600 font-bold">{sliderVal} {config.unit || ''}</span>
+            <span className="text-emerald-600 font-bold">{sliderVal.toLocaleString()} {config.unit || ''}</span>
             <span>{config.maxLabel || config.max || 100}</span>
           </div>
           <Slider

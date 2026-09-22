@@ -369,9 +369,6 @@ function evaluateFormulaSafe(
 ): number | null {
   if (!formula) return null;
 
-  // Build a lookup map of field id → calculation values for quick access.
-  // When a source field has useCalculationValues=true, the formula engine
-  // substitutes the numeric calculation value instead of the raw option string.
   const calcValuesMap = new Map<string, Record<string, number | string>>();
   if (fields) {
     for (const f of fields) {
@@ -382,14 +379,21 @@ function evaluateFormulaSafe(
     }
   }
 
-  let expr = formula.replace(/\{\{\s*([a-zA-Z0-9_-]+)\s*\}\}/g, (_m, id: string) => {
+  let expr = formula.replace(/\[([a-zA-Z0-9_.-]+)\]|\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g, (_m, id1: string, id2: string) => {
+    const id = id1 || id2;
     const v = values[id];
-    if (v === undefined || v === null || v === '') return 'NaN';
+    if (v === undefined || v === null || v === '') return '0';
+
+    if (typeof v === 'boolean') return v ? '1' : '0';
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      if (s === 'true') return '1';
+      if (s === 'false') return '0';
+    }
 
     // Check if this field has calculation values configured
     const calcValues = calcValuesMap.get(id);
     if (calcValues) {
-      // For array values (multi-select), sum the calculation values
       if (Array.isArray(v)) {
         const sum = v.reduce((acc: number, item: string) => {
           const cv = calcValues[item];
@@ -398,7 +402,6 @@ function evaluateFormulaSafe(
         }, 0);
         return String(sum);
       }
-      // For single values, use the calculation value if it exists
       const cv = calcValues[String(v)];
       if (cv !== undefined) {
         const n = typeof cv === 'number' ? cv : Number(cv);
@@ -406,15 +409,35 @@ function evaluateFormulaSafe(
       }
     }
 
-    // Fall back to raw numeric value
-    const n = typeof v === 'number' ? v : Number(v);
-    return Number.isNaN(n) ? 'NaN' : String(n);
+    if (Array.isArray(v)) {
+      const sum = v.reduce((acc: number, item: unknown) => {
+        const itemStr = String(item).trim();
+        const priceMatch = itemStr.match(/[\$£€]([0-9]+(?:\.[0-9]+)?)/);
+        if (priceMatch && priceMatch[1]) {
+          const num = parseFloat(priceMatch[1]);
+          return isNaN(num) ? acc : acc + num;
+        }
+        const num = parseFloat(itemStr.replace(/[^0-9.-]/g, ''));
+        return isNaN(num) ? acc : acc + num;
+      }, 0);
+      return String(sum);
+    }
+
+    const str = String(v).trim();
+    const priceMatch = str.match(/[\$£€]([0-9]+(?:\.[0-9]+)?)/);
+    if (priceMatch && priceMatch[1]) {
+      const num = parseFloat(priceMatch[1]);
+      if (!isNaN(num)) return String(num);
+    }
+
+    const n = typeof v === 'number' ? v : parseFloat(str.replace(/[^0-9.-]/g, ''));
+    return Number.isNaN(n) ? '0' : String(n);
   });
+
   if (expr.includes('NaN')) return null;
-  if (!/^[0-9.\s+\-*/()]+$/.test(expr)) return null;
+  if (!/^[0-9.\s+\-*/%()?:!=><&|Math.roundmaxinabslorceq]+$/.test(expr)) return null;
   if (/\/\s*0(?!\.\d)/.test(expr)) return null;
   try {
-     
     const fn = new Function(`"use strict"; return (${expr});`);
     const result = fn();
     if (typeof result !== 'number' || !Number.isFinite(result)) return null;
@@ -1401,7 +1424,7 @@ export function FormRuntimeRenderer({
                       {field.helpText && !['heading', 'paragraph'].includes(field.type) && (
                         <p className="text-xs text-muted-foreground">{field.helpText}</p>
                       )}
-                      {(field.type === 'control_widget' || ['dropdown','radio','checkbox','short_answer','email','phone','numerical','date','time','long_answer','signature','rating','appointment','heading','paragraph','divider'].includes(field.type) || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
+                      {(field.type === 'control_widget' || ['dropdown','radio','checkbox','short_answer','email','phone','numerical','date','time','long_answer','signature','rating','appointment','heading','paragraph','divider','slider','switch','toggle','multiple_choice','single_choice','calculation','form_calculation'].includes(field.type) || (field.widgetType && field.widgetType !== 'hidden')) && (
                         <WidgetRuntimeDispatcher field={field} value={formData[field.id]} onChange={(val) => handleFieldChange(field.id, val)} allFormData={formData} />
                       )}
                       {field.type === 'heading' && (() => {
@@ -1579,9 +1602,9 @@ export function FormRuntimeRenderer({
                         calendar, format, decimals, thousandsSep, rows, showCounter, etc.
                         Exception: material/tier radio fields use the specialized estimator card below. */}
                     {(field.type === 'control_widget' ||
-                      ['dropdown','radio','checkbox','short_answer','email','phone','numerical','date','time','long_answer','signature','rating','appointment','heading','paragraph','divider','address','file'].includes(field.type) ||
-                      (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) &&
-                      !(field.type === 'radio' && (field.id.includes('material') || field.id.includes('tier'))) && (
+                      ['dropdown','radio','checkbox','short_answer','email','phone','numerical','date','time','long_answer','signature','rating','appointment','heading','paragraph','divider','address','file','slider','switch','toggle','multiple_choice','single_choice','calculation','form_calculation'].includes(field.type) ||
+                      (field.widgetType && field.widgetType !== 'hidden')) &&
+                      !(field.type === 'radio' && !field.widgetType && (field.id.includes('material') || field.id.includes('tier'))) && (
                       <WidgetRuntimeDispatcher
                         field={field}
                         value={formData[field.id]}

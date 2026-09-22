@@ -25,6 +25,7 @@ interface FormCalculationProps {
 function parseFieldToNumber(val: unknown): number {
   if (val === undefined || val === null || val === '') return 0;
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (typeof val === 'boolean') return val ? 1 : 0;
 
   // 1. Array of values (e.g. Multi-select Checkboxes)
   if (Array.isArray(val)) {
@@ -32,6 +33,8 @@ function parseFieldToNumber(val: unknown): number {
   }
 
   const str = String(val).trim();
+  if (str.toLowerCase() === 'true') return 1;
+  if (str.toLowerCase() === 'false') return 0;
 
   // 2. Date String (YYYY-MM-DD or MM/DD/YYYY)
   const isDatePattern = /^\d{4}-\d{2}-\d{2}$|^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str);
@@ -44,13 +47,13 @@ function parseFieldToNumber(val: unknown): number {
   }
 
   // 3. String containing dollar/currency amount e.g. "Parking - $10" or "Premium ($50.00)"
-  const priceMatch = str.match(/\$([0-9]+(?:\.[0-9]+)?)/);
+  const priceMatch = str.match(/[\$£€]([0-9]+(?:\.[0-9]+)?)/);
   if (priceMatch && priceMatch[1]) {
     const num = parseFloat(priceMatch[1]);
     if (!isNaN(num)) return num;
   }
 
-  // 4. Standard string number e.g. "45.5"
+  // 4. Standard string number e.g. "45.5" or "120 sq ft"
   const rawNum = parseFloat(str.replace(/[^0-9.-]/g, ''));
   return isNaN(rawNum) ? 0 : rawNum;
 }
@@ -77,7 +80,7 @@ export function FormCalculation({
         return String(num);
       });
 
-      // 2. Allow standard Math functions: Math.round, Math.max, Math.min, Math.abs, Math.floor, Math.ceil
+      // 2. Allow standard Math functions: Math.round, Math.max, Math.min, Math.abs, Math.floor, Math.ceil, Math.sqrt
       evalString = evalString
         .replace(/round\(/g, 'Math.round(')
         .replace(/max\(/g, 'Math.max(')
@@ -87,13 +90,13 @@ export function FormCalculation({
         .replace(/ceil\(/g, 'Math.ceil(')
         .replace(/sqrt\(/g, 'Math.sqrt(');
 
-      // 3. Sanitize: allow only numbers, basic arithmetic operators, parentheses, commas, whitespace, and Math.*
-      const sanitized = evalString.replace(/[^0-9+\-*/().,\sMath.roundmaxinabslorceq]/g, '');
+      // 3. Sanitize: allow numbers, operators, parentheses, commas, ternary, comparison, and Math.*
+      const sanitized = evalString.replace(/[^0-9+\-*/%().,\s?:!=><&|Math.roundmaxinabslorceq]/g, '');
 
       if (!sanitized.trim()) return 0;
 
       // 4. Safe mathematical evaluation
-      const result = new Function(`return (${sanitized});`)();
+      const result = new Function(`"use strict"; return (${sanitized});`)();
       const num = Number(result);
       return isNaN(num) || !isFinite(num) ? 0 : num;
     } catch {

@@ -152,6 +152,40 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     ],
   },
   {
+    id: 'switch',
+    name: 'Toggle Switch',
+    category: 'choice',
+    iconName: 'ToggleRight',
+    description: 'On/Off toggle switch for options and add-ons',
+    tier: 'free',
+    createField: (label = 'Toggle Option') => ({
+      label, type: 'checkbox', widgetType: 'switch',
+      widgetConfig: { defaultChecked: false }, required: false,
+    }),
+    settingsSchema: [
+      { key: 'defaultChecked', label: 'Default ON', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Toggle is switched on by default.' },
+    ],
+  },
+  {
+    id: 'slider',
+    name: 'Range Slider',
+    category: 'basic',
+    iconName: 'SlidersHorizontal',
+    description: 'Draggable numeric slider with min/max and unit',
+    tier: 'free',
+    createField: (label = 'Range Slider') => ({
+      label, type: 'numerical', widgetType: 'slider',
+      widgetConfig: { min: 0, max: 100, step: 1, defaultValue: 50, unit: '' }, required: false,
+    }),
+    settingsSchema: [
+      { key: 'min', label: 'Minimum value', type: 'number', group: 'field_specific', default: 0 },
+      { key: 'max', label: 'Maximum value', type: 'number', group: 'field_specific', default: 100 },
+      { key: 'step', label: 'Step increment', type: 'number', group: 'field_specific', default: 1 },
+      { key: 'defaultValue', label: 'Default value', type: 'number', group: 'field_specific', default: 50 },
+      { key: 'unit', label: 'Unit label (e.g. sq ft, %)', type: 'text', group: 'field_specific', default: '' },
+    ],
+  },
+  {
     id: 'email',
     name: 'Email Address',
     category: 'contact',
