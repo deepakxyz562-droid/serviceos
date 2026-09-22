@@ -164,7 +164,7 @@ export function PaymentPropertiesPanel({
   const isConnected = Boolean(widgetConfig.isConnected ?? (widgetConfig.provider === 'managed' || widgetConfig.publishableKey || widgetConfig.applicationId || widgetConfig.clientId));
   const mode = (widgetConfig.mode as 'live' | 'test') || (widgetConfig.testMode ? 'test' : 'live') || 'test';
   const connectionName = String(widgetConfig.connectionName || `My ${gateway.name} Connection #1`);
-  const paymentType = (widgetConfig.paymentType as PaymentTypeOption) || (widgetConfig.pricingMode === 'fixed' ? 'sell_products' : widgetConfig.pricingMode === 'formula' ? 'user_defined_amount' : 'sell_products');
+  const paymentType = (widgetConfig.paymentType as PaymentTypeOption) || (widgetConfig.pricingMode === 'fixed' ? 'sell_products' : widgetConfig.pricingMode === 'user_input' ? 'user_defined_amount' : 'sell_products');
   const currency = String(widgetConfig.currency || gateway.currencies[0] || 'USD');
   const authorizationOnly = Boolean(widgetConfig.authorizationOnly ?? false);
   const chargeImmediately = Boolean(widgetConfig.chargeImmediately ?? !authorizationOnly);
@@ -443,7 +443,7 @@ export function PaymentPropertiesPanel({
                 value={paymentType}
                 onValueChange={(val) => {
                   onConfigChange('paymentType', val);
-                  onConfigChange('pricingMode', val === 'sell_products' ? 'fixed' : val === 'user_defined_amount' ? 'formula' : 'fixed');
+                  onConfigChange('pricingMode', val === 'sell_products' || val === 'sell_subscriptions' ? 'products' : val === 'user_defined_amount' ? 'user_input' : 'fixed');
                 }}
               >
                 <SelectTrigger className="h-8 text-xs bg-background">
@@ -463,6 +463,107 @@ export function PaymentPropertiesPanel({
                 {paymentType === 'collect_donations' && 'Allow customers to donate custom or preset amounts.'}
               </p>
             </div>
+
+            {/* Products Editor — shown when selling products or subscriptions */}
+            {(paymentType === 'sell_products' || paymentType === 'sell_subscriptions') && (
+              <div className="space-y-2 p-3 rounded-lg border border-border bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-semibold text-foreground">
+                    {paymentType === 'sell_subscriptions' ? 'Subscription Plans' : 'Products'}
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">
+                    {(widgetConfig.products as any[] || []).length} item{(widgetConfig.products as any[] || []).length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {((widgetConfig.products as Array<Record<string, unknown>>) || []).map((p, idx) => {
+                    const name = String(p.name || '');
+                    const price = Number(p.price || 0);
+                    const qty = Number(p.qty || 1);
+                    const description = String(p.description || '');
+                    const updateProduct = (key: string, val: unknown) => {
+                      const products = (widgetConfig.products as Array<Record<string, unknown>>) || [];
+                      const next = [...products];
+                      next[idx] = { ...next[idx], [key]: val };
+                      onConfigChange('products', next);
+                    };
+                    return (
+                      <div key={idx} className="p-2 rounded-lg border border-border/60 bg-background space-y-1.5">
+                        <div className="grid grid-cols-12 gap-1.5 items-center">
+                          <Input
+                            className="col-span-6 h-7 text-xs"
+                            value={name}
+                            placeholder={paymentType === 'sell_subscriptions' ? 'Plan name' : 'Product name'}
+                            onChange={(e) => updateProduct('name', e.target.value)}
+                          />
+                          <Input
+                            type="number"
+                            className="col-span-3 h-7 text-xs"
+                            value={price}
+                            placeholder="Price"
+                            onChange={(e) => updateProduct('price', Number(e.target.value))}
+                          />
+                          <Input
+                            type="number"
+                            className="col-span-2 h-7 text-xs"
+                            value={qty}
+                            placeholder="Qty"
+                            min="1"
+                            onChange={(e) => updateProduct('qty', Number(e.target.value))}
+                          />
+                          <button
+                            type="button"
+                            className="col-span-1 flex items-center justify-center size-7 text-muted-foreground hover:text-red-500 rounded"
+                            onClick={() => {
+                              const products = (widgetConfig.products as Array<Record<string, unknown>>) || [];
+                              onConfigChange('products', products.filter((_, i) => i !== idx));
+                            }}
+                            aria-label="Remove product"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
+                        <Input
+                          className="h-7 text-xs"
+                          value={description}
+                          placeholder="Description (optional)"
+                          onChange={(e) => updateProduct('description', e.target.value)}
+                        />
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                          <span>Line total: <strong className="text-foreground">{currency} {(price * qty).toFixed(2)}</strong></span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-dashed border-border hover:border-teal-500 hover:bg-teal-50/30 dark:hover:bg-teal-950/20 text-xs text-muted-foreground hover:text-teal-700 dark:hover:text-teal-400 transition-colors"
+                    onClick={() => {
+                      const products = (widgetConfig.products as Array<Record<string, unknown>>) || [];
+                      onConfigChange('products', [...products, {
+                        name: '',
+                        price: 0,
+                        qty: 1,
+                        description: '',
+                      }]);
+                    }}
+                  >
+                    <Plus className="size-3" /> Add {paymentType === 'sell_subscriptions' ? 'Plan' : 'Product'}
+                  </button>
+                </div>
+                {/* Total */}
+                {((widgetConfig.products as Array<Record<string, unknown>>) || []).length > 0 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-border/60">
+                    <span className="text-[11px] font-semibold text-foreground">Order Total</span>
+                    <span className="text-sm font-bold text-teal-600 dark:text-teal-400">
+                      {currency} {((widgetConfig.products as Array<Record<string, unknown>>) || [])
+                        .reduce((sum, p) => sum + Number(p.price || 0) * Number(p.qty || 1), 0)
+                        .toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Currency Selector (With JotForm-style connection lock) */}
             <div className="space-y-1.5">

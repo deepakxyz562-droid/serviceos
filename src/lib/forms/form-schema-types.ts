@@ -364,15 +364,25 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
     resolvedFields = fallbackList.length > 0 ? fallbackList : DEFAULT_FORM_SCHEMA.fields;
   }
 
-  // Ensure every field has a valid stepId so it is never dropped or filtered out
+  // Ensure every field has a valid stepId so it is never dropped or filtered out.
+  // Also normalize options: basic choice fields saved with `options: string[]`
+  // must be converted to `[{label, value}]` so the runtime renderer can iterate
+  // them correctly (otherwise `opt.value` and `opt.label` are both undefined
+  // and the dropdown renders empty on the public form).
   const sanitizedFields = resolvedFields.map((f, idx) => {
     const stepId = f.stepId && validStepIds.has(f.stepId) ? f.stepId : defaultStepId;
+    // Normalize options: string[] → {label, value}[]
+    let normalizedOptions = f.options;
+    if (Array.isArray(f.options) && f.options.length > 0 && typeof f.options[0] === 'string') {
+      normalizedOptions = (f.options as string[]).map((opt) => ({ label: opt, value: opt }));
+    }
     return {
       ...f,
       id: f.id || `f_${idx + 1}`,
       label: f.label || `Question ${idx + 1}`,
       type: f.type || 'short_answer',
       stepId,
+      options: normalizedOptions,
     };
   });
 

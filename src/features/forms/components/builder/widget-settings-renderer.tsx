@@ -450,11 +450,11 @@ export function WidgetSettingsRenderer({
             <div className="flex items-center justify-between">
               <Label className="text-[11px] font-semibold">{setting.label}</Label>
               <Switch
-                checked={Boolean(field[`${setting.key}_enabled`] ?? true)}
-                onCheckedChange={(c) => onFieldChange(`${setting.key}_enabled`, c)}
+                checked={Boolean(field[setting.key] ?? true)}
+                onCheckedChange={(c) => onFieldChange(setting.key, c)}
               />
             </div>
-            {Boolean(field[`${setting.key}_enabled`] ?? true) && (
+            {Boolean(field[setting.key] ?? true) && (
               <Input
                 className="h-8 text-xs bg-background"
                 placeholder={setting.placeholder}
@@ -539,6 +539,80 @@ export function WidgetSettingsRenderer({
               onChange={(e) => onChange(Number(e.target.value))}
               className="w-full accent-emerald-600 cursor-pointer"
             />
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+      }
+
+      // ─── Predefined Options — Jotform-style preset selector ──────────────────
+      case 'predefined_options': {
+        const PRESETS: Record<string, string[]> = {
+          '— Select a preset —': [],
+          'Countries': ['United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 'Spain', 'Italy', 'Netherlands', 'Sweden', 'Norway', 'Denmark', 'Finland', 'Poland', 'India', 'China', 'Japan', 'South Korea', 'Brazil', 'Mexico', 'Argentina', 'South Africa', 'UAE', 'Saudi Arabia', 'Singapore', 'New Zealand'],
+          'US States': ['Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'],
+          'Days of Week': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+          'Months': ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+          'Gender': ['Male', 'Female', 'Non-binary', 'Prefer not to say'],
+          'Yes / No': ['Yes', 'No'],
+          'Likert 1–5': ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'],
+          'Likert 1–10': ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+          'Priority Levels': ['Low', 'Medium', 'High', 'Critical', 'Emergency'],
+          'Service Types': ['Plumbing', 'HVAC', 'Electrical', 'Cleaning', 'Landscaping', 'Roofing', 'Handyman', 'Pest Control', 'Painting', 'Appliance Repair'],
+          'Satisfaction': ['Very Dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very Satisfied'],
+          'Frequency': ['One-time', 'Weekly', 'Bi-weekly', 'Monthly', 'Quarterly', 'Annually'],
+        };
+        return (
+          <div key={setting.key} className="space-y-1.5">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <Select
+              value=""
+              onValueChange={(presetName) => {
+                const presetOptions = PRESETS[presetName] || [];
+                if (presetOptions.length > 0) {
+                  onFieldChange('options', presetOptions);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 text-xs bg-background">
+                <SelectValue placeholder="— Select a preset —" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.keys(PRESETS).filter((k) => k !== '— Select a preset —').map((presetName) => (
+                  <SelectItem key={presetName} value={presetName} className="text-xs">
+                    {presetName} ({PRESETS[presetName].length})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+      }
+
+      // ─── Field ID Display — read-only system identifier (Jotform Field Details) ──
+      case 'field_id_display': {
+        const fieldId = String(field?.id || '—');
+        return (
+          <div key={setting.key} className="space-y-1.5">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-[10px] font-mono px-2.5 py-1.5 rounded-md bg-muted/60 border border-border text-muted-foreground truncate">
+                {fieldId}
+              </code>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px] shrink-0"
+                onClick={() => {
+                  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                    navigator.clipboard.writeText(fieldId);
+                  }
+                }}
+              >
+                Copy
+              </Button>
+            </div>
             {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
           </div>
         );

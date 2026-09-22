@@ -36,7 +36,9 @@ export type SettingFieldType =
   | 'field_selector'         // dropdown listing all form fields (for Customer Email, Custom Data)
   | 'calculation_values_editor' // Calculation values matrix per option (JotForm pattern)
   | 'bulk_options_editor'   // bulk options paste / text editor
-  | 'range';                 // slider / range input with numeric value display (JotForm pattern)
+  | 'range'                  // slider / range input with numeric value display (JotForm pattern)
+  | 'predefined_options'     // Jotform-style preset selector (Countries, States, Days, etc.)
+  | 'field_id_display';      // read-only display of the field's internal ID
 
 export type SettingGroup = 'general' | 'advanced' | 'field_specific' | 'survey';
 
@@ -149,6 +151,7 @@ export const UNIVERSAL_ADVANCED_SETTINGS: SettingField[] = [
     description: 'Pass parameters via URL (UTMs, IDs).',
   },
   { key: 'fieldName', label: 'Field Name (Machine Key)', type: 'text', group: 'advanced', helpText: 'Internal identifier for API/webhook mapping.' },
+  { key: 'fieldId', label: 'Field ID', type: 'field_id_display', group: 'advanced', helpText: 'Unique system identifier for this field (read-only).' },
   {
     key: 'condition',
     label: 'Conditional Logic (Show / Hide)',

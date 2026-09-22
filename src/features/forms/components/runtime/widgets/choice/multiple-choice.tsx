@@ -1,10 +1,23 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { WidgetProps, normalizeOptions, str, bool, num } from '../widget-props';
+
+/** Deterministic shuffle for randomize option — stable across SSR/CSR. */
+function seededShuffle<T>(array: T[], seed: string): T[] {
+  const result = [...array];
+  let s = 0;
+  for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) | 0;
+  const rng = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
 
 const COL_CLASS: Record<string, string> = {
   '1': 'grid grid-cols-1 gap-2.5',
@@ -23,7 +36,7 @@ const DEFAULT_SAMPLE_OPTIONS = [
 
 export function MultipleChoice({ value, onChange, config, disabled, field }: WidgetProps) {
   const rawOptions = config.options || (field as any)?.options;
-  const options = normalizeOptions(
+  const baseOptions = normalizeOptions(
     Array.isArray(rawOptions) && rawOptions.length > 0
       ? rawOptions
       : DEFAULT_SAMPLE_OPTIONS
@@ -32,10 +45,18 @@ export function MultipleChoice({ value, onChange, config, disabled, field }: Wid
   const otherPlaceholder = str(config.otherText, 'Other');
   const selectAllOption = bool(config.selectAllOption, false);
   const allowNone = bool(config.allowNone, false);
+  const randomize = bool(config.randomize, false);
   const minSelect = Math.max(0, num(config.minSelect, 0));
   const maxSelect = Math.max(0, num(config.maxSelect, 0));
   const columns = str(config.columns, '1');
   const ariaLabel = str(field?.label, 'Multiple choice');
+  const fieldId = str(field?.id, 'multiple_choice');
+
+  // Shuffle options when randomize is enabled — stable seed prevents hydration mismatch.
+  const options = useMemo(() => {
+    if (randomize) return seededShuffle(baseOptions, fieldId);
+    return baseOptions;
+  }, [baseOptions, randomize, fieldId]);
 
   const selected: string[] = Array.isArray(value)
     ? value.map(String)

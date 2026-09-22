@@ -365,11 +365,48 @@ function FormMediaHeroPanel({
 function evaluateFormulaSafe(
   formula: string,
   values: Record<string, unknown>,
+  fields?: Array<{ id: string; widgetConfig?: Record<string, unknown> }>,
 ): number | null {
   if (!formula) return null;
+
+  // Build a lookup map of field id → calculation values for quick access.
+  // When a source field has useCalculationValues=true, the formula engine
+  // substitutes the numeric calculation value instead of the raw option string.
+  const calcValuesMap = new Map<string, Record<string, number | string>>();
+  if (fields) {
+    for (const f of fields) {
+      const wc = f.widgetConfig;
+      if (wc && wc.useCalculationValues && wc.calculationValues && typeof wc.calculationValues === 'object') {
+        calcValuesMap.set(f.id, wc.calculationValues as Record<string, number | string>);
+      }
+    }
+  }
+
   let expr = formula.replace(/\{\{\s*([a-zA-Z0-9_-]+)\s*\}\}/g, (_m, id: string) => {
     const v = values[id];
     if (v === undefined || v === null || v === '') return 'NaN';
+
+    // Check if this field has calculation values configured
+    const calcValues = calcValuesMap.get(id);
+    if (calcValues) {
+      // For array values (multi-select), sum the calculation values
+      if (Array.isArray(v)) {
+        const sum = v.reduce((acc: number, item: string) => {
+          const cv = calcValues[item];
+          const n = typeof cv === 'number' ? cv : Number(cv);
+          return Number.isNaN(n) ? acc : acc + n;
+        }, 0);
+        return String(sum);
+      }
+      // For single values, use the calculation value if it exists
+      const cv = calcValues[String(v)];
+      if (cv !== undefined) {
+        const n = typeof cv === 'number' ? cv : Number(cv);
+        if (!Number.isNaN(n)) return String(n);
+      }
+    }
+
+    // Fall back to raw numeric value
     const n = typeof v === 'number' ? v : Number(v);
     return Number.isNaN(n) ? 'NaN' : String(n);
   });
@@ -615,6 +652,10 @@ export function FormRuntimeRenderer({
   }, [schema.rules, formData]);
 
   // ─── Live Estimator & Calculation Engine ─────────────────────────────────
+  // Tightened detection: requires BOTH a keyword match AND at least one
+  // calculation-related field. Prevents false positives where forms named
+  // "Quote Request" or "Cleaning Form" get a misleading Live Estimate panel
+  // with hardcoded material rates.
   const isEstimatorForm = useMemo(() => {
     const nameLower = (formName + ' ' + (formDescription || '')).toLowerCase();
     const hasEstimateKeywords = /estimate|estimator|quote|roof|cleaning|hvac|solar|pricing|calculator/i.test(nameLower);
@@ -622,12 +663,13 @@ export function FormRuntimeRenderer({
       (f) =>
         f.widgetType === 'form_calculation' ||
         f.type === 'calculated' ||
-        f.type === 'currency' ||
-        f.id.includes('sqft') ||
-        f.id.includes('material') ||
-        f.id.includes('area')
+        f.widgetType === 'live_estimate_summary'
     );
-    return hasEstimateKeywords || hasCalcField;
+    // Require BOTH: keyword match + calculation field.
+    // A form with no calculation fields is NOT an estimator, regardless of name.
+    // A form with calculation fields but no estimator keywords IS an estimator
+    // (e.g. a "Roofing Quote Calculator" with form_calculation widgets).
+    return hasCalcField && (hasEstimateKeywords || schema.fields.some((f) => f.widgetType === 'live_estimate_summary'));
   }, [formName, formDescription, schema.fields]);
 
   const liveEstimateData = useMemo(() => {
@@ -728,7 +770,7 @@ export function FormRuntimeRenderer({
         if (field.widgetType === 'form_calculation' && field.widgetConfig) {
           const formula = String((field.widgetConfig as Record<string, unknown>).formula || '');
           if (!formula) continue;
-          const result = evaluateFormulaSafe(formula, prev);
+          const result = evaluateFormulaSafe(formula, prev, schema.fields);
           if (result !== null && result !== prev[field.id]) {
             next[field.id] = result;
             changed = true;
@@ -1269,7 +1311,7 @@ export function FormRuntimeRenderer({
                       {field.helpText && !['heading', 'paragraph'].includes(field.type) && (
                         <p className="text-xs text-muted-foreground">{field.helpText}</p>
                       )}
-                      {(field.type === 'control_widget' || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
+                      {(field.type === 'control_widget' || ['dropdown','radio','checkbox'].includes(field.type) || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
                         <WidgetRuntimeDispatcher field={field} value={formData[field.id]} onChange={(val) => handleFieldChange(field.id, val)} allFormData={formData} />
                       )}
                       {!field.widgetType && ['short_answer', 'email', 'phone', 'numerical', 'date', 'time'].includes(field.type) && (
@@ -1293,55 +1335,6 @@ export function FormRuntimeRenderer({
                           className="text-sm rounded-xl bg-slate-50/70 dark:bg-slate-900 border-border/80 focus-visible:ring-2 resize-none"
                           style={inputStyle}
                         />
-                      )}
-                      {field.type === 'dropdown' && (
-                        <Select value={formData[field.id] || ''} onValueChange={(val) => handleFieldChange(field.id, val)}>
-                          <SelectTrigger className="text-sm h-11 rounded-xl bg-slate-50/70 dark:bg-slate-900 border-border/80"><SelectValue placeholder={field.placeholder || 'Select an option'} /></SelectTrigger>
-                          <SelectContent>{field.options?.map((opt) => (<SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>))}</SelectContent>
-                        </Select>
-                      )}
-                      {field.type === 'radio' && (
-                        <RadioGroup value={formData[field.id] || ''} onValueChange={(val) => handleFieldChange(field.id, val)} className="space-y-2">
-                          {field.options?.map((opt) => (
-                            <div
-                              key={opt.value}
-                              className={`flex items-center space-x-2.5 p-3 rounded-xl border transition-all cursor-pointer ${
-                                formData[field.id] === opt.value
-                                  ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
-                                  : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
-                              }`}
-                              onClick={() => handleFieldChange(field.id, opt.value)}
-                            >
-                              <RadioGroupItem value={opt.value} id={`${field.id}_${opt.value}`} />
-                              <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-semibold cursor-pointer">{opt.label}</Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      )}
-                      {field.type === 'checkbox' && (
-                        <div className="space-y-2">
-                          {field.options?.map((opt) => {
-                            const currentArr = Array.isArray(formData[field.id]) ? formData[field.id] : [];
-                            const isChecked = currentArr.includes(opt.value);
-                            return (
-                              <div
-                                key={opt.value}
-                                className={`flex items-center space-x-2.5 p-3 rounded-xl border transition-all cursor-pointer ${
-                                  isChecked
-                                    ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
-                                    : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
-                                }`}
-                                onClick={() => {
-                                  const updated = isChecked ? currentArr.filter((v: string) => v !== opt.value) : [...currentArr, opt.value];
-                                  handleFieldChange(field.id, updated);
-                                }}
-                              >
-                                <Checkbox id={`${field.id}_${opt.value}`} checked={isChecked} />
-                                <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-semibold cursor-pointer">{opt.label}</Label>
-                              </div>
-                            );
-                          })}
-                        </div>
                       )}
                       {field.type === 'heading' && (<h2 className="text-lg font-bold text-foreground pt-2">{field.label}</h2>)}
                       {field.type === 'paragraph' && (<p className="text-sm text-muted-foreground leading-relaxed">{(field.widgetConfig as any)?.text || field.label}</p>)}
@@ -1496,8 +1489,14 @@ export function FormRuntimeRenderer({
                       <p className="text-[11px] text-muted-foreground">{field.helpText}</p>
                     )}
 
-                    {/* Specialized Control Widgets */}
-                    {(field.type === 'control_widget' || (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
+                    {/* Specialized Control Widgets + Basic Choice Fields */}
+                    {/* Route dropdown/radio/checkbox through the dispatcher so rich settings
+                        (multiSelect, search, columns, allowOther, randomize, etc.) actually apply.
+                        Exception: material/tier radio fields use the specialized estimator card below. */}
+                    {(field.type === 'control_widget' ||
+                      (['dropdown','radio','checkbox'].includes(field.type) &&
+                       !(field.type === 'radio' && (field.id.includes('material') || field.id.includes('tier')))) ||
+                      (field.widgetType && field.type === 'short_answer' && field.widgetType !== 'hidden')) && (
                       <WidgetRuntimeDispatcher
                         field={field}
                         value={formData[field.id]}
@@ -1607,87 +1606,6 @@ export function FormRuntimeRenderer({
                         }`}
                         style={inputStyle}
                       />
-                    )}
-
-                    {field.type === 'dropdown' && (
-                      <Select
-                        value={formData[field.id] || ''}
-                        onValueChange={(val) => handleFieldChange(field.id, val)}
-                      >
-                        <SelectTrigger
-                          className={`${inputHeightClass} bg-slate-50/50 dark:bg-slate-900 border-border/80 shadow-2xs ${hasError ? 'border-rose-500' : ''}`}
-                          style={inputStyle}
-                        >
-                          <SelectValue placeholder={field.placeholder || 'Select an option'} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {field.options?.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-
-                    {field.type === 'radio' && (
-                      <RadioGroup
-                        value={formData[field.id] || ''}
-                        onValueChange={(val) => handleFieldChange(field.id, val)}
-                        className="space-y-1.5"
-                      >
-                        {field.options?.map((opt) => (
-                          <div
-                            key={opt.value}
-                            className={`flex items-center space-x-2.5 p-2.5 border transition-all cursor-pointer ${
-                              formData[field.id] === opt.value
-                                ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
-                                : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
-                            }`}
-                            style={{ borderRadius: fieldRadius }}
-                            onClick={() => handleFieldChange(field.id, opt.value)}
-                          >
-                            <RadioGroupItem value={opt.value} id={`${field.id}_${opt.value}`} />
-                            <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-semibold cursor-pointer">
-                              {opt.label}
-                            </Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    )}
-
-                    {field.type === 'checkbox' && (
-                      <div className="space-y-1.5">
-                        {field.options?.map((opt) => {
-                          const currentArr = Array.isArray(formData[field.id]) ? formData[field.id] : [];
-                          const checked = currentArr.includes(opt.value);
-                          return (
-                            <div
-                              key={opt.value}
-                              className={`flex items-center space-x-2.5 p-2.5 border transition-all cursor-pointer ${
-                                checked
-                                  ? 'border-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20 ring-1 ring-emerald-600/30 shadow-2xs'
-                                  : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900'
-                              }`}
-                              style={{ borderRadius: fieldRadius }}
-                              onClick={() => {
-                                const updated = checked
-                                  ? currentArr.filter((v: string) => v !== opt.value)
-                                  : [...currentArr, opt.value];
-                                handleFieldChange(field.id, updated);
-                              }}
-                            >
-                              <Checkbox
-                                id={`${field.id}_${opt.value}`}
-                                checked={checked}
-                              />
-                              <Label htmlFor={`${field.id}_${opt.value}`} className="text-xs font-semibold cursor-pointer">
-                                {opt.label}
-                              </Label>
-                            </div>
-                          );
-                        })}
-                      </div>
                     )}
 
                     {field.type === 'signature' && (

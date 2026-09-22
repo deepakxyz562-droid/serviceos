@@ -80,6 +80,14 @@ export function PaymentGatewayRuntime({
 
   // Calculate dynamic amount
   const computedAmount = useMemo(() => {
+    // Products mode: sum all product prices × quantities
+    if (config.pricingMode === 'products' && Array.isArray(config.products)) {
+      const total = (config.products as Array<Record<string, unknown>>).reduce(
+        (sum, p) => sum + Number(p.price || 0) * Number(p.qty || 1),
+        0,
+      );
+      return total;
+    }
     if (config.pricingMode === 'formula' && config.amountField) {
       const fieldVal = allFormData[config.amountField];
       const parsed = parseFloat(fieldVal);

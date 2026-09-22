@@ -90,6 +90,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       label, type: 'dropdown', options: ['Option 1', 'Option 2', 'Option 3'], required: false,
     }),
     settingsSchema: [
+      { key: 'predefinedOptions', label: 'Predefined Options', type: 'predefined_options', group: 'field_specific', helpText: 'Quickly populate with common option sets.' },
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
       { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
       { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
@@ -111,6 +112,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       label, type: 'radio', options: ['Choice A', 'Choice B', 'Choice C'], required: false,
     }),
     settingsSchema: [
+      { key: 'predefinedOptions', label: 'Predefined Options', type: 'predefined_options', group: 'field_specific', helpText: 'Quickly populate with common option sets.' },
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
       { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
         { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },
@@ -135,6 +137,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       label, type: 'checkbox', options: ['Type option 1', 'Type option 2', 'Type option 3', 'Type option 4'], required: false,
     }),
     settingsSchema: [
+      { key: 'predefinedOptions', label: 'Predefined Options', type: 'predefined_options', group: 'field_specific', helpText: 'Quickly populate with common option sets.' },
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
       { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
         { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },

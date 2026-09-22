@@ -471,12 +471,10 @@ export function FormStudioBuilder({
       widgetType: def.widgetType as string | undefined,
       widgetConfig: {
         ...(def.widgetConfig as Record<string, unknown> || {}),
-        ...def,
       },
       stepId: currentStepId,
       width: 'full',
       layoutColumn: targetColumn,
-      ...def,
     };
     onFormDataChange((prev) => ({
       ...prev,
