@@ -31,8 +31,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     tier: 'free',
     createField: (label = 'Short Text') => ({
       label,
-      type: 'short_answer',
-      widgetType: 'short_text',
+      type: 'control_widget',
       placeholder: 'Enter text...',
       required: false,
     }),
@@ -53,7 +52,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Multi-line paragraph text',
     tier: 'free',
     createField: (label = 'Long Text') => ({
-      label, type: 'long_answer', widgetType: 'long_text', placeholder: 'Enter detailed response...', required: false,
+      label, type: 'long_answer', placeholder: 'Enter detailed response...', required: false,
     }),
     settingsSchema: [
       { key: 'rows', label: 'Visible rows', type: 'number', group: 'field_specific', default: 4, min: 2, max: 20 },
@@ -69,7 +68,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Numeric values',
     tier: 'free',
     createField: (label = 'Number') => ({
-      label, type: 'numerical', widgetType: 'number', placeholder: '0', required: false,
+      label, type: 'numerical', placeholder: '0', required: false,
     }),
     settingsSchema: [
       { key: 'min', label: 'Min value', type: 'number', group: 'field_specific' },
@@ -88,18 +87,18 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'free',
     createField: (label = 'Dropdown') => ({
-      label, type: 'dropdown', widgetType: 'dropdown', options: ['Option 1', 'Option 2', 'Option 3'], required: false,
+      label, type: 'dropdown', options: ['Option 1', 'Option 2', 'Option 3'], required: false,
     }),
     settingsSchema: [
-      { key: 'predefinedOptions', label: 'Predefined Options', type: 'predefined_options', group: 'field_specific', helpText: 'Quickly populate with common option sets.' },
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
+      { key: 'defaultValue', label: 'Default Value', type: 'select', group: 'field_specific', options: [], helpText: 'Choose an option to be selected by default.' },
       { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
       { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
       { key: 'multiSelect', label: 'Allow multi-select', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users select more than one option.' },
       { key: 'searchEnabled', label: 'Enable search', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add a search box for long option lists.' },
-      { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load (great for surveys).' },
-      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add values to be used in calculations.' },
-      { key: 'calculationValues', label: 'Calculation Values Matrix', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
+      { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Shuffle options on each form load (great for surveys).' },
+      { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add values to be used in calculations.' },
+      { key: 'showEmptyText', label: 'Show Text in Empty Option', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Use text instead of the empty option. Treated as an empty answer.' },
     ],
   },
   {
@@ -110,20 +109,19 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Radio button options',
     tier: 'free',
     createField: (label = 'Single Choice') => ({
-      label, type: 'radio', widgetType: 'single_choice', options: ['Choice A', 'Choice B', 'Choice C'], required: false,
+      label, type: 'radio', options: ['Choice A', 'Choice B', 'Choice C'], required: false,
     }),
     settingsSchema: [
-      { key: 'predefinedOptions', label: 'Predefined Options', type: 'predefined_options', group: 'field_specific', helpText: 'Quickly populate with common option sets.' },
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-      { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
-        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },
-      ], helpText: 'How options are laid out visually.' },
+      { key: 'defaultValue', label: 'Default Value', type: 'select', group: 'field_specific', options: [], helpText: 'Choose an option to be selected by default.' },
       { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
       { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
+      { key: 'columns', label: 'Spread', type: 'segmented', group: 'field_specific', default: '1', options: [
+        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
+      ], helpText: 'How options are laid out visually.' },
       // ─── Surveying tab (JotForm 4th tab for choice fields) ──────────────────────
-      { key: 'randomize', label: 'Randomize Option Order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load to reduce order bias.' },
       { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign calculation values to each option for use in formulas.' },
-      { key: 'calculationValues', label: 'Calculation Values Matrix', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
+      { key: 'randomize', label: 'Randomize Option Order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load to reduce order bias.' },
       { key: 'allowNone', label: 'Allow "None of the above"', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add a "None of the above" option that deselects all others.' },
     ],
   },
@@ -135,23 +133,21 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'Multi-select checkboxes',
     tier: 'free',
     createField: (label = 'Multiple Choice') => ({
-      label, type: 'checkbox', widgetType: 'multiple_choice', options: ['Type option 1', 'Type option 2', 'Type option 3', 'Type option 4'], required: false,
+      label, type: 'checkbox', options: ['Item 1', 'Item 2', 'Item 3'], required: false,
     }),
     settingsSchema: [
-      { key: 'predefinedOptions', label: 'Predefined Options', type: 'predefined_options', group: 'field_specific', helpText: 'Quickly populate with common option sets.' },
       { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-      { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
-        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },
-      ], helpText: 'How options are laid out visually.' },
+      { key: 'defaultValue', label: 'Default Value', type: 'select', group: 'field_specific', options: [], helpText: 'Choose an option to be selected by default.' },
       { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
       { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
-      { key: 'selectAllOption', label: 'Show "Select All" option', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Show a master checkbox to select/deselect all options.' },
+      { key: 'minSelect', label: 'Min selections', type: 'number', group: 'field_specific', default: 0, min: 0, helpText: 'Minimum number of options the user must select.' },
+      { key: 'maxSelect', label: 'Max selections (0 = unlimited)', type: 'number', group: 'field_specific', default: 0 },
+      { key: 'columns', label: 'Spread', type: 'segmented', group: 'field_specific', default: '1', options: [
+        { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: 'Inline', value: 'inline' },
+      ], helpText: 'How options are laid out visually.' },
       // ─── Surveying tab (JotForm 4th tab for choice fields) ──────────────────────
-      { key: 'minSelect', label: 'Min selections', type: 'number', group: 'survey', default: 0, min: 0, helpText: 'Minimum number of options the user must select.' },
-      { key: 'maxSelect', label: 'Max selections (0 = unlimited)', type: 'number', group: 'survey', default: 0, min: 0 },
-      { key: 'randomize', label: 'Randomize Option Order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load to reduce order bias.' },
       { key: 'useCalculationValues', label: 'Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign calculation values to each option for use in formulas.' },
-      { key: 'calculationValues', label: 'Calculation Values Matrix', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
+      { key: 'randomize', label: 'Randomize Option Order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load to reduce order bias.' },
       { key: 'allowNone', label: 'Allow "None of the above"', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add a "None of the above" option that deselects all others.' },
     ],
   },
@@ -164,7 +160,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'free',
     createField: (label = 'Email Address') => ({
-      label, type: 'email', widgetType: 'email', placeholder: 'name@example.com', required: false,
+      label, type: 'email', placeholder: 'name@example.com', required: false,
     }),
     settingsSchema: [
       { key: 'confirmation', label: 'Require confirmation (re-enter)', type: 'toggle_with_description', group: 'field_specific', default: false },
@@ -179,25 +175,14 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     description: 'International phone input',
     tier: 'free',
     createField: (label = 'Phone Number') => ({
-      label, type: 'phone', widgetType: 'phone', placeholder: '+1 (555) 000-0000', required: false,
+      label, type: 'phone', placeholder: '+1 (555) 000-0000', required: false,
     }),
     settingsSchema: [
-      // ─── General Tab sublabels ──────────────────────────────────────────
-      { key: 'sublabel', label: 'Sublabel', type: 'text', group: 'general', default: 'Please enter a valid phone number.', helpText: 'Helper text displayed directly below the phone input.' },
-      // ─── Options Tab (JotForm) ─────────────────────────────────────────
-      { key: 'countryCodeDropdown', label: 'Country Code', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display country selector dropdown with flags.' },
-      { key: 'inputMask', label: 'Input Mask', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Force users to follow a specific phone pattern.' },
-      { key: 'maskPattern', label: 'Mask Pattern', type: 'text', group: 'field_specific', default: '(###) ###-####', condition: { dependsOn: 'inputMask', equals: 'true' }, helpText: 'Use # for numbers, e.g. (###) ###-####' },
-      { key: 'defaultCountry', label: 'Default Country', type: 'select', group: 'field_specific', default: 'US', options: [
-        { label: 'United States (+1)', value: 'US' },
-        { label: 'United Kingdom (+44)', value: 'GB' },
-        { label: 'Canada (+1)', value: 'CA' },
-        { label: 'India (+91)', value: 'IN' },
-        { label: 'Australia (+61)', value: 'AU' },
-        { label: 'Germany (+49)', value: 'DE' },
-        { label: 'France (+33)', value: 'FR' },
-      ], helpText: 'Default country selected when the form loads.' },
-      { key: 'validateMobile', label: 'Validate as mobile only', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Block landline or VOIP numbers when possible.' },
+      { key: 'defaultCountry', label: 'Default country code', type: 'text', group: 'field_specific', default: 'US' },
+      { key: 'validateMobile', label: 'Validate as mobile only', type: 'toggle_with_description', group: 'field_specific', default: false },
+      { key: 'format', label: 'Display format', type: 'select', group: 'field_specific', default: 'international', options: [
+        { label: 'International (+1...)', value: 'international' }, { label: 'National', value: 'national' }, { label: 'E.164', value: 'e164' },
+      ] },
     ],
   },
   {
@@ -209,7 +194,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'free',
     createField: (label = 'Date') => ({
-      label, type: 'date', widgetType: 'date_picker', required: false,
+      label, type: 'date', required: false,
     }),
     settingsSchema: [
       { key: 'format', label: 'Display format', type: 'select', group: 'field_specific', default: 'yyyy-mm-dd', options: [
@@ -234,7 +219,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     iconName: 'Clock',
     description: 'Time-of-day selection',
     tier: 'free',
-    createField: (label = 'Time') => ({ label, type: 'time', widgetType: 'time_picker', required: false }),
+    createField: (label = 'Time') => ({ label, type: 'time', required: false }),
     settingsSchema: [
       { key: 'format', label: 'Format', type: 'select', group: 'field_specific', default: '24h', options: [
         { label: '24-hour', value: '24h' }, { label: '12-hour (AM/PM)', value: '12h' },
@@ -242,44 +227,6 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       { key: 'step', label: 'Step (minutes)', type: 'number', group: 'field_specific', default: 15, min: 1, max: 60 },
       { key: 'min', label: 'Earliest time', type: 'text', group: 'field_specific', placeholder: '09:00' },
       { key: 'max', label: 'Latest time', type: 'text', group: 'field_specific', placeholder: '17:00' },
-    ],
-  },
-  {
-    id: 'appointment',
-    name: 'Appointment',
-    category: 'datetime',
-    iconName: 'CalendarCheck',
-    description: 'Schedule appointments with time slots & calendar sync',
-    badge: 'POPULAR',
-    tier: 'free',
-    createField: (label = 'Appointment') => ({
-      label,
-      type: 'appointment',
-      widgetType: 'appointment',
-      required: true,
-      widgetConfig: {
-        slotDurationMinutes: 30,
-        intervalMin: 30,
-        rollingDays: 30,
-        appointmentType: 'one_on_one',
-        maxAttendees: 5,
-        defaultTimezone: 'America/New_York',
-        lockTimezone: false,
-        sendReminderEmail: true,
-        reminderTime: '1_day_before',
-        lunchtimeEnabled: true,
-        lunchStart: '12:00',
-        intervals: [
-          { from: '09:00', to: '17:00', days: 'Weekdays' },
-        ],
-      },
-    }),
-    settingsSchema: [
-      { key: 'slotDurationMinutes', label: 'Slot Duration (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 480 },
-      { key: 'intervalMin', label: 'Slot Interval (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 120 },
-      { key: 'rollingDays', label: 'Booking Window (days)', type: 'number', group: 'field_specific', default: 30, min: 1, max: 365 },
-      { key: 'appointmentType', label: 'Appointment Type', type: 'select', group: 'field_specific', default: 'one_on_one', options: [{ label: 'One-on-One', value: 'one_on_one' }, { label: 'Group', value: 'group' }] },
-      { key: 'maxAttendees', label: 'Max Attendees', type: 'number', group: 'field_specific', default: 5, min: 1, max: 100 },
     ],
   },
   {
@@ -292,12 +239,13 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     tier: 'free',
     createField: (label = 'Rating') => ({
       label, type: 'rating', widgetType: 'star_rating',
-      widgetConfig: { maxStars: 5, defaultValue: 0, requireCommentBelow: 3 }, required: false,
+      widgetConfig: { maxStars: 5 }, required: false,
     }),
     settingsSchema: [
       { key: 'maxStars', label: 'Max stars', type: 'number', group: 'field_specific', default: 5, min: 3, max: 10 },
       { key: 'defaultValue', label: 'Default Value', type: 'number', group: 'field_specific', default: 0, min: 0, max: 5, helpText: 'Pre-select a number of stars (0 = no default).' },
-      { key: 'requireCommentBelow', label: 'Require comment on low rating', type: 'number', group: 'field_specific', default: 3, helpText: 'Force users to leave a comment when rating is at or below this number.' },
+      { key: 'requireCommentOnLowRating', label: 'Require comment on low rating', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Force users to leave a comment when rating below threshold.' },
+      { key: 'threshold', label: 'Threshold', type: 'number', group: 'field_specific', default: 3, condition: { dependsOn: 'requireCommentOnLowRating', equals: 'true' } },
     ],
   },
   {
@@ -327,7 +275,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'free',
     createField: (label = 'File Upload') => ({
-      label, type: 'file', widgetType: 'file_upload', required: false,
+      label, type: 'file', required: false,
     }),
     settingsSchema: [
       { key: 'maxFiles', label: 'Max files', type: 'number', group: 'field_specific', default: 5, min: 1, max: 50 },
@@ -354,7 +302,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     iconName: 'Heading',
     description: 'Bold heading text to label sections',
     tier: 'free',
-    createField: (label = 'Section Heading') => ({ label, type: 'heading', widgetType: 'heading', widgetConfig: { level: 'h3', align: 'left' } }),
+    createField: (label = 'Section Heading') => ({ label, type: 'heading' }),
     settingsSchema: [
       { key: 'level', label: 'Heading level', type: 'select', group: 'field_specific', default: 'h3', options: [
         { label: 'H1', value: 'h1' }, { label: 'H2', value: 'h2' }, { label: 'H3', value: 'h3' }, { label: 'H4', value: 'h4' },
@@ -371,7 +319,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     iconName: 'FileText',
     description: 'Static text/description shown to user',
     tier: 'free',
-    createField: (label = 'Paragraph') => ({ label: '', type: 'paragraph', widgetType: 'paragraph', widgetConfig: { text: 'Add your descriptive text here...', allowHTML: false } }),
+    createField: (label = 'Paragraph') => ({ label: '', type: 'paragraph', widgetConfig: { text: 'Add your descriptive text here...' } }),
     settingsSchema: [
       { key: 'text', label: 'Paragraph text', type: 'textarea', group: 'field_specific' },
       { key: 'allowHTML', label: 'Allow HTML', type: 'toggle_with_description', group: 'field_specific', default: false },
@@ -384,121 +332,12 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     iconName: 'Minus',
     description: 'Visual separator line',
     tier: 'free',
-    createField: () => ({ label: '', type: 'control_widget', widgetType: 'divider', widgetConfig: { style: 'solid', thickness: 1, spacing: 'medium' } }),
+    createField: () => ({ label: '', type: 'paragraph', widgetType: 'divider' }),
     settingsSchema: [
       { key: 'style', label: 'Style', type: 'select', group: 'field_specific', default: 'solid', options: [
-        { label: 'Solid', value: 'solid' }, { label: 'Dashed', value: 'dashed' }, { label: 'Dotted', value: 'dotted' }, { label: 'Gradient Glow', value: 'gradient' },
+        { label: 'Solid', value: 'solid' }, { label: 'Dashed', value: 'dashed' }, { label: 'Dotted', value: 'dotted' },
       ] },
-      { key: 'thickness', label: 'Thickness (px)', type: 'number', group: 'field_specific', default: 1, min: 1, max: 8 },
-      { key: 'spacing', label: 'Vertical Spacing', type: 'select', group: 'field_specific', default: 'medium', options: [
-        { label: 'Compact (8px)', value: 'compact' }, { label: 'Medium (16px)', value: 'medium' }, { label: 'Large (32px)', value: 'large' },
-      ] },
-    ],
-  },
-  {
-    id: 'static_image',
-    name: 'Image (Elementor Style)',
-    category: 'layout',
-    iconName: 'Image',
-    description: 'Insert photo, banner, logo, or diagram',
-    badge: 'POPULAR',
-    tier: 'free',
-    createField: (label = 'Image') => ({
-      label: 'Image',
-      type: 'control_widget',
-      widgetType: 'static_image',
-      widgetConfig: {
-        imageUrl: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
-        altText: 'Form Image',
-        alignment: 'center',
-        maxWidthPercent: 100,
-        borderRadius: '12px',
-        caption: '',
-        linkUrl: '',
-      },
-      required: false,
-    }),
-    settingsSchema: [
-      { key: 'imageUrl', label: 'Image URL', type: 'text', group: 'field_specific', default: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80', helpText: 'Direct image URL or Unsplash image link.' },
-      { key: 'altText', label: 'Alt Text', type: 'text', group: 'field_specific', default: 'Image banner' },
-      { key: 'caption', label: 'Image Caption', type: 'text', group: 'field_specific', default: '', helpText: 'Optional text shown under the image.' },
-      { key: 'alignment', label: 'Alignment', type: 'select', group: 'field_specific', default: 'center', options: [
-        { label: 'Left', value: 'left' }, { label: 'Center', value: 'center' }, { label: 'Right', value: 'right' },
-      ] },
-      { key: 'maxWidthPercent', label: 'Max Width (%)', type: 'number', group: 'field_specific', default: 100, min: 20, max: 100 },
-      { key: 'heightPx', label: 'Height (px, optional)', type: 'number', group: 'field_specific', default: 0, min: 0, max: 800, helpText: '0 = auto aspect ratio' },
-      { key: 'borderRadius', label: 'Corner Radius', type: 'select', group: 'field_specific', default: '12px', options: [
-        { label: 'None (0px)', value: '0px' }, { label: 'Small (6px)', value: '6px' }, { label: 'Medium (12px)', value: '12px' }, { label: 'Large (20px)', value: '20px' }, { label: 'Full Pill', value: '9999px' },
-      ] },
-      { key: 'linkUrl', label: 'Link URL (optional)', type: 'text', group: 'field_specific', default: '', helpText: 'Opens link when image is clicked.' },
-    ],
-  },
-  {
-    id: 'map_embed',
-    name: 'Interactive Map (Elementor Style)',
-    category: 'layout',
-    iconName: 'MapPin',
-    description: 'Google map with location pin & service area',
-    badge: 'POPULAR',
-    tier: 'free',
-    createField: (label = 'Service Location Map') => ({
-      label: 'Service Location Map',
-      type: 'control_widget',
-      widgetType: 'map_embed',
-      widgetConfig: {
-        address: 'Austin, TX',
-        zoom: 13,
-        heightPx: 260,
-        showDispatchBadge: true,
-        badgeText: '📍 Live Verified Service Area',
-        borderRadius: '16px',
-      },
-      required: false,
-    }),
-    settingsSchema: [
-      { key: 'address', label: 'Location / Address', type: 'text', group: 'field_specific', default: 'Austin, TX', helpText: 'City, neighborhood, or full address.' },
-      { key: 'zoom', label: 'Zoom Level', type: 'number', group: 'field_specific', default: 13, min: 5, max: 19 },
-      { key: 'heightPx', label: 'Map Height (px)', type: 'number', group: 'field_specific', default: 260, min: 150, max: 600 },
-      { key: 'showDispatchBadge', label: 'Show Dispatch Badge', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display a trust pill over the map.' },
-      { key: 'badgeText', label: 'Badge Label', type: 'text', group: 'field_specific', default: '📍 Live Verified Service Area' },
-      { key: 'borderRadius', label: 'Corner Radius', type: 'select', group: 'field_specific', default: '16px', options: [
-        { label: 'Small (8px)', value: '8px' }, { label: 'Medium (16px)', value: '16px' }, { label: 'Large (24px)', value: '24px' },
-      ] },
-    ],
-  },
-  {
-    id: 'video_embed',
-    name: 'Video Player (Elementor Style)',
-    category: 'layout',
-    iconName: 'Video',
-    description: 'Embed YouTube, Vimeo, or MP4 video',
-    badge: 'POPULAR',
-    tier: 'free',
-    createField: (label = 'Video') => ({
-      label: 'Video',
-      type: 'control_widget',
-      widgetType: 'video_embed',
-      widgetConfig: {
-        videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-        autoplay: false,
-        muted: true,
-        loop: false,
-        aspectRatio: '16:9',
-        borderRadius: '16px',
-      },
-      required: false,
-    }),
-    settingsSchema: [
-      { key: 'videoUrl', label: 'Video URL', type: 'text', group: 'field_specific', default: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', helpText: 'YouTube, Vimeo, or direct MP4 link.' },
-      { key: 'aspectRatio', label: 'Aspect Ratio', type: 'select', group: 'field_specific', default: '16:9', options: [
-        { label: '16:9 (Widescreen)', value: '16:9' }, { label: '4:3 (Standard)', value: '4:3' }, { label: '1:1 (Square)', value: '1:1' }, { label: '9:16 (Vertical/Reel)', value: '9:16' },
-      ] },
-      { key: 'autoplay', label: 'Autoplay Video', type: 'toggle_with_description', group: 'field_specific', default: false },
-      { key: 'muted', label: 'Mute by Default', type: 'toggle_with_description', group: 'field_specific', default: true },
-      { key: 'loop', label: 'Loop Video', type: 'toggle_with_description', group: 'field_specific', default: false },
-      { key: 'borderRadius', label: 'Corner Radius', type: 'select', group: 'field_specific', default: '16px', options: [
-        { label: 'Small (8px)', value: '8px' }, { label: 'Medium (16px)', value: '16px' }, { label: 'Large (24px)', value: '24px' },
-      ] },
+      { key: 'thickness', label: 'Thickness (px)', type: 'number', group: 'field_specific', default: 1, min: 1, max: 5 },
     ],
   },
   {
@@ -569,7 +408,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'pro',
     createField: (label = 'Photos with Notes') => ({
-      label, type: 'short_answer', widgetType: 'image_upload_with_notes',
+      label, type: 'control_widget', widgetType: 'image_upload_with_notes',
       widgetConfig: {
         maxFiles: 10, requireNotes: true, maxFileSizeMb: 10,
         noteFieldTitle: 'Note', notePlaceholder: 'Add a note',
@@ -642,7 +481,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     backendHandler: 'maps',
     runtimeComponentId: 'nearest_location_finder',
     createField: (label = 'Nearest Location') => ({
-      label, type: 'short_answer', widgetType: 'nearest_location_finder',
+      label, type: 'control_widget', widgetType: 'nearest_location_finder',
       widgetConfig: { provider: 'managed', distanceUnit: 'miles', maxResults: 3, autoGps: true }, required: false,
     }),
     settingsSchema: [
@@ -667,7 +506,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     backendHandler: 'maps',
     createField: (label = 'Route Planner') => ({
-      label, type: 'short_answer', widgetType: 'route_planner_map',
+      label, type: 'control_widget', widgetType: 'route_planner_map',
       widgetConfig: {
         mapProvider: 'osm',
         defaultTravelMode: 'driving',
@@ -680,10 +519,6 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
         addressPlaceholder: 'Street address, city or ZIP',
         travelMode: 'driving',
         unit: 'miles',
-        frameWidth: 768,
-        frameHeight: 500,
-        widthPx: 768,
-        heightPx: 500,
       },
       required: false,
     }),
@@ -800,73 +635,14 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     badge: 'NEW',
     tier: 'pro',
     backendHandler: 'maps',
-    createField: (label = 'Service Area Checker') => ({
-      label, type: 'short_answer', widgetType: 'service_area_checker',
-      widgetConfig: {
-        serviceCenterAddress: '',
-        addressPlaceholder: 'Street, city, postal code',
-        serviceRadius: 30,
-        distanceUnit: 'miles',
-        outsideAreaMessage: 'We cannot serve this address. Please enter another address or contact us for help.',
-        showDistanceToRespondent: true,
-      }, required: false,
+    createField: (label = 'Service Area Check') => ({
+      label, type: 'control_widget', widgetType: 'service_area_checker',
+      widgetConfig: { provider: 'managed', radiusMiles: 35, outOfAreaMessage: 'Sorry, we do not service this area yet.' }, required: false,
     }),
     settingsSchema: [
-      {
-        key: 'serviceCenterAddress',
-        label: 'Service Center Address',
-        type: 'text',
-        group: 'field_specific',
-        placeholder: 'e.g. 100 Main St, Chicago, IL',
-        helpText: 'Main address used as the center of the service area.',
-      },
-      {
-        key: 'addressPlaceholder',
-        label: 'Address Placeholder',
-        type: 'text',
-        group: 'field_specific',
-        default: 'Street, city, postal code',
-        helpText: 'Placeholder shown in the respondent address field.',
-      },
-      {
-        key: 'serviceRadius',
-        label: 'Service Radius',
-        type: 'range',
-        group: 'field_specific',
-        default: 30,
-        min: 1,
-        max: 1000,
-        step: 1,
-        helpText: 'Maximum distance allowed from the service center.',
-      },
-      {
-        key: 'distanceUnit',
-        label: 'Distance Unit',
-        type: 'select',
-        group: 'field_specific',
-        default: 'miles',
-        options: [
-          { label: 'Miles', value: 'miles' },
-          { label: 'Kilometers', value: 'kilometers' },
-        ],
-        helpText: 'Unit used for the radius threshold and displayed distance.',
-      },
-      {
-        key: 'outsideAreaMessage',
-        label: 'Outside Service Area Message',
-        type: 'textarea',
-        group: 'field_specific',
-        default: 'We cannot serve this address. Please enter another address or contact us for help.',
-        helpText: 'Message shown when the address cannot be accepted.',
-      },
-      {
-        key: 'showDistanceToRespondent',
-        label: 'Show Distance to Respondent',
-        type: 'toggle_with_description',
-        group: 'field_specific',
-        default: true,
-        description: 'Show the measured distance after the address is checked.',
-      },
+      { key: 'radiusMiles', label: 'Service radius (miles)', type: 'number', group: 'field_specific', default: 35, min: 1 },
+      { key: 'centerAddress', label: 'Center address', type: 'text', group: 'field_specific' },
+      { key: 'outOfAreaMessage', label: 'Out-of-area message', type: 'textarea', group: 'field_specific' },
     ],
   },
   {
@@ -878,39 +654,15 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'pro',
     createField: (label = 'Calculation') => ({
-      label, type: 'short_answer', widgetType: 'form_calculation',
-      widgetConfig: { formula: '', decimals: 2, prefix: '$', suffix: '', hidden: false }, required: false,
+      label, type: 'control_widget', widgetType: 'form_calculation',
+      widgetConfig: { formula: '', decimalPlaces: 2, resultPrefix: '$', resultSuffix: '', hidden: false }, required: false,
     }),
     settingsSchema: [
       { key: 'formula', label: 'Formula', type: 'formula_editor', group: 'field_specific', helpText: 'Use {{field_id}} tokens for field values. e.g. {{qty}} * {{price}}' },
-      { key: 'decimals', label: 'Decimal places', type: 'number', group: 'field_specific', default: 2, min: 0, max: 6 },
-      { key: 'prefix', label: 'Prefix (e.g. $)', type: 'text', group: 'field_specific', default: '$' },
-      { key: 'suffix', label: 'Suffix (e.g. USD)', type: 'text', group: 'field_specific' },
+      { key: 'decimalPlaces', label: 'Decimal places', type: 'number', group: 'field_specific', default: 2, min: 0, max: 6 },
+      { key: 'resultPrefix', label: 'Prefix (e.g. $)', type: 'text', group: 'field_specific', default: '$' },
+      { key: 'resultSuffix', label: 'Suffix (e.g. USD)', type: 'text', group: 'field_specific' },
       { key: 'hidden', label: 'Hidden (calculated, not shown to user)', type: 'toggle_with_description', group: 'field_specific', default: false },
-    ],
-  },
-  {
-    id: 'live_estimate_summary',
-    name: 'Live Estimate Summary Panel (Elementor)',
-    category: 'calculation',
-    iconName: 'Receipt',
-    description: 'Interactive 2-column live price & breakdown card mapped to left column inputs',
-    badge: 'NEW',
-    tier: 'pro',
-    createField: (label = 'Live Estimate Breakdown') => ({
-      label, type: 'control_widget', widgetType: 'live_estimate_summary',
-      widgetConfig: {
-        headline: 'Estimated Investment Breakdown',
-        currency: '$',
-        formula: '',
-        continueText: 'Lock In Estimate ⚡',
-      }, required: false,
-    }),
-    settingsSchema: [
-      { key: 'headline', label: 'Panel Title', type: 'text', group: 'field_specific', default: 'Estimated Investment Breakdown' },
-      { key: 'formula', label: 'Master Calculation Formula', type: 'formula_editor', group: 'field_specific', helpText: 'Calculation formula combining left-column fields (e.g. [sqft] * [grade] + [addons])' },
-      { key: 'currency', label: 'Currency Symbol', type: 'text', group: 'field_specific', default: '$' },
-      { key: 'continueText', label: 'CTA Button Text', type: 'text', group: 'field_specific', default: 'Lock In Estimate ⚡' },
     ],
   },
   {
@@ -943,7 +695,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'business',
     backendHandler: 'otp_sms',
     createField: (label = 'SMS Verification') => ({
-      label, type: 'short_answer', widgetType: 'sms_otp_verification',
+      label, type: 'control_widget', widgetType: 'sms_otp_verification',
       widgetConfig: { provider: 'managed', codeLength: 6, expiryMinutes: 10 }, required: true,
     }),
     settingsSchema: [
@@ -963,7 +715,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'free',
     createField: (label = 'Bot Protection') => ({
-      label: '', type: 'short_answer', widgetType: 'cloudflare_turnstile',
+      label: '', type: 'control_widget', widgetType: 'cloudflare_turnstile',
       widgetConfig: { theme: 'auto', size: 'flexible' }, required: false,
     }),
     settingsSchema: [
@@ -983,7 +735,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     description: 'Records audio voice notes in browser',
     tier: 'pro',
     createField: (label = 'Voice Note') => ({
-      label, type: 'short_answer', widgetType: 'voice_recorder',
+      label, type: 'control_widget', widgetType: 'voice_recorder',
       widgetConfig: { maxDurationSeconds: 180, format: 'audio/webm' }, required: false,
     }),
     settingsSchema: [
@@ -1003,7 +755,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     badge: 'POPULAR',
     tier: 'pro',
     createField: (label = 'Items List') => ({
-      label, type: 'short_answer', widgetType: 'configurable_list',
+      label, type: 'control_widget', widgetType: 'configurable_list',
       widgetConfig: {
         minRows: 1, maxRows: 20,
         columns: [
@@ -1032,30 +784,14 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     name: 'Address Map Locator',
     category: 'maps',
     iconName: 'MapPin',
-    description: 'Interactive map with search, draggable marker, and zoom for pinpointing exact locations.',
+    description: 'Draggable map pin for pinpointing exact drop-off and service work locations.',
     tier: 'pro',
     runtimeComponentId: 'address_map_locator',
     createField: (label = 'Address Map Locator') => ({
-      label, type: 'short_answer', widgetType: 'address_map_locator',
-      widgetConfig: {
-        defaultLat: 40.7128,
-        defaultLng: -74.006,
-        defaultZoom: 13,
-        draggableMarker: true,
-        showSearch: true,
-        showCoordinates: true,
-        showGpsButton: true,
-      }, required: false,
+      label, type: 'control_widget', widgetType: 'address_map_locator',
+      widgetConfig: { provider: 'managed', defaultZoom: 14 }, required: false,
     }),
-    settingsSchema: [
-      { key: 'showSearch', label: 'Show Address Search', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Let respondents type an address to search instead of clicking the map.' },
-      { key: 'draggableMarker', label: 'Draggable Marker', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Allow respondents to drag the pin for fine-tuning the location.' },
-      { key: 'showCoordinates', label: 'Show Coordinate Inputs', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Show manual latitude/longitude input fields below the map.' },
-      { key: 'showGpsButton', label: 'Show GPS Button', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Add a button to detect the respondent’s current location.' },
-      { key: 'defaultLat', label: 'Default Latitude', type: 'number', group: 'field_specific', default: 40.7128, step: 0.000001, helpText: 'Initial map center latitude (e.g. 40.7128 for New York).' },
-      { key: 'defaultLng', label: 'Default Longitude', type: 'number', group: 'field_specific', default: -74.006, step: 0.000001, helpText: 'Initial map center longitude (e.g. -74.006 for New York).' },
-      { key: 'defaultZoom', label: 'Default Zoom Level', type: 'number', group: 'field_specific', default: 13, min: 1, max: 19, helpText: 'Initial zoom (1 = world, 13 = city, 19 = street).' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'adobe_sign',
@@ -1067,14 +803,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'business',
     runtimeComponentId: 'adobe_sign',
     createField: (label = 'Adobe Sign') => ({
-      label, type: 'short_answer', widgetType: 'adobe_sign',
+      label, type: 'control_widget', widgetType: 'adobe_sign',
       widgetConfig: { requiresEnvelope: true }, required: false,
     }),
-    settingsSchema: [
-      { key: 'requiresEnvelope', label: 'Require Envelope', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Create an Adobe Sign envelope for each submission.' },
-      { key: 'agreementName', label: 'Agreement Name', type: 'text', group: 'field_specific', placeholder: 'e.g. Service Agreement', helpText: 'Name shown to signers in Adobe Sign.' },
-      { key: 'signerEmailField', label: 'Signer Email Field', type: 'field_selector', group: 'field_specific', helpText: 'Form field containing the signer\'s email address.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'australia_bsb_checker',
@@ -1086,12 +818,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'australia_bsb_checker',
     createField: (label = 'BSB Number') => ({
-      label, type: 'short_answer', widgetType: 'australia_bsb_checker',
+      label, type: 'control_widget', widgetType: 'australia_bsb_checker',
       widgetConfig: { autoFormat: true }, required: false,
     }),
-    settingsSchema: [
-      { key: 'autoFormat', label: 'Auto-format BSB', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Automatically insert the dash as the user types (XXX-XXX).' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'color_picker',
@@ -1103,15 +833,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     // Runtime registry uses the suffixed key for this widget.
     runtimeComponentId: 'color_picker_widget',
     createField: (label = 'Color Picker') => ({
-      label, type: 'short_answer', widgetType: 'color_picker',
+      label, type: 'control_widget', widgetType: 'color_picker',
       widgetConfig: { defaultColor: '#059669', format: 'hex' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'defaultColor', label: 'Default Color', type: 'color', group: 'field_specific', default: '#059669' },
-      { key: 'format', label: 'Output Format', type: 'select', group: 'field_specific', default: 'hex', options: [
-        { label: 'HEX', value: 'hex' }, { label: 'RGB', value: 'rgb' }, { label: 'HSL', value: 'hsl' },
-      ] },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'comparison_slider',
@@ -1123,14 +848,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'comparison_slider',
     createField: (label = 'Comparison Slider') => ({
-      label, type: 'short_answer', widgetType: 'comparison_slider',
-      widgetConfig: { beforeImage: '', afterImage: '', startPositionPct: 50 }, required: false,
+      label, type: 'control_widget', widgetType: 'comparison_slider',
+      widgetConfig: { beforeImageUrl: '', afterImageUrl: '', startPositionPct: 50 }, required: false,
     }),
-    settingsSchema: [
-      { key: 'beforeImage', label: 'Before Image URL', type: 'text', group: 'field_specific', placeholder: 'https://…/before.jpg', helpText: 'Image shown on the left of the slider divider.' },
-      { key: 'afterImage', label: 'After Image URL', type: 'text', group: 'field_specific', placeholder: 'https://…/after.jpg', helpText: 'Image shown on the right of the slider divider.' },
-      { key: 'startPositionPct', label: 'Initial Divider Position', type: 'range', group: 'field_specific', default: 50, min: 0, max: 100, step: 1, helpText: 'Where the slider handle starts (0–100%).' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'digital_magazine_maker',
@@ -1142,13 +863,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'business',
     runtimeComponentId: 'digital_magazine_maker',
     createField: (label = 'Digital Magazine') => ({
-      label, type: 'short_answer', widgetType: 'digital_magazine_maker',
-      widgetConfig: { embedUrl: '', autoPlay: false }, required: false,
+      label, type: 'control_widget', widgetType: 'digital_magazine_maker',
+      widgetConfig: { flipbookUrl: '', autoPlay: false }, required: false,
     }),
-    settingsSchema: [
-      { key: 'embedUrl', label: 'Embed URL', type: 'text', group: 'field_specific', placeholder: 'https://…', helpText: 'URL of the flipbook/magazine embed.' },
-      { key: 'autoPlay', label: 'Auto-play Flipbook', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Start turning pages automatically on load.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'docusign',
@@ -1160,13 +878,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'business',
     runtimeComponentId: 'docusign',
     createField: (label = 'DocuSign') => ({
-      label, type: 'short_answer', widgetType: 'docusign',
+      label, type: 'control_widget', widgetType: 'docusign',
       widgetConfig: { templateId: '' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'templateId', label: 'DocuSign Template ID', type: 'text', group: 'field_specific', placeholder: 'Template GUID', helpText: 'ID of the DocuSign template to instantiate.' },
-      { key: 'signerEmailField', label: 'Signer Email Field', type: 'field_selector', group: 'field_specific', helpText: 'Form field containing the signer\'s email address.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'draw_on_image',
@@ -1178,16 +893,13 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'draw_on_image',
     createField: (label = 'Annotated Image') => ({
-      label, type: 'short_answer', widgetType: 'draw_on_image',
+      label, type: 'control_widget', widgetType: 'draw_on_image',
       widgetConfig: {
         brushColors: ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'],
         defaultThickness: 3,
       }, required: false,
     }),
-    settingsSchema: [
-      { key: 'defaultThickness', label: 'Default Brush Thickness', type: 'range', group: 'field_specific', default: 3, min: 1, max: 20, step: 1, helpText: 'Initial pixel width of the annotation brush.' },
-      { key: 'sourceImage', label: 'Source Image URL', type: 'text', group: 'field_specific', placeholder: 'https://…/floorplan.png', helpText: 'Background image to annotate.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'drawing_board',
@@ -1198,13 +910,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'drawing_board',
     createField: (label = 'Drawing Board') => ({
-      label, type: 'short_answer', widgetType: 'drawing_board',
+      label, type: 'control_widget', widgetType: 'drawing_board',
       widgetConfig: { canvasHeight: 300, backgroundColor: '#ffffff' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'canvasHeight', label: 'Canvas Height (px)', type: 'number', group: 'field_specific', default: 300, min: 100, max: 2000, step: 10 },
-      { key: 'backgroundColor', label: 'Background Color', type: 'color', group: 'field_specific', default: '#ffffff' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'driving_distance_calculator',
@@ -1216,16 +925,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     backendHandler: 'maps',
     runtimeComponentId: 'driving_distance_calculator',
     createField: (label = 'Driving Distance') => ({
-      label, type: 'short_answer', widgetType: 'driving_distance_calculator',
+      label, type: 'control_widget', widgetType: 'driving_distance_calculator',
       widgetConfig: { provider: 'managed', ratePerMile: 2.5, unit: 'miles' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'unit', label: 'Distance Unit', type: 'select', group: 'field_specific', default: 'miles', options: [
-        { label: 'Kilometers', value: 'km' }, { label: 'Miles', value: 'miles' },
-      ] },
-      { key: 'originField', label: 'Origin Field', type: 'field_selector', group: 'field_specific', helpText: 'Form field containing the origin address.' },
-      { key: 'destinationField', label: 'Destination Field', type: 'field_selector', group: 'field_specific', helpText: 'Form field containing the destination address.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'france_region_map_picker',
@@ -1236,14 +939,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'france_region_map_picker',
     createField: (label = 'France Region') => ({
-      label, type: 'short_answer', widgetType: 'france_region_map_picker',
+      label, type: 'control_widget', widgetType: 'france_region_map_picker',
       widgetConfig: { colorScheme: 'blue' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'colorScheme', label: 'Color Scheme', type: 'select', group: 'field_specific', default: 'blue', options: [
-        { label: 'Blue', value: 'blue' }, { label: 'Green', value: 'green' }, { label: 'Red', value: 'red' }, { label: 'Purple', value: 'purple' },
-      ] },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'google_analytics_4',
@@ -1255,14 +954,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     // Runtime registry uses the suffixed key for this widget.
     runtimeComponentId: 'google_analytics_4_widget',
     createField: (label = 'GA4 Tracking') => ({
-      label: '', type: 'short_answer', widgetType: 'google_analytics_4',
-      widgetConfig: { measurementId: 'G-XXXXXXXXXX', eventName: 'form_submit', debug: false }, required: false,
+      label: '', type: 'control_widget', widgetType: 'google_analytics_4',
+      widgetConfig: { measurementId: '' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'measurementId', label: 'Google Analytics Measurement ID', type: 'text', group: 'field_specific', default: 'G-XXXXXXXXXX', placeholder: 'G-XXXXXXXXXX', helpText: 'Your GA4 data stream measurement ID.' },
-      { key: 'eventName', label: 'Event Name on Submit', type: 'text', group: 'field_specific', default: 'form_submit', helpText: 'Custom event name sent to GA4 upon submission.' },
-      { key: 'debug', label: 'Debug Mode', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Log GA4 event payloads to the browser console.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'image_scanner_ocr',
@@ -1275,15 +970,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     backendHandler: 'ocr',
     runtimeComponentId: 'image_scanner_ocr',
     createField: (label = 'Image Scanner') => ({
-      label, type: 'short_answer', widgetType: 'image_scanner_ocr',
+      label, type: 'control_widget', widgetType: 'image_scanner_ocr',
       widgetConfig: { autoExtract: true, targetDocument: 'any' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'outputField', label: 'Output Field', type: 'field_selector', group: 'field_specific', helpText: 'Form field where the extracted text should be written.' },
-      { key: 'language', label: 'OCR Language', type: 'select', group: 'field_specific', default: 'eng', options: [
-        { label: 'English', value: 'eng' }, { label: 'Spanish', value: 'spa' }, { label: 'French', value: 'fra' }, { label: 'German', value: 'deu' }, { label: 'Italian', value: 'ita' }, { label: 'Portuguese', value: 'por' }, { label: 'Chinese (Simplified)', value: 'chi_sim' }, { label: 'Japanese', value: 'jpn' },
-      ] },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'india_states_dropdown',
@@ -1294,38 +984,24 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'free',
     runtimeComponentId: 'india_states_dropdown',
     createField: (label = 'India State') => ({
-      label, type: 'short_answer', widgetType: 'india_states_dropdown',
+      label, type: 'control_widget', widgetType: 'india_states_dropdown',
       widgetConfig: { includeUnionTerritories: true }, required: false,
     }),
-    settingsSchema: [
-      { key: 'includeUnionTerritories', label: 'Include Union Territories', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Show Delhi, J&K, Ladakh, Puducherry, etc. alongside the 28 states.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'infinite_list',
     name: 'Infinite List',
     category: 'productivity',
     iconName: 'ListPlus',
-    description: 'Multi-column repeating rows for dynamic list entries — add as many as you need.',
+    description: 'Add-as-many rows itemizer for dynamic list entries and attendee names.',
     tier: 'pro',
     runtimeComponentId: 'infinite_list',
     createField: (label = 'Infinite List') => ({
-      label, type: 'short_answer', widgetType: 'infinite_list',
-      widgetConfig: {
-        columnNames: 'Item\nQuantity\nNotes',
-        addButtonText: '+ Add Another',
-        removeButtonText: 'Remove',
-        showRowCount: true,
-        placeholder: 'Enter value...',
-      }, required: false,
+      label, type: 'control_widget', widgetType: 'infinite_list',
+      widgetConfig: { placeholder: 'Enter item...', addButtonText: '+ Add Another' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'columnNames', label: 'Column Names', type: 'textarea', group: 'field_specific', default: 'Item\nQuantity\nNotes', placeholder: 'Item\nQuantity\nNotes', helpText: 'One column name per line. Each line becomes a column in the repeating row.' },
-      { key: 'addButtonText', label: 'Add Button Label', type: 'text', group: 'field_specific', default: '+ Add Another', placeholder: '+ Add Another' },
-      { key: 'removeButtonText', label: 'Remove Button Label', type: 'text', group: 'field_specific', default: 'Remove', placeholder: 'Remove' },
-      { key: 'showRowCount', label: 'Show Row Counter', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display "X filled · Y total" below the list.' },
-      { key: 'placeholder', label: 'Input Placeholder', type: 'text', group: 'field_specific', default: 'Enter value...', placeholder: 'Enter value...' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'italian_codice_fiscale',
@@ -1337,13 +1013,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'italian_codice_fiscale',
     createField: (label = 'Codice Fiscale') => ({
-      label, type: 'short_answer', widgetType: 'italian_codice_fiscale',
+      label, type: 'control_widget', widgetType: 'italian_codice_fiscale',
       widgetConfig: { uppercase: true }, required: false,
     }),
-    settingsSchema: [
-      { key: 'uppercase', label: 'Force Uppercase', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Convert input to uppercase as the user types.' },
-      { key: 'autoFill', label: 'Auto-fill from Name/DOB', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Attempt to compute the code from other form fields.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'like_dislike_feedback',
@@ -1355,14 +1028,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     // Runtime registry uses the shorter `like_dislike` key for this widget.
     runtimeComponentId: 'like_dislike',
     createField: (label = 'Like / Dislike') => ({
-      label, type: 'short_answer', widgetType: 'like_dislike_feedback',
-      widgetConfig: { showCounts: true, baseLikes: 0, baseDislikes: 0 }, required: false,
+      label, type: 'control_widget', widgetType: 'like_dislike_feedback',
+      widgetConfig: { showLiveCounts: true }, required: false,
     }),
-    settingsSchema: [
-      { key: 'showCounts', label: 'Show Vote Counters', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display count badges next to each button.' },
-      { key: 'baseLikes', label: 'Initial Likes Count', type: 'number', group: 'field_specific', default: 0, description: 'Baseline positive votes shown.' },
-      { key: 'baseDislikes', label: 'Initial Dislikes Count', type: 'number', group: 'field_specific', default: 0, description: 'Baseline negative votes shown.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'most_frequent_answer',
@@ -1372,19 +1041,13 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     description: 'Live social proof displaying trending choices based on real-time form submissions.',
     badge: 'AI',
     tier: 'business',
-    // Runtime component not yet implemented. Marked unavailable so users
-    // cannot add it to new forms (it would render as a plain <Input>).
-    // The definition stays in FIELD_REGISTRY so any saved forms using
-    // this widgetType still render via the dispatcher's fallback.
-    unavailable: 'Runtime component not yet implemented — coming soon.',
+    // No runtime entry yet — dispatcher falls back to default Input for saved forms.
     runtimeComponentId: 'most_frequent_answer',
     createField: (label = 'Most Frequent Answer') => ({
-      label: '', type: 'short_answer', widgetType: 'most_frequent_answer',
+      label: '', type: 'control_widget', widgetType: 'most_frequent_answer',
       widgetConfig: { linkedQuestionId: '', minResponsesThreshold: 5 }, required: false,
     }),
-    settingsSchema: [
-      { key: 'targetField', label: 'Target Field', type: 'field_selector', group: 'field_specific', helpText: 'Form field whose responses are tallied to compute the most frequent answer.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'orderable_list',
@@ -1395,12 +1058,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'orderable_list',
     createField: (label = 'Orderable List') => ({
-      label, type: 'short_answer', widgetType: 'orderable_list',
-      widgetConfig: { options: [{ value: 'quality', label: 'Quality' }, { value: 'speed', label: 'Speed of Service' }, { value: 'pricing', label: 'Pricing' }, { value: 'communication', label: 'Communication' }] }, required: false,
+      label, type: 'control_widget', widgetType: 'orderable_list',
+      widgetConfig: { items: ['Quality', 'Speed of Service', 'Pricing', 'Communication'] }, required: false,
     }),
-    settingsSchema: [
-      { key: 'options', label: 'Items to Rank', type: 'options_editor', group: 'field_specific', helpText: 'Drag-and-drop items that respondents reorder.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'pdf_embedder',
@@ -1411,13 +1072,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'pdf_embedder',
     createField: (label = 'PDF Embedder') => ({
-      label: '', type: 'short_answer', widgetType: 'pdf_embedder',
-      widgetConfig: { url: '', height: 500 }, required: false,
+      label: '', type: 'control_widget', widgetType: 'pdf_embedder',
+      widgetConfig: { pdfUrl: '', heightPx: 500 }, required: false,
     }),
-    settingsSchema: [
-      { key: 'url', label: 'PDF URL', type: 'text', group: 'field_specific', placeholder: 'https://…/document.pdf', helpText: 'Direct URL to the PDF file.' },
-      { key: 'height', label: 'Viewer Height (px)', type: 'number', group: 'field_specific', default: 500, min: 200, max: 4000, step: 10 },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'photo_watermark',
@@ -1429,17 +1087,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'business',
     runtimeComponentId: 'photo_watermark',
     createField: (label = 'Watermarked Photo') => ({
-      label, type: 'short_answer', widgetType: 'photo_watermark',
+      label, type: 'control_widget', widgetType: 'photo_watermark',
       widgetConfig: { includeTimestamp: true, includeGps: true, watermarkPosition: 'bottom_right' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'includeTimestamp', label: 'Overlay Timestamp', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Stamp the capture date/time onto each photo.' },
-      { key: 'includeGps', label: 'Overlay GPS Coordinates', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Stamp latitude/longitude onto each photo.' },
-      { key: 'watermarkPosition', label: 'Watermark Position', type: 'select', group: 'field_specific', default: 'bottom_right', options: [
-        { label: 'Top Left', value: 'top_left' }, { label: 'Top Right', value: 'top_right' }, { label: 'Bottom Left', value: 'bottom_left' }, { label: 'Bottom Right', value: 'bottom_right' },
-      ] },
-      { key: 'businessName', label: 'Business Name', type: 'text', group: 'field_specific', placeholder: 'Acme Inc.', helpText: 'Business name to overlay on each photo.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'speech_to_text',
@@ -1451,15 +1102,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'speech_to_text',
     createField: (label = 'Speech to Text') => ({
-      label, type: 'short_answer', widgetType: 'speech_to_text',
-      widgetConfig: { continuous: false, lang: 'en-US' }, required: false,
+      label, type: 'control_widget', widgetType: 'speech_to_text',
+      widgetConfig: { continuous: false, language: 'en-US' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'lang', label: 'Recognition Language', type: 'select', group: 'field_specific', default: 'en-US', options: [
-        { label: 'English (US)', value: 'en-US' }, { label: 'English (UK)', value: 'en-GB' }, { label: 'Spanish (Spain)', value: 'es-ES' }, { label: 'French (France)', value: 'fr-FR' }, { label: 'German', value: 'de-DE' }, { label: 'Italian', value: 'it-IT' }, { label: 'Portuguese (Brazil)', value: 'pt-BR' }, { label: 'Chinese (Simplified)', value: 'zh-CN' }, { label: 'Japanese', value: 'ja-JP' }, { label: 'Korean', value: 'ko-KR' },
-      ] },
-      { key: 'continuous', label: 'Continuous Recognition', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Keep transcribing until the user stops the session.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'spreadsheet_to_form',
@@ -1471,12 +1117,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'business',
     runtimeComponentId: 'spreadsheet_to_form',
     createField: (label = 'Spreadsheet Import') => ({
-      label, type: 'short_answer', widgetType: 'spreadsheet_to_form',
+      label, type: 'control_widget', widgetType: 'spreadsheet_to_form',
       widgetConfig: { accessCodeField: 'code' }, required: false,
     }),
-    settingsSchema: [
-      { key: 'accessCodeField', label: 'Access Code Field', type: 'text', group: 'field_specific', default: 'code', helpText: 'Machine key of the form field containing the customer access code.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'star_rating_with_comments',
@@ -1488,14 +1132,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     // Runtime registry uses the shorter `star_rating_comments` key for this widget.
     runtimeComponentId: 'star_rating_comments',
     createField: (label = 'Star Rating + Comments') => ({
-      label, type: 'short_answer', widgetType: 'star_rating_with_comments',
+      label, type: 'control_widget', widgetType: 'star_rating_with_comments',
       widgetConfig: { maxStars: 5, requireCommentOnLowRating: true, threshold: 3 }, required: false,
     }),
-    settingsSchema: [
-      { key: 'maxStars', label: 'Maximum Stars', type: 'number', group: 'field_specific', default: 5, min: 2, max: 10 },
-      { key: 'requireCommentOnLowRating', label: 'Require Comment on Low Rating', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Force respondents to write a comment below the threshold.' },
-      { key: 'threshold', label: 'Low-rating Threshold', type: 'number', group: 'field_specific', default: 3, min: 1, max: 10, helpText: 'Ratings at or below this value trigger the comment requirement.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'unique_id_generator',
@@ -1506,15 +1146,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'pro',
     runtimeComponentId: 'unique_id_generator',
     createField: (label = 'Unique ID') => ({
-      label: '', type: 'short_answer', widgetType: 'unique_id_generator',
+      label: '', type: 'control_widget', widgetType: 'unique_id_generator',
       widgetConfig: { prefix: 'REF-', startNumber: 1001, padding: 5 }, required: false,
     }),
-    settingsSchema: [
-      { key: 'prefix', label: 'ID Prefix', type: 'text', group: 'field_specific', default: 'REF-', helpText: 'Text prepended to every generated ID.' },
-      { key: 'startNumber', label: 'Start Number', type: 'number', group: 'field_specific', default: 1001, min: 0, helpText: 'First sequential number used.' },
-      { key: 'padding', label: 'Number Padding', type: 'number', group: 'field_specific', default: 5, min: 0, max: 12, helpText: 'Zero-pad the number to this many digits.' },
-      { key: 'allowManualEdit', label: 'Allow Manual Edit', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let respondents override the generated ID.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'us_state_picker',
@@ -1525,13 +1160,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'free',
     runtimeComponentId: 'us_state_picker',
     createField: (label = 'US State') => ({
-      label, type: 'short_answer', widgetType: 'us_state_picker',
+      label, type: 'control_widget', widgetType: 'us_state_picker',
       widgetConfig: { returnAbbreviation: true }, required: false,
     }),
-    settingsSchema: [
-      { key: 'returnAbbreviation', label: 'Return Abbreviation', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Store the 2-letter postal code (CA) instead of the full name (California).' },
-      { key: 'includeTerritories', label: 'Include US Territories', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add Puerto Rico, Guam, USVI, etc. to the list.' },
-    ],
+    settingsSchema: [],
   },
   {
     id: 'youtube_video_embed',
@@ -1542,14 +1174,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     tier: 'free',
     runtimeComponentId: 'youtube_video_embed',
     createField: (label = 'YouTube Video') => ({
-      label: '', type: 'short_answer', widgetType: 'youtube_video_embed',
-      widgetConfig: { url: '', autoplay: false, controls: true }, required: false,
+      label: '', type: 'control_widget', widgetType: 'youtube_video_embed',
+      widgetConfig: { videoUrl: '', autoPlay: false, controls: true }, required: false,
     }),
-    settingsSchema: [
-      { key: 'url', label: 'YouTube URL', type: 'text', group: 'field_specific', placeholder: 'https://youtu.be/…', helpText: 'Full YouTube watch URL or video ID.' },
-      { key: 'autoplay', label: 'Autoplay', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Start playback automatically when the form loads (may be blocked by browsers).' },
-      { key: 'controls', label: 'Show Player Controls', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display the YouTube play/pause/seek bar.' },
-    ],
+    settingsSchema: [],
   },
 ];
 
@@ -1590,15 +1218,6 @@ export const FIELD_ALIASES: Record<string, string> = {
   dynamic_dropdowns: 'dropdown',
   remote_data_dropdown: 'dropdown',
   inventory_dropdown: 'dropdown',
-
-  // File alias
-  file: 'file_upload',
-
-  // Basic type aliases (type → widgetType for dispatcher resolution)
-  email: 'email',
-  phone: 'phone',
-  date: 'date_picker',
-  time: 'time_picker',
 
   // ─── Phase-1 *_widget aliases (legacy IDs → canonical runtime map keys) ──
   // These IDs exist as Phase-1 FieldDefinitions (so the builder shows their
@@ -1665,10 +1284,6 @@ export const FIELD_ALIASES: Record<string, string> = {
   like_dislike_feedback: 'like_dislike',
   star_rating_with_comments: 'star_rating_comments',
   weekly_appointment_planner: 'weekly_planner',
-  appointment_booking: 'appointment',
-  appointment_scheduler: 'appointment',
-  booking: 'appointment',
-  schedule_appointment: 'appointment',
 };
 
 export function getFieldById(id: string): FieldDefinition | undefined {
@@ -1685,25 +1300,17 @@ export function getFieldsByCategory(category: FieldDefinition['category']): Fiel
 
 export function searchFields(
   query: string,
-  category?: FieldDefinition['category'] | 'booking',
+  category?: FieldDefinition['category'],
 ): FieldDefinition[] {
   const q = query.toLowerCase().trim();
   return FIELD_REGISTRY.filter((f) => {
-    let matchesCat = true;
-    if (category) {
-      if (category === 'booking') {
-        matchesCat = f.category === 'datetime' || f.id.includes('appointment') || f.id.includes('planner') || f.id.includes('booking') || f.id.includes('schedule');
-      } else {
-        matchesCat = f.category === category;
-      }
-    }
+    const matchesCat = !category || f.category === category;
     if (!matchesCat) return false;
     if (!q) return true;
     return (
       f.name.toLowerCase().includes(q) ||
       f.description.toLowerCase().includes(q) ||
-      f.id.toLowerCase().includes(q) ||
-      (f.id === 'appointment' && ('schedule'.includes(q) || 'booking'.includes(q) || 'calendar'.includes(q) || 'appointment'.includes(q)))
+      f.id.toLowerCase().includes(q)
     );
   });
 }

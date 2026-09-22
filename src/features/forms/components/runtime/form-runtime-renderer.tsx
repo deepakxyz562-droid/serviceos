@@ -509,6 +509,31 @@ export function FormRuntimeRenderer({
     } catch {}
   }, [storageKey]);
 
+  // Initialize default values for fields that define defaultValue (if not already filled)
+  useEffect(() => {
+    const defaults: Record<string, any> = {};
+    for (const f of schema.fields) {
+      const cfg = (f.widgetConfig || {}) as Record<string, any>;
+      const def = (f as any).defaultValue ?? cfg.defaultValue;
+      if (def !== undefined && def !== '' && def !== null) {
+        defaults[f.id] = def;
+      }
+    }
+    if (Object.keys(defaults).length > 0) {
+      setFormData((prev) => {
+        const next = { ...prev };
+        let hasChanges = false;
+        for (const [k, v] of Object.entries(defaults)) {
+          if (next[k] === undefined || next[k] === '') {
+            next[k] = v;
+            hasChanges = true;
+          }
+        }
+        return hasChanges ? next : prev;
+      });
+    }
+  }, [schema.fields]);
+
   // ─── Hidden Field Auto-Capture ───────────────────────────────────────────
   // Populate hidden fields with auto-captured values (UTM params, referrer, etc.)
   // on form load. This makes the Hidden Parameter widget actually functional
@@ -656,6 +681,10 @@ export function FormRuntimeRenderer({
   // Filter to the current step's fields AND evaluate conditional rules.
   // When isMultiStep is false, ALL fields are displayed together on a single page.
   const currentStepFields = schema.fields.filter((f) => {
+    // Hidden universal setting or hidden widget type
+    const cfg = (f.widgetConfig || {}) as Record<string, unknown>;
+    if ((f as any).hidden === true || cfg.hidden === true || f.type === 'hidden' || f.widgetType === 'hidden') return false;
+
     // In split layout, left-column fields are rendered in the Hero Media panel
     if (isSplitLayout && f.layoutColumn === 'left') return false;
 

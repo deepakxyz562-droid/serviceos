@@ -31,36 +31,34 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
     { key: 'multiSelect', label: 'Allow multi-select', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users select more than one option.' },
     { key: 'searchEnabled', label: 'Enable search', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Add a search box for long option lists.' },
-    { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load (great for surveys).' },
-    { key: 'useCalculationValues', label: 'Use Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign numerical values/scores to options for calculations.' },
-    { key: 'calculationValues', label: 'Calculation Values Matrix', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
+    { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Shuffle options on each form load (great for surveys).' },
+    { key: 'useCalculationValues', label: 'Use Calculation Values', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Assign numerical values/scores to options for calculations.' },
+    { key: 'calculationValues', label: 'Calculation Values', type: 'calculation_values_editor', group: 'field_specific', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
   ]],
   ['single_choice_widget', 'Single Choice (Radio)', 'choice', 'CircleDot', 'Radio button options', '', 'free', [
     { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
+    { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
+    { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
     { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
       { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },
     ] },
-    { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
-    { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
-    { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load.' },
-    { key: 'useCalculationValues', label: 'Use Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign numerical values/scores to options for calculations.' },
-    { key: 'calculationValues', label: 'Calculation Values Matrix', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
-    { key: 'allowNone', label: 'Allow "None of the above"', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add a "None of the above" option that deselects all others.' },
+    { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Shuffle options on each form load.' },
+    { key: 'useCalculationValues', label: 'Use Calculation Values', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Assign numerical values/scores to options for calculations.' },
+    { key: 'calculationValues', label: 'Calculation Values', type: 'calculation_values_editor', group: 'field_specific', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
   ]],
   ['multiple_choice_widget', 'Multiple Choice (Checkbox)', 'choice', 'CheckSquare', 'Multi-select checkboxes', '', 'free', [
     { key: 'options', label: 'Options', type: 'options_editor', group: 'field_specific' },
-    { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
-      { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },
-    ] },
     { key: 'allowOther', label: 'Allow "Other"', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Let users type a custom answer not in the list.' },
     { key: 'otherText', label: '"Other" placeholder text', type: 'text', group: 'field_specific', default: 'Other', condition: { dependsOn: 'allowOther', equals: 'true' } },
     { key: 'selectAllOption', label: 'Show "Select All" option', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Show a master checkbox to select/deselect all options.' },
-    { key: 'minSelect', label: 'Min selections', type: 'number', group: 'survey', default: 0, min: 0, helpText: 'Minimum number of options the user must select.' },
-    { key: 'maxSelect', label: 'Max selections (0 = unlimited)', type: 'number', group: 'survey', default: 0, min: 0 },
-    { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load.' },
-    { key: 'useCalculationValues', label: 'Use Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign numerical values/scores to options for calculations.' },
-    { key: 'calculationValues', label: 'Calculation Values Matrix', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
-    { key: 'allowNone', label: 'Allow "None of the above"', type: 'toggle_with_description', group: 'survey', default: false, description: 'Add a "None of the above" option that deselects all others.' },
+    { key: 'minSelect', label: 'Min selections', type: 'number', group: 'field_specific', default: 0, min: 0, helpText: 'Minimum number of options the user must select.' },
+    { key: 'maxSelect', label: 'Max selections (0 = unlimited)', type: 'number', group: 'field_specific', default: 0, min: 0 },
+    { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
+      { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },
+    ] },
+    { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Shuffle options on each form load.' },
+    { key: 'useCalculationValues', label: 'Use Calculation Values', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Assign numerical values/scores to options for calculations.' },
+    { key: 'calculationValues', label: 'Calculation Values', type: 'calculation_values_editor', group: 'field_specific', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
   ]],
   ['image_choice', 'Image Choice', 'choice', 'Image', 'Visual radio with images per option', 'NEW', 'pro', [
     { key: 'options', label: 'Image Options', type: 'options_editor', group: 'field_specific' },
@@ -123,9 +121,13 @@ const WIDGET_SPECS: WidgetSpec[] = [
     ] },
     { key: 'defaultToCurrent', label: 'Default to current time', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Pre-fill with current date and time.' },
   ]],
-  // NOTE: 'appointment' is defined in field-registry.ts with a richer settingsSchema
-  // (10+ settings including slotDuration, interval, rollingDays, timezone, etc.)
-  // Removed from phase-1 to avoid duplicate ID in FIELD_REGISTRY.
+  ['appointment', 'Appointment Booking', 'datetime', 'CalendarCheck', 'Time-slot booking with availability', 'POPULAR', 'pro', [
+    { key: 'duration', label: 'Duration (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 480 },
+    { key: 'interval', label: 'Slot interval (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 120 },
+    { key: 'leadTime', label: 'Min lead time (hours)', type: 'number', group: 'field_specific', default: 24, min: 0 },
+    { key: 'rollingDays', label: 'Booking window (days in advance)', type: 'number', group: 'field_specific', default: 30, min: 1, max: 365 },
+    { key: 'maxPerSlot', label: 'Max attendees per slot', type: 'number', group: 'field_specific', default: 1, min: 1, max: 50 },
+  ]],
   ['birth_date', 'Birth Date', 'datetime', 'Cake', 'Date picker with min/max age', '', 'free', [
     { key: 'minAge', label: 'Min age', type: 'number', group: 'field_specific', default: 0, min: 0 },
     { key: 'maxAge', label: 'Max age', type: 'number', group: 'field_specific', default: 120 },
@@ -161,6 +163,13 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['email_widget', 'Email Address', 'contact', 'Mail', 'Validated email input', 'POPULAR', 'free', [
     { key: 'confirmation', label: 'Require confirmation', type: 'toggle_with_description', group: 'field_specific', default: false },
     { key: 'blockFreeDomains', label: 'Block free domains (gmail/yahoo)', type: 'toggle_with_description', group: 'field_specific', default: false },
+  ]],
+  ['phone_widget', 'Phone Number', 'contact', 'Phone', 'International phone input', '', 'free', [
+    { key: 'defaultCountry', label: 'Default country', type: 'text', group: 'field_specific', default: 'US' },
+    { key: 'validateMobile', label: 'Validate as mobile', type: 'toggle_with_description', group: 'field_specific', default: false },
+    { key: 'format', label: 'Display format', type: 'select', group: 'field_specific', default: 'international', options: [
+      { label: 'International', value: 'international' }, { label: 'National', value: 'national' }, { label: 'E.164', value: 'e164' },
+    ] },
   ]],
   ['full_name', 'Full Name (First/Last)', 'contact', 'User', 'First + last name combined', '', 'free', [
     { key: 'middleName', label: 'Include middle name', type: 'toggle_with_description', group: 'field_specific', default: false },
@@ -273,20 +282,11 @@ const WIDGET_SPECS: WidgetSpec[] = [
     ] },
     { key: 'size', label: 'Output size (px)', type: 'number', group: 'field_specific', default: 200, min: 50, max: 1024 },
   ]],
-  ['qrcode_scanner', 'QR Code Scanner', 'file', 'QrCode', 'Camera-based QR scan', '', 'pro', [
-    { key: 'facingMode', label: 'Camera facing mode', type: 'select', group: 'field_specific', default: 'environment', options: [
-      { label: 'Rear (environment)', value: 'environment' }, { label: 'Front (user)', value: 'user' },
-    ] },
-    { key: 'scanIntervalMs', label: 'Scan interval (ms)', type: 'number', group: 'field_specific', default: 500, min: 100, max: 5000, step: 100, description: 'How often to attempt a decode from the camera feed.' },
-  ]],
+  ['qrcode_scanner', 'QR Code Scanner', 'file', 'QrCode', 'Camera-based QR scan', '', 'pro'],
   ['barcode_scanner', 'Barcode Scanner', 'file', 'Scan', 'Camera-based barcode scan', '', 'pro', [
     { key: 'formats', label: 'Supported formats (comma-sep)', type: 'text', group: 'field_specific', default: 'code128, ean13, code39' },
   ]],
-  ['nfc_tag_reader', 'NFC Tag Reader', 'file', 'Nfc', 'Web NFC tag reader', 'NEW', 'business', [
-    { key: 'readMode', label: 'Read mode', type: 'select', group: 'field_specific', default: 'read-only', options: [
-      { label: 'Read only', value: 'read-only' }, { label: 'Read / Write', value: 'read-write' },
-    ] },
-  ]],
+  ['nfc_tag_reader', 'NFC Tag Reader', 'file', 'Nfc', 'Web NFC tag reader', 'NEW', 'business'],
 
   // ─── Calculations (8) ──────────────────────────────────────────────────────────
   ['loan_emi', 'Loan EMI Calculator', 'calculation', 'Percent', 'Monthly installment + amortization', 'NEW', 'business', [
@@ -320,23 +320,16 @@ const WIDGET_SPECS: WidgetSpec[] = [
       { label: 'Days', value: 'days' }, { label: 'Months', value: 'months' }, { label: 'Years', value: 'years' },
     ] },
   ]],
-  ['percentage_calculator', 'Percentage Calculator', 'calculation', 'Percent', 'X is what % of Y', '', 'free', [
-    { key: 'decimalPlaces', label: 'Decimal places', type: 'number', group: 'field_specific', default: 2, min: 0, max: 6 },
-    { key: 'showFormula', label: 'Show formula', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display the underlying percentage formula alongside the result.' },
-  ]],
+  ['percentage_calculator', 'Percentage Calculator', 'calculation', 'Percent', 'X is what % of Y', '', 'free'],
 
   // ─── Survey (7) ────────────────────────────────────────────────────────────────
   ['star_rating_comments', 'Star Rating + Comments', 'survey', 'Star', '5-star with required comment on low', 'POPULAR', 'pro', [
     { key: 'maxStars', label: 'Max stars', type: 'number', group: 'field_specific', default: 5, min: 3, max: 10 },
-    { key: 'allowHalf', label: 'Allow half stars', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Allow respondents to select 0.5 ratings.' },
-    { key: 'requireCommentBelow', label: 'Require comment below threshold', type: 'number', group: 'field_specific', default: 3, description: 'Require respondent to leave an explanation when rating is at or below this score.' },
-    { key: 'placeholder', label: 'Comment placeholder', type: 'text', group: 'field_specific', default: 'Tell us more about your experience…' },
-    { key: 'maxChars', label: 'Max comment length (characters)', type: 'number', group: 'field_specific', default: 600 },
+    { key: 'requireCommentOnLowRating', label: 'Require comment below threshold', type: 'toggle_with_description', group: 'field_specific', default: true },
+    { key: 'threshold', label: 'Threshold', type: 'number', group: 'field_specific', default: 3 },
   ]],
   ['like_dislike', 'Like / Dislike', 'survey', 'ThumbsUp', 'Binary thumbs up/down', '', 'free', [
-    { key: 'showCounts', label: 'Show Vote Counters', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display count badges next to each button.' },
-    { key: 'baseLikes', label: 'Initial Likes Count', type: 'number', group: 'field_specific', default: 0, description: 'Baseline positive votes shown.' },
-    { key: 'baseDislikes', label: 'Initial Dislikes Count', type: 'number', group: 'field_specific', default: 0, description: 'Baseline negative votes shown.' },
+    { key: 'showLiveCounts', label: 'Show live counts', type: 'toggle_with_description', group: 'field_specific', default: true },
   ]],
   ['nps_slider', 'NPS Slider (0-10)', 'survey', 'Gauge', 'Net promoter score scale', 'POPULAR', 'pro', [
     { key: 'min', label: 'Min value', type: 'number', group: 'field_specific', default: 0 },
@@ -354,12 +347,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'statements', label: 'Statements (JSON array)', type: 'json', group: 'field_specific' },
     { key: 'points', label: 'Point scale', type: 'number', group: 'field_specific', default: 5, min: 3, max: 9 },
   ]],
-  ['thumb_rating', 'Thumb Rating', 'survey', 'ThumbsUp', 'Single thumb up/down', '', 'free', [
-    { key: 'size', label: 'Button size', type: 'select', group: 'field_specific', default: 'medium', options: [
-      { label: 'Small', value: 'small' }, { label: 'Medium', value: 'medium' }, { label: 'Large', value: 'large' },
-    ] },
-    { key: 'showLabel', label: 'Show label', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Display the up/down label text under each thumb button.' },
-  ]],
+  ['thumb_rating', 'Thumb Rating', 'survey', 'ThumbsUp', 'Single thumb up/down', '', 'free'],
 
   // ─── Productivity (5) ──────────────────────────────────────────────────────────
   ['terms_and_conditions', 'Terms & Conditions', 'productivity', 'ScrollText', 'Scrollable legal modal + accept checkbox', 'POPULAR', 'free', [
@@ -672,7 +660,7 @@ export const PHASE_1_WIDGETS: FieldDefinition[] = WIDGET_SPECS.map(
     backendHandler: backendHandler as FieldDefinition['backendHandler'],
     createField: (label?: string) => ({
       label: label ?? name,
-      type: 'short_answer',
+      type: 'control_widget',
       widgetType: id,
       widgetConfig: (extraSettings || []).reduce<Record<string, unknown>>((acc, s) => {
         if (s.default !== undefined) acc[s.key] = s.default;

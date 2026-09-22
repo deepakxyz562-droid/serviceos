@@ -10,13 +10,10 @@ import { NearestLocationFinder } from './nearest-location-finder';
 import { RoutePlannerMap } from './route-planner-map';
 import { ServiceAreaChecker } from './service-area-checker';
 import { FormCalculation } from './form-calculation';
-import { LiveEstimateSummaryPanel } from './live-estimate-summary-panel';
 import { SmsOtpVerification } from './sms-otp-verification';
 import { SignaturePad } from './signature-pad';
 import { VoiceRecorder } from './voice-recorder';
 import { PaymentGatewayRuntime } from './payment-gateway-runtime';
-import { StarRatingComments } from './survey/star-rating-comments';
-import { ConfigurableListV2 } from './productivity/configurable-list-v2';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Star, Shield, Lock, CreditCard, Sparkles, CheckSquare, Plus, Trash2 } from 'lucide-react';
@@ -119,10 +116,7 @@ export function WidgetRuntimeDispatcher({
   allFormData = {},
   disabled = false,
 }: WidgetRuntimeDispatcherProps) {
-  const widgetType =
-    field.widgetType ||
-    (field.type && field.type !== 'control_widget' ? field.type : '') ||
-    '';
+  const widgetType = field.widgetType || '';
   // Cast to Record<string, any> so property access returns `any` instead of `unknown`.
   // The widget config is freeform JSON defined per-widget — we trust the runtime
   // to pass the right shape based on widgetType.
@@ -179,10 +173,7 @@ export function WidgetRuntimeDispatcher({
   }
 
   switch (widgetType) {
-    // ─── Widgets NOT in WIDGET_RUNTIME_MAP (must be handled here) ──────────────
-
-    case 'photos_with_notes':
-    case 'photo_notes':
+    case 'image_upload_with_notes':
       return (
         <ImageUploadWithNotes
           value={value || []}
@@ -193,6 +184,19 @@ export function WidgetRuntimeDispatcher({
         />
       );
 
+    case 'nearest_location_finder':
+      return (
+        <NearestLocationFinder
+          value={value}
+          onChange={onChange}
+          branches={config.branches}
+          unit={config.distanceUnit || 'miles'}
+          disabled={disabled}
+        />
+      );
+
+    case 'route_planner_map':
+    case 'route_planner':
     case 'route_planner_v2':
       return (
         <RoutePlannerMap
@@ -204,9 +208,18 @@ export function WidgetRuntimeDispatcher({
         />
       );
 
+    case 'service_area_checker':
+      return (
+        <ServiceAreaChecker
+          value={value}
+          onChange={onChange}
+          allowedZipCodes={config.allowedZipCodes}
+          maxRadiusMiles={config.maxRadiusMiles}
+          disabled={disabled}
+        />
+      );
+
     case 'form_calculation':
-    case 'calculation':
-    case 'math_formula':
       return (
         <FormCalculation
           formula={config.formula || ''}
@@ -220,46 +233,71 @@ export function WidgetRuntimeDispatcher({
         />
       );
 
-    case 'live_estimate_summary':
-    case 'live_estimator':
-    case 'estimate_summary_panel':
+    case 'sms_otp_verification':
       return (
-        <LiveEstimateSummaryPanel
-          headline={config.headline as string | undefined}
-          formula={config.formula as string | undefined}
-          currency={config.currency as string | undefined}
-          prefix={config.currency as string | undefined}
-          lineItems={config.lineItems as any}
-          continueText={config.continueText as string | undefined}
-          allFormData={allFormData}
-          fields={field?.widgetConfig?.lineItems ? [] : []}
+        <SmsOtpVerification
+          value={value}
+          onChange={onChange}
+          disabled={disabled}
+        />
+      );
+
+    case 'signature_pad':
+    case 'smooth_signature':
+    case 'e_signature':
+    case 'signature':
+      return (
+        <SignaturePad
+          value={value}
+          onChange={onChange}
+          penColor={config.penColor || '#0f172a'}
+          disabled={disabled}
         />
       );
 
     case 'voice_recorder':
-    case 'voice_note':
     case 'audio_note':
       return (
         <VoiceRecorder
           value={value}
           onChange={onChange}
-          config={config}
           disabled={disabled}
-          field={field as unknown as Record<string, unknown>}
         />
       );
 
+    case 'star_rating':
     case 'star_rating_pro':
-      // Legacy alias — routes to star_rating which is in the lazy map.
-      // This case is only reached if the lazy map lookup fails.
+      const maxStars = config.maxStars || 5;
+      const currentStar = Number(value || 0);
       return (
-        <StarRatingComments
-          value={value}
-          onChange={onChange}
-          config={config}
-          disabled={disabled}
-          field={field}
-        />
+        <div className="flex items-center gap-1.5 py-1">
+          {Array.from({ length: maxStars }).map((_, i) => {
+            const starVal = i + 1;
+            const filled = starVal <= currentStar;
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={disabled}
+                onClick={() => onChange(starVal)}
+                className="p-1 text-muted-foreground hover:text-amber-400 focus:outline-none transition-colors"
+              >
+                <Star
+                  className={`size-7 transition-transform active:scale-95 ${
+                    filled
+                      ? 'text-amber-400 fill-amber-400'
+                      : 'text-muted-foreground/30 hover:text-amber-300'
+                  }`}
+                />
+              </button>
+            );
+          })}
+          {currentStar > 0 && (
+            <span className="text-xs font-bold text-foreground ml-2">
+              {currentStar} / {maxStars}
+            </span>
+          )}
+        </div>
       );
 
     case 'slider_rating':
@@ -283,30 +321,84 @@ export function WidgetRuntimeDispatcher({
         </div>
       );
 
+    case 'configurable_list':
     case 'matrix_dynamo':
     case 'dynamic_repeater':
-      // Legacy aliases for configurable_list — routes to the lazy map component.
-      // These aliases aren't in FIELD_ALIASES, so handle them here.
+      const rows: any[] = Array.isArray(value) ? value : [{}];
+      const rowColumns = config.columns || [
+        { key: 'item', label: 'Item / Description' },
+        { key: 'qty', label: 'Qty' },
+        { key: 'notes', label: 'Notes' },
+      ];
+
       return (
-        <ConfigurableListV2
-          value={value}
-          onChange={onChange}
-          config={config}
-          disabled={disabled}
-          field={field}
-        />
+        <div className="space-y-2.5">
+          <div className="border border-border/70 rounded-xl overflow-hidden">
+            <div className="grid grid-cols-12 bg-muted/60 p-2 text-[11px] font-bold text-muted-foreground border-b border-border/70">
+              {rowColumns.map((col: any, idx: number) => (
+                <div key={idx} className="col-span-3 px-1">{col.label}</div>
+              ))}
+              <div className="col-span-3 text-right pr-2">Action</div>
+            </div>
+            <div className="divide-y divide-border/40">
+              {rows.map((row, rIdx) => (
+                <div key={rIdx} className="grid grid-cols-12 p-2 gap-2 items-center bg-card">
+                  {rowColumns.map((col: any, cIdx: number) => (
+                    <div key={cIdx} className="col-span-3 px-1">
+                      <Input
+                        value={row[col.key] || ''}
+                        disabled={disabled}
+                        placeholder={col.label}
+                        onChange={(e) => {
+                          const updated = [...rows];
+                          updated[rIdx] = { ...updated[rIdx], [col.key]: e.target.value };
+                          onChange(updated);
+                        }}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  ))}
+                  <div className="col-span-3 flex justify-end pr-1">
+                    {!disabled && rows.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onChange(rows.filter((_, i) => i !== rIdx))}
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {!disabled && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onChange([...rows, {}])}
+              className="text-xs gap-1.5 h-7"
+            >
+              <Plus className="size-3.5" /> Add Another Row
+            </Button>
+          )}
+        </div>
       );
 
+    case 'cloudflare_turnstile':
     case 'hcaptcha_enterprise':
     case 'google_recaptcha_v3':
-      // Legacy captcha stubs — show a "Verified" badge (same as Turnstile)
       return (
         <div className="p-3 bg-muted/40 border border-border/70 rounded-xl flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="size-4 text-emerald-600" />
             <div>
-              <p className="text-xs font-semibold text-foreground">Bot Protection Active</p>
-              <p className="text-[10px] text-muted-foreground">Automated spam & bot protection</p>
+              <p className="text-xs font-semibold text-foreground">Protected by Cloudflare Turnstile</p>
+              <p className="text-[10px] text-muted-foreground">Automated spam & bot protection active</p>
             </div>
           </div>
           <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 px-2 py-0.5 rounded font-bold">
@@ -315,8 +407,26 @@ export function WidgetRuntimeDispatcher({
         </div>
       );
 
-    default:
+    case 'currency_amount_input':
+      return (
+        <div className="relative">
+          <span className="absolute left-3 top-2.5 text-xs font-bold text-muted-foreground">
+            {config.currencySymbol || '$'}
+          </span>
+          <Input
+            type="number"
+            value={value || ''}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="0.00"
+            className="pl-7 text-xs font-mono font-bold"
+            disabled={disabled}
+          />
+        </div>
+      );
+
+    default: {
       // Default fallback widget input
+      const isReadOnly = Boolean((field as any).readOnly || config.readOnly);
       return (
         <Input
           value={typeof value === 'string' ? value : ''}
@@ -324,7 +434,9 @@ export function WidgetRuntimeDispatcher({
           placeholder={field.placeholder || 'Enter value...'}
           className="text-xs"
           disabled={disabled}
+          readOnly={isReadOnly}
         />
       );
+    }
   }
 }

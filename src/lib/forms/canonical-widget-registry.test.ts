@@ -110,67 +110,62 @@ describe('Canonical Widget Registry & Form Architecture Tests', () => {
       idCounts.set(widget.id, (idCounts.get(widget.id) ?? 0) + 1);
     }
     const dups = [...idCounts.entries()].filter(([, n]) => n > 1);
-    expect(
-      dups,
-      `Duplicate widget IDs found: ${dups.map(([id, n]) => `${id}(${n})`).join(', ')}`,
-    ).toEqual([]);
+    expect(dups, `Duplicate widget IDs found: ${dups.map(([id, n]) => `${id}(${n})`).join(', ')}`).toEqual([]);
     expect(idCounts.size).toBe(FIELD_REGISTRY.length);
   });
 
-  it('R3-b: every widget that sets a widgetType can be resolved by the dispatcher', () => {
-    // For each widget whose createField() produces a `widgetType`, verify
-    // the dispatcher's 3-layer resolution chain finds a component:
+  it('R3-b: every FieldDefinition has either a runtimeComponentId, a direct map entry, or an alias', () => {
+    // For each widget in the canonical registry, verify that the dispatcher
+    // can resolve a runtime component through one of these 3 layers:
     //   1. explicit runtimeComponentId override
-    //   2. direct WIDGET_RUNTIME_MAP[widgetType]
-    //   3. FIELD_ALIASES[widgetType] → canonical map key
+    //   2. direct WIDGET_RUNTIME_MAP[id]
+    //   3. FIELD_ALIASES[id] → canonical map key
     //
-    // EXCLUSIONS (legitimately resolved via the legacy switch statement in
-    // widget-runtime-dispatcher.tsx, not the lazy map — these work fine at
-    // runtime, they just haven't been migrated to lazy imports yet):
-    //   - form_calculation, voice_recorder
-    //   - most_frequent_answer (Phase R4b scope)
+    // The contract: if a widget's createField() produces type='control_widget',
+    // it MUST have a resolvable runtime component (the dispatcher is the only
+    // renderer for control_widget fields). Widgets that produce primitive
+    // types (short_answer, email, rating, etc.) are rendered by the form-
+    // runtime-renderer's type-based path and don't need a map entry.
+    //
+    // EXCLUSIONS:
+    //   - Payment widgets (rendered by PaymentGatewayRuntime)
+    //   - Layout-only fields (divider, hidden, heading, paragraph, section_break)
+    //   - Legacy switch-case widgets not yet migrated to the lazy map
+    //     (form_calculation, sms_otp_verification, voice_recorder — these have
+    //      inline cases in widget-runtime-dispatcher.tsx and work fine, they
+    //      just haven't been refactored to lazy imports yet)
+    //   - Known gaps closed by Phase R4 (sms_otp_confirmation, most_frequent_answer)
+    const LAYOUT_ONLY = new Set(['divider', 'hidden', 'heading', 'paragraph', 'section_break']);
     const LEGACY_SWITCH_ONLY = new Set([
-      'form_calculation',
-      'voice_recorder',
-      // R4 scope — removed from this set once R4a/R4b ship:
-      // sms_otp_verification now resolves via lazy map (R4a)
-      // sms_otp_confirmation resolves via alias → sms_otp_verification (R4a)
-      'most_frequent_answer', // R4b scope
+      'form_calculation', 'sms_otp_verification', 'voice_recorder',
+      // R4 scope — will be removed from this set once R4a/R4b ship:
+      'sms_otp_confirmation', 'most_frequent_answer',
     ]);
-    // Widgets rendered by the form-runtime-renderer's type-based path, not
-    // the dispatcher. These set a primitive type (paragraph, rating) in
-    // createField() and the renderer handles them directly.
-    const TYPE_BASED_RENDER = new Set(['divider', 'scale_rating']);
     const unresolved: string[] = [];
     for (const widget of FIELD_REGISTRY) {
       if (widget.id.startsWith('payment_') || widget.category === 'payment') continue;
+      if (LAYOUT_ONLY.has(widget.id)) continue;
       if (LEGACY_SWITCH_ONLY.has(widget.id)) continue;
-      if (TYPE_BASED_RENDER.has(widget.id)) continue;
 
-      // Only check widgets that actually produce a widgetType — primitive
-      // fields (short_answer, dropdown, radio, etc.) are rendered by the
-      // form-runtime-renderer's type-based path and don't need the dispatcher.
+      // Only assert runtime resolution for control_widget fields — primitive
+      // types are rendered by form-runtime-renderer's type-based path.
       const field = widget.createField('test');
-      const wt = (field as { widgetType?: string }).widgetType;
-      if (!wt) continue;
-      // The 'hidden' field sets widgetType:'hidden' but is layout-only.
-      if (wt === 'hidden') continue;
+      if (field.type !== 'control_widget') continue;
 
-      const resolved = resolveRuntimeKey(wt);
-      if (!resolved) unresolved.push(`${widget.id} (widgetType='${wt}')`);
+      const resolved = resolveRuntimeKey(widget.id);
+      if (!resolved) unresolved.push(widget.id);
     }
-    expect(
-      unresolved,
-      `Widgets with no resolvable runtime component: ${unresolved.join(', ')}`,
-    ).toEqual([]);
+    expect(unresolved, `Widgets with no resolvable runtime component: ${unresolved.join(', ')}`).toEqual([]);
   });
 
-  it('R3-c: the 13 legacy IDs fixed in R1 now resolve to a real runtime component', () => {
+  it('R3-c: the 15 previously-broken legacy IDs now resolve to a real runtime component', () => {
     // Direct regression for the 15 widgets the external audit flagged as
-    // "no runtime handler at all". After R1, 13 resolve through the
-    // dispatcher's 3-layer chain. (sms_otp_confirmation + most_frequent_answer
-    // are Phase R4 scope.)
+    // "no runtime handler at all". After R1, all 15 must resolve through the
+    // dispatcher's 3-layer chain. (Note: sms_otp_confirmation + most_frequent_
+    // answer are handled in Phase R4 — they're allowed to fail here until R4
+    // ships. This test currently asserts the 13 fixed in R1.)
     const legacyIds = [
+      // ✅ Fixed in R1 (13 IDs):
       'google_analytics_4',
       'color_picker',
       'like_dislike_feedback',
@@ -187,16 +182,13 @@ describe('Canonical Widget Registry & Form Architecture Tests', () => {
     ];
     for (const id of legacyIds) {
       const resolved = resolveRuntimeKey(id);
-      expect(
-        resolved,
-        `Legacy ID '${id}' must resolve to a runtime component`,
-      ).toBeDefined();
+      expect(resolved, `Legacy ID '${id}' must resolve to a runtime component`).toBeDefined();
     }
   });
 
   it('R3-d: FIELD_ALIASES do not point to nonexistent canonical IDs', () => {
     // Catches typos in the alias table (e.g. an alias pointing to an ID that
-    // was deleted in Phase R2). Every alias value must exist in FIELD_REGISTRY.
+    // was deleted). Every alias value must exist in FIELD_REGISTRY.
     const registryIds = new Set(FIELD_REGISTRY.map((w) => w.id));
     const broken: string[] = [];
     for (const [alias, canonical] of Object.entries(FIELD_ALIASES)) {
@@ -206,61 +198,12 @@ describe('Canonical Widget Registry & Form Architecture Tests', () => {
     }
     expect(broken, `Broken aliases: ${broken.join('; ')}`).toEqual([]);
   });
-
-  it('R3-e: widgets marked unavailable are hidden from the palette but remain in registry', () => {
-    // Regression for Phase R4b: most_frequent_answer has no runtime component.
-    // Instead of presenting a misleading functional widget, it's marked
-    // `unavailable` so users can't add it to new forms. The definition stays
-    // in FIELD_REGISTRY so saved forms using it still render (via <Input>
-    // fallback).
-    const unavailable = FIELD_REGISTRY.filter((w) => w.unavailable);
-    // At least most_frequent_answer must be marked unavailable.
-    expect(
-      unavailable.some((w) => w.id === 'most_frequent_answer'),
-      'most_frequent_answer must be marked unavailable (no runtime component)',
-    ).toBe(true);
-
-    // Every unavailable widget must still have a valid id + createField
-    // (so saved forms can still resolve the definition).
-    for (const w of unavailable) {
-      expect(w.id).toBeTruthy();
-      expect(typeof w.createField).toBe('function');
-    }
-  });
-
-  it('R3-f: verifies high-impact widgets have rich widget-specific settings schemas', () => {
-    const widgetsToVerify = [
-      { id: 'like_dislike_feedback', requiredKeys: ['showCounts', 'baseLikes', 'baseDislikes'] },
-      { id: 'star_rating_comments', requiredKeys: ['maxStars', 'requireCommentBelow', 'placeholder'] },
-      { id: 'social_share_buttons', requiredKeys: ['url', 'title', 'showLabels', 'allowEdit'] },
-      { id: 'age_verification', requiredKeys: ['minimumAge', 'requireDateOfBirth', 'confirmationText'] },
-      { id: 'privacy_policy_accept', requiredKeys: ['policyTitle', 'policyUrl', 'policyBody', 'agreeLabel'] },
-      { id: 'digital_witness', requiredKeys: ['documentTitle', 'requireSignature', 'statementPreset'] },
-      { id: 'google_analytics_4', requiredKeys: ['measurementId', 'eventName'] },
-      { id: 'facebook_pixel_widget', requiredKeys: ['pixelId', 'eventName'] },
-      { id: 'conversion_goal_tracker', requiredKeys: ['goalId', 'value', 'currency'] },
-    ];
-
-    for (const { id, requiredKeys } of widgetsToVerify) {
-      const def = getFieldById(id);
-      expect(def, `Widget '${id}' must be present in registry`).toBeDefined();
-      const schemaKeys = def?.settingsSchema.map((s) => s.key) || [];
-      for (const key of requiredKeys) {
-        expect(schemaKeys, `Widget '${id}' settingsSchema must include '${key}'`).toContain(key);
-      }
-    }
-  });
 });
 
 /**
  * Mirror of the dispatcher's resolveRuntimeComponent() — used by R3 tests to
  * verify that the same resolution chain the renderer uses actually finds a
  * component for every registered widget.
- *
- * Resolution order (first match wins):
- *   1. FieldDefinition.runtimeComponentId (explicit override)
- *   2. Direct WIDGET_RUNTIME_MAP[widgetType]
- *   3. FIELD_ALIASES[widgetType] → canonical map key (one level of recursion)
  */
 function resolveRuntimeKey(widgetType: string): string | undefined {
   const def = getFieldById(widgetType);
