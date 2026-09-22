@@ -10,7 +10,7 @@ import {
   type TemplateCategoryId,
 } from '@/lib/forms/templates';
 import { FormRuntimeRenderer } from '@/features/forms/components/runtime/form-runtime-renderer';
-import { ChevronRight, Star, FileText, CheckCircle2, ArrowRight, Sparkles } from 'lucide-react';
+import { ChevronRight, Star, FileText, CheckCircle2, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react';
 import { UseTemplateCTAButton } from './use-template-cta-button';
 
 /**
@@ -115,16 +115,26 @@ export default async function TemplateDetailPage({
 
       {/* Breadcrumbs */}
       <nav className="border-b border-border bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center gap-1 text-xs text-muted-foreground overflow-x-auto">
-          <Link href="/" className="hover:text-foreground shrink-0">Home</Link>
-          <ChevronRight className="size-3 shrink-0" />
-          <Link href="/templates" className="hover:text-foreground shrink-0">Templates</Link>
-          <ChevronRight className="size-3 shrink-0" />
-          <Link href={`/templates/${category}`} className="hover:text-foreground shrink-0">
-            {getCategoryLabel(category)}
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1 overflow-x-auto">
+            <Link href="/" className="hover:text-foreground shrink-0">Home</Link>
+            <ChevronRight className="size-3 shrink-0" />
+            <Link href="/templates" className="hover:text-foreground shrink-0">Templates</Link>
+            <ChevronRight className="size-3 shrink-0" />
+            <Link href={`/templates/${category}`} className="hover:text-foreground shrink-0">
+              {getCategoryLabel(category)}
+            </Link>
+            <ChevronRight className="size-3 shrink-0" />
+            <span className="text-foreground font-medium truncate max-w-[200px] sm:max-w-none">{template.name}</span>
+          </div>
+
+          <Link
+            href="/templates"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-background/80 px-3 py-1.5 rounded-lg border border-border/70 transition shrink-0 shadow-2xs"
+          >
+            <ArrowLeft className="size-3.5" />
+            <span>Back to Templates</span>
           </Link>
-          <ChevronRight className="size-3 shrink-0" />
-          <span className="text-foreground font-medium truncate">{template.name}</span>
         </div>
       </nav>
 

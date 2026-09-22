@@ -279,14 +279,14 @@ export function TemplatesGalleryClient({
     seedTotal,
   ]);
 
-  const openPreview = useCallback(async (template: FormTemplate) => {
+  const openPreview = useCallback(async (template: FormTemplate, pushHistory = true) => {
     if (!template) return;
     setPreviewTemplate(template);
     setPreviewExperience('Conversational');
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && pushHistory) {
       const primaryCat = template.categories?.[0] || 'general';
       try {
-        window.history.replaceState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
+        window.history.pushState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
       } catch {}
     }
 
@@ -305,13 +305,17 @@ export function TemplatesGalleryClient({
     }
   }, []);
 
-  const closePreview = useCallback(() => {
+  const closePreview = useCallback((triggeredByPopState = false) => {
     setPreviewTemplate(null);
-    if (typeof window !== 'undefined') {
-      const cleanUrl = selectedCategory !== 'all' ? `/templates?category=${selectedCategory}` : '/templates';
-      try {
-        window.history.replaceState(null, '', cleanUrl);
-      } catch {}
+    if (typeof window !== 'undefined' && !triggeredByPopState) {
+      if (window.history.state?.previewTemplateId) {
+        window.history.back();
+      } else {
+        const cleanUrl = selectedCategory !== 'all' ? `/templates?category=${selectedCategory}` : '/templates';
+        try {
+          window.history.replaceState(null, '', cleanUrl);
+        } catch {}
+      }
     }
   }, [selectedCategory]);
 
@@ -319,11 +323,11 @@ export function TemplatesGalleryClient({
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       if (!e.state?.previewTemplateId) {
-        setPreviewTemplate(null);
+        closePreview(true);
       } else {
         const found = items.find((t) => t.id === e.state.previewTemplateId);
         if (found) {
-          openPreview(found);
+          openPreview(found, false);
         } else {
           fetch(`/api/templates/${e.state.previewTemplateId}`)
             .then((r) => r.json())
@@ -336,7 +340,7 @@ export function TemplatesGalleryClient({
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [items, openPreview]);
+  }, [items, openPreview, closePreview]);
 
   const categoryCounts = useMemo(() => new Map(Object.entries(categoryCountsProp || {})), [categoryCountsProp]);
   const industryCounts = useMemo(() => new Map(Object.entries(industryCountsProp || {})), [industryCountsProp]);
@@ -1069,7 +1073,11 @@ export function TemplatesGalleryClient({
       {/* ─── 4-EXPERIENCE INTERACTIVE LIVE PREVIEW MODAL ─── */}
       {previewTemplate && (
         <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && closePreview()}>
-          <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden p-0 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl bg-white dark:bg-slate-900 flex flex-col">
+          <DialogContent
+            showCloseButton={false}
+            style={{ paddingTop: 0 }}
+            className="!max-w-[1280px] sm:!max-w-[1280px] lg:!max-w-[1320px] w-[96vw] max-h-[94vh] flex flex-col !p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900"
+          >
             {/* Modal Header */}
             <DialogHeader className="px-6 py-4 border-b border-border bg-slate-50/50 dark:bg-slate-950/40 flex flex-row items-center justify-between space-y-0">
               <div className="space-y-1 max-w-xl">
@@ -1091,7 +1099,7 @@ export function TemplatesGalleryClient({
                 </DialogDescription>
               </div>
 
-              <div className="flex items-center gap-2 pr-6">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1109,6 +1117,15 @@ export function TemplatesGalleryClient({
                   aria-label="Next template"
                 >
                   <ArrowRight className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => closePreview()}
+                  className="size-8 p-0 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-muted-foreground hover:text-foreground ml-1"
+                  aria-label="Close dialog"
+                >
+                  <X className="size-4" />
                 </Button>
               </div>
             </DialogHeader>
