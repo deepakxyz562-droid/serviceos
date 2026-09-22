@@ -99,6 +99,10 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
     return (
       <FormAgentStudio
         initialAgent={activeStudioAgent}
+        onChange={(updated) => {
+          setActiveStudioAgent(updated);
+          setAgents((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+        }}
         onBack={() => setActiveStudioAgent(null)}
         siteOrigin={siteOrigin}
       />

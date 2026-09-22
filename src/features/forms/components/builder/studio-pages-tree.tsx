@@ -38,6 +38,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { getFieldById } from '@/lib/forms/field-registry';
+import { resolveIcon } from '@/lib/forms/icon-resolver';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -203,6 +205,14 @@ export function StudioPagesTree({
       fields: prev.fields.map((f) => (f.id === fieldId ? { ...f, stepId: targetStepId } : f)),
     }));
     toast.success('Field moved to new step');
+  };
+
+  const getFieldMeta = (field: FormField) => {
+    const rawType = (field as any).widgetType || field.type;
+    const def = getFieldById(rawType);
+    const Icon = def?.iconName ? resolveIcon(def.iconName) : getFieldIcon(field.type);
+    const widgetName = def?.name || field.type?.replace(/_/g, ' ');
+    return { Icon, widgetName };
   };
 
   const getFieldIcon = (type: string) => {
@@ -398,7 +408,7 @@ export function StudioPagesTree({
                 {/* Sub-Fields List */}
                 <div className="p-1.5 space-y-1">
                   {step.fields.map((field, fIdx) => {
-                    const Icon = getFieldIcon(field.type);
+                    const { Icon, widgetName } = getFieldMeta(field);
                     const isFieldSelected = selectedFieldId === field.id;
 
                     return (
@@ -414,12 +424,15 @@ export function StudioPagesTree({
                             : 'hover:bg-slate-100/70 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
                         }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="size-4 rounded bg-slate-200 dark:bg-slate-700 text-[9px] font-bold flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0">
                             {getLetterBadge(fIdx)}
                           </span>
                           <Icon className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                          <span className="truncate text-[11px] max-w-[130px]">{field.label || 'Question'}</span>
+                          <div className="min-w-0 flex-1">
+                            <span className="truncate text-[11px] block text-foreground">{field.label || 'Question'}</span>
+                            <span className="text-[9px] text-muted-foreground truncate block font-normal">{widgetName}</span>
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -481,7 +494,7 @@ export function StudioPagesTree({
             </div>
 
             {fields.map((field, fIdx) => {
-              const Icon = getFieldIcon(field.type);
+              const { Icon, widgetName } = getFieldMeta(field);
               const isFieldSelected = selectedFieldId === field.id;
 
               return (
@@ -494,12 +507,15 @@ export function StudioPagesTree({
                       : 'hover:bg-slate-100/70 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="size-4 rounded bg-slate-200 dark:bg-slate-700 text-[9px] font-bold flex items-center justify-center shrink-0">
                       {fIdx + 1}
                     </span>
                     <Icon className="size-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span className="truncate text-[11px]">{field.label || 'Untitled Question'}</span>
+                    <div className="min-w-0 flex-1">
+                      <span className="truncate text-[11px] block text-foreground">{field.label || 'Untitled Question'}</span>
+                      <span className="text-[9px] text-muted-foreground truncate block font-normal">{widgetName}</span>
+                    </div>
                   </div>
                   {field.required && <span className="text-[9px] font-bold text-rose-500">*</span>}
                 </div>

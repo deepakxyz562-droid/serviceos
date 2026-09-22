@@ -213,6 +213,7 @@ export interface EditorFormData {
   };
   mediaPanel?: import('@/lib/forms/form-schema-types').FormMediaPanel;
   settings?: FormSettingsConfig;
+  agentConfig?: import('./agent-types').FormAgentData;
 }
 
 /**

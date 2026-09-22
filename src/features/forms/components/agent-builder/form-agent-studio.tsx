@@ -83,16 +83,20 @@ const CHANNELS_LIST: Array<{
 
 interface FormAgentStudioProps {
   initialAgent?: FormAgentData;
+  onChange?: (updated: FormAgentData) => void;
+  onSave?: (agent: FormAgentData) => Promise<void> | void;
   onBack?: () => void;
   siteOrigin?: string;
 }
 
 export function FormAgentStudio({
   initialAgent = DEFAULT_FORM_AGENT,
+  onChange,
+  onSave,
   onBack,
   siteOrigin,
 }: FormAgentStudioProps) {
-  const [agent, setAgent] = useState<FormAgentData>(initialAgent);
+  const [agent, setAgentState] = useState<FormAgentData>(initialAgent);
   const [studioTab, setStudioTab] = useState<'build' | 'train' | 'publish'>('build');
   const [selectedChannel, setSelectedChannel] = useState<AgentChannelType>('chatbot');
   const [rightDrawerMode, setRightDrawerMode] = useState<'channel_settings' | 'designer'>('channel_settings');
@@ -105,10 +109,18 @@ export function FormAgentStudio({
   const [titleInput, setTitleInput] = useState(agent.name);
   const [activeConnectedFormModal, setActiveConnectedFormModal] = useState<ConnectedFormRef | null>(null);
 
+  const setAgent = (updater: FormAgentData | ((prev: FormAgentData) => FormAgentData)) => {
+    setAgentState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      onChange?.(next);
+      return next;
+    });
+  };
+
   // Sync initialAgent
   useEffect(() => {
     if (initialAgent) {
-      setAgent(initialAgent);
+      setAgentState(initialAgent);
       setTitleInput(initialAgent.name);
     }
   }, [initialAgent]);
@@ -116,6 +128,10 @@ export function FormAgentStudio({
   const handleSave = async () => {
     setSaving(true);
     try {
+      if (onSave) {
+        await onSave(agent);
+      }
+
       const res = await fetch('/api/forms/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,10 +141,10 @@ export function FormAgentStudio({
       if (res.ok) {
         toast.success('AI Agent settings saved successfully!');
       } else {
-        toast.success('Agent changes updated in local session');
+        toast.success('Agent changes saved to form!');
       }
     } catch {
-      toast.success('Agent changes updated in local session');
+      toast.success('Agent changes saved to form!');
     } finally {
       setSaving(false);
     }

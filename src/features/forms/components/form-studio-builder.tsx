@@ -2313,20 +2313,35 @@ export function FormStudioBuilder({
         {studioTab === 'agent' && !isPreviewMode && (
           <div className="flex-1 flex overflow-hidden w-full">
             <FormAgentStudio
-              initialAgent={{
-                ...DEFAULT_FORM_AGENT,
-                id: `agent_${formData.id || 'form_agent'}`,
-                name: formData.name ? `${formData.name} Assistant` : 'Clara',
-                roleTitle: `${formData.name || 'Inquiry'} AI Assistant`,
-                brandColor: formData.theme?.primaryColor || formData.primaryColor || '#059669',
-                connectedForms: [
-                  {
-                    id: formData.id || 'form_1',
-                    name: formData.name || 'Untitled Form',
-                    description: formData.description,
-                    submissionCount: 1,
-                  },
-                ],
+              initialAgent={
+                formData.agentConfig || {
+                  ...DEFAULT_FORM_AGENT,
+                  id: `agent_${formData.id || 'form_agent'}`,
+                  name: formData.name ? `${formData.name} Assistant` : 'Clara',
+                  roleTitle: `${formData.name || 'Inquiry'} AI Assistant`,
+                  brandColor: formData.theme?.primaryColor || formData.primaryColor || '#059669',
+                  connectedForms: [
+                    {
+                      id: formData.id || 'form_1',
+                      name: formData.name || 'Untitled Form',
+                      description: formData.description,
+                      submissionCount: 1,
+                    },
+                  ],
+                }
+              }
+              onChange={(updatedAgent) => {
+                onFormDataChange((prev) => ({
+                  ...prev,
+                  agentConfig: updatedAgent,
+                }));
+              }}
+              onSave={async (savedAgent) => {
+                onFormDataChange((prev) => ({
+                  ...prev,
+                  agentConfig: savedAgent,
+                }));
+                await onSave();
               }}
               onBack={() => setStudioTab('build')}
               siteOrigin={siteOrigin}

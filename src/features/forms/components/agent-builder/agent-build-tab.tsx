@@ -152,6 +152,13 @@ export function AgentBuildTab({
     onChange({
       ...agent,
       brandColor: scheme.letterColor,
+      channels: {
+        ...agent.channels,
+        chatbot: {
+          ...agent.channels?.chatbot,
+          primaryColor: scheme.letterColor,
+        },
+      },
       style: {
         ...(agent.style as any),
         colorSchemeId: scheme.id,
@@ -161,9 +168,24 @@ export function AgentBuildTab({
         pageBackgroundEnd: scheme.endBg,
         titleColor: scheme.titleColor,
         chatBg: scheme.isDark ? '#0f172a' : '#ffffff',
+        isDark: scheme.isDark,
       },
     });
     toast.success(`Applied ${scheme.name} color scheme!`);
+  };
+
+  const setThemeMode = (mode: 'light' | 'dark') => {
+    const isDark = mode === 'dark';
+    onChange({
+      ...agent,
+      style: {
+        ...(agent.style as any),
+        isDark,
+        chatBg: isDark ? '#0f172a' : '#ffffff',
+        titleColor: isDark ? '#ffffff' : '#0A1551',
+      },
+    });
+    toast.success(`Switched to ${isDark ? 'Dark' : 'Light'} theme`);
   };
 
   const addQuickActionButton = () => {
@@ -377,8 +399,43 @@ export function AgentBuildTab({
             {/* ── STYLE TAB ── */}
             {designerSubTab === 'style' && (
               <div className="space-y-4">
+                {/* 1. Theme Mode Switcher */}
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold text-slate-300 uppercase tracking-wider">COLOR SCHEMES</Label>
+                  <Label className="text-xs font-bold text-slate-300 uppercase tracking-wider">THEME MODE</Label>
+                  <div className="grid grid-cols-2 gap-2 bg-slate-800/70 p-1 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setThemeMode('light')}
+                      className={cn(
+                        'py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all',
+                        !agent.style?.isDark && (agent.style?.chatBg === '#ffffff' || !agent.style?.chatBg)
+                          ? 'bg-white text-slate-900 shadow-sm font-bold'
+                          : 'text-slate-400 hover:text-slate-200'
+                      )}
+                    >
+                      <span>☀️</span> Light
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setThemeMode('dark')}
+                      className={cn(
+                        'py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all',
+                        agent.style?.isDark || agent.style?.chatBg === '#0f172a'
+                          ? 'bg-slate-950 text-white shadow-sm font-bold border border-slate-700'
+                          : 'text-slate-400 hover:text-slate-200'
+                      )}
+                    >
+                      <span>🌙</span> Dark
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Curated Color Presets */}
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold text-slate-300 uppercase tracking-wider">PRESET SCHEMES</Label>
+                    <span className="text-[10px] text-slate-400">8 Styles</span>
+                  </div>
                   <div className="grid grid-cols-4 gap-2">
                     {COLOR_SCHEMES.map((scheme) => (
                       <div
@@ -387,7 +444,7 @@ export function AgentBuildTab({
                         className={cn(
                           'p-2 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center gap-1 aspect-square relative',
                           agent.brandColor === scheme.letterColor
-                            ? 'border-purple-500 ring-2 ring-purple-500/20 shadow-md'
+                            ? 'border-purple-500 ring-2 ring-purple-500/20 shadow-md scale-105'
                             : 'border-slate-800 hover:border-slate-700 bg-slate-800/40'
                         )}
                         style={{
@@ -400,7 +457,7 @@ export function AgentBuildTab({
                         >
                           A
                         </span>
-                        <span className="text-[9px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[48px]">
+                        <span className="text-[9px] font-bold text-slate-900 truncate max-w-[48px]">
                           {scheme.name}
                         </span>
                       </div>
@@ -408,24 +465,105 @@ export function AgentBuildTab({
                   </div>
                 </div>
 
+                {/* 3. Custom Color Pickers */}
                 <div className="space-y-3 pt-3 border-t border-slate-800">
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-slate-400">Primary Brand Color</span>
+                  <Label className="text-xs font-bold text-slate-300 uppercase tracking-wider">CUSTOM COLORS</Label>
+
+                  {/* Primary Brand Color */}
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-700/60">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-200">Primary Brand Color</p>
+                      <p className="text-[10px] text-slate-400">Top bar, user bubble & accents</p>
+                    </div>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
                         value={agent.brandColor || '#0284c7'}
-                        onChange={(e) => onChange({ ...agent, brandColor: e.target.value })}
-                        className="size-6 rounded border-0 cursor-pointer bg-transparent"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onChange({
+                            ...agent,
+                            brandColor: val,
+                            channels: {
+                              ...agent.channels,
+                              chatbot: {
+                                ...agent.channels?.chatbot,
+                                primaryColor: val,
+                              },
+                            },
+                          });
+                        }}
+                        className="size-7 rounded cursor-pointer bg-transparent border-0"
                       />
-                      <span className="text-xs font-mono font-bold text-slate-200">
+                      <span className="text-[11px] font-mono font-bold text-slate-300">
                         {agent.brandColor || '#0284c7'}
                       </span>
                     </div>
                   </div>
 
+                  {/* Chat Background Color */}
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-700/60">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-200">Chat Window Background</p>
+                      <p className="text-[10px] text-slate-400">Custom body backdrop hex</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={agent.style?.chatBg || '#ffffff'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onChange({
+                            ...agent,
+                            style: {
+                              ...(agent.style as any),
+                              chatBg: val,
+                            },
+                          });
+                        }}
+                        className="size-7 rounded cursor-pointer bg-transparent border-0"
+                      />
+                      <span className="text-[11px] font-mono font-bold text-slate-300">
+                        {agent.style?.chatBg || '#ffffff'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Header Title Color */}
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-700/60">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-200">Header Title Color</p>
+                      <p className="text-[10px] text-slate-400">Agent top bar name text</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={agent.style?.titleColor || '#ffffff'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onChange({
+                            ...agent,
+                            style: {
+                              ...(agent.style as any),
+                              titleColor: val,
+                            },
+                          });
+                        }}
+                        className="size-7 rounded cursor-pointer bg-transparent border-0"
+                      />
+                      <span className="text-[11px] font-mono font-bold text-slate-300">
+                        {agent.style?.titleColor || '#ffffff'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Agent Identity */}
+                <div className="space-y-3 pt-3 border-t border-slate-800">
+                  <Label className="text-xs font-bold text-slate-300 uppercase tracking-wider">AGENT IDENTITY</Label>
+
                   <div className="space-y-1">
-                    <span className="text-[10px] text-slate-400">Agent Name</span>
+                    <span className="text-[10px] font-semibold text-slate-300">Agent Name</span>
                     <Input
                       value={agent.name}
                       onChange={(e) => onChange({ ...agent, name: e.target.value })}
@@ -434,10 +572,20 @@ export function AgentBuildTab({
                   </div>
 
                   <div className="space-y-1">
-                    <span className="text-[10px] text-slate-400">Agent Role Title</span>
+                    <span className="text-[10px] font-semibold text-slate-300">Agent Role Title</span>
                     <Input
                       value={agent.roleTitle}
                       onChange={(e) => onChange({ ...agent, roleTitle: e.target.value })}
+                      className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-medium"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-semibold text-slate-300">Status Indicator Text</span>
+                    <Input
+                      value={agent.statusText || 'Online'}
+                      onChange={(e) => onChange({ ...agent, statusText: e.target.value })}
+                      placeholder="Online / Ready to help"
                       className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-medium"
                     />
                   </div>

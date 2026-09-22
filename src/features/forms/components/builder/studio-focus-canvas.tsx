@@ -48,6 +48,20 @@ import {
 import { toast } from 'sonner';
 import type { EditorFormData, FormField } from '@/features/forms/types';
 import { WidgetRuntimeDispatcher } from '../runtime/widgets/widget-runtime-dispatcher';
+import { getFieldById } from '@/lib/forms/field-registry';
+import { resolveIcon } from '@/lib/forms/icon-resolver';
+
+export function getFieldWidgetMeta(field: FormField) {
+  const def = getFieldById(field.widgetType || field.type);
+  if (def) {
+    return { name: def.name, iconName: def.iconName, category: def.category };
+  }
+  const cleanType = String(field.widgetType || field.type || 'Field')
+    .replace(/_widget$/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return { name: cleanType, iconName: 'HelpCircle', category: 'custom' };
+}
 
 interface StudioFocusCanvasProps {
   formData: EditorFormData;
@@ -1431,13 +1445,16 @@ function StudioFieldPreview({
                             : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300'
                         }`}
                       >
-                        {/* Top Card Bar: Label + Width Pills + Actions */}
+                        {/* Top Card Bar: Label + Widget Type Badge + Width Pills + Actions */}
                         <div className="flex items-center justify-between gap-1">
                           <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 min-w-0">
                             <span className="size-4 rounded bg-slate-200 dark:bg-slate-700 text-[9px] font-bold flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0">
                               {letter}
                             </span>
                             <span className="truncate">{field.label || 'Question'}</span>
+                            <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded border border-slate-200/80 dark:border-slate-700/80 shrink-0 select-none">
+                              {getFieldWidgetMeta(field).name}
+                            </span>
                             {field.required && <span className="text-rose-500 font-bold">*</span>}
                           </label>
 
@@ -1646,6 +1663,9 @@ function StudioFieldPreview({
                         <div className="flex items-center justify-between gap-1">
                           <label className="text-xs font-bold text-foreground flex items-center gap-1.5 truncate">
                             <span className="truncate">{f.label || 'Question'}</span>
+                            <span className="text-[9px] font-semibold text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border/80 shrink-0 select-none">
+                              {getFieldWidgetMeta(f).name}
+                            </span>
                             {f.required && <span className="text-rose-500">*</span>}
                           </label>
 

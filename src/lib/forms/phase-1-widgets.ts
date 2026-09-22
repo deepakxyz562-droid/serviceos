@@ -56,9 +56,9 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'columns', label: 'Spread to Columns', type: 'segmented', group: 'field_specific', default: '1', options: [
       { label: '1', value: '1' }, { label: '2', value: '2' }, { label: '3', value: '3' }, { label: '4', value: '4' }, { label: 'Inline', value: 'inline' },
     ] },
-    { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Shuffle options on each form load.' },
-    { key: 'useCalculationValues', label: 'Use Calculation Values', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Assign numerical values/scores to options for calculations.' },
-    { key: 'calculationValues', label: 'Calculation Values', type: 'calculation_values_editor', group: 'field_specific', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
+    { key: 'randomize', label: 'Randomize order', type: 'toggle_with_description', group: 'survey', default: false, description: 'Shuffle options on each form load.' },
+    { key: 'useCalculationValues', label: 'Use Calculation Values', type: 'toggle_with_description', group: 'survey', default: false, description: 'Assign numerical values/scores to options for calculations.' },
+    { key: 'calculationValues', label: 'Calculation Values', type: 'calculation_values_editor', group: 'survey', condition: { dependsOn: 'useCalculationValues', equals: 'true' } },
   ]],
   ['image_choice', 'Image Choice', 'choice', 'Image', 'Visual radio with images per option', 'NEW', 'pro', [
     { key: 'options', label: 'Image Options', type: 'options_editor', group: 'field_specific' },

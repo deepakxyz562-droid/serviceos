@@ -30,6 +30,7 @@ import {
   type SettingField,
 } from '@/lib/forms/field-settings-types';
 import type { FieldDefinition } from '@/lib/forms/field-settings-types';
+import { resolveIcon } from '@/lib/forms/icon-resolver';
 import { cn } from '@/lib/utils';
 
 export interface WidgetSettingsRendererProps {
@@ -526,6 +527,8 @@ export function WidgetSettingsRenderer({
     }
   };
 
+  const WidgetIcon = resolveIcon(definition.iconName);
+
   const settingsForTab = (tab: SubTab): SettingField[] => {
     if (tab === 'general') {
       return isWidgetSettingsMode ? fieldSpecific : universalGeneral;
@@ -544,29 +547,32 @@ export function WidgetSettingsRenderer({
     <div className="flex flex-col h-full min-h-0 w-full">
       {/* ════ HEADER / TABS (shrink-0) ════ */}
       <div className="p-3 pb-2 border-b border-border/60 shrink-0 space-y-2.5 bg-background">
-        {isWidgetSettingsMode ? (
-          <div className="space-y-2.5">
-            {/* Widget Hero Card */}
-            <div className="rounded-xl border border-border/70 bg-muted/30 p-3 flex items-start gap-2.5 shadow-xs">
-              <div className="size-8 rounded-lg bg-purple-600/10 text-purple-600 dark:text-purple-400 flex items-center justify-center p-1.5 shrink-0 border border-purple-600/20">
-                <span className="font-bold text-xs">🧩</span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <h4 className="font-bold text-xs text-foreground truncate">{definition.name}</h4>
-                  {definition.badge && (
-                    <Badge variant="outline" className="text-[8px] px-1 py-0 h-3.5 font-bold">
-                      {definition.badge}
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
-                  {definition.description}
-                </p>
-              </div>
+        {/* Universal Field / Widget Identity Hero Card (Always visible, even after renaming) */}
+        <div className="rounded-xl border border-border/70 bg-muted/30 p-2.5 flex items-start gap-2.5 shadow-2xs">
+          <div className="size-8 rounded-lg bg-emerald-600/10 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center p-1.5 shrink-0 border border-emerald-600/20">
+            <WidgetIcon className="size-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h4 className="font-bold text-xs text-foreground truncate">{definition.name}</h4>
+              <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 font-semibold uppercase tracking-wider bg-background text-muted-foreground border-border/80">
+                {definition.category}
+              </Badge>
+              {definition.badge && (
+                <Badge className="text-[8px] px-1 py-0 h-3.5 font-bold bg-emerald-600 text-white">
+                  {definition.badge}
+                </Badge>
+              )}
             </div>
+            <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug line-clamp-1">
+              {String(field.label || definition.description || 'Question Field')}
+            </p>
+          </div>
+        </div>
 
-            {/* JotForm Widget Tabs: [ GENERAL ] [ CUSTOM CSS ] */}
+        {isWidgetSettingsMode ? (
+          <div className="space-y-2">
+            {/* JotForm Widget Tabs: [ WIDGET SETTINGS ] [ CUSTOM CSS ] */}
             <div className="grid grid-cols-2 p-1 bg-muted/60 rounded-lg border border-border/60 gap-1">
               <button
                 type="button"
@@ -578,7 +584,7 @@ export function WidgetSettingsRenderer({
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                General
+                Widget Settings
               </button>
               <button
                 type="button"
@@ -595,7 +601,7 @@ export function WidgetSettingsRenderer({
             </div>
           </div>
         ) : (
-          /* Standard Question Properties Tabs: [ General ] [ Options ] [ Advanced ] */
+          /* Standard Question Properties Tabs: [ General ] [ Options / Specific ] [ Surveying ] [ Advanced ] */
           <div className={cn('grid gap-1 bg-muted/60 p-1 rounded-lg border border-border/60', hasSurveyTab ? 'grid-cols-4' : 'grid-cols-3')}>
             {(['general', 'field_specific', 'survey', 'advanced'] as SubTab[])
               .filter((tab) => tab !== 'survey' || hasSurveyTab)
@@ -614,15 +620,15 @@ export function WidgetSettingsRenderer({
                 {tab === 'general' && 'General'}
                 {tab === 'field_specific' && (
                   definition.category === 'choice' ? 'Options'
-                  : definition.category === 'payment' ? 'Payment Properties'
-                  : definition.category === 'signature' ? 'Signature Settings'
-                  : definition.category === 'media' ? 'Media Settings'
-                  : definition.category === 'maps' ? 'Map Settings'
-                  : definition.category === 'security' ? 'Security Settings'
-                  : definition.category === 'datetime' ? 'Date Settings'
-                  : definition.category === 'survey' ? 'Survey Settings'
-                  : definition.category === 'calculation' ? 'Calculation Settings'
-                  : definition.category === 'file' ? 'File Settings'
+                  : definition.category === 'payment' ? 'Payment'
+                  : definition.category === 'signature' ? 'Signature'
+                  : definition.category === 'media' ? 'Media'
+                  : definition.category === 'maps' ? 'Map'
+                  : definition.category === 'security' ? 'Security'
+                  : definition.category === 'datetime' ? 'Date & Time'
+                  : definition.category === 'survey' ? 'Survey'
+                  : definition.category === 'calculation' ? 'Calculation'
+                  : definition.category === 'file' ? 'File'
                   : 'Field Settings'
                 )}
                 {tab === 'survey' && 'Surveying'}

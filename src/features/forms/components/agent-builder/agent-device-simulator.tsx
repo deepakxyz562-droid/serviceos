@@ -55,6 +55,24 @@ interface ChatMsg {
   suggestedForm?: ConnectedFormRef;
 }
 
+function isColorDark(colorStr?: string): boolean {
+  if (!colorStr) return false;
+  const hex = colorStr.replace('#', '').trim();
+  if (hex.length === 3) {
+    const r = parseInt(hex[0] + hex[0], 16);
+    const g = parseInt(hex[1] + hex[1], 16);
+    const b = parseInt(hex[2] + hex[2], 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) < 145;
+  }
+  if (hex.length === 6) {
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) < 145;
+  }
+  return false;
+}
+
 export function AgentDeviceSimulator({
   agent,
   isTestMode = true,
@@ -176,10 +194,9 @@ export function AgentDeviceSimulator({
   };
 
   const brandColor = agent.brandColor || '#0284c7';
-  const startBg = agent.style?.agentBackgroundStart || '#C5E3FA';
-  const endBg = agent.style?.agentBackgroundEnd || '#D6E1E7';
-  const titleColor = agent.style?.titleColor || '#0A1551';
   const chatBg = agent.style?.chatBg || '#ffffff';
+  const isDark = agent.style?.isDark ?? isColorDark(chatBg);
+  const titleColor = agent.style?.titleColor || (isDark ? '#ffffff' : '#0A1551');
   const isSidebarLayout = agent.channels?.chatbot?.layoutMode === 'sidebar';
   const allowFileUpload = agent.settings?.fileUploadEnabled ?? true;
   const allowScreenShare = agent.settings?.allowScreenSharing ?? false;
@@ -204,14 +221,19 @@ export function AgentDeviceSimulator({
   // ═════════════════════════════════════════════════════════════════════════
   if (previewPage === 'greeting') {
     return (
-      <div className="flex flex-col justify-end h-full w-full p-4 items-center sm:items-end">
+      <div className={cn('flex flex-col justify-end h-full w-full p-4 items-center sm:items-end', isDark && 'dark')}>
         {welcomeStyle === 'avatar' ? (
           /* ── AVATAR CIRCLE LAUNCHER STYLE ── */
           <div className="flex flex-col items-end gap-3 animate-in fade-in slide-in-from-bottom-3 duration-300">
             {greetingToggle && (
               <div
                 onClick={() => onSwitchPage?.('conversation')}
-                className="bg-white dark:bg-slate-900 px-4 py-2.5 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-100 font-semibold cursor-pointer max-w-[260px] leading-snug hover:scale-105 transition-transform"
+                className={cn(
+                  'px-4 py-2.5 rounded-2xl shadow-xl border text-xs font-semibold cursor-pointer max-w-[260px] leading-snug hover:scale-105 transition-transform',
+                  isDark
+                    ? 'bg-slate-900 border-slate-700 text-slate-100 shadow-slate-950/50'
+                    : 'bg-white border-slate-200 text-slate-800'
+                )}
               >
                 {greetingBubble}
               </div>
@@ -232,10 +254,17 @@ export function AgentDeviceSimulator({
           </div>
         ) : (
           /* ── QUICK INPUT CARD LAUNCHER STYLE ── */
-          <div className="w-full max-w-[340px] bg-white dark:bg-slate-900 rounded-3xl p-5 shadow-2xl border border-slate-200/80 dark:border-slate-800 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div
+            className={cn(
+              'w-full max-w-[340px] rounded-3xl p-5 shadow-2xl border space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300',
+              isDark
+                ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-slate-950/50'
+                : 'bg-white border-slate-200/80 text-slate-900'
+            )}
+          >
             {greetingToggle && (
-              <p className="text-xs text-slate-800 dark:text-slate-100 leading-relaxed">
-                Hi! I&apos;m <strong className="font-bold">{agent.name}</strong>, your <strong className="font-bold">AI Agent</strong> and <strong className="font-bold">{agent.roleTitle}</strong>. How can I help you?
+              <p className={cn('text-xs leading-relaxed font-medium', isDark ? 'text-slate-100' : 'text-slate-800')}>
+                Hi! I&apos;m <strong className="font-bold text-blue-500">{agent.name}</strong>, your <strong className="font-bold">AI Agent</strong> and <strong className="font-bold">{agent.roleTitle}</strong>. How can I help you?
               </p>
             )}
 
@@ -246,7 +275,12 @@ export function AgentDeviceSimulator({
                     key={qa.id}
                     type="button"
                     onClick={() => handleQuickActionClick(qa)}
-                    className="w-full py-2 px-4 rounded-xl border border-slate-300 dark:border-slate-700 hover:border-blue-500 bg-slate-50/50 dark:bg-slate-800 hover:bg-blue-50/50 text-xs font-semibold text-slate-800 dark:text-slate-100 text-center transition-all shadow-2xs"
+                    className={cn(
+                      'w-full py-2 px-4 rounded-xl border text-xs font-semibold text-center transition-all shadow-2xs',
+                      isDark
+                        ? 'bg-slate-800/90 hover:bg-slate-700 border-slate-700 text-slate-100 hover:border-slate-500'
+                        : 'bg-slate-50/50 hover:bg-blue-50/50 border-slate-300 hover:border-blue-500 text-slate-800'
+                    )}
                   >
                     {qa.label}
                   </button>
@@ -254,17 +288,22 @@ export function AgentDeviceSimulator({
               </div>
             )}
 
-            <div className="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+            <div className={cn('flex items-center gap-2 pt-1 border-t', isDark ? 'border-slate-800' : 'border-slate-100')}>
               <div
                 onClick={() => onSwitchPage?.('conversation')}
-                className="flex items-center gap-2 flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 rounded-full px-3 py-1.5 cursor-pointer transition-all border border-slate-200 dark:border-slate-700"
+                className={cn(
+                  'flex items-center gap-2 flex-1 rounded-full px-3 py-1.5 cursor-pointer transition-all border',
+                  isDark
+                    ? 'bg-slate-800 hover:bg-slate-750 border-slate-700 text-slate-200'
+                    : 'bg-slate-100 hover:bg-slate-200/80 border-slate-200 text-slate-700'
+                )}
               >
                 <img
                   src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
                   alt={agent.name}
                   className="size-5 rounded-full object-cover shrink-0"
                 />
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                <span className={cn('text-xs font-medium', isDark ? 'text-slate-300' : 'text-slate-500')}>
                   {placeholderMessage}
                 </span>
               </div>
@@ -276,7 +315,12 @@ export function AgentDeviceSimulator({
                     onSwitchPage?.('conversation');
                     setActiveTab('voice');
                   }}
-                  className="px-3.5 py-1.5 rounded-full bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white text-white dark:text-slate-900 text-xs font-bold flex items-center gap-1 shadow-md transition-all shrink-0"
+                  className={cn(
+                    'px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-md transition-all shrink-0',
+                    isDark
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                      : 'bg-slate-900 hover:bg-slate-800 text-white'
+                  )}
                 >
                   <Mic className="size-3.5" />
                   <span>Voice</span>
@@ -295,11 +339,12 @@ export function AgentDeviceSimulator({
   return (
     <div
       className={cn(
-        'flex flex-col h-full w-full overflow-hidden shadow-2xl border border-slate-200/80 dark:border-slate-800 text-slate-900 dark:text-slate-100 transition-all select-none relative',
+        'flex flex-col h-full w-full overflow-hidden shadow-2xl border transition-all select-none relative',
+        isDark ? 'dark border-slate-800 text-slate-100' : 'border-slate-200/80 text-slate-900',
         isSidebarLayout ? 'rounded-none border-y-0 h-full' : 'rounded-[28px]'
       )}
       style={{
-        background: chatBg,
+        backgroundColor: chatBg,
       }}
     >
       {/* ── TOP AGENT BAR ── */}
@@ -320,7 +365,7 @@ export function AgentDeviceSimulator({
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className="text-xs font-bold leading-none tracking-tight" style={{ color: titleColor === '#0A1551' ? '#ffffff' : titleColor }}>
+              <h2 className="text-xs font-bold leading-none tracking-tight" style={{ color: titleColor }}>
                 {agent.name}
               </h2>
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white/20 text-white leading-none">
@@ -332,7 +377,7 @@ export function AgentDeviceSimulator({
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-white/80 mt-0.5 leading-none">{agent.roleTitle}</p>
+            <p className="text-[10px] text-white/85 mt-0.5 leading-none">{agent.roleTitle}</p>
           </div>
         </div>
 
@@ -376,8 +421,8 @@ export function AgentDeviceSimulator({
             {/* Welcome Text + Action Buttons Card */}
             {messages.length <= 1 && (
               <div className="space-y-3 pt-1">
-                <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
-                  Hi! I&apos;m <strong className="font-bold">{agent.name}</strong>, your <strong className="font-bold">AI Agent</strong> and <strong className="font-bold">{agent.roleTitle}</strong>. How can I help you?
+                <p className={cn('text-xs leading-relaxed font-semibold', isDark ? 'text-slate-100' : 'text-slate-800')}>
+                  Hi! I&apos;m <strong className="font-bold text-blue-400">{agent.name}</strong>, your <strong className="font-bold">AI Agent</strong> and <strong className="font-bold">{agent.roleTitle}</strong>. How can I help you?
                 </p>
 
                 {(agent.channels?.chatbot?.showButtons ?? true) && (
@@ -387,7 +432,12 @@ export function AgentDeviceSimulator({
                         key={qa.id}
                         type="button"
                         onClick={() => handleQuickActionClick(qa)}
-                        className="py-1.5 px-3 rounded-xl border border-slate-300 dark:border-slate-700 hover:border-blue-500 bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 text-xs font-semibold text-slate-800 dark:text-slate-100 transition-all shadow-2xs"
+                        className={cn(
+                          'py-1.5 px-3 rounded-xl border text-xs font-semibold transition-all shadow-2xs',
+                          isDark
+                            ? 'bg-slate-800/90 border-slate-700 text-slate-100 hover:bg-slate-700 hover:border-slate-500'
+                            : 'bg-slate-50 border-slate-300 text-slate-800 hover:bg-blue-50 hover:border-blue-400'
+                        )}
                       >
                         {qa.label}
                       </button>
@@ -416,25 +466,35 @@ export function AgentDeviceSimulator({
                   <div className="space-y-1.5">
                     <div
                       className={cn(
-                        'p-3 rounded-2xl text-xs leading-relaxed shadow-2xs break-words',
+                        'p-3 rounded-2xl text-xs leading-relaxed shadow-2xs break-words font-medium',
                         isAi
-                          ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-tl-xs'
-                          : 'bg-blue-600 text-white rounded-tr-xs'
+                          ? isDark
+                            ? 'bg-slate-800/95 border border-slate-700/80 text-slate-100 rounded-tl-xs shadow-slate-950/40'
+                            : 'bg-slate-100 border border-slate-200/60 text-slate-900 rounded-tl-xs'
+                          : 'text-white rounded-tr-xs shadow-sm'
                       )}
+                      style={!isAi ? { background: brandColor } : undefined}
                     >
                       <p className="whitespace-pre-wrap">{msg.text}</p>
                     </div>
 
                     {/* Connected Form Recommendation Card */}
                     {msg.suggestedForm && (
-                      <div className="p-3 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200/80 dark:border-blue-800/80 space-y-2">
+                      <div
+                        className={cn(
+                          'p-3 rounded-xl border space-y-2',
+                          isDark
+                            ? 'bg-slate-800/90 border-slate-700'
+                            : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200/80'
+                        )}
+                      >
                         <div className="flex items-center gap-1.5">
-                          <FileText className="size-3.5 text-blue-600" />
-                          <span className="text-[11px] font-bold text-blue-900 dark:text-blue-200">
+                          <FileText className="size-3.5 text-blue-400" />
+                          <span className={cn('text-[11px] font-bold', isDark ? 'text-blue-300' : 'text-blue-900')}>
                             {msg.suggestedForm.name}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-600 dark:text-slate-400">
+                        <p className={cn('text-[10px]', isDark ? 'text-slate-300' : 'text-slate-600')}>
                           {msg.suggestedForm.description || 'Complete this form to submit your inquiry.'}
                         </p>
                         <Button
@@ -448,7 +508,7 @@ export function AgentDeviceSimulator({
                       </div>
                     )}
 
-                    <span className="text-[9px] text-slate-400 block px-1">
+                    <span className={cn('text-[9px] block px-1', isDark ? 'text-slate-400' : 'text-slate-500')}>
                       {msg.timestamp}
                     </span>
                   </div>
@@ -463,10 +523,13 @@ export function AgentDeviceSimulator({
                   alt={agent.name}
                   className="size-6 rounded-full object-cover shrink-0"
                 />
-                <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs flex items-center gap-1.5 shadow-2xs">
-                  <span className="size-1.5 rounded-full bg-blue-600 animate-bounce" />
-                  <span className="size-1.5 rounded-full bg-blue-600 animate-bounce [animation-delay:0.2s]" />
-                  <span className="size-1.5 rounded-full bg-blue-600 animate-bounce [animation-delay:0.4s]" />
+                <div className={cn(
+                  'p-3 rounded-2xl text-xs flex items-center gap-1.5 shadow-2xs',
+                  isDark ? 'bg-slate-800 text-slate-200 border border-slate-700' : 'bg-slate-100 text-slate-800'
+                )}>
+                  <span className="size-1.5 rounded-full bg-blue-500 animate-bounce" />
+                  <span className="size-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0.2s]" />
+                  <span className="size-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0.4s]" />
                 </div>
               </div>
             )}
@@ -475,10 +538,26 @@ export function AgentDeviceSimulator({
           </div>
 
           {/* ── BOTTOM INPUT BAR ── */}
-          <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-            <div className="flex items-center gap-2 bg-slate-100/90 dark:bg-slate-800 rounded-2xl px-3 py-1.5 border border-slate-200 dark:border-slate-700">
+          <div
+            className={cn(
+              'p-3 border-t shrink-0',
+              isDark ? 'bg-slate-900/95 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+            )}
+          >
+            <div
+              className={cn(
+                'flex items-center gap-2 rounded-2xl px-3 py-1.5 border',
+                isDark ? 'bg-slate-800/90 border-slate-700' : 'bg-slate-100/90 border-slate-200'
+              )}
+            >
               {allowFileUpload && (
-                <button type="button" className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-0.5">
+                <button
+                  type="button"
+                  className={cn(
+                    'p-0.5 transition-colors',
+                    isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-700'
+                  )}
+                >
                   <Paperclip className="size-4" />
                 </button>
               )}
@@ -488,13 +567,17 @@ export function AgentDeviceSimulator({
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleSendMessage())}
                 placeholder={placeholderMessage}
-                className="text-xs h-7 flex-1 bg-transparent border-0 focus-visible:ring-0 shadow-none px-1 text-slate-900 dark:text-slate-100"
+                className={cn(
+                  'text-xs h-7 flex-1 bg-transparent border-0 focus-visible:ring-0 shadow-none px-1',
+                  isDark ? 'text-slate-100 placeholder:text-slate-400' : 'text-slate-900 placeholder:text-slate-500'
+                )}
               />
 
               <button
                 type="button"
                 onClick={() => handleSendMessage()}
-                className="size-7 rounded-full bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-xs"
+                style={{ background: brandColor }}
+                className="size-7 rounded-full text-white flex items-center justify-center shrink-0 shadow-xs hover:opacity-90 transition-opacity"
               >
                 <Send className="size-3.5" />
               </button>
@@ -516,8 +599,8 @@ export function AgentDeviceSimulator({
           </div>
 
           <div className="space-y-1">
-            <h3 className="text-sm font-bold text-foreground">{agent.name}</h3>
-            <p className="text-xs text-muted-foreground">Voice Assistant • {agent.voiceTone} tone</p>
+            <h3 className={cn('text-sm font-bold', isDark ? 'text-white' : 'text-slate-900')}>{agent.name}</h3>
+            <p className={cn('text-xs', isDark ? 'text-slate-400' : 'text-slate-500')}>Voice Assistant • {agent.voiceTone} tone</p>
           </div>
 
           {/* Animated Waveform Visualizer */}
@@ -525,7 +608,7 @@ export function AgentDeviceSimulator({
             {[40, 70, 30, 90, 60, 100, 45, 80, 50, 95, 35, 65].map((h, i) => (
               <span
                 key={i}
-                className="w-1 bg-blue-600 rounded-full animate-pulse"
+                className="w-1 bg-blue-500 rounded-full animate-pulse"
                 style={{ height: `${h}%`, animationDelay: `${i * 0.1}s` }}
               />
             ))}
@@ -537,7 +620,7 @@ export function AgentDeviceSimulator({
               size="icon"
               variant={isMuted ? 'destructive' : 'outline'}
               onClick={() => setIsMuted(!isMuted)}
-              className="size-11 rounded-full shadow-md"
+              className={cn('size-11 rounded-full shadow-md', isDark && 'border-slate-700 bg-slate-800 text-slate-100')}
             >
               {isMuted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
             </Button>
@@ -564,8 +647,8 @@ export function AgentDeviceSimulator({
       {activeTab === 'forms' && (
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           <div className="space-y-1">
-            <h3 className="text-xs font-bold text-foreground">Connected Forms</h3>
-            <p className="text-[11px] text-muted-foreground">
+            <h3 className={cn('text-xs font-bold', isDark ? 'text-white' : 'text-slate-900')}>Connected Forms</h3>
+            <p className={cn('text-[11px]', isDark ? 'text-slate-400' : 'text-slate-500')}>
               Select a form to fill out with AI guidance.
             </p>
           </div>
@@ -576,11 +659,14 @@ export function AgentDeviceSimulator({
             ]).map((form) => (
               <div
                 key={form.id}
-                className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between"
+                className={cn(
+                  'p-3 rounded-2xl border flex items-center justify-between',
+                  isDark ? 'bg-slate-800/90 border-slate-700' : 'bg-slate-100 border-slate-200'
+                )}
               >
                 <div className="space-y-0.5">
-                  <p className="text-xs font-bold text-foreground">{form.name}</p>
-                  <p className="text-[10px] text-muted-foreground line-clamp-1">{form.description}</p>
+                  <p className={cn('text-xs font-bold', isDark ? 'text-white' : 'text-slate-900')}>{form.name}</p>
+                  <p className={cn('text-[10px] line-clamp-1', isDark ? 'text-slate-400' : 'text-slate-500')}>{form.description}</p>
                 </div>
                 <Button
                   type="button"
@@ -599,13 +685,16 @@ export function AgentDeviceSimulator({
       {/* ── TAB 4: PRESENTATION TAB CONTENT ── */}
       {activeTab === 'presentation' && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 text-center">
-          <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-200 dark:border-indigo-800 space-y-2">
-            <Presentation className="size-8 text-indigo-600 mx-auto" />
-            <h3 className="text-xs font-bold text-foreground">Interactive AI Presentation</h3>
-            <p className="text-[11px] text-muted-foreground">
+          <div className={cn(
+            'p-4 rounded-2xl border space-y-2',
+            isDark ? 'bg-indigo-950/30 border-indigo-800/60' : 'bg-indigo-50 border-indigo-200'
+          )}>
+            <Presentation className="size-8 text-indigo-400 mx-auto" />
+            <h3 className={cn('text-xs font-bold', isDark ? 'text-white' : 'text-slate-900')}>Interactive AI Presentation</h3>
+            <p className={cn('text-[11px]', isDark ? 'text-slate-300' : 'text-slate-600')}>
               {agent.name} is ready to present your services with slides and voice walkthrough.
             </p>
-            <Button size="sm" className="h-7 text-xs font-bold bg-indigo-600 text-white mt-2">
+            <Button size="sm" className="h-7 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white mt-2">
               Start Presentation
             </Button>
           </div>
@@ -615,13 +704,16 @@ export function AgentDeviceSimulator({
       {/* ── TAB 5: WHATSAPP TAB CONTENT ── */}
       {activeTab === 'whatsapp' && (
         <div className="flex-1 overflow-y-auto p-4 space-y-4 text-center">
-          <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800 space-y-3">
+          <div className={cn(
+            'p-5 rounded-2xl border space-y-3',
+            isDark ? 'bg-emerald-950/30 border-emerald-800/60' : 'bg-emerald-50 border-emerald-200'
+          )}>
             <div className="size-12 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-md">
               <MessageCircle className="size-6" />
             </div>
             <div>
-              <h3 className="text-xs font-bold text-foreground">WhatsApp Business Integration</h3>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <h3 className={cn('text-xs font-bold', isDark ? 'text-white' : 'text-slate-900')}>WhatsApp Business Integration</h3>
+              <p className={cn('text-[11px] mt-0.5', isDark ? 'text-slate-300' : 'text-slate-600')}>
                 {agent.channels?.whatsapp?.phoneNumber
                   ? `Connected: ${agent.channels.whatsapp.phoneNumber}`
                   : 'Configure your WhatsApp number in settings.'}
@@ -639,7 +731,7 @@ export function AgentDeviceSimulator({
                 Open WhatsApp Chat <ExternalLink className="size-3" />
               </a>
             ) : (
-              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+              <p className="text-[10px] text-amber-400 font-medium">
                 Enter your WhatsApp number in the Chatbot Navigation settings.
               </p>
             )}
@@ -650,13 +742,13 @@ export function AgentDeviceSimulator({
       {/* ── TAB 6: HISTORY TAB CONTENT ── */}
       {activeTab === 'history' && (
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          <h3 className="text-xs font-bold text-foreground">Conversation History</h3>
-          <div className="p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 space-y-1">
+          <h3 className={cn('text-xs font-bold', isDark ? 'text-white' : 'text-slate-900')}>Conversation History</h3>
+          <div className={cn('p-3 rounded-2xl border space-y-1', isDark ? 'bg-slate-800/90 border-slate-700' : 'bg-slate-100 border-slate-200')}>
             <div className="flex items-center justify-between text-[10px] text-muted-foreground">
               <span>Today, Session #1</span>
               <span>{messages.length} messages</span>
             </div>
-            <p className="text-xs text-foreground font-medium line-clamp-2">
+            <p className={cn('text-xs font-medium line-clamp-2', isDark ? 'text-slate-200' : 'text-slate-800')}>
               {messages[messages.length - 1]?.text || 'No previous messages.'}
             </p>
           </div>
@@ -666,7 +758,10 @@ export function AgentDeviceSimulator({
       {/* ── DYNAMIC FOOTER SUB-TABS (CHAT | VOICE | WHATSAPP | FORMS | PRESENTATION | HISTORY) ── */}
       {navItems.length > 0 && (
         <div
-          className="h-12 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 px-1 text-slate-600 dark:text-slate-400 flex items-center justify-around"
+          className={cn(
+            'h-12 border-t shrink-0 px-1 flex items-center justify-around',
+            isDark ? 'bg-slate-900/95 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-600'
+          )}
         >
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -678,7 +773,13 @@ export function AgentDeviceSimulator({
                 onClick={() => setActiveTab(item.id)}
                 className={cn(
                   'flex flex-col items-center justify-center text-[10px] font-bold gap-0.5 px-2 py-1 rounded-lg transition-colors',
-                  isSelected ? 'text-blue-600 dark:text-blue-400' : 'hover:text-slate-900 dark:hover:text-slate-100'
+                  isSelected
+                    ? isDark
+                      ? 'text-blue-400'
+                      : 'text-blue-600'
+                    : isDark
+                      ? 'text-slate-400 hover:text-slate-100'
+                      : 'text-slate-600 hover:text-slate-900'
                 )}
               >
                 <Icon className="size-3.5" />
@@ -689,8 +790,13 @@ export function AgentDeviceSimulator({
         </div>
       )}
 
-      <div className="py-1 text-center text-[9px] text-slate-400 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800">
-        Powered by <strong className="font-bold text-slate-600 dark:text-slate-300">Fieseros AI</strong>
+      <div
+        className={cn(
+          'py-1 text-center text-[9px] border-t',
+          isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'
+        )}
+      >
+        Powered by <strong className={cn('font-bold', isDark ? 'text-slate-200' : 'text-slate-700')}>Fieseros AI</strong>
       </div>
     </div>
   );
