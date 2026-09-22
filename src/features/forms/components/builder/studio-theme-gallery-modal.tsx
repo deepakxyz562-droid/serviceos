@@ -250,8 +250,11 @@ export function StudioThemeGalleryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl bg-white dark:bg-slate-950">
-        <DialogHeader className="p-4 px-6 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 flex flex-row items-center justify-between">
+      <DialogContent
+        className="max-w-4xl max-h-[88vh] flex flex-col p-0 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl bg-white dark:bg-slate-950"
+        style={{ paddingTop: 0 }}
+      >
+        <DialogHeader className="p-4 px-6 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 flex flex-row items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400">
               <Palette className="size-4" />
@@ -268,8 +271,8 @@ export function StudioThemeGalleryModal({
         </DialogHeader>
 
         {/* Tab Navigation */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-          <div className="px-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/30">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="px-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/30 shrink-0">
             <TabsList className="h-10 bg-transparent p-0 gap-6">
               <TabsTrigger
                 value="presets"
@@ -293,9 +296,9 @@ export function StudioThemeGalleryModal({
           </div>
 
           {/* ════ TAB 1: THEME PRESETS ════ */}
-          <TabsContent value="presets" className="m-0 p-0">
+          <TabsContent value="presets" className="m-0 p-0 flex-1 min-h-0 flex flex-col overflow-hidden">
             {/* Quick Style Options */}
-            <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-muted/20 flex items-center justify-between">
+            <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-muted/20 flex items-center justify-between shrink-0">
               <div>
                 <p className="text-xs font-semibold text-foreground">Top Accent Line</p>
                 <p className="text-[10px] text-muted-foreground">Show glowing colored accent line at the top of the form</p>
@@ -307,7 +310,7 @@ export function StudioThemeGalleryModal({
             </div>
 
             {/* Gallery Grid */}
-            <div className="p-6 max-h-[60vh] overflow-y-auto">
+            <div className="p-6 flex-1 min-h-0 overflow-y-auto overscroll-contain">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
                 {THEME_GALLERY_PRESETS.map((theme) => {
                   const isSelected = currentThemeId === theme.id;
@@ -353,7 +356,7 @@ export function StudioThemeGalleryModal({
           </TabsContent>
 
           {/* ════ TAB 2: FORM BACKGROUND & BACKDROP ════ */}
-          <TabsContent value="background" className="m-0 p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+          <TabsContent value="background" className="m-0 p-6 space-y-6 flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {/* Direct Custom Image URL */}
             <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
               <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
@@ -478,7 +481,7 @@ export function StudioThemeGalleryModal({
           </TabsContent>
 
           {/* ════ TAB 3: SPLIT HERO MEDIA PANEL ════ */}
-          <TabsContent value="hero_media" className="m-0 p-6 max-h-[65vh] overflow-y-auto">
+          <TabsContent value="hero_media" className="m-0 p-6 flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {mediaPanel && onUpdateMediaPanel ? (
               <FormSplitMediaInspector
                 mediaPanel={mediaPanel}
@@ -495,6 +498,21 @@ export function StudioThemeGalleryModal({
             )}
           </TabsContent>
         </Tabs>
+
+        {/* ─── STICKY FOOTER ─── */}
+        <div className="p-3 px-6 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between shrink-0">
+          <p className="text-[11px] text-muted-foreground">
+            Changes take effect instantly on your live form preview.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            className="h-8 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs cursor-pointer"
+          >
+            Done
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
