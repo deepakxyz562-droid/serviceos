@@ -279,7 +279,7 @@ export const BASIC_FIELDS: FieldDefinition[] = [
       },
     }),
     settingsSchema: [
-      { key: 'slotDurationMin', label: 'Slot Duration (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 480 },
+      { key: 'slotDurationMinutes', label: 'Slot Duration (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 480 },
       { key: 'intervalMin', label: 'Slot Interval (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 120 },
       { key: 'rollingDays', label: 'Booking Window (days)', type: 'number', group: 'field_specific', default: 30, min: 1, max: 365 },
       { key: 'appointmentType', label: 'Appointment Type', type: 'select', group: 'field_specific', default: 'one_on_one', options: [{ label: 'One-on-One', value: 'one_on_one' }, { label: 'Group', value: 'group' }] },
@@ -911,10 +911,10 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
       }, required: false,
     }),
     settingsSchema: [
-      { key: 'title', label: 'Panel Title', type: 'text', group: 'field_specific', default: 'Estimated Investment Breakdown' },
+      { key: 'headline', label: 'Panel Title', type: 'text', group: 'field_specific', default: 'Estimated Investment Breakdown' },
       { key: 'formula', label: 'Master Calculation Formula', type: 'formula_editor', group: 'field_specific', helpText: 'Calculation formula combining left-column fields (e.g. [sqft] * [grade] + [addons])' },
-      { key: 'currencyPrefix', label: 'Currency Symbol', type: 'text', group: 'field_specific', default: '$' },
-      { key: 'ctaButtonText', label: 'CTA Button Text', type: 'text', group: 'field_specific', default: 'Lock In Estimate ⚡' },
+      { key: 'currency', label: 'Currency Symbol', type: 'text', group: 'field_specific', default: '$' },
+      { key: 'continueText', label: 'CTA Button Text', type: 'text', group: 'field_specific', default: 'Lock In Estimate ⚡' },
     ],
   },
   {
@@ -1351,7 +1351,7 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     runtimeComponentId: 'orderable_list',
     createField: (label = 'Orderable List') => ({
       label, type: 'short_answer', widgetType: 'orderable_list',
-      widgetConfig: { options: ['Quality', 'Speed of Service', 'Pricing', 'Communication'] }, required: false,
+      widgetConfig: { options: [{ value: 'quality', label: 'Quality' }, { value: 'speed', label: 'Speed of Service' }, { value: 'pricing', label: 'Pricing' }, { value: 'communication', label: 'Communication' }] }, required: false,
     }),
     settingsSchema: [],
   },

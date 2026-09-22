@@ -21,13 +21,17 @@ export function NpsSlider({ value, onChange, config, disabled, field }: WidgetPr
   const showLabels = config.showLabels !== false;
   const minLabel = String(config.minLabel || 'Not likely');
   const maxLabel = String(config.maxLabel || 'Very likely');
+  // Read min/max from config (default 0-10 for standard NPS).
+  const minVal = Number(config.min ?? 0);
+  const maxVal = Number(config.max ?? 10);
+  const range = maxVal - minVal + 1;
   const bucket = classify(current);
 
   return (
     <div className="space-y-3" aria-label={String(field?.['label'] ?? 'NPS slider')}>
       <div className="flex flex-wrap gap-1.5">
-        {Array.from({ length: 11 }).map((_, i) => {
-          const v = i;
+        {Array.from({ length: range }).map((_, i) => {
+          const v = minVal + i;
           const isSel = current === v;
           const b = classify(v);
           return (
@@ -51,8 +55,8 @@ export function NpsSlider({ value, onChange, config, disabled, field }: WidgetPr
       </div>
       {showLabels && (
         <div className="flex justify-between text-[10px] text-muted-foreground font-semibold">
-          <span>0 · {minLabel}</span>
-          <span>10 · {maxLabel}</span>
+          <span>{minVal} · {minLabel}</span>
+          <span>{maxVal} · {maxLabel}</span>
         </div>
       )}
       {bucket && current > 0 && (

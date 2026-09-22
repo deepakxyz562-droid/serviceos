@@ -71,8 +71,14 @@ import {
   SheetDescription,
   SheetFooter,
 } from '@/components/ui/sheet';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { FormThumbnailPreview } from '@/components/forms/form-thumbnail-preview';
-import { FormPreviewCanvas } from '@/components/forms/form-preview-canvas';
 import type { FormTemplate } from '@/lib/forms/templates';
 import {
   TEMPLATE_CATEGORIES,
@@ -116,6 +122,27 @@ const POPULAR_SEARCHES = [
   'Event registration',
 ];
 
+// Mapping helper for goals to template categories/keywords
+function matchesGoal(template: FormTemplate, goal: string): boolean {
+  const text = `${template.name} ${template.shortDescription || ''} ${(template.categories || []).join(' ')} ${(template.tags || []).join(' ')}`.toLowerCase();
+  switch (goal) {
+    case 'Book appointments':
+      return text.includes('booking') || text.includes('appointment') || text.includes('schedule') || text.includes('consultation') || text.includes('calendar');
+    case 'Collect enquiries':
+      return text.includes('contact') || text.includes('inquiry') || text.includes('enquiry') || text.includes('intake') || text.includes('lead') || text.includes('application');
+    case 'Create quotes':
+      return text.includes('quote') || text.includes('estimate') || text.includes('calculator') || text.includes('pricing') || text.includes('cost');
+    case 'Take payments':
+      return text.includes('payment') || text.includes('order') || text.includes('donation') || text.includes('checkout') || text.includes('deposit') || text.includes('ecommerce');
+    case 'Run inspections':
+      return text.includes('inspection') || text.includes('checklist') || text.includes('audit') || text.includes('vehicle') || text.includes('safety');
+    case 'Gather feedback':
+      return text.includes('feedback') || text.includes('survey') || text.includes('review') || text.includes('evaluation') || text.includes('nps') || text.includes('csat');
+    default:
+      return true;
+  }
+}
+
 interface TemplatesGalleryClientProps {
   initialTemplates?: FormTemplate[];
   templates?: FormTemplate[];
@@ -144,6 +171,7 @@ export function TemplatesGalleryClient({
   const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
   const [selectedIndustry, setSelectedIndustry] = useState<string>(initialIndustry);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
+  const [selectedExperience, setSelectedExperience] = useState<Experience | 'all'>('all');
   const [sort, setSort] = useState<'featured' | 'popular' | 'rating' | 'recent'>('featured');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 24;
@@ -156,9 +184,8 @@ export function TemplatesGalleryClient({
 
   // Interactive Preview Modal State
   const [previewTemplate, setPreviewTemplate] = useState<FormTemplate | null>(null);
-  const [previewExperience, setPreviewExperience] = useState<Experience>('Classic');
-  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [modalActiveTab, setModalActiveTab] = useState<'overview' | 'fields' | 'integrations' | 'faq'>('overview');
+  const [previewExperience, setPreviewExperience] = useState<Experience>('Conversational');
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('Create a service booking flow that qualifies the customer, collects photos, and offers an appointment.');
 
@@ -252,18 +279,14 @@ export function TemplatesGalleryClient({
     seedTotal,
   ]);
 
-  // Open Preview Modal with pushState so browser Back pops state properly
   const openPreview = useCallback(async (template: FormTemplate) => {
     if (!template) return;
     setPreviewTemplate(template);
-    setPreviewExperience('Classic');
-    setModalActiveTab('overview');
-
+    setPreviewExperience('Conversational');
     if (typeof window !== 'undefined') {
       const primaryCat = template.categories?.[0] || 'general';
       try {
-        // Push state so clicking browser Back closes the modal and stays on /templates
-        window.history.pushState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
+        window.history.replaceState({ previewTemplateId: template.id }, '', `/templates/${primaryCat}/${template.id}`);
       } catch {}
     }
 
@@ -282,22 +305,17 @@ export function TemplatesGalleryClient({
     }
   }, []);
 
-  // Close Preview Modal cleanly
   const closePreview = useCallback(() => {
     setPreviewTemplate(null);
     if (typeof window !== 'undefined') {
-      if (window.history.state?.previewTemplateId) {
-        window.history.back();
-      } else {
-        const cleanUrl = selectedCategory !== 'all' ? `/templates?category=${selectedCategory}` : '/templates';
-        try {
-          window.history.replaceState(null, '', cleanUrl);
-        } catch {}
-      }
+      const cleanUrl = selectedCategory !== 'all' ? `/templates?category=${selectedCategory}` : '/templates';
+      try {
+        window.history.replaceState(null, '', cleanUrl);
+      } catch {}
     }
   }, [selectedCategory]);
 
-  // Handle browser popstate (Back & Forward buttons)
+  // Handle browser popstate
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       if (!e.state?.previewTemplateId) {
@@ -305,7 +323,7 @@ export function TemplatesGalleryClient({
       } else {
         const found = items.find((t) => t.id === e.state.previewTemplateId);
         if (found) {
-          setPreviewTemplate(found);
+          openPreview(found);
         } else {
           fetch(`/api/templates/${e.state.previewTemplateId}`)
             .then((r) => r.json())
@@ -318,7 +336,7 @@ export function TemplatesGalleryClient({
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [items]);
+  }, [items, openPreview]);
 
   const categoryCounts = useMemo(() => new Map(Object.entries(categoryCountsProp || {})), [categoryCountsProp]);
   const industryCounts = useMemo(() => new Map(Object.entries(industryCountsProp || {})), [industryCountsProp]);
@@ -356,20 +374,6 @@ export function TemplatesGalleryClient({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [previewTemplate, handlePrevTemplate, handleNextTemplate]);
 
-  const relatedTemplates = useMemo(() => {
-    if (!previewTemplate) return [];
-    const primaryCat = previewTemplate.categories?.[0] || 'general';
-    const primaryInd = previewTemplate.industries?.[0] || 'general';
-    return items
-      .filter(
-        (t) =>
-          t.id !== previewTemplate.id &&
-          ((t.categories || []).includes(primaryCat as any) ||
-            (primaryInd && primaryInd !== 'general' && (t.industries || []).includes(primaryInd as any)))
-      )
-      .slice(0, 4);
-  }, [previewTemplate, items]);
-
   const toggleFeature = (feat: string) => {
     setSelectedFeatures((prev) =>
       prev.includes(feat) ? prev.filter((f) => f !== feat) : [...prev, feat]
@@ -394,6 +398,7 @@ export function TemplatesGalleryClient({
     setSelectedIndustry('all');
     setSelectedGoal('all');
     setSelectedFeatures([]);
+    setSelectedExperience('all');
     setSearchQuery('');
     setCurrentPage(1);
   };
@@ -1061,453 +1066,325 @@ export function TemplatesGalleryClient({
         </SheetContent>
       </Sheet>
 
-      {/* ─── FULL-WIDTH JOTFORM-GRADE 4-EXPERIENCE INTERACTIVE PREVIEW MODAL ─── */}
+      {/* ─── 4-EXPERIENCE INTERACTIVE LIVE PREVIEW MODAL ─── */}
       {previewTemplate && (
         <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && closePreview()}>
-          <DialogContent
-            showCloseButton={false}
-            style={{ paddingTop: 0 }}
-            className="!max-w-[1280px] sm:!max-w-[1280px] lg:!max-w-[1320px] w-[96vw] max-h-[94vh] flex flex-col !p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900"
-          >
-            <DialogHeader className="sr-only">
-              <DialogTitle>{previewTemplate.name}</DialogTitle>
-              <DialogDescription>{previewTemplate.shortDescription || 'Form template preview'}</DialogDescription>
+          <DialogContent className="max-w-5xl max-h-[92vh] overflow-hidden p-0 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl bg-white dark:bg-slate-900 flex flex-col">
+            {/* Modal Header */}
+            <DialogHeader className="px-6 py-4 border-b border-border bg-slate-50/50 dark:bg-slate-950/40 flex flex-row items-center justify-between space-y-0">
+              <div className="space-y-1 max-w-xl">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] font-bold bg-white dark:bg-slate-900">
+                    {getCategoryLabel(previewTemplate.categories?.[0] || 'general')}
+                  </Badge>
+                  {previewTemplate.industries?.[0] && previewTemplate.industries[0] !== 'general' && (
+                    <Badge variant="outline" className="text-[10px] font-bold bg-blue-50 text-blue-700 border-blue-200">
+                      {getIndustryLabel(previewTemplate.industries[0])}
+                    </Badge>
+                  )}
+                </div>
+                <DialogTitle className="text-lg sm:text-xl font-bold text-foreground">
+                  {previewTemplate.name}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground line-clamp-1">
+                  {previewTemplate.shortDescription || 'Live interactive form preview with multi-mode experiences.'}
+                </DialogDescription>
+              </div>
+
+              <div className="flex items-center gap-2 pr-6">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrevTemplate}
+                  className="size-8 p-0 rounded-lg"
+                  aria-label="Previous template"
+                >
+                  <ArrowLeft className="size-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextTemplate}
+                  className="size-8 p-0 rounded-lg"
+                  aria-label="Next template"
+                >
+                  <ArrowRight className="size-4" />
+                </Button>
+              </div>
             </DialogHeader>
 
-            {/* Desktop Floating Lateral Navigation Arrows */}
-            <button
-              type="button"
-              onClick={handlePrevTemplate}
-              aria-label="Previous Template"
-              title="Previous Template (Left Arrow)"
-              className="hidden lg:flex fixed left-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-slate-100 hover:bg-white dark:hover:bg-slate-800 hover:scale-110 shadow-2xl border border-slate-200 dark:border-slate-700 items-center justify-center transition-all z-50 group cursor-pointer"
-            >
-              <ChevronLeft className="size-6 text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 transition-colors" />
-            </button>
-            <button
-              type="button"
-              onClick={handleNextTemplate}
-              aria-label="Next Template"
-              title="Next Template (Right Arrow)"
-              className="hidden lg:flex fixed right-6 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/95 dark:bg-slate-900/95 text-slate-800 dark:text-slate-100 hover:bg-white dark:hover:bg-slate-800 hover:scale-110 shadow-2xl border border-slate-200 dark:border-slate-700 items-center justify-center transition-all z-50 group cursor-pointer"
-            >
-              <ChevronRight className="size-6 text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 transition-colors" />
-            </button>
-
-            {/* Modal Header: Breadcrumb + Experience & Device Switchers + Actions */}
-            <div className="px-5 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-              <div className="min-w-0 flex items-center gap-2">
-                <nav className="flex items-center gap-1.5 text-xs text-muted-foreground truncate">
-                  <span className="font-medium text-foreground">Form Templates</span>
-                  <ChevronRight className="size-3 shrink-0" />
-                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold truncate">
-                    {getCategoryLabel(previewTemplate.categories?.[0] || 'general')}
-                  </span>
-                  <ChevronRight className="size-3 shrink-0" />
-                  <span className="text-foreground font-bold truncate max-w-[180px] sm:max-w-[280px]">
-                    {previewTemplate.name}
-                  </span>
-                </nav>
-              </div>
-
-              {/* Experience & Device Preview Switcher & Primary CTA */}
-              <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-auto">
-                {/* 4 Multi-Mode Experiences Switcher */}
-                <div className="flex items-center gap-0.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700">
-                  {EXPERIENCES.map((exp) => (
-                    <button
-                      key={exp}
-                      onClick={() => setPreviewExperience(exp)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                        previewExperience === exp
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {exp}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Device Frame Switcher */}
-                <div className="flex items-center gap-0.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700">
-                  <button
-                    onClick={() => setPreviewDevice('desktop')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      previewDevice === 'desktop'
-                        ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="Desktop Preview"
-                  >
-                    <Monitor className="size-3.5" /> <span className="hidden sm:inline">Desktop</span>
-                  </button>
-                  <button
-                    onClick={() => setPreviewDevice('tablet')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      previewDevice === 'tablet'
-                        ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="Tablet Preview"
-                  >
-                    <Tablet className="size-3.5" /> <span className="hidden sm:inline">Tablet</span>
-                  </button>
-                  <button
-                    onClick={() => setPreviewDevice('mobile')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
-                      previewDevice === 'mobile'
-                        ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    title="Mobile Preview"
-                  >
-                    <Smartphone className="size-3.5" /> <span className="hidden sm:inline">Mobile</span>
-                  </button>
-                </div>
-
-                <Button
-                  onClick={() => navigateToUseTemplate(previewTemplate)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-sm gap-1.5"
-                >
-                  <Sparkles className="size-3.5" /> Use Template
-                </Button>
-
-                <button
-                  type="button"
-                  onClick={closePreview}
-                  className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ml-1"
-                  title="Close preview (Esc)"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body: Jotform 2-Column Split (Canvas on Left + Deep Tab Suite on Right) */}
-            <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
-              {/* Left Column: Form Preview Canvas with Experience Mode Rendering */}
-              <div className="flex-1 min-w-0 bg-slate-100/80 dark:bg-slate-950 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
-                {previewExperience === 'Classic' ? (
-                  <FormPreviewCanvas template={previewTemplate} device={previewDevice} />
-                ) : previewExperience === 'Card' ? (
-                  <div className={cn(
-                    'w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-md transition-all',
-                    previewDevice === 'mobile' ? 'max-w-[340px]' : previewDevice === 'tablet' ? 'max-w-lg' : 'max-w-xl'
-                  )}>
-                    <div className="space-y-5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
-                          QUESTION 1 OF {previewTemplate.schema?.fields?.length || 6}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">15% completed</span>
-                      </div>
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                        <div className="bg-emerald-600 h-full w-[15%]" />
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-lg text-foreground">
-                          What specific assistance do you need today?
-                        </h4>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Select the primary reason for your request.
-                        </p>
-                      </div>
-                      <div className="space-y-2 pt-2">
-                        {['New Consultation / Inquiry', 'Emergency Service Booking', 'Pricing & Quote Estimate', 'General Feedback'].map((opt, i) => (
-                          <div
-                            key={opt}
-                            className={`p-3 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
-                              i === 0
-                                ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300'
-                                : 'border-border hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
-                            }`}
-                          >
-                            {opt}
-                          </div>
-                        ))}
-                      </div>
-                      <Button
-                        disabled
-                        className="w-full bg-emerald-600 text-white font-bold text-xs h-10 rounded-xl"
+            {/* Modal Body: Left Canvas + Right Sidebar */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] flex-1 overflow-hidden">
+              {/* Left Live Interactive Canvas */}
+              <div className="bg-slate-100/70 dark:bg-slate-950/60 p-4 sm:p-6 overflow-y-auto flex flex-col items-center">
+                {/* Mode Switcher & Device Toggles */}
+                <div className="w-full max-w-2xl mb-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-border p-1 rounded-xl shadow-xs overflow-x-auto">
+                    {EXPERIENCES.map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => setPreviewExperience(mode)}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          previewExperience === mode
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
                       >
-                        Continue →
-                      </Button>
-                    </div>
+                        {mode}
+                      </button>
+                    ))}
                   </div>
-                ) : previewExperience === 'Conversational' ? (
-                  <div className={cn(
-                    'w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-md transition-all',
-                    previewDevice === 'mobile' ? 'max-w-[340px]' : previewDevice === 'tablet' ? 'max-w-lg' : 'max-w-xl'
-                  )}>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 pb-3 border-b border-border text-xs font-bold text-foreground">
-                        <span className="size-8 rounded-full bg-emerald-600 text-white flex items-center justify-center">
-                          <MessageCircle className="size-4" />
-                        </span>
+
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-border p-1 rounded-xl shadow-xs">
+                    <Button
+                      variant={previewDevice === 'desktop' ? 'secondary' : 'ghost'}
+                      size="icon"
+                      className="size-7 rounded-lg"
+                      onClick={() => setPreviewDevice('desktop')}
+                      aria-label="Desktop preview"
+                    >
+                      <Monitor className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant={previewDevice === 'mobile' ? 'secondary' : 'ghost'}
+                      size="icon"
+                      className="size-7 rounded-lg"
+                      onClick={() => setPreviewDevice('mobile')}
+                      aria-label="Mobile preview"
+                    >
+                      <Smartphone className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Live Preview Container */}
+                <div
+                  className={cn(
+                    'w-full transition-all duration-300 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-md overflow-hidden',
+                    previewDevice === 'mobile' ? 'max-w-[340px] my-auto' : 'max-w-2xl'
+                  )}
+                >
+                  {/* Preview Topbar Bar */}
+                  <div className="flex items-center justify-between border-b border-border bg-slate-950 px-4 py-2.5 text-white">
+                    <span className="flex items-center gap-2 text-[10px] font-bold tracking-wider">
+                      <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+                      LIVE PREVIEW
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {previewExperience} Mode
+                    </span>
+                  </div>
+
+                  {/* 4 Interactive Runtimes */}
+                  <div className="p-5 sm:p-6 min-h-[320px] flex flex-col justify-center">
+                    {/* 1. Classic Form Preview */}
+                    {previewExperience === 'Classic' && (
+                      <div className="space-y-4">
                         <div>
-                          <p className="font-bold text-foreground">Fieseros AI Concierge</p>
-                          <p className="text-[10px] text-muted-foreground font-normal">Active & ready</p>
+                          <h4 className="font-bold text-base text-foreground">{previewTemplate.name}</h4>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Please fill out the details below to submit your request.
+                          </p>
+                        </div>
+                        <div className="space-y-3 pt-2">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-foreground mb-1">
+                              Full Name <span className="text-emerald-600">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              disabled
+                              placeholder="e.g. Jane Doe"
+                              className="w-full h-9 rounded-lg border border-border bg-slate-50 dark:bg-slate-800 px-3 text-xs text-foreground"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-foreground mb-1">
+                              Email Address <span className="text-emerald-600">*</span>
+                            </label>
+                            <input
+                              type="email"
+                              disabled
+                              placeholder="jane@example.com"
+                              className="w-full h-9 rounded-lg border border-border bg-slate-50 dark:bg-slate-800 px-3 text-xs text-foreground"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-foreground mb-1">
+                              Service Scope / Notes
+                            </label>
+                            <textarea
+                              disabled
+                              rows={2}
+                              placeholder="Describe your inquiry details..."
+                              className="w-full rounded-lg border border-border bg-slate-50 dark:bg-slate-800 p-2.5 text-xs text-foreground resize-none"
+                            />
+                          </div>
+                          <Button
+                            disabled
+                            className="w-full bg-emerald-600 text-white font-bold text-xs h-9 rounded-lg"
+                          >
+                            Submit Application
+                          </Button>
                         </div>
                       </div>
-                      <div className="space-y-3 text-xs">
-                        <div className="max-w-[85%] rounded-2xl rounded-tl-xs bg-slate-100 dark:bg-slate-800 p-3.5 text-foreground leading-relaxed">
-                          Hello! 👋 I&apos;m here to guide you through {previewTemplate.name.toLowerCase()}. What type of service are you looking for?
+                    )}
+
+                    {/* 2. Card Stepper Preview */}
+                    {previewExperience === 'Card' && (
+                      <div className="space-y-5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
+                            QUESTION 1 OF {previewTemplate.schema?.fields?.length || 6}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">15% completed</span>
                         </div>
-                        <div className="ml-auto max-w-[80%] rounded-2xl rounded-tr-xs bg-emerald-600 text-white p-3.5 font-medium">
-                          I&apos;d like to get started with a quote and schedule an appointment.
+                        <div className="w-full bg-slate-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
+                          <div className="bg-emerald-600 h-full w-[15%]" />
                         </div>
-                        <div className="max-w-[85%] rounded-2xl rounded-tl-xs bg-slate-100 dark:bg-slate-800 p-3.5 text-foreground leading-relaxed">
-                          Perfect! What date works best for you, and what is your preferred contact email?
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={cn(
-                    'w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-md transition-all',
-                    previewDevice === 'mobile' ? 'max-w-[340px]' : previewDevice === 'tablet' ? 'max-w-lg' : 'max-w-xl'
-                  )}>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 pb-3 border-b border-border">
-                        <span className="size-9 rounded-xl bg-purple-600 text-white flex items-center justify-center">
-                          <Sparkles className="size-5" />
-                        </span>
                         <div>
-                          <p className="text-xs font-bold text-foreground">Autonomous Generative AI Agent</p>
-                          <p className="text-[10px] text-muted-foreground">Natural language parser & field validator</p>
+                          <h4 className="font-extrabold text-lg text-foreground">
+                            What specific assistance do you need today?
+                          </h4>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Select the primary reason for your request.
+                          </p>
+                        </div>
+                        <div className="space-y-2 pt-2">
+                          {['New Consultation / Inquiry', 'Emergency Service Booking', 'Pricing & Quote Estimate', 'General Feedback'].map((opt, i) => (
+                            <div
+                              key={opt}
+                              className={`p-3 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
+                                i === 0
+                                  ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-300'
+                                  : 'border-border hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                              }`}
+                            >
+                              {opt}
+                            </div>
+                          ))}
+                        </div>
+                        <Button
+                          disabled
+                          className="w-full bg-emerald-600 text-white font-bold text-xs h-9 rounded-lg"
+                        >
+                          Continue →
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* 3. Conversational Chatbot Preview */}
+                    {previewExperience === 'Conversational' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 pb-2 border-b border-border text-xs font-bold text-foreground">
+                          <span className="size-7 rounded-full bg-emerald-600 text-white flex items-center justify-center">
+                            <MessageCircle className="size-3.5" />
+                          </span>
+                          <span>Fieseros AI Concierge</span>
+                        </div>
+                        <div className="space-y-3 text-xs">
+                          <div className="max-w-[85%] rounded-2xl rounded-tl-xs bg-slate-100 dark:bg-slate-800 p-3 text-foreground leading-relaxed">
+                            Hello! 👋 I&apos;m here to guide you through {previewTemplate.name.toLowerCase()}. What type of service are you looking for?
+                          </div>
+                          <div className="ml-auto max-w-[80%] rounded-2xl rounded-tr-xs bg-emerald-600 text-white p-3 font-medium">
+                            I&apos;d like to get started with a quote and schedule an appointment.
+                          </div>
+                          <div className="max-w-[85%] rounded-2xl rounded-tl-xs bg-slate-100 dark:bg-slate-800 p-3 text-foreground leading-relaxed">
+                            Perfect! What date works best for you, and what is your preferred contact email?
+                          </div>
                         </div>
                       </div>
-                      <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 text-xs text-muted-foreground leading-relaxed">
-                        &ldquo;Customer speaks or writes in natural language: &lsquo;Need service for our home this Friday morning, call me at 555-0192.&rsquo;&rdquo;
-                      </div>
-                      <div className="rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 p-3.5 space-y-2.5">
-                        <p className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider">
-                          STRUCTURED INSTANTLY BY AI
-                        </p>
-                        <div className="grid grid-cols-2 gap-2 text-[11px]">
-                          <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
-                            <span className="text-muted-foreground block text-[9px]">Goal:</span>
-                            <strong>Service Booking & Intake</strong>
+                    )}
+
+                    {/* 4. AI Agent Preview */}
+                    {previewExperience === 'AI Agent' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 pb-2 border-b border-border">
+                          <span className="size-8 rounded-xl bg-purple-600 text-white flex items-center justify-center">
+                            <Sparkles className="size-4" />
+                          </span>
+                          <div>
+                            <p className="text-xs font-bold text-foreground">Natural Language Form Agent</p>
+                            <p className="text-[10px] text-muted-foreground">Autonomous data parser & validator</p>
                           </div>
-                          <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
-                            <span className="text-muted-foreground block text-[9px]">Timing:</span>
-                            <strong>Friday Morning</strong>
-                          </div>
-                          <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
-                            <span className="text-muted-foreground block text-[9px]">Status:</span>
-                            <strong>Validated</strong>
-                          </div>
-                          <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
-                            <span className="text-muted-foreground block text-[9px]">Contact:</span>
-                            <strong>555-0192</strong>
+                        </div>
+                        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3 text-xs text-muted-foreground leading-relaxed">
+                          &ldquo;Customer speaks or writes in natural language: &lsquo;Need HVAC repair for our 2,400 sq ft home this Friday morning, call me at 555-0192.&rsquo;&rdquo;
+                        </div>
+                        <div className="rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 p-3 space-y-2">
+                          <p className="text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider">
+                            STRUCTURED INSTANTLY BY AI
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 text-[11px]">
+                            <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
+                              <span className="text-muted-foreground block text-[9px]">Goal:</span>
+                              <strong>HVAC Service Repair</strong>
+                            </div>
+                            <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
+                              <span className="text-muted-foreground block text-[9px]">Timing:</span>
+                              <strong>Friday Morning</strong>
+                            </div>
+                            <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
+                              <span className="text-muted-foreground block text-[9px]">Property Size:</span>
+                              <strong>2,400 sq ft</strong>
+                            </div>
+                            <div className="p-2 rounded bg-white dark:bg-slate-900 border border-purple-100 dark:border-purple-900/30">
+                              <span className="text-muted-foreground block text-[9px]">Contact:</span>
+                              <strong>555-0192</strong>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
 
-              {/* Right Column: Tabbed Information Suite */}
-              <div className="w-full lg:w-[420px] shrink-0 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between overflow-y-auto max-h-[84vh] p-5 space-y-4">
-                <div className="space-y-4">
-                  {/* Top Meta Header */}
+              {/* Right Modal Sidebar */}
+              <aside className="p-6 border-t lg:border-t-0 lg:border-l border-border bg-white dark:bg-slate-900 flex flex-col justify-between overflow-y-auto">
+                <div className="space-y-6">
                   <div>
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
-                        Curated Template
-                      </span>
-                      <div className="flex items-center gap-1 text-xs text-amber-500 font-bold">
-                        <Star className="size-3.5 fill-amber-400 text-amber-400" />
-                        <span>{previewTemplate.ratingAverage || 4.9}</span>
-                        <span className="text-[10px] text-muted-foreground font-normal">
-                          ({previewTemplate.ratingCount || 48} reviews)
-                        </span>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                      Included in Template
+                    </h4>
+                    <div className="space-y-2.5 text-xs text-foreground">
+                      <div className="flex items-center gap-2">
+                        <Check className="size-4 text-emerald-600 shrink-0" />
+                        <span>{previewTemplate.schema?.fields?.length || 8} Editable Smart Fields</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="size-4 text-emerald-600 shrink-0" />
+                        <span>Conditional Branching & Math Logic</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="size-4 text-emerald-600 shrink-0" />
+                        <span>0% Commission Payment Gateway</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Check className="size-4 text-emerald-600 shrink-0" />
+                        <span>Mobile, Tablet & Desktop Responsive</span>
                       </div>
                     </div>
-                    <h3 className="text-lg font-bold text-foreground leading-snug">
-                      {previewTemplate.name}
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                      {previewTemplate.shortDescription}
-                    </p>
                   </div>
 
-                  {/* Navigation Tab Bar */}
-                  <div className="flex items-center border-b border-slate-200 dark:border-slate-800 gap-4 text-xs font-semibold">
-                    <button
-                      onClick={() => setModalActiveTab('overview')}
-                      className={`pb-2 border-b-2 transition-colors ${
-                        modalActiveTab === 'overview'
-                          ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                          : 'border-transparent text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Overview
-                    </button>
-                    <button
-                      onClick={() => setModalActiveTab('fields')}
-                      className={`pb-2 border-b-2 transition-colors ${
-                        modalActiveTab === 'fields'
-                          ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                          : 'border-transparent text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Fields ({previewTemplate.schema?.fields?.length || 0})
-                    </button>
-                    <button
-                      onClick={() => setModalActiveTab('integrations')}
-                      className={`pb-2 border-b-2 transition-colors ${
-                        modalActiveTab === 'integrations'
-                          ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                          : 'border-transparent text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Integrations
-                    </button>
-                    <button
-                      onClick={() => setModalActiveTab('faq')}
-                      className={`pb-2 border-b-2 transition-colors ${
-                        modalActiveTab === 'faq'
-                          ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-                          : 'border-transparent text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      FAQ
-                    </button>
-                  </div>
-
-                  {/* Tab 1: Overview Tab */}
-                  {modalActiveTab === 'overview' && (
-                    <div className="space-y-3.5 text-xs text-muted-foreground">
-                      <div>
-                        <h4 className="font-bold text-foreground mb-1">Key Features Included</h4>
-                        <ul className="space-y-1.5 text-[11px]">
-                          <li className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                            <CheckCircle2 className="size-3.5 text-emerald-600" />
-                            <span>0% Commission Payment Processing (Stripe, PayPal, Square)</span>
-                          </li>
-                          <li className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                            <CheckCircle2 className="size-3.5 text-emerald-600" />
-                            <span>Instant Live Calculation & Custom Mathematical Formulas</span>
-                          </li>
-                          <li className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                            <CheckCircle2 className="size-3.5 text-emerald-600" />
-                            <span>Multi-Step Card & Conversational Chatbot Form Runtimes</span>
-                          </li>
-                          <li className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                            <CheckCircle2 className="size-3.5 text-emerald-600" />
-                            <span>Digital E-Signatures & Document / Photo Uploads</span>
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <h4 className="font-bold text-foreground mb-1.5">Taxonomy & Classifications</h4>
-                        <div className="flex flex-wrap gap-1">
-                          {(previewTemplate.categories || []).map((cat) => (
-                            <Badge key={cat} variant="secondary" className="text-[10px]">
-                              {getCategoryLabel(cat)}
-                            </Badge>
-                          ))}
-                          {(previewTemplate.industries || []).map((ind) => (
-                            <Badge key={ind} variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
-                              {getIndustryLabel(ind)}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tab 2: Fields List Tab */}
-                  {modalActiveTab === 'fields' && (
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                      {(previewTemplate.schema?.fields || []).map((field, idx) => (
-                        <div
-                          key={field.id || idx}
-                          className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 text-xs flex items-center justify-between"
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                      Workflow Lifecycle
+                    </h4>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['1. Invite', '2. Questions', '3. Validate', '4. Submit'].map((step) => (
+                        <span
+                          key={step}
+                          className="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-muted-foreground"
                         >
-                          <div>
-                            <p className="font-semibold text-foreground">
-                              {field.label || `Field #${idx + 1}`}
-                            </p>
-                            <span className="text-[10px] text-muted-foreground uppercase">
-                              Type: {field.type}
-                            </span>
-                          </div>
-                          {field.required && (
-                            <span className="text-[9px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-200">
-                              Required
-                            </span>
-                          )}
-                        </div>
+                          {step}
+                        </span>
                       ))}
                     </div>
-                  )}
-
-                  {/* Tab 3: Integrations Tab */}
-                  {modalActiveTab === 'integrations' && (
-                    <div className="space-y-2 text-xs">
-                      <p className="text-muted-foreground text-[11px]">
-                        Seamlessly sync submissions to 30+ CRM, email marketing, and payment tools:
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        {['Stripe Payments', 'PayPal Checkout', 'Google Sheets Sync', 'Webhook / Zapier', 'Slack Alerts', 'Mailchimp'].map((item) => (
-                          <div key={item} className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium text-[11px] flex items-center gap-1.5">
-                            <Check className="size-3 text-emerald-600" /> {item}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tab 4: FAQ Tab */}
-                  {modalActiveTab === 'faq' && (
-                    <div className="space-y-3 text-xs">
-                      <div>
-                        <p className="font-bold text-foreground mb-1">Is this template 100% customizable?</p>
-                        <p className="text-muted-foreground text-[11px] leading-relaxed">
-                          Yes! You can add, edit, or remove fields, update colors and themes, configure conditional branching, and connect webhooks.
-                        </p>
-                      </div>
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <p className="font-bold text-foreground mb-1">Is it mobile friendly & secure?</p>
-                        <p className="text-muted-foreground text-[11px] leading-relaxed">
-                          All templates feature responsive viewport scaling, SSL 256-bit encryption, and GDPR compliance.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Related Templates Slider */}
-                  {relatedTemplates.length > 0 && (
-                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                      <p className="text-[11px] font-bold text-foreground uppercase tracking-wider">
-                        More Templates Like This
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {relatedTemplates.slice(0, 2).map((rel) => (
-                          <button
-                            key={rel.id}
-                            type="button"
-                            onClick={() => openPreview(rel)}
-                            className="p-2 rounded-xl bg-slate-50 hover:bg-emerald-50/60 dark:bg-slate-800/70 dark:hover:bg-emerald-950/40 border border-slate-200/60 dark:border-slate-700 text-left transition-colors"
-                          >
-                            <p className="text-xs font-bold text-foreground truncate">{rel.name}</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              ⭐ {rel.ratingAverage || 4.9} · {rel.usageCount || 300}+ uses
-                            </p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
 
-                {/* Sticky Sidebar CTA Card */}
-                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                <div className="pt-6 border-t border-border space-y-3">
                   <Button
                     onClick={() => navigateToUseTemplate(previewTemplate)}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 rounded-xl shadow-md gap-2"
@@ -1515,10 +1392,10 @@ export function TemplatesGalleryClient({
                     <Sparkles className="size-4" /> Use This Template
                   </Button>
                   <p className="text-[11px] text-center text-muted-foreground">
-                    Free forever · 0% commission · Instant copy
+                    100% Free · No credit card required
                   </p>
                 </div>
-              </div>
+              </aside>
             </div>
           </DialogContent>
         </Dialog>
@@ -1528,7 +1405,7 @@ export function TemplatesGalleryClient({
 }
 
 /**
- * Modern Template Card Component
+ * Modern Template Card with Hover Actions and Badges
  */
 function ModernTemplateCard({
   template,

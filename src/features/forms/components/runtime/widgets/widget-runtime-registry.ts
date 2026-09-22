@@ -29,7 +29,7 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   textarea: w(() => import('./text/long-text')),
   number: w(() => import('./text/number-input')),
   numerical: w(() => import('./text/number-input')),
-  currency_amount_input: w(() => import('./text/number-input')),
+  currency_amount_input: w(() => import('./text/currency-amount')),
   spinner: w(() => import('./text/spinner')),
   percentage: w(() => import('./text/percentage')),
 

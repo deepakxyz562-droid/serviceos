@@ -61,6 +61,7 @@ export function Dropdown({ value, onChange, config, disabled, field }: WidgetPro
   const [searchQuery, setSearchQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [searchQ, setSearchQ] = useState('');
+  const [otherText, setOtherText] = useState('');
   const filteredOptions = searchEnabled && searchQuery
     ? options.filter((opt) => opt.label.toLowerCase().includes(searchQuery.toLowerCase()))
     : options;
@@ -131,7 +132,6 @@ export function Dropdown({ value, onChange, config, disabled, field }: WidgetPro
   }
 
   // Single-select using Select
-  const [otherText, setOtherText] = React.useState('');
   const valStr = typeof value === 'string' ? value : '';
   const isOther = allowOther && valStr && !options.some((o) => o.value === valStr);
 

@@ -222,6 +222,16 @@ export function PaymentGatewayRuntime({
 
   return (
     <div className="w-full rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs transition-all">
+      {/* Simulated payment banner — shown when gateway is not yet implemented */}
+      {gateway.implemented === false && (
+        <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 flex items-center gap-2">
+          <AlertCircle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+            Test Mode — this is a simulated payment. No real charge will be made.
+            {gateway.name} is coming soon; only Stripe processes live payments.
+          </p>
+        </div>
+      )}
       {/* Header Banner */}
       <div className="px-4 py-3 bg-muted/40 border-b border-border/60 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -267,6 +277,12 @@ export function PaymentGatewayRuntime({
               <p className="text-[11px] text-emerald-700 dark:text-emerald-300 font-mono mt-0.5">
                 Ref: {value?.transactionId} • {currencySymbol}{computedAmount.toFixed(2)} {currency}
               </p>
+              {/* Simulated payment disclosure */}
+              {value?.simulated && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 italic">
+                  ⚠ Simulated payment — no real charge was made.
+                </p>
+              )}
             </div>
             {!disabled && (
               <Button

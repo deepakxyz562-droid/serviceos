@@ -39,6 +39,9 @@ export function DateDifference({ value, onChange, config, disabled, field }: Wid
     date1: initial.date1 || today,
     date2: initial.date2 || '',
   };
+  // Read 'unit' setting to filter which stat cards render.
+  // 'all' (default) shows all 4; 'days'/'weeks'/'months'/'years' shows only that one.
+  const unit = String((config as Record<string, unknown>)?.unit || 'all');
 
   const result = useMemo(() => {
     if (!state.date1 || !state.date2) return null;
@@ -88,10 +91,10 @@ export function DateDifference({ value, onChange, config, disabled, field }: Wid
         </div>
         {result ? (
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <Stat label="Years" value={result.years} />
-            <Stat label="Months (total)" value={result.totalMonths} />
-            <Stat label="Weeks (total)" value={result.totalWeeks} />
-            <Stat label="Days (total)" value={result.totalDays} />
+            {(unit === 'all' || unit === 'years') && <Stat label="Years" value={result.years} />}
+            {(unit === 'all' || unit === 'months') && <Stat label="Months (total)" value={result.totalMonths} />}
+            {(unit === 'all' || unit === 'weeks') && <Stat label="Weeks (total)" value={result.totalWeeks} />}
+            {(unit === 'all' || unit === 'days') && <Stat label="Days (total)" value={result.totalDays} />}
           </div>
         ) : (
           <div className="text-base font-black text-muted-foreground text-center">—</div>

@@ -3,49 +3,72 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { Fingerprint, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { WidgetProps } from '../widget-props';
+import { WidgetProps, str, num, bool } from '../widget-props';
 
 function pad(n: number, width: number): string {
   const s = String(n);
   return s.length >= width ? s : '0'.repeat(width - s.length) + s;
 }
 
+/**
+ * Unique ID Generator widget.
+ *
+ * Reads settings from config:
+ * - prefix: string prefix for the ID (e.g. 'INV', 'REF', 'TICKET')
+ * - startNumber: starting counter value (e.g. 1001)
+ * - padding: number of digits to pad (e.g. 5 → '00042')
+ * - allowManualEdit: whether the user can override the generated ID
+ *
+ * The counter increments per-form-load using a sessionStorage counter keyed
+ * by the field ID. This provides pseudo-sequential IDs within a single
+ * browser session. True server-side sequential IDs require a backend
+ * counter endpoint (future enhancement).
+ */
 export function UniqueIdGenerator({ value, onChange, config, disabled, field }: WidgetProps) {
-  const prefix = (config.prefix as string) || 'ID';
-  const digits = Number(config.digits) || 5;
-  const useCounter = config.useCounter !== false;
-  const allowManualEdit = config.allowManualEdit === true;
+  const prefix = str(config.prefix, 'ID');
+  const startNumber = Math.max(1, num(config.startNumber, num(config.digits ? 1 : 1, 1)));
+  const padding = Math.max(1, num(config.padding, num(config.digits, 5)));
+  const allowManualEdit = bool(config.allowManualEdit, false);
+
+  const fieldId = str(field?.id, 'unique_id');
+  const storageKey = `fieseros_uid_counter_${fieldId}`;
 
   const existing = typeof value === 'string' ? value : '';
 
   const generate = useCallback(() => {
-    if (useCounter) {
-      const counter = Math.floor(Math.random() * Math.pow(10, digits)) + 1;
-      return `${prefix}-${pad(counter, digits)}`;
+    // Read counter from sessionStorage (per-field, per-session)
+    let counter = startNumber;
+    if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+      const stored = sessionStorage.getItem(storageKey);
+      if (stored) {
+        counter = parseInt(stored, 10) + 1;
+      }
+      sessionStorage.setItem(storageKey, String(counter));
     }
-    // Full random fallback for collision-safety
-    const rnd = Math.floor(Math.random() * Math.pow(36, digits));
-    return `${prefix}-${rnd.toString(36).toUpperCase().padStart(digits, '0')}`;
-  }, [prefix, digits, useCounter]);
+    return `${prefix}-${pad(counter, padding)}`;
+  }, [prefix, startNumber, padding, storageKey]);
 
   // Auto-generate on mount if empty
   useEffect(() => {
     if (!existing && !disabled) {
       onChange(generate());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
-  const preview = useMemo(() => generate(), [generate]);
+  const preview = useMemo(() => {
+    // Generate a preview without incrementing the counter
+    const counter = startNumber;
+    return `${prefix}-${pad(counter, padding)}`;
+  }, [prefix, startNumber, padding]);
 
   function regenerate() {
     onChange(generate());
   }
 
   return (
-    <div className="space-y-2" aria-label={String(field?.['label'] ?? 'Unique ID generator')}>
+    <div className="space-y-2" aria-label={String(field?.label ?? 'Unique ID generator')}>
       <div className="flex items-center gap-2">
         <Fingerprint className="size-5 text-emerald-600 shrink-0" />
         {allowManualEdit ? (
@@ -75,8 +98,8 @@ export function UniqueIdGenerator({ value, onChange, config, disabled, field }: 
         )}
       </div>
       <div className="text-[10px] text-muted-foreground">
-        Format: <span className="font-mono">{prefix}-{'0'.repeat(digits)}</span>
-        {useCounter ? ' (sequential-style)' : ' (random)'}
+        Format: <span className="font-mono">{prefix}-{'0'.repeat(padding)}</span>
+        {' '}· Counter starts at {startNumber}
       </div>
     </div>
   );
