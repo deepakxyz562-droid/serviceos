@@ -500,7 +500,22 @@ export function FormRuntimeRenderer({
 }: FormRuntimeRendererProps) {
   const [activeMode, setActiveMode] = useState<'paper' | 'card' | 'agent'>(initialMode);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [formData, setFormData] = useState<Record<string, any>>({});
+  // ─── Initialize formData with default values SYNCHRONOUSLY ──────────────
+  // This ensures calculation fields (form_calculation) have access to
+  // defaultValue from the very first render. Previously, two async effects
+  // ran after render, leaving formData empty on first paint — causing all
+  // calculations to show $0.00 until React re-rendered.
+  const [formData, setFormData] = useState<Record<string, any>>(() => {
+    const defaults: Record<string, any> = {};
+    for (const f of schema.fields) {
+      const cfg = (f.widgetConfig || {}) as Record<string, any>;
+      const def = (f as any).defaultValue ?? cfg.defaultValue;
+      if (def !== undefined && def !== '' && def !== null) {
+        defaults[f.id] = def;
+      }
+    }
+    return defaults;
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   // ─── Draft auto-saving and AI fast-fill state ─────────────────────────────
   const [restoredDraft, setRestoredDraft] = useState(false);
@@ -536,30 +551,13 @@ export function FormRuntimeRenderer({
     } catch {}
   }, [storageKey]);
 
-  // Initialize default values for fields that define defaultValue (if not already filled)
-  useEffect(() => {
-    const defaults: Record<string, any> = {};
-    for (const f of schema.fields) {
-      const cfg = (f.widgetConfig || {}) as Record<string, any>;
-      const def = (f as any).defaultValue ?? cfg.defaultValue;
-      if (def !== undefined && def !== '' && def !== null) {
-        defaults[f.id] = def;
-      }
-    }
-    if (Object.keys(defaults).length > 0) {
-      setFormData((prev) => {
-        const next = { ...prev };
-        let hasChanges = false;
-        for (const [k, v] of Object.entries(defaults)) {
-          if (next[k] === undefined || next[k] === '') {
-            next[k] = v;
-            hasChanges = true;
-          }
-        }
-        return hasChanges ? next : prev;
-      });
-    }
-  }, [schema.fields]);
+  // ─── Default Value Initialization (removed — handled by useState initializer) ──
+  // The formData state now initializes with default values synchronously via
+  // the useState(() => ...) initializer above. This ensures FormCalculation
+  // widgets have access to defaultValue from the very first render.
+  // The old async effects (lines 539-562 and 617-630) were removed because:
+  // 1. They ran AFTER first render, causing calculations to show $0.00
+  // 2. The second effect used String(dv) which broke boolean/number types
 
   // ─── Hidden Field Auto-Capture ───────────────────────────────────────────
   // Populate hidden fields with auto-captured values (UTM params, referrer, etc.)
@@ -608,26 +606,8 @@ export function FormRuntimeRenderer({
    
   }, [schema.fields]);
 
-  // ─── Default Value Initialization ────────────────────────────────────────
-  // Populate fields with their configured defaultValue on form load.
-  // Reads `formData` but intentionally omits it from deps — we only want to
-  // populate defaults once on mount (or after a draft restore), not on every
-  // keystroke. The functional `setFormData((prev) => ...)` form is used so the
-  // latest state is captured inside the updater without triggering re-runs.
-  useEffect(() => {
-    if (restoredDraft) return;
-    setFormData((prev) => {
-      const updates: Record<string, string> = {};
-      for (const field of schema.fields) {
-        const cfg = (field.widgetConfig as Record<string, unknown>) || {};
-        const dv = String(cfg.defaultValue ?? (field as Record<string, unknown>).defaultValue ?? '');
-        if (dv && !prev[field.id]) {
-          updates[field.id] = dv;
-        }
-      }
-      return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev;
-    });
-  }, [schema.fields, restoredDraft]);
+  // ─── Default Value Initialization (removed — handled by useState initializer) ──
+  // See comment above at line 554.
 
   // Debounced draft autosave
   useEffect(() => {
