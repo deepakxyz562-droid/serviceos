@@ -463,6 +463,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#00539B"/><path d="M14 13h7c3 0 5 1.5 5 4s-2 4-5 4h-7V13zm3 3v5h4c1.5 0 2.5-.8 2.5-2.5S22.5 16 21 16h-4zm-3 8h7c3.5 0 5.5 1.5 5.5 4.5s-2 4.5-5.5 4.5h-7V24zm3 3v6h4c1.8 0 2.8-.8 2.8-3s-1-3-2.8-3h-4z" fill="#FFF"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'accountId', label: 'BluePay Account ID', type: 'text', placeholder: '100...' },
+      { key: 'secretKey', label: 'BluePay Secret Key', type: 'password', placeholder: 'Used for TAMPER_PROOF_SEAL' },
+    ],
   },
   // 16. Eway
   {
@@ -478,6 +482,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#FF6B00"/><path d="M12 15h16v3H15v3h11v3H15v4h13v3H12V15z" fill="#FFF"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'apiKey', label: 'eWay API Key', type: 'password', placeholder: 'epk-...' },
+      { key: 'password', label: 'eWay API Password', type: 'password', placeholder: 'Used with Rapid API' },
+    ],
   },
   // 17. PayU (Global)
   {
@@ -528,6 +536,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#DA291C"/><circle cx="16" cy="20" r="5" stroke="#FFF" stroke-width="2"/><circle cx="24" cy="20" r="5" stroke="#FFF" stroke-width="2"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'serviceKey', label: 'Worldpay Service Key', type: 'password', placeholder: 'sk_...' },
+      { key: 'clientKey', label: 'Worldpay Client Key', type: 'text', placeholder: 'T_...' },
+    ],
   },
   // 20. BlueSnap
   {
@@ -543,6 +555,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#1E3A8A"/><path d="M12 28l8-16 8 16h-5l-3-6-3 6h-5z" fill="#38BDF8"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'username', label: 'BlueSnap API Username', type: 'text', placeholder: 'API username' },
+      { key: 'password', label: 'BlueSnap API Password', type: 'password', placeholder: 'API password' },
+    ],
   },
   // 21. Moneris
   {
@@ -559,6 +575,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#005A9C"/><path d="M13 27V13h3.5l3.5 8 3.5-8H27v14h-3v-8.5l-3.5 7.5h-1L16 18.5V27h-3z" fill="#FFF"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'storeId', label: 'Moneris Store ID', type: 'text', placeholder: 'store...' },
+      { key: 'apiToken', label: 'Moneris API Token', type: 'password', placeholder: 'api token' },
+    ],
   },
   // 22. GoCardless
   {
@@ -622,6 +642,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#4A154B"/><rect x="13" y="13" width="14" height="14" rx="3" stroke="#FFF" stroke-width="2"/><circle cx="20" cy="20" r="3" fill="#FFF"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'user_defined_amount'],
+    configFields: [
+      { key: 'apiKey', label: 'SensePass API Key', type: 'password', placeholder: 'API key' },
+      { key: 'merchantId', label: 'SensePass Merchant ID', type: 'text', placeholder: 'merchant id' },
+    ],
   },
   // 26. Purchase Order (Offline)
   {
@@ -662,6 +686,11 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#0070BA"/><rect x="12" y="14" width="16" height="12" rx="2" stroke="#FFF" stroke-width="2"/><line x1="12" y1="18" x2="28" y2="18" stroke="#FFF" stroke-width="2"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'merchantId', label: 'CardPointe Merchant ID', type: 'text', placeholder: 'merchant...' },
+      { key: 'username', label: 'CardPointe Username', type: 'text', placeholder: 'API username' },
+      { key: 'password', label: 'CardPointe Password', type: 'password', placeholder: 'API password' },
+    ],
   },
   // 28. 2Checkout / Verifone
   {
@@ -677,6 +706,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#FF6F00"/><path d="M13 15h14l-8 10h8v3H13l8-10h-8v-3z" fill="#FFF"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'merchantCode', label: '2Checkout Merchant Code', type: 'text', placeholder: 'Merchant code' },
+      { key: 'secretKey', label: '2Checkout Secret Key', type: 'password', placeholder: 'SECRET KEY' },
+    ],
   },
   // 29. Paysafe
   {
@@ -692,6 +725,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#111827"/><path d="M14 13h7a5 5 0 0 1 0 10h-4v4h-3V13zm3 3v4h4a2 2 0 0 0 0-4h-4z" fill="#E60000"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'user_defined_amount'],
+    configFields: [
+      { key: 'accountId', label: 'Paysafe Account ID', type: 'text', placeholder: 'account...' },
+      { key: 'apiPassword', label: 'Paysafe API Password', type: 'password', placeholder: 'API password' },
+    ],
   },
   // 30. iyzico (Turkey)
   {
@@ -723,6 +760,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#811847"/><path d="M14 24.5c.8.6 1.8 1 2.8 1 1.5 0 2.2-.6 2.2-1.4 0-2.3-5-1.5-5-5.2 0-2.2 1.8-3.9 4.8-3.9 1.3 0 2.4.3 3.2.8l-.8 2.3c-.7-.4-1.5-.7-2.4-.7-1.3 0-1.9.5-1.9 1.2 0 2.2 5 1.4 5 5.1 0 2.2-1.7 4.1-5.1 4.1-1.5 0-2.9-.4-3.8-1l1-2.3z" fill="#FFF"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'user_defined_amount'],
+    configFields: [
+      { key: 'merchantEmail', label: 'Skrill Merchant Email', type: 'text', placeholder: 'merchant@email.com' },
+      { key: 'secretWord', label: 'Skrill Secret Word', type: 'password', placeholder: 'MQI password' },
+    ],
   },
   // 32. Chargify / Maxio
   {
@@ -759,6 +800,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: true,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#E74C3C"/><path d="M12 14h16v12H12z" stroke="#FFF" stroke-width="2.5"/><line x1="12" y1="18" x2="28" y2="18" stroke="#FFF" stroke-width="2"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'user_defined_amount', 'collect_donations'],
+    configFields: [
+      { key: 'publicKey', label: 'Paymentwall Public Key', type: 'text', placeholder: 'project key' },
+      { key: 'privateKey', label: 'Paymentwall Private Key', type: 'password', placeholder: 'secret key' },
+    ],
   },
   // 34. Stripe Financial ACH (Phase C addition)
   {

@@ -652,6 +652,62 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test direct debit mandates without real bank authorization.' },
   ], 'payment'],
 
+  // ─── Tier 3: Enterprise gateways (7 new widgets) ────────────────────────
+  ['payment_cybersource', 'CyberSource', 'payment', 'ShieldCheck', 'Visa-owned enterprise fraud management & card processing engine', '', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'cybersource', options: [{ label: 'CyberSource', value: 'cybersource' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+  ['payment_bluepay', 'BluePay', 'payment', 'CreditCard', 'Secure merchant processing for US & Canadian merchants', '', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'bluepay', options: [{ label: 'BluePay', value: 'bluepay' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'CAD - Canadian Dollars', value: 'CAD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+  ['payment_moneris', 'Moneris', 'payment', 'CreditCard', "Canada's leading payment processor for CAD / USD card payments", 'CANADA', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'moneris', options: [{ label: 'Moneris', value: 'moneris' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'CAD', searchPlaceholder: 'Search...', options: [{ label: 'CAD - Canadian Dollars', value: 'CAD' }, { label: 'USD - United States Dollars', value: 'USD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+  ['payment_cardpointe', 'CardPointe', 'payment', 'CreditCard', 'CardConnect PCI-certified point-to-point encryption gateway', '', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'cardpointe', options: [{ label: 'CardPointe', value: 'cardpointe' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+  ['payment_paysafe', 'Paysafe', 'payment', 'Wallet', 'Enterprise payments including Neteller, Skrill, and cards', '', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'paysafe', options: [{ label: 'Paysafe', value: 'paysafe' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+  ['payment_sensepass', 'SensePass', 'payment', 'QrCode', 'Omnichannel QR & digital wallet tap-to-pay aggregator', '', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'sensepass', options: [{ label: 'SensePass', value: 'sensepass' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+  ['payment_paymentwall', 'Paymentwall', 'payment', 'CreditCard', '150+ alternative payment options worldwide', '150+ APMs', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'paymentwall', options: [{ label: 'Paymentwall', value: 'paymentwall' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }, { label: 'BRL - Brazilian Reals', value: 'BRL' }, { label: 'INR - Indian Rupees', value: 'INR' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+  ['payment_eway', 'eWAY', 'payment', 'CreditCard', 'Payment gateway for Australia, New Zealand, UK, and Singapore merchants', 'AU/NZ', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'eway', options: [{ label: 'eWAY', value: 'eway' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'AUD', searchPlaceholder: 'Search...', options: [{ label: 'AUD - Australian Dollars', value: 'AUD' }, { label: 'NZD - New Zealand Dollars', value: 'NZD' }, { label: 'GBP - British Pounds', value: 'GBP' }, { label: 'SGD - Singapore Dollars', value: 'SGD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+  ['payment_skrill', 'Skrill', 'payment', 'Wallet', 'Global digital wallet and money transfer service supporting 40+ currencies', '40+ CURRENCIES', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'skrill', options: [{ label: 'Skrill', value: 'skrill' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real accounts.' },
+  ], 'payment'],
+
 
   // ─── Products (10) ────────────────────────────────────────────────────────────
   ['product_single', 'Single Product', 'payment', 'Package', 'Single product card with qty selector', '', 'pro', [

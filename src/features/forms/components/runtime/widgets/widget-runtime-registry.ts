@@ -162,6 +162,14 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   payment_twocheckout: w(() => import('./payment/twocheckout')),
   payment_worldpay: w(() => import('./payment/worldpay')),
   payment_bluesnap: w(() => import('./payment/bluesnap')),
+  // ─── Tier 3: Enterprise gateways ──────────────────────────────────────────
+  payment_cybersource: w(() => import('./payment/cybersource')),
+  payment_bluepay: w(() => import('./payment/bluepay')),
+  payment_moneris: w(() => import('./payment/moneris')),
+  payment_cardpointe: w(() => import('./payment/cardpointe')),
+  payment_paysafe: w(() => import('./payment/paysafe')),
+  payment_sensepass: w(() => import('./payment/sensepass')),
+  payment_paymentwall: w(() => import('./payment/paymentwall')),
   payment_klarna: w(() => import('./payment/klarna')),
   payment_afterpay: w(() => import('./payment/afterpay')),
   payment_clearpay: w(() => import('./payment/afterpay')), // Clearpay shares Afterpay widget
