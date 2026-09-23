@@ -19,21 +19,24 @@ export async function GET(request: NextRequest) {
     const statusFilter = searchParams.get('status') || '';
     const tenantIdFilter = searchParams.get('tenantId') || '';
     const search = searchParams.get('search') || '';
+    const isExport = searchParams.get('export') === 'true';
 
-    // Pagination params — defaults: page=1, limit=50. Limit clamped to [1, 200].
+    // Pagination params — defaults: page=1, limit=50. If isExport, allow up to 5000.
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
+    const limit = isExport
+      ? 5000
+      : Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
 
     // Build where clause
     const where: Record<string, unknown> = {};
-    if (statusFilter) {
+    if (statusFilter && statusFilter !== 'all') {
       where.status = statusFilter;
     }
     if (tenantIdFilter) {
       where.tenantId = tenantIdFilter;
     }
     if (search) {
-      // Search across the tenant relation (name/email) and the subscription's
+      // Search across the tenant relation (name/email/phone/slug) and the subscription's
       // own plan column. Uses Prisma's relation filter syntax so the search
       // is pushed down to the DB rather than filtering in JS after the fetch.
       where.OR = [
@@ -42,6 +45,8 @@ export async function GET(request: NextRequest) {
             OR: [
               { name: { contains: search } },
               { email: { contains: search } },
+              { phone: { contains: search } },
+              { slug: { contains: search } },
             ],
           },
         },
@@ -49,33 +54,76 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Run the paginated findMany and the total count in parallel. The count
-    // reuses the SAME `where` so `totalPages` reflects the filtered set.
+    // Run the findMany and the total count in parallel.
     const [subscriptions, total] = await Promise.all([
       db.subscription.findMany({
         where,
         include: {
           tenant: {
-            select: { name: true, email: true, plan: true, planStatus: true },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              email: true,
+              phone: true,
+              whatsappPhone: true,
+              address: true,
+              country: true,
+              currency: true,
+              industry: true,
+              plan: true,
+              planStatus: true,
+              formsPlan: true,
+              formsPlanStatus: true,
+              lifetimeJobsCreated: true,
+              mrr: true,
+              arr: true,
+              users: {
+                where: { role: 'owner' },
+                select: { name: true, email: true, phone: true },
+                take: 1,
+              },
+            },
           },
         },
         orderBy: { createdAt: 'desc' },
         take: limit,
-        skip: (page - 1) * limit,
+        skip: isExport ? 0 : (page - 1) * limit,
       }),
       db.subscription.count({ where }),
     ]);
 
     const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
+    const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
 
     const formatted = subscriptions.map((s: Record<string, unknown>) => {
-      const tenant = s.tenant as Record<string, unknown> | null;
+      const tenant = s.tenant as Record<string, any> | null;
+      const owner = Array.isArray(tenant?.users) && tenant.users.length > 0 ? tenant.users[0] : null;
+      const slug = tenant?.slug || '';
+      const tenantId = (s.tenantId as string) || '';
+
       return {
         id: s.id,
-        tenantId: s.tenantId,
+        tenantId,
         tenantName: tenant?.name || 'Unknown',
+        tenantSlug: slug,
         tenantEmail: tenant?.email || '',
+        tenantPhone: tenant?.phone || '',
+        tenantWhatsappPhone: tenant?.whatsappPhone || '',
+        tenantAddress: tenant?.address || '',
+        tenantCountry: tenant?.country || 'US',
+        tenantCurrency: tenant?.currency || (s.currency as string) || 'USD',
+        tenantIndustry: tenant?.industry || '',
         tenantPlanStatus: tenant?.planStatus || '',
+        formsPlan: tenant?.formsPlan || 'free',
+        formsPlanStatus: tenant?.formsPlanStatus || 'active',
+        lifetimeJobsCreated: Number(tenant?.lifetimeJobsCreated) || 0,
+        ownerName: owner?.name || '',
+        ownerEmail: owner?.email || '',
+        ownerPhone: owner?.phone || '',
+        publicProfileUrl: slug ? `${origin}/b/${slug}` : '',
+        marketplaceUrl: slug ? `${origin}/marketplace/${slug}` : '',
+        adminDetailUrl: tenantId ? `${origin}/dashboard/superadmin/tenants/${tenantId}` : '',
         plan: s.plan,
         status: s.status,
         amount: Number(s.amount) || 0,
@@ -101,9 +149,6 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Paginated response shape: { data, page, limit, total, totalPages }.
-    // The 500 branch keeps the old `subscriptions: []` shape so existing
-    // error consumers keep working — only the success path changes shape.
     return NextResponse.json({
       data: formatted,
       page,

@@ -25,8 +25,12 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import {
   CheckCircle2, XCircle, Clock, Pause, PlayCircle, Edit3,
-  BarChart3, Filter, Loader2, CreditCard,
+  BarChart3, Filter, Loader2, CreditCard, Download, ChevronDown, ExternalLink,
 } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { buildCsv, withBom, exportFilename } from '@/lib/csv-export';
 import {
   ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
 } from 'recharts';
@@ -50,6 +54,7 @@ export function SubscriptionsTab({ subscriptions, subsLoading, format }: Subscri
   const [actionReason, setActionReason] = useState('');
   const [newPlan, setNewPlan] = useState('');
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const filteredSubs = useMemo(() => {
     if (statusFilter === 'all') return subscriptions;
@@ -71,6 +76,129 @@ export function SubscriptionsTab({ subscriptions, subsLoading, format }: Subscri
     growth: 'oklch(0.696 0.17 162.48)',
     pro: 'oklch(0.6 0.118 184.704)',
     enterprise: 'oklch(0.55 0.2 303)',
+  };
+
+  const handleExportCsv = async (exportAll: boolean = false) => {
+    try {
+      setExporting(true);
+      let dataToExport: Subscription[] = filteredSubs;
+
+      if (exportAll) {
+        const res = await fetch('/api/superadmin/subscriptions?export=true');
+        if (!res.ok) {
+          throw new Error('Failed to fetch full subscriber dataset');
+        }
+        const json = await res.json();
+        dataToExport = Array.isArray(json.data) ? json.data : (Array.isArray(json.subscriptions) ? json.subscriptions : []);
+      }
+
+      if (!dataToExport || dataToExport.length === 0) {
+        toast.info('No subscription data to export');
+        return;
+      }
+
+      const headers = [
+        'Subscription ID',
+        'Business / Tenant Name',
+        'Business Email',
+        'Business Phone Number',
+        'WhatsApp Number',
+        'Owner / Primary Contact Name',
+        'Owner Email',
+        'Owner Phone',
+        'Subscription Plan',
+        'Subscription Status',
+        'Billing Cycle',
+        'Amount / Price',
+        'Currency',
+        'Tenant Plan Status',
+        'Forms Plan',
+        'Forms Plan Status',
+        'Lifetime Jobs Created',
+        'Industry',
+        'Address',
+        'Country',
+        'Fieseros Provider Public Page Link',
+        'Fieseros Marketplace Page Link',
+        'Superadmin Tenant Detail Link',
+        'Seat Count',
+        'AI Quota',
+        'AI Usage',
+        'WhatsApp Quota',
+        'WhatsApp Usage',
+        'Email Quota',
+        'Email Usage',
+        'SMS Quota',
+        'SMS Usage',
+        'Storage Quota (MB)',
+        'Storage Usage (MB)',
+        'Start Date',
+        'End Date',
+        'Paused Date',
+        'Pause Reason',
+        'Created At',
+      ];
+
+      const rows = dataToExport.map((sub) => [
+        sub.id,
+        sub.tenantName || '',
+        sub.tenantEmail || '',
+        sub.tenantPhone || '',
+        sub.tenantWhatsappPhone || '',
+        sub.ownerName || '',
+        sub.ownerEmail || '',
+        sub.ownerPhone || '',
+        sub.plan || '',
+        sub.status || '',
+        sub.billingCycle || 'monthly',
+        sub.amount ?? 0,
+        sub.currency || sub.tenantCurrency || 'USD',
+        sub.tenantPlanStatus || '',
+        sub.formsPlan || 'free',
+        sub.formsPlanStatus || 'active',
+        sub.lifetimeJobsCreated ?? 0,
+        sub.tenantIndustry || '',
+        sub.tenantAddress || '',
+        sub.tenantCountry || 'US',
+        sub.publicProfileUrl || '',
+        sub.marketplaceUrl || '',
+        sub.adminDetailUrl || '',
+        sub.seatCount ?? 0,
+        sub.aiQuota ?? 0,
+        sub.aiUsageCount ?? 0,
+        sub.whatsappQuota ?? 0,
+        sub.whatsappUsageCount ?? 0,
+        sub.emailQuota ?? 0,
+        sub.emailUsageCount ?? 0,
+        sub.smsQuota ?? 0,
+        sub.smsUsageCount ?? 0,
+        sub.storageQuotaMb ?? 0,
+        sub.storageUsageMb ?? 0,
+        sub.startDate || '',
+        sub.endDate || '',
+        sub.pausedDate || '',
+        sub.pauseReason || '',
+        sub.createdAt || '',
+      ]);
+
+      const csvContent = withBom(buildCsv(headers, rows));
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = exportFilename('fieseros-subscribers', 'csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Exported ${dataToExport.length} subscriber records successfully`);
+    } catch (err) {
+      console.error('Subscriber export failed:', err);
+      toast.error('Failed to export subscriber data');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleAction = async () => {
@@ -104,7 +232,29 @@ export function SubscriptionsTab({ subscriptions, subsLoading, format }: Subscri
   };
 
   const subscriptionColumns: Column<Subscription>[] = [
-    { key: 'tenant', header: 'Tenant', render: (s) => <span className="font-medium text-foreground">{s.tenantName}</span> },
+    {
+      key: 'tenant',
+      header: 'Tenant',
+      render: (s) => (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium text-foreground">{s.tenantName}</span>
+            {s.publicProfileUrl && (
+              <a
+                href={s.publicProfileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary transition-colors"
+                title="View Live Fieseros Page"
+              >
+                <ExternalLink className="size-3" />
+              </a>
+            )}
+          </div>
+          {s.tenantEmail ? <span className="text-[11px] text-muted-foreground">{s.tenantEmail}</span> : null}
+        </div>
+      ),
+    },
     { key: 'plan', header: 'Plan', render: (s) => <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(s.plan))}>{s.plan}</Badge> },
     { key: 'status', header: 'Status', render: (s) => <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadgeClasses(s.status))}>{s.status}</Badge> },
     { key: 'amount', header: 'Amount', render: (s) => <span className="text-right text-foreground block">{format(s.amount)}</span>, className: 'text-right' },
@@ -174,25 +324,44 @@ export function SubscriptionsTab({ subscriptions, subsLoading, format }: Subscri
 
         <Card className="card-shadow lg:col-span-2">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
                 <CardTitle className="text-sm font-semibold text-foreground">All Subscriptions</CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">{filteredSubs.length} found</CardDescription>
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[130px] text-xs">
-                  <Filter className="size-3 mr-1" /><SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="trial">Trial</SelectItem>
-                  <SelectItem value="past_due">Past Due</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" disabled={exporting || subsLoading}>
+                      {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                      <span>Export</span>
+                      <ChevronDown className="size-3 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48 text-xs">
+                    <DropdownMenuItem onClick={() => handleExportCsv(false)} disabled={exporting || filteredSubs.length === 0}>
+                      Export Filtered ({filteredSubs.length})
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExportCsv(true)} disabled={exporting}>
+                      Export All Subscribers (CSV)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[130px] text-xs h-8">
+                    <Filter className="size-3 mr-1" /><SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="trial">Trial</SelectItem>
+                    <SelectItem value="past_due">Past Due</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                    <SelectItem value="paused">Paused</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardHeader>
           <CardContent>

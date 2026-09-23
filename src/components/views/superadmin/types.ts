@@ -57,7 +57,24 @@ export interface Subscription {
   id: string;
   tenantId: string;
   tenantName: string;
+  tenantSlug?: string;
   tenantEmail: string;
+  tenantPhone?: string;
+  tenantWhatsappPhone?: string;
+  tenantAddress?: string;
+  tenantCountry?: string;
+  tenantCurrency?: string;
+  tenantIndustry?: string;
+  tenantPlanStatus?: string;
+  formsPlan?: string;
+  formsPlanStatus?: string;
+  lifetimeJobsCreated?: number;
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+  publicProfileUrl?: string;
+  marketplaceUrl?: string;
+  adminDetailUrl?: string;
   plan: string;
   status: string;
   amount: number;
@@ -72,6 +89,12 @@ export interface Subscription {
   aiUsageCount: number;
   whatsappQuota: number;
   whatsappUsageCount: number;
+  emailQuota?: number;
+  emailUsageCount?: number;
+  smsQuota?: number;
+  smsUsageCount?: number;
+  storageQuotaMb?: number;
+  storageUsageMb?: number;
   createdAt: string | null;
 }
 
