@@ -637,6 +637,20 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test ACH payments without real bank transfers.' },
   ], 'payment'],
+  // ─── Tier 2: Clearpay (UK/EU BNPL — separate from Afterpay) ───────────────
+  ['payment_clearpay', 'Clearpay', 'payment', 'Wallet', 'UK/EU BNPL — 4 interest-free installments', 'NEW', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'clearpay', options: [{ label: 'Clearpay', value: 'clearpay' }], helpText: 'Connected to Clearpay.' },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'GBP', searchPlaceholder: 'Search...', options: [{ label: 'GBP - British Pounds', value: 'GBP' }, { label: 'EUR - Euros', value: 'EUR' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  ], 'payment'],
+  // ─── Tier 2: GoCardless (Direct Debit) ────────────────────────────────────
+  ['payment_gocardless', 'GoCardless', 'payment', 'Building2', 'Direct debit bank transfers (SEPA, BACS, ACH, PAD, BECS)', 'NEW', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'gocardless', options: [{ label: 'GoCardless', value: 'gocardless' }], helpText: 'Connected to GoCardless.' },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'subscriptions', options: [{ label: 'Sell Subscriptions', value: 'subscriptions' }, { label: 'Sell Products', value: 'products' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'GBP', searchPlaceholder: 'Search...', options: [{ label: 'GBP - British Pounds', value: 'GBP' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'USD - United States Dollars', value: 'USD' }, { label: 'AUD - Australian Dollars', value: 'AUD' }, { label: 'CAD - Canadian Dollars', value: 'CAD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test direct debit mandates without real bank authorization.' },
+  ], 'payment'],
 
 
   // ─── Products (10) ────────────────────────────────────────────────────────────

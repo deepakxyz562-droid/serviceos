@@ -334,9 +334,8 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
   // 9. Afterpay
   {
     id: 'afterpay',
-    fieldType: 'control_square_afterpay',
+    fieldType: 'control_afterpay',
     name: 'Afterpay',
-    subtitle: 'Powered by Square',
     category: 'bnpl',
     description: 'Split payments into 4 interest-free installments paid every 2 weeks.',
     badge: 'BNPL',
@@ -347,18 +346,17 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: true,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#111827"/><path d="M12 24l4-8h4l-4 8h-4zm8 0l4-8h4l-4 8h-4z" fill="#B2FCE4"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'user_defined_amount'],
-    supportsBusinessLocation: true,
     configFields: [
-      { key: 'applicationId', label: 'Square Application ID', type: 'text' },
-      { key: 'accessToken', label: 'Square Access Token', type: 'password' },
+      { key: 'merchantId', label: 'Afterpay Merchant ID', type: 'text', placeholder: 'MID...' },
+      { key: 'secretKey', label: 'Afterpay Secret Key', type: 'password', placeholder: 'sk_...' },
+      { key: 'webhookSecret', label: 'Webhook Secret', type: 'password', placeholder: 'whsec_...' },
     ],
   },
   // 10. Clearpay (UK / EU)
   {
     id: 'clearpay',
-    fieldType: 'control_square_clearpay',
+    fieldType: 'control_clearpay',
     name: 'Clearpay',
-    subtitle: 'Powered by Square',
     category: 'bnpl',
     description: 'UK and European BNPL solution by Afterpay for 4 flexible installments.',
     badge: 'BNPL',
@@ -369,7 +367,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: true,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#000"/><path d="M13 23l3.5-6h3.5l-3.5 6H13zm7 0l3.5-6h3.5l-3.5 6H20z" fill="#B2FCE4"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'user_defined_amount'],
-    supportsBusinessLocation: true,
+    configFields: [
+      { key: 'merchantId', label: 'Clearpay Merchant ID', type: 'text', placeholder: 'MID...' },
+      { key: 'secretKey', label: 'Clearpay Secret Key', type: 'password', placeholder: 'sk_...' },
+    ],
   },
   // 11. Apple Pay & Google Pay
   {

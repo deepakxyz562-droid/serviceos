@@ -3,15 +3,15 @@
 /**
  * Chargify (Maxio) — B2B SaaS subscription billing.
  *
- * Renders a plan selector with recurring billing. Chargify is a subscription
- * billing engine (not a payment processor — it sits on top of Stripe/Braintree).
+ * Calls /api/forms/[id]/charge which creates a Chargify subscription via
+ * {subdomain}.chargify.com/subscriptions.json. If no payment profile is
+ * provided, Chargify returns a hosted_signup_url — we redirect the customer
+ * there to enter their card.
  *
- * When testMode is off, calls the /api/forms/[id]/charge endpoint which would
- * create a Chargify subscription via the Chargify API. When testMode is on,
- * simulates.
+ * When testMode is on (or apiKey/subdomain are not set), simulates.
  */
 import React, { useState } from 'react';
-import { Loader2, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
+import { Loader2, ShieldCheck, RefreshCw, AlertCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,12 +19,13 @@ import { PaymentGatewayHeader } from './payment-gateway-header';
 import type { WidgetProps } from '../widget-props';
 
 interface ChargifyValue {
-  status: 'idle' | 'processing' | 'succeeded' | 'error';
+  status: 'idle' | 'processing' | 'pending_redirect' | 'succeeded' | 'error';
   amount: number;
   currency: string;
   gatewayId: string;
   transactionId?: string;
   subscriptionId?: string;
+  checkoutUrl?: string;
   simulated?: boolean;
   errorMessage?: string;
 }
@@ -34,6 +35,7 @@ export function Chargify({ value, onChange, config, disabled, field }: WidgetPro
   const currency = String(config.currency ?? 'USD');
   const testMode = Boolean(config.testMode ?? true);
   const apiKey = String(config.apiKey ?? '');
+  const subdomain = String(config.subdomain ?? '');
   const formId = String((field as Record<string, unknown> | undefined)?.formId ?? '');
   const label = String(field?.label ?? 'Chargify Subscription');
   const [processing, setProcessing] = useState(false);
@@ -41,7 +43,7 @@ export function Chargify({ value, onChange, config, disabled, field }: WidgetPro
   const [customerEmail, setCustomerEmail] = useState('');
 
   const currencySymbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
-  const canGoLive = !testMode && Boolean(apiKey) && Boolean(formId);
+  const canGoLive = !testMode && Boolean(apiKey) && Boolean(subdomain) && Boolean(formId);
 
   const handleSubscribe = async () => {
     if (disabled) return;
@@ -67,16 +69,23 @@ export function Chargify({ value, onChange, config, disabled, field }: WidgetPro
         body: JSON.stringify({
           gatewayId: 'chargify',
           amount, currency,
-          customer: { email: customerEmail },
+          customer: { email: customerEmail, name: customerEmail.split('@')[0] || 'Customer' },
         }),
       });
       const data = await res.json();
       setProcessing(false);
       if (data.success) {
         onChange({
-          status: 'succeeded', amount, currency, gatewayId: 'chargify',
-          transactionId: data.transactionId, subscriptionId: data.subscriptionId,
+          status: data.checkoutUrl ? 'pending_redirect' : 'succeeded',
+          amount, currency, gatewayId: 'chargify',
+          transactionId: data.transactionId,
+          subscriptionId: data.subscriptionId,
+          checkoutUrl: data.checkoutUrl,
         } as ChargifyValue);
+        // If Chargify returned a hosted signup URL, redirect to it.
+        if (data.checkoutUrl) {
+          window.location.href = data.checkoutUrl;
+        }
       } else {
         setErrorMsg(data.error || 'Subscription creation failed.');
       }

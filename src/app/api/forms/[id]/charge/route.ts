@@ -191,42 +191,9 @@ export async function POST(
       }
     }
 
-    // ─── eCheck.Net (via Authorize.Net) ────────────────────────────────────
-    if (gatewayId === 'echeck_net') {
-      // eCheck.Net rides on Authorize.Net credentials.
-      const creds = await resolveFormCredentials(formId, 'authorize_net');
-      if (!creds?.apiLoginId || !creds?.transactionKey) {
-        return NextResponse.json({
-          success: false,
-          error: 'No Authorize.Net credentials connected. Add your API Login ID and Transaction Key in the form inspector or in Dashboard > Settings > Payments.',
-          gatewayId,
-        }, { status: 503 });
-      }
-      return NextResponse.json({
-        success: false,
-        error: 'eCheck.Net real charges require the Accept.js SDK to tokenize bank details. This flow is not yet implemented.',
-        gatewayId,
-        flow: 'client_side',
-      }, { status: 501 });
-    }
-
-    // ─── Chargify (subscription billing) ────────────────────────────────────
-    if (gatewayId === 'chargify') {
-      const creds = await resolveFormCredentials(formId, 'chargify');
-      if (!creds?.apiKey || !creds?.subdomain) {
-        return NextResponse.json({
-          success: false,
-          error: 'No Chargify credentials connected. Add your Chargify API Key and Subdomain in the form inspector or in Dashboard > Settings > Payments.',
-          gatewayId,
-        }, { status: 503 });
-      }
-      return NextResponse.json({
-        success: false,
-        error: 'Chargify subscription creation flow is not yet implemented.',
-        gatewayId,
-        flow: 'server_side',
-      }, { status: 501 });
-    }
+    // ─── eCheck.Net, Chargify, Mollie, PayU India, GoCardless, Afterpay/Clearpay
+    // are handled further below (after Authorize.Net) — they share the same
+    // resolveFormCredentials pattern.
 
     // ─── Authorize.Net (via Accept.js opaque token) ────────────────────────
     if (gatewayId === 'authorize_net') {
@@ -525,10 +492,508 @@ export async function POST(
       }
     }
 
+    // ─── eCheck.Net (via Authorize.Net echeck transaction) ────────────────
+    if (gatewayId === 'echeck_net') {
+      // eCheck.Net rides on Authorize.Net credentials.
+      const creds = await resolveFormCredentials(formId, 'echeck_net');
+      let apiLoginId: string | undefined;
+      let transactionKey: string | undefined;
+      let isLive = true;
+
+      if (creds?.apiLoginId && creds?.transactionKey) {
+        apiLoginId = creds.apiLoginId as string;
+        transactionKey = creds.transactionKey as string;
+        isLive = creds.isLive !== false;
+      } else {
+        // Fall back to platform env vars.
+        apiLoginId = process.env.AUTHORIZE_NET_API_LOGIN_ID;
+        transactionKey = process.env.AUTHORIZE_NET_TRANSACTION_KEY;
+        isLive = process.env.AUTHORIZE_NET_ENVIRONMENT === 'production';
+      }
+
+      if (!apiLoginId || !transactionKey) {
+        return NextResponse.json({
+          success: false,
+          error: 'No Authorize.Net credentials connected. Add your API Login ID and Transaction Key in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
+
+      // The frontend sends paymentMethodId as `${dataDescriptor}:${dataValue}`
+      // from Accept.js opaque tokenization. For eCheck, the opaque data wraps
+      // the bank account/routing number securely.
+      const [dataDescriptor, dataValue] = String(paymentMethodId || '').split(':');
+      if (!dataDescriptor || !dataValue) {
+        return NextResponse.json({
+          success: false,
+          error: 'Missing Accept.js opaque data for eCheck. The frontend must tokenize bank details via Accept.js first.',
+          gatewayId,
+        }, { status: 400 });
+      }
+
+      try {
+        const apiBase = isLive
+          ? 'https://api.authorize.net/xml/v1/request.api'
+          : 'https://apitest.authorize.net/xml/v1/request.api';
+        const amountStr = Number(amount).toFixed(2);
+        const res = await fetch(apiBase, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+          body: JSON.stringify({
+            createTransactionRequest: {
+              merchantAuthentication: { name: apiLoginId, transactionKey },
+              transactionRequest: {
+                transactionType: 'authCaptureTransaction',
+                amount: amountStr,
+                payment: { opaqueData: { dataDescriptor, dataValue } },
+                order: { description: `Form eCheck payment - ${formId}` },
+              },
+            },
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          return NextResponse.json({
+            success: false,
+            error: `Authorize.Net eCheck request failed: ${errText}`,
+            gatewayId,
+          }, { status: 402 });
+        }
+        const text = await res.text();
+        const clean = text.replace(/^\uFEFF/, '');
+        const data = JSON.parse(clean);
+        const txResponse = data?.transactionResponse;
+        if (data?.messages?.resultCode === 'Ok' && txResponse?.transId) {
+          if (formResponseId) {
+            await db.formResponse.update({
+              where: { id: formResponseId },
+              data: {
+                paymentStatus: 'succeeded',
+                transactionId: String(txResponse.transId),
+                paymentMethod: 'echeck_net',
+                paymentAmount: Number(amount),
+                paymentCurrency: currency,
+                paymentGatewayId: gatewayId,
+                paidAt: new Date(),
+              },
+            }).catch(() => { /* noop */ });
+          }
+          return NextResponse.json({
+            success: true,
+            transactionId: String(txResponse.transId),
+            paymentStatus: 'succeeded',
+            gateway: 'echeck_net',
+          });
+        }
+        return NextResponse.json({
+          success: false,
+          error: data?.messages?.message?.[0]?.text || 'Authorize.Net eCheck declined the payment.',
+          gatewayId,
+        }, { status: 402 });
+      } catch (echeckError: any) {
+        console.error('[forms/charge] eCheck.Net error:', echeckError);
+        return NextResponse.json({
+          success: false,
+          error: 'eCheck.Net payment failed',
+          details: echeckError.message,
+        }, { status: 402 });
+      }
+    }
+
+    // ─── Chargify (subscription billing) ────────────────────────────────────
+    if (gatewayId === 'chargify') {
+      const creds = await resolveFormCredentials(formId, 'chargify');
+      if (!creds?.apiKey || !creds?.subdomain) {
+        return NextResponse.json({
+          success: false,
+          error: 'No Chargify credentials connected. Add your Chargify API Key and Subdomain in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
+      const apiKey = creds.apiKey as string;
+      const subdomain = creds.subdomain as string;
+      const isLive = creds.isLive !== false;
+      const productId = (creds.productId as string) || String(body.config?.productId || body.productId || '');
+
+      try {
+        // Chargify API: POST https://{subdomain}.chargify.com/subscriptions.json
+        // Uses HTTP Basic auth with apiKey:X (X is a literal placeholder —
+        // Chargify's API key is the only secret needed).
+        const apiBase = isLive
+          ? `https://${subdomain}.chargify.com`
+          : `https://${subdomain}.chargify.com`; // Chargify has no separate sandbox domain
+        const auth = Buffer.from(`${apiKey}:X`).toString('base64');
+        const res = await fetch(`${apiBase}/subscriptions.json`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            subscription: {
+              product_id: productId,
+              customer_attributes: {
+                first_name: customer?.name?.split(' ')[0] || 'Customer',
+                last_name: customer?.name?.split(' ').slice(1).join(' ') || '',
+                email: customer?.email || '',
+              },
+              // chargify handles payment method collection via hosted signup page
+              // if no payment profile is provided. We return the hosted URL.
+            },
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          return NextResponse.json({
+            success: false,
+            error: `Chargify subscription creation failed: ${errText}`,
+            gatewayId,
+          }, { status: 402 });
+        }
+        const data = await res.json();
+        const subscriptionId = data?.subscription?.id;
+        const hostedUrl = data?.subscription?.hosted_signup_url;
+        if (formResponseId && subscriptionId) {
+          await db.formResponse.update({
+            where: { id: formResponseId },
+            data: {
+              paymentStatus: 'pending',
+              transactionId: String(subscriptionId),
+              paymentMethod: 'chargify',
+              paymentAmount: Number(amount),
+              paymentCurrency: currency,
+              paymentGatewayId: gatewayId,
+            },
+          }).catch(() => { /* noop */ });
+        }
+        return NextResponse.json({
+          success: true,
+          transactionId: String(subscriptionId || ''),
+          subscriptionId: String(subscriptionId || ''),
+          checkoutUrl: hostedUrl || null,
+          paymentStatus: 'pending',
+          gateway: 'chargify',
+        });
+      } catch (chargifyError: any) {
+        console.error('[forms/charge] Chargify error:', chargifyError);
+        return NextResponse.json({
+          success: false,
+          error: 'Chargify subscription creation failed',
+          details: chargifyError.message,
+        }, { status: 402 });
+      }
+    }
+
+    // ─── Mollie (European gateway: iDEAL, Bancontact, EPS, Giropay, SEPA) ───
+    if (gatewayId === 'mollie') {
+      const creds = await resolveFormCredentials(formId, 'mollie');
+      if (!creds?.apiKey) {
+        return NextResponse.json({
+          success: false,
+          error: 'No Mollie credentials connected. Add your Mollie API Key in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
+      const apiKey = creds.apiKey as string;
+      try {
+        // Mollie Payments API: POST https://api.mollie.com/v2/payments
+        // Returns { _links: { checkout: { href } } } — redirect URL.
+        const res = await fetch('https://api.mollie.com/v2/payments', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: { currency, value: Number(amount).toFixed(2) },
+            description: `Form payment - ${formId}`,
+            redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=success`,
+            webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/payments/webhook/mollie`,
+            metadata: { formId, formResponseId: formResponseId || '', gatewayId },
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          return NextResponse.json({
+            success: false,
+            error: `Mollie payment creation failed: ${errText}`,
+            gatewayId,
+          }, { status: 402 });
+        }
+        const data = await res.json();
+        const checkoutUrl = data?._links?.checkout?.href;
+        if (formResponseId && data?.id) {
+          await db.formResponse.update({
+            where: { id: formResponseId },
+            data: {
+              paymentStatus: 'pending',
+              transactionId: data.id,
+              paymentMethod: 'mollie',
+              paymentAmount: Number(amount),
+              paymentCurrency: currency,
+              paymentGatewayId: gatewayId,
+            },
+          }).catch(() => { /* noop */ });
+        }
+        return NextResponse.json({
+          success: true,
+          transactionId: data?.id || '',
+          checkoutUrl,
+          paymentStatus: 'pending',
+          gateway: 'mollie',
+        });
+      } catch (mollieError: any) {
+        console.error('[forms/charge] Mollie error:', mollieError);
+        return NextResponse.json({
+          success: false,
+          error: 'Mollie payment creation failed',
+          details: mollieError.message,
+        }, { status: 402 });
+      }
+    }
+
+    // ─── PayU India (UPI, NetBanking, Cards, Wallets, EMI) ─────────────────
+    if (gatewayId === 'payu_india') {
+      const creds = await resolveFormCredentials(formId, 'payu_india');
+      if (!creds?.merchantKey || !creds?.merchantSalt) {
+        return NextResponse.json({
+          success: false,
+          error: 'No PayU India credentials connected. Add your Merchant Key and Merchant Salt in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
+      const merchantKey = creds.merchantKey as string;
+      const merchantSalt = creds.merchantSalt as string;
+      const isLive = creds.isLive !== false;
+      const txnid = `form_${formId}_${Date.now()}`;
+      const productinfo = `Form payment - ${formId}`;
+
+      try {
+        // PayU India hash-based redirect flow.
+        // The hash is sha512(key|txnid|amount|productinfo|firstname|email|||||||||||salt)
+        const firstname = customer?.name?.split(' ')[0] || 'Customer';
+        const email = customer?.email || '';
+        const hashString = `${merchantKey}|${txnid}|${Number(amount).toFixed(2)}|${productinfo}|${firstname}|${email}|||||||||||${merchantSalt}`;
+        const crypto = await import('crypto');
+        const hash = crypto.createHash('sha512').update(hashString).digest('hex');
+        const actionUrl = isLive
+          ? 'https://secure.payu.in/_payment'
+          : 'https://test.payu.in/_payment';
+
+        if (formResponseId) {
+          await db.formResponse.update({
+            where: { id: formResponseId },
+            data: {
+              paymentStatus: 'pending',
+              transactionId: txnid,
+              paymentMethod: 'payu_india',
+              paymentAmount: Number(amount),
+              paymentCurrency: currency,
+              paymentGatewayId: gatewayId,
+            },
+          }).catch(() => { /* noop */ });
+        }
+
+        // Return the redirect parameters — the frontend builds a hidden form
+        // and POSTs to PayU's actionUrl.
+        return NextResponse.json({
+          success: true,
+          transactionId: txnid,
+          paymentStatus: 'pending',
+          gateway: 'payu_india',
+          redirect: {
+            url: actionUrl,
+            method: 'POST',
+            params: {
+              key: merchantKey,
+              txnid,
+              amount: Number(amount).toFixed(2),
+              productinfo,
+              firstname,
+              email,
+              phone: customer?.phone || '',
+              surl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/payments/webhook/payu/success`,
+              furl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/payments/webhook/payu/failure`,
+              hash,
+              udf1: formId,
+              udf2: formResponseId || '',
+              udf3: gatewayId,
+            },
+          },
+        });
+      } catch (payuError: any) {
+        console.error('[forms/charge] PayU India error:', payuError);
+        return NextResponse.json({
+          success: false,
+          error: 'PayU India payment initiation failed',
+          details: payuError.message,
+        }, { status: 402 });
+      }
+    }
+
+    // ─── GoCardless (Direct Debit: SEPA, BACS, ACH, PAD, BECS) ──────────────
+    if (gatewayId === 'gocardless') {
+      const creds = await resolveFormCredentials(formId, 'gocardless');
+      if (!creds?.accessToken) {
+        return NextResponse.json({
+          success: false,
+          error: 'No GoCardless credentials connected. Add your GoCardless Access Token in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
+      const accessToken = creds.accessToken as string;
+      const isLive = creds.isLive !== false;
+      const apiBase = isLive
+        ? 'https://api.gocardless.com'
+        : 'https://api-sandbox.gocardless.com';
+
+      try {
+        // GoCardless redirect flow: creates a mandate via hosted page.
+        // Step 1: POST /redirect_flows to start the bank authorization flow.
+        const res = await fetch(`${apiBase}/redirect_flows`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+            'GoCardless-Version': '2015-07-06',
+            'Idempotency-Key': `${formId}_${Date.now()}`,
+          },
+          body: JSON.stringify({
+            redirect_flows: {
+              description: `Form payment mandate - ${formId}`,
+              success_redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?gocardless=success`,
+              metadata: { formId, formResponseId: formResponseId || '', gatewayId },
+            },
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          return NextResponse.json({
+            success: false,
+            error: `GoCardless redirect flow creation failed: ${errText}`,
+            gatewayId,
+          }, { status: 402 });
+        }
+        const data = await res.json();
+        const redirectFlowId = data?.redirect_flows?.id;
+        const redirectUrl = data?.redirect_flows?.redirect_url;
+
+        if (formResponseId && redirectFlowId) {
+          await db.formResponse.update({
+            where: { id: formResponseId },
+            data: {
+              paymentStatus: 'pending',
+              transactionId: redirectFlowId,
+              paymentMethod: 'gocardless',
+              paymentAmount: Number(amount),
+              paymentCurrency: currency,
+              paymentGatewayId: gatewayId,
+            },
+          }).catch(() => { /* noop */ });
+        }
+
+        return NextResponse.json({
+          success: true,
+          transactionId: redirectFlowId || '',
+          checkoutUrl: redirectUrl,
+          paymentStatus: 'pending',
+          gateway: 'gocardless',
+        });
+      } catch (gocardlessError: any) {
+        console.error('[forms/charge] GoCardless error:', gocardlessError);
+        return NextResponse.json({
+          success: false,
+          error: 'GoCardless redirect flow creation failed',
+          details: gocardlessError.message,
+        }, { status: 402 });
+      }
+    }
+
+    // ─── Afterpay / Clearpay (BNPL: Pay in 4) ──────────────────────────────
+    if (gatewayId === 'afterpay' || gatewayId === 'clearpay') {
+      const creds = await resolveFormCredentials(formId, gatewayId);
+      if (!creds?.merchantId || !creds?.secretKey) {
+        return NextResponse.json({
+          success: false,
+          error: `No ${gatewayId === 'afterpay' ? 'Afterpay' : 'Clearpay'} credentials connected. Add your Merchant ID and Secret Key in the form inspector or in Dashboard > Settings > Payments.`,
+          gatewayId,
+        }, { status: 503 });
+      }
+      const merchantId = creds.merchantId as string;
+      const secretKey = creds.secretKey as string;
+      const isLive = creds.isLive !== false;
+      const apiBase = isLive
+        ? (gatewayId === 'afterpay' ? 'https://api.us.afterpay.com/v2' : 'https://api.clearpay.co.uk/v2')
+        : (gatewayId === 'afterpay' ? 'https://api-sandbox.us.afterpay.com/v2' : 'https://api-sandbox.clearpay.co.uk/v2');
+
+      try {
+        // Afterpay/Clearpay Checkout API: POST /checkouts
+        // Returns { token, redirectCheckoutUrl } for redirect flow.
+        const auth = Buffer.from(`${merchantId}:${secretKey}`).toString('base64');
+        const res = await fetch(`${apiBase}/checkouts`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: {
+              amount: Number(amount).toFixed(2),
+              currency,
+            },
+            merchantReference: `form_${formId}_${Date.now()}`,
+            description: `Form payment - ${formId}`,
+            redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?afterpay=success`,
+            metadata: { formId, formResponseId: formResponseId || '', gatewayId },
+          }),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          return NextResponse.json({
+            success: false,
+            error: `${gatewayId} checkout creation failed: ${errText}`,
+            gatewayId,
+          }, { status: 402 });
+        }
+        const data = await res.json();
+        const token = data?.token;
+        const checkoutUrl = data?.redirectCheckoutUrl;
+
+        if (formResponseId && token) {
+          await db.formResponse.update({
+            where: { id: formResponseId },
+            data: {
+              paymentStatus: 'pending',
+              transactionId: token,
+              paymentMethod: gatewayId,
+              paymentAmount: Number(amount),
+              paymentCurrency: currency,
+              paymentGatewayId: gatewayId,
+            },
+          }).catch(() => { /* noop */ });
+        }
+
+        return NextResponse.json({
+          success: true,
+          transactionId: token || '',
+          checkoutUrl,
+          paymentStatus: 'pending',
+          gateway: gatewayId,
+        });
+      } catch (afterpayError: any) {
+        console.error(`[forms/charge] ${gatewayId} error:`, afterpayError);
+        return NextResponse.json({
+          success: false,
+          error: `${gatewayId} checkout creation failed`,
+          details: afterpayError.message,
+        }, { status: 402 });
+      }
+    }
+
     // ─── Other gateways ─────────────────────────────────────────────────────
     return NextResponse.json({
       success: false,
-      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_* (stripe_elements, stripe_checkout, stripe_ach), paypal_*, razorpay_*, square_payments, authorize_net, echeck_net, chargify.`,
+      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_* (stripe_elements, stripe_checkout, stripe_ach), paypal_*, razorpay_*, square_payments, authorize_net, echeck_net, chargify, mollie, payu_india, gocardless, afterpay, clearpay.`,
       gatewayId,
     }, { status: 501 });
   } catch (error: any) {
