@@ -238,3 +238,6 @@ export function VoiceRecorder({
     </div>
   );
 }
+
+export default VoiceRecorder;
+

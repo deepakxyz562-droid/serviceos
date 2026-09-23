@@ -129,7 +129,7 @@ const AudienceAnalyticsView = lazy(() => import('@/components/views/audience-ana
 const EmailCampaignsView = lazy(() => import('@/components/views/email-campaigns-view').then(m => ({ default: m.EmailCampaignsView })));
 const EmailProvidersView = lazy(() => import('@/components/views/email-providers-view').then(m => ({ default: m.EmailProvidersView })));
 const EmailTemplatesView = lazy(() => import('@/components/views/email-templates-view').then(m => ({ default: m.EmailTemplatesView })));
-const ChannelsView = lazy(() => import('@/components/views/channels-view'));
+const ChannelsView = lazy(() => import('@/components/views/channels-view').then(m => ({ default: m.default || m.ChannelsView })));
 
 // Template Studio
 const TemplateStudioView = lazy(() => import('@/components/templates/template-studio-view').then(m => ({ default: m.TemplateStudioView })));

@@ -651,3 +651,6 @@ export function PaymentGatewayRuntime({
     </div>
   );
 }
+
+export default PaymentGatewayRuntime;
+

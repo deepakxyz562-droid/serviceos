@@ -157,3 +157,6 @@ export function FormCalculation({
     </div>
   );
 }
+
+export default FormCalculation;
+
