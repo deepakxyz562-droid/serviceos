@@ -180,7 +180,7 @@ export default function PublicFormPage() {
           formDescription={formDescription}
           schema={schema}
           branding={branding}
-          allowModeSwitch={(schema.settings as any)?.allowModeSwitch === true}
+          allowModeSwitch={true}
           mode={resolvedMode}
         />
       </div>

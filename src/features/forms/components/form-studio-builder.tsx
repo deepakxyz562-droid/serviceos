@@ -110,7 +110,11 @@ export function FormStudioBuilder({
   const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'agent' | 'templates'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const [previewFormat, setPreviewFormat] = useState<'paper' | 'card' | 'agent'>('paper');
+  const initialPreviewFormat: 'paper' | 'card' | 'agent' =
+    formData.theme?.layout === 'conversational' || (formData.settings as any)?.formLayout === 'conversational' ? 'agent'
+    : formData.theme?.layout === 'card' || (formData.settings as any)?.formLayout === 'single_question' ? 'card'
+    : 'paper';
+  const [previewFormat, setPreviewFormat] = useState<'paper' | 'card' | 'agent'>(initialPreviewFormat);
   
   // Selection and Palette state
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(formData.fields[0]?.id || null);
@@ -1430,7 +1434,37 @@ export function FormStudioBuilder({
                 </CardContent>
               </Card>
 
-              {/* 5. Form Warnings */}
+              {/* 5. AI Smart Fast-Fill */}
+              <Card className="rounded-2xl border-border/80 shadow-xs hover:border-emerald-500/40 transition-colors">
+                <CardContent className="p-5 flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Zap className="size-4 text-emerald-600" />
+                      <Label className="text-sm font-bold text-foreground cursor-pointer" htmlFor="fastfill-toggle">
+                        AI Smart Fast-Fill
+                      </Label>
+                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40">
+                        Live Forms Only
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Show the "AI Smart Fast-Fill" panel on your live form, allowing respondents to paste raw text or contact cards to auto-fill matching fields instantly.
+                    </p>
+                  </div>
+                  <Switch
+                    id="fastfill-toggle"
+                    checked={!(formData.settings as any)?.disableFastFill}
+                    onCheckedChange={(v) =>
+                      onFormDataChange((prev) => ({
+                        ...prev,
+                        settings: { ...(prev.settings || {}), disableFastFill: !v } as any,
+                      }))
+                    }
+                  />
+                </CardContent>
+              </Card>
+
+
               <Card className="rounded-2xl border-border/80 shadow-xs hover:border-emerald-500/40 transition-colors">
                 <CardContent className="p-5 flex items-start justify-between gap-4">
                   <div className="space-y-1">

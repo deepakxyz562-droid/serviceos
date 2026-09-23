@@ -537,6 +537,7 @@ export function FormRuntimeRenderer({
 
   // Restore draft from localStorage on mount
   useEffect(() => {
+    if (previewMode) return; // studio preview always starts blank
     try {
       if (typeof window !== 'undefined') {
         const saved = localStorage.getItem(storageKey);
@@ -1290,7 +1291,9 @@ export function FormRuntimeRenderer({
                   </div>
                 )}
 
+
                 {/* ─── AI Smart Fast-Fill Accordion / Action Pill ───────────── */}
+                {!previewMode && !(schema.settings as any)?.disableFastFill && (
                 <div className="rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/5 via-teal-500/5 to-emerald-500/5 p-3.5 transition-all">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -1359,6 +1362,7 @@ export function FormRuntimeRenderer({
                     </div>
                   )}
                 </div>
+                )}
 
             {/* ─── Card-by-Card Mode: render ONE field at a time ─────────────── */}
             {activeMode === 'card' ? (
