@@ -89,6 +89,7 @@ export function AgentDeviceSimulator({
   const [isMuted, setIsMuted] = useState(false);
   const [screenSharingActive, setScreenSharingActive] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [activeFormModal, setActiveFormModal] = useState<ConnectedFormRef | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize greeting on load
@@ -536,7 +537,10 @@ export function AgentDeviceSimulator({
                         <Button
                           type="button"
                           size="sm"
-                          onClick={() => onOpenFormInModal?.(msg.suggestedForm!)}
+                          onClick={() => {
+                            setActiveFormModal(msg.suggestedForm!);
+                            onOpenFormInModal?.(msg.suggestedForm!);
+                          }}
                           className="w-full h-7 text-[11px] font-bold bg-blue-600 hover:bg-blue-700 text-white gap-1 shadow-xs"
                         >
                           Open &amp; Fill Form <ArrowRight className="size-3" />
@@ -707,8 +711,11 @@ export function AgentDeviceSimulator({
                 <Button
                   type="button"
                   size="sm"
-                  onClick={() => onOpenFormInModal?.(form)}
-                  className="h-7 text-xs font-bold bg-blue-600 text-white"
+                  onClick={() => {
+                    setActiveFormModal(form);
+                    onOpenFormInModal?.(form);
+                  }}
+                  className="h-7 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer"
                 >
                   Fill Form
                 </Button>
@@ -828,12 +835,43 @@ export function AgentDeviceSimulator({
 
       <div
         className={cn(
-          'py-1 text-center text-[9px] border-t',
+          'py-1 text-center text-[9px] border-t shrink-0',
           isDark ? 'bg-slate-950 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-100 text-slate-500'
         )}
       >
         Powered by <strong className={cn('font-bold', isDark ? 'text-slate-200' : 'text-slate-700')}>Fieseros AI</strong>
       </div>
+
+      {/* ── IN-CHAT CONNECTED FORM MODAL OVERLAY (JotForm AI Agent Style) ── */}
+      {activeFormModal && (
+        <div className="absolute inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col animate-in fade-in zoom-in-95 duration-200">
+          <div className="px-4 py-3 border-b flex items-center justify-between bg-muted/40 shrink-0">
+            <div className="flex items-center gap-2">
+              <FileText className="size-4 text-blue-600" />
+              <div>
+                <h3 className="text-xs font-bold text-foreground line-clamp-1">{activeFormModal.name}</h3>
+                <p className="text-[10px] text-muted-foreground line-clamp-1">{activeFormModal.description || 'Fill and submit to complete inquiry'}</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveFormModal(null)}
+              className="size-7 rounded-full text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+          <div className="flex-1 min-h-0 w-full overflow-y-auto p-2">
+            <iframe
+              src={`/form/${encodeURIComponent(activeFormModal.id)}`}
+              title={activeFormModal.name}
+              className="w-full h-full min-h-[440px] border-0 rounded-xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
