@@ -309,6 +309,11 @@ export function FormStudioBuilder({
         mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
       },
       mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
+      // Bridge the agent configuration from the studio's "AI Agent" tab into
+      // the runtime schema. The runtime renderer's `activeMode === 'agent'`
+      // branch will read this and render AgentDeviceSimulator — making the
+      // preview pixel-identical to the edit-mode widget.
+      agentConfig: formData.agentConfig,
       rules: (formData.rules as any[]) || [],
       settings: {
         submitButtonText: formData.submitButtonText || 'Submit',
@@ -2502,7 +2507,12 @@ export function FormStudioBuilder({
                     </div>
                   </div>
                   {/* Phone Screen Internal Scrollable Content */}
-                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain pb-6">
+                  <div
+                    className={cn(
+                      'flex-1 min-h-0 h-full overflow-y-auto overscroll-contain',
+                      previewFormat === 'agent' ? '' : 'pb-6',
+                    )}
+                  >
                     <FormRuntimeRenderer
                       previewMode={true}
                       formName={formData.name || 'Untitled Form'}
@@ -2527,7 +2537,12 @@ export function FormStudioBuilder({
                     <div className="size-2 bg-slate-900 rounded-full" />
                   </div>
                   {/* Tablet Screen Internal Scrollable Content */}
-                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-2 pb-8">
+                  <div
+                    className={cn(
+                      'flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-2',
+                      previewFormat === 'agent' ? '' : 'pb-8',
+                    )}
+                  >
                     <FormRuntimeRenderer
                       previewMode={true}
                       formName={formData.name || 'Untitled Form'}
@@ -2569,8 +2584,23 @@ export function FormStudioBuilder({
                     </a>
                   </div>
                   {/* Desktop Screen Internal Scrollable Content */}
-                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center">
-                    <div className="w-full max-w-2xl pb-16">
+                  {/* When previewFormat === 'agent', stretch the child so the
+                      chat widget fills the viewport height (no more dead gap
+                      below the widget). For paper/card modes, keep vertical
+                      centering + bottom padding so short forms don't stick
+                      to the top. */}
+                  <div
+                    className={cn(
+                      'flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center',
+                      previewFormat === 'agent' ? 'items-stretch' : 'items-center',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'w-full max-w-2xl',
+                        previewFormat === 'agent' ? 'h-full flex flex-col' : 'pb-16',
+                      )}
+                    >
                       <FormRuntimeRenderer
                         previewMode={true}
                         formName={formData.name || 'Untitled Form'}

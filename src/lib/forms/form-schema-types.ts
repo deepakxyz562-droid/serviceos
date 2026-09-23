@@ -216,6 +216,12 @@ export interface FormSchema {
   rules: ConditionalRule[];
   theme: FormTheme;
   mediaPanel?: FormMediaPanel;
+  // Agent configuration bridged from the form studio's "AI Agent" tab.
+  // When present, the runtime renders AgentDeviceSimulator (the same widget
+  // used in edit mode) instead of the generic ConversationalAgentRuntime.
+  // Imported lazily as `any` to avoid a circular type dependency between
+  // lib/forms and features/forms.
+  agentConfig?: any;
   settings: {
     submitButtonText: string;
     successTitle: string;

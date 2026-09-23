@@ -122,6 +122,29 @@ export function AgentDeviceSimulator({
     if (!textToSend) setInputText('');
     setSending(true);
 
+    // ─── TEST MODE: never hit the real chat API ──────────────────────────
+    // In the studio's preview viewport, the agent may not be saved yet, and
+    // we don't want to consume AI credits for a preview. Return a friendly
+    // simulated reply that surfaces the connected form (if any) so the user
+    // can verify the "Fill Form" handoff works end-to-end.
+    if (isTestMode) {
+      try {
+        await new Promise((r) => setTimeout(r, 500)); // brief thinking delay
+        const connectedForm = agent.connectedForms?.[0];
+        const aiMsg: ChatMsg = {
+          id: `ai_sim_${Date.now()}`,
+          sender: 'ai',
+          text: `Great question! In test mode I can't reach the live AI, but here's how I'd help: I can answer questions about ${agent.roleTitle || 'your inquiry'}, or you can fill out the connected form and I'll guide you through it.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          suggestedForm: connectedForm,
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     try {
       const res = await fetch(`/api/forms/agents/${agent.id}/chat`, {
         method: 'POST',

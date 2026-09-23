@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { FormSchema, FormField } from '@/lib/forms/form-schema-types';
 import { WidgetRuntimeDispatcher } from './widgets/widget-runtime-dispatcher';
 import { ConversationalAgentRuntime } from './conversational-agent-runtime';
+import { AgentPreviewBridge } from './agent-preview-bridge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -368,7 +369,7 @@ function FormMediaHeroPanel({
  * Math.*, no eval, no Function constructor. Returns null on any error
  * (division by zero, missing values, invalid characters, etc.).
  */
-function evaluateFormulaSafe(
+export function evaluateFormulaSafe(
   formula: string,
   values: Record<string, unknown>,
   fields?: Array<{ id: string; widgetConfig?: Record<string, unknown> }>,
@@ -887,7 +888,12 @@ export function FormRuntimeRenderer({
       return changed ? next : prev;
     });
      
-  }, [isEstimatorForm, schema.fields]);
+  // ─── Deps: `formData` MUST be in this list ──────────────────────────────
+  // Without `formData`, this effect runs ONCE on mount and never re-runs
+  // when the user changes a slider/input. Result: form_calculation fields
+  // stay at their initial state ($0.00) for the entire session. Adding
+  // `formData` makes calculations re-evaluate on every input change.
+  }, [isEstimatorForm, schema.fields, formData]);
 
   // Ghost form partial lead capture
   const handleFieldChange = (fieldId: string, value: any) => {
@@ -1038,9 +1044,9 @@ export function FormRuntimeRenderer({
   // Render Conversational AI Voice/Chat Agent Mode
   if (activeMode === 'agent') {
     return (
-      <div className="max-w-xl mx-auto space-y-3">
+      <div className="w-full h-full flex flex-col">
         {allowModeSwitch && (
-          <div className="flex justify-end gap-1">
+          <div className="flex justify-end gap-1 pb-2 shrink-0">
             <Button
               type="button"
               variant="outline"
@@ -1052,14 +1058,19 @@ export function FormRuntimeRenderer({
             </Button>
           </div>
         )}
-        <ConversationalAgentRuntime
-          schema={schema}
-          formName={formName}
-          formData={formData}
-          onFieldChange={handleFieldChange}
-          onSubmit={handleSubmit}
-          submitting={submitting}
-        />
+        {/* AgentPreviewBridge renders the SAME AgentDeviceSimulator widget
+            used in the studio's edit mode — making preview pixel-identical
+            to what the user configured. It reads schema.agentConfig (or
+            synthesizes a default) and never hits the real chat API in
+            preview/test mode. */}
+        <div className="flex-1 min-h-0 flex">
+          <AgentPreviewBridge
+            schema={schema}
+            formName={formName}
+            formDescription={formDescription}
+            onSwitchToPaper={() => handleModeSwitch('paper')}
+          />
+        </div>
       </div>
     );
   }

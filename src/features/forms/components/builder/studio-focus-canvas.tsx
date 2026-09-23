@@ -50,6 +50,7 @@ import {
 import { toast } from 'sonner';
 import type { EditorFormData, FormField } from '@/features/forms/types';
 import { WidgetRuntimeDispatcher } from '../runtime/widgets/widget-runtime-dispatcher';
+import { evaluateFormulaSafe } from '../runtime/form-runtime-renderer';
 import { getFieldById } from '@/lib/forms/field-registry';
 import { resolveIcon } from '@/lib/forms/icon-resolver';
 
@@ -153,8 +154,42 @@ export function StudioFocusCanvas({
       } else if (f.options && Array.isArray(f.options) && f.options.length > 0) {
         const first = f.options[0];
         data[f.id] = typeof first === 'object' && first !== null ? (first as any).value ?? (first as any).label : first;
+      } else {
+        // ─── Seed input fields with sensible defaults so formulas evaluate ──
+        // Without this, slider/numerical fields have `undefined` in
+        // canvasFormData → FormCalculation evaluates `0 * rate = 0` →
+        // the editor canvas shows "$0.00" for all formula blocks.
+        const cfg = (f.widgetConfig as Record<string, any>) || {};
+        const wt = f.widgetType || f.type;
+        if (wt === 'slider' || f.type === 'slider') {
+          // Use the slider's min value, or a sensible default (2400 sq ft).
+          const min = typeof cfg.min === 'number' ? cfg.min : 800;
+          data[f.id] = min > 0 ? min : 2400;
+        } else if (f.type === 'numerical' || wt === 'numerical') {
+          data[f.id] = 0;
+        } else if (f.type === 'switch' || f.type === 'toggle' || wt === 'switch' || wt === 'toggle') {
+          data[f.id] = false;
+        }
       }
     }
+
+    // ─── Evaluate form_calculation fields using the seeded values ──────────
+    // This gives the editor a live (read-only) preview of what the formula
+    // produces. Previously, the FormCalculation widget would show "$0.00"
+    // because allFormData had no seeded input values.
+    for (const f of fields) {
+      if (f.widgetType === 'form_calculation' || f.type === 'calculation') {
+        const cfg = (f.widgetConfig as Record<string, any>) || {};
+        const formula = String(cfg.formula || '');
+        if (formula) {
+          const result = evaluateFormulaSafe(formula, data, fields as any);
+          if (result !== null && !isNaN(result)) {
+            data[f.id] = result;
+          }
+        }
+      }
+    }
+
     return data;
   }, [fields]);
 
