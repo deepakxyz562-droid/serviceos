@@ -1155,9 +1155,14 @@ export function FormRuntimeRenderer({
         </div>
       )}
 
-      {/* Top 3-Step Navigation Tabs (Desktop & Tablet) */}
-      {steps.length > 1 && (
-        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-1">
+      {/* Top Multi-Step Navigation Tabs (Desktop & Tablet) */}
+      {isMultiStep && steps.length > 1 && (
+        <div
+          className="grid gap-2 sm:gap-3 mb-1 w-full"
+          style={{
+            gridTemplateColumns: `repeat(${Math.min(steps.length, 6)}, minmax(0, 1fr))`,
+          }}
+        >
           {steps.map((step, idx) => {
             const isActive = idx === currentStepIndex;
             const isPast = idx < currentStepIndex;
@@ -1167,7 +1172,7 @@ export function FormRuntimeRenderer({
                 type="button"
                 disabled={idx > currentStepIndex}
                 onClick={() => {
-                  if (idx < currentStepIndex) setCurrentStepIndex(idx);
+                  if (idx <= currentStepIndex) setCurrentStepIndex(idx);
                 }}
                 className={`flex items-center gap-2 sm:gap-2.5 p-2.5 sm:p-3 rounded-2xl text-left transition-all border ${
                   isActive
@@ -1185,6 +1190,7 @@ export function FormRuntimeRenderer({
                       ? 'bg-emerald-500 text-white shadow-xs'
                       : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
                   }`}
+                  style={isActive ? { backgroundColor: primaryColor } : undefined}
                 >
                   {isPast ? '✓' : `0${idx + 1}`}
                 </div>

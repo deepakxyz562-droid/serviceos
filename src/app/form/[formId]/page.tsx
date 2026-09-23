@@ -143,17 +143,34 @@ export default function PublicFormPage() {
     );
   }
 
+  const formLayout = schema.theme?.layout || (schema.settings as any)?.formLayout;
+  const resolvedMode: 'paper' | 'card' | 'agent' =
+    formLayout === 'conversational'
+      ? 'agent'
+      : formLayout === 'card' || formLayout === 'single_question'
+      ? 'card'
+      : 'paper';
+
+  const pageBgColor = schema.theme?.backgroundColor && schema.theme.backgroundColor !== '#ffffff'
+    ? schema.theme.backgroundColor
+    : undefined;
+
   return (
-    <div className="min-h-screen bg-muted/30 py-8 px-4 sm:px-6 lg:px-8 flex flex-col justify-center">
-      <FormRuntimeRenderer
-        formId={formId}
-        formName={formName}
-        formDescription={formDescription}
-        schema={schema}
-        branding={branding}
-        allowModeSwitch={true}
-        mode={schema.theme?.layout === 'card' ? 'card' : 'paper'}
-      />
+    <div
+      className="min-h-screen bg-slate-50/60 dark:bg-slate-950 py-6 sm:py-10 px-3 sm:px-6 lg:px-8 flex flex-col justify-center items-center"
+      style={pageBgColor ? { backgroundColor: pageBgColor } : undefined}
+    >
+      <div className="w-full max-w-5xl">
+        <FormRuntimeRenderer
+          formId={formId}
+          formName={formName}
+          formDescription={formDescription}
+          schema={schema}
+          branding={branding}
+          allowModeSwitch={(schema.settings as any)?.allowModeSwitch === true}
+          mode={resolvedMode}
+        />
+      </div>
     </div>
   );
 }

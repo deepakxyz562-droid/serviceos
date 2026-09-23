@@ -386,8 +386,13 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
     };
   });
 
+  const isMultiStep = (s as any).isMultiStep !== undefined
+    ? Boolean((s as any).isMultiStep)
+    : steps.length > 1;
+
   return {
     version: s.version || 1,
+    isMultiStep,
     steps,
     fields: sanitizedFields,
     rules: Array.isArray(s.rules) ? s.rules : [],
