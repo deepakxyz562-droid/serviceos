@@ -1,12 +1,21 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+/**
+ * Email OTP Verification — REAL backend integration via /api/proxy/email.
+ *
+ * Sends a verification code to the user's email address via the backend
+ * API (which uses Resend or falls back to dev mode). The code is verified
+ * server-side — the frontend never stores the code locally.
+ *
+ * Mirrors the SMS OTP pattern (sms-otp-verification.tsx → /api/proxy/sms).
+ */
+import React, { useState, useEffect } from 'react';
 import { Mail, ShieldCheck, Send, Loader2, RefreshCw, CheckCircle2, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { WidgetProps, str, num, bool } from '../widget-props';
-import { cn } from '@/lib/utils';
 
 interface EmailOtpValue {
   email: string;
@@ -20,50 +29,112 @@ export function EmailOtpVerification({ value, onChange, config, disabled, field 
   const ariaLabel = str(field?.label, 'Email OTP verification');
   const codeLength = Math.max(4, Math.min(10, num(config.codeLength, 6)));
   const resendSeconds = Math.max(15, num(config.resendSeconds, 60));
+  const senderName = str(config.senderName, 'Fieseros Security');
   const mockDevCode = bool(config.exposeDevCode, true);
 
   const v: EmailOtpValue = value && typeof value === 'object' ? (value as EmailOtpValue) : { email: '', code: '', verified: false, attempts: 0 };
 
   const [email, setEmail] = useState(v.email || '');
-  const [code, setCode] = useState(v.code || '');
-  const [sentCode, setSentCode] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [devCode, setDevCode] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [seconds, setSeconds] = useState(0);
+  const [countdown, setCountdown] = useState(0);
 
   useEffect(() => {
-    if (seconds <= 0) return;
-    const id = setTimeout(() => setSeconds((s) => s - 1), 1000);
+    if (countdown <= 0) return;
+    const id = setTimeout(() => setCountdown((s) => s - 1), 1000);
     return () => clearTimeout(id);
-  }, [seconds]);
+  }, [countdown]);
 
   const emit = (patch: Partial<EmailOtpValue>) => onChange({ ...v, ...patch });
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (disabled || sending || !email) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
     setSending(true);
-    // MOCK: never makes a real network call in Phase 2.
-    setTimeout(() => {
-      const generated = Array.from({ length: codeLength }, () => Math.floor(Math.random() * 10)).join('');
-      setSentCode(generated);
-      setSeconds(resendSeconds);
+    try {
+      const res = await fetch('/api/proxy/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          action: 'send_otp',
+          codeLength,
+          senderName,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setCodeSent(true);
+        setCode('');
+        setCountdown(resendSeconds);
+        if (data.devCode) {
+          setDevCode(data.devCode);
+          toast.success(`Verification code sent! (Dev: ${data.devCode})`);
+        } else {
+          setDevCode(null);
+          toast.success(`Verification code sent to ${email}`);
+        }
+        emit({ email, code: '', verified: false, attempts: 0 });
+      } else {
+        toast.error(data.error || 'Failed to send verification code');
+      }
+    } catch {
+      toast.error('Failed to send verification code. Please try again.');
+    } finally {
       setSending(false);
-      emit({ email, code: '', verified: false, attempts: 0 });
-    }, 600);
+    }
   };
 
-  const handleVerify = () => {
-    if (disabled || verifying || !sentCode || code.length !== codeLength) return;
+  const handleVerify = async () => {
+    if (disabled || verifying || !codeSent || code.length !== codeLength) return;
     setVerifying(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/proxy/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          action: 'verify_otp',
+          code,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
       setVerifying(false);
-      const next = { email, code, verified: code === sentCode, attempts: v.attempts + 1 };
-      if (next.verified) {
-        next.verifiedAt = new Date().toISOString();
+
+      if (data.verified) {
+        const next: EmailOtpValue = {
+          email,
+          code,
+          verified: true,
+          verifiedAt: new Date().toISOString(),
+          attempts: v.attempts + 1,
+        };
+        emit(next);
+        toast.success('Email verified successfully!');
+      } else {
+        const next: EmailOtpValue = {
+          email,
+          code: '',
+          verified: false,
+          attempts: v.attempts + 1,
+        };
+        emit(next);
+        const left = data.attemptsLeft !== undefined ? ` (${data.attemptsLeft} attempts left)` : '';
+        toast.error(`Invalid code${left}. Please try again.`);
       }
-      emit(next);
-    }, 400);
+    } catch {
+      setVerifying(false);
+      toast.error('Failed to verify code. Please try again.');
+    }
   };
 
   if (v.verified) {
@@ -84,7 +155,8 @@ export function EmailOtpVerification({ value, onChange, config, disabled, field 
               onClick={() => {
                 setEmail('');
                 setCode('');
-                setSentCode(null);
+                setCodeSent(false);
+                setDevCode(null);
                 emit({ email: '', code: '', verified: false, attempts: 0, verifiedAt: undefined });
               }}
             >
@@ -106,7 +178,7 @@ export function EmailOtpVerification({ value, onChange, config, disabled, field 
             placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={disabled || sending || !!sentCode}
+            disabled={disabled || sending || codeSent}
             aria-label="Email address"
             className="text-xs h-9 pl-8"
           />
@@ -115,13 +187,13 @@ export function EmailOtpVerification({ value, onChange, config, disabled, field 
           type="button"
           size="sm"
           className="text-xs gap-1.5"
-          disabled={disabled || sending || !email || seconds > 0}
+          disabled={disabled || sending || !email || countdown > 0}
           onClick={handleSend}
         >
           {sending ? (
             <Loader2 className="size-3.5 animate-spin" />
-          ) : seconds > 0 ? (
-            `Resend (${seconds}s)`
+          ) : countdown > 0 ? (
+            `Resend (${countdown}s)`
           ) : (
             <>
               <Send className="size-3.5" /> Send code
@@ -130,16 +202,16 @@ export function EmailOtpVerification({ value, onChange, config, disabled, field 
         </Button>
       </div>
 
-      {sentCode && (
+      {codeSent && (
         <div className="rounded-lg border border-border/60 bg-muted/40 p-2.5 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold flex items-center gap-1.5">
               <ShieldCheck className="size-3.5 text-emerald-600" /> Enter {codeLength}-digit code
             </span>
-            {mockDevCode && (
+            {mockDevCode && devCode && (
               <Badge variant="outline" className="text-[9px] gap-1 font-mono">
                 <KeyRound className="size-2.5" />
-                Dev: {sentCode}
+                Dev: {devCode}
               </Badge>
             )}
           </div>
