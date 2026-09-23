@@ -611,6 +611,11 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: false,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#E60000"/><path d="M14 13h12v3.5H18v3.5h7v3.5h-7v6.5H14V13z" fill="#FFF"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'merchantId', label: 'Payfast Merchant ID', type: 'text', placeholder: '100...' },
+      { key: 'merchantKey', label: 'Payfast Merchant Key', type: 'password', placeholder: 'merchant key' },
+      { key: 'passphrase', label: 'Payfast Passphrase', type: 'password', placeholder: 'passphrase (optional, for signing)' },
+    ],
   },
   // 24. Venmo
   {
@@ -745,6 +750,10 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     supportsZeroConfig: true,
     iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#1E64FF"/><circle cx="16" cy="14" r="2" fill="#FFF"/><path d="M14 18h4v9h-4zM22 18h4v9h-4z" fill="#FFF"/><circle cx="24" cy="14" r="2" fill="#FFF"/></svg>`,
     supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'apiKey', label: 'iyzico API Key', type: 'text', placeholder: 'sandbox-...' },
+      { key: 'secretKey', label: 'iyzico Secret Key', type: 'password', placeholder: 'secret key' },
+    ],
   },
   // 31. Skrill
   {
@@ -865,6 +874,26 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     configFields: [
       { key: 'publicApiKey', label: 'Affirm Public API Key', type: 'text', placeholder: 'PUB_...' },
       { key: 'privateApiKey', label: 'Affirm Private API Key', type: 'password', placeholder: 'PRV_...' },
+    ],
+  },
+  // 37. Klarna (standalone direct API — NOT via Stripe)
+  {
+    id: 'klarna',
+    fieldType: 'control_klarna',
+    name: 'Klarna',
+    category: 'bnpl',
+    description: 'Pay in 4, Pay in 30 Days, or Monthly Financing installments via Klarna.',
+    badge: 'BNPL',
+    currencies: ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'SEK', 'NOK', 'DKK'],
+    features: ['Pay in 4 (interest-free)', 'Pay in 30 Days', 'Monthly Financing', 'No fees when paid on time'],
+    brandColor: '#FFA8CD',
+    logoBg: '#171A20',
+    supportsZeroConfig: false,
+    iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#171A20"/><path d="M12 24.5c.8.6 1.8 1 2.8 1 1.5 0 2.2-.6 2.2-1.4 0-2.3-5-1.5-5-5.2 0-2.2 1.8-3.9 4.8-3.9 1.3 0 2.4.3 3.2.8l-.8 2.3c-.7-.4-1.5-.7-2.4-.7-1.3 0-1.9.5-1.9 1.2 0 2.2 5 1.4 5 5.1 0 2.2-1.7 4.1-5.1 4.1-1.5 0-2.9-.4-3.8-1l1-2.3z" fill="#FFA8CD"/></svg>`,
+    supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'merchantId', label: 'Klarna Merchant ID', type: 'text', placeholder: 'PK_...' },
+      { key: 'secretKey', label: 'Klarna Secret Key', type: 'password', placeholder: 'API key from Klarna merchant portal' },
     ],
   },
 ];

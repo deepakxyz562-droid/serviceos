@@ -757,6 +757,21 @@ const TWO_COLUMN_LIVE_ESTIMATOR_TEMPLATE: FormTemplate = {
   estimatedMinutes: 2,
   createdAt: '2026-03-01T00:00:00Z',
   updatedAt: '2026-09-22T00:00:00Z',
+  seo: {
+    seoTitle: 'Elementor 2-Column Live Roofing & Construction Estimator Form',
+    seoDescription: 'Interactive 2-column cost calculator with live instant calculation, square footage slider, roofing material options, and tear-off toggle.',
+    seoKeywords: ['elementor live estimator', 'roofing calculator form', '2 column estimate form', 'instant price calculator', 'construction quote form'],
+    faq: [
+      {
+        question: 'How does real-time calculation work in this 2-column form?',
+        answer: 'Every input change on the left column (slider square footage, material choice, tear-off switch, add-on warranties) instantly recalculates the subtotal, total investment, and required deposit on the right column using safe mathematical formulas.',
+      },
+      {
+        question: 'Can I customize the formulas and pricing rates?',
+        answer: 'Yes! In the AI Form Builder Studio, click any calculation widget on the right column to modify formula multipliers, base prices, discounts, and deposit percentages using the Formula Pad.',
+      },
+    ],
+  },
 };
 
 // ─── 6. Hotel & Vacation Stay Date Calculation Quote (Date Math) ────────────
@@ -895,6 +910,21 @@ const HOTEL_DATE_CALCULATION_TEMPLATE: FormTemplate = {
   estimatedMinutes: 2,
   createdAt: '2026-03-01T00:00:00Z',
   updatedAt: '2026-09-22T00:00:00Z',
+  seo: {
+    seoTitle: 'Hotel & Resort Stay Date Difference Calculator & Booking Form',
+    seoDescription: 'Interactive stay cost calculator with automatic date difference calculation, room tier selection, and instant rate estimates.',
+    seoKeywords: ['hotel booking calculator', 'date difference quote form', 'resort reservation form', 'stay cost calculator', 'vacation rental estimate'],
+    faq: [
+      {
+        question: 'How does the stay calculation work?',
+        answer: 'The form calculates the exact number of nights between check-in and check-out dates and multiplies it by the selected room rate plus any chosen amenities.',
+      },
+      {
+        question: 'Can I add custom room tiers or seasonal pricing?',
+        answer: 'Yes! You can edit the room choices and calculation formulas in the AI Form Builder Studio.',
+      },
+    ],
+  },
 };
 
 // Register all split-media templates

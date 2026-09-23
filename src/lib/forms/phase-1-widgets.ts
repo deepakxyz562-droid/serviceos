@@ -557,24 +557,26 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ], 'payment'],
 
   // 11-20: Remaining redirect-based gateways with simple schema
-  ['payment_paypal_pro', 'PayPal Pro', 'payment', 'CreditCard', 'Card fields hosted by PayPal Pro', 'PRO', 'business', [
-    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'paypal_pro', options: [{ label: 'PayPal Pro', value: 'paypal_pro' }], helpText: 'Connected to PayPal Pro.' },
-    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
-    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
-    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
-  ], 'payment'],
+  // Hidden: payment_paypal_pro (not in user's list — legacy, covered by PayPal Commerce)
+  // ['payment_paypal_pro', 'PayPal Pro', 'payment', 'CreditCard', 'Card fields hosted by PayPal Pro', 'PRO', 'business', [
+  //   { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'paypal_pro', options: [{ label: 'PayPal Pro', value: 'paypal_pro' }], helpText: 'Connected to PayPal Pro.' },
+  //   { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+  //   { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }, { label: 'GBP - British Pounds', value: 'GBP' }] },
+  //   { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  // ], 'payment'],
   ['payment_payu_india', 'PayU India', 'payment', 'CreditCard', 'PayU India redirect checkout', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'payu_india', options: [{ label: 'PayU India', value: 'payu_india' }], helpText: 'Connected to PayU India.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'INR', searchPlaceholder: 'Search...', options: [{ label: 'INR - Indian Rupees', value: 'INR' }, { label: 'USD - United States Dollars', value: 'USD' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
   ], 'payment'],
-  ['payment_payu_latam', 'PayU Latam', 'payment', 'CreditCard', 'PayU Latam redirect checkout', '', 'pro', [
-    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'payu_global', options: [{ label: 'PayU', value: 'payu_global' }], helpText: 'Connected to PayU Latam.' },
-    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
-    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'BRL - Brazilian Reals', value: 'BRL' }, { label: 'MXN - Mexican Pesos', value: 'MXN' }, { label: 'COP - Colombian Pesos', value: 'COP' }] },
-    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
-  ], 'payment'],
+  // Hidden: payment_payu_latam (not in user's list — covered by PayU India)
+  // ['payment_payu_latam', 'PayU Latam', 'payment', 'CreditCard', 'PayU Latam redirect checkout', '', 'pro', [
+  //   { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'payu_global', options: [{ label: 'PayU', value: 'payu_global' }], helpText: 'Connected to PayU Latam.' },
+  //   { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+  //   { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }, { label: 'BRL - Brazilian Reals', value: 'BRL' }, { label: 'MXN - Mexican Pesos', value: 'MXN' }, { label: 'COP - Colombian Pesos', value: 'COP' }] },
+  //   { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real cards.' },
+  // ], 'payment'],
   ['payment_braintree', 'Braintree', 'payment', 'CreditCard', 'Braintree hosted fields', '', 'pro', [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'braintree', options: [{ label: 'Braintree', value: 'braintree' }], helpText: 'Connected to Braintree.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
@@ -719,6 +721,18 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'cash_app_pay', options: [{ label: 'Cash App Pay', value: 'cash_app_pay' }], helpText: 'Requires a connected Square account.' },
     { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
     { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real accounts.' },
+  ], 'payment'],
+  ['payment_payfast', 'Payfast', 'payment', 'CreditCard', "South Africa's leading payment gateway (EFT, Masterpass, Zapper, Mobicred)", 'SA', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'payfast', options: [{ label: 'Payfast', value: 'payfast' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'ZAR', searchPlaceholder: 'Search...', options: [{ label: 'ZAR - South African Rand', value: 'ZAR' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real accounts.' },
+  ], 'payment'],
+  ['payment_iyzico', 'iyzico', 'payment', 'CreditCard', "Turkey's leading payment gateway for TL & installment credit cards", 'TR', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'iyzico', options: [{ label: 'iyzico', value: 'iyzico' }] },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'TRY', searchPlaceholder: 'Search...', options: [{ label: 'TRY - Turkish Lira', value: 'TRY' }, { label: 'USD - United States Dollars', value: 'USD' }, { label: 'EUR - Euros', value: 'EUR' }] },
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real accounts.' },
   ], 'payment'],
 

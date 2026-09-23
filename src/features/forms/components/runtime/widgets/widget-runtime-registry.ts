@@ -179,6 +179,8 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   // ─── Tier 4: Gateway-dependent sub-methods (new standalone widgets) ──────
   payment_venmo: w(() => import('./payment/venmo')),
   payment_cash_app_pay: w(() => import('./payment/cash-app-pay')),
+  payment_payfast: w(() => import('./payment/payfast')),
+  payment_iyzico: w(() => import('./payment/iyzico')),
   // ─── Phase C: previously-missing payment widgets ──────────────────────────
   payment_echeck_net: w(() => import('./payment/echeck-net')),
   payment_chargify: w(() => import('./payment/chargify')),

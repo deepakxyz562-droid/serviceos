@@ -1493,11 +1493,96 @@ export async function POST(
       }
     }
 
-    // ─── Tier 4: Gateway-dependent sub-methods ─────────────────────────────
-    // These payment methods ride on top of a primary gateway (Stripe/Square/PayPal).
-    // The backend resolves the primary gateway's credentials and creates the
-    // payment with the sub-method enabled.
-    if (['klarna', 'apple_pay', 'google_pay'].includes(gatewayId)) {
+    // ─── Klarna (standalone direct API — NOT via Stripe) ───────────────────
+    if (gatewayId === 'klarna') {
+      const creds = await resolveFormCredentials(formId, 'klarna');
+      if (!creds?.merchantId || !creds?.secretKey) {
+        return NextResponse.json({
+          success: false,
+          error: 'No Klarna credentials connected. Add your Klarna Merchant ID and Secret Key in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
+      const merchantId = creds.merchantId as string;
+      const secretKey = creds.secretKey as string;
+      const isLive = creds.isLive !== false;
+      // Klarna uses different API base URLs for EU vs US merchants.
+      const apiBase = isLive
+        ? 'https://api.klarna-payments.com'
+        : 'https://api.playground.klarna-payments.com';
+      const auth = Buffer.from(`${merchantId}:${secretKey}`).toString('base64');
+      try {
+        // Create a Klarna payment session.
+        const res = await fetch(`${apiBase}/payments/v1/sessions`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            purchase_country: currency === 'USD' ? 'US' : currency === 'GBP' ? 'GB' : 'DE',
+            purchase_currency: currency,
+            locale: 'en-US',
+            order_amount: Math.round(Number(amount) * 100),
+            order_lines: [{
+              type: 'digital',
+              name: `Form payment - ${formId}`,
+              quantity: 1,
+              unit_price: Math.round(Number(amount) * 100),
+              total_amount: Math.round(Number(amount) * 100),
+            }],
+            merchant_urls: {
+              confirmation: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=success`,
+              push: `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/payments/webhook/klarna`,
+            },
+            merchant_reference1: formId,
+            merchant_reference2: formResponseId || '',
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return NextResponse.json({
+            success: false,
+            error: `Klarna session creation failed: ${JSON.stringify(data)}`,
+            gatewayId,
+          }, { status: 402 });
+        }
+        const sessionId = data?.session_id;
+        const checkoutUrl = data?.client_token
+          ? `${apiBase}/payments/v1/sessions/${sessionId}/authorize`
+          : null;
+        if (formResponseId && sessionId) {
+          await db.formResponse.update({
+            where: { id: formResponseId },
+            data: {
+              paymentStatus: 'pending',
+              transactionId: sessionId,
+              paymentMethod: 'klarna',
+              paymentAmount: Number(amount),
+              paymentCurrency: currency,
+              paymentGatewayId: gatewayId,
+            },
+          }).catch(() => {});
+        }
+        return NextResponse.json({
+          success: true,
+          transactionId: sessionId || '',
+          checkoutUrl,
+          paymentStatus: 'pending',
+          gateway: 'klarna',
+        });
+      } catch (e: any) {
+        console.error('[forms/charge] Klarna error:', e);
+        return NextResponse.json({
+          success: false,
+          error: 'Klarna payment failed',
+          details: e.message,
+        }, { status: 402 });
+      }
+    }
+
+    // ─── Apple Pay / Google Pay (via Stripe — gateway-dependent sub-methods) ──
+    if (['apple_pay', 'google_pay'].includes(gatewayId)) {
       // Resolve Stripe credentials (sub-methods use Stripe).
       const creds = await resolveFormCredentials(formId, 'stripe_elements');
       let stripeSecretKey: string | undefined;
@@ -1512,16 +1597,10 @@ export async function POST(
       try {
         const stripe = new Stripe(stripeSecretKey);
         const amountInCents = Math.round(Number(amount) * 100);
-        // Map gatewayId to Stripe payment_method_types.
-        const paymentMethodTypes: Record<string, string> = {
-          klarna: 'klarna',
-          apple_pay: 'card', // Apple Pay uses card with wallet
-          google_pay: 'card', // Google Pay uses card with wallet
-        };
         const paymentIntent = await stripe.paymentIntents.create({
           amount: amountInCents,
           currency: currency.toLowerCase(),
-          payment_method_types: [paymentMethodTypes[gatewayId]],
+          payment_method_types: ['card'],
           metadata: { formId, formResponseId: formResponseId || '', gatewayId, customerName: customer?.name || '' },
           description: `Form payment (${gatewayId}) - ${formId}`,
         });
@@ -1553,6 +1632,112 @@ export async function POST(
       }
       // Square Web SDK handles Cash App Pay automatically. Return applicationId + locationId.
       return NextResponse.json({ success: true, applicationId: creds.applicationId, locationId: creds.locationId, gateway: 'cash_app_pay', flow: 'client_side_sdk' });
+    }
+
+    // ─── Payfast (South Africa — standalone redirect) ──────────────────────
+    if (gatewayId === 'payfast') {
+      const creds = await resolveFormCredentials(formId, 'payfast');
+      if (!creds?.merchantId || !creds?.merchantKey) {
+        return NextResponse.json({ success: false, error: 'No Payfast credentials connected. Add your Merchant ID and Merchant Key in the form inspector or in Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const merchantId = creds.merchantId as string;
+      const merchantKey = creds.merchantKey as string;
+      const passphrase = (creds.passphrase as string) || '';
+      const isLive = creds.isLive !== false;
+      const txnId = `form_${formId}_${Date.now()}`;
+      const apiBase = isLive ? 'https://www.payfast.co.za' : 'https://sandbox.payfast.co.za';
+      // Build Payfast payment params.
+      const params = new URLSearchParams({
+        merchant_id: merchantId,
+        merchant_key: merchantKey,
+        return_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=success`,
+        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=cancelled`,
+        notify_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/payments/webhook/payfast`,
+        m_payment_id: txnId,
+        amount: Number(amount).toFixed(2),
+        item_name: `Form payment - ${formId}`,
+      });
+      // Generate signature (MD5 of sorted params + passphrase).
+      const crypto = await import('crypto');
+      let sigString = params.toString();
+      if (passphrase) sigString += `&passphrase=${encodeURIComponent(passphrase)}`;
+      const signature = crypto.createHash('md5').update(sigString).digest('hex');
+      params.append('signature', signature);
+      const checkoutUrl = `${apiBase}/eng/process?${params.toString()}`;
+      if (formResponseId) {
+        await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'payfast', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+      }
+      return NextResponse.json({ success: true, transactionId: txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'payfast' });
+    }
+
+    // ─── iyzico (Turkey — standalone redirect) ────────────────────────────
+    if (gatewayId === 'iyzico') {
+      const creds = await resolveFormCredentials(formId, 'iyzico');
+      if (!creds?.apiKey || !creds?.secretKey) {
+        return NextResponse.json({ success: false, error: 'No iyzico credentials connected. Add your API Key and Secret Key in the form inspector or in Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const apiKey = creds.apiKey as string;
+      const secretKey = creds.secretKey as string;
+      const isLive = creds.isLive !== false;
+      const apiBase = isLive ? 'https://api.iyzipay.com' : 'https://sandbox-api.iyzipay.com';
+      const txnId = `form_${formId}_${Date.now()}`;
+      try {
+        // iyzico uses HMAC-SHA512 signature for API auth.
+        const crypto = await import('crypto');
+        const randomString = Math.random().toString(36).slice(2, 12);
+        const body = JSON.stringify({
+          locale: 'tr',
+          conversationId: txnId,
+          price: Number(amount).toFixed(2),
+          paidPrice: Number(amount).toFixed(2),
+          currency,
+          basketId: formId,
+          paymentGroup: 'PRODUCT',
+          callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=success`,
+          buyer: {
+            id: 'customer_1',
+            name: customer?.name?.split(' ')[0] || 'Customer',
+            surname: customer?.name?.split(' ').slice(1).join(' ') || '',
+            email: customer?.email || '',
+            identityNumber: '00000000000',
+            ip: '1.1.1.1',
+          },
+          basketItems: [{
+            id: formId,
+            name: `Form payment - ${formId}`,
+            category1: 'Digital',
+            category2: 'Service',
+            itemType: 'VIRTUAL',
+            price: Number(amount).toFixed(2),
+          }],
+        });
+        // Generate signature: HMAC-SHA512(apiKey + randomString + secretKey + body)
+        const signString = `${apiKey}${randomString}${secretKey}${body}`;
+        const signature = crypto.createHmac('sha512', secretKey).update(signString).digest('base64');
+        const res = await fetch(`${apiBase}/payment/iyzipos/checkoutform/initialize/3d`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `apiKey:${apiKey}`,
+            'x-iyzi-rnd': randomString,
+            'x-iyzi-signature': signature,
+            'Content-Type': 'application/json',
+          },
+          body,
+        });
+        const data = await res.json();
+        if (!res.ok || data?.status !== 'success') {
+          return NextResponse.json({ success: false, error: `iyzico payment initiation failed: ${JSON.stringify(data)}`, gatewayId }, { status: 402 });
+        }
+        const checkoutUrl = data?.checkoutFormContent
+          ? `https://${isLive ? 'www' : 'sandbox'}.iyzico.com/checkout?token=${data?.token}`
+          : null;
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'iyzico', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'iyzico' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
     }
 
     // ─── Other gateways ─────────────────────────────────────────────────────

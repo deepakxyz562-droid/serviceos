@@ -1,23 +1,22 @@
 'use client';
 
 /**
- * Klarna — REAL standalone Klarna Payments API integration.
+ * iyzico — REAL iyzico redirect integration.
  *
- * Klarna has its own direct API (no Stripe needed). The user enters their
- * own Klarna merchantId + secretKey in the inspector. The backend creates
- * a Klarna payment session via api.klarna-payments.com and returns a
- * checkout URL. The customer is redirected to Klarna's hosted page.
+ * Calls /api/forms/[id]/charge which creates an iyzico payment request
+ * via api.iyzipay.com. Returns a checkoutUrl — the customer is redirected
+ * to iyzico's hosted checkout page.
  *
  * In testMode (or when credentials are not set), falls back to a clearly
  * marked simulated-payment UI.
  */
 import React, { useState } from 'react';
-import { Loader2, ShieldCheck, AlertCircle, Lock, Calendar, ExternalLink } from 'lucide-react';
+import { Lock, ShieldCheck, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PaymentGatewayHeader } from './payment-gateway-header';
 import type { WidgetProps } from '../widget-props';
 
-interface KlarnaValue {
+interface IyzicoValue {
   status: 'idle' | 'pending_redirect' | 'succeeded' | 'error';
   amount: number;
   currency: string;
@@ -28,20 +27,19 @@ interface KlarnaValue {
   errorMessage?: string;
 }
 
-export function Klarna({ value, onChange, config, disabled, field }: WidgetProps) {
-  const amount = Number(config.amount ?? 99);
-  const currency = String(config.currency ?? 'USD');
+export function Iyzico({ value, onChange, config, disabled, field }: WidgetProps) {
+  const amount = Number(config.amount ?? 49);
+  const currency = String(config.currency ?? 'TRY');
   const testMode = Boolean(config.testMode ?? true);
-  const merchantId = String(config.merchantId ?? '');
+  const apiKey = String(config.apiKey ?? '');
   const secretKey = String(config.secretKey ?? '');
   const formId = String((field as Record<string, unknown> | undefined)?.formId ?? '');
-  const label = String(field?.label ?? 'Klarna');
+  const label = String(field?.label ?? 'iyzico');
   const [processing, setProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const currencySymbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
-  const canGoLive = !testMode && Boolean(merchantId) && Boolean(secretKey) && Boolean(formId);
-  const installment = amount / 4;
+  const currencySymbol = '₺';
+  const canGoLive = !testMode && Boolean(apiKey) && Boolean(secretKey) && Boolean(formId);
 
   const handlePay = async () => {
     if (disabled) return;
@@ -52,12 +50,12 @@ export function Klarna({ value, onChange, config, disabled, field }: WidgetProps
       setTimeout(() => {
         setProcessing(false);
         onChange({
-          status: 'pending_redirect', amount, currency, gatewayId: 'klarna',
-          transactionId: `sim_klarna_${Date.now()}`,
-          checkoutUrl: 'https://klarna.com/test-checkout',
+          status: 'pending_redirect', amount, currency, gatewayId: 'iyzico',
+          transactionId: `sim_iyz_${Date.now()}`,
+          checkoutUrl: 'https://sandbox.iyzico.com/checkout/test',
           simulated: true,
-        } as KlarnaValue);
-      }, 800);
+        } as IyzicoValue);
+      }, 700);
       return;
     }
 
@@ -66,7 +64,7 @@ export function Klarna({ value, onChange, config, disabled, field }: WidgetProps
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          gatewayId: 'klarna', amount, currency,
+          gatewayId: 'iyzico', amount, currency,
           customer: { name: 'Customer' },
         }),
       });
@@ -74,12 +72,12 @@ export function Klarna({ value, onChange, config, disabled, field }: WidgetProps
       setProcessing(false);
       if (data.success && data.checkoutUrl) {
         onChange({
-          status: 'pending_redirect', amount, currency, gatewayId: 'klarna',
+          status: 'pending_redirect', amount, currency, gatewayId: 'iyzico',
           transactionId: data.transactionId, checkoutUrl: data.checkoutUrl,
-        } as KlarnaValue);
+        } as IyzicoValue);
         window.location.href = data.checkoutUrl;
       } else {
-        setErrorMsg(data.error || 'Klarna payment failed.');
+        setErrorMsg(data.error || 'iyzico payment initiation failed.');
       }
     } catch (e: unknown) {
       setProcessing(false);
@@ -87,13 +85,13 @@ export function Klarna({ value, onChange, config, disabled, field }: WidgetProps
     }
   };
 
-  const currentValue = value as KlarnaValue | undefined;
+  const currentValue = value as IyzicoValue | undefined;
   const done = currentValue?.status === 'pending_redirect' && currentValue.transactionId;
 
   return (
     <div className="space-y-3" aria-label={label}>
       <PaymentGatewayHeader
-        gatewayId="klarna"
+        gatewayId="iyzico"
         amount={amount}
         currency={currency}
         currencySymbol={currencySymbol}
@@ -101,39 +99,30 @@ export function Klarna({ value, onChange, config, disabled, field }: WidgetProps
         label={label}
       />
 
-      {!testMode && (!merchantId || !secretKey) && (
+      {!testMode && (!apiKey || !secretKey) && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-start gap-2">
           <AlertCircle className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-tight">
-            Live mode requires <strong>Klarna Merchant ID and Secret Key</strong>.
+            Live mode requires <strong>iyzico API Key and Secret Key</strong>.
             Add them in the inspector under <em>API Credentials</em>.
           </p>
         </div>
       )}
 
-      {/* Klarna "Pay in 4" breakdown */}
-      <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-1">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold flex items-center gap-1.5">
-            <Calendar className="size-3.5 text-[#FFA8CD]" /> Pay in 4
-          </span>
-          <span className="text-xs font-bold text-[#171A20] dark:text-pink-100">
-            {currencySymbol}{installment.toFixed(2)} <span className="text-[10px] text-muted-foreground">× 4</span>
-          </span>
-        </div>
-        <p className="text-[10px] text-muted-foreground">
-          4 interest-free payments. No fees when paid on time.
-        </p>
+      <div className="rounded-xl border border-border bg-muted/30 p-3 text-center space-y-1">
+        <ExternalLink className="size-6 mx-auto text-[#1E64FF]" />
+        <p className="text-xs font-semibold">iyzico Hosted Checkout</p>
+        <p className="text-[11px] text-muted-foreground">Turkish Lira, BKM Express, installment cards</p>
       </div>
 
       {done && (
         <div className="text-[11px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-lg p-2 border border-emerald-200 dark:border-emerald-800/60">
           {currentValue?.simulated
-            ? `Test checkout created — Ref: ${currentValue?.transactionId} (no real charge)`
-            : `Checkout created — Ref: ${currentValue?.transactionId}`}
+            ? `Test payment created — Ref: ${currentValue?.transactionId} (no real charge)`
+            : `Payment created — Ref: ${currentValue?.transactionId}`}
           {currentValue?.checkoutUrl && !currentValue?.simulated && (
             <a href={currentValue.checkoutUrl} target="_blank" rel="noopener noreferrer" className="ml-1 underline">
-              Open Klarna ↗
+              Open iyzico ↗
             </a>
           )}
         </div>
@@ -149,25 +138,25 @@ export function Klarna({ value, onChange, config, disabled, field }: WidgetProps
         type="button"
         disabled={disabled || processing}
         onClick={handlePay}
-        className="w-full h-10 bg-[#FFA8CD] hover:bg-[#FF90BF] text-[#171A20] font-bold text-xs rounded-xl gap-1.5"
+        className="w-full h-10 bg-[#1E64FF] hover:bg-[#1A55DD] text-white font-bold text-xs rounded-xl gap-1.5"
       >
         {processing ? (
           <Loader2 className="size-4 animate-spin" />
         ) : (
           <>
-            <Lock className="size-3.5" /> Pay {currencySymbol}{installment.toFixed(2)} now
+            <Lock className="size-3.5" /> Pay {currencySymbol}{amount.toFixed(2)} with iyzico
           </>
         )}
       </Button>
 
       <div className="flex items-center justify-between text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1">
-          <ShieldCheck className="size-3 text-emerald-600" /> BNPL Protected
+          <ShieldCheck className="size-3 text-emerald-600" /> Protected Shopping
         </span>
-        <span className="font-mono">Klarna</span>
+        <span className="font-mono">iyzico</span>
       </div>
     </div>
   );
 }
 
-export default Klarna;
+export default Iyzico;
