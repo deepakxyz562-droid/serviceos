@@ -1,0 +1,118 @@
+{% comment %}
+  GPTForm Embed — Shopify Theme App Extension Block
+  Version: 1.0.0
+
+  This block allows merchants to add GPTForm forms directly from the
+  Shopify theme editor (Online Store → Themes → Customize).
+
+  The block renders the gptform-embed snippet with settings configured
+  via the theme editor's block settings panel.
+{% endcomment %}
+
+<div class="gptform-block-wrapper" {{ block.shopify_attributes }}>
+  {% render 'gptform-embed',
+    form_id: block.settings.form_id,
+    mode: block.settings.embed_mode,
+    theme: block.settings.theme,
+    primary_color: block.settings.primary_color,
+    height: block.settings.min_height,
+    branding: block.settings.show_branding,
+    success_title: block.settings.success_title,
+    success_message: block.settings.success_message
+  %}
+</div>
+
+{% schema %}
+{
+  "name": "GPTForm Embed",
+  "tag": "div",
+  "class": "gptform-embed-block",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Form Configuration"
+    },
+    {
+      "type": "text",
+      "id": "form_id",
+      "label": "Form ID",
+      "info": "Enter your GPTForm form ID from the dashboard at fieseros.com/gptform",
+      "default": ""
+    },
+    {
+      "type": "select",
+      "id": "embed_mode",
+      "label": "Embed Mode",
+      "options": [
+        { "value": "js", "label": "JavaScript (Recommended)" },
+        { "value": "iframe", "label": "Iframe (Fallback)" }
+      ],
+      "default": "js",
+      "info": "JavaScript mode renders forms natively for better UX."
+    },
+    {
+      "type": "header",
+      "content": "Appearance"
+    },
+    {
+      "type": "select",
+      "id": "theme",
+      "label": "Theme",
+      "options": [
+        { "value": "", "label": "Default (from form settings)" },
+        { "value": "light", "label": "Light" },
+        { "value": "dark", "label": "Dark" }
+      ],
+      "default": ""
+    },
+    {
+      "type": "color",
+      "id": "primary_color",
+      "label": "Primary Color Override",
+      "info": "Override the form's primary button/link color. Leave empty to use the form's default."
+    },
+    {
+      "type": "text",
+      "id": "min_height",
+      "label": "Minimum Height",
+      "default": "500px",
+      "info": "Minimum height for the embedded form (used in iframe mode)."
+    },
+    {
+      "type": "header",
+      "content": "Submission"
+    },
+    {
+      "type": "text",
+      "id": "success_title",
+      "label": "Success Title",
+      "info": "Custom title shown after successful submission. Leave empty for default.",
+      "default": ""
+    },
+    {
+      "type": "textarea",
+      "id": "success_message",
+      "label": "Success Message",
+      "info": "Custom message shown after successful submission. Leave empty for default.",
+      "default": ""
+    },
+    {
+      "type": "header",
+      "content": "Branding"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_branding",
+      "label": "Show 'Powered by GPTForm'",
+      "default": true,
+      "info": "Display a small 'Powered by GPTForm' link below the form."
+    }
+  ],
+  "presets": [
+    {
+      "name": "GPTForm Embed",
+      "category": "Forms"
+    }
+  ]
+}
+{% endschema %}

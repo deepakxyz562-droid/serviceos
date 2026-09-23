@@ -106,7 +106,11 @@ export async function GET(
       } catch { /* ignore */ }
     }
 
-    return NextResponse.json({
+    // ─── CORS headers for embed (WordPress, Shopify, custom sites) ────────
+    // The embed.js SDK fetches form schema cross-origin. These headers allow
+    // any site to read the response. Forms are public by design — no auth
+    // is required to view a form's schema.
+    const response = NextResponse.json({
       id: form.id,
       name: form.name,
       slug: form.slug,
@@ -123,6 +127,10 @@ export async function GET(
         businessEmail: form.tenant?.email || workspaceBranding.supportEmail || null,
       },
     });
+    response.headers.set('Access-Control-Allow-Origin', '*');
+    response.headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    return response;
   } catch (error) {
     console.error('[public-form-get] Error:', error);
     return NextResponse.json({ error: 'Failed to fetch form' }, { status: 500 });

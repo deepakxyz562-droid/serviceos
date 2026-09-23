@@ -1,0 +1,79 @@
+{% comment %}
+  GPTForm Embed — Liquid Snippet for Shopify
+  Version: 1.0.0
+  Author: Fieseros
+  Homepage: https://fieseros.com/gptform
+
+  Usage in any .liquid template:
+    {% render 'gptform-embed', form_id: 'abc123' %}
+    {% render 'gptform-embed', form_slug: 'my-booking-form', theme: 'dark' %}
+    {% render 'gptform-embed', form_id: 'abc123', mode: 'iframe', height: '600px' %}
+
+  Parameters:
+    form_id (string)      — GPTForm form ID (from dashboard)
+    form_slug (string)    — Form slug (alternative to form_id)
+    mode (string)         — 'js' (default, native rendering) or 'iframe'
+    theme (string)        — 'light' or 'dark' (optional)
+    primary_color (string)— Hex color override, e.g. '#ff0000'
+    border_radius (string)— CSS border radius, e.g. '8px'
+    background_color (string) — Hex background color override
+    height (string)       — Min height for iframe mode, e.g. '500px'
+    branding (boolean)    — Show 'Powered by GPTForm' (default: true)
+    redirect_url (string) — URL to redirect after submission
+    success_title (string)— Custom success message title
+    success_message (string) — Custom success message text
+{% endcomment %}
+
+{% liquid
+  assign gptf_form_id = form_id | default: form_slug
+  assign gptf_mode = mode | default: 'js'
+  assign gptf_height = height | default: '500px'
+  assign gptf_branding = branding | default: true
+  assign gptf_api_domain = 'https://fieseros.com'
+%}
+
+{% if gptf_form_id != blank %}
+  <div
+    class="gptform-embed"
+    data-form-id="{{ gptf_form_id | escape }}"
+    data-mode="{{ gptf_mode | escape }}"
+    {% if theme != blank %}data-theme="{{ theme | escape }}"{% endif %}
+    {% if primary_color != blank %}data-primary-color="{{ primary_color | escape }}"{% endif %}
+    {% if border_radius != blank %}data-border-radius="{{ border_radius | escape }}"{% endif %}
+    {% if background_color != blank %}data-background-color="{{ background_color | escape }}"{% endif %}
+    {% if gptf_height != blank %}data-height="{{ gptf_height | escape }}"{% endif %}
+    {% if redirect_url != blank %}data-redirect-url="{{ redirect_url | escape }}"{% endif %}
+    {% if success_title != blank %}data-success-title="{{ success_title | escape }}"{% endif %}
+    {% if success_message != blank %}data-success-message="{{ success_message | escape }}"{% endif %}
+    {% unless gptf_branding %}data-branding="false"{% endunless %}
+  ></div>
+
+  {% comment %} Load the GPTForm Embed SDK (loaded once, handles all forms on page) {% endcomment %}
+  <script src="{{ gptf_api_domain }}/embed.js" async defer></script>
+
+  {% comment %} No-JS fallback: if JavaScript is disabled, show an iframe {% endcomment %}
+  <noscript>
+    <iframe
+      src="{{ gptf_api_domain }}/form/{{ gptf_form_id | escape }}?embed=1"
+      frameborder="0"
+      scrolling="no"
+      loading="lazy"
+      allow="camera; microphone"
+      title="GPTForm"
+      style="width:100%;height:{{ gptf_height | escape }};border:none;display:block;"
+    ></iframe>
+  </noscript>
+
+  {% if gptf_branding %}
+    <div style="text-align:center;margin-top:12px;font-size:11px;font-family:system-ui,sans-serif;">
+      Powered by <a href="{{ gptf_api_domain }}/gptform" target="_blank" rel="noopener" style="color:#94a3b8;text-decoration:none;">GPTForm</a>
+    </div>
+  {% endif %}
+{% else %}
+  {% comment %} Show placeholder in theme editor when no form ID is set {% endcomment %}
+  <div style="padding:40px;text-align:center;background:#f8fafc;border:2px dashed #e2e8f0;border-radius:12px;">
+    <p style="color:#64748b;font-size:14px;font-family:system-ui,sans-serif;">
+      GPTForm — Enter a Form ID in the block settings to display your form.
+    </p>
+  </div>
+{% endif %}

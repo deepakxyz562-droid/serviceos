@@ -1,617 +1,324 @@
-/*!
- * Fieseros Embed Script v1.1.0
- * Universal form lead capture for any website (HTML, React, Next.js, PHP, Vue, etc.)
+/**
+ * GPTForm Embed SDK — Standalone JavaScript for embedding GPTForm forms
+ * on external sites (WordPress, Shopify, custom HTML).
  *
- * HOW IT WORKS:
- *   1. Paste this script tag into your site's <head> or before </body>:
- *      <script src="https://app.fieseros.io/embed.js" data-key="pk_live_xxx" async></script>
- *   2. The script auto-detects ALL <form> submissions on the page.
- *   3. On submit, it maps form fields and POSTs to /api/forms/leads.
- *   4. Your existing form handler (email, redirect, etc.) continues to run.
+ * Usage (auto-init — WordPress/Shopify friendly):
+ *   <div class="gptform-embed" data-form-id="abc123" data-theme="dark"></div>
+ *   <script src="https://fieseros.com/embed.js"></script>
  *
- * ATTRIBUTES (on the <script> tag):
- *   data-key="pk_live_xxx"      REQUIRED — your publishable API key
- *   data-endpoint="https://…"   Optional — custom API endpoint (defaults to current origin + /api/forms/leads)
- *   data-toast="true"           Optional — show a "✓ Message sent" toast on success
- *   data-form-selector="form"   Optional — CSS selector for forms to capture (default: all forms)
- *   data-fieseros-ajax="true"  Optional — also intercept fetch()/XHR POSTs (AJAX forms)
+ * Usage (programmatic):
+ *   <div id="my-form"></div>
+ *   <script src="https://fieseros.com/embed.js"></script>
+ *   <script>GPTForm.render('my-form', 'abc123', { theme: 'dark' });</script>
  *
- * WORDPRESS / CONFIG OBJECT MODE:
- *   The WordPress plugin injects `window.FIESEROS_CONFIG` BEFORE this script loads:
- *     window.FIESEROS_CONFIG = {
- *       apiKey:   'pk_live_xxx',
- *       apiUrl:   'https://app.fieseros.io',
- *       interceptAjax: false   // set true to also intercept AJAX form POSTs
- *     };
- *   When present, these values take priority over the data-* attributes.
+ * Usage (iframe fallback):
+ *   <div id="my-form"></div>
+ *   <script>GPTForm.render('my-form', 'abc123', { mode: 'iframe' });</script>
  *
- * OPT-OUT:
- *   Add data-fieseros="false" to any <form> to exclude it from capture.
- *
- * EVENTS:
- *   The script dispatches a custom event on window after each submission:
- *     window.addEventListener('fieseros:lead:created', (e) => {
- *       console.log('Lead created:', e.detail.leadId);
- *     });
- *
- * No dependencies. Vanilla JS. ~5KB minified. Async-loaded.
+ * @version 1.0.0
+ * @copyright 2026 Fieseros / GPTForm
  */
-(function () {
+(function (window, document) {
   'use strict';
 
-  // ─── Prevent double-load ──────────────────────────────────────────────────
-  if (window.__fieserosEmbedLoaded) return;
-  window.__fieserosEmbedLoaded = true;
+  var EMBED_VERSION = '1.0.0';
+  var DEFAULT_DOMAIN = 'https://fieseros.com';
 
-  var scriptTag = document.currentScript || (function () {
-    var scripts = document.getElementsByTagName('script');
-    return scripts[scripts.length - 1];
-  })();
-
-  // ─── Config resolution ────────────────────────────────────────────────────
-  // Priority: window.FIESEROS_CONFIG (injected by WP plugin via wp_localize_script
-  // or inline <script>) → data-* attributes on the script tag.
-  var CONFIG = window.FIESEROS_CONFIG || {};
-
-  var API_KEY = CONFIG.apiKey ||
-                scriptTag.getAttribute('data-key') ||
-                scriptTag.getAttribute('data-fieseros-api-key');
-  var ENDPOINT = CONFIG.apiUrl ||
-                 scriptTag.getAttribute('data-endpoint');
-  var SHOW_TOAST = (CONFIG.showToast === true) ||
-                   (scriptTag.getAttribute('data-toast') === 'true');
-  var FORM_SELECTOR = scriptTag.getAttribute('data-form-selector') || 'form';
-  var INTERCEPT_AJAX = (CONFIG.interceptAjax === true) ||
-                       (scriptTag.getAttribute('data-fieseros-ajax') === 'true');
-
-  if (!API_KEY) {
-    if (console && console.warn) {
-      console.warn('[Fieseros] Missing API key. Set window.FIESEROS_CONFIG.apiKey or add data-key="pk_live_xxx" to the script tag.');
-    }
-    return;
+  function getApiDomain() {
+    try {
+      if (document.currentScript && document.currentScript.src) {
+        return new URL(document.currentScript.src).origin;
+      }
+    } catch (e) {}
+    return DEFAULT_DOMAIN;
   }
 
-  // Default endpoint: same origin as the script + /api/forms/leads
-  if (!ENDPOINT) {
-    var origin = scriptTag.src ? scriptTag.src.replace(/\/embed\.js.*$/, '') : '';
-    if (!origin) {
-      // Fallback: derive from the script src
-      var link = document.createElement('a');
-      link.href = scriptTag.src;
-      origin = link.origin;
+  var API_DOMAIN = getApiDomain();
+
+  function $(selector) {
+    if (typeof selector === 'string') {
+      var el = document.getElementById(selector.charAt(0) === '#' ? selector.slice(1) : selector);
+      return el || document.querySelector(selector);
     }
-    ENDPOINT = origin + '/api/forms/leads';
-  } else if (ENDPOINT.indexOf('/api/forms/leads') === -1) {
-    // If user supplied a base API URL (no /api/forms/leads suffix), append it.
-    ENDPOINT = ENDPOINT.replace(/\/+$/, '') + '/api/forms/leads';
+    return selector;
   }
 
-  // ─── Field auto-mapping ───────────────────────────────────────────────────
-  // Maps form field names/types/labels to lead fields. Uses a priority order:
-  //   1. name attribute (exact match against aliases)
-  //   2. id attribute
-  //   3. placeholder text
-  //   4. associated <label> text
-  //   5. autocomplete attribute
-  //   6. type attribute (tel, email)
+  function extend(defaults, overrides) {
+    var result = {};
+    for (var key in defaults) { if (defaults.hasOwnProperty(key)) result[key] = defaults[key]; }
+    for (var key2 in overrides) { if (overrides.hasOwnProperty(key2)) result[key2] = overrides[key2]; }
+    return result;
+  }
 
-  var FIELD_ALIASES = {
-    name: ['name', 'full_name', 'fullname', 'first_name', 'firstname', 'fname',
-           'your-name', 'your_name', 'contact_name', 'customer_name', 'client_name',
-           'visitor_name', 'user_name', 'username', 'who', 'from'],
-    phone: ['phone', 'mobile', 'cell', 'telephone', 'tel', 'phone_number',
-            'phonenumber', 'contact_phone', 'contact_number', 'your-phone',
-            'your_phone', 'whatsapp', 'mobile_number', 'cellphone', 'phone_no'],
-    email: ['email', 'email_address', 'emailaddress', 'e-mail', 'your-email',
-            'your_email', 'contact_email', 'mailto', 'user_email', 'email_id'],
-    address: ['address', 'street', 'location', 'full_address', 'your-address',
-              'your_address', 'street-address', 'addr', 'city', 'home_address'],
-    serviceType: ['service', 'service_type', 'subject', 'inquiry_type', 'inquiry-type',
-                  'your-subject', 'your_subject', 'request_type', 'topic', 'category',
-                  'department', 'interest', 'what_service', 'service_requested'],
-    description: ['message', 'description', 'notes', 'comments', 'body', 'details',
-                  'msg', 'enquiry', 'inquiry', 'question', 'comment', 'feedback',
-                  'your-message', 'your_message', 'body_text', 'text'],
-    company: ['company', 'company_name', 'business', 'business_name',
-              'organization', 'organisation', 'org'],
-    scheduledAt: ['date', 'preferred_date', 'booking_date', 'appointment_date',
-                  'service_date', 'preferred-date'],
-    scheduledTime: ['time', 'preferred_time', 'booking_time', 'appointment_time',
-                    'service_time', 'preferred-time'],
-    value: ['budget', 'value', 'amount', 'quote_amount', 'estimated_value', 'price'],
+  function buildUrl(path, params) {
+    var url = API_DOMAIN + path;
+    if (params) {
+      var qs = [];
+      for (var key in params) {
+        if (params.hasOwnProperty(key) && params[key] !== undefined && params[key] !== null) {
+          qs.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
+        }
+      }
+      if (qs.length > 0) url += '?' + qs.join('&');
+    }
+    return url;
+  }
+
+  function trackEvent(formId, eventType) {
+    try {
+      var url = buildUrl('/api/public/forms/' + formId + '/embed-event', {
+        type: eventType, ref: document.referrer || '', v: EMBED_VERSION,
+      });
+      if (navigator.sendBeacon) { navigator.sendBeacon(url); }
+      else { var img = new Image(); img.src = url + '&_t=' + Date.now(); }
+    } catch (e) {}
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function mapFieldType(field) {
+    var typeMap = {
+      'short_answer': 'text', 'short_text': 'text', 'email': 'email',
+      'phone': 'tel', 'numerical': 'number', 'number': 'number',
+      'date': 'date', 'time': 'time', 'long_answer': 'textarea',
+      'long_text': 'textarea', 'password': 'password', 'hidden': 'hidden',
+    };
+    var mapped = typeMap[field.type] || typeMap[field.widgetType] || 'text';
+    return mapped === 'textarea' ? 'textarea' : mapped;
+  }
+
+  function renderIframe(container, formId, options) {
+    var iframe = document.createElement('iframe');
+    iframe.setAttribute('src', buildUrl('/form/' + formId, {
+      embed: '1', theme: options.theme, primaryColor: options.primaryColor,
+      borderRadius: options.borderRadius, backgroundColor: options.backgroundColor,
+    }));
+    iframe.setAttribute('frameborder', '0');
+    iframe.setAttribute('scrolling', 'no');
+    iframe.style.cssText = 'width:100%;border:none;min-height:' + (options.height || '400px') + ';display:block;';
+    iframe.setAttribute('title', options.title || 'GPTForm');
+    iframe.setAttribute('loading', 'lazy');
+    iframe.setAttribute('allow', 'camera; microphone');
+
+    window.addEventListener('message', function (event) {
+      if (event.origin !== API_DOMAIN) return;
+      var data = event.data || {};
+      if (data.gptform && data.formId === formId) {
+        if (data.height && data.height > 0) iframe.style.height = data.height + 'px';
+        if (data.event === 'submit' && typeof options.onSuccess === 'function') {
+          options.onSuccess(data.response || {});
+        }
+      }
+    });
+
+    container.innerHTML = '';
+    container.appendChild(iframe);
+    addBranding(container, options);
+    trackEvent(formId, 'iframe_view');
+  }
+
+  function renderJS(container, formId, options) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8;font-family:system-ui;">Loading form…</div>';
+
+    fetch(buildUrl('/api/public/forms/' + formId))
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (!data || !data.schema) {
+          container.innerHTML = '<div style="padding:20px;color:#ef4444;font-family:system-ui;font-size:14px;">Form not found or inactive.</div>';
+          return;
+        }
+        renderFormHTML(container, formId, data, options);
+        trackEvent(formId, 'js_view');
+      })
+      .catch(function () {
+        if (options.fallback !== false) { renderIframe(container, formId, options); }
+        else { container.innerHTML = '<div style="padding:20px;color:#ef4444;font-family:system-ui;font-size:14px;">Failed to load form.</div>'; }
+      });
+  }
+
+  function renderFormHTML(container, formId, formData, options) {
+    var schema = formData.schema || {};
+    var fields = schema.fields || [];
+    var theme = schema.theme || {};
+    var settings = schema.settings || {};
+
+    var primaryColor = options.primaryColor || theme.primaryColor || '#059669';
+    var bgColor = options.backgroundColor || theme.backgroundColor || '#ffffff';
+    var textColor = theme.textColor || '#0f172a';
+    var borderRadius = options.borderRadius || theme.borderRadius || '12px';
+    var submitText = settings.submitButtonText || 'Submit';
+
+    var uid = 'gptf_' + Math.random().toString(36).slice(2, 8);
+    var css = '#' + uid + ' .gptf-form{font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:20px;background:' + bgColor + ';color:' + textColor + ';border-radius:' + borderRadius + ';}' +
+      '#' + uid + ' .gptf-field{margin-bottom:16px;}' +
+      '#' + uid + ' .gptf-label{display:block;font-size:13px;font-weight:600;margin-bottom:4px;color:' + textColor + ';}' +
+      '#' + uid + ' .gptf-input{width:100%;padding:8px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;box-sizing:border-box;background:#fff;color:' + textColor + ';}' +
+      '#' + uid + ' .gptf-input:focus{outline:none;border-color:' + primaryColor + ';box-shadow:0 0 0 3px ' + primaryColor + '20;}' +
+      '#' + uid + ' .gptf-textarea{min-height:80px;resize:vertical;}' +
+      '#' + uid + ' .gptf-radio,#' + uid + ' .gptf-checkbox{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:14px;}' +
+      '#' + uid + ' .gptf-btn{width:100%;padding:12px;background:' + primaryColor + ';color:#fff;border:none;border-radius:' + borderRadius + ';font-size:14px;font-weight:700;cursor:pointer;}' +
+      '#' + uid + ' .gptf-btn:hover{opacity:0.9;}' +
+      '#' + uid + ' .gptf-btn:disabled{opacity:0.5;cursor:not-allowed;}' +
+      '#' + uid + ' .gptf-error{color:#ef4444;font-size:12px;margin-top:4px;}' +
+      '#' + uid + ' .gptf-branding{text-align:center;margin-top:16px;font-size:11px;}' +
+      '#' + uid + ' .gptf-branding a{color:#94a3b8;text-decoration:none;}';
+
+    var html = '<style>' + css + '</style><div id="' + uid + '"><form class="gptf-form" id="gptf-form-' + formId + '">';
+
+    fields.forEach(function (field) {
+      if (field.type === 'heading') {
+        var level = (field.widgetConfig && field.widgetConfig.level) || 'h3';
+        html += '<' + level + ' style="color:' + textColor + ';">' + escapeHtml(field.label || '') + '</' + level + '>';
+        return;
+      }
+      if (field.type === 'paragraph' && field.widgetType === 'divider') {
+        html += '<hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;" />';
+        return;
+      }
+      if (field.type === 'paragraph') {
+        var text = (field.widgetConfig && field.widgetConfig.text) || field.label || '';
+        html += '<p style="font-size:14px;color:#64748b;margin:8px 0;">' + escapeHtml(text) + '</p>';
+        return;
+      }
+
+      html += '<div class="gptf-field">';
+      if (field.label && field.type !== 'hidden') {
+        html += '<label class="gptf-label">' + escapeHtml(field.label);
+        if (field.required) html += ' <span style="color:#ef4444;">*</span>';
+        html += '</label>';
+      }
+
+      var fieldName = 'field_' + field.id;
+      var fieldType = mapFieldType(field);
+      var placeholder = field.placeholder || (field.widgetConfig && field.widgetConfig.placeholder) || '';
+
+      if (field.type === 'radio' || field.widgetType === 'single_choice') {
+        (field.options || []).forEach(function (opt, i) {
+          var val = typeof opt === 'object' ? opt.value : opt;
+          var lbl = typeof opt === 'object' ? opt.label : opt;
+          html += '<div class="gptf-radio"><input type="radio" name="' + fieldName + '" value="' + escapeHtml(val) + '" id="' + fieldName + '_' + i + '"' + (i === 0 ? ' checked' : '') + ' /><label for="' + fieldName + '_' + i + '">' + escapeHtml(lbl) + '</label></div>';
+        });
+      } else if (field.type === 'checkbox' || field.widgetType === 'multiple_choice') {
+        (field.options || []).forEach(function (opt, i) {
+          var val = typeof opt === 'object' ? opt.value : opt;
+          var lbl = typeof opt === 'object' ? opt.label : opt;
+          html += '<div class="gptf-checkbox"><input type="checkbox" name="' + fieldName + '[]" value="' + escapeHtml(val) + '" id="' + fieldName + '_' + i + '" /><label for="' + fieldName + '_' + i + '">' + escapeHtml(lbl) + '</label></div>';
+        });
+      } else if (field.type === 'hidden' || field.widgetType === 'hidden') {
+        html += '<input type="hidden" name="' + fieldName + '" value="' + escapeHtml(field.defaultValue || '') + '" />';
+      } else if (fieldType === 'textarea') {
+        html += '<textarea class="gptf-input gptf-textarea" name="' + fieldName + '" placeholder="' + escapeHtml(placeholder) + '">' + escapeHtml(field.defaultValue || '') + '</textarea>';
+      } else {
+        html += '<input class="gptf-input" type="' + fieldType + '" name="' + fieldName + '" placeholder="' + escapeHtml(placeholder) + '" value="' + escapeHtml(field.defaultValue || '') + '" />';
+      }
+      html += '</div>';
+    });
+
+    html += '<button type="submit" class="gptf-btn">' + escapeHtml(submitText) + '</button>';
+    html += '</form>';
+
+    if (options.branding !== false) {
+      html += '<div class="gptf-branding">Powered by <a href="' + API_DOMAIN + '/gptform" target="_blank" rel="noopener">GPTForm</a></div>';
+    }
+    html += '</div>';
+
+    container.innerHTML = html;
+
+    var formEl = container.querySelector('#gptf-form-' + formId);
+    if (formEl) {
+      formEl.addEventListener('submit', function (e) {
+        e.preventDefault();
+        submitForm(container, formEl, formId, options);
+      });
+    }
+  }
+
+  function submitForm(container, formEl, formId, options) {
+    var formData = new FormData(formEl);
+    var data = {};
+    formData.forEach(function (value, key) {
+      if (key.indexOf('[]') !== -1) {
+        var cleanKey = key.replace('[]', '');
+        if (!data[cleanKey]) data[cleanKey] = [];
+        data[cleanKey].push(value);
+      } else { data[key] = value; }
+    });
+
+    var btn = formEl.querySelector('.gptf-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+
+    fetch(buildUrl('/api/public/forms/' + formId + '/submit'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: data, source: 'embed_js' }),
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (result) {
+        trackEvent(formId, 'submission');
+        var successTitle = options.successTitle || 'Success!';
+        var successMsg = options.successMessage || 'Your submission has been received.';
+        container.innerHTML = '<div style="text-align:center;padding:40px 20px;font-family:system-ui;"><h3 style="color:' + (options.primaryColor || '#059669') + ';font-size:18px;margin-bottom:8px;">' + escapeHtml(successTitle) + '</h3><p style="color:#64748b;font-size:14px;">' + escapeHtml(successMsg) + '</p></div>';
+        if (typeof options.onSuccess === 'function') options.onSuccess(result);
+        if (options.redirectUrl) window.location.href = options.redirectUrl;
+      })
+      .catch(function () {
+        var err = formEl.querySelector('.gptf-error');
+        if (err) err.remove();
+        err = document.createElement('div');
+        err.className = 'gptf-error';
+        err.textContent = 'Network error. Please try again.';
+        formEl.appendChild(err);
+        if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
+      });
+  }
+
+  function addBranding(container, options) {
+    if (options.branding === false) return;
+    var brand = document.createElement('div');
+    brand.style.cssText = 'text-align:center;margin-top:12px;font-size:11px;font-family:system-ui;';
+    brand.innerHTML = 'Powered by <a href="' + API_DOMAIN + '/gptform" target="_blank" rel="noopener" style="color:#94a3b8;text-decoration:none;">GPTForm</a>';
+    container.appendChild(brand);
+  }
+
+  var GPTForm = {
+    version: EMBED_VERSION,
+    render: function (selector, formId, options) {
+      var container = $(selector);
+      if (!container) { console.error('[GPTForm] Container not found:', selector); return; }
+      options = extend({ mode: 'js', branding: true, fallback: true }, options || {});
+      if (options.mode === 'iframe') { renderIframe(container, formId, options); }
+      else { renderJS(container, formId, options); }
+    },
+    autoInit: function () {
+      document.querySelectorAll('.gptform-embed').forEach(function (el) {
+        var formId = el.getAttribute('data-form-id') || el.getAttribute('data-slug');
+        if (!formId) return;
+        GPTForm.render(el, formId, {
+          mode: el.getAttribute('data-mode') || 'js',
+          theme: el.getAttribute('data-theme'),
+          primaryColor: el.getAttribute('data-primary-color'),
+          borderRadius: el.getAttribute('data-border-radius'),
+          backgroundColor: el.getAttribute('data-background-color'),
+          height: el.getAttribute('data-height'),
+          title: el.getAttribute('data-title'),
+          redirectUrl: el.getAttribute('data-redirect-url'),
+          successTitle: el.getAttribute('data-success-title'),
+          successMessage: el.getAttribute('data-success-message'),
+          branding: el.getAttribute('data-branding') !== 'false',
+        });
+      });
+    },
+    getDomain: function () { return API_DOMAIN; },
   };
 
-  function normalizeKey(str) {
-    return String(str || '').toLowerCase().replace(/[-_\s]/g, '');
-  }
+  window.GPTForm = GPTForm;
 
-  function getFieldValue(field) {
-    var type = field.type;
-    if (type === 'checkbox') {
-      if (field.checked) return field.value === 'on' ? 'Yes' : field.value;
-      return null;
-    }
-    if (type === 'radio') {
-      // Return null if not checked; the checked radio in the group will be captured
-      return field.checked ? field.value : null;
-    }
-    if (type === 'select-multiple') {
-      var values = [];
-      for (var i = 0; i < field.options.length; i++) {
-        if (field.options[i].selected) values.push(field.options[i].value);
-      }
-      return values.join(', ');
-    }
-    if (type === 'select-one') {
-      return field.value;
-    }
-    return field.value;
-  }
-
-  function getFieldLabel(field) {
-    // Try associated <label for="id">
-    if (field.id) {
-      var label = document.querySelector('label[for="' + CSS.escape(field.id) + '"]');
-      if (label) return label.textContent.trim();
-    }
-    // Try wrapping <label>
-    var parent = field.parentElement;
-    while (parent && parent.tagName !== 'FORM') {
-      if (parent.tagName === 'LABEL') return parent.textContent.trim();
-      parent = parent.parentElement;
-    }
-    // Try aria-label
-    if (field.getAttribute('aria-label')) return field.getAttribute('aria-label');
-    // Try placeholder
-    if (field.placeholder) return field.placeholder;
-    return '';
-  }
-
-  function mapFormFields(form) {
-    var mapped = {};
-    var usedFields = {};
-
-    var fields = form.querySelectorAll('input, textarea, select');
-    for (var i = 0; i < fields.length; i++) {
-      var field = fields[i];
-      // Skip submit buttons, hidden Fieseros fields, and password fields
-      if (['submit', 'button', 'reset', 'image', 'password', 'file', 'hidden'].indexOf(field.type) !== -1) {
-        // Allow hidden fields that have a name (could be form_source etc.)
-        if (field.type === 'hidden' && field.name && !field.name.match(/^_/)) {
-          mapped[field.name] = field.value;
-        }
-        continue;
-      }
-
-      var value = getFieldValue(field);
-      if (value === null || value === '') continue;
-
-      // Gather all possible identifiers for this field
-      var identifiers = [
-        field.name,
-        field.id,
-        field.getAttribute('autocomplete'),
-        field.placeholder,
-        getFieldLabel(field),
-        field.getAttribute('data-name'),
-      ].filter(Boolean);
-
-      var matched = false;
-      for (var fieldKey in FIELD_ALIASES) {
-        if (usedFields[fieldKey]) continue; // First match wins
-        var aliases = FIELD_ALIASES[fieldKey];
-        for (var j = 0; j < aliases.length; j++) {
-          var aliasNorm = normalizeKey(aliases[j]);
-          for (var k = 0; k < identifiers.length; k++) {
-            var idNorm = normalizeKey(identifiers[k]);
-            if (idNorm === aliasNorm || idNorm.indexOf(aliasNorm) !== -1) {
-              mapped[fieldKey] = value;
-              usedFields[fieldKey] = true;
-              matched = true;
-              break;
-            }
-          }
-          if (matched) break;
-        }
-        if (matched) break;
-      }
-
-      // If no alias matched, store by field name (for custom mapping on the server)
-      if (!matched && field.name) {
-        mapped[field.name] = value;
-      }
-    }
-
-    return mapped;
-  }
-
-  // ─── Map a raw key/value object (for AJAX body parsing) ───────────────────
-  // Same alias logic as mapFormFields, but works on a plain object instead of
-  // a DOM form. Used by the opt-in fetch/XHR interceptor.
-  function mapObjectFields(obj) {
-    var mapped = {};
-    var usedFields = {};
-    var keys = Object.keys(obj || {});
-
-    for (var fi = 0; fi < keys.length; fi++) {
-      var rawKey = keys[fi];
-      var value = obj[rawKey];
-      if (value === null || value === undefined || value === '') continue;
-      if (typeof value === 'object') continue; // skip nested objects/arrays
-      value = String(value);
-
-      var nk = normalizeKey(rawKey);
-      var matched = false;
-
-      for (var fieldKey in FIELD_ALIASES) {
-        if (usedFields[fieldKey]) continue;
-        var aliases = FIELD_ALIASES[fieldKey];
-        for (var j = 0; j < aliases.length; j++) {
-          var aliasNorm = normalizeKey(aliases[j]);
-          if (aliasNorm.length <= 2) continue; // avoid false positives on short aliases
-          if (nk === aliasNorm || nk.indexOf(aliasNorm) !== -1 || nk.endsWith(aliasNorm)) {
-            mapped[fieldKey] = value;
-            usedFields[fieldKey] = true;
-            matched = true;
-            break;
-          }
-        }
-        if (matched) break;
-      }
-
-      if (!matched && rawKey.indexOf('_') !== 0) {
-        mapped[rawKey] = value;
-      }
-    }
-
-    return mapped;
-  }
-
-  // ─── Toast UI ─────────────────────────────────────────────────────────────
-
-  function showToast(message, isError) {
-    var toast = document.createElement('div');
-    toast.style.cssText =
-      'position:fixed;bottom:20px;right:20px;z-index:99999;' +
-      'padding:14px 20px;border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
-      'font-size:14px;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.15);' +
-      'transition:opacity 0.3s,transform 0.3s;opacity:0;transform:translateY(10px);' +
-      'background:' + (isError ? '#ef4444' : '#10b981') + ';';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    // Animate in
-    setTimeout(function () {
-      toast.style.opacity = '1';
-      toast.style.transform = 'translateY(0)';
-    }, 10);
-
-    // Animate out + remove
-    setTimeout(function () {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(10px)';
-      setTimeout(function () {
-        if (toast.parentNode) toast.parentNode.removeChild(toast);
-      }, 300);
-    }, 4000);
-  }
-
-  // ─── Submit handler ───────────────────────────────────────────────────────
-
-  function handleSubmit(form) {
-    var data = mapFormFields(form);
-
-    // Add metadata
-    data._source_url = window.location.href;
-    data._page_title = document.title;
-    data._user_agent = navigator.userAgent;
-    data._form_title = form.getAttribute('data-name') ||
-                       form.getAttribute('aria-label') ||
-                       form.id ||
-                       'Contact Form';
-    data._form_plugin = 'embed-script';
-
-    // Honeypot — read the hidden honeypot field injected by attachListeners.
-    // Bots auto-fill all text inputs; humans never see this field. The server
-    // (form-spam-guard.ts Layer 4) silently drops submissions where this field
-    // is non-empty. Uses type="text" + CSS off-screen (not type="hidden")
-    // because many bots skip hidden inputs but fill visible ones.
-    var hpField = form.querySelector('[name="_hp_website"]');
-    if (hpField) {
-      data._hp_website = hpField.value || '';
-    } else {
-      data._hp_website = '';
-    }
-
-    // Fire and forget — don't block the form's normal submission
-    fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': API_KEY,
-      },
-      body: JSON.stringify(data),
-      keepalive: true, // Ensures the request completes even if page navigates away
-    })
-      .then(function (response) {
-        if (!response.ok) {
-          return response.json().catch(function () { return { error: 'HTTP ' + response.status }; })
-            .then(function (err) {
-              if (console && console.warn) {
-                console.warn('[Fieseros] Lead capture failed:', err.error || err.message || response.status);
-              }
-              if (SHOW_TOAST) showToast('Could not send message. Please try again.', true);
-            });
-        }
-        return response.json().then(function (result) {
-          // Dispatch custom event
-          try {
-            window.dispatchEvent(new CustomEvent('fieseros:lead:created', {
-              detail: { leadId: result.leadId, leadName: result.leadName, source: result.source },
-            }));
-          } catch (e) {
-            // CustomEvent not supported (very old browsers) — skip
-          }
-
-          if (SHOW_TOAST) {
-            showToast('✓ Message sent! We\'ll be in touch soon.', false);
-          }
-        });
-      })
-      .catch(function (err) {
-        if (console && console.warn) {
-          console.warn('[Fieseros] Network error:', err);
-        }
-        if (SHOW_TOAST) showToast('Network error. Please try again.', true);
-      });
-  }
-
-  // ─── Attach listeners ─────────────────────────────────────────────────────
-
-  function attachListeners() {
-    var forms = document.querySelectorAll(FORM_SELECTOR);
-    for (var i = 0; i < forms.length; i++) {
-      var form = forms[i];
-
-      // Skip forms with data-fieseros="false"
-      if (form.getAttribute('data-fieseros') === 'false') continue;
-
-      // Skip already-attached forms
-      if (form.__fieserosAttached) continue;
-      form.__fieserosAttached = true;
-
-      form.addEventListener('submit', function (event) {
-        // Don't prevent default — let the form's normal handler run
-        // We capture data and send async in parallel
-        try {
-          handleSubmit(event.target);
-        } catch (e) {
-          if (console && console.warn) {
-            console.warn('[Fieseros] Error capturing form:', e);
-          }
-        }
-      }, true); // Use capture phase to fire before any handlers that might redirect
-    }
-  }
-
-  // ─── Opt-in AJAX Interceptor ──────────────────────────────────────────────
-  // Activated only when data-fieseros-ajax="true" OR
-  // window.FIESEROS_CONFIG.interceptAjax === true.
-  //
-  // Monkey-patches window.fetch and XMLHttpRequest to capture AJAX form POSTs
-  // (Contact Form 7's REST endpoint, Gravity Forms admin-ajax, WPForms,
-  // Fluent Forms, custom React forms, etc.). Captured payloads run through
-  // the same field mapper and POST to /api/forms/leads in parallel.
-  // The original request is ALWAYS allowed to proceed unchanged.
-  //
-  // Everything is wrapped in try/catch so a broken interception never breaks
-  // the site's normal form submission.
-
-  function shouldInterceptUrl(urlStr) {
-    if (!urlStr) return false;
-    try {
-      var u = urlStr.toLowerCase();
-      // WordPress AJAX + REST + common form endpoints
-      return (
-        u.indexOf('admin-ajax.php') !== -1 ||
-        u.indexOf('/wp-json/') !== -1 ||
-        u.indexOf('/wp-json/contact-form-7') !== -1 ||
-        u.indexOf('wpcf7') !== -1 ||
-        u.indexOf('wpforms') !== -1 ||
-        u.indexOf('gform') !== -1 ||
-        u.indexOf('gravityforms') !== -1 ||
-        u.indexOf('fluentform') !== -1 ||
-        u.indexOf('elementor') !== -1 ||
-        u.indexOf('ninjaform') !== -1 ||
-        u.indexOf('everestform') !== -1 ||
-        u.indexOf('metform') !== -1 ||
-        u.indexOf('formidable') !== -1 ||
-        u.indexOf('/forms/submit') !== -1 ||
-        u.indexOf('/form/submit') !== -1 ||
-        u.indexOf('submit-form') !== -1
-      );
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function captureAjaxPayload(urlStr, method, body) {
-    try {
-      if (!urlStr || (method && method.toUpperCase() !== 'POST')) return;
-      if (!shouldInterceptUrl(urlStr)) return;
-
-      var data = null;
-
-      // Try to parse body
-      if (!body) {
-        return;
-      } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
-        data = {};
-        try {
-          body.forEach(function (value, key) {
-            data[key] = typeof value === 'string' ? value : String(value);
-          });
-        } catch (e) {
-          return;
-        }
-      } else if (typeof body === 'string') {
-        // Try JSON first, then URL-encoded
-        try {
-          data = JSON.parse(body);
-        } catch (e) {
-          try {
-            data = {};
-            new URLSearchParams(body).forEach(function (v, k) {
-              data[k] = v;
-            });
-          } catch (e2) {
-            return;
-          }
-        }
-      } else if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
-        data = {};
-        body.forEach(function (v, k) { data[k] = v; });
-      } else if (typeof body === 'object') {
-        data = {};
-        try {
-          for (var k in body) {
-            if (Object.prototype.hasOwnProperty.call(body, k)) {
-              data[k] = body[k];
-            }
-          }
-        } catch (e) {
-          return;
-        }
-      } else {
-        return;
-      }
-
-      if (!data || typeof data !== 'object') return;
-
-      // Map fields using the same alias table
-      var mapped = mapObjectFields(data);
-
-      // Add metadata
-      mapped._source_url = window.location.href;
-      mapped._page_title = document.title;
-      mapped._user_agent = navigator.userAgent;
-      mapped._form_title = 'AJAX Form (' + urlStr + ')';
-      mapped._form_plugin = 'ajax-interceptor';
-
-      if (console && console.log) {
-        console.log('[Fieseros] AJAX intercepted:', urlStr);
-      }
-
-      // Fire and forget
-      fetch(ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': API_KEY,
-        },
-        body: JSON.stringify(mapped),
-        keepalive: true,
-      }).catch(function (err) {
-        if (console && console.warn) {
-          console.warn('[Fieseros] AJAX capture network error:', err);
-        }
-      });
-    } catch (err) {
-      if (console && console.warn) {
-        console.warn('[Fieseros] AJAX capture failed (non-fatal):', err);
-      }
-    }
-  }
-
-  function installAjaxInterceptor() {
-    // ─── Patch fetch() ───────────────────────────────────────────────────
-    if (typeof window.fetch === 'function' && !window.__fieserosFetchPatched) {
-      window.__fieserosFetchPatched = true;
-      var originalFetch = window.fetch;
-      window.fetch = function (input, init) {
-        try {
-          var url = '';
-          var method = 'GET';
-          if (typeof input === 'string') {
-            url = input;
-          } else if (input && input.url) {
-            url = input.url;
-            method = input.method || 'GET';
-          }
-          if (init && init.method) method = init.method;
-          if (init && init.body) {
-            captureAjaxPayload(url, method, init.body);
-          } else if (typeof input === 'object' && input && input.body) {
-            captureAjaxPayload(url, method, input.body);
-          }
-        } catch (e) {
-          // Never break the original fetch
-        }
-        return originalFetch.apply(this, arguments);
-      };
-    }
-
-    // ─── Patch XMLHttpRequest ────────────────────────────────────────────
-    if (typeof window.XMLHttpRequest === 'function' && !window.__fieserosXhrPatched) {
-      window.__fieserosXhrPatched = true;
-      var originalOpen = XMLHttpRequest.prototype.open;
-      var originalSend = XMLHttpRequest.prototype.send;
-
-      XMLHttpRequest.prototype.open = function (method, url) {
-        try {
-          this.__fieserosMethod = method;
-          this.__fieserosUrl = url;
-        } catch (e) {
-          // ignore
-        }
-        return originalOpen.apply(this, arguments);
-      };
-
-      XMLHttpRequest.prototype.send = function (body) {
-        try {
-          captureAjaxPayload(this.__fieserosUrl, this.__fieserosMethod, body);
-        } catch (e) {
-          // Never break the original send
-        }
-        return originalSend.apply(this, arguments);
-      };
-    }
-  }
-
-  // ─── Init ─────────────────────────────────────────────────────────────────
-
-  function init() {
-    // Attach to existing forms
-    attachListeners();
-
-    // Watch for dynamically added forms (SPAs, AJAX-loaded content)
-    if (typeof MutationObserver !== 'undefined') {
-      var observer = new MutationObserver(function (mutations) {
-        for (var i = 0; i < mutations.length; i++) {
-          if (mutations[i].addedNodes && mutations[i].addedNodes.length > 0) {
-            // Re-scan on any DOM change (debounced via rAF)
-            if (window.__fieserosRAF) cancelAnimationFrame(window.__fieserosRAF);
-            window.__fieserosRAF = requestAnimationFrame(attachListeners);
-            break;
-          }
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    // Install AJAX interceptor only if explicitly opted in
-    if (INTERCEPT_AJAX) {
-      installAjaxInterceptor();
-      if (console && console.log) {
-        console.log('[Fieseros] AJAX interceptor enabled (fetch + XHR).');
-      }
-    }
-  }
-
-  // Run init when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
+    document.addEventListener('DOMContentLoaded', function () { GPTForm.autoInit(); });
+  } else { GPTForm.autoInit(); }
+})(window, document);

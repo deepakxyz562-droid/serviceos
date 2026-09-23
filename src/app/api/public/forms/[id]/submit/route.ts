@@ -185,15 +185,22 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({
+    const submitResponse = NextResponse.json({
       success: true,
       submissionId: response.id,
       successTitle: normalizedSchema.settings.successTitle,
       successMessage: normalizedSchema.settings.successMessage,
       redirectUrl: normalizedSchema.settings.redirectUrl || null,
     });
+    // ─── CORS headers for embed (WordPress, Shopify, custom sites) ────────
+    submitResponse.headers.set('Access-Control-Allow-Origin', '*');
+    submitResponse.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    submitResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    return submitResponse;
   } catch (error) {
     console.error('[public-form-submit] Error:', error);
-    return NextResponse.json({ error: 'Failed to process submission' }, { status: 500 });
+    const errResponse = NextResponse.json({ error: 'Failed to process submission' }, { status: 500 });
+    errResponse.headers.set('Access-Control-Allow-Origin', '*');
+    return errResponse;
   }
 }
