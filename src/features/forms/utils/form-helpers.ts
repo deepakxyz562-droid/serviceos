@@ -109,8 +109,17 @@ export const safeJsonParse = safeParseJson;
 
 export function apiFormToFormItem(api: ApiForm): FormItem {
   let fields: FormField[] = [];
+  let parsedSchema: any = null;
+  if (api.schemaJson) {
+    try {
+      parsedSchema = typeof api.schemaJson === 'string' ? JSON.parse(api.schemaJson) : api.schemaJson;
+    } catch {}
+  }
+
   if (Array.isArray((api as any).fields)) {
     fields = (api as any).fields;
+  } else if (parsedSchema && Array.isArray(parsedSchema.fields) && parsedSchema.fields.length > 0) {
+    fields = parsedSchema.fields;
   } else if (api.fieldsJson) {
     const rawFields = safeJsonParse<any>(api.fieldsJson, []);
     fields = Array.isArray(rawFields) ? rawFields : [];
@@ -201,7 +210,7 @@ export function apiFormToFormItem(api: ApiForm): FormItem {
     submissionActions,
     fieldMappings: mappings,
     welcomeMessage: api.welcomeMessage || '',
-    completionMessage: api.completionMessage || '',
+    completionMessage: api.completionMessage || parsedSchema?.settings?.successMessage || '',
     whatsappOwnerTemplate: api.whatsappOwnerTemplate || '',
     whatsappUserTemplate: api.whatsappUserTemplate || '',
     aiGenerateUserMessage: api.whatsappAiGenerated || false,
@@ -211,6 +220,14 @@ export function apiFormToFormItem(api: ApiForm): FormItem {
     createdAt: api.createdAt
       ? new Date(api.createdAt).toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0],
+    theme: parsedSchema?.theme,
+    mediaPanel: parsedSchema?.mediaPanel || parsedSchema?.theme?.mediaPanel,
+    isMultiStep: parsedSchema?.isMultiStep,
+    steps: parsedSchema?.steps,
+    rules: parsedSchema?.rules || [],
+    settings: parsedSchema?.settings,
+    primaryColor: parsedSchema?.theme?.primaryColor,
+    submitButtonText: parsedSchema?.settings?.submitButtonText,
   };
 }
 
@@ -252,7 +269,12 @@ export function buildApiPayload(formData: EditorFormData) {
     ...f,
     id: f.id || `f_${idx + 1}`,
     stepId: isMultiStep ? (f.stepId && validStepIds.has(f.stepId) ? f.stepId : defaultStepId) : defaultStepId,
+    layoutColumn: f.layoutColumn || 'left',
+    defaultValue: f.defaultValue,
   }));
+
+  const mediaPanel = formData.mediaPanel || formData.theme?.mediaPanel;
+  const themeLayout = formData.theme?.layout || (formData.settings?.formLayout === 'split_media' ? 'split_media' : formData.settings?.formLayout === 'single_question' ? 'card' : 'paper');
 
   const schemaObj = {
     version: 1,
@@ -265,14 +287,19 @@ export function buildApiPayload(formData: EditorFormData) {
       cardBackground: formData.theme?.cardBackground || '#ffffff',
       textColor: formData.theme?.textColor || '#0f172a',
       fontFamily: formData.theme?.fontFamily || 'Inter, sans-serif',
-      borderRadius: `${formData.borderRadius || 16}px`,
+      borderRadius: typeof formData.borderRadius === 'number' ? `${formData.borderRadius}px` : formData.borderRadius || '16px',
       inputBorderRadius: formData.theme?.inputBorderRadius || '12px',
       inputHeight: formData.theme?.inputHeight || 'medium',
       buttonColor: formData.theme?.buttonColor || formData.primaryColor || '#059669',
       buttonTextColor: formData.theme?.buttonTextColor || '#ffffff',
       showTopBorder: formData.theme?.showTopBorder ?? false,
-      layout: formData.theme?.layout || (formData.settings?.formLayout === 'single_question' ? 'card' : 'paper'),
+      layout: themeLayout,
+      backgroundImageUrl: formData.theme?.backgroundImageUrl,
+      backgroundOverlayOpacity: formData.theme?.backgroundOverlayOpacity,
+      backgroundBlur: formData.theme?.backgroundBlur,
+      mediaPanel,
     },
+    mediaPanel,
     rules: formData.rules || [],
     settings: {
       submitButtonText: formData.submitButtonText || 'Submit',

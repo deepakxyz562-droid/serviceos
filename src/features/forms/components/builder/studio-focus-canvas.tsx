@@ -138,6 +138,22 @@ export function StudioFocusCanvas({
     });
   }, [formData.steps, formData.name, fields, isMultiStep]);
 
+  // Canvas preview values for calculation fields and widgets
+  const canvasFormData = useMemo(() => {
+    const data: Record<string, any> = {};
+    for (const f of fields) {
+      if (f.defaultValue !== undefined) {
+        data[f.id] = f.defaultValue;
+      } else if (f.widgetConfig?.defaultValue !== undefined) {
+        data[f.id] = f.widgetConfig.defaultValue;
+      } else if (f.options && Array.isArray(f.options) && f.options.length > 0) {
+        const first = f.options[0];
+        data[f.id] = typeof first === 'object' && first !== null ? (first as any).value ?? (first as any).label : first;
+      }
+    }
+    return data;
+  }, [fields]);
+
   const activeStep = steps[currentStepIndex] || steps[0] || { id: 'step_1', title: 'Step 1', fields: [] };
   const progressPercent = Math.round(((currentStepIndex + 1) / Math.max(steps.length, 1)) * 100);
 
@@ -551,8 +567,9 @@ function StudioFieldPreview({
     <div className="w-full pointer-events-auto">
       <WidgetRuntimeDispatcher
         field={field as any}
-        value={undefined}
+        value={canvasFormData[field.id]}
         onChange={() => {}}
+        allFormData={canvasFormData}
         disabled={false}
       />
     </div>

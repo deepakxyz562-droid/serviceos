@@ -207,21 +207,30 @@ export function FormBuilderView() {
           console.warn(`[form-builder-view] Template '${pendingId}' not found in registry.`);
           return;
         }
-        // Map template FormField[] → builder FormField[] (same as handleApplyTemplate)
+        // Map template FormField[] → builder FormField[] (preserving IDs, layoutColumn, defaultValues, and options)
         const templateFields = (template.schema.fields || []).map((f: any, idx: number) => ({
-          id: `tpl-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
-          label: f.label,
+          id: f.id || `tpl-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          label: f.label || 'Question',
           type: f.widgetType ? 'control_widget' : f.type,
           required: f.required ?? false,
           placeholder: f.placeholder || '',
           helpText: f.helpText || f.description || '',
           width: f.width || 'full',
+          layoutColumn: f.layoutColumn || 'left',
+          stepId: f.stepId || 'step-1',
+          defaultValue: f.defaultValue ?? f.widgetConfig?.defaultValue,
           widgetType: f.widgetType,
           widgetConfig: f.widgetConfig as Record<string, unknown> | undefined,
-          options: f.options?.map((opt: any) =>
-            typeof opt === 'string' ? opt : opt.label,
-          ),
+          options: f.options,
         }));
+
+        const templateSteps = template.schema.steps?.map((s: any) => ({
+          id: s.id,
+          title: s.title,
+          description: s.description,
+        })) || [{ id: 'step-1', title: 'Step 1: Details' }];
+        const hasMultiSteps = (template.schema.steps?.length || 0) > 1;
+
         setFormData({
           name: template.name,
           description: template.shortDescription || template.description || '',
@@ -232,6 +241,22 @@ export function FormBuilderView() {
           fieldMappings: [],
           welcomeMessage: '',
           completionMessage: template.schema.settings?.successMessage || 'Thank you for your submission!',
+          isMultiStep: hasMultiSteps,
+          steps: templateSteps,
+          primaryColor: template.schema.theme?.primaryColor || '#059669',
+          submitButtonText: template.schema.settings?.submitButtonText || 'Submit',
+          theme: {
+            ...(template.schema.theme || {}),
+            primaryColor: template.schema.theme?.primaryColor || '#059669',
+            layout: template.schema.theme?.layout || template.schema.settings?.formLayout || 'paper',
+            mediaPanel: template.schema.mediaPanel || template.schema.theme?.mediaPanel,
+          } as any,
+          mediaPanel: template.schema.mediaPanel || template.schema.theme?.mediaPanel,
+          rules: template.schema.rules || [],
+          settings: {
+            ...(template.schema.settings as any || {}),
+            formLayout: (template.schema.theme?.layout || template.schema.settings?.formLayout) as any,
+          },
         });
         setEditMode(false);
         setEditFormId(null);
@@ -263,6 +288,14 @@ export function FormBuilderView() {
       fieldMappings: Array.isArray(form.fieldMappings) ? [...form.fieldMappings] : [],
       welcomeMessage: form.welcomeMessage || '',
       completionMessage: form.completionMessage || '',
+      isMultiStep: form.isMultiStep,
+      steps: form.steps,
+      primaryColor: form.primaryColor || form.theme?.primaryColor,
+      submitButtonText: form.submitButtonText || form.settings?.submitButtonText,
+      theme: form.theme,
+      mediaPanel: form.mediaPanel || form.theme?.mediaPanel,
+      rules: form.rules || [],
+      settings: form.settings,
     });
     setActiveTab('details');
     setShowCreateDialog(true);

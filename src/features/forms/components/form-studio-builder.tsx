@@ -242,6 +242,7 @@ export function FormStudioBuilder({
         required: f.required,
         stepId: f.stepId || 'step_1',
         width: f.width || 'full',
+        layoutColumn: f.layoutColumn,
         // ─── Universal settings (pass through to renderer) ────────
         labelEnabled: f.labelEnabled,
         widthPx: f.widthPx,
@@ -264,9 +265,16 @@ export function FormStudioBuilder({
         inputHeight: f.inputHeight,
         customCss: f.customCss,
         // ─── Options + widget config ────────────────────────────────────────
-        options: f.options?.map((opt) => (typeof opt === 'string'
-          ? { label: opt, value: opt.toLowerCase().replace(/\s+/g, '_') }
-          : opt as { label: string; value: string })),
+        options: f.options?.map((opt: any) => {
+          if (typeof opt === 'string') return { label: opt, value: opt };
+          if (opt && typeof opt === 'object') {
+            return {
+              label: String(opt.label ?? opt.value ?? ''),
+              value: String(opt.value ?? opt.label ?? ''),
+            };
+          }
+          return { label: String(opt), value: String(opt) };
+        }),
         widgetType: f.widgetType,
         widgetConfig: f.widgetConfig,
       })),
@@ -319,10 +327,24 @@ export function FormStudioBuilder({
         placeholder: f.placeholder,
         helpText: f.helpText,
         required: Boolean(f.required),
-        options: f.options?.map((o) => (typeof o === 'string' ? o : o.label)) || [],
+        width: f.width || 'full',
+        layoutColumn: f.layoutColumn,
+        stepId: f.stepId,
+        defaultValue: f.defaultValue,
+        options: f.options,
         widgetType: f.widgetType,
         widgetConfig: f.widgetConfig,
       })),
+      theme: {
+        ...(prev.theme || {}),
+        ...(importedSchema.theme || {}),
+      } as any,
+      mediaPanel: importedSchema.mediaPanel || importedSchema.theme?.mediaPanel || prev.mediaPanel,
+      rules: importedSchema.rules || prev.rules,
+      settings: {
+        ...(prev.settings || {}),
+        ...(importedSchema.settings as any || {}),
+      },
     }));
   };
 
@@ -331,25 +353,23 @@ export function FormStudioBuilder({
     customTitle: string,
     mode: 'replace' | 'append'
   ) => {
-    // The registry's FormTemplate.schema.fields uses the canonical FormSchema
-    // shape (options: FieldOption[]). The builder's FormField (from
-    // @/features/forms/types) uses options: string[]. We map options.labels
-    // out and preserve widgetType/widgetConfig so the drag-and-drop canvas
-    // keeps the same specialized widgets the template shipped with.
+    // Preserve field IDs so formula calculations (e.g. [roof_sqft] * [material_grade])
+    // map directly to target fields without broken token references.
     const newFields: FormField[] = template.schema.fields.map((f, idx) => ({
-      id: `f-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      id: f.id || `f-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
       type: (f.type as FieldType) || 'text',
       label: f.label || 'Question',
       placeholder: f.placeholder,
       helpText: f.helpText,
       description: f.description,
       required: Boolean(f.required),
-      options: f.options?.map((o) => (typeof o === 'string' ? o : o.label)) || [],
+      options: f.options,
       widgetType: f.widgetType,
       widgetConfig: f.widgetConfig,
       width: f.width,
+      layoutColumn: f.layoutColumn || 'left',
       stepId: f.stepId,
-      defaultValue: f.defaultValue,
+      defaultValue: f.defaultValue ?? (f.widgetConfig as any)?.defaultValue,
       hidden: (f as { hidden?: boolean }).hidden,
       validation: f.validation,
     }));
@@ -372,11 +392,21 @@ export function FormStudioBuilder({
         isMultiStep: hasMultiSteps ? true : prev.isMultiStep,
         steps: mode === 'replace' && hasMultiSteps ? templateSteps : (prev.steps || templateSteps),
         primaryColor: template.schema.theme?.primaryColor || prev.primaryColor,
+        submitButtonText: template.schema.settings?.submitButtonText || prev.submitButtonText,
         theme: {
           ...(prev.theme || {}),
           ...(template.schema.theme || {}),
           primaryColor: template.schema.theme?.primaryColor || prev.primaryColor || '#059669',
+          layout: template.schema.theme?.layout || template.schema.settings?.formLayout || 'paper',
+          mediaPanel: template.schema.mediaPanel || template.schema.theme?.mediaPanel,
         } as any,
+        mediaPanel: template.schema.mediaPanel || template.schema.theme?.mediaPanel || prev.mediaPanel,
+        rules: template.schema.rules || prev.rules || [],
+        settings: {
+          ...(prev.settings || {}),
+          ...(template.schema.settings as any || {}),
+          formLayout: (template.schema.theme?.layout || template.schema.settings?.formLayout) as any,
+        },
       };
     });
 

@@ -135,6 +135,14 @@ export interface FormItem {
   submissions: number;
   conversionRate: number;
   createdAt: string;
+  theme?: any;
+  mediaPanel?: any;
+  isMultiStep?: boolean;
+  steps?: Array<{ id: string; title: string; description?: string }>;
+  rules?: any[];
+  settings?: any;
+  primaryColor?: string;
+  submitButtonText?: string;
 }
 
 export interface FormResponse {
@@ -229,6 +237,7 @@ export interface ApiForm {
   status: string;
   slug?: string | null;
   fieldsJson?: string;
+  schemaJson?: string;
   submissionActions?: string;
   fieldMappingJson?: string;
   welcomeMessage?: string;

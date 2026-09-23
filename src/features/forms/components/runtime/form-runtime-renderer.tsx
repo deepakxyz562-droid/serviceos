@@ -309,6 +309,7 @@ function FormMediaHeroPanel({
                     field={field as any}
                     value={formData ? formData[field.id] : undefined}
                     onChange={(val) => onChange?.(field.id, val)}
+                    allFormData={formData}
                     disabled={false}
                     formId={formId}
                   />
