@@ -708,6 +708,20 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real accounts.' },
   ], 'payment'],
 
+  // ─── Tier 4: Gateway-dependent sub-methods (2 new standalone widgets) ──
+  ['payment_venmo', 'Venmo', 'payment', 'Users', 'US social wallet payments via PayPal', 'POPULAR', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'venmo', options: [{ label: 'Venmo', value: 'venmo' }], helpText: 'Requires a connected PayPal account.' },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real accounts.' },
+  ], 'payment'],
+  ['payment_cash_app_pay', 'Cash App Pay', 'payment', 'Smartphone', 'Square Cash App QR & mobile deep-link payments', 'POPULAR', 'business', [
+    { key: 'gatewayId', label: 'Payment Connection', type: 'gateway_picker', group: 'field_specific', default: 'cash_app_pay', options: [{ label: 'Cash App Pay', value: 'cash_app_pay' }], helpText: 'Requires a connected Square account.' },
+    { key: 'paymentType', label: 'Payment Type', type: 'select', group: 'field_specific', default: 'products', options: [{ label: 'Sell Products', value: 'products' }, { label: 'Sell Single Product', value: 'single' }, { label: 'User Defined Amount (Donation)', value: 'donation' }] },
+    { key: 'currency', label: 'Currency', type: 'currency_search', group: 'field_specific', default: 'USD', searchPlaceholder: 'Search...', options: [{ label: 'USD - United States Dollars', value: 'USD' }] },
+    { key: 'testMode', label: 'Sandbox Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Test payments without charging real accounts.' },
+  ], 'payment'],
+
 
   // ─── Products (10) ────────────────────────────────────────────────────────────
   ['product_single', 'Single Product', 'payment', 'Package', 'Single product card with qty selector', '', 'pro', [

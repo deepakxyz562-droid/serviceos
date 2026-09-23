@@ -827,6 +827,46 @@ export const PAYMENT_GATEWAYS_REGISTRY: PaymentGatewayDef[] = [
     ],
     implemented: true,
   },
+  // 35. Coinbase Commerce (Crypto) — Tier 4 standalone direct integration
+  {
+    id: 'coinbase_commerce',
+    fieldType: 'control_coinbase',
+    name: 'Coinbase Commerce',
+    category: 'wallets',
+    description: 'Accept Bitcoin, Ethereum, USD Coin, and other crypto payments via Coinbase Commerce.',
+    badge: 'CRYPTO',
+    currencies: ['USD', 'EUR', 'GBP', 'BTC', 'ETH', 'USDC'],
+    features: ['Bitcoin (BTC)', 'Ethereum (ETH)', 'USD Coin (USDC)', 'Crypto Webhook Confirmations'],
+    brandColor: '#0052FF',
+    logoBg: '#0052FF',
+    supportsZeroConfig: false,
+    iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#0052FF"/><circle cx="20" cy="20" r="8" stroke="#FFF" stroke-width="2.5"/><circle cx="20" cy="20" r="3" fill="#FFF"/></svg>`,
+    supportedPaymentTypes: ['sell_products', 'user_defined_amount', 'collect_donations'],
+    configFields: [
+      { key: 'apiKey', label: 'Coinbase Commerce API Key', type: 'password', placeholder: 'dc3a...' },
+      { key: 'webhookSecret', label: 'Webhook Secret', type: 'password', placeholder: 'whsec_...' },
+    ],
+  },
+  // 36. Affirm (BNPL — Pay over time) — Tier 4 standalone direct integration
+  {
+    id: 'affirm',
+    fieldType: 'control_affirm',
+    name: 'Affirm',
+    category: 'bnpl',
+    description: 'Pay over time with Affirm — flexible monthly installment plans for larger purchases.',
+    badge: 'BNPL',
+    currencies: ['USD', 'CAD'],
+    features: ['Flexible Monthly Payments', 'No Late Fees', 'Soft Credit Check'],
+    brandColor: '#0FA3E0',
+    logoBg: '#0FA3E0',
+    supportsZeroConfig: false,
+    iconSvg: `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="40" height="40" rx="8" fill="#0FA3E0"/><path d="M12 15h16v3h-3v8h-3v-8h-4v8h-3v-8h-3v-3z" fill="#FFF"/></svg>`,
+    supportedPaymentTypes: ['sell_products', 'sell_subscriptions', 'user_defined_amount'],
+    configFields: [
+      { key: 'publicApiKey', label: 'Affirm Public API Key', type: 'text', placeholder: 'PUB_...' },
+      { key: 'privateApiKey', label: 'Affirm Private API Key', type: 'password', placeholder: 'PRV_...' },
+    ],
+  },
 ];
 
 export function getPaymentGatewayById(id: string): PaymentGatewayDef | undefined {

@@ -36,7 +36,8 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ['payment_helcim', 'Helcim', 'payment', 'CreditCard', 'Helcim payments', '', 'pro', [{ key: 'testMode', label: 'Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Simulate payments without real charges.' }], 'payment'],
   ['payment_eway', 'eWay (Australia)', 'payment', 'CreditCard', 'Australian gateway', '', 'pro', [{ key: 'testMode', label: 'Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Simulate payments without real charges.' }], 'payment'],
   ['payment_elavon', 'Elavon', 'payment', 'CreditCard', 'Elavon payments', '', 'pro', [{ key: 'testMode', label: 'Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Simulate payments without real charges.' }], 'payment'],
-  ['payment_coinpayments', 'CoinPayments (Crypto)', 'payment', 'Bitcoin', 'Crypto payments', 'NEW', 'business', [{ key: 'testMode', label: 'Test Mode', type: 'toggle_with_description', group: 'field_specific', default: true, description: 'Simulate payments without real charges.' }], 'payment'],
+  // NOTE: payment_coinpayments removed in Tier 4 — fraud risk (generated fake
+  // BTC addresses). Crypto payments are covered by payment_coinbase_commerce.
 
   // ─── More Regional Validators (10) ──────────────────────────────────────────
   ['mexico_rfc', 'Mexico RFC', 'regional', 'IdCard', 'Mexican RFC tax ID', 'NEW', 'pro', [

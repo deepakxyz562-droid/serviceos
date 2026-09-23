@@ -50,6 +50,7 @@ export const SECRET_FIELD_KEYS = [
   'serviceKey',           // Worldpay UK
   'merchantSalt',         // PayU India
   'apiSecret',            // iyzico
+  'privateApiKey',        // Affirm
   'secret',               // generic
 ] as const;
 
@@ -97,6 +98,8 @@ const GATEWAY_ID_TO_PGC_GATEWAY: Record<string, string> = {
   skrill: 'skrill',
   sensepass: 'sensepass',
   apple_google_pay: 'apple_google_pay',
+  apple_pay: 'apple_google_pay',
+  google_pay: 'apple_google_pay',
   chargify: 'chargify',
   coinbase_commerce: 'coinbase_commerce',
   // Regional / Phase 4

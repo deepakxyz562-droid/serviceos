@@ -176,6 +176,9 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   payment_gocardless: w(() => import('./payment/gocardless')),
   payment_affirm: w(() => import('./payment/affirm')),
   payment_coinbase_commerce: w(() => import('./payment/coinbase-commerce')),
+  // ─── Tier 4: Gateway-dependent sub-methods (new standalone widgets) ──────
+  payment_venmo: w(() => import('./payment/venmo')),
+  payment_cash_app_pay: w(() => import('./payment/cash-app-pay')),
   // ─── Phase C: previously-missing payment widgets ──────────────────────────
   payment_echeck_net: w(() => import('./payment/echeck-net')),
   payment_chargify: w(() => import('./payment/chargify')),
@@ -451,7 +454,10 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   payment_helcim: w(() => import('./payment/helcim')),
   payment_eway: w(() => import('./payment/eway')),
   payment_elavon: w(() => import('./payment/elavon')),
-  payment_coinpayments: w(() => import('./payment/coinpayments')),
+  // NOTE: payment_coinpayments removed in Tier 4 — fraud risk (generated
+  // fake BTC addresses that could mislead users into sending crypto to
+  // non-functional addresses). Crypto payments are covered by
+  // payment_coinbase_commerce instead.
 
   // ─── Phase 4 — More Regional Validators (10) ──────────────────────────────
   mexico_rfc: w(() => import('./regional/mexico-rfc')),

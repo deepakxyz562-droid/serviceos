@@ -1418,10 +1418,147 @@ export async function POST(
       }
     }
 
+    // ─── Tier 4: Coinbase Commerce (Crypto — standalone direct API) ────────
+    if (gatewayId === 'coinbase_commerce') {
+      const creds = await resolveFormCredentials(formId, 'coinbase_commerce');
+      if (!creds?.apiKey) {
+        return NextResponse.json({ success: false, error: 'No Coinbase Commerce credentials connected. Add your API Key in the form inspector or in Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const apiKey = creds.apiKey as string;
+      try {
+        const res = await fetch('https://api.commerce.coinbase.com/charges', {
+          method: 'POST',
+          headers: { 'X-CC-Api-Key': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: `Form payment - ${formId}`,
+            description: `Payment for form ${formId}`,
+            pricing_type: 'fixed_price',
+            local_price: { amount: Number(amount).toFixed(2), currency },
+            metadata: { formId, formResponseId: formResponseId || '', gatewayId },
+            redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=success`,
+            cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=cancelled`,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return NextResponse.json({ success: false, error: `Coinbase charge creation failed: ${JSON.stringify(data)}`, gatewayId }, { status: 402 });
+        }
+        const chargeCode = data?.data?.code;
+        const checkoutUrl = data?.data?.hosted_url;
+        if (formResponseId && chargeCode) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: chargeCode, paymentMethod: 'coinbase_commerce', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: chargeCode || '', chargeCode, checkoutUrl, paymentStatus: 'pending', gateway: 'coinbase_commerce' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── Tier 4: Affirm (BNPL — standalone direct API) ─────────────────────
+    if (gatewayId === 'affirm') {
+      const creds = await resolveFormCredentials(formId, 'affirm');
+      if (!creds?.publicApiKey || !creds?.privateApiKey) {
+        return NextResponse.json({ success: false, error: 'No Affirm credentials connected. Add your Public API Key and Private API Key in the form inspector.', gatewayId }, { status: 503 });
+      }
+      const isLive = creds.isLive !== false;
+      const apiBase = isLive ? 'https://api.affirm.com/api/v1' : 'https://sandbox.affirm.com/api/v1';
+      const auth = Buffer.from(`${creds.publicApiKey}:${creds.privateApiKey}`).toString('base64');
+      try {
+        const res = await fetch(`${apiBase}/charges`, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            merchant_external_reference: `form_${formId}_${Date.now()}`,
+            amount: Math.round(Number(amount) * 100), // Affirm uses cents
+            currency,
+            items: [{ display_name: 'Form payment', sku: formId, unit_price: Math.round(Number(amount) * 100), qty: 1 }],
+            checkout: {
+              redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=success`,
+              cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || ''}/form/${formId}?payment=cancelled`,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return NextResponse.json({ success: false, error: `Affirm checkout creation failed: ${JSON.stringify(data)}`, gatewayId }, { status: 402 });
+        }
+        const txnId = data?.id || `affirm_${Date.now()}`;
+        const checkoutUrl = data?.checkout_url || data?.redirect_url;
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'affirm', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'affirm' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── Tier 4: Gateway-dependent sub-methods ─────────────────────────────
+    // These payment methods ride on top of a primary gateway (Stripe/Square/PayPal).
+    // The backend resolves the primary gateway's credentials and creates the
+    // payment with the sub-method enabled.
+    if (['klarna', 'apple_pay', 'google_pay'].includes(gatewayId)) {
+      // Resolve Stripe credentials (sub-methods use Stripe).
+      const creds = await resolveFormCredentials(formId, 'stripe_elements');
+      let stripeSecretKey: string | undefined;
+      if (creds?.secretKey) {
+        stripeSecretKey = creds.secretKey as string;
+      } else {
+        stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+      }
+      if (!stripeSecretKey) {
+        return NextResponse.json({ success: false, error: `${gatewayId} requires a connected Stripe account. Connect your Stripe account in the inspector or in Dashboard > Settings > Payments.`, gatewayId }, { status: 503 });
+      }
+      try {
+        const stripe = new Stripe(stripeSecretKey);
+        const amountInCents = Math.round(Number(amount) * 100);
+        // Map gatewayId to Stripe payment_method_types.
+        const paymentMethodTypes: Record<string, string> = {
+          klarna: 'klarna',
+          apple_pay: 'card', // Apple Pay uses card with wallet
+          google_pay: 'card', // Google Pay uses card with wallet
+        };
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents,
+          currency: currency.toLowerCase(),
+          payment_method_types: [paymentMethodTypes[gatewayId]],
+          metadata: { formId, formResponseId: formResponseId || '', gatewayId, customerName: customer?.name || '' },
+          description: `Form payment (${gatewayId}) - ${formId}`,
+        });
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: paymentIntent.id, paymentMethod: gatewayId, paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: paymentIntent.id, clientSecret: paymentIntent.client_secret, paymentStatus: 'pending', gateway: gatewayId });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    if (gatewayId === 'venmo') {
+      // Venmo rides on PayPal — resolve PayPal credentials.
+      const creds = await resolveFormCredentials(formId, 'paypal_complete');
+      if (!creds?.clientId) {
+        return NextResponse.json({ success: false, error: 'Venmo requires a connected PayPal account. Connect your PayPal account in the inspector.', gatewayId }, { status: 503 });
+      }
+      // PayPal Smart Buttons handle Venmo automatically when the SDK is loaded
+      // with venmo enabled. Return the clientId for frontend SDK init.
+      return NextResponse.json({ success: true, clientId: creds.clientId, gateway: 'venmo', flow: 'client_side_sdk' });
+    }
+
+    if (gatewayId === 'cash_app_pay') {
+      // Cash App Pay rides on Square — resolve Square credentials.
+      const creds = await resolveFormCredentials(formId, 'square_payments');
+      if (!creds?.accessToken) {
+        return NextResponse.json({ success: false, error: 'Cash App Pay requires a connected Square account. Connect your Square account in the inspector.', gatewayId }, { status: 503 });
+      }
+      // Square Web SDK handles Cash App Pay automatically. Return applicationId + locationId.
+      return NextResponse.json({ success: true, applicationId: creds.applicationId, locationId: creds.locationId, gateway: 'cash_app_pay', flow: 'client_side_sdk' });
+    }
+
     // ─── Other gateways ─────────────────────────────────────────────────────
     return NextResponse.json({
       success: false,
-      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_* (stripe_elements, stripe_checkout, stripe_ach), paypal_*, razorpay_*, square_payments, authorize_net, echeck_net, chargify, mollie, payu_india, gocardless, afterpay, clearpay, braintree, cybersource, bluepay, eway, bluesnap, moneris, cardpointe, paysafe, sensepass, skrill, two_checkout, paymentwall, worldpay_uk.`,
+      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_* (stripe_elements, stripe_checkout, stripe_ach), paypal_*, razorpay_*, square_payments, authorize_net, echeck_net, chargify, mollie, payu_india, gocardless, afterpay, clearpay, braintree, cybersource, bluepay, eway, bluesnap, moneris, cardpointe, paysafe, sensepass, skrill, two_checkout, paymentwall, worldpay_uk, coinbase_commerce, affirm, klarna, apple_pay, google_pay, venmo, cash_app_pay.`,
       gatewayId,
     }, { status: 501 });
   } catch (error: any) {
