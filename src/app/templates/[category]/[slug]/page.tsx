@@ -9,22 +9,9 @@ import {
   getIndustryLabel,
   type TemplateCategoryId,
 } from '@/lib/forms/templates';
-import dynamic from 'next/dynamic';
 import { ChevronRight, Star, FileText, CheckCircle2, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react';
 import { UseTemplateCTAButton } from './use-template-cta-button';
-
-const FormRuntimeRenderer = dynamic(
-  () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => m.FormRuntimeRenderer),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-3" />
-        <span className="text-xs text-muted-foreground">Loading interactive form preview...</span>
-      </div>
-    ),
-  }
-);
+import { TemplateRuntimePreview } from './template-runtime-preview';
 
 /**
  * /templates/[category]/[slug] — template detail page.
@@ -211,10 +198,9 @@ export default async function TemplateDetailPage({
           <section id="preview" className="scroll-mt-4">
             <h2 className="text-lg font-bold text-foreground mb-3">Live Preview</h2>
             <div className="rounded-xl border border-border bg-card overflow-hidden p-6">
-              <FormRuntimeRenderer
+              <TemplateRuntimePreview
                 formName={template.name}
                 schema={template.schema}
-                previewMode={true}
               />
             </div>
             <p className="mt-2 text-xs text-muted-foreground text-center">
