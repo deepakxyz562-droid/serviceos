@@ -29,7 +29,8 @@ async function fetchCounts(
   country: string | null,
   city: string | null,
 ): Promise<MarketplaceCounts> {
-  const url = new URL('/api/marketplace/counts', window.location.origin);
+  const origin = typeof window !== 'undefined' && window.location ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com');
+  const url = new URL('/api/marketplace/counts', origin);
   if (country) url.searchParams.set('country', country);
   if (city) url.searchParams.set('city', city);
 

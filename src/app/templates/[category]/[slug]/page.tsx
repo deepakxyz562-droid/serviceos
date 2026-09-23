@@ -9,9 +9,22 @@ import {
   getIndustryLabel,
   type TemplateCategoryId,
 } from '@/lib/forms/templates';
-import { FormRuntimeRenderer } from '@/features/forms/components/runtime/form-runtime-renderer';
+import dynamic from 'next/dynamic';
 import { ChevronRight, Star, FileText, CheckCircle2, ArrowRight, ArrowLeft, Sparkles } from 'lucide-react';
 import { UseTemplateCTAButton } from './use-template-cta-button';
+
+const FormRuntimeRenderer = dynamic(
+  () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => m.FormRuntimeRenderer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-3" />
+        <span className="text-xs text-muted-foreground">Loading interactive form preview...</span>
+      </div>
+    ),
+  }
+);
 
 /**
  * /templates/[category]/[slug] — template detail page.
