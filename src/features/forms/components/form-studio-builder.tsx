@@ -2435,32 +2435,31 @@ export function FormStudioBuilder({
         {/* ─── 6. INTERACTIVE PREVIEW MODE (MULTI-FORMAT: PAPER / CARD / AGENT) ─── */}
         {isPreviewMode && (
           <div className="flex-1 min-h-0 h-full flex flex-col bg-slate-200 dark:bg-slate-900/90 overflow-hidden">
-            {/* Viewport & Multi-Format Header */}
+            {/* Viewport & Device Preview Header */}
             <div className="h-12 border-b border-border/80 bg-background px-4 flex items-center justify-between shrink-0">
-              {/* Multi-Format Switcher: Paper vs Card vs AI Agent */}
-              <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border/60 text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setPreviewFormat('paper')}
-                  className={cn('px-2.5 py-1 rounded-md transition-all', previewFormat === 'paper' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground')}
-                >
-                  📄 Classic Paper Form
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewFormat('card')}
-                  className={cn('px-2.5 py-1 rounded-md transition-all', previewFormat === 'card' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground')}
-                >
-                  🃏 Card-by-Card Swipe
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPreviewFormat('agent')}
-                  className={cn('px-2.5 py-1 rounded-md transition-all flex items-center gap-1', previewFormat === 'agent' ? 'bg-background text-emerald-600 shadow-xs' : 'text-muted-foreground')}
-                >
-                  <Bot className="size-3 text-emerald-600" />
-                  <span>💬 AI Voice/Chat Agent</span>
-                </button>
+              {/* Form Layout Indicator Badge (Jotform Style) */}
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs font-semibold px-2.5 py-1 bg-muted/40 border-border/60 gap-1.5">
+                  {viewMode === 'split_media' ? (
+                    <>
+                      <span className="size-2 rounded-full bg-emerald-500" />
+                      <span>2-Column Split Hero Form</span>
+                    </>
+                  ) : viewMode === 'paper' || previewFormat === 'paper' ? (
+                    <>
+                      <span className="size-2 rounded-full bg-blue-500" />
+                      <span>Classic Paper Form</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="size-2 rounded-full bg-indigo-500" />
+                      <span>Card-by-Card Swipe Form</span>
+                    </>
+                  )}
+                </Badge>
+                <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                  Interactive Test Preview
+                </span>
               </div>
 
               {/* Device Switcher */}
@@ -2518,8 +2517,7 @@ export function FormStudioBuilder({
                       formName={formData.name || 'Untitled Form'}
                       formDescription={formData.description}
                       schema={runtimeSchema}
-                      mode={previewFormat}
-                      onModeChange={setPreviewFormat}
+                      mode={viewMode === 'focus' ? 'card' : 'paper'}
                     />
                   </div>
                   {/* Home Indicator */}
@@ -2537,19 +2535,13 @@ export function FormStudioBuilder({
                     <div className="size-2 bg-slate-900 rounded-full" />
                   </div>
                   {/* Tablet Screen Internal Scrollable Content */}
-                  <div
-                    className={cn(
-                      'flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-2',
-                      previewFormat === 'agent' ? '' : 'pb-8',
-                    )}
-                  >
+                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-2 pb-8">
                     <FormRuntimeRenderer
                       previewMode={true}
                       formName={formData.name || 'Untitled Form'}
                       formDescription={formData.description}
                       schema={runtimeSchema}
-                      mode={previewFormat}
-                      onModeChange={setPreviewFormat}
+                      mode={viewMode === 'focus' ? 'card' : 'paper'}
                     />
                   </div>
                   {/* Tablet Home Indicator */}
@@ -2584,24 +2576,14 @@ export function FormStudioBuilder({
                     </a>
                   </div>
                   {/* Desktop Screen Internal Scrollable Content */}
-                  <div
-                    className={cn(
-                      'flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-center',
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'w-full max-w-2xl',
-                        previewFormat === 'agent' ? 'py-4 flex justify-center' : 'pb-16',
-                      )}
-                    >
+                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-center">
+                    <div className="w-full max-w-2xl pb-16">
                       <FormRuntimeRenderer
                         previewMode={true}
                         formName={formData.name || 'Untitled Form'}
                         formDescription={formData.description}
                         schema={runtimeSchema}
-                        mode={previewFormat}
-                        onModeChange={setPreviewFormat}
+                        mode={viewMode === 'focus' ? 'card' : 'paper'}
                       />
                     </div>
                   </div>
