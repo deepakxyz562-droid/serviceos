@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 
 const FormRuntimeRenderer = dynamic(
-  () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => m.FormRuntimeRenderer),
+  () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => ({ default: m.FormRuntimeRenderer })),
   {
     ssr: false,
     loading: () => (

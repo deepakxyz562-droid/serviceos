@@ -1919,3 +1919,5 @@ export function FormRuntimeRenderer({
 
   return formElement;
 }
+
+export default FormRuntimeRenderer;

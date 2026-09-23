@@ -83,7 +83,7 @@ import { FormThumbnailPreview } from '@/components/forms/form-thumbnail-preview'
 import type { FormTemplate } from '@/lib/forms/templates';
 
 const FormPreviewCanvas = dynamic(
-  () => import('@/components/forms/form-preview-canvas').then((m) => m.FormPreviewCanvas),
+  () => import('@/components/forms/form-preview-canvas').then((m) => ({ default: m.FormPreviewCanvas })),
   {
     ssr: false,
     loading: () => (

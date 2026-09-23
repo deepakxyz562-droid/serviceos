@@ -7,7 +7,7 @@ import type { FormTemplate } from '@/lib/forms/templates';
 import { Button } from '@/components/ui/button';
 
 const FormRuntimeRenderer = dynamic(
-  () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => m.FormRuntimeRenderer),
+  () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => ({ default: m.FormRuntimeRenderer })),
   {
     ssr: false,
     loading: () => (
