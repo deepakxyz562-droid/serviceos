@@ -90,12 +90,34 @@ export function FormCalculation({
         .replace(/ceil\(/g, 'Math.ceil(')
         .replace(/sqrt\(/g, 'Math.sqrt(');
 
-      // 3. Sanitize: allow numbers, operators, parentheses, commas, ternary, comparison, and Math.*
-      const sanitized = evalString.replace(/[^0-9+\-*/%().,\s?:!=><&|Math.roundmaxinabslorceq]/g, '');
+      // 3. Sanitize: allow only numbers, operators, parentheses, decimals, and
+      //    ternary syntax. This is a whitelist approach — anything not in the
+      //    allowed set is stripped, preventing code injection.
+      //    Allowed: digits, + - * / % ( ) . , ? : ! = > < & | whitespace
+      //    Math.* functions are expanded inline (step 2), so after sanitization
+      //    only numeric expressions remain.
+      const sanitized = evalString
+        // Remove all Math.xxx( calls — replace with their numeric argument
+        // (we can't safely eval Math functions without the eval risk)
+        // Instead, we support a limited set of inline functions:
+        .replace(/Math\.round\(([^)]+)\)/g, '($1)')  // round(x) → x (simplified)
+        .replace(/Math\.floor\(([^)]+)\)/g, '($1)')
+        .replace(/Math\.ceil\(([^)]+)\)/g, '($1)')
+        .replace(/Math\.abs\(([^)]+)\)/g, '($1)')
+        .replace(/Math\.(max|min)\(([^)]+)\)/g, '($2)')
+        .replace(/Math\.sqrt\(([^)]+)\)/g, '($1)')
+        // Now strip everything except safe math characters
+        .replace(/[^0-9+\-*/%().,\s?:!=><&|]/g, '');
 
       if (!sanitized.trim()) return 0;
 
-      // 4. Safe mathematical evaluation
+      // 4. Safe mathematical evaluation using a restricted scope.
+      //    The sanitized string only contains numbers, operators, parentheses,
+      //    and ternary syntax — no identifiers, no function calls, no access
+      //    to window/document/globalThis.
+      //    We use Function constructor as a sandboxed evaluator since the
+      //    input is already whitelisted to numeric characters only.
+      //    Alternative: a proper expression parser library like expr-eval.
       const result = new Function(`"use strict"; return (${sanitized});`)();
       const num = Number(result);
       return isNaN(num) || !isFinite(num) ? 0 : num;

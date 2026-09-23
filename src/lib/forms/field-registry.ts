@@ -1142,8 +1142,6 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
     description: 'Live social proof displaying trending choices based on real-time form submissions.',
     badge: 'AI',
     tier: 'business',
-    // No runtime entry yet — dispatcher falls back to default Input for saved forms.
-    runtimeComponentId: 'most_frequent_answer',
     createField: (label = 'Most Frequent Answer') => ({
       label: '', type: 'control_widget', widgetType: 'most_frequent_answer',
       widgetConfig: { linkedQuestionId: '', minResponsesThreshold: 5 }, required: false,

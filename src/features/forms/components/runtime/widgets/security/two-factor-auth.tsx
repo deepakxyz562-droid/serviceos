@@ -149,10 +149,12 @@ export function TwoFactorAuth({ value, onChange, config, disabled, field }: Widg
           <ShieldCheck className="size-3" /> Invalid code — please try again.
         </p>
       )}
-      <Badge variant="outline" className="text-[9px] gap-1">
-        <ShieldCheck className="size-2.5" />
-        Phase 2 — demo codes: "123456" or any repeated digit.
-      </Badge>
+      <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-1.5">
+        <Badge variant="outline" className="text-[9px] gap-1 border-amber-300 text-amber-700 dark:text-amber-400">
+          <ShieldCheck className="size-2.5" />
+          Demo Mode — real TOTP verification requires backend integration.
+        </Badge>
+      </div>
     </div>
   );
 }

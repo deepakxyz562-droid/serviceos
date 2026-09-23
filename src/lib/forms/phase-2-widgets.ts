@@ -165,10 +165,9 @@ const WIDGET_SPECS: WidgetSpec[] = [
     { key: 'expiryMinutes', label: 'Code Expiration (Minutes)', type: 'number', group: 'field_specific', default: 10, min: 1, max: 60 },
   ], 'otp_sms'],
   ['friendly_captcha', 'Friendly Captcha', 'security', 'ShieldCheck', 'Friendly-captcha-style widget', 'NEW', 'free', [
-    { key: 'siteKey', label: 'Site Key', type: 'text', group: 'field_specific' },
-    { key: 'theme', label: 'Widget Theme', type: 'select', group: 'field_specific', default: 'light', options: [
-      { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }, { label: 'Auto', value: 'auto' },
-    ] },
+    { key: 'siteKey', label: 'FriendlyCaptcha Site Key', type: 'text', group: 'field_specific', placeholder: 'FC...' },
+    { key: 'language', label: 'Language', type: 'select', group: 'field_specific', default: 'en', options: [{ label: 'English', value: 'en' }, { label: 'Spanish', value: 'es' }, { label: 'French', value: 'fr' }, { label: 'German', value: 'de' }] },
+    { key: 'darkMode', label: 'Dark Mode', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Use dark theme for the captcha widget.' },
   ]],
   ['math_captcha', 'Math Captcha', 'security', 'Calculator', 'Simple math captcha equation', '', 'free', [
     { key: 'difficulty', label: 'Difficulty', type: 'segmented', group: 'field_specific', default: 'easy', options: [

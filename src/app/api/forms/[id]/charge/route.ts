@@ -1743,7 +1743,7 @@ export async function POST(
     // ─── Other gateways ─────────────────────────────────────────────────────
     return NextResponse.json({
       success: false,
-      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_* (stripe_elements, stripe_checkout, stripe_ach), paypal_*, razorpay_*, square_payments, authorize_net, echeck_net, chargify, mollie, payu_india, gocardless, afterpay, clearpay, braintree, cybersource, bluepay, eway, bluesnap, moneris, cardpointe, paysafe, sensepass, skrill, two_checkout, paymentwall, worldpay_uk, coinbase_commerce, affirm, klarna, apple_pay, google_pay, venmo, cash_app_pay.`,
+      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_* (stripe_elements, stripe_checkout, stripe_ach), paypal_*, razorpay_*, square_payments, authorize_net, echeck_net, chargify, mollie, payu_india, gocardless, afterpay, clearpay, braintree, cybersource, bluepay, eway, bluesnap, moneris, cardpointe, paysafe, sensepass, skrill, two_checkout, paymentwall, worldpay_uk, coinbase_commerce, affirm, klarna, apple_pay, google_pay, venmo, cash_app_pay, payfast, iyzico.`,
       gatewayId,
     }, { status: 501 });
   } catch (error: any) {

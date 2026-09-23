@@ -111,8 +111,13 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   qrcode_scanner: w(() => import('./file/qrcode-scanner')),
   barcode_scanner: w(() => import('./file/barcode-scanner')),
   nfc_tag_reader: w(() => import('./file/nfc-tag-reader')),
+  voice_recorder: w(() => import('./voice-recorder')),
+  audio_note: w(() => import('./voice-recorder')),
 
   // ─── Calculations ────────────────────────────────────────────────────────────
+  form_calculation: w(() => import('./form-calculation')),
+  calculation: w(() => import('./form-calculation')),
+  calculated: w(() => import('./form-calculation')),
   loan_emi: w(() => import('./calc/loan-emi')),
   loan_emi_calculator: w(() => import('./calc/loan-emi')),
   spreadsheet: w(() => import('./calc/spreadsheet')),
@@ -444,8 +449,11 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   equipment_inspection: w(() => import('./industry/equipment-inspection')),
   compliance_audit: w(() => import('./industry/compliance-audit')),
 
-  // ─── Phase 4 — More Payment Gateways (12) ───────────────────────────────────
-  payment_dwolla: w(() => import('./payment/dwolla')),
+  // ─── Phase 4 — More Payment Gateways ───────────────────────────────────────
+  // NOTE: payment_dwolla removed from palette — tuple is commented out in
+  // phase-4-widgets.ts. Registration kept for backward compatibility with
+  // saved forms that may still reference this widgetType.
+  // payment_dwolla: w(() => import('./payment/dwolla')),
   payment_skrill: w(() => import('./payment/skrill')),
   payment_cielo: w(() => import('./payment/cielo')),
   payment_mercado_pago: w(() => import('./payment/mercado-pago')),

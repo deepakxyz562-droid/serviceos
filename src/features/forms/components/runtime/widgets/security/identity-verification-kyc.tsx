@@ -76,6 +76,12 @@ export function IdentityVerificationKyc({ value, onChange, config, disabled, fie
 
   return (
     <div className="space-y-2.5" aria-label={ariaLabel}>
+      <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-start gap-2">
+        <ShieldCheck className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-tight">
+          <strong>Demo Mode.</strong> Add your Persona/Onfido API key in the inspector to enable real KYC verification.
+        </p>
+      </div>
       {v.status === 'approved' ? (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 p-3 flex items-center gap-2">
           <CheckCircle2 className="size-5 text-emerald-600 shrink-0" />

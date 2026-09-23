@@ -1,172 +1,91 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
-import { Hexagon, MapPin, Trash2, Undo2, Crosshair, Check } from 'lucide-react';
+/**
+ * Map Polygon Drawer — real interactive Leaflet map for drawing a polygon area.
+ *
+ * Uses react-leaflet + OpenStreetMap tiles. User clicks multiple points on
+ * the map to form a polygon. The polygon vertices are stored as an array
+ * of {lat, lng} points.
+ */
+import React, { useState } from 'react';
+import { MapContainer, TileLayer, Polygon, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
+import { MapPin, Trash2, Undo2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { WidgetProps, str, num } from '../widget-props';
 
-interface Point {
-  x: number;
-  y: number;
+delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+import 'leaflet/dist/leaflet.css';
+
+interface Point { lat: number; lng: number; }
+
+function ClickHandler({ onClick, disabled }: { onClick: (lat: number, lng: number) => void; disabled: boolean }) {
+  useMapEvents({ click(e) { if (!disabled) onClick(e.latlng.lat, e.latlng.lng); } });
+  return null;
 }
 
-interface PolygonValue {
-  // Normalize relative coordinates [0..1] x [0..1]; transform via center+zoom at read time.
-  points: Point[];
-  center: { lat: number; lng: number };
-  zoom: number;
-}
-
-/**
- * Map-polygon-drawer: a clickable canvas where the user drops vertices
- * to form a polygon. Uses a CSS gradient map placeholder + SVG overlay
- * (NO Leaflet). Stores normalized polygon points + map center.
- */
 export function MapPolygonDrawer({ value, onChange, config, disabled, field }: WidgetProps) {
-  const ariaLabel = str(field?.label, 'Map polygon drawer');
-  const centerLat = num(config.centerLat, 40.7128);
-  const centerLng = num(config.centerLng, -74.006);
-  const zoom = num(config.zoom, 13);
-  const maxPoints = Math.max(3, num(config.maxPoints, 30));
+  const ariaLabel = str(field?.label, 'Map Polygon Drawer');
+  const defaultLat = num(config.defaultLat, 39.8283);
+  const defaultLng = num(config.defaultLng, -98.5795);
+  const defaultZoom = num(config.defaultZoom, 4);
 
-  const existing: PolygonValue | null =
-    value && typeof value === 'object' ? (value as PolygonValue) : null;
-  const [points, setPoints] = useState<Point[]>(existing?.points ?? []);
-  const [closed, setClosed] = useState<boolean>(existing && existing.points.length >= 3 ? true : false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const points: Point[] = Array.isArray(value) ? value : [];
+  const [isDrawing, setIsDrawing] = useState(true);
 
-  const commit = (next: Point[], isClosed: boolean) => {
-    setPoints(next);
-    setClosed(isClosed);
-    onChange({ points: next, center: { lat: centerLat, lng: centerLng }, zoom });
+  const handleMapClick = (lat: number, lng: number) => {
+    if (!isDrawing) return;
+    onChange([...points, { lat, lng }]);
   };
 
-  const onMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (disabled || closed) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    if (points.length >= maxPoints) return;
-    commit([...points, { x: Number(x.toFixed(4)), y: Number(y.toFixed(4)) }], false);
+  const handleUndo = () => {
+    onChange(points.slice(0, -1));
   };
 
-  const close = () => {
-    if (points.length < 3 || disabled) return;
-    commit(points, true);
+  const handleClear = () => {
+    onChange([]);
   };
 
-  const undo = () => {
-    if (disabled || points.length === 0) return;
-    commit(points.slice(0, -1), false);
-  };
-
-  const reset = () => {
-    commit([], false);
-  };
-
-  // SVG polygon path
-  const toPath = (pts: Point[], closePath: boolean) => {
-    if (pts.length === 0) return '';
-    const d = pts
-      .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x * 1000} ${p.y * 600}`)
-      .join(' ');
-    return closePath ? `${d} Z` : d;
+  const handleFinish = () => {
+    setIsDrawing(false);
   };
 
   return (
-    <div className="space-y-2.5" aria-label={ariaLabel}>
-      <div
-        ref={containerRef}
-        role="button"
-        tabIndex={disabled ? -1 : 0}
-        aria-label={`${ariaLabel} canvas; click to add polygon vertices`}
-        onClick={onMapClick}
-        className="relative w-full h-56 rounded-lg overflow-hidden border border-border/80 bg-gradient-to-br from-sky-100 via-emerald-50 to-emerald-100 dark:from-sky-950 dark:via-emerald-950/40 dark:to-emerald-900/40 cursor-crosshair select-none"
-      >
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage:
-              'linear-gradient(to right, rgba(0,0,0,0.12) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.12) 1px, transparent 1px)',
-            backgroundSize: '32px 32px',
-          }}
-        />
-        <svg
-          viewBox="0 0 1000 600"
-          preserveAspectRatio="none"
-          className="absolute inset-0 w-full h-full"
+    <div className="space-y-2" aria-label={ariaLabel}>
+      <div className="rounded-xl overflow-hidden border border-border">
+        <MapContainer
+          center={[defaultLat, defaultLng]}
+          zoom={defaultZoom}
+          className="w-full h-[280px]"
+          scrollWheelZoom={!disabled}
         >
-          {points.length > 1 && (
-            <path
-              d={toPath(points, closed)}
-              fill={closed ? 'rgba(34, 197, 94, 0.25)' : 'none'}
-              stroke="rgb(13, 148, 136)"
-              strokeWidth={4}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {points.length >= 2 && (
+            <Polygon positions={points.map(p => [p.lat, p.lng] as [number, number])} pathOptions={{ color: '#059669', fillColor: '#059669', fillOpacity: 0.2 }} />
           )}
-          {points.map((p, i) => (
-            <circle
-              key={i}
-              cx={p.x * 1000}
-              cy={p.y * 600}
-              r={8}
-              fill={i === 0 ? 'rgb(13, 148, 136)' : 'white'}
-              stroke="rgb(13, 148, 136)"
-              strokeWidth={3}
-            />
-          ))}
-        </svg>
-        {points.length === 0 && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground gap-1 pointer-events-none">
-            <Hexagon className="size-6" />
-            <span className="text-xs">Click on the map to drop polygon vertices</span>
-          </div>
-        )}
+          <ClickHandler onClick={handleMapClick} disabled={disabled || !isDrawing} />
+        </MapContainer>
       </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={undo}
-          disabled={disabled || points.length === 0}
-          className="gap-1.5 text-xs"
-        >
-          <Undo2 className="size-3.5" /> Undo
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={close}
-          disabled={disabled || closed || points.length < 3}
-          className="gap-1.5 text-xs"
-        >
-          <Check className="size-3.5" /> Close polygon
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={reset}
-          disabled={disabled || points.length === 0}
-          className="gap-1.5 text-xs"
-        >
-          <Trash2 className="size-3.5" /> Clear
-        </Button>
-        <span className="ml-auto text-[11px] text-muted-foreground flex items-center gap-1">
-          <MapPin className="size-3" />
-          {points.length} vertex{points.length === 1 ? '' : 'es'}
-          {closed && <Check className="size-3 text-emerald-600" />}
-        </span>
-      </div>
-      {points.length > 0 && !closed && points.length < 3 && (
-        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-          <Crosshair className="size-3" /> Add at least 3 vertices, then close.
-        </p>
+      {!disabled && (
+        <div className="flex items-center gap-1.5">
+          <Button type="button" variant="outline" size="sm" onClick={handleUndo} disabled={points.length === 0} className="text-xs gap-1">
+            <Undo2 className="size-3" /> Undo
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleClear} disabled={points.length === 0} className="text-xs gap-1">
+            <Trash2 className="size-3" /> Clear
+          </Button>
+          {isDrawing && points.length >= 3 && (
+            <Button type="button" variant="default" size="sm" onClick={handleFinish} className="text-xs gap-1">
+              <Check className="size-3" /> Done
+            </Button>
+          )}
+          <span className="text-[10px] text-muted-foreground ml-auto">{points.length} points</span>
+        </div>
       )}
     </div>
   );

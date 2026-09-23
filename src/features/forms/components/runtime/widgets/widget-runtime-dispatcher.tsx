@@ -7,11 +7,11 @@ import { getFieldById, FIELD_ALIASES } from '@/lib/forms/canonical-widget-regist
 import type { WidgetProps } from './widget-props';
 import { ImageUploadWithNotes } from './image-upload-with-notes';
 import { NearestLocationFinder } from './nearest-location-finder';
-import { RoutePlannerMap } from './route-planner-map';
+import { RoutePlannerV2 as RoutePlannerMap } from './maps/route-planner-v2';
 import { ServiceAreaChecker } from './service-area-checker';
 import { FormCalculation } from './form-calculation';
 import { SmsOtpVerification } from './sms-otp-verification';
-import { SignaturePad } from './signature-pad';
+import { SmoothSignatureWidget as SignaturePad } from './signature/smooth-signature';
 import { VoiceRecorder } from './voice-recorder';
 import { PaymentGatewayRuntime } from './payment-gateway-runtime';
 import { Input } from '@/components/ui/input';
