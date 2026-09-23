@@ -78,9 +78,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import dynamic from 'next/dynamic';
 import { FormThumbnailPreview } from '@/components/forms/form-thumbnail-preview';
-import { FormPreviewCanvas } from '@/components/forms/form-preview-canvas';
 import type { FormTemplate } from '@/lib/forms/templates';
+
+const FormPreviewCanvas = dynamic(
+  () => import('@/components/forms/form-preview-canvas').then((m) => m.FormPreviewCanvas),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-3" />
+        <span className="text-xs text-muted-foreground">Loading preview modal...</span>
+      </div>
+    ),
+  }
+);
 import {
   TEMPLATE_CATEGORIES,
   TEMPLATE_INDUSTRIES,

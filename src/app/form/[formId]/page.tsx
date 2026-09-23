@@ -8,7 +8,20 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
-import { FormRuntimeRenderer } from '@/features/forms/components/runtime/form-runtime-renderer';
+import dynamic from 'next/dynamic';
+
+const FormRuntimeRenderer = dynamic(
+  () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => m.FormRuntimeRenderer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mb-3" />
+        <span className="text-xs text-muted-foreground">Loading form...</span>
+      </div>
+    ),
+  }
+);
 
 export default function PublicFormPage() {
   const params = useParams();
