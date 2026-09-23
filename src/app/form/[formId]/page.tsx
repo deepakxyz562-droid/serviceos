@@ -10,6 +10,9 @@ import { toast } from 'sonner';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 import dynamic from 'next/dynamic';
 
+import { AgentDeviceSimulator } from '@/features/forms/components/agent-builder/agent-device-simulator';
+import { cn } from '@/lib/utils';
+
 const FormRuntimeRenderer = dynamic(
   () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => ({ default: m.FormRuntimeRenderer })),
   {
@@ -37,6 +40,9 @@ export default function PublicFormPage() {
   const [passwordInput, setPasswordInput] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
+
+  // Floating AI Agent Chat Widget state
+  const [chatPage, setChatPage] = useState<'greeting' | 'conversation'>('greeting');
 
   const fetchForm = useCallback(async () => {
     if (!formId) return;
@@ -168,9 +174,15 @@ export default function PublicFormPage() {
     ? schema.theme.backgroundColor
     : undefined;
 
+  // Floating AI Agent configuration
+  const agentConfig = schema.agentConfig;
+  const isAgentEnabled = Boolean(agentConfig && agentConfig.channels?.chatbot?.enabled !== false && resolvedMode !== 'agent');
+  const agentPosition = agentConfig?.channels?.chatbot?.position || 'bottom-right';
+  const isLeftPos = agentPosition === 'bottom-left';
+
   return (
     <div
-      className="min-h-screen bg-slate-50/60 dark:bg-slate-950 py-6 sm:py-10 px-3 sm:px-6 lg:px-8 flex flex-col justify-center items-center"
+      className="min-h-screen bg-slate-50/60 dark:bg-slate-950 py-6 sm:py-10 px-3 sm:px-6 lg:px-8 flex flex-col justify-center items-center relative overflow-x-hidden"
       style={pageBgColor ? { backgroundColor: pageBgColor } : undefined}
     >
       <div className="w-full max-w-5xl">
@@ -180,10 +192,29 @@ export default function PublicFormPage() {
           formDescription={formDescription}
           schema={schema}
           branding={branding}
-          allowModeSwitch={true}
+          allowModeSwitch={false}
           mode={resolvedMode}
         />
       </div>
+
+      {/* ─── Floating AI Agent Website Chat Assistant (JotForm / Intercom Style) ─── */}
+      {isAgentEnabled && agentConfig && (
+        <div
+          className={cn(
+            'fixed z-50 transition-all duration-300',
+            chatPage === 'greeting'
+              ? cn('bottom-4', isLeftPos ? 'left-4' : 'right-4')
+              : cn('bottom-4 max-h-[600px] h-[580px] w-[360px] sm:w-[380px]', isLeftPos ? 'left-4' : 'right-4')
+          )}
+        >
+          <AgentDeviceSimulator
+            agent={agentConfig}
+            isTestMode={false}
+            previewPage={chatPage}
+            onSwitchPage={(page) => setChatPage(page)}
+          />
+        </div>
+      )}
     </div>
   );
 }

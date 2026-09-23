@@ -434,6 +434,19 @@ export function AgentDeviceSimulator({
           >
             <RotateCcw className="size-3.5" />
           </Button>
+
+          {onSwitchPage && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onSwitchPage('greeting')}
+              title="Minimize Chat"
+              className="size-7 rounded-full text-white/80 hover:text-white hover:bg-white/10"
+            >
+              <ChevronDown className="size-4" />
+            </Button>
+          )}
         </div>
       </div>
 
