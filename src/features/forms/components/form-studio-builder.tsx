@@ -992,6 +992,7 @@ export function FormStudioBuilder({
                 onClick={() => {
                   setViewMode('focus');
                   updateSetting('formLayout', 'single_question');
+                  updateMediaPanel({ enabled: false });
                 }}
                 className={cn(
                   'px-2 py-0.5 rounded-md transition-all cursor-pointer',
@@ -1006,6 +1007,7 @@ export function FormStudioBuilder({
                 onClick={() => {
                   setViewMode('paper');
                   updateSetting('formLayout', 'all_on_one_page');
+                  updateMediaPanel({ enabled: false });
                 }}
                 className={cn(
                   'px-2 py-0.5 rounded-md transition-all cursor-pointer',
@@ -1852,6 +1854,8 @@ export function FormStudioBuilder({
                       updateSetting('formLayout', v);
                       if (v === 'split_media') {
                         updateMediaPanel({ enabled: true });
+                      } else {
+                        updateMediaPanel({ enabled: false });
                       }
                     }}
                     className="grid grid-cols-1 sm:grid-cols-3 gap-3"

@@ -135,7 +135,9 @@ function FormMediaHeroPanel({
           className="absolute inset-0 z-0 bg-cover bg-center transition-all duration-500"
           style={{
             backgroundImage: `url(${mediaPanel.backgroundImageUrl})`,
-            filter: mediaPanel?.backgroundBlur ? `blur(${mediaPanel.backgroundBlur}px)` : undefined,
+            filter: mediaPanel?.backgroundBlur
+              ? `blur(${mediaPanel.backgroundBlur === 'lg' ? 16 : mediaPanel.backgroundBlur === 'md' ? 8 : mediaPanel.backgroundBlur === 'sm' ? 4 : Number(mediaPanel.backgroundBlur) || 0}px)`
+              : undefined,
           }}
         />
       )}
