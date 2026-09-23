@@ -431,5 +431,6 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
       },
     },
     mediaPanel: s.mediaPanel || s.theme?.mediaPanel,
+    agentConfig: s.agentConfig,
   };
 }

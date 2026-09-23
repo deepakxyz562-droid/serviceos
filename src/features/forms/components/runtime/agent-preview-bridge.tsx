@@ -38,6 +38,8 @@ interface AgentPreviewBridgeProps {
   schema: FormSchema;
   formName: string;
   formDescription?: string | null;
+  /** When true, simulated test replies are returned without calling the live AI chat API. */
+  isTestMode?: boolean;
   /** Called when the user clicks "Fill Form" — should switch preview to paper mode. */
   onSwitchToPaper?: () => void;
 }
@@ -82,7 +84,7 @@ function synthesizeAgentFromSchema(
     name: formName ? `${formName.slice(0, 24)} Assistant` : 'AI Assistant',
     roleTitle: formName ? `${formName.slice(0, 32)} AI Assistant` : 'AI Assistant',
     brandColor: buttonColor,
-    welcomeGreeting: `Hi! I'm your **AI assistant** for **${formName || 'this form'}**. I can answer questions or help you fill out the form. How can I help?`,
+    welcomeGreeting: `Hi! I'm **${formName ? `${formName.slice(0, 24)} Assistant` : 'your AI Agent'}**, your AI Agent and ${formName || 'Service'} Assistant. How can I help you?`,
     greetingSubtitle: formDescription || 'Ask me anything, or tap a quick action below.',
     quickActions: quickActions.length > 0 ? quickActions : DEFAULT_FORM_AGENT.quickActions,
     connectedForms: [connectedForm],
@@ -97,7 +99,7 @@ function synthesizeAgentFromSchema(
     },
     navigation: {
       chatEnabled: true,
-      voiceEnabled: false, // voice requires telephony config — hide in preview
+      voiceEnabled: true,
       formsEnabled: true,
       historyEnabled: true,
       presentationEnabled: false,
@@ -110,6 +112,7 @@ export function AgentPreviewBridge({
   schema,
   formName,
   formDescription,
+  isTestMode = false,
   onSwitchToPaper,
 }: AgentPreviewBridgeProps) {
   // Resolve the agent config: prefer the user-configured one, else synthesize.
@@ -120,9 +123,6 @@ export function AgentPreviewBridge({
     return synthesizeAgentFromSchema(schema, formName, formDescription);
   }, [schema, formName, formDescription]);
 
-  // In preview we never want to hit the real chat API — the agent may not be
-  // saved yet. AgentDeviceSimulator gates the fetch on `isTestMode`; when
-  // true it returns a friendly simulated reply.
   const handleOpenFormInModal = useCallback(
     (_form: ConnectedFormRef) => {
       // Switch the runtime to paper mode so the user can actually fill the form.
@@ -132,14 +132,14 @@ export function AgentPreviewBridge({
   );
 
   return (
-    <div className="w-full h-full flex justify-center items-stretch">
-      {/* AgentDeviceSimulator fills its container — give it a sensible
-          max-width and height bound so it looks like a real chat widget
-          instead of stretching edge-to-edge. */}
-      <div className="w-full max-w-md h-full min-h-[520px] max-h-[680px] flex">
+    <div className="w-full h-full flex justify-center items-center p-2 sm:p-4">
+      {/* AgentDeviceSimulator fills its container — give it standard,
+          proportional dimensions (w-[360px] to max-w-[380px], h-[580px])
+          matching the editor simulator so there is no awkward vertical void. */}
+      <div className="w-full max-w-[380px] h-[580px] max-h-[85vh] flex flex-col shadow-2xl rounded-[28px] overflow-hidden">
         <AgentDeviceSimulator
           agent={agent}
-          isTestMode={true}
+          isTestMode={isTestMode}
           previewPage="conversation"
           onOpenFormInModal={handleOpenFormInModal}
         />

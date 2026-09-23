@@ -1043,31 +1043,51 @@ export function FormRuntimeRenderer({
 
   // Render Conversational AI Voice/Chat Agent Mode
   if (activeMode === 'agent') {
+    const primaryColor = schema.theme?.primaryColor || '#059669';
     return (
-      <div className="w-full h-full flex flex-col">
+      <div className="w-full max-w-xl mx-auto flex flex-col items-center">
         {allowModeSwitch && (
-          <div className="flex justify-end gap-1 pb-2 shrink-0">
+          <div className="flex justify-end gap-1.5 pb-3 w-full max-w-[380px]">
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => handleModeSwitch('paper')}
-              className="text-xs h-7 gap-1"
+              className="text-xs h-7 rounded-lg cursor-pointer"
             >
-              <LayoutTemplate className="size-3" /> Classic View
+              Classic Paper
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleModeSwitch('card')}
+              className="text-xs h-7 rounded-lg cursor-pointer"
+            >
+              Card Swipe
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => handleModeSwitch('agent')}
+              className="text-xs h-7 gap-1 font-semibold rounded-lg cursor-pointer shadow-xs"
+              style={{ color: primaryColor }}
+            >
+              <Bot className="size-3.5" /> AI Agent
             </Button>
           </div>
         )}
-        {/* AgentPreviewBridge renders the SAME AgentDeviceSimulator widget
-            used in the studio's edit mode — making preview pixel-identical
-            to what the user configured. It reads schema.agentConfig (or
-            synthesizes a default) and never hits the real chat API in
-            preview/test mode. */}
-        <div className="flex-1 min-h-0 flex">
+        {/* AgentPreviewBridge renders the AgentDeviceSimulator widget with
+            full interactive conversational experience. It reads schema.agentConfig
+            (or synthesizes a default) and uses live chat on live forms or simulated
+            chat in previewMode. */}
+        <div className="w-full flex justify-center">
           <AgentPreviewBridge
             schema={schema}
             formName={formName}
             formDescription={formDescription}
+            isTestMode={previewMode}
             onSwitchToPaper={() => handleModeSwitch('paper')}
           />
         </div>

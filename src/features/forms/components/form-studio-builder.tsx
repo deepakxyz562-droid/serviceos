@@ -2584,21 +2584,15 @@ export function FormStudioBuilder({
                     </a>
                   </div>
                   {/* Desktop Screen Internal Scrollable Content */}
-                  {/* When previewFormat === 'agent', stretch the child so the
-                      chat widget fills the viewport height (no more dead gap
-                      below the widget). For paper/card modes, keep vertical
-                      centering + bottom padding so short forms don't stick
-                      to the top. */}
                   <div
                     className={cn(
-                      'flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center',
-                      previewFormat === 'agent' ? 'items-stretch' : 'items-center',
+                      'flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-center',
                     )}
                   >
                     <div
                       className={cn(
                         'w-full max-w-2xl',
-                        previewFormat === 'agent' ? 'h-full flex flex-col' : 'pb-16',
+                        previewFormat === 'agent' ? 'py-4 flex justify-center' : 'pb-16',
                       )}
                     >
                       <FormRuntimeRenderer

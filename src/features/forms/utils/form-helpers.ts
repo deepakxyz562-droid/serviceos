@@ -228,6 +228,7 @@ export function apiFormToFormItem(api: ApiForm): FormItem {
     settings: parsedSchema?.settings,
     primaryColor: parsedSchema?.theme?.primaryColor,
     submitButtonText: parsedSchema?.settings?.submitButtonText,
+    agentConfig: parsedSchema?.agentConfig,
   };
 }
 
@@ -300,6 +301,7 @@ export function buildApiPayload(formData: EditorFormData) {
       mediaPanel,
     },
     mediaPanel,
+    agentConfig: formData.agentConfig,
     rules: formData.rules || [],
     settings: {
       submitButtonText: formData.submitButtonText || 'Submit',
