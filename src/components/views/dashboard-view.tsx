@@ -70,7 +70,7 @@ import dynamic from 'next/dynamic';
 import { AISuggestionsPanel } from '@/components/dashboard/ai-suggestions-panel';
 
 const LazyKPISparkline = dynamic(
-  () => import('./dashboard-charts').then(m => m.KPISparkline),
+  () => import('./dashboard-charts').then(m => ({ default: m.KPISparkline })),
   {
     ssr: false,
     loading: () => <Skeleton className="h-8 w-20" />,
@@ -78,7 +78,7 @@ const LazyKPISparkline = dynamic(
 );
 
 const LazyRevenueTrendChart = dynamic(
-  () => import('./dashboard-charts').then(m => m.RevenueTrendChart),
+  () => import('./dashboard-charts').then(m => ({ default: m.RevenueTrendChart })),
   {
     ssr: false,
     loading: () => <Skeleton className="h-[240px] w-full" />,
@@ -86,7 +86,7 @@ const LazyRevenueTrendChart = dynamic(
 );
 
 const LazyLeadSourcesChart = dynamic(
-  () => import('./dashboard-charts').then(m => m.LeadSourcesChart),
+  () => import('./dashboard-charts').then(m => ({ default: m.LeadSourcesChart })),
   {
     ssr: false,
     loading: () => <Skeleton className="h-[240px] w-full" />,

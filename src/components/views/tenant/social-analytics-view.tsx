@@ -491,3 +491,5 @@ export function SocialAnalyticsView() {
     </div>
   );
 }
+
+export default SocialAnalyticsView;

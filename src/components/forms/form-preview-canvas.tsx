@@ -151,3 +151,5 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
     </div>
   );
 }
+
+export default FormPreviewCanvas;

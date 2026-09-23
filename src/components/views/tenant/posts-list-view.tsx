@@ -680,3 +680,5 @@ export function PostsListView() {
     </div>
   );
 }
+
+export default PostsListView;

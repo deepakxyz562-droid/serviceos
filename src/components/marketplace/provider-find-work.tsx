@@ -877,3 +877,5 @@ export function ProviderFindWork() {
     </div>
   );
 }
+
+export default ProviderFindWork;

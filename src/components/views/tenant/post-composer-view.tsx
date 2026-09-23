@@ -784,3 +784,5 @@ export function PostComposerView() {
     </div>
   );
 }
+
+export default PostComposerView;

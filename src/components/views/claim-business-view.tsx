@@ -500,3 +500,5 @@ function getStatusConfig(status: string): {
       };
   }
 }
+
+export default ClaimBusinessView;
