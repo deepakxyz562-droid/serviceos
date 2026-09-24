@@ -133,13 +133,16 @@ export function FormCalculation({
   }, [onChange]);
 
   useEffect(() => {
-    if (lastEmittedRef.current !== calculatedResult) {
+    if (
+      lastEmittedRef.current !== calculatedResult &&
+      (value === undefined || Number(value) !== calculatedResult)
+    ) {
       lastEmittedRef.current = calculatedResult;
       if (typeof onChangeRef.current === 'function') {
         onChangeRef.current(calculatedResult);
       }
     }
-  }, [calculatedResult]);
+  }, [calculatedResult, value]);
 
   return (
     <div className="p-3.5 rounded-xl bg-muted/40 border border-border/80 flex items-center justify-between">

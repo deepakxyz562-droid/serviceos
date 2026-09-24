@@ -241,4 +241,33 @@ describe('Elementor 2-Column Live Estimator Parity & Calculations', () => {
     expect(normalized.mediaPanel?.headline).toBeDefined();
     expect(normalized.fields.filter((f) => f.layoutColumn === 'left').length).toBe(4);
   });
+
+  it('should resolve nested multi-step calculation dependencies without cyclic recursion', () => {
+    const template = getTemplateSync('elementor-two-column-live-estimator')!;
+    const fields = template.schema.fields;
+
+    const values: Record<string, any> = {
+      roof_sqft: 2000,
+      material_grade: '5.00',
+      tear_off: true, // 1200
+      addons: ['800'],
+    };
+
+    // Multi-pass resolution simulation
+    for (let pass = 0; pass < 3; pass++) {
+      for (const f of fields) {
+        if (f.widgetType === 'form_calculation' && f.widgetConfig) {
+          const formula = f.widgetConfig.formula as string;
+          const res = evaluateFormulaSafe(formula, values, fields);
+          if (res !== null) {
+            values[f.id] = res;
+          }
+        }
+      }
+    }
+
+    expect(values.subtotal_calculation).toBe(10000); // 2000 * 5
+    expect(values.total_calculation).toBe(12000); // (2000 * 5) + 1200 + 800
+    expect(values.deposit_calculation).toBe(2400); // 12000 * 0.20
+  });
 });

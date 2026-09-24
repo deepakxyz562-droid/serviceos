@@ -102,15 +102,17 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
     </div>
   );
 
+  const isSplitLayout = normalizedSchema?.theme?.layout === 'split_media' || Boolean(normalizedSchema?.mediaPanel?.enabled);
+
   return (
-    <div className="flex-1 min-w-0 bg-slate-100/80 dark:bg-slate-950 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
+    <div className="flex-1 min-w-0 bg-slate-100/80 dark:bg-slate-950 p-4 sm:p-6 lg:p-8 overflow-y-auto flex items-start justify-center">
       {device === 'mobile' ? (
         /* Mobile Frame */
         <div className="w-[360px] bg-slate-900 rounded-[36px] p-3 shadow-2xl border-4 border-slate-800 transition-all my-2">
           <div className="w-24 h-4 bg-slate-950 rounded-full mx-auto mb-3 flex items-center justify-center">
             <div className="w-8 h-1 bg-slate-800 rounded-full" />
           </div>
-          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-2 sm:p-4 max-h-[68vh] overflow-y-auto shadow-inner">
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-3 sm:p-4 max-h-[68vh] overflow-y-auto shadow-inner">
             <FormErrorBoundary fallback={renderFallback}>
               <FormRuntimeRenderer
                 formName={template.name}
@@ -137,7 +139,7 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
         </div>
       ) : (
         /* Desktop Paper Canvas */
-        <div className="w-full max-w-2xl transition-all my-2">
+        <div className={`w-full ${isSplitLayout ? 'max-w-4xl lg:max-w-5xl' : 'max-w-2xl'} transition-all my-2 pt-2`}>
           <FormErrorBoundary fallback={renderFallback}>
             <FormRuntimeRenderer
               formName={template.name}

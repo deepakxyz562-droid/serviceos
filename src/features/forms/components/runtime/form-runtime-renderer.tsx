@@ -262,39 +262,20 @@ function FormMediaHeroPanel({
         )}
 
         {/* Bullet Benefits List */}
-        {showBenefits && (
-          <>
-            {benefits.length > 0 ? (
-              <div className="space-y-2.5 pt-4">
-                {benefits.map((benefit, i) => (
-                  <div key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200">
-                    <div
-                      className="size-4 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                      style={{ backgroundColor: `${primaryColor}40` }}
-                    >
-                      <CheckCircle2 className="size-3.5 text-emerald-400" />
-                    </div>
-                    <span>{benefit}</span>
-                  </div>
-                ))}
+        {showBenefits && benefits.length > 0 && (
+          <div className="space-y-2.5 pt-4">
+            {benefits.map((benefit, i) => (
+              <div key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200">
+                <div
+                  className="size-4 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                  style={{ backgroundColor: `${primaryColor}40` }}
+                >
+                  <CheckCircle2 className="size-3.5 text-emerald-400" />
+                </div>
+                <span>{benefit}</span>
               </div>
-            ) : (
-              <div className="space-y-2 pt-4">
-                <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-                  <span>Instant AI price calculation &amp; live estimate</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-                  <span>Guaranteed response within 15 minutes</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-                  <span>100% Satisfaction &amp; Escrow Guarantee</span>
-                </div>
-              </div>
-            )}
-          </>
+            ))}
+          </div>
         )}
         {/* Left Column Form Fields / Widgets */}
         {leftFields.length > 0 && (
@@ -325,34 +306,21 @@ function FormMediaHeroPanel({
       </div>
 
       {/* Bottom Testimonial / Social Proof */}
-      {showTestimonial && (
+      {showTestimonial && testimonial && (
         <div className="relative z-10 pt-6">
-          {testimonial ? (
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 shadow-sm space-y-1.5">
-              <div className="flex items-center gap-1 text-amber-400">
-                {Array.from({ length: testimonial.rating || 5 }).map((_, i) => (
-                  <Star key={i} className="size-3 fill-amber-400" />
-                ))}
-              </div>
-              <p className="text-xs italic text-slate-200">
-                "{testimonial.quote}"
-              </p>
-              <p className="text-[11px] font-bold text-white">
-                — {testimonial.author} {testimonial.role ? <span className="font-normal text-slate-400">({testimonial.role})</span> : ''}
-              </p>
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 shadow-sm space-y-1.5">
+            <div className="flex items-center gap-1 text-amber-400">
+              {Array.from({ length: testimonial.rating || 5 }).map((_, i) => (
+                <Star key={i} className="size-3 fill-amber-400" />
+              ))}
             </div>
-          ) : (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 backdrop-blur-xs border border-white/10">
-              <div className="flex -space-x-1.5">
-                <div className="size-6 rounded-full bg-emerald-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">A</div>
-                <div className="size-6 rounded-full bg-blue-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">D</div>
-                <div className="size-6 rounded-full bg-indigo-500 border border-slate-900 flex items-center justify-center text-[9px] font-bold text-white">M</div>
-              </div>
-              <div className="text-[11px] text-slate-300">
-                <span className="font-bold text-white">4.9/5 Rating</span> from 1,200+ happy clients
-              </div>
-            </div>
-          )}
+            <p className="text-xs italic text-slate-200">
+              "{testimonial.quote}"
+            </p>
+            <p className="text-[11px] font-bold text-white">
+              — {testimonial.author} {testimonial.role ? <span className="font-normal text-slate-400">({testimonial.role})</span> : ''}
+            </p>
+          </div>
         </div>
       )}
     </div>
@@ -552,19 +520,23 @@ export function FormRuntimeRenderer({
       }
     }
 
-    // Evaluate form_calculation fields using the seeded values so they
-    // show real numbers on the first paint.
-    for (const f of schema.fields) {
-      if (f.widgetType === 'form_calculation' || f.type === 'calculation') {
-        const cfg = (f.widgetConfig || {}) as Record<string, any>;
-        const formula = String(cfg.formula || '');
-        if (formula) {
-          const result = evaluateFormulaSafe(formula, defaults, schema.fields);
-          if (result !== null && !isNaN(result)) {
-            defaults[f.id] = result;
+    // Evaluate form_calculation fields using multi-pass resolution (up to 3 passes)
+    for (let pass = 0; pass < 3; pass++) {
+      let passChanged = false;
+      for (const f of schema.fields) {
+        if (f.widgetType === 'form_calculation' || f.type === 'calculation') {
+          const cfg = (f.widgetConfig || {}) as Record<string, any>;
+          const formula = String(cfg.formula || '');
+          if (formula) {
+            const result = evaluateFormulaSafe(formula, defaults, schema.fields);
+            if (result !== null && !isNaN(result) && defaults[f.id] !== result) {
+              defaults[f.id] = result;
+              passChanged = true;
+            }
           }
         }
       }
+      if (!passChanged) break;
     }
 
     return defaults;
@@ -896,56 +868,27 @@ export function FormRuntimeRenderer({
     };
   }, [formData, schema.fields]);
 
-  // Auto-evaluate calculation widgets and inject their result into formData.
-  // This effect runs after every formData change so dependent fields re-evaluate.
-  useEffect(() => {
-    setFormData((prev) => {
-      let changed = false;
-      const next = { ...prev };
-
-      // Set default initial values for slider/material if not yet set for smooth live estimate
-      if (isEstimatorForm) {
-        const areaField = schema.fields.find(
-          (f) => f.id.includes('size') || f.id.includes('area') || f.id.includes('sqft')
-        );
-        if (areaField && next[areaField.id] === undefined) {
-          next[areaField.id] = 2400;
-          changed = true;
-        }
-        const materialField = schema.fields.find(
-          (f) => f.id.includes('material') || f.id.includes('tier')
-        );
-        if (materialField && next[materialField.id] === undefined && materialField.options?.length) {
-          next[materialField.id] = materialField.options[1]?.value || materialField.options[0]?.value;
-          changed = true;
-        }
-      }
-
-      for (const field of schema.fields) {
-        if (field.widgetType === 'form_calculation' && field.widgetConfig) {
-          const formula = String((field.widgetConfig as Record<string, unknown>).formula || '');
-          if (!formula) continue;
-          const result = evaluateFormulaSafe(formula, prev, schema.fields);
-          if (result !== null && result !== prev[field.id]) {
-            next[field.id] = result;
-            changed = true;
-          }
-        }
-      }
-      return changed ? next : prev;
-    });
-     
-  // ─── Deps: `formData` MUST be in this list ──────────────────────────────
-  // Without `formData`, this effect runs ONCE on mount and never re-runs
-  // when the user changes a slider/input. Result: form_calculation fields
-  // stay at their initial state ($0.00) for the entire session. Adding
-  // `formData` makes calculations re-evaluate on every input change.
-  }, [isEstimatorForm, schema.fields, formData]);
-
-  // Ghost form partial lead capture
+  // Ghost form partial lead capture & synchronous multi-pass calculation
   const handleFieldChange = (fieldId: string, value: any) => {
     setFormData((prev) => {
       const next = { ...prev, [fieldId]: value };
+
+      // Synchronously resolve formula calculations across up to 3 passes
+      for (let pass = 0; pass < 3; pass++) {
+        let passChanged = false;
+        for (const field of schema.fields) {
+          if ((field.widgetType === 'form_calculation' || field.type === 'calculation') && field.widgetConfig) {
+            const formula = String((field.widgetConfig as Record<string, unknown>).formula || '');
+            if (!formula) continue;
+            const result = evaluateFormulaSafe(formula, next, schema.fields);
+            if (result !== null && !isNaN(result) && next[field.id] !== result) {
+              next[field.id] = result;
+              passChanged = true;
+            }
+          }
+        }
+        if (!passChanged) break;
+      }
 
       // Auto capture lead if email/phone entered
       if (!previewMode && formId && !partialSavedRef.current) {
