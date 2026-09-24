@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
   
   
   
@@ -1311,7 +1312,7 @@ model FormTemplate {
   description       String?
 
   // The full FormTemplate object (schema, theme, settings, seo, etc.)
-  schemaJson        String
+  schemaJson        Json
 
   // Multi-dimensional classification (JSON arrays of taxonomy IDs)
   categories        Json     @default("[]")     // TemplateCategoryId[]
@@ -1373,7 +1374,7 @@ model FormAgent {
   
   // Full agent config (FormAgentData serialized) — channels, knowledge,
   // settings, navigation, quickActions, connectedForms
-  configJson      String   @default("{}")
+  configJson      Json     @default("{}")
   
   // Agent status
   status          String   @default("active") // active | inactive | draft
@@ -4389,7 +4390,7 @@ model KnowledgeDocument {
   tenantId        String?
   workspaceId     String?
   title           String
-  content         String              
+  content         String              @db.Text
   url             String?
   status          String              @default("ready")
   chunksCount     Int                 @default(0)
@@ -4408,7 +4409,7 @@ model KnowledgeChunk {
   documentId      String
   tenantId        String?
   workspaceId     String?
-  content         String              
+  content         String              @db.Text
   tokenCount      Int                 @default(0)
   chunkIndex      Int                 @default(0)
   metadataJson    String              @default("{}")
@@ -6038,7 +6039,7 @@ model MarketplaceCustomer {
   notifyByPush    Boolean  @default(true)
   
   // Favorites (providers the customer has saved)
-  favoriteTenantIds String @default("")
+  favoriteTenantIds String[] @default([])
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -6065,7 +6066,7 @@ model MarketplaceProviderProfile {
   // Business description for the marketplace listing
   tagline         String?
   bio             String?
-  portfolioUrls   String @default("")
+  portfolioUrls   String[] @default([])
   
   // Availability rules (JSON: business hours, blackout dates, capacity)
   availabilityJson String  @default("{}")
@@ -6079,7 +6080,7 @@ model MarketplaceProviderProfile {
   // Provider "Find Work" preferences
   maxDistanceMiles  Float? @default(50)
   minBudgetFilter    Float? @default(0)
-  preferredCategories String @default("")
+  preferredCategories String[] @default([])
   
   // Verification summary (mirrors Tenant flags for fast marketplace queries)
   verificationSummary String @default("{}") // {identity, business, license, insurance}
