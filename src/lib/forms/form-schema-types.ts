@@ -416,8 +416,49 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
   const rawLayout = s.theme?.layout || (s.settings as any)?.formLayout;
   const isSplitMedia =
     rawLayout === 'split_media' ||
-    Boolean(s.mediaPanel && s.mediaPanel.enabled !== false && (s.mediaPanel.mediaUrl || s.mediaPanel.backgroundImageUrl || s.mediaPanel.headline)) ||
-    Boolean(s.theme?.mediaPanel && s.theme.mediaPanel.enabled !== false && (s.theme.mediaPanel.mediaUrl || s.theme.mediaPanel.backgroundImageUrl || s.theme.mediaPanel.headline));
+    Boolean(s.mediaPanel && s.mediaPanel.enabled !== false) ||
+    Boolean(s.theme?.mediaPanel && s.theme.mediaPanel.enabled !== false);
+
+  const rawPanel = s.mediaPanel || s.theme?.mediaPanel;
+  const resolvedMediaPanel = isSplitMedia
+    ? {
+        enabled: true,
+        position: rawPanel?.position || 'left',
+        splitRatio: rawPanel?.splitRatio || '50-50',
+        mediaType: rawPanel?.mediaType || 'image',
+        mediaUrl:
+          rawPanel?.mediaUrl ||
+          rawPanel?.backgroundImageUrl ||
+          'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+        headline: rawPanel?.headline,
+        subtitle: rawPanel?.subtitle,
+        badgeText: rawPanel?.badgeText,
+        showBadge: rawPanel?.showBadge ?? Boolean(rawPanel?.badgeText),
+        showHeadline: rawPanel?.showHeadline ?? true,
+        showSubtitle: rawPanel?.showSubtitle ?? true,
+        showMedia: rawPanel?.showMedia ?? true,
+        showBenefits: rawPanel?.showBenefits ?? true,
+        showTestimonial: rawPanel?.showTestimonial ?? false,
+        backgroundColor: rawPanel?.backgroundColor || '#0f172a',
+        backgroundImageUrl: rawPanel?.backgroundImageUrl,
+        overlayOpacity: rawPanel?.overlayOpacity ?? 70,
+        backgroundBlur: rawPanel?.backgroundBlur,
+        benefitsList: rawPanel?.benefitsList || [
+          'Guaranteed response within 15 minutes',
+          'Licensed, insured & background-checked',
+          '100% Price Match & Escrow Guarantee',
+        ],
+        testimonial: rawPanel?.testimonial,
+        mapAddress: rawPanel?.mapAddress,
+        mapZoom: rawPanel?.mapZoom,
+        mapServiceRadius: rawPanel?.mapServiceRadius,
+        videoEmbedUrl: rawPanel?.videoEmbedUrl,
+        videoAutoplay: rawPanel?.videoAutoplay,
+        videoLoop: rawPanel?.videoLoop,
+        videoMuted: rawPanel?.videoMuted,
+        mobileBehavior: rawPanel?.mobileBehavior,
+      }
+    : rawPanel;
 
   const canonicalLayout = isSplitMedia
     ? 'split_media'
@@ -433,7 +474,7 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
       ...DEFAULT_FORM_THEME,
       ...(s.theme || {}),
       layout: canonicalLayout,
-      mediaPanel: s.mediaPanel || s.theme?.mediaPanel,
+      mediaPanel: resolvedMediaPanel,
     },
     settings: {
       submitButtonText: s.settings?.submitButtonText || 'Submit',
@@ -462,7 +503,7 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
         },
       },
     },
-    mediaPanel: s.mediaPanel || s.theme?.mediaPanel,
+    mediaPanel: resolvedMediaPanel,
     agentConfig: s.agentConfig,
   };
 }

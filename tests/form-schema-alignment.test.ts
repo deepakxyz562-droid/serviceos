@@ -101,4 +101,33 @@ describe('Form Schema Alignment & Multi-step Normalization', () => {
     expect(normalized.fields[0].layoutColumn).toBe('right');
     expect(normalized.fields[1].layoutColumn).toBe('left');
   });
+
+  it('buildApiPayload persists split_media and hydrates mediaPanel accurately', async () => {
+    const { buildApiPayload } = await import('@/features/forms/utils/form-helpers');
+    const editorData = {
+      name: 'Online Booking & Appointment Scheduling',
+      description: 'Book online instantly',
+      type: 'booking' as const,
+      status: 'active' as const,
+      fields: [
+        { id: 'f_name', label: 'Full Name', type: 'text' as any, required: true },
+        { id: 'f_phone', label: 'Phone Number', type: 'phone' as any, required: true },
+      ],
+      theme: { layout: 'split_media' as const },
+      settings: { formLayout: 'split_media' as const },
+    };
+
+    const payload = buildApiPayload(editorData as any);
+    const parsedSchema = JSON.parse(payload.schemaJson);
+
+    expect(parsedSchema.theme.layout).toBe('split_media');
+    expect(parsedSchema.mediaPanel).toBeDefined();
+    expect(parsedSchema.mediaPanel.enabled).toBe(true);
+    expect(parsedSchema.mediaPanel.mediaUrl).toBeDefined();
+    expect(parsedSchema.mediaPanel.headline).toBe('Online Booking & Appointment Scheduling');
+
+    const normalized = normalizeFormSchema(parsedSchema);
+    expect(normalized.theme.layout).toBe('split_media');
+    expect(normalized.mediaPanel?.enabled).toBe(true);
+  });
 });

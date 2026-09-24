@@ -308,9 +308,9 @@ export function FormStudioBuilder({
         backgroundImageUrl: formData.theme?.backgroundImageUrl,
         backgroundOverlayOpacity: formData.theme?.backgroundOverlayOpacity,
         backgroundBlur: formData.theme?.backgroundBlur,
-        layout: formData.settings?.formLayout === 'single_question' || formData.theme?.layout === 'card'
+        layout: formData.settings?.formLayout === 'single_question' || formData.theme?.layout === 'card' || viewMode === 'focus'
           ? 'card'
-          : formData.settings?.formLayout === 'split_media' || formData.theme?.layout === 'split_media'
+          : formData.settings?.formLayout === 'split_media' || formData.theme?.layout === 'split_media' || viewMode === 'split_media' || (formData.mediaPanel && formData.mediaPanel.enabled !== false)
           ? 'split_media'
           : 'paper',
         mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,

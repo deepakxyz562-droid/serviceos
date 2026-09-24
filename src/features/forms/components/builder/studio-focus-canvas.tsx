@@ -505,8 +505,13 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                   mediaPanel: updated,
                   theme: {
                     ...(prev.theme || {}),
+                    layout: 'split_media',
                     mediaPanel: updated,
                   } as any,
+                  settings: {
+                    ...(prev.settings || {}),
+                    formLayout: 'split_media',
+                  },
                 }));
               };
 

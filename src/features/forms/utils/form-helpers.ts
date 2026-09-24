@@ -274,11 +274,51 @@ export function buildApiPayload(formData: EditorFormData) {
     defaultValue: f.defaultValue,
   }));
 
-  const mediaPanel = formData.mediaPanel || formData.theme?.mediaPanel;
+  const rawMediaPanel = formData.mediaPanel || formData.theme?.mediaPanel;
   const isSplitMedia =
     formData.theme?.layout === 'split_media' ||
     formData.settings?.formLayout === 'split_media' ||
-    (mediaPanel && mediaPanel.enabled !== false && Boolean(mediaPanel.mediaUrl || mediaPanel.backgroundImageUrl || mediaPanel.headline));
+    Boolean(rawMediaPanel && rawMediaPanel.enabled !== false);
+
+  const mediaPanel = isSplitMedia
+    ? {
+        enabled: true,
+        position: rawMediaPanel?.position || 'left',
+        splitRatio: rawMediaPanel?.splitRatio || '50-50',
+        mediaType: rawMediaPanel?.mediaType || 'image',
+        mediaUrl:
+          rawMediaPanel?.mediaUrl ||
+          rawMediaPanel?.backgroundImageUrl ||
+          'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+        headline: rawMediaPanel?.headline || formData.name || 'Fast & Reliable Professional Service',
+        subtitle: rawMediaPanel?.subtitle || formData.description || 'Fill out the form below to receive upfront pricing.',
+        badgeText: rawMediaPanel?.badgeText || '⭐ 5-Star Rated Service Pro',
+        showBadge: rawMediaPanel?.showBadge ?? Boolean(rawMediaPanel?.badgeText),
+        showHeadline: rawMediaPanel?.showHeadline ?? true,
+        showSubtitle: rawMediaPanel?.showSubtitle ?? true,
+        showMedia: rawMediaPanel?.showMedia ?? true,
+        showBenefits: rawMediaPanel?.showBenefits ?? true,
+        showTestimonial: rawMediaPanel?.showTestimonial ?? false,
+        backgroundColor: rawMediaPanel?.backgroundColor || '#0f172a',
+        backgroundImageUrl: rawMediaPanel?.backgroundImageUrl,
+        overlayOpacity: rawMediaPanel?.overlayOpacity ?? 70,
+        backgroundBlur: rawMediaPanel?.backgroundBlur,
+        benefitsList: rawMediaPanel?.benefitsList || [
+          'Guaranteed response within 15 minutes',
+          'Licensed, insured & background-checked',
+          '100% Price Match & Escrow Guarantee',
+        ],
+        testimonial: rawMediaPanel?.testimonial,
+        mapAddress: rawMediaPanel?.mapAddress,
+        mapZoom: rawMediaPanel?.mapZoom,
+        mapServiceRadius: rawMediaPanel?.mapServiceRadius,
+        videoEmbedUrl: rawMediaPanel?.videoEmbedUrl,
+        videoAutoplay: rawMediaPanel?.videoAutoplay,
+        videoLoop: rawMediaPanel?.videoLoop,
+        videoMuted: rawMediaPanel?.videoMuted,
+        mobileBehavior: rawMediaPanel?.mobileBehavior,
+      }
+    : rawMediaPanel;
 
   const isCard =
     formData.theme?.layout === 'card' ||
