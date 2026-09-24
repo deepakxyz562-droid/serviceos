@@ -98,18 +98,22 @@ export function SiteAgentWidget({
 
   if (!agent) return null;
 
-  const resolvedPosition = position || agent.channels?.chatbot?.position || 'bottom-right';
-  const isLeftPos = resolvedPosition === 'bottom-left';
+  const chatbot = agent.channels?.chatbot;
+  const resolvedPosition = position || chatbot?.position || 'right';
+  const isLeftPos = resolvedPosition === 'left';
+  const isSidebar = chatbot?.layoutMode === 'sidebar';
 
   return (
     <div
       className={cn(
-        'fixed z-[9999] transition-all duration-300 pointer-events-auto',
-        previewPage === 'greeting'
-          ? cn('bottom-4', isLeftPos ? 'left-4' : 'right-4')
-          : cn('bottom-4 max-h-[600px] h-[580px] w-[360px] sm:w-[380px]', isLeftPos ? 'left-4' : 'right-4'),
+        'fixed z-[9999] pointer-events-auto transition-all duration-300',
+        isSidebar
+          ? cn('top-0 bottom-0 h-screen w-[360px] sm:w-[400px]', isLeftPos ? 'left-0' : 'right-0')
+          : previewPage === 'greeting'
+            ? cn('bottom-4', isLeftPos ? 'left-4' : 'right-4')
+            : cn('bottom-4 max-h-[min(720px,calc(100vh-2rem))] h-[580px] w-[360px] sm:w-[380px]', isLeftPos ? 'left-4' : 'right-4'),
         className
-      )}
+      )
     >
       {loadError && (
         <div className="absolute -top-6 left-0 right-0 text-center text-[9px] text-amber-500 font-medium">

@@ -110,11 +110,18 @@ export function FormStudioBuilder({
   const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'agent' | 'templates'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const initialPreviewFormat: 'paper' | 'card' | 'agent' =
-    formData.theme?.layout === 'conversational' || (formData.settings as any)?.formLayout === 'conversational' ? 'agent'
-    : formData.theme?.layout === 'card' || (formData.settings as any)?.formLayout === 'single_question' ? 'card'
-    : 'paper';
-  const [previewFormat, setPreviewFormat] = useState<'paper' | 'card' | 'agent'>(initialPreviewFormat);
+  const initialPreviewFormat: 'paper' | 'card' =
+    formData.theme?.layout === 'card' || (formData.settings as any)?.formLayout === 'single_question'
+      ? 'card'
+      : 'paper';
+  // Form preview only. AI Agent has its own builder/simulator and publish flow.
+  const [previewFormat, setPreviewFormat] = useState<'paper' | 'card'>(initialPreviewFormat);
+
+  // Keep the preview selector synchronized with the form's saved presentation.
+  useEffect(() => {
+    const layout = formData.theme?.layout || (formData.settings as any)?.formLayout;
+    setPreviewFormat(layout === 'card' || layout === 'single_question' ? 'card' : 'paper');
+  }, [formData.theme?.layout, formData.settings?.formLayout]);
   
   // Selection and Palette state
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(formData.fields[0]?.id || null);
@@ -297,14 +304,10 @@ export function FormStudioBuilder({
         backgroundImageUrl: formData.theme?.backgroundImageUrl,
         backgroundOverlayOpacity: formData.theme?.backgroundOverlayOpacity,
         backgroundBlur: formData.theme?.backgroundBlur,
-        layout: previewFormat === 'card'
+        layout: formData.settings?.formLayout === 'single_question' || formData.theme?.layout === 'card'
           ? 'card'
-          : previewFormat === 'agent'
-          ? 'conversational'
           : formData.settings?.formLayout === 'split_media' || formData.theme?.layout === 'split_media'
           ? 'split_media'
-          : formData.settings?.formLayout === 'single_question'
-          ? 'card'
           : 'paper',
         mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
       },
@@ -323,7 +326,7 @@ export function FormStudioBuilder({
         ...(formData.settings || {}),
       },
     };
-  }, [formData, previewFormat]);
+  }, [formData]);
 
   const handleImportSuccess = (importedSchema: FormSchema, importedName?: string) => {
     onFormDataChange((prev) => ({
@@ -2451,7 +2454,7 @@ export function FormStudioBuilder({
           </div>
         )}
 
-        {/* ─── 6. INTERACTIVE PREVIEW MODE (MULTI-FORMAT: PAPER / CARD / AGENT) ─── */}
+        {/* ─── 6. INTERACTIVE FORM PREVIEW (PAPER / CARD) ─── */}
         {isPreviewMode && (
           <div className="flex-1 min-h-0 h-full flex flex-col bg-slate-200 dark:bg-slate-900/90 overflow-hidden">
             {/* Viewport & Device Preview Header */}
@@ -2464,7 +2467,7 @@ export function FormStudioBuilder({
                       <span className="size-2 rounded-full bg-emerald-500" />
                       <span>2-Column Split Hero Form</span>
                     </>
-                  ) : viewMode === 'paper' || previewFormat === 'paper' ? (
+                  ) : previewFormat === 'paper' ? (
                     <>
                       <span className="size-2 rounded-full bg-blue-500" />
                       <span>Classic Paper Form</span>
@@ -2528,7 +2531,7 @@ export function FormStudioBuilder({
                   <div
                     className={cn(
                       'flex-1 min-h-0 h-full overflow-y-auto overscroll-contain',
-                      previewFormat === 'agent' ? '' : 'pb-6',
+                      'pb-6',
                     )}
                   >
                     <FormRuntimeRenderer
@@ -2536,7 +2539,7 @@ export function FormStudioBuilder({
                       formName={formData.name || 'Untitled Form'}
                       formDescription={formData.description}
                       schema={runtimeSchema}
-                      mode={viewMode === 'focus' ? 'card' : 'paper'}
+                      mode={previewFormat}
                     />
                   </div>
                   {/* Home Indicator */}
@@ -2560,7 +2563,7 @@ export function FormStudioBuilder({
                       formName={formData.name || 'Untitled Form'}
                       formDescription={formData.description}
                       schema={runtimeSchema}
-                      mode={viewMode === 'focus' ? 'card' : 'paper'}
+                      mode={previewFormat}
                     />
                   </div>
                   {/* Tablet Home Indicator */}
@@ -2602,7 +2605,7 @@ export function FormStudioBuilder({
                         formName={formData.name || 'Untitled Form'}
                         formDescription={formData.description}
                         schema={runtimeSchema}
-                        mode={viewMode === 'focus' ? 'card' : 'paper'}
+                        mode={previewFormat}
                       />
                     </div>
                   </div>

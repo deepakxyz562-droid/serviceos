@@ -406,6 +406,19 @@ export function AgentDeviceSimulator({
         </div>
 
         <div className="flex items-center gap-1">
+          {agent.navigation?.formsEnabled && (agent.connectedForms?.length ?? 0) > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTab('forms')}
+              title="Forms"
+              className="size-7 rounded-full text-white/80 hover:text-white hover:bg-white/10"
+            >
+              <FileText className="size-3.5" />
+            </Button>
+          )}
+
           {allowScreenShare && (
             <Button
               type="button"

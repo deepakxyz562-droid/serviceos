@@ -123,7 +123,7 @@ export default function GptFormPage() {
           'JotForm-grade visual formula calculation pad',
           'Date difference calculation (checkout - checkin)',
           '33+ Connected payment gateways with 0% platform fees',
-          '4 runtime modes: Classic Grid, Focus Card Stepper, Chatbot, Voice AI Agent',
+          '2 form layouts: Classic Paper and Card Swipe, plus a separate AI Agent chatbot',
           '20,000+ free canonical industry form templates',
           'HTML5 smooth canvas digital e-signatures',
           'Direct appointment scheduling with calendar availability sync',
@@ -166,7 +166,7 @@ export default function GptFormPage() {
             name: 'How is GPTForm different from Jotform and Typeform?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'Unlike traditional form builders that lock forms into a single layout, GPTForm provides 4 runtime modes in one schema (Classic Paper, Focus Card Stepper, Interactive Chat, and Voice AI Agent). Furthermore, GPTForm supports 33+ payment gateways with 0% platform transaction fees, JotForm-grade visual formula calculations, and 20,000+ free canonical templates.',
+              text: 'GPTForm keeps form presentation and AI chat separate: choose Classic Paper or Card Swipe for the form, then optionally deploy a separate AI Agent chatbot that can open connected forms inside the chat. GPTForm also supports 33+ payment gateways with 0% platform transaction fees, JotForm-grade visual formula calculations, and 20,000+ free canonical templates.',
             },
           },
           {

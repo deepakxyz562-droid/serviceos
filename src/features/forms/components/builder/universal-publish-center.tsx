@@ -5,7 +5,6 @@ import { UniversalProject } from '@/lib/forms/universal-component-types';
 import {
   Share2,
   Globe,
-  Bot,
   Smartphone,
   Copy,
   Check,
@@ -13,7 +12,6 @@ import {
   ExternalLink,
   Code,
   Sparkles,
-  MessageCircle,
   Phone,
   Download,
   Printer,
@@ -75,12 +73,11 @@ export function UniversalPublishCenter({
     'Service Request Form';
 
   const formUrl = `${siteOrigin}/f/${resolvedFormSlug}`;
-  const chatModeUrl = `${siteOrigin}/f/${resolvedFormSlug}?mode=chat`;
   const mobileModeUrl = `${siteOrigin}/f/${resolvedFormSlug}?mode=mobile`;
 
   const inlineEmbedCode = `<iframe \n  src="${formUrl}" \n  width="100%" \n  height="650" \n  frameborder="0" \n  style="border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 4px 12px rgba(0,0,0,0.05);">\n</iframe>`;
 
-  const agentEmbedCode = `<!-- Fieseros AI Form Assistant -->\n<script \n  src="${siteOrigin}/embed/agent.js" \n  data-agent="${formId || resolvedFormSlug}" \n  data-form-id="${formId || resolvedFormSlug}" \n  async>\n</script>`;
+
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(formUrl)}`;
 
@@ -129,7 +126,7 @@ export function UniversalPublishCenter({
             Publish &amp; Share
           </h2>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            <strong className="text-foreground">One form. Anywhere your customers are.</strong> — Share via direct link, embed on your website, deploy in AI chat mode, launch as a mobile experience, or print QR codes.
+            <strong className="text-foreground">One form. Anywhere your customers are.</strong> — Share the form by link, embed it on your website, launch the mobile experience, or print a QR code. AI Agent deployment is managed separately.
           </p>
         </div>
         <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800 text-[11px] font-bold self-start sm:self-center py-1 px-3">
@@ -139,7 +136,7 @@ export function UniversalPublishCenter({
 
       {/* ─── 5-PILLAR PUBLISHING TABS ─── */}
       <Tabs defaultValue="share" className="w-full space-y-6">
-        <TabsList className="grid grid-cols-2 sm:grid-cols-5 h-auto p-1.5 bg-muted/60 rounded-2xl gap-1 border border-border/60">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 h-auto p-1.5 bg-muted/60 rounded-2xl gap-1 border border-border/60">
           <TabsTrigger value="share" className="rounded-xl py-2 text-xs font-bold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
             <Globe className="size-3.5 text-blue-500" />
             <span>1. Share Link</span>
@@ -148,17 +145,13 @@ export function UniversalPublishCenter({
             <Code className="size-3.5 text-indigo-500" />
             <span>2. Embed</span>
           </TabsTrigger>
-          <TabsTrigger value="chat" className="rounded-xl py-2 text-xs font-bold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
-            <Bot className="size-3.5 text-emerald-500" />
-            <span>3. AI Chat</span>
-          </TabsTrigger>
           <TabsTrigger value="mobile" className="rounded-xl py-2 text-xs font-bold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
             <Smartphone className="size-3.5 text-purple-500" />
-            <span>4. Mobile</span>
+            <span>3. Mobile</span>
           </TabsTrigger>
           <TabsTrigger value="qr" className="rounded-xl py-2 text-xs font-bold gap-1.5 data-[state=active]:bg-background data-[state=active]:shadow-xs">
             <QrCode className="size-3.5 text-amber-500" />
-            <span>5. QR Code</span>
+            <span>4. QR Code</span>
           </TabsTrigger>
         </TabsList>
 
@@ -284,103 +277,10 @@ export function UniversalPublishCenter({
               </div>
             </Card>
 
-            {/* Floating AI Chat Widget */}
-            <Card className="rounded-2xl border-border/80 shadow-xs flex flex-col justify-between">
-              <div>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <Sparkles className="size-4 text-emerald-600" />
-                      Floating AI Chat Widget
-                    </CardTitle>
-                    <Badge className="bg-emerald-600 text-white text-[9px]">Text.com Style</Badge>
-                  </div>
-                  <CardDescription className="text-xs">
-                    Add a floating chat launcher in the bottom corner of your website with form context.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="relative">
-                    <textarea
-                      readOnly
-                      rows={5}
-                      value={agentEmbedCode}
-                      className="w-full text-xs font-mono p-3 bg-muted/50 border border-border/80 rounded-xl select-all resize-none focus:outline-hidden"
-                    />
-                  </div>
-                </CardContent>
-              </div>
-              <div className="p-4 pt-0">
-                <Button
-                  size="sm"
-                  onClick={() => copyText(agentEmbedCode, 'agent_embed', 'AI Chat Script Snippet')}
-                  className="w-full h-9 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl"
-                >
-                  {copiedKey === 'agent_embed' ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                  Copy Script Snippet
-                </Button>
-              </div>
-            </Card>
           </div>
         </TabsContent>
 
-        {/* ─── TAB 3: AI CHAT (CONVERSATIONAL FORM) ─── */}
-        <TabsContent value="chat" className="space-y-4">
-          <Card className="rounded-2xl border-border/80 shadow-xs bg-gradient-to-b from-card to-emerald-500/5">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Bot className="size-4 text-emerald-600" />
-                  Conversational AI Form Mode
-                </CardTitle>
-                <Badge className="bg-emerald-600 text-white text-[10px]">Turn Form Into Conversation</Badge>
-              </div>
-              <CardDescription className="text-xs">
-                Customers can speak or chat naturally with an AI assistant that gathers all required form fields through friendly dialogue.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  value={chatModeUrl}
-                  readOnly
-                  className="h-10 text-xs font-mono bg-background select-all border-border/80"
-                />
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    onClick={() => copyText(chatModeUrl, 'chat_link', 'AI Chat URL')}
-                    className="h-10 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 rounded-xl shadow-xs cursor-pointer"
-                  >
-                    {copiedKey === 'chat_link' ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                    Copy Chat Link
-                  </Button>
-                  <a
-                    href={chatModeUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center h-10 px-3 text-xs font-semibold rounded-xl border border-border/80 bg-background hover:bg-muted text-foreground gap-1.5"
-                  >
-                    <span>Test Chat</span>
-                    <ExternalLink className="size-3.5 text-emerald-600" />
-                  </a>
-                </div>
-              </div>
-
-              <div className="p-4 bg-muted/40 rounded-xl border border-border/70 space-y-2">
-                <p className="text-xs font-bold text-foreground">💡 How Conversational Mode Works:</p>
-                <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                  <li>AI Copilot reads your form fields and asks questions one by one.</li>
-                  <li>Answers are validated and mapped automatically to your form fields.</li>
-                  <li>Visitors can ask clarifying questions about services, requirements, or pricing.</li>
-                  <li>Escalates seamlessly to your <strong>Live Chat Inbox</strong> if human help is needed.</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ─── TAB 4: MOBILE EXPERIENCE ─── */}
+        {/* ─── TAB 3: MOBILE EXPERIENCE ─── */}
         <TabsContent value="mobile" className="space-y-4">
           <Card className="rounded-2xl border-border/80 shadow-xs bg-gradient-to-b from-card to-purple-500/5">
             <CardHeader className="pb-3">
