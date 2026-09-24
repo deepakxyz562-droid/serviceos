@@ -712,7 +712,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                         <SortableContext items={rightColumnFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
                           <div className="flex flex-wrap gap-y-4 gap-x-3">
                             {rightColumnFields.length > 0 ? (
-                              rightColumnFields.map((f) => (
+                               rightColumnFields.map((f) => (
                                 <SortableFieldWrapper
                                   key={f.id}
                                   field={f}
@@ -723,6 +723,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                   onSelectField={onSelectField}
                                   inputBorderRadius={inputBorderRadius}
                                   defaultInputHeightCls={defaultInputHeightCls}
+                                  onSetWidth={handleSetFieldWidth}
                                   onDuplicate={handleDuplicateField}
                                   onDelete={handleDeleteField}
                                   onMoveUp={(id) => handleMoveField(id, 'up')}
@@ -824,35 +825,11 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
             })()}
           </div>
         ) : viewMode === 'card' ? (
-          /* ════ 1. FOCUS CARD MULTI-STEP VIEW (Typeform Parity) ════ */
-          <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl p-6 sm:p-10 transition-all">
-            {/* Left Media Block */}
-            {hasMedia && (
-              <div className="md:col-span-5 rounded-2xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 p-6 flex flex-col items-center justify-center text-center relative overflow-hidden group min-h-[260px]">
-                <div className="size-12 rounded-2xl bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-md mb-3">
-                  <Video className="size-6" />
-                </div>
-                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                  Media &amp; Video Hero
-                </h4>
-                <p className="text-[11px] text-muted-foreground mt-1 max-w-xs">
-                  Upload video or image hero for this step
-                </p>
-
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="mt-4 text-xs font-bold gap-1.5 rounded-xl shadow-xs bg-white dark:bg-slate-900 hover:bg-emerald-50 hover:text-emerald-700"
-                >
-                  <Plus className="size-3.5" /> Add Video / Media
-                </Button>
-              </div>
-            )}
-
-            {/* Right Question Focus Card */}
-            <div className={`${hasMedia ? 'md:col-span-7' : 'md:col-span-12'} flex flex-col justify-between space-y-6`}>
+          /* ════ 1. FOCUS CARD MULTI-STEP VIEW (Typeform / Card Swipe Parity) ════ */
+          <div className="w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl p-6 sm:p-10 transition-all">
+            <div className="flex flex-col justify-between space-y-6">
               {/* Question Headline */}
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 pb-2 border-b border-border/40">
                 <div className="flex items-center gap-2">
                   <span
                     className="size-6 rounded-lg text-white text-xs font-bold flex items-center justify-center shadow-xs shrink-0"
@@ -860,7 +837,6 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                   >
                     {isMultiStep ? currentStepIndex + 1 : '1'}
                   </span>
-                  {/* Step title — NOT editable inline (matches runtime). Edit via Inspector. */}
                   <h2 className="text-lg sm:text-xl font-bold text-foreground">
                     {activeStep.title || (isMultiStep ? `Step ${currentStepIndex + 1}` : formData.name || 'Untitled Form')}
                   </h2>
@@ -870,14 +846,14 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                 </p>
               </div>
 
-              {/* Step Sub-Fields Render — WYSIWYG + Drag-and-Drop */}
+              {/* Step Fields Render — WYSIWYG + Drag-and-Drop */}
               <DndContext
                 sensors={dndSensors}
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
               >
                 <SortableContext items={activeStep.fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                  <div className="flex flex-wrap gap-y-4 gap-x-3 pl-0 sm:pl-8">
+                  <div className="flex flex-wrap gap-y-4 gap-x-3 items-start justify-between">
                     {activeStep.fields.length > 0 ? (
                       activeStep.fields.map((field) => (
                         <SortableFieldWrapper
@@ -890,6 +866,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                           onSelectField={onSelectField}
                           inputBorderRadius={inputBorderRadius}
                           defaultInputHeightCls={defaultInputHeightCls}
+                          onSetWidth={handleSetFieldWidth}
                           onDuplicate={handleDuplicateField}
                           onDelete={handleDeleteField}
                           onMoveUp={(id) => handleMoveField(id, 'up')}
@@ -909,10 +886,20 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                 </SortableContext>
               </DndContext>
 
+              {onOpenAddWidgetDialog && (
+                <button
+                  type="button"
+                  onClick={() => onOpenAddWidgetDialog(currentStepIndex, activeStep.id)}
+                  className="w-full h-10 border border-dashed border-border/60 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="size-3.5" /> Add field
+                </button>
+              )}
+
               {/* Step Navigation Controls (Typeform Enter to Continue) */}
-              {isMultiStep && (
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 pl-0 sm:pl-8">
-                  <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  {isMultiStep && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -922,98 +909,175 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                     >
                       <ArrowLeft className="size-3.5" /> Back
                     </Button>
+                  )}
 
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (currentStepIndex < steps.length - 1) {
-                          onStepChange(currentStepIndex + 1);
-                        }
-                      }}
-                      className="text-xs h-9 rounded-xl font-bold text-white shadow-md gap-1.5 px-4 cursor-pointer"
-                      style={{ backgroundColor: buttonColor, color: buttonTextColor }}
-                    >
-                      <span>{currentStepIndex === steps.length - 1 ? 'Complete & Submit' : 'OK · Continue'}</span>
-                      <ArrowRight className="size-3.5" />
-                    </Button>
-                  </div>
-
-                  <p className="text-[11px] text-muted-foreground hidden sm:inline-flex items-center gap-1">
-                    press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono border">Enter ↵</kbd>
-                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (isMultiStep && currentStepIndex < steps.length - 1) {
+                        onStepChange(currentStepIndex + 1);
+                      }
+                    }}
+                    className="text-xs h-9 rounded-xl font-bold text-white shadow-md gap-1.5 px-4 cursor-pointer"
+                    style={{ backgroundColor: buttonColor, color: buttonTextColor }}
+                  >
+                    <span>{isMultiStep && currentStepIndex === steps.length - 1 ? (formData.settings?.submitButtonText || 'Submit Form') : 'OK · Continue'}</span>
+                    <ArrowRight className="size-3.5" />
+                  </Button>
                 </div>
-              )}
+
+                <p className="text-[11px] text-muted-foreground hidden sm:inline-flex items-center gap-1">
+                  press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono border">Enter ↵</kbd>
+                </p>
+              </div>
             </div>
           </div>
         ) : (
-          /* ════ 2. CLASSIC PAPER DOCUMENT VIEW (Jotform Parity with Multi-Column) ════ */
-          <div className="w-full space-y-6">
-            {steps.map((step, sIdx) => (
-              <div
-                key={step.id}
-                className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-md p-6 sm:p-8 space-y-5"
-              >
-                {/* Step / Section Header */}
-                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="size-6 rounded-lg text-white text-xs font-bold flex items-center justify-center shadow-xs"
-                      style={{ backgroundColor: primaryColor }}
-                    >
-                      {sIdx + 1}
-                    </span>
-                    <h3 className="text-base font-bold text-foreground">{step.title}</h3>
-                    <Badge variant="outline" className="text-[10px] font-normal">
-                      {step.fields.length} {step.fields.length === 1 ? 'question' : 'questions'}
-                    </Badge>
-                  </div>
+          /* ════ 2. CLASSIC DOCUMENT VIEW (Jotform Parity with Multi-Column) ════ */
+          <div className="w-full bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl overflow-hidden p-6 sm:p-8 space-y-6 transition-all">
+            {/* Form Header — matches live runtime */}
+            <div className="pb-4 border-b border-border/40">
+              <h1 className="text-xl sm:text-2xl font-black text-foreground">
+                {formData.name || 'Untitled Form'}
+              </h1>
+              {formData.description && (
+                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
+                  {formData.description}
+                </p>
+              )}
+            </div>
 
-                  {onOpenAddWidgetDialog && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onOpenAddWidgetDialog(sIdx, step.id)}
-                      className="h-7 text-[11px] font-semibold gap-1 text-emerald-600 border-emerald-200 dark:border-emerald-800"
+            {/* Top Multi-Step Tabs if multi-step form */}
+            {isMultiStep && steps.length > 1 && (
+              <div
+                className="grid gap-2 sm:gap-3 mb-2 w-full"
+                style={{
+                  gridTemplateColumns: `repeat(${Math.min(steps.length, 6)}, minmax(0, 1fr))`,
+                }}
+              >
+                {steps.map((step, idx) => {
+                  const isActive = idx === currentStepIndex;
+                  return (
+                    <button
+                      key={step.id || idx}
+                      type="button"
+                      onClick={() => onStepChange(idx)}
+                      className={`flex items-center gap-2 p-2.5 rounded-2xl text-left transition-all border cursor-pointer ${
+                        isActive
+                          ? 'bg-emerald-50/60 dark:bg-emerald-950/40 border-emerald-500/40 shadow-sm ring-1 ring-emerald-500/20'
+                          : 'bg-slate-50 dark:bg-slate-800/40 border-border/60 hover:bg-slate-100'
+                      }`}
                     >
-                      <Plus className="size-3" /> Add field
-                    </Button>
+                      <div
+                        className={`size-6 rounded-lg text-[10px] font-black flex items-center justify-center shrink-0 ${
+                          isActive ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                        }`}
+                        style={isActive ? { backgroundColor: primaryColor } : undefined}
+                      >
+                        0{idx + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold truncate text-foreground">
+                          {step.title}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Multi-Column Field Grid — WYSIWYG + Drag-and-Drop */}
+            <DndContext
+              sensors={dndSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={(isMultiStep ? activeStep.fields : fields).map((f) => f.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="flex flex-wrap gap-y-4 gap-x-3 items-start justify-between">
+                  {(isMultiStep ? activeStep.fields : fields).length > 0 ? (
+                    (isMultiStep ? activeStep.fields : fields).map((f) => (
+                      <SortableFieldWrapper
+                        key={f.id}
+                        field={f}
+                        value={effectiveCanvasFormData[f.id]}
+                        onChange={(val) => handleCanvasFieldChange(f.id, val)}
+                        allFormData={effectiveCanvasFormData}
+                        selectedFieldId={selectedFieldId}
+                        onSelectField={onSelectField}
+                        inputBorderRadius={inputBorderRadius}
+                        defaultInputHeightCls={defaultInputHeightCls}
+                        onSetWidth={handleSetFieldWidth}
+                        onDuplicate={handleDuplicateField}
+                        onDelete={handleDeleteField}
+                        onMoveUp={(id) => handleMoveField(id, 'up')}
+                        onMoveDown={(id) => handleMoveField(id, 'down')}
+                        onMoveToStep={handleMoveFieldToStep}
+                        onOpenSettings={(id) => { onSelectField(id); }}
+                        steps={steps}
+                        hasColumns={false}
+                      />
+                    ))
+                  ) : (
+                    <div className="w-full p-8 text-center text-muted-foreground text-xs">
+                      <p>No fields yet in this section.</p>
+                    </div>
                   )}
                 </div>
+              </SortableContext>
+            </DndContext>
 
-                {/* Multi-Column Field Grid — WYSIWYG + Drag-and-Drop */}
-                <DndContext
-                  sensors={dndSensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
+            {/* Add Field Button */}
+            {onOpenAddWidgetDialog && (
+              <button
+                type="button"
+                onClick={() => onOpenAddWidgetDialog(currentStepIndex, activeStep.id)}
+                className="w-full h-10 border border-dashed border-border/60 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="size-3.5" /> Add field
+              </button>
+            )}
+
+            {/* Bottom Action Footer */}
+            <div className="pt-4 border-t border-border/40 flex items-center justify-between">
+              {isMultiStep && currentStepIndex > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onStepChange(Math.max(0, currentStepIndex - 1))}
+                  className="h-9 text-xs gap-1"
                 >
-                  <SortableContext items={step.fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                    <div className="flex flex-wrap gap-y-4 gap-x-3 items-start">
-                      {step.fields.map((f) => (
-                        <SortableFieldWrapper
-                          key={f.id}
-                          field={f}
-                          value={effectiveCanvasFormData[f.id]}
-                          onChange={(val) => handleCanvasFieldChange(f.id, val)}
-                          allFormData={effectiveCanvasFormData}
-                          selectedFieldId={selectedFieldId}
-                          onSelectField={onSelectField}
-                          inputBorderRadius={inputBorderRadius}
-                          defaultInputHeightCls={defaultInputHeightCls}
-                          onDuplicate={handleDuplicateField}
-                          onDelete={handleDeleteField}
-                          onMoveUp={(id) => handleMoveField(id, 'up')}
-                          onMoveDown={(id) => handleMoveField(id, 'down')}
-                          onMoveToStep={handleMoveFieldToStep}
-                          onOpenSettings={(id) => { onSelectField(id); }}
-                          steps={steps}
-                          hasColumns={false}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
-              </div>
-            ))}
+                  <ArrowLeft className="size-3" /> Previous Step
+                </Button>
+              ) : (
+                <span />
+              )}
+
+              {isMultiStep && currentStepIndex < steps.length - 1 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onStepChange(currentStepIndex + 1)}
+                  className="h-9 text-xs gap-1.5 px-4 font-bold"
+                  style={{ backgroundColor: buttonColor, color: buttonTextColor }}
+                >
+                  Next Step <ArrowRight className="size-3" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 text-xs gap-1.5 px-5 font-bold shadow-md"
+                  style={{ backgroundColor: buttonColor, color: buttonTextColor }}
+                >
+                  {formData.settings?.submitButtonText || 'Submit Form ⚡'}
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </div>

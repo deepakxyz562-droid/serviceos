@@ -367,20 +367,32 @@ export function FormBuilderView() {
       const payload = buildApiPayload(formData);
 
       if (editMode && editFormId) {
-        const res = await authFetch(`/api/forms/${editFormId}`, {
+        let res = await authFetch(`/api/forms/${editFormId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
+        if (res.status === 404) {
+          // If the form doesn't exist yet on the server (e.g. template or unpersisted draft), fallback to create
+          res = await authFetch('/api/forms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+        }
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || `Failed to update form (HTTP ${res.status})`);
+          throw new Error(data.error || `Failed to save form (HTTP ${res.status})`);
         }
         const data = await res.json();
         const updated = apiFormToFormItem(data.form as ApiForm);
-        setForms((prev) => prev.map((f) => (f.id === editFormId ? updated : f)));
+        setForms((prev) => {
+          const exists = prev.some((f) => f.id === updated.id || f.id === editFormId);
+          return exists ? prev.map((f) => (f.id === editFormId || f.id === updated.id ? updated : f)) : [updated, ...prev];
+        });
+        setEditFormId(updated.id);
         setFormData((prev) => ({ ...prev, id: updated.id, slug: updated.slug }));
-        toast.success('Form updated');
+        toast.success('Form saved');
         return { id: updated.id, slug: updated.slug };
       } else {
         const res = await authFetch('/api/forms', {

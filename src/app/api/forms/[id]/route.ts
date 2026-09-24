@@ -25,11 +25,13 @@ export async function GET(
     const { id } = await params;
 
     // Tenant-scoped lookup: super-admins can access any tenant; everyone else
-    // is constrained to their own tenant.
+    // can access their tenant or unassigned templates/forms.
     const tenantFilter =
       user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
         ? {}
-        : { tenantId: user.tenantId };
+        : user.tenantId
+        ? { OR: [{ tenantId: user.tenantId }, { tenantId: null }] }
+        : {};
 
     const form = await db.form.findFirst({
       where: { id, ...tenantFilter },
@@ -76,15 +78,17 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    // Tenant-scoped lookup: verify the form exists AND belongs to the user's tenant
+    // Tenant-scoped lookup: verify the form exists AND belongs to user or is unassigned
     const tenantFilter =
       user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
         ? {}
-        : { tenantId: user.tenantId };
+        : user.tenantId
+        ? { OR: [{ tenantId: user.tenantId }, { tenantId: null }] }
+        : {};
 
     const existing = await db.form.findFirst({ where: { id, ...tenantFilter } });
     if (!existing) {
-      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Form not found or access denied' }, { status: 404 });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -175,7 +179,9 @@ export async function DELETE(
     const tenantFilter =
       user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
         ? {}
-        : { tenantId: user.tenantId };
+        : user.tenantId
+        ? { OR: [{ tenantId: user.tenantId }, { tenantId: null }] }
+        : {};
 
     // Tenant-scoped delete: use deleteMany with tenantId in WHERE
     const deleteResult = await db.form.deleteMany({
