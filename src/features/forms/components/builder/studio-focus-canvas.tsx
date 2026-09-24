@@ -603,7 +603,12 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
               const isLeftColumnActive = selectedColumn === 'left';
               const isRightColumnActive = selectedColumn === 'right';
 
-              const renderHeroMediaPanel = () => (
+              // ─── Left Column: Generic Widget Container (Elementor-style) ──────
+              // The left column is a BLANK CANVAS where ANY widget can be added
+              // (heading, paragraph, image, section, spacer, etc.) — NOT a fixed
+              // media panel. The column background color, image, and overlay are
+              // controlled via the Inspector (column-level settings), not hardcoded.
+              const renderLeftColumn = () => (
                 <div
                   className={`${leftWidthClass} relative ${isMediaSelected ? 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg' : 'hover:outline hover:outline-1 hover:outline-emerald-400/40 hover:rounded-lg'}`}
                   onClick={(e) => {
@@ -611,119 +616,121 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                     onSelectColumn?.('left');
                     onSelectField('__media_panel__');
                   }}
+                  style={{
+                    backgroundColor: panel.backgroundColor || '#0f172a',
+                    backgroundImage: panel.backgroundImageUrl ? `url(${panel.backgroundImageUrl})` : undefined,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }}
                 >
-                  <FormMediaHeroPanel
-                    formId={undefined}
-                    mediaPanel={panel}
-                    formName={formData.name || 'Untitled Form'}
-                    formDescription={formData.description}
-                    primaryColor={primaryColor}
-                    formData={effectiveCanvasFormData}
-                    errors={{}}
-                    onChange={handleCanvasFieldChange}
-                    editable={true}
-                    onUpdateMediaPanel={updatePanel}
-                    onSelectMediaField={(field) => {
-                      onSelectColumn?.('left');
-                      onSelectField('__media_panel__');
-                    }}
-                  >
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-xs font-semibold text-white/90">
-                        <span className="flex items-center gap-1.5">
-                          <Columns className="size-3.5 text-emerald-400" />
-                          Left Column Widgets ({leftColumnFields.length})
-                        </span>
-                        {onOpenAddWidgetDialog && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectColumn?.('left');
-                              onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
-                            }}
-                            className="text-[11px] text-emerald-300 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
-                          >
-                            <Plus className="size-3" /> Add Widget
-                          </button>
-                        )}
-                      </div>
+                  {/* Background overlay (if background image set) */}
+                  {panel.backgroundImageUrl && (
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        backgroundColor: '#000000',
+                        opacity: (panel.overlayOpacity ?? 70) / 100,
+                      }}
+                    />
+                  )}
 
-                      <DndContext
-                        sensors={dndSensors}
-                        collisionDetection={closestCenter}
-                        onDragEnd={handleDragEnd}
-                      >
-                        <SortableContext items={leftColumnFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                          <div className="space-y-3">
-                            {leftColumnFields.length > 0 ? (
-                              leftColumnFields.map((f) => (
-                                <SortableFieldWrapper
-                                  key={f.id}
-                                  field={f}
-                                  value={effectiveCanvasFormData[f.id]}
-                                  onChange={(val) => handleCanvasFieldChange(f.id, val)}
-                                  allFormData={effectiveCanvasFormData}
-                                  selectedFieldId={selectedFieldId}
-                                  onSelectField={(id) => {
-                                    onSelectColumn?.('left');
-                                    onSelectField(id);
-                                  }}
-                                  inputBorderRadius={inputBorderRadius}
-                                  defaultInputHeightCls={defaultInputHeightCls}
-                                  onSetWidth={handleSetFieldWidth}
-                                  onDuplicate={handleDuplicateField}
-                                  onDelete={handleDeleteField}
-                                  onMoveUp={(id) => handleMoveField(id, 'up')}
-                                  onMoveDown={(id) => handleMoveField(id, 'down')}
-                                  onMoveToColumn={handleMoveFieldToColumn}
-                                  onMoveToStep={handleMoveFieldToStep}
-                                  onOpenSettings={(id) => {
-                                    onSelectColumn?.('left');
-                                    onSelectField(id);
-                                  }}
-                                  steps={steps}
-                                  hasColumns={true}
-                                />
-                              ))
-                            ) : (
-                              <div
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSelectColumn?.('left');
-                                }}
-                                className="w-full p-3 text-center rounded-xl border border-dashed border-white/20 bg-white/5 text-slate-300 text-xs hover:border-white/40 cursor-pointer transition-all"
-                              >
-                                <p className="text-[11px] font-medium text-slate-300">
-                                  Drag or add generic widgets here (heading, paragraph, etc.)
-                                </p>
-                                {onOpenAddWidgetDialog && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onSelectColumn?.('left');
-                                      onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
-                                    }}
-                                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
-                                  >
-                                    <Plus className="size-3" /> Add Widget to Left Column
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </SortableContext>
-                      </DndContext>
+                  {/* Column content — generic widgets rendered directly */}
+                  <div className="relative z-10 p-6 sm:p-8 text-white space-y-3">
+                    {/* Column header with add button */}
+                    <div className="flex items-center justify-between text-xs font-semibold text-white/90">
+                      <span className="flex items-center gap-1.5">
+                        <Columns className="size-3.5 text-emerald-400" />
+                        Left Column ({leftColumnFields.length})
+                      </span>
+                      {onOpenAddWidgetDialog && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectColumn?.('left');
+                            onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
+                          }}
+                          className="text-[11px] text-emerald-300 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="size-3" /> Add Widget
+                        </button>
+                      )}
                     </div>
-                  </FormMediaHeroPanel>
+
+                    {/* Generic widgets — rendered via SortableFieldWrapper (same as right column) */}
+                    <DndContext
+                      sensors={dndSensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext items={leftColumnFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-3">
+                          {leftColumnFields.length > 0 ? (
+                            leftColumnFields.map((f) => (
+                              <SortableFieldWrapper
+                                key={f.id}
+                                field={f}
+                                value={effectiveCanvasFormData[f.id]}
+                                onChange={(val) => handleCanvasFieldChange(f.id, val)}
+                                allFormData={effectiveCanvasFormData}
+                                selectedFieldId={selectedFieldId}
+                                onSelectField={(id) => {
+                                  onSelectColumn?.('left');
+                                  onSelectField(id);
+                                }}
+                                inputBorderRadius={inputBorderRadius}
+                                defaultInputHeightCls={defaultInputHeightCls}
+                                onDuplicate={handleDuplicateField}
+                                onDelete={handleDeleteField}
+                                onMoveUp={(id) => handleMoveField(id, 'up')}
+                                onMoveDown={(id) => handleMoveField(id, 'down')}
+                                onMoveToColumn={handleMoveFieldToColumn}
+                                onMoveToStep={handleMoveFieldToStep}
+                                onOpenSettings={(id) => {
+                                  onSelectColumn?.('left');
+                                  onSelectField(id);
+                                }}
+                                steps={steps}
+                                hasColumns={true}
+                              />
+                            ))
+                          ) : (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectColumn?.('left');
+                              }}
+                              className="w-full p-4 text-center rounded-xl border border-dashed border-white/20 bg-white/5 text-slate-300 text-xs hover:border-white/40 cursor-pointer transition-all"
+                            >
+                              <p className="text-[11px] font-medium text-slate-300">
+                                Add widgets here — heading, image, paragraph, etc.
+                              </p>
+                              {onOpenAddWidgetDialog && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectColumn?.('left');
+                                    onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
+                                  }}
+                                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                                >
+                                  <Plus className="size-3" /> Add widget
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
                 </div>
               );
 
               return (
                 <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[550px]">
-                  {/* LEFT HERO MEDIA COLUMN */}
-                  {panel.position !== 'right' && renderHeroMediaPanel()}
+                  {/* LEFT COLUMN — Generic Widget Container */}
+                  {panel.position !== 'right' && renderLeftColumn()}
 
                   {/* RIGHT FORM FIELDS COLUMN (Stepped / Single Page) */}
                   <div
@@ -894,8 +901,8 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                     </div>
                   </div>
 
-                  {/* RIGHT-SIDE MEDIA COLUMN */}
-                  {panel.position === 'right' && renderHeroMediaPanel()}
+                  {/* RIGHT-SIDE COLUMN — Generic Widget Container */}
+                  {panel.position === 'right' && renderLeftColumn()}
                 </div>
               );
             })()}
