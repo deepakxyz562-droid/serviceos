@@ -112,26 +112,30 @@ export function FormMediaHeroPanel({
   const showBenefits = mediaPanel?.showBenefits !== false;
   const showTestimonial = mediaPanel?.showTestimonial !== false;
 
+  const rawPanel = (mediaPanel || {}) as any;
+  const mediaType = mediaPanel?.mediaType || rawPanel.type || 'image';
+  const mediaUrl = mediaPanel?.mediaUrl || rawPanel.url;
+
   const videoParsed = parseVideoEmbed(
-    mediaPanel?.mediaType === 'video' || mediaPanel?.mediaType === 'youtube' || mediaPanel?.mediaType === 'vimeo'
-      ? mediaPanel?.videoEmbedUrl || mediaPanel?.mediaUrl
+    mediaType === 'video' || mediaType === 'youtube' || mediaType === 'vimeo'
+      ? mediaPanel?.videoEmbedUrl || mediaUrl
       : mediaPanel?.videoEmbedUrl
   );
-  const isMap = mediaPanel?.mediaType === 'map';
-  const isGradient = mediaPanel?.mediaType === 'gradient';
+  const isMap = mediaType === 'map';
+  const isGradient = mediaType === 'gradient';
   const isVideo =
     !isMap &&
     !isGradient &&
-    (mediaPanel?.mediaType === 'video' ||
-      mediaPanel?.mediaType === 'youtube' ||
-      mediaPanel?.mediaType === 'vimeo' ||
+    (mediaType === 'video' ||
+      mediaType === 'youtube' ||
+      mediaType === 'vimeo' ||
       videoParsed.type !== 'none');
-  const hasImage = Boolean((mediaPanel?.mediaUrl || (!isMap && !isGradient && !isVideo)) && !isVideo && !isMap && !isGradient);
+  const hasImage = Boolean((mediaUrl || (!isMap && !isGradient && !isVideo)) && !isVideo && !isMap && !isGradient);
 
   const headline = mediaPanel?.headline || formName;
   const subtitle = mediaPanel?.subtitle || formDescription;
-  const badge = mediaPanel?.badgeText;
-  const benefits = mediaPanel?.benefitsList || [
+  const badge = mediaPanel?.badgeText || rawPanel.badge;
+  const benefits = mediaPanel?.benefitsList || rawPanel.bullets || [
     'Guaranteed response within 15 minutes',
     'Licensed, insured & background-checked',
     '100% Price Match & Escrow Guarantee',
