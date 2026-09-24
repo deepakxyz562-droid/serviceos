@@ -34,7 +34,10 @@ export async function GET(
         : {};
 
     const form = await db.form.findFirst({
-      where: { id, ...tenantFilter },
+      where: {
+        OR: [{ id }, { slug: id }],
+        ...tenantFilter,
+      },
       include: {
         responses: {
           orderBy: { createdAt: 'desc' },
@@ -78,7 +81,7 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    // Tenant-scoped lookup: verify the form exists AND belongs to user or is unassigned
+    // Tenant-scoped lookup: verify the form exists AND belongs to user or is unassigned (by id or slug)
     const tenantFilter =
       user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
         ? {}
@@ -86,7 +89,12 @@ export async function PUT(
         ? { OR: [{ tenantId: user.tenantId }, { tenantId: null }] }
         : {};
 
-    const existing = await db.form.findFirst({ where: { id, ...tenantFilter } });
+    const existing = await db.form.findFirst({
+      where: {
+        OR: [{ id }, { slug: id }],
+        ...tenantFilter,
+      },
+    });
     if (!existing) {
       return NextResponse.json({ error: 'Form not found or access denied' }, { status: 404 });
     }
@@ -134,10 +142,9 @@ export async function PUT(
     if (body.slug !== undefined) updateData.slug = body.slug;
     if (body.createdById !== undefined) updateData.createdById = body.createdById;
 
-    // Use updateMany with tenant scope so a race-condition ID swap can't
-    // mutate a form that was just moved to another tenant.
+    // Use existing.id for mutation
     const updateResult = await db.form.updateMany({
-      where: { id, ...tenantFilter },
+      where: { id: existing.id },
       data: updateData,
     });
 
@@ -147,7 +154,7 @@ export async function PUT(
 
     // Fetch the updated form to return (tenant-scoped for safety)
     const form = await db.form.findFirst({
-      where: { id, ...tenantFilter },
+      where: { id: existing.id },
       include: { _count: { select: { responses: true } } },
     });
 
@@ -183,9 +190,20 @@ export async function DELETE(
         ? { OR: [{ tenantId: user.tenantId }, { tenantId: null }] }
         : {};
 
-    // Tenant-scoped delete: use deleteMany with tenantId in WHERE
+    const existing = await db.form.findFirst({
+      where: {
+        OR: [{ id }, { slug: id }],
+        ...tenantFilter,
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
+
+    // Tenant-scoped delete: use deleteMany with existing.id
     const deleteResult = await db.form.deleteMany({
-      where: { id, ...tenantFilter },
+      where: { id: existing.id },
     });
 
     if (deleteResult.count === 0) {

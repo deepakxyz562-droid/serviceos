@@ -39,6 +39,8 @@ import {
   Trash2,
   History,
   MapPin,
+  Plus,
+  Edit2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -84,6 +86,9 @@ export function FormMediaHeroPanel({
   errors = {},
   onChange,
   children,
+  editable = false,
+  onUpdateMediaPanel,
+  onSelectMediaField,
 }: {
   formId?: string;
   mediaPanel?: import('@/lib/forms/form-schema-types').FormMediaPanel;
@@ -95,6 +100,9 @@ export function FormMediaHeroPanel({
   errors?: Record<string, string>;
   onChange?: (fieldId: string, val: any) => void;
   children?: React.ReactNode;
+  editable?: boolean;
+  onUpdateMediaPanel?: (updates: Partial<import('@/lib/forms/form-schema-types').FormMediaPanel>) => void;
+  onSelectMediaField?: (field: string) => void;
 }) {
   const [isMuted, setIsMuted] = useState(mediaPanel?.videoMuted ?? true);
   const showMedia = mediaPanel?.showMedia !== false;
@@ -123,12 +131,16 @@ export function FormMediaHeroPanel({
   const headline = mediaPanel?.headline || formName;
   const subtitle = mediaPanel?.subtitle || formDescription;
   const badge = mediaPanel?.badgeText;
-  const benefits = mediaPanel?.benefitsList || [];
+  const benefits = mediaPanel?.benefitsList || [
+    'Guaranteed response within 15 minutes',
+    'Licensed, insured & background-checked',
+    '100% Price Match & Escrow Guarantee',
+  ];
   const testimonial = mediaPanel?.testimonial;
 
   return (
     <div
-      className="relative flex flex-col justify-between overflow-hidden text-white p-6 sm:p-8 lg:p-10 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-[320px] lg:min-h-full"
+      className="relative flex flex-col justify-between overflow-hidden text-white p-6 sm:p-8 lg:p-10 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-[320px] lg:min-h-full select-text"
       style={{
         backgroundColor: mediaPanel?.backgroundColor || '#0f172a',
       }}
@@ -159,19 +171,69 @@ export function FormMediaHeroPanel({
         </>
       )}
 
-      {/* 1. Top Trust Badge Widget (Only when badgeText is provided) */}
-      {showBadge && mediaPanel?.badgeText && (
-        <div className="relative z-10 flex items-center justify-between gap-2 mb-4">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-white text-xs font-semibold backdrop-blur">
-            <Star className="size-3 text-amber-400 fill-amber-400" />
-            <span>{mediaPanel.badgeText}</span>
+      {/* 1. Top Trust Badge Widget (Inline Editable in Editor mode) */}
+      {showBadge && (
+        <div
+          className="relative z-10 flex items-center justify-between gap-2 mb-4 group/badge"
+          onClick={(e) => {
+            if (editable) {
+              e.stopPropagation();
+              onSelectMediaField?.('badgeText');
+            }
+          }}
+        >
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold backdrop-blur transition-all">
+            <Star className="size-3 text-amber-400 fill-amber-400 shrink-0" />
+            {editable ? (
+              <input
+                type="text"
+                value={mediaPanel?.badgeText || ''}
+                placeholder="⭐ Trust badge text (e.g. 5-Star Rated Service Pro)"
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onUpdateMediaPanel?.({ badgeText: e.target.value });
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-transparent border-none outline-none text-white text-xs font-semibold placeholder:text-white/50 w-auto min-w-[200px]"
+              />
+            ) : (
+              <span>{mediaPanel?.badgeText || '⭐ 5-Star Rated Service Pro'}</span>
+            )}
           </div>
         </div>
       )}
 
       {/* 2. Visual Media Block (Photo, Video, Map, or Gradient) */}
       {showMedia && (
-        <div className="relative z-10 my-4 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl">
+        <div
+          className="relative z-10 my-4 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl group/media"
+          onClick={(e) => {
+            if (editable) {
+              e.stopPropagation();
+              onSelectMediaField?.('media');
+            }
+          }}
+        >
+          {editable && (
+            <div
+              className="absolute top-2.5 right-2.5 z-30 flex items-center gap-1 opacity-90 hover:opacity-100 transition-opacity"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectMediaField?.('media');
+                }}
+                className="px-2.5 py-1 rounded-lg bg-black/75 hover:bg-black/95 text-white text-[11px] font-bold backdrop-blur border border-white/20 flex items-center gap-1.5 shadow-md cursor-pointer"
+                title="Change Media Type / Image / Video / Map"
+              >
+                <ImageIcon className="size-3 text-emerald-400" />
+                <span>Change Media</span>
+              </button>
+            </div>
+          )}
+
           {isMap ? (
             <div className="relative w-full aspect-video min-h-[220px] bg-slate-950 overflow-hidden flex flex-col justify-between p-4">
               <iframe
@@ -235,8 +297,11 @@ export function FormMediaHeroPanel({
                 />
                 <button
                   type="button"
-                  onClick={() => setIsMuted(!isMuted)}
-                  className="absolute bottom-2 right-2 size-7 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center text-white text-xs z-20"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMuted(!isMuted);
+                  }}
+                  className="absolute bottom-2 right-2 size-7 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center text-white text-xs z-20 cursor-pointer"
                   title={isMuted ? 'Unmute video' : 'Mute video'}
                 >
                   {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
@@ -263,26 +328,125 @@ export function FormMediaHeroPanel({
       {/* 3. Headline, Subtitle, Value Benefits & Left Fields (at the bottom) */}
       <div className="relative z-10 space-y-3 mt-auto">
         {showHeadline && (
-          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-snug">
-            {headline}
-          </h2>
+          editable ? (
+            <div
+              className="relative group/headline"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectMediaField?.('headline');
+              }}
+            >
+              <textarea
+                rows={2}
+                value={mediaPanel?.headline ?? formName}
+                placeholder="Enter a compelling headline..."
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onUpdateMediaPanel?.({ headline: e.target.value });
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-snug bg-transparent border border-dashed border-transparent hover:border-white/30 focus:border-emerald-400 focus:bg-white/5 rounded-lg px-2 py-1 outline-none resize-none transition-all"
+              />
+            </div>
+          ) : (
+            <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-snug">
+              {headline}
+            </h2>
+          )
         )}
 
-        {showSubtitle && subtitle && (
-          <p className="text-xs text-slate-300 leading-relaxed">
-            {subtitle}
-          </p>
+        {showSubtitle && (
+          editable ? (
+            <div
+              className="relative group/subtitle"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectMediaField?.('subtitle');
+              }}
+            >
+              <textarea
+                rows={2}
+                value={mediaPanel?.subtitle ?? (formDescription || '')}
+                placeholder="Add supporting description or value guarantee..."
+                onChange={(e) => {
+                  e.stopPropagation();
+                  onUpdateMediaPanel?.({ subtitle: e.target.value });
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full text-xs text-slate-300 leading-relaxed bg-transparent border border-dashed border-transparent hover:border-white/30 focus:border-emerald-400 focus:bg-white/5 rounded-lg px-2 py-1 outline-none resize-none transition-all"
+              />
+            </div>
+          ) : subtitle ? (
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {subtitle}
+            </p>
+          ) : null
         )}
 
-        {showBenefits && benefits.length > 0 && (
-          <div className="space-y-2 pt-2 border-t border-white/10">
-            {benefits.map((benefit, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs text-slate-200">
-                <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-                <span>{benefit}</span>
-              </div>
-            ))}
-          </div>
+        {/* Benefits List (Inline Editable in Editor Mode) */}
+        {showBenefits && (
+          editable ? (
+            <div
+              className="space-y-1.5 pt-2 border-t border-white/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectMediaField?.('benefits');
+              }}
+            >
+              {benefits.map((benefit, i) => (
+                <div key={i} className="group/benefit flex items-center gap-2 text-xs text-slate-200">
+                  <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={benefit}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      const next = [...benefits];
+                      next[i] = e.target.value;
+                      onUpdateMediaPanel?.({ benefitsList: next });
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-1 bg-transparent border border-dashed border-transparent hover:border-white/30 focus:border-emerald-400 focus:bg-white/5 rounded px-1.5 py-0.5 text-xs text-slate-200 outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const next = [...benefits];
+                      next.splice(i, 1);
+                      onUpdateMediaPanel?.({ benefitsList: next });
+                    }}
+                    className="opacity-0 group-hover/benefit:opacity-100 size-5 rounded text-rose-400 hover:text-rose-300 hover:bg-white/10 flex items-center justify-center transition-all cursor-pointer"
+                    title="Remove benefit"
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateMediaPanel?.({
+                    benefitsList: [...benefits, 'New benefit guarantee point'],
+                  });
+                }}
+                className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-white/5 hover:bg-white/10 px-2 py-0.5 rounded-md border border-emerald-400/20 transition-all cursor-pointer"
+              >
+                <Plus className="size-3" /> Add Benefit
+              </button>
+            </div>
+          ) : benefits.length > 0 ? (
+            <div className="space-y-2 pt-2 border-t border-white/10">
+              {benefits.map((benefit, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-slate-200">
+                  <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
+                  <span>{benefit}</span>
+                </div>
+              ))}
+            </div>
+          ) : null
         )}
 
         {/* Left Column Form Fields / Widgets or interactive children (Editor Mode) */}
@@ -1103,8 +1267,8 @@ export function FormRuntimeRenderer({
       })()}
 
 
-      {/* Top Multi-Step Navigation Tabs (Desktop & Tablet) */}
-      {isMultiStep && steps.length > 1 && (
+      {/* Top Multi-Step Navigation Tabs (Desktop & Tablet) — Only for Non-Split forms! */}
+      {!isSplitLayout && isMultiStep && steps.length > 1 && (
         <div
           className="grid gap-2 sm:gap-3 mb-1 w-full"
           style={{
@@ -1185,38 +1349,91 @@ export function FormRuntimeRenderer({
 
           {/* Form Content Column */}
           <div className={`${isSplitLayout ? formColSpan : isEstimatorForm ? 'lg:col-span-7 w-full' : 'w-full'} flex flex-col justify-between`}>
-            {/* Header: Only show for non-split forms, or if branding is set */}
-            {(!isSplitLayout || branding?.businessName) && (
-              <div className="p-6 sm:p-8 pb-4 border-b border-border/40">
-                {branding?.businessName && (
-                  <p
-                    className="text-[10px] uppercase font-extrabold tracking-wider mb-1"
-                    style={{ color: primaryColor }}
-                  >
-                    {branding.businessName}
-                  </p>
-                )}
-                {!isSplitLayout && (
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
-                        {formName}
-                      </h1>
-                      {formDescription && (
-                        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
-                          {formDescription}
-                        </p>
-                      )}
-                    </div>
-                    {isEstimatorForm && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                        <Sparkles className="size-3 text-emerald-500" /> Real-time Calculation
-                      </span>
-                    )}
-                  </div>
+            {/* Header */}
+            <div className="p-6 sm:p-8 pb-4 border-b border-border/40">
+              {branding?.businessName && (
+                <p
+                  className="text-[10px] uppercase font-extrabold tracking-wider mb-1"
+                  style={{ color: primaryColor }}
+                >
+                  {branding.businessName}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
+                    {formName}
+                  </h1>
+                  {formDescription && (
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
+                      {formDescription}
+                    </p>
+                  )}
+                </div>
+                {isEstimatorForm && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <Sparkles className="size-3 text-emerald-500" /> Real-time Calculation
+                  </span>
                 )}
               </div>
-            )}
+
+              {/* Stepper Carousel / Steps Indicator (Split Layout Multi-Step only — matches editor canvas) */}
+              {isSplitLayout && steps.length > 1 && (
+                <div className="space-y-2 pt-3 mt-3 border-t border-border/40">
+                  {/* Progress Line */}
+                  <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.round(((currentStepIndex + 1) / Math.max(steps.length, 1)) * 100)}%`,
+                        backgroundColor: primaryColor,
+                      }}
+                    />
+                  </div>
+
+                  {/* Horizontal Step Navigation Chips */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none flex-nowrap">
+                    {steps.map((step, sIdx) => {
+                      const isCurrent = sIdx === currentStepIndex;
+                      const isPast = sIdx < currentStepIndex;
+                      return (
+                        <button
+                          key={step.id || sIdx}
+                          type="button"
+                          disabled={sIdx > currentStepIndex}
+                          onClick={() => {
+                            if (sIdx <= currentStepIndex) setCurrentStepIndex(sIdx);
+                          }}
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all flex items-center gap-1.5 shrink-0 ${
+                            isCurrent
+                              ? 'bg-primary text-primary-foreground shadow-xs font-bold'
+                              : isPast
+                              ? 'bg-muted/80 text-foreground hover:bg-muted cursor-pointer'
+                              : 'bg-muted/40 text-muted-foreground opacity-50 cursor-not-allowed'
+                          }`}
+                          title={`Step ${sIdx + 1}: ${step.title}`}
+                        >
+                          <span
+                            className={`size-3.5 rounded-full text-[9px] flex items-center justify-center font-extrabold ${
+                              isCurrent
+                                ? 'bg-black/20 dark:bg-white/20 text-white'
+                                : isPast
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            {isPast ? '✓' : sIdx + 1}
+                          </span>
+                          <span className="truncate max-w-[100px] sm:max-w-[130px]">
+                            {step.title}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Content */}
             <CardContent className="p-6 sm:p-8 pt-6 flex-1">

@@ -606,7 +606,8 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
               const renderHeroMediaPanel = () => (
                 <div
                   className={`${leftWidthClass} relative ${isMediaSelected ? 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg' : 'hover:outline hover:outline-1 hover:outline-emerald-400/40 hover:rounded-lg'}`}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     onSelectColumn?.('left');
                     onSelectField('__media_panel__');
                   }}
@@ -620,6 +621,12 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                     formData={effectiveCanvasFormData}
                     errors={{}}
                     onChange={handleCanvasFieldChange}
+                    editable={true}
+                    onUpdateMediaPanel={updatePanel}
+                    onSelectMediaField={(field) => {
+                      onSelectColumn?.('left');
+                      onSelectField('__media_panel__');
+                    }}
                   >
                     <div className="space-y-3">
                       <div className="flex items-center justify-between text-xs font-semibold text-white/90">
