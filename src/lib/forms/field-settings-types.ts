@@ -173,6 +173,38 @@ export const UNIVERSAL_ADVANCED_SETTINGS: SettingField[] = [
     default: false,
     description: 'Pass parameters via URL (UTMs, IDs).',
   },
+  // ─── Elementor-style per-widget styling (Phase 3) ────────────────────
+  // These settings are applied by FormFieldRenderer to the field wrapper,
+  // giving users Elementor-level control over each widget's appearance.
+  // They're in the 'advanced' group so they stay hidden by default (collapsed).
+  { key: 'padding', label: 'Padding (CSS, e.g. 12px 8px)', type: 'text', group: 'advanced', placeholder: 'e.g. 12px 8px', helpText: 'Inner spacing of the field wrapper.' },
+  { key: 'margin', label: 'Margin (CSS, e.g. 0 0 16px 0)', type: 'text', group: 'advanced', placeholder: 'e.g. 0 0 16px 0', helpText: 'Outer spacing around the field.' },
+  { key: 'borderRadius', label: 'Border Radius', type: 'text', group: 'advanced', placeholder: 'e.g. 8px or inherit', helpText: 'Corner roundness. Use "inherit" for theme default.' },
+  { key: 'backgroundColor', label: 'Background Color', type: 'color', group: 'advanced', helpText: 'Field wrapper background.' },
+  { key: 'borderColor', label: 'Border Color', type: 'color', group: 'advanced', helpText: 'Border color (set border style to show).' },
+  { key: 'borderStyle', label: 'Border Style', type: 'select', group: 'advanced', default: 'inherit', options: [
+    { label: 'Inherit (theme default)', value: 'inherit' },
+    { label: 'Solid', value: 'solid' },
+    { label: 'Dashed', value: 'dashed' },
+    { label: 'Dotted', value: 'dotted' },
+  ] },
+  { key: 'textColor', label: 'Text Color', type: 'color', group: 'advanced', helpText: 'Text color inside the field.' },
+  { key: 'fontSize', label: 'Font Size', type: 'text', group: 'advanced', placeholder: 'e.g. 14px or inherit', helpText: 'Text size. Use "inherit" for theme default.' },
+  { key: 'widthPx', label: 'Width (px)', type: 'number', group: 'advanced', placeholder: 'e.g. 300', helpText: 'Max width in pixels. Leave empty for auto.' },
+  { key: 'heightPx', label: 'Height (px)', type: 'number', group: 'advanced', placeholder: 'e.g. 44', helpText: 'Input height in pixels.' },
+  { key: 'align', label: 'Text Alignment', type: 'select', group: 'advanced', default: '', options: [
+    { label: 'Default', value: '' },
+    { label: 'Left', value: 'left' },
+    { label: 'Center', value: 'center' },
+    { label: 'Right', value: 'right' },
+  ] },
+  { key: 'inputHeight', label: 'Input Height Preset', type: 'select', group: 'advanced', default: 'inherit', options: [
+    { label: 'Inherit (theme default)', value: 'inherit' },
+    { label: 'Compact (36px)', value: 'compact' },
+    { label: 'Medium (44px)', value: 'medium' },
+    { label: 'Large (52px)', value: 'large' },
+  ] },
+  // ─── End Elementor-style per-widget styling ──────────────────────────
   { key: 'fieldName', label: 'Field Name (Machine Key)', type: 'text', group: 'advanced', helpText: 'Internal identifier for API/webhook mapping.' },
   { key: 'fieldId', label: 'Field ID', type: 'field_id_display', group: 'advanced', helpText: 'Unique system identifier for this field (read-only).' },
   {

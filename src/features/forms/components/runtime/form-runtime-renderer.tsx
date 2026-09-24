@@ -112,26 +112,30 @@ export function FormMediaHeroPanel({
   const showBenefits = mediaPanel?.showBenefits !== false;
   const showTestimonial = mediaPanel?.showTestimonial !== false;
 
+  const rawPanel = (mediaPanel || {}) as any;
+  const mediaType = mediaPanel?.mediaType || rawPanel.type || 'image';
+  const mediaUrl = mediaPanel?.mediaUrl || rawPanel.url;
+
   const videoParsed = parseVideoEmbed(
-    mediaPanel?.mediaType === 'video' || mediaPanel?.mediaType === 'youtube' || mediaPanel?.mediaType === 'vimeo'
-      ? mediaPanel?.videoEmbedUrl || mediaPanel?.mediaUrl
+    mediaType === 'video' || mediaType === 'youtube' || mediaType === 'vimeo'
+      ? mediaPanel?.videoEmbedUrl || mediaUrl
       : mediaPanel?.videoEmbedUrl
   );
-  const isMap = mediaPanel?.mediaType === 'map';
-  const isGradient = mediaPanel?.mediaType === 'gradient';
+  const isMap = mediaType === 'map';
+  const isGradient = mediaType === 'gradient';
   const isVideo =
     !isMap &&
     !isGradient &&
-    (mediaPanel?.mediaType === 'video' ||
-      mediaPanel?.mediaType === 'youtube' ||
-      mediaPanel?.mediaType === 'vimeo' ||
+    (mediaType === 'video' ||
+      mediaType === 'youtube' ||
+      mediaType === 'vimeo' ||
       videoParsed.type !== 'none');
-  const hasImage = Boolean((mediaPanel?.mediaUrl || (!isMap && !isGradient && !isVideo)) && !isVideo && !isMap && !isGradient);
+  const hasImage = Boolean((mediaUrl || (!isMap && !isGradient && !isVideo)) && !isVideo && !isMap && !isGradient);
 
   const headline = mediaPanel?.headline || formName;
   const subtitle = mediaPanel?.subtitle || formDescription;
-  const badge = mediaPanel?.badgeText;
-  const benefits = mediaPanel?.benefitsList || [
+  const badge = mediaPanel?.badgeText || rawPanel.badge;
+  const benefits = mediaPanel?.benefitsList || rawPanel.bullets || [
     'Guaranteed response within 15 minutes',
     'Licensed, insured & background-checked',
     '100% Price Match & Escrow Guarantee',
@@ -874,9 +878,11 @@ export function FormRuntimeRenderer({
   const currentStep = steps[currentStepIndex] || steps[0];
 
   const mediaPanel = schema.mediaPanel || schema.theme?.mediaPanel;
-  const isSplitLayout =
-    (schema.theme?.layout === 'split_media' || (mediaPanel && mediaPanel.enabled !== false)) &&
-    activeMode === 'paper';
+  // ─── FIX: Layout is determined ONLY by theme.layout, NOT mediaPanel.enabled ──
+  // Previously: (mediaPanel && mediaPanel.enabled !== false) returned TRUE
+  // when enabled was undefined, forcing split_media layout on Classic forms.
+  // Now: split_media is only active when theme.layout === 'split_media'.
+  const isSplitLayout = schema.theme?.layout === 'split_media' && activeMode === 'paper';
   const splitRatio = mediaPanel?.splitRatio || '50-50';
   const isRightSide = mediaPanel?.position === 'right';
 
@@ -982,15 +988,26 @@ export function FormRuntimeRenderer({
     }
 
     // Determine scope / area / quantity
+    // Phase 4: Made this more robust — check widgetType/type in addition to id.
+    // Previously only checked f.id.includes('size') which broke templates
+    // that used different field IDs (e.g. 'roof_area', 'square_footage').
+    // Now also checks: widgetType === 'slider', type === 'numerical',
+    // and label containing 'sq ft' or 'area' (case-insensitive).
     const areaField = schema.fields.find(
-      (f) => f.id.includes('size') || f.id.includes('area') || f.id.includes('sqft') || f.type === 'numerical'
+      (f) =>
+        f.id.includes('size') || f.id.includes('area') || f.id.includes('sqft') ||
+        f.type === 'numerical' || f.widgetType === 'slider' ||
+        (f.label && /sq\s*ft|area|square\s*foot/i.test(f.label))
     );
     const rawArea = areaField ? formData[areaField.id] : undefined;
-    const areaNum = typeof rawArea === 'number' ? rawArea : parseFloat(rawArea) || 2400;
+    const areaNum = typeof rawArea === 'number' ? rawArea : parseFloat(rawArea) || 0;
 
     // Determine material / tier rate
+    // Phase 4: Also check field.label and widgetConfig for material/tier info.
     const materialField = schema.fields.find(
-      (f) => f.id.includes('material') || f.id.includes('tier') || f.id.includes('service')
+      (f) =>
+        f.id.includes('material') || f.id.includes('tier') || f.id.includes('service') ||
+        (f.label && /material|tier|grade|shingle|roof/i.test(f.label))
     );
     const rawMaterial = materialField ? formData[materialField.id] : undefined;
     let materialName = 'Architectural Metal';

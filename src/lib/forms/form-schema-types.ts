@@ -414,10 +414,12 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
     : steps.length > 1;
 
   const rawLayout = s.theme?.layout || (s.settings as any)?.formLayout;
-  const isSplitMedia =
-    rawLayout === 'split_media' ||
-    Boolean(s.mediaPanel && s.mediaPanel.enabled !== false) ||
-    Boolean(s.theme?.mediaPanel && s.theme.mediaPanel.enabled !== false);
+  // ─── FIX: Layout is determined ONLY by theme.layout / settings.formLayout ──
+  // Previously: Boolean(s.mediaPanel && s.mediaPanel.enabled !== false)
+  // This returned TRUE when enabled was undefined (common in templates),
+  // forcing the layout to split_media even when theme.layout = 'classic'.
+  // Now: mediaPanel is just config data for WHEN layout IS split_media.
+  const isSplitMedia = rawLayout === 'split_media';
 
   const rawPanel = s.mediaPanel || s.theme?.mediaPanel;
   const resolvedMediaPanel = isSplitMedia

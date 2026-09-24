@@ -58,9 +58,11 @@ export function resolveFormLayout(schema: {
     case 'split_media':
       return 'split_media';
 
+    // Legacy terms that map to classic
     case 'paper':
     case 'classic':
     case 'all_on_one_page':
+    case 'multi_step': // Legacy templates use 'multi_step' for multi-page classic forms
     default:
       return 'classic';
   }

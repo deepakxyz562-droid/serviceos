@@ -98,6 +98,8 @@ export function getFieldInputStyle(
     ...(field.align ? { textAlign: field.align } : {}),
     borderRadius: fieldRadius,
     ...(field.padding ? { padding: field.padding } : {}),
+    // ─── Elementor-style margin support (Phase 3) ────────────────────
+    ...(field.margin ? { margin: field.margin } : {}),
     ...(field.fontSize && field.fontSize !== 'inherit' ? { fontSize: field.fontSize } : {}),
     ...(field.backgroundColor ? { backgroundColor: field.backgroundColor } : {}),
     ...(field.borderStyle && field.borderStyle !== 'inherit'

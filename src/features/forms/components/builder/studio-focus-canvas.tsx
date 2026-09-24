@@ -632,7 +632,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                       <div className="flex items-center justify-between text-xs font-semibold text-white/90">
                         <span className="flex items-center gap-1.5">
                           <Columns className="size-3.5 text-emerald-400" />
-                          Left Hero Column Fields ({leftColumnFields.length})
+                          Left Column Widgets ({leftColumnFields.length})
                         </span>
                         {onOpenAddWidgetDialog && (
                           <button
@@ -644,7 +644,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                             }}
                             className="text-[11px] text-emerald-300 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
                           >
-                            <Plus className="size-3" /> Add Field
+                            <Plus className="size-3" /> Add Widget
                           </button>
                         )}
                       </div>
@@ -655,45 +655,36 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                         onDragEnd={handleDragEnd}
                       >
                         <SortableContext items={leftColumnFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                          <div className="flex flex-wrap gap-y-3 gap-x-3">
+                          <div className="space-y-3">
                             {leftColumnFields.length > 0 ? (
                               leftColumnFields.map((f) => (
-                                <div
+                                <SortableFieldWrapper
                                   key={f.id}
-                                  className="w-full"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
+                                  field={f}
+                                  value={effectiveCanvasFormData[f.id]}
+                                  onChange={(val) => handleCanvasFieldChange(f.id, val)}
+                                  allFormData={effectiveCanvasFormData}
+                                  selectedFieldId={selectedFieldId}
+                                  onSelectField={(id) => {
                                     onSelectColumn?.('left');
-                                    onSelectField(f.id);
+                                    onSelectField(id);
                                   }}
-                                >
-                                  <SortableFieldWrapper
-                                    field={f}
-                                    value={effectiveCanvasFormData[f.id]}
-                                    onChange={(val) => handleCanvasFieldChange(f.id, val)}
-                                    allFormData={effectiveCanvasFormData}
-                                    selectedFieldId={selectedFieldId}
-                                    onSelectField={(id) => {
-                                      onSelectColumn?.('left');
-                                      onSelectField(id);
-                                    }}
-                                    inputBorderRadius={inputBorderRadius}
-                                    defaultInputHeightCls={defaultInputHeightCls}
-                                    onSetWidth={handleSetFieldWidth}
-                                    onDuplicate={handleDuplicateField}
-                                    onDelete={handleDeleteField}
-                                    onMoveUp={(id) => handleMoveField(id, 'up')}
-                                    onMoveDown={(id) => handleMoveField(id, 'down')}
-                                    onMoveToColumn={handleMoveFieldToColumn}
-                                    onMoveToStep={handleMoveFieldToStep}
-                                    onOpenSettings={(id) => {
-                                      onSelectColumn?.('left');
-                                      onSelectField(id);
-                                    }}
-                                    steps={steps}
-                                    hasColumns={true}
-                                  />
-                                </div>
+                                  inputBorderRadius={inputBorderRadius}
+                                  defaultInputHeightCls={defaultInputHeightCls}
+                                  onSetWidth={handleSetFieldWidth}
+                                  onDuplicate={handleDuplicateField}
+                                  onDelete={handleDeleteField}
+                                  onMoveUp={(id) => handleMoveField(id, 'up')}
+                                  onMoveDown={(id) => handleMoveField(id, 'down')}
+                                  onMoveToColumn={handleMoveFieldToColumn}
+                                  onMoveToStep={handleMoveFieldToStep}
+                                  onOpenSettings={(id) => {
+                                    onSelectColumn?.('left');
+                                    onSelectField(id);
+                                  }}
+                                  steps={steps}
+                                  hasColumns={true}
+                                />
                               ))
                             ) : (
                               <div
@@ -701,10 +692,10 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                   e.stopPropagation();
                                   onSelectColumn?.('left');
                                 }}
-                                className="w-full p-4 text-center rounded-xl border border-dashed border-white/20 bg-white/5 text-slate-300 text-xs hover:border-white/40 cursor-pointer transition-all"
+                                className="w-full p-3 text-center rounded-xl border border-dashed border-white/20 bg-white/5 text-slate-300 text-xs hover:border-white/40 cursor-pointer transition-all"
                               >
                                 <p className="text-[11px] font-medium text-slate-300">
-                                  No fields placed in Left Hero Column.
+                                  Drag or add generic widgets here (heading, paragraph, etc.)
                                 </p>
                                 {onOpenAddWidgetDialog && (
                                   <button
@@ -714,9 +705,9 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                       onSelectColumn?.('left');
                                       onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
                                     }}
-                                    className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
                                   >
-                                    <Plus className="size-3" /> Add field to Left Column
+                                    <Plus className="size-3" /> Add Widget to Left Column
                                   </button>
                                 )}
                               </div>

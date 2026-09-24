@@ -275,10 +275,14 @@ export function buildApiPayload(formData: EditorFormData) {
   }));
 
   const rawMediaPanel = formData.mediaPanel || formData.theme?.mediaPanel;
+  // ─── FIX: Layout is determined ONLY by theme.layout / settings.formLayout ──
+  // Previously: Boolean(rawMediaPanel && rawMediaPanel.enabled !== false)
+  // This returned TRUE when enabled was undefined (common in templates),
+  // forcing the layout to split_media even when the user wanted Classic.
+  // Now: mediaPanel is just config data for WHEN layout IS split_media.
   const isSplitMedia =
     formData.theme?.layout === 'split_media' ||
-    formData.settings?.formLayout === 'split_media' ||
-    Boolean(rawMediaPanel && rawMediaPanel.enabled !== false);
+    formData.settings?.formLayout === 'split_media';
 
   const mediaPanel = isSplitMedia
     ? {
