@@ -2389,15 +2389,34 @@ export function FormStudioBuilder({
                 formData.agentConfig || {
                   ...DEFAULT_FORM_AGENT,
                   id: `agent_${formData.id || 'form_agent'}`,
-                  name: formData.name ? `${formData.name} Assistant` : 'Clara',
-                  roleTitle: `${formData.name || 'Inquiry'} AI Assistant`,
+                  name: formData.name ? `${formData.name.slice(0, 20)} Assistant` : 'AI Assistant',
+                  roleTitle: formData.name ? `${formData.name.slice(0, 28)} AI Assistant` : 'Virtual Assistant',
                   brandColor: formData.theme?.primaryColor || formData.primaryColor || '#059669',
+                  welcomeGreeting: `Hi! I'm your **AI Assistant** for **${formData.name || 'this form'}**. I can answer questions or help you fill out the form. How can I help?`,
+                  greetingSubtitle: formData.description || 'Ask me anything, or tap a quick action below.',
+                  // Derive quick actions from the form's own fields (first 2
+                  // non-decorative fields) so the agent is immediately useful
+                  // without manual configuration. Falls back to generic actions.
+                  quickActions: (() => {
+                    const actionableFields = (formData.fields || []).filter(
+                      (f: any) => f.label && !['heading', 'paragraph', 'divider'].includes(f.type),
+                    );
+                    if (actionableFields.length >= 2) {
+                      return actionableFields.slice(0, 2).map((f: any, idx: number) => ({
+                        id: `qa_form_${idx + 1}`,
+                        label: f.label.length > 30 ? f.label.slice(0, 28) + '…' : f.label,
+                        actionType: 'open_form' as const,
+                        payload: f.id,
+                      }));
+                    }
+                    return DEFAULT_FORM_AGENT.quickActions;
+                  })(),
                   connectedForms: [
                     {
                       id: formData.id || 'form_1',
                       name: formData.name || 'Untitled Form',
                       description: formData.description,
-                      submissionCount: 1,
+                      submissionCount: 0,
                     },
                   ],
                 }

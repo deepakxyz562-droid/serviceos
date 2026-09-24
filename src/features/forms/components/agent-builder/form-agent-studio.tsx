@@ -47,6 +47,7 @@ import {
   X,
   ShoppingBag,
   LayoutTemplate,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -128,23 +129,40 @@ export function FormAgentStudio({
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (onSave) {
-        await onSave(agent);
-      }
-
+      // POST to the API first — this creates or updates the agent in the DB
+      // and returns the real DB cuid (replacing the placeholder ID).
       const res = await fetch('/api/forms/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(agent),
       });
 
-      if (res.ok) {
-        toast.success('AI Agent settings saved successfully!');
+      const data = await res.json().catch(() => ({}));
+
+      // If the API returned a saved agent (with real DB id/slug), update
+      // the local state with the persisted values. This prevents duplicate
+      // agent rows on subsequent saves — the next POST will find the existing
+      // row by ID and update it instead of creating a new one.
+      const savedAgent: FormAgentData = data.agent
+        ? { ...agent, ...data.agent, id: data.agent.id || agent.id, slug: data.agent.slug || agent.slug }
+        : agent;
+
+      setAgentState(savedAgent);
+
+      // Persist to the form's agentConfig (this flows into schemaJson on save)
+      if (onSave) {
+        await onSave(savedAgent);
+      }
+
+      if (res.ok && data.agent) {
+        toast.success('AI Agent saved successfully!');
+      } else if (res.ok) {
+        toast.success('Agent changes saved to form!');
       } else {
         toast.success('Agent changes saved to form!');
       }
     } catch {
-      toast.success('Agent changes saved to form!');
+      toast.error('Failed to save agent. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -524,29 +542,26 @@ export function FormAgentStudio({
         onChange={setAgent}
       />
 
-      {/* Connected Form Modal */}
+      {/* Connected Form Modal — renders the REAL form via iframe (JotForm AI Agent parity) */}
       <Dialog open={!!activeConnectedFormModal} onOpenChange={(open) => !open && setActiveConnectedFormModal(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl h-[80vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="px-4 py-3 border-b shrink-0">
             <DialogTitle className="text-sm font-bold flex items-center gap-2">
-              <Bot className="size-4 text-blue-600" />
+              <FileText className="size-4 text-blue-600" />
               {activeConnectedFormModal?.name}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              AI Guided Form Auto-fill session active.
+              {activeConnectedFormModal?.description || 'Fill and submit to complete inquiry'}
             </DialogDescription>
           </DialogHeader>
-
-          <div className="p-4 space-y-3 bg-muted/30 rounded-xl border">
-            <p className="text-xs text-muted-foreground">
-              Form responses collected during chat will be automatically pre-populated here.
-            </p>
-            <div className="space-y-2">
-              <div className="text-xs font-semibold">Borrower Name</div>
-              <input type="text" defaultValue="John Doe" className="w-full text-xs h-8 border rounded-lg px-2 bg-background" />
-              <div className="text-xs font-semibold">Loan Amount Requested</div>
-              <input type="text" defaultValue="$450,000" className="w-full text-xs h-8 border rounded-lg px-2 bg-background" />
-            </div>
+          <div className="flex-1 min-h-0 w-full overflow-hidden">
+            {activeConnectedFormModal && (
+              <iframe
+                src={`/form/${encodeURIComponent(activeConnectedFormModal.id)}`}
+                title={activeConnectedFormModal.name}
+                className="w-full h-full border-0"
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>

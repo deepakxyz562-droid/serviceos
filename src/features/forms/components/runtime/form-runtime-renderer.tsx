@@ -508,6 +508,10 @@ export function FormRuntimeRenderer({
   // defaultValue from the very first render. Previously, two async effects
   // ran after render, leaving formData empty on first paint — causing all
   // calculations to show $0.00 until React re-rendered.
+  //
+  // We also seed slider/numerical/switch fields with sensible defaults
+  // (matching the editor's canvasFormData logic) so that formula fields
+  // compute real values on the very first paint, not $0.00.
   const [formData, setFormData] = useState<Record<string, any>>(() => {
     const defaults: Record<string, any> = {};
     for (const f of schema.fields) {
@@ -515,8 +519,43 @@ export function FormRuntimeRenderer({
       const def = (f as any).defaultValue ?? cfg.defaultValue;
       if (def !== undefined && def !== '' && def !== null) {
         defaults[f.id] = def;
+      } else if (f.options && Array.isArray(f.options) && f.options.length > 0) {
+        // Seed choice fields with first option so formulas using
+        // calculationValues can resolve on first paint.
+        const first = f.options[0];
+        defaults[f.id] = typeof first === 'object' && first !== null ? (first as any).value ?? (first as any).label : first;
+      } else {
+        // Seed input fields with sensible defaults so formulas evaluate.
+        // Without this, slider/numerical fields have `undefined` in
+        // formData → FormCalculation evaluates `0 * rate = 0` → shows
+        // $0.00 on the live form first paint.
+        const wt = f.widgetType || f.type;
+        if (wt === 'slider' || f.type === 'slider') {
+          const min = typeof cfg.min === 'number' ? cfg.min : 0;
+          defaults[f.id] = min;
+        } else if (f.type === 'numerical' || wt === 'numerical') {
+          defaults[f.id] = 0;
+        } else if (f.type === 'switch' || f.type === 'toggle' || wt === 'switch' || wt === 'toggle') {
+          defaults[f.id] = false;
+        }
       }
     }
+
+    // Evaluate form_calculation fields using the seeded values so they
+    // show real numbers on the first paint.
+    for (const f of schema.fields) {
+      if (f.widgetType === 'form_calculation' || f.type === 'calculation') {
+        const cfg = (f.widgetConfig || {}) as Record<string, any>;
+        const formula = String(cfg.formula || '');
+        if (formula) {
+          const result = evaluateFormulaSafe(formula, defaults, schema.fields);
+          if (result !== null && !isNaN(result)) {
+            defaults[f.id] = result;
+          }
+        }
+      }
+    }
+
     return defaults;
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -760,25 +799,26 @@ export function FormRuntimeRenderer({
   }, [schema.rules, formData]);
 
   // ─── Live Estimator & Calculation Engine ─────────────────────────────────
-  // Tightened detection: requires BOTH a keyword match AND at least one
-  // calculation-related field. Prevents false positives where forms named
-  // "Quote Request" or "Cleaning Form" get a misleading Live Estimate panel
-  // with hardcoded material rates.
+  // OPT-IN detection: the Live Estimate receipt card (with its hardcoded
+  // material rates and dark "LIVE ESTIMATE" sidebar) ONLY appears when the
+  // form explicitly includes a `live_estimate_summary` widget OR has the
+  // schema setting `enableLiveEstimate: true`.
+  //
+  // Previously, this used keyword matching on the form name ("estimate",
+  // "roof", "cleaning", etc.) which caused the hardcoded roofing material
+  // rates ($3.40 asphalt, $5.80 metal) to appear on ANY form that happened
+  // to have "estimate" in its name — even non-roofing forms.
+  //
+  // Now: form_calculation widgets still compute and display their formula
+  // results everywhere. But the separate "Live Estimate" receipt card with
+  // hardcoded rates is opt-in only.
   const isEstimatorForm = useMemo(() => {
-    const nameLower = (formName + ' ' + (formDescription || '')).toLowerCase();
-    const hasEstimateKeywords = /estimate|estimator|quote|roof|cleaning|hvac|solar|pricing|calculator/i.test(nameLower);
-    const hasCalcField = schema.fields.some(
-      (f) =>
-        f.widgetType === 'form_calculation' ||
-        f.type === 'calculated' ||
-        f.widgetType === 'live_estimate_summary'
+    const hasLiveEstimateWidget = schema.fields.some(
+      (f) => f.widgetType === 'live_estimate_summary',
     );
-    // Require BOTH: keyword match + calculation field.
-    // A form with no calculation fields is NOT an estimator, regardless of name.
-    // A form with calculation fields but no estimator keywords IS an estimator
-    // (e.g. a "Roofing Quote Calculator" with form_calculation widgets).
-    return hasCalcField && (hasEstimateKeywords || schema.fields.some((f) => f.widgetType === 'live_estimate_summary'));
-  }, [formName, formDescription, schema.fields]);
+    const hasLiveEstimateSetting = Boolean((schema.settings as any)?.enableLiveEstimate);
+    return hasLiveEstimateWidget || hasLiveEstimateSetting;
+  }, [schema.fields, schema.settings]);
 
   const liveEstimateData = useMemo(() => {
     // Determine currency symbol

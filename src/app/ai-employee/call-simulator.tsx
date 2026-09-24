@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   PhoneCall,
@@ -116,11 +116,9 @@ export function CallSimulator() {
   const [isPlaying, setIsPlaying] = useState(true);
   const timers = useRef<NodeJS.Timeout[]>([]);
 
-  const startPlayback = (scenario: Scenario) => {
+  const scheduleTimers = useCallback((scenario: Scenario) => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
-    setShownIndex(0);
-    setIsPlaying(true);
 
     scenario.transcript.forEach((_, idx) => {
       const timer = setTimeout(() => {
@@ -131,17 +129,25 @@ export function CallSimulator() {
       }, 1000 * (idx + 1));
       timers.current.push(timer);
     });
-  };
+  }, []);
 
   const handleScenarioChange = (s: Scenario) => {
     setActiveScenario(s);
-    startPlayback(s);
+    setShownIndex(0);
+    setIsPlaying(true);
+    scheduleTimers(s);
+  };
+
+  const handleReplay = () => {
+    setShownIndex(0);
+    setIsPlaying(true);
+    scheduleTimers(activeScenario);
   };
 
   useEffect(() => {
-    startPlayback(activeScenario);
+    scheduleTimers(activeScenario);
     return () => timers.current.forEach(clearTimeout);
-  }, []);
+  }, [activeScenario, scheduleTimers]);
 
   const isLive = shownIndex < activeScenario.transcript.length;
 
@@ -206,7 +212,7 @@ export function CallSimulator() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => startPlayback(activeScenario)}
+                  onClick={handleReplay}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                   title="Replay Call"
                   aria-label="Replay Call"

@@ -119,8 +119,6 @@ export function StudioFocusCanvas({
   const buttonTextColor = formData.theme?.buttonTextColor || '#ffffff';
   const borderRadius = formData.theme?.borderRadius || '16px';
   const fontFamily = formData.theme?.fontFamily || 'Inter, sans-serif';
-  const inputBorderRadius = formData.theme?.inputBorderRadius || '12px';
-  const inputHeight = formData.theme?.inputHeight || 'medium';
 
   // Normalize steps
   const steps = useMemo(() => {
@@ -295,21 +293,23 @@ export function StudioFocusCanvas({
     }
   };
 
-function StudioFieldPreview({
+/**
+ * StudioFieldPreview — Top-level component for rendering a single field
+ * in the studio editor canvas using the SAME WidgetRuntimeDispatcher
+ * used by the live runtime. This ensures pixel-identical rendering.
+ *
+ * Extracted to top-level (was previously a nested function inside
+ * StudioFocusCanvas) so React doesn't remount all field widgets on
+ * every parent render — which caused focus loss, scroll reset, and
+ * janky editing.
+ */
+const StudioFieldPreview = React.memo(function StudioFieldPreview({
   field,
-  inputBorderRadius,
-  inputHeight,
+  canvasFormData,
 }: {
   field: FormField;
-  inputBorderRadius: string;
-  inputHeight: string;
+  canvasFormData: Record<string, any>;
 }) {
-  const cfg = (field.widgetConfig as Record<string, any>) || {};
-
-  // All field types are rendered via the same WidgetRuntimeDispatcher used
-  // by the live runtime. This ensures the editor preview is pixel-identical
-  // to the live/preview view. Previously, 7 widget types had bespoke HTML
-  // rendering here that diverged from the runtime.
   return (
     <div className="w-full pointer-events-auto">
       <WidgetRuntimeDispatcher
@@ -321,7 +321,7 @@ function StudioFieldPreview({
       />
     </div>
   );
-}
+});
 
   return (
     <div
@@ -844,8 +844,8 @@ function StudioFieldPreview({
                                   </div>
                                   <StudioFieldPreview
                                     field={f}
-                                    inputBorderRadius={inputBorderRadius}
-                                    inputHeight={inputHeight}
+                                    canvasFormData={canvasFormData}
+                                    
                                   />
                                 </div>
                               );
@@ -1106,8 +1106,8 @@ function StudioFieldPreview({
 
                                 <StudioFieldPreview
                                   field={f}
-                                  inputBorderRadius={inputBorderRadius}
-                                  inputHeight={inputHeight}
+                                  canvasFormData={canvasFormData}
+                                  
                                 />
                               </div>
                             );
@@ -1388,8 +1388,8 @@ function StudioFieldPreview({
                         {/* Input Type Preview */}
                         <StudioFieldPreview
                           field={field}
-                          inputBorderRadius={inputBorderRadius}
-                          inputHeight={inputHeight}
+                          canvasFormData={canvasFormData}
+                          
                         />
                       </div>
                     );
@@ -1611,8 +1611,8 @@ function StudioFieldPreview({
                         {/* Input Preview */}
                         <StudioFieldPreview
                           field={f}
-                          inputBorderRadius={inputBorderRadius}
-                          inputHeight={inputHeight}
+                          canvasFormData={canvasFormData}
+                          
                         />
                       </div>
                     );

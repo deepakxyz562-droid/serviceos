@@ -10,9 +10,6 @@ import { toast } from 'sonner';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 import dynamic from 'next/dynamic';
 
-import { AgentDeviceSimulator } from '@/features/forms/components/agent-builder/agent-device-simulator';
-import { cn } from '@/lib/utils';
-
 const FormRuntimeRenderer = dynamic(
   () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => ({ default: m.FormRuntimeRenderer })),
   {
@@ -26,6 +23,19 @@ const FormRuntimeRenderer = dynamic(
   }
 );
 
+/**
+ * Published Form Page — /form/[formId]
+ *
+ * This route renders a PURE FORM in its saved type (Classic Paper or Card
+ * Swipe). It does NOT render an AI Agent widget — the AI Agent is a separate
+ * product that users add to their site independently via:
+ *   - Standalone route: /agent/[agentId]
+ *   - Site-wide embed:  <SiteAgentWidget agentId="..." /> (see src/components/site-agent-widget.tsx)
+ *
+ * This separation matches Jotform's architecture:
+ *   - Jotform published forms are pure forms (no chat widget).
+ *   - Jotform AI Agent is a separate embeddable widget.
+ */
 export default function PublicFormPage() {
   const params = useParams();
   const formId = params.formId as string;
@@ -40,9 +50,6 @@ export default function PublicFormPage() {
   const [passwordInput, setPasswordInput] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
-
-  // Floating AI Agent Chat Widget state
-  const [chatPage, setChatPage] = useState<'greeting' | 'conversation'>('greeting');
 
   const fetchForm = useCallback(async () => {
     if (!formId) return;
@@ -162,11 +169,12 @@ export default function PublicFormPage() {
     );
   }
 
+  // Resolve the form's saved layout mode. Forms are NEVER in 'agent' mode —
+  // the AI Agent is a separate product. If a legacy form has layout='conversational',
+  // fall back to 'paper' so it still renders correctly.
   const formLayout = schema.theme?.layout || (schema.settings as any)?.formLayout;
-  const resolvedMode: 'paper' | 'card' | 'agent' =
-    formLayout === 'conversational'
-      ? 'agent'
-      : formLayout === 'card' || formLayout === 'single_question'
+  const resolvedMode: 'paper' | 'card' =
+    formLayout === 'card' || formLayout === 'single_question'
       ? 'card'
       : 'paper';
 
@@ -174,15 +182,9 @@ export default function PublicFormPage() {
     ? schema.theme.backgroundColor
     : undefined;
 
-  // Floating AI Agent configuration
-  const agentConfig = schema.agentConfig;
-  const isAgentEnabled = Boolean(agentConfig && agentConfig.channels?.chatbot?.enabled !== false && resolvedMode !== 'agent');
-  const agentPosition = agentConfig?.channels?.chatbot?.position || 'bottom-right';
-  const isLeftPos = agentPosition === 'bottom-left';
-
   return (
     <div
-      className="min-h-screen bg-slate-50/60 dark:bg-slate-950 py-6 sm:py-10 px-3 sm:px-6 lg:px-8 flex flex-col justify-center items-center relative overflow-x-hidden"
+      className="min-h-screen bg-slate-50/60 dark:bg-slate-950 py-6 sm:py-10 px-3 sm:px-6 lg:px-8 flex flex-col justify-center items-center"
       style={pageBgColor ? { backgroundColor: pageBgColor } : undefined}
     >
       <div className="w-full max-w-5xl">
@@ -196,25 +198,6 @@ export default function PublicFormPage() {
           mode={resolvedMode}
         />
       </div>
-
-      {/* ─── Floating AI Agent Website Chat Assistant (JotForm / Intercom Style) ─── */}
-      {isAgentEnabled && agentConfig && (
-        <div
-          className={cn(
-            'fixed z-50 transition-all duration-300',
-            chatPage === 'greeting'
-              ? cn('bottom-4', isLeftPos ? 'left-4' : 'right-4')
-              : cn('bottom-4 max-h-[600px] h-[580px] w-[360px] sm:w-[380px]', isLeftPos ? 'left-4' : 'right-4')
-          )}
-        >
-          <AgentDeviceSimulator
-            agent={agentConfig}
-            isTestMode={false}
-            previewPage={chatPage}
-            onSwitchPage={(page) => setChatPage(page)}
-          />
-        </div>
-      )}
     </div>
   );
 }

@@ -301,7 +301,17 @@ export function buildApiPayload(formData: EditorFormData) {
       mediaPanel,
     },
     mediaPanel,
-    agentConfig: formData.agentConfig,
+    // Only persist agentConfig if the user has explicitly configured an agent.
+    // We detect "explicitly configured" by checking that the agent ID is NOT
+    // a placeholder (placeholders start with 'agent_form_' or 'agent_default').
+    // This prevents the DEFAULT_FORM_AGENT from being auto-saved to every
+    // form's schemaJson just because the user opened the AI Agent tab.
+    ...(formData.agentConfig &&
+      formData.agentConfig.id &&
+      !formData.agentConfig.id.startsWith('agent_form_') &&
+      !formData.agentConfig.id.startsWith('agent_default')
+      ? { agentConfig: formData.agentConfig }
+      : {}),
     rules: formData.rules || [],
     settings: {
       submitButtonText: formData.submitButtonText || 'Submit',

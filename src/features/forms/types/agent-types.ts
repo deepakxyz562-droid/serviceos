@@ -334,19 +334,19 @@ export interface FormAgentData {
 }
 
 export const DEFAULT_FORM_AGENT: FormAgentData = {
-  id: 'agent_alex',
-  slug: 'alex-assistant',
-  name: 'Nell',
-  roleTitle: 'Loan Application Guide',
+  id: 'agent_default',
+  slug: 'ai-assistant',
+  name: 'AI Assistant',
+  roleTitle: 'Virtual Assistant',
   avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
   statusText: 'Online & Active',
-  brandColor: '#0284c7',
-  voiceTone: 'professional',
-  welcomeGreeting: "Hi! I'm **Nell**, your **AI Agent** and **Loan Application Guide**. How can I help you?",
-  greetingSubtitle: 'Get immediate loan estimates, check eligibility, or complete your application.',
+  brandColor: '#059669',
+  voiceTone: 'friendly',
+  welcomeGreeting: "Hi! I'm your **AI Assistant**. I can answer questions or help you fill out a form. How can I help you today?",
+  greetingSubtitle: 'Ask me anything, or tap a quick action below to get started.',
   quickActions: [
-    { id: 'qa_1', label: 'Begin loan application', actionType: 'message', payload: 'I would like to begin my loan application.' },
-    { id: 'qa_2', label: 'Learn more', actionType: 'message', payload: 'Tell me about available loan options and rates.' },
+    { id: 'qa_1', label: 'Ask a question', actionType: 'message', payload: 'I have a question.' },
+    { id: 'qa_2', label: 'Fill out the form', actionType: 'open_form', payload: '' },
   ],
   navigation: {
     chatEnabled: true,
