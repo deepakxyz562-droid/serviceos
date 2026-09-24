@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { FormField } from '@/lib/forms/form-schema-types';
 import { getRuntimeComponent } from './widget-runtime-registry';
 import { getFieldById, FIELD_ALIASES } from '@/lib/forms/canonical-widget-registry';
@@ -469,6 +469,24 @@ export function WidgetRuntimeDispatcher({
           />
         </div>
       );
+
+    case 'columns_container': {
+      // Layout container — renders child fields in a multi-column grid
+      const ColumnsContainerWidget = lazy(() =>
+        import('./layout/columns-container-widget').then((m) => ({ default: m.ColumnsContainerWidget }))
+      );
+      return (
+        <Suspense fallback={<div className="h-10 bg-muted/20 rounded animate-pulse" />}>
+          <ColumnsContainerWidget
+            field={field}
+            allFormData={allFormData || {}}
+            onChange={onChange}
+            allFields={allFields || []}
+            formId={formId}
+          />
+        </Suspense>
+      );
+    }
 
     default: {
       // Default fallback widget input

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FormSchema, FormField } from '@/lib/forms/form-schema-types';
 import { WidgetRuntimeDispatcher } from './widgets/widget-runtime-dispatcher';
+import { FormFieldRenderer } from './shared-field-renderer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1332,67 +1333,19 @@ export function FormRuntimeRenderer({
                 {/* Render only the current field */}
                 {currentStepFields[cardFieldIndex] && (() => {
                   const field = currentStepFields[cardFieldIndex];
-                  const labelHidden = field.labelEnabled === false
-                    || field.labelAlign === 'hidden'
-                    || ['heading', 'paragraph', 'divider'].includes(field.type);
-                  const labelAlignClass = field.labelAlign === 'left'
-                    ? 'flex items-center gap-2'
-                    : field.labelAlign === 'right'
-                      ? 'flex items-center justify-end gap-2'
-                      : '';
-                  const inputStyle: React.CSSProperties = {
-                    ...(field.heightPx ? { height: `${field.heightPx}px` } : {}),
-                    ...(field.align ? { textAlign: field.align } : {}),
-                    // ─── P2 fix: apply field-level borderRadius (was missing in card mode) ──
-                    borderRadius: field.borderRadius && field.borderRadius !== 'inherit'
-                      ? field.borderRadius
-                      : (schema.theme?.inputBorderRadius || '12px'),
-                    // ─── P2 fix: apply field-level padding, fontSize, backgroundColor ──
-                    ...(field.padding ? { padding: field.padding } : {}),
-                    ...(field.fontSize ? { fontSize: field.fontSize } : {}),
-                    ...(field.backgroundColor ? { backgroundColor: field.backgroundColor } : {}),
-                  };
-
                   return (
-                    <div key={field.id} className="space-y-2.5 animate-in fade-in slide-in-from-right-4 duration-300">
-                      {!labelHidden && (
-                        <Label htmlFor={field.id} className={`text-sm sm:text-base font-bold text-foreground ${labelAlignClass}`}>
-                          <span>{field.label} {field.required && <span className="text-rose-500">*</span>}</span>
-                        </Label>
-                      )}
-                      {field.helpText && !['heading', 'paragraph'].includes(field.type) && (
-                        <p className="text-xs text-muted-foreground">{field.helpText}</p>
-                      )}
-                      {field.type === 'heading' && (() => {
-                        const cfg = (field.widgetConfig as any) || {};
-                        const level = cfg.level || 'h3';
-                        const align = cfg.align || 'left';
-                        const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
-                        const sizeClass = level === 'h1' ? 'text-2xl' : level === 'h2' ? 'text-xl' : level === 'h4' ? 'text-base' : 'text-lg';
-                        const Tag = level as keyof JSX.IntrinsicElements;
-                        return <Tag className={`${sizeClass} font-bold text-foreground pt-2 ${alignClass}`}>{field.label}</Tag>;
-                      })()}
-                      {field.type === 'paragraph' && (() => {
-                        const cfg = (field.widgetConfig as any) || {};
-                        const text = cfg.text || field.label || '';
-                        const allowHTML = cfg.allowHTML || false;
-                        if (allowHTML) {
-                          return <div className="text-sm text-muted-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: text }} />;
-                        }
-                        return <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>;
-                      })()}
-                      {field.type === 'divider' && <hr className="my-3 border-border/60" />}
-
-                      {/* Universal Widget Dispatcher: renders every widget, alias, and fallback as interactive input */}
-                      {!['heading', 'paragraph', 'divider'].includes(field.type) && (
-                        <WidgetRuntimeDispatcher
-                          field={field}
-                          value={formData[field.id]}
-                          onChange={(val) => handleFieldChange(field.id, val)}
-                          allFormData={formData}
-                          formId={formId}
-                        />
-                      )}
+                    <div key={field.id} className="animate-in fade-in slide-in-from-right-4 duration-300">
+                      <FormFieldRenderer
+                        field={field}
+                        value={formData[field.id]}
+                        onChange={(val) => handleFieldChange(field.id, val)}
+                        allFormData={formData}
+                        formId={formId}
+                        mode="live"
+                        errors={errors}
+                        inputBorderRadius={inputBorderRadius}
+                        defaultInputHeightCls={defaultInputHeightCls}
+                      />
                     </div>
                   );
                 })()}
@@ -1428,186 +1381,20 @@ export function FormRuntimeRenderer({
               </div>
             ) : (
             <div className="flex flex-wrap gap-y-4 justify-between">
-              {currentStepFields.map((field) => {
-                const isHalf = field.width === 'half';
-                const isThird = field.width === 'third';
-                const isQuarter = field.width === 'quarter';
-                const widthClass = isHalf
-                  ? 'w-full sm:w-[48.5%]'
-                  : isThird
-                    ? 'w-full sm:w-[31.5%]'
-                    : isQuarter
-                      ? 'w-full sm:w-[23.5%]'
-                      : 'w-full';
-                const hasError = errors[field.id];
-
-                // ─── Apply universal settings ──────────────────────
-                const labelHidden = field.labelEnabled === false
-                  || field.labelAlign === 'hidden'
-                  || ['heading', 'paragraph', 'divider'].includes(field.type);
-                const labelAlignClass = field.labelAlign === 'left'
-                  ? 'flex items-center gap-2'
-                  : field.labelAlign === 'right'
-                    ? 'flex items-center justify-end gap-2'
-                    : '';
-                const fieldStyle: React.CSSProperties = {
-                  ...(field.widthPx ? { maxWidth: `${field.widthPx}px` } : {}),
-                };
-                const fieldRadius =
-                  field.borderRadius && field.borderRadius !== 'inherit'
-                    ? field.borderRadius
-                    : inputBorderRadius;
-
-                const inputStyle: React.CSSProperties = {
-                  ...(field.heightPx ? { height: `${field.heightPx}px` } : {}),
-                  ...(field.align ? { textAlign: field.align } : {}),
-                  borderRadius: fieldRadius,
-                  // ─── P2: Elementor-style per-field styling ──────────────────
-                  ...(field.padding ? { padding: field.padding } : {}),
-                  ...(field.fontSize && field.fontSize !== 'inherit' ? { fontSize: field.fontSize } : {}),
-                  ...(field.backgroundColor ? { backgroundColor: field.backgroundColor } : {}),
-                  ...(field.borderStyle && field.borderStyle !== 'inherit'
-                    ? { borderStyle: field.borderStyle, borderWidth: '1px' }
-                    : {}),
-                  ...(field.borderColor ? { borderColor: field.borderColor } : {}),
-                  ...(field.textColor ? { color: field.textColor } : {}),
-                };
-
-                // ─── P2: Apply inputHeight preset (compact/medium/large) ───────
-                const inputHeightClass =
-                  field.inputHeight === 'compact' ? 'h-9'
-                  : field.inputHeight === 'medium' ? 'h-11'
-                  : field.inputHeight === 'large' ? 'h-13'
-                  : defaultInputHeightCls;
-
-                return (
-                  <div
-                    key={field.id}
-                    className={`space-y-1.5 ${widthClass}`}
-                    style={fieldStyle}
-                  >
-                    {/* Label */}
-                    {!labelHidden && (
-                      <Label
-                        htmlFor={field.id}
-                        className={`text-xs font-bold text-foreground ${labelAlignClass}`}
-                      >
-                        <span>
-                          {field.label} {field.required && <span className="text-rose-500">*</span>}
-                        </span>
-                      </Label>
-                    )}
-
-                    {field.helpText && !['heading', 'paragraph'].includes(field.type) && (
-                      <p className="text-[11px] text-muted-foreground">{field.helpText}</p>
-                    )}
-
-                    {/* All field types route through WidgetRuntimeDispatcher for rich runtime components.
-                        Removed inline <Input>/<Textarea> that bypassed rich components and ignored
-                        settings like maxLength, validation, mask, confirmation, country dropdown,
-                        calendar, format, decimals, thousandsSep, rows, showCounter, etc.
-                        Exception: material/tier radio fields use the specialized estimator card below. */}
-                    {/* Scope / Area Interactive Slider */}
-                    {!field.widgetType && (field.id.includes('size') || field.id.includes('area') || field.id.includes('sqft') || field.label.toLowerCase().includes('sq ft') || field.label.toLowerCase().includes('area')) && (
-                      <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-border/80">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-muted-foreground">Area / Scope Size</span>
-                          <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold text-xs">
-                            {(Number(formData[field.id]) || 2400).toLocaleString()} sq ft
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="500"
-                          max="10000"
-                          step="50"
-                          value={Number(formData[field.id]) || 2400}
-                          onChange={(e) => handleFieldChange(field.id, Number(e.target.value))}
-                          className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-                        />
-                        <div className="flex justify-between text-[10px] text-muted-foreground pt-0.5">
-                          <span>500 sq ft</span>
-                          <span className="font-medium text-emerald-600 dark:text-emerald-400">Drag to recalculate</span>
-                          <span>10,000 sq ft</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Segmented Material / Pricing Option Cards */}
-                    {!field.widgetType && field.type === 'radio' && (field.id.includes('material') || field.id.includes('tier')) && (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                        {field.options?.map((opt) => {
-                          const isSelected = formData[field.id] === opt.value;
-                          const optLabel = opt.label;
-                          let priceBadge = '£3.40/sq ft';
-                          if (opt.value.includes('metal') || opt.value.includes('architectural')) priceBadge = '£5.80/sq ft';
-                          if (opt.value.includes('tile') || opt.value.includes('spanish') || opt.value.includes('premium')) priceBadge = '£8.20/sq ft';
-
-                          return (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => handleFieldChange(field.id, opt.value)}
-                              className={`p-3 rounded-2xl text-left border transition-all flex flex-col justify-between gap-2 cursor-pointer ${
-                                isSelected
-                                  ? 'border-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/30 ring-2 ring-emerald-600/30 shadow-xs'
-                                  : 'border-border/70 hover:bg-slate-50 dark:hover:bg-slate-900 bg-white dark:bg-slate-900/50'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-1 w-full">
-                                <span className="text-xs font-bold text-foreground truncate">{optLabel}</span>
-                                <div className={`size-3.5 rounded-full border flex items-center justify-center ${isSelected ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>
-                                  {isSelected && <div className="size-1.5 rounded-full bg-white" />}
-                                </div>
-                              </div>
-                              <span className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400">
-                                {priceBadge}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Headings / Paragraphs — respect level, align, text, allowHTML settings */}
-                    {field.type === 'heading' && (() => {
-                      const cfg = (field.widgetConfig as any) || {};
-                      const level = cfg.level || 'h3';
-                      const align = cfg.align || 'left';
-                      const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
-                      const sizeClass = level === 'h1' ? 'text-2xl' : level === 'h2' ? 'text-xl' : level === 'h4' ? 'text-sm' : 'text-base';
-                      const Tag = level as keyof JSX.IntrinsicElements;
-                      return <Tag className={`${sizeClass} font-bold text-foreground pt-2 border-b border-border/60 pb-1 w-full ${alignClass}`}>{field.label}</Tag>;
-                    })()}
-                    {field.type === 'paragraph' && (() => {
-                      const cfg = (field.widgetConfig as any) || {};
-                      const text = cfg.text || field.label || '';
-                      const allowHTML = cfg.allowHTML || false;
-                      if (allowHTML) {
-                        return <div className="text-xs text-muted-foreground leading-relaxed w-full" dangerouslySetInnerHTML={{ __html: text }} />;
-                      }
-                      return <p className="text-xs text-muted-foreground leading-relaxed w-full">{text}</p>;
-                    })()}
-                    {field.type === 'divider' && <hr className="my-2 border-border/60 w-full" />}
-
-                    {/* Universal Widget Dispatcher: renders every widget, alias, and fallback as interactive input */}
-                    {!['heading', 'paragraph', 'divider'].includes(field.type) &&
-                      !(!field.widgetType && (field.id.includes('size') || field.id.includes('area') || field.id.includes('sqft') || field.label.toLowerCase().includes('sq ft') || field.label.toLowerCase().includes('area'))) &&
-                      !(!field.widgetType && field.type === 'radio' && (field.id.includes('material') || field.id.includes('tier'))) && (
-                      <WidgetRuntimeDispatcher
-                        field={field}
-                        value={formData[field.id]}
-                        onChange={(val) => handleFieldChange(field.id, val)}
-                        allFormData={formData}
-                        formId={formId}
-                      />
-                    )}
-
-                    {/* Error message */}
-                    {hasError && <p className="text-[11px] text-rose-500 font-medium">{hasError}</p>}
-                  </div>
-                );
-              })}
+              {currentStepFields.map((field) => (
+                <FormFieldRenderer
+                  key={field.id}
+                  field={field}
+                  value={formData[field.id]}
+                  onChange={(val) => handleFieldChange(field.id, val)}
+                  allFormData={formData}
+                  formId={formId}
+                  mode="live"
+                  errors={errors}
+                  inputBorderRadius={inputBorderRadius}
+                  defaultInputHeightCls={defaultInputHeightCls}
+                />
+              ))}
             </div>
             )}
 

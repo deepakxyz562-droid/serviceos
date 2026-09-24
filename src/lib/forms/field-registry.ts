@@ -392,6 +392,39 @@ export const BASIC_FIELDS: FieldDefinition[] = [
     ],
   },
   {
+    id: 'columns_container',
+    name: 'Columns Layout',
+    category: 'layout',
+    iconName: 'Columns',
+    description: 'Display fields side-by-side in 2 or 3 columns',
+    badge: 'LAYOUT',
+    tier: 'free',
+    createField: (label = 'Columns Layout') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'columns_container',
+      widgetConfig: {
+        columns: 2,
+        gap: '16px',
+        // childFields: string[] — field IDs that belong to this container
+        // The editor reads this to know which fields to render inside the columns
+        childFields: [],
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'columns', label: 'Number of columns', type: 'select', group: 'field_specific', default: 2, options: [
+        { label: '2 columns (50/50)', value: 2 },
+        { label: '3 columns (33/33/33)', value: 3 },
+      ] },
+      { key: 'gap', label: 'Gap between columns', type: 'select', group: 'field_specific', default: '16px', options: [
+        { label: 'Small (8px)', value: '8px' },
+        { label: 'Medium (16px)', value: '16px' },
+        { label: 'Large (24px)', value: '24px' },
+      ] },
+    ],
+  },
+  {
     id: 'signature',
     name: 'E-Signature',
     category: 'signature',

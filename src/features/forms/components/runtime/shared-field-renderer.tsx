@@ -177,27 +177,35 @@ export const FormFieldRenderer = React.memo(function FormFieldRenderer({
 
   // For heading/paragraph/divider fields, render without the standard wrapper
   if (field.type === 'heading') {
+    const cfg = (field.widgetConfig as Record<string, any>) || {};
+    const level = cfg.level || 'h3';
+    const align = cfg.align || 'left';
+    const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+    const sizeClass = level === 'h1' ? 'text-2xl' : level === 'h2' ? 'text-xl' : level === 'h4' ? 'text-sm' : 'text-base';
+    const Tag = level as keyof JSX.IntrinsicElements;
     return (
       <div
-        className={cn('w-full', isSelected && 'ring-2 ring-emerald-500 rounded-lg')}
+        className={cn('w-full', isEditMode && isSelected && 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg', isEditMode && 'cursor-pointer')}
         onClick={isEditMode ? (e) => { e.stopPropagation(); onSelectField?.(field.id); } : undefined}
       >
-        <h3 className="text-lg font-bold text-foreground">{field.label}</h3>
+        <Tag className={`${sizeClass} font-bold text-foreground pt-2 border-b border-border/60 pb-1 w-full ${alignClass}`}>{field.label}</Tag>
       </div>
     );
   }
 
   if (field.type === 'paragraph') {
-    const text = field.helpText || field.label || '';
+    const cfg = (field.widgetConfig as Record<string, any>) || {};
+    const text = cfg.text || field.helpText || field.label || '';
+    const allowHTML = cfg.allowHTML || false;
     return (
       <div
-        className={cn('w-full', isSelected && 'ring-2 ring-emerald-500 rounded-lg')}
+        className={cn('w-full', isEditMode && isSelected && 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg', isEditMode && 'cursor-pointer')}
         onClick={isEditMode ? (e) => { e.stopPropagation(); onSelectField?.(field.id); } : undefined}
       >
-        {field.label?.includes('<') ? (
-          <div className="text-sm text-muted-foreground leading-relaxed" dangerouslySetInnerHTML={{ __html: field.label }} />
+        {allowHTML ? (
+          <div className="text-xs text-muted-foreground leading-relaxed w-full" dangerouslySetInnerHTML={{ __html: text }} />
         ) : (
-          <p className="text-sm text-muted-foreground leading-relaxed">{text || field.label}</p>
+          <p className="text-xs text-muted-foreground leading-relaxed w-full">{text}</p>
         )}
       </div>
     );
@@ -206,22 +214,30 @@ export const FormFieldRenderer = React.memo(function FormFieldRenderer({
   if (field.type === 'divider') {
     return (
       <div
-        className={cn('w-full', isSelected && 'ring-2 ring-emerald-500 rounded-lg')}
+        className={cn('w-full', isEditMode && isSelected && 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg', isEditMode && 'cursor-pointer')}
         onClick={isEditMode ? (e) => { e.stopPropagation(); onSelectField?.(field.id); } : undefined}
       >
-        <hr className="my-3 border-border/60" />
+        <hr className="my-2 border-border/60 w-full" />
       </div>
     );
   }
 
   // Standard field rendering — used for ALL non-decorative fields
+  // Selection uses outline (non-layout-changing) instead of ring-offset + p-1
+  // so the editor field dimensions match the runtime dimensions exactly.
   return (
     <div
       className={cn(
         'space-y-1.5 relative group',
         widthClass,
-        isSelected && 'ring-2 ring-emerald-500 ring-offset-2 rounded-xl p-1',
         isEditMode && 'cursor-pointer',
+        // ─── Selection: outline, NOT padding/ring-offset ───────────────
+        // Previously: 'ring-2 ring-emerald-500 ring-offset-2 rounded-xl p-1'
+        // This changed the field's geometry → editor ≠ runtime.
+        // Now: outline + outline-offset (doesn't affect layout box).
+        isEditMode && isSelected && 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg',
+        // ─── Hover: subtle outline (not a full card) ──────────────────
+        isEditMode && !isSelected && 'hover:outline hover:outline-1 hover:outline-emerald-400/40 hover:outline-offset-2 rounded-lg',
       )}
       style={fieldStyle}
       onClick={isEditMode ? (e) => { e.stopPropagation(); onSelectField?.(field.id); } : undefined}

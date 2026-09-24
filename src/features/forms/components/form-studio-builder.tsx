@@ -10,7 +10,7 @@
  * 4. PREVIEW — Interactive multi-format testing (📄 Paper, 🃏 Card-by-Card Swipe, 💬 AI Voice/Chat Agent) on Desktop, Tablet, and Mobile.
  */
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   ArrowLeft, Check, Copy, ExternalLink, Eye, FileInput, Globe,
   Hammer, Loader2, MessageCircle, Monitor, MoveDown, MoveUp,
@@ -24,7 +24,7 @@ import {
   Sliders, Send, Search, RefreshCw, Layers, CalendarCheck,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X,
   Wifi, Battery, Lock, Languages, AlertTriangle, Key, Share, Download, Film,
-  ImageIcon
+  ImageIcon, Undo2, Redo2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -104,6 +104,124 @@ export function FormStudioBuilder({
   onExit,
   siteOrigin,
 }: FormStudioBuilderProps) {
+  // ─── Undo/Redo History (Jotform/Elementor parity) ─────────────────────
+  // Wraps onFormDataChange to record every change to a history stack.
+  // Keyboard shortcuts (Cmd+Z, Cmd+Shift+Z) are handled below.
+  const historyRef = useRef<{ past: EditorFormData[]; future: EditorFormData[] }>({
+    past: [],
+    future: [],
+  });
+  const [, forceHistoryUpdate] = useState(0);
+
+  const handleChangeWithHistory = useCallback(
+    (updater: EditorFormData | ((prev: EditorFormData) => EditorFormData)) => {
+      onFormDataChange((prev) => {
+        historyRef.current.past.push(prev);
+        if (historyRef.current.past.length > 50) historyRef.current.past.shift();
+        historyRef.current.future = [];
+        forceHistoryUpdate((n) => n + 1);
+        return typeof updater === 'function' ? (updater as (p: EditorFormData) => EditorFormData)(prev) : updater;
+      });
+    },
+    [onFormDataChange],
+  );
+
+  const undo = useCallback(() => {
+    onFormDataChange((prev) => {
+      const past = historyRef.current.past;
+      if (past.length === 0) return prev;
+      const previous = past[past.length - 1]!;
+      historyRef.current.past = past.slice(0, -1);
+      historyRef.current.future.unshift(prev);
+      if (historyRef.current.future.length > 50) historyRef.current.future = historyRef.current.future.slice(0, 50);
+      forceHistoryUpdate((n) => n + 1);
+      return previous;
+    });
+  }, [onFormDataChange]);
+
+  const redo = useCallback(() => {
+    onFormDataChange((prev) => {
+      const future = historyRef.current.future;
+      if (future.length === 0) return prev;
+      const next = future[0]!;
+      historyRef.current.future = future.slice(1);
+      historyRef.current.past.push(prev);
+      if (historyRef.current.past.length > 50) historyRef.current.past.shift();
+      forceHistoryUpdate((n) => n + 1);
+      return next;
+    });
+  }, [onFormDataChange]);
+
+  const canUndo = historyRef.current.past.length > 0;
+  const canRedo = historyRef.current.future.length > 0;
+
+  // ─── Dirty State + Autosave (Jotform/Elementor parity) ──────────────
+  // Tracks whether the form has unsaved changes. Shows a "Saving..." /
+  // "Saved" / "Unsaved changes" indicator in the toolbar.
+  // Autosaves after 3 seconds of inactivity (debounced).
+  const [isDirty, setIsDirty] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSavedFormDataRef = useRef<string>(JSON.stringify(formData));
+
+  // Mark dirty when formData changes (but not on first render)
+  useEffect(() => {
+    const currentSerialized = JSON.stringify(formData);
+    if (currentSerialized !== lastSavedFormDataRef.current) {
+      setIsDirty(true);
+      setAutosaveStatus('idle');
+
+      // Clear any existing timer
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+
+      // Set up debounced autosave (3 second delay)
+      if (editMode) {
+        autosaveTimerRef.current = setTimeout(async () => {
+          setAutosaveStatus('saving');
+          try {
+            const result = await onSave();
+            if (result) {
+              lastSavedFormDataRef.current = currentSerialized;
+              setIsDirty(false);
+              setLastSavedAt(new Date());
+              setAutosaveStatus('saved');
+              // Clear "saved" indicator after 3 seconds
+              setTimeout(() => setAutosaveStatus('idle'), 3000);
+            } else {
+              setAutosaveStatus('error');
+            }
+          } catch {
+            setAutosaveStatus('error');
+          }
+        }, 3000);
+      }
+    }
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [formData]);
+
+  // Manual save handler — clears dirty state
+  const handleManualSave = useCallback(async () => {
+    setAutosaveStatus('saving');
+    const result = await onSave();
+    if (result) {
+      lastSavedFormDataRef.current = JSON.stringify(formData);
+      setIsDirty(false);
+      setLastSavedAt(new Date());
+      setAutosaveStatus('saved');
+      setTimeout(() => setAutosaveStatus('idle'), 3000);
+    } else {
+      setAutosaveStatus('error');
+    }
+    return result;
+  }, [onSave, formData]);
   // Studio navigation
   const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'templates'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -122,7 +240,12 @@ export function FormStudioBuilder({
   }, [formData.theme?.layout, formData.settings?.formLayout]);
   
   // Selection and Palette state
-  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(formData.fields[0]?.id || null);
+  // ─── Default to null (Jotform behavior) ─────────────────────────────────
+  // Previously: selectedFieldId defaulted to the first field, which meant
+  // the form always opened with a field pre-selected and the inspector
+  // visible. For WYSIWYG parity, the form should open clean — nothing
+  // selected, no inspector chrome. User clicks a field to select it.
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<'left' | 'right'>('right');
   const [paletteTab, setPaletteTab] = useState<'basic' | 'payments' | 'widgets'>('basic');
   const [selectedWidgetCategory, setSelectedWidgetCategory] = useState<FieldDefinition['category'] | 'all'>('all');
@@ -158,6 +281,48 @@ export function FormStudioBuilder({
   const [viewMode, setViewMode] = useState<'focus' | 'paper' | 'split_media'>(initialLayout);
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [currentThemeId, setCurrentThemeId] = useState('fieseros-emerald');
+
+  // ─── Keyboard Shortcuts (Jotform/Elementor parity) ────────────────────
+  // Cmd/Ctrl+Z = Undo, Cmd/Ctrl+Shift+Z = Redo, Cmd/Ctrl+S = Save,
+  // Escape = Deselect selected field
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isTyping = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      const isModifier = e.metaKey || e.ctrlKey;
+
+      // Allow Cmd/Ctrl+S even while typing (user may be editing a label)
+      if (isModifier && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleManualSave();
+        return;
+      }
+
+      // Don't intercept other shortcuts while typing
+      if (isTyping) return;
+
+      // Undo: Cmd/Ctrl+Z
+      if (isModifier && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+      // Redo: Cmd/Ctrl+Shift+Z or Cmd/Ctrl+Y
+      if ((isModifier && e.key.toLowerCase() === 'z' && e.shiftKey) || (isModifier && e.key.toLowerCase() === 'y')) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      // Escape: Deselect field
+      if (e.key === 'Escape') {
+        setSelectedFieldId(null);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo, handleManualSave]);
 
   // Form Settings & Publish state
   const [warningsModalOpen, setWarningsModalOpen] = useState(false);
@@ -956,12 +1121,63 @@ export function FormStudioBuilder({
             />
           </div>
 
+          {/* Undo / Redo Buttons (Jotform/Elementor parity) */}
+          <div className="flex items-center gap-0.5 mr-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={undo}
+              disabled={!canUndo}
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              title="Undo (Cmd/Ctrl+Z)"
+            >
+              <Undo2 className="size-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={redo}
+              disabled={!canRedo}
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              title="Redo (Cmd/Ctrl+Shift+Z)"
+            >
+              <Redo2 className="size-3.5" />
+            </Button>
+          </div>
+
+          {/* Save Status Indicator (Jotform/Elementor parity) */}
+          <div className="hidden md:flex items-center text-[10px] font-medium mr-1 min-w-[80px]">
+            {autosaveStatus === 'saving' && (
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Loader2 className="size-3 animate-spin" /> Saving...
+              </span>
+            )}
+            {autosaveStatus === 'saved' && (
+              <span className="text-emerald-600 flex items-center gap-1">
+                <Check className="size-3" /> Saved
+              </span>
+            )}
+            {autosaveStatus === 'error' && (
+              <span className="text-rose-500">Save failed</span>
+            )}
+            {autosaveStatus === 'idle' && isDirty && (
+              <span className="text-amber-600 flex items-center gap-1">
+                <span className="size-1.5 rounded-full bg-amber-500" /> Unsaved changes
+              </span>
+            )}
+            {autosaveStatus === 'idle' && !isDirty && lastSavedAt && (
+              <span className="text-muted-foreground">
+                Saved {lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+
           {/* Save Button */}
           <Button
             size="sm"
-            onClick={onSave}
-            disabled={saving}
-            className="h-8 gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-md shadow-emerald-600/25 rounded-xl px-3.5 cursor-pointer"
+            onClick={handleManualSave}
+            disabled={saving || (!isDirty && editMode)}
+            className="h-8 gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-md shadow-emerald-600/25 rounded-xl px-3.5 cursor-pointer disabled:opacity-50"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
             <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save Form'}</span>

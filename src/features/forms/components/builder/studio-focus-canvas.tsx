@@ -51,7 +51,23 @@ import { toast } from 'sonner';
 import type { EditorFormData, FormField } from '@/features/forms/types';
 import { WidgetRuntimeDispatcher } from '../runtime/widgets/widget-runtime-dispatcher';
 import { FormFieldRenderer, getFieldWidthClass } from '../runtime/shared-field-renderer';
+import { SortableFieldWrapper } from '../runtime/sortable-field-wrapper';
 import { evaluateFormulaSafe } from '../runtime/form-runtime-renderer';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { getFieldById } from '@/lib/forms/field-registry';
 import { resolveIcon } from '@/lib/forms/icon-resolver';
 
@@ -73,7 +89,7 @@ interface StudioFocusCanvasProps {
   currentStepIndex: number;
   onStepChange: (index: number) => void;
   selectedFieldId: string | null;
-  onSelectField: (fieldId: string) => void;
+  onSelectField: (fieldId: string | null) => void;
   selectedColumn?: 'left' | 'right';
   onSelectColumn?: (col: 'left' | 'right') => void;
   viewMode: 'focus' | 'paper' | 'split_media';
@@ -275,6 +291,35 @@ export function StudioFocusCanvas({
     toast.info('Field removed');
   };
 
+  // ─── Drag-and-Drop (Jotform/Elementor parity) ────────────────────────
+  // @dnd-kit sensors: pointer (mouse/touch) + keyboard (accessibility)
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 }, // 5px before drag starts (allows clicks)
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  // Handle drag end: reorder the field in formData.fields
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = fields.findIndex((f) => f.id === active.id);
+      const newIndex = fields.findIndex((f) => f.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      onFormDataChange((prev) => {
+        const newFields = arrayMove(prev.fields, oldIndex, newIndex);
+        return { ...prev, fields: newFields };
+      });
+    },
+    [fields, onFormDataChange],
+  );
+
 
 
   // Move Field to Another Step
@@ -366,6 +411,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
         // We apply it as a CSS variable so child elements can inherit it.
         ['--form-radius' as any]: borderRadius,
       }}
+      onClick={() => onSelectField(null)}
     >
       {/* ─── Outer Canvas Background Image Backdrop (if set in theme) ─── */}
       {formData.theme?.backgroundImageUrl && (
@@ -818,112 +864,36 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                       {/* 4. Left Column Widgets (Added directly to Left Hero) */}
                       {leftColumnFields.length > 0 && (
                         <div className="space-y-3 pt-3 border-t border-white/10">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1">
-                              <span>Left Column Widgets</span>
-                              <Badge className="bg-emerald-500 text-white text-[9px] py-0 px-1 font-extrabold">{leftColumnFields.length}</Badge>
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-2.5">
-                            {leftColumnFields.map((f) => {
-                              const isSelected = selectedFieldId === f.id;
-                              const widthCls = getWidthClasses(f.width);
-
-                              return (
-                                <div
-                                  key={f.id}
-                                  id={`field-card-${f.id}`}
-                                  data-field-id={f.id}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSelectColumn?.('left');
-                                    onSelectField(f.id);
-                                  }}
-                                  className={`group/card relative p-3 rounded-xl border transition-all cursor-pointer space-y-2 text-slate-900 dark:text-slate-100 ${widthCls} ${
-                                    isSelected
-                                      ? 'border-emerald-400 bg-white dark:bg-slate-900 ring-2 ring-emerald-400/30 shadow-md'
-                                      : 'border-white/20 bg-white/95 dark:bg-slate-900/95 hover:bg-white dark:hover:bg-slate-900 shadow-sm'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    <label className="text-xs font-bold truncate flex items-center gap-1 text-slate-900 dark:text-slate-100">
-                                      <span className="truncate">{f.label || 'Question'}</span>
-                                      {f.required && <span className="text-rose-500">*</span>}
-                                    </label>
-                                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                      {((f.widgetType && f.widgetType.includes('calculation')) || f.type === 'calculation') && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            onSelectColumn?.('left');
-                                            onSelectField(f.id);
-                                            toast.info('Opening Formula Pad...');
-                                          }}
-                                          className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 flex items-center gap-1 transition-colors border border-blue-200/60"
-                                          title="Open Formula Pad 🪄"
-                                        >
-                                          <Wand2 className="size-2.5" /> Formula
-                                        </button>
-                                      )}
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateField(f.id, { layoutColumn: 'right' })}
-                                        className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 text-slate-700 dark:text-slate-300 hover:text-emerald-700 transition-colors"
-                                        title="Move to Right Column"
-                                      >
-                                        Right 👉
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDuplicateField(f)}
-                                        className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
-                                        title="Duplicate"
-                                      >
-                                        <Copy className="size-3" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeleteField(f.id)}
-                                        className="p-1 rounded text-rose-500 hover:text-rose-700 transition-colors"
-                                        title="Delete"
-                                      >
-                                        <Trash2 className="size-3" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <StudioFieldPreview
-                                    field={f}
-                                    canvasFormData={effectiveCanvasFormData}
-                                    onCanvasFieldChange={handleCanvasFieldChange}
-                                    selectedFieldId={selectedFieldId}
-                                    onSelectField={onSelectField}
-                                    inputBorderRadius={inputBorderRadius}
-                                    defaultInputHeightCls={defaultInputHeightCls}
-                                  />
-                                </div>
-                              );
-                            })}
+                          <div className="flex flex-wrap gap-y-3 gap-x-2.5">
+                            {leftColumnFields.map((f) => (
+                              <StudioFieldPreview
+                                key={f.id}
+                                field={f}
+                                canvasFormData={effectiveCanvasFormData}
+                                onCanvasFieldChange={handleCanvasFieldChange}
+                                selectedFieldId={selectedFieldId}
+                                onSelectField={onSelectField}
+                                inputBorderRadius={inputBorderRadius}
+                                defaultInputHeightCls={defaultInputHeightCls}
+                              />
+                            ))}
                           </div>
                         </div>
                       )}
 
-                      {/* 5. Add Widget to Left Column Action Button */}
+                      {/* Add field to left column — subtle button */}
                       {onOpenAddWidgetDialog && (
-                        <div className="pt-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectColumn?.('left');
-                              onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
-                            }}
-                            className="w-full h-8 bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-semibold gap-1.5 rounded-xl shadow-xs"
-                          >
-                            <Plus className="size-3" /> Add Widget to Left Column
-                          </Button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectColumn?.('left');
+                            onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
+                          }}
+                          className="w-full h-8 bg-white/10 hover:bg-white/20 text-white border border-dashed border-white/20 text-xs font-semibold gap-1.5 rounded-xl flex items-center justify-center transition-all"
+                        >
+                          <Plus className="size-3" /> Add field
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1033,176 +1003,40 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                         </div>
                       )}
 
-                      {/* Right Fields Grid */}
-                      <div className="flex flex-wrap gap-3">
+                      {/* Right Fields Grid — WYSIWYG: no editor cards, just the fields */}
+                      <div className="flex flex-wrap gap-y-4 gap-x-3">
                         {rightColumnFields.length > 0 ? (
-                          rightColumnFields.map((f) => {
-                            const isSelected = selectedFieldId === f.id;
-                            const widthCls = getWidthClasses(f.width);
-
-                            return (
-                              <div
-                                key={f.id}
-                                id={`field-card-${f.id}`}
-                                data-field-id={f.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSelectColumn?.('right');
-                                  onSelectField(f.id);
-                                }}
-                                className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
-                                  isSelected
-                                    ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs'
-                                    : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-1">
-                                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5 truncate">
-                                    <span className="truncate">{f.label || 'Question'}</span>
-                                    {f.required && <span className="text-rose-500">*</span>}
-                                  </label>
-
-                                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                    {/* Move to Left Column Button */}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUpdateField(f.id, { layoutColumn: 'left' })}
-                                      className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 text-slate-700 dark:text-slate-300 hover:text-emerald-700 transition-colors"
-                                      title="Move to Left Hero Column"
-                                    >
-                                      👈 Left
-                                    </button>
-
-                                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5 text-[9px] font-bold">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSetFieldWidth(f.id, 'full')}
-                                        className={`px-1.5 py-0.5 rounded ${
-                                          !f.width || f.width === 'full'
-                                            ? 'bg-primary text-primary-foreground shadow-2xs font-extrabold'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                        }`}
-                                      >
-                                        1C
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleSetFieldWidth(f.id, 'half')}
-                                        className={`px-1.5 py-0.5 rounded ${
-                                          f.width === 'half'
-                                            ? 'bg-primary text-primary-foreground shadow-2xs font-extrabold'
-                                            : 'text-muted-foreground hover:text-foreground'
-                                        }`}
-                                      >
-                                        2C
-                                      </button>
-                                    </div>
-
-                                    {((f.widgetType && f.widgetType.includes('calculation')) || f.type === 'calculation') && (
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          onSelectColumn?.('right');
-                                          onSelectField(f.id);
-                                          toast.info('Opening Formula Pad...');
-                                        }}
-                                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 flex items-center gap-1 transition-colors border border-blue-200/60"
-                                        title="Open Formula Pad 🪄"
-                                      >
-                                        <Wand2 className="size-2.5" /> Formula
-                                      </button>
-                                    )}
-
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDuplicateField(f)}
-                                      className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                      title="Duplicate Block"
-                                    >
-                                      <Copy className="size-3" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteField(f.id)}
-                                      className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                                      title="Delete Block"
-                                    >
-                                      <Trash2 className="size-3" />
-                                    </button>
-
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="More Options">
-                                          <Sliders className="size-3" />
-                                        </button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="text-xs w-48">
-                                        <DropdownMenuItem onClick={() => handleUpdateField(f.id, { layoutColumn: 'left' })} className="gap-1.5">
-                                          👈 Move to Left Column
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleDuplicateField(f)} className="gap-1.5">
-                                          <Copy className="size-3.5" /> Duplicate Field
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleMoveField(f.id, 'up')} className="gap-1.5">
-                                          <ArrowUp className="size-3.5" /> Move Up
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleMoveField(f.id, 'down')} className="gap-1.5">
-                                          <ArrowDown className="size-3.5" /> Move Down
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem onClick={() => handleDeleteField(f.id)} className="gap-1.5 text-rose-600">
-                                          <Trash2 className="size-3.5" /> Delete Field
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                </div>
-
-                                <StudioFieldPreview
-                                  field={f}
-                                  canvasFormData={effectiveCanvasFormData}
-                                  onCanvasFieldChange={handleCanvasFieldChange}
-                                  selectedFieldId={selectedFieldId}
-                                  onSelectField={onSelectField}
-                                  inputBorderRadius={inputBorderRadius}
-                                  defaultInputHeightCls={defaultInputHeightCls}
-                                />
-                              </div>
-                            );
-                          })
+                          rightColumnFields.map((f) => (
+                            <StudioFieldPreview
+                              key={f.id}
+                              field={f}
+                              canvasFormData={effectiveCanvasFormData}
+                              onCanvasFieldChange={handleCanvasFieldChange}
+                              selectedFieldId={selectedFieldId}
+                              onSelectField={onSelectField}
+                              inputBorderRadius={inputBorderRadius}
+                              defaultInputHeightCls={defaultInputHeightCls}
+                            />
+                          ))
                         ) : (
-                          <div className="w-full p-8 border-2 border-dashed rounded-2xl text-center text-muted-foreground text-xs space-y-2">
-                            <p>No fields in this right column step yet.</p>
-                            {onOpenAddWidgetDialog && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  onSelectColumn?.('right');
-                                  onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
-                                }}
-                                className="h-8 text-xs gap-1.5"
-                              >
-                                <Plus className="size-3" /> Add Question to Right Column
-                              </Button>
-                            )}
+                          <div className="w-full p-8 text-center text-muted-foreground text-xs">
+                            <p>No fields yet. Click "+ Add field" below to add one.</p>
                           </div>
                         )}
                       </div>
 
-                      {/* Add Field Button inside split canvas */}
+                      {/* Add Field Button — subtle, appears as a dashed divider */}
                       {onOpenAddWidgetDialog && (
-                        <Button
+                        <button
                           type="button"
-                          variant="ghost"
                           onClick={() => {
                             onSelectColumn?.('right');
                             onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
                           }}
-                          className="w-full h-9 border border-dashed border-border text-xs text-muted-foreground hover:text-primary hover:border-primary/50 gap-1.5 rounded-xl"
+                          className="w-full h-10 border border-dashed border-border/60 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all flex items-center justify-center gap-1.5"
                         >
-                          <Plus className="size-3.5" /> Add Widget to Right Column
-                        </Button>
+                          <Plus className="size-3.5" /> Add field
+                        </button>
                       )}
                     </div>
 
@@ -1330,166 +1164,24 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                 </p>
               </div>
 
-              {/* Step Sub-Fields Render with Multi-Column Flex Grid */}
-              <div className="flex flex-wrap gap-3 pl-0 sm:pl-8">
+              {/* Step Sub-Fields Render — WYSIWYG: no editor cards */}
+              <div className="flex flex-wrap gap-y-4 gap-x-3 pl-0 sm:pl-8">
                 {activeStep.fields.length > 0 ? (
-                  activeStep.fields.map((field, fIdx) => {
-                    const isSelected = selectedFieldId === field.id;
-                    const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-                    const letter = letters[fIdx % letters.length];
-                    const widthCls = getWidthClasses(field.width);
-
-                    return (
-                      <div
-                        key={field.id}
-                        id={`field-card-${field.id}`}
-                        data-field-id={field.id}
-                        onClick={() => onSelectField(field.id)}
-                        className={`group relative p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
-                          isSelected
-                            ? 'border-emerald-600 dark:border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 ring-2 ring-emerald-600/20 shadow-sm'
-                            : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300'
-                        }`}
-                      >
-                        {/* Top Card Bar: Label + Widget Type Badge + Width Pills + Actions */}
-                        <div className="flex items-center justify-between gap-1">
-                          <label className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 min-w-0">
-                            <span className="size-4 rounded bg-slate-200 dark:bg-slate-700 text-[9px] font-bold flex items-center justify-center text-slate-700 dark:text-slate-300 shrink-0">
-                              {letter}
-                            </span>
-                            <span className="truncate">{field.label || 'Question'}</span>
-                            <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded border border-slate-200/80 dark:border-slate-700/80 shrink-0 select-none">
-                              {getFieldWidgetMeta(field).name}
-                            </span>
-                            {field.required && <span className="text-rose-500 font-bold">*</span>}
-                          </label>
-
-                          {/* Quick Column Width & Action Toolbar */}
-                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {/* Width Selector Pills */}
-                            <div className="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-0.5 text-[9px] font-bold">
-                              <button
-                                type="button"
-                                onClick={() => handleSetFieldWidth(field.id, 'full')}
-                                className={`px-1.5 py-0.5 rounded ${
-                                  !field.width || field.width === 'full'
-                                    ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-2xs font-extrabold'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                                title="100% Full Width (1 Column)"
-                              >
-                                1C
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSetFieldWidth(field.id, 'half')}
-                                className={`px-1.5 py-0.5 rounded ${
-                                  field.width === 'half'
-                                    ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-2xs font-extrabold'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                                title="50% Width (2 Columns)"
-                              >
-                                2C
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSetFieldWidth(field.id, 'third')}
-                                className={`px-1.5 py-0.5 rounded ${
-                                  field.width === 'third'
-                                    ? 'bg-white dark:bg-slate-900 text-emerald-600 shadow-2xs font-extrabold'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                                title="33% Width (3 Columns)"
-                              >
-                                3C
-                              </button>
-                            </div>
-
-                            {((field.widgetType && field.widgetType.includes('calculation')) || field.type === 'calculation') && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onSelectField(field.id);
-                                  toast.info('Opening Formula Pad...');
-                                }}
-                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 flex items-center gap-1 transition-colors border border-blue-200/60"
-                                title="Open Formula Pad 🪄"
-                              >
-                                <Wand2 className="size-2.5" /> Formula
-                              </button>
-                            )}
-
-                            {/* Direct Duplicate & Delete Action Buttons */}
-                            <button
-                              type="button"
-                              onClick={() => handleDuplicateField(field)}
-                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                              title="Duplicate Block"
-                            >
-                              <Copy className="size-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteField(field.id)}
-                              className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                              title="Delete Block"
-                            >
-                              <Trash2 className="size-3" />
-                            </button>
-
-                            {/* More Actions Menu */}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800" title="More Options">
-                                  <Sliders className="size-3" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="text-xs w-44">
-                                <DropdownMenuItem onClick={() => handleDuplicateField(field)} className="gap-1.5">
-                                  <Copy className="size-3.5" /> Duplicate Field
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleMoveField(field.id, 'up')} className="gap-1.5">
-                                  <ArrowUp className="size-3.5" /> Move Up
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleMoveField(field.id, 'down')} className="gap-1.5">
-                                  <ArrowDown className="size-3.5" /> Move Down
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleDeleteField(field.id)} className="gap-1.5 text-rose-600">
-                                  <Trash2 className="size-3.5" /> Delete Field
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-
-                        {/* Input Type Preview */}
-                        <StudioFieldPreview
-                          field={field}
-                          canvasFormData={effectiveCanvasFormData}
-                          onCanvasFieldChange={handleCanvasFieldChange}
-                          selectedFieldId={selectedFieldId}
-                          onSelectField={onSelectField}
-                          inputBorderRadius={inputBorderRadius}
-                          defaultInputHeightCls={defaultInputHeightCls}
-                        />
-                      </div>
-                    );
-                  })
+                  activeStep.fields.map((field) => (
+                    <StudioFieldPreview
+                      key={field.id}
+                      field={field}
+                      canvasFormData={effectiveCanvasFormData}
+                      onCanvasFieldChange={handleCanvasFieldChange}
+                      selectedFieldId={selectedFieldId}
+                      onSelectField={onSelectField}
+                      inputBorderRadius={inputBorderRadius}
+                      defaultInputHeightCls={defaultInputHeightCls}
+                    />
+                  ))
                 ) : (
-                  <div className="w-full p-8 border-2 border-dashed rounded-2xl text-center text-muted-foreground text-xs space-y-2">
-                    <p>No questions on this step yet.</p>
-                    {onOpenAddWidgetDialog && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => onOpenAddWidgetDialog(currentStepIndex, activeStep.id)}
-                        className="text-xs font-semibold gap-1"
-                      >
-                        <Plus className="size-3.5" /> Add Question / Widget
-                      </Button>
-                    )}
+                  <div className="w-full p-8 text-center text-muted-foreground text-xs">
+                    <p>No questions yet.</p>
                   </div>
                 )}
               </div>
@@ -1565,146 +1257,30 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                   )}
                 </div>
 
-                {/* Multi-Column Field Grid */}
-                <div className="flex flex-wrap gap-4 items-start">
-                  {step.fields.map((f, fIdx) => {
-                    const isSelected = selectedFieldId === f.id;
-                    const widthCls = getWidthClasses(f.width);
-
-                    return (
-                      <div
-                        key={f.id}
-                        id={`field-card-${f.id}`}
-                        data-field-id={f.id}
-                        onClick={() => onSelectField(f.id)}
-                        className={`group relative p-4 rounded-2xl border transition-all cursor-pointer space-y-2 ${widthCls} ${
-                          isSelected
-                            ? 'border-emerald-600 dark:border-emerald-400 bg-emerald-50/30 dark:bg-emerald-950/20 ring-2 ring-emerald-600/20 shadow-sm'
-                            : 'border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 hover:border-slate-300'
-                        }`}
-                      >
-                        {/* Header & Column Selector */}
-                        <div className="flex items-center justify-between gap-1">
-                          <label className="text-xs font-bold text-foreground flex items-center gap-1.5 truncate">
-                            <span className="truncate">{f.label || 'Question'}</span>
-                            <span className="text-[9px] font-semibold text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border/80 shrink-0 select-none">
-                              {getFieldWidgetMeta(f).name}
-                            </span>
-                            {f.required && <span className="text-rose-500">*</span>}
-                          </label>
-
-                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {/* Width Selector Pills */}
-                            <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md p-0.5 text-[9px] font-bold">
-                              <button
-                                type="button"
-                                onClick={() => handleSetFieldWidth(f.id, 'full')}
-                                className={`px-1.5 py-0.5 rounded ${
-                                  !f.width || f.width === 'full'
-                                    ? 'bg-emerald-600 text-white shadow-2xs'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                                title="100% Full Width (1 Column)"
-                              >
-                                100%
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSetFieldWidth(f.id, 'half')}
-                                className={`px-1.5 py-0.5 rounded ${
-                                  f.width === 'half'
-                                    ? 'bg-emerald-600 text-white shadow-2xs'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                                title="50% Half Width (2 Columns)"
-                              >
-                                50%
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSetFieldWidth(f.id, 'third')}
-                                className={`px-1.5 py-0.5 rounded ${
-                                  f.width === 'third'
-                                    ? 'bg-emerald-600 text-white shadow-2xs'
-                                    : 'text-muted-foreground hover:text-foreground'
-                                }`}
-                                title="33% Third Width (3 Columns)"
-                              >
-                                33%
-                              </button>
-                            </div>
-
-                            {((f.widgetType && f.widgetType.includes('calculation')) || f.type === 'calculation') && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onSelectField(f.id);
-                                  toast.info('Opening Formula Pad...');
-                                }}
-                                className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 flex items-center gap-1 transition-colors border border-blue-200/60"
-                                title="Open Formula Pad 🪄"
-                              >
-                                <Wand2 className="size-2.5" /> Formula
-                              </button>
-                            )}
-
-                            {/* Direct Duplicate & Delete Action Buttons */}
-                            <button
-                              type="button"
-                              onClick={() => handleDuplicateField(f)}
-                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                              title="Duplicate Block"
-                            >
-                              <Copy className="size-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteField(f.id)}
-                              className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                              title="Delete Block"
-                            >
-                              <Trash2 className="size-3" />
-                            </button>
-
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="p-1 rounded text-muted-foreground hover:text-foreground" title="More Options">
-                                  <Sliders className="size-3" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="text-xs w-44">
-                                <DropdownMenuItem onClick={() => handleDuplicateField(f)} className="gap-1.5">
-                                  <Copy className="size-3.5" /> Duplicate Field
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleMoveField(f.id, 'up')} className="gap-1.5">
-                                  <ArrowUp className="size-3.5" /> Move Up
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleMoveField(f.id, 'down')} className="gap-1.5">
-                                  <ArrowDown className="size-3.5" /> Move Down
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleDeleteField(f.id)} className="gap-1.5 text-rose-600">
-                                  <Trash2 className="size-3.5" /> Delete Field
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
-
-                        {/* Input Preview */}
-                        <StudioFieldPreview
+                {/* Multi-Column Field Grid — WYSIWYG + Drag-and-Drop */}
+                <DndContext
+                  sensors={dndSensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={step.fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                    <div className="flex flex-wrap gap-y-4 gap-x-3 items-start">
+                      {step.fields.map((f) => (
+                        <SortableFieldWrapper
+                          key={f.id}
                           field={f}
-                          canvasFormData={effectiveCanvasFormData}
-                          onCanvasFieldChange={handleCanvasFieldChange}
+                          value={effectiveCanvasFormData[f.id]}
+                          onChange={(val) => handleCanvasFieldChange(f.id, val)}
+                          allFormData={effectiveCanvasFormData}
                           selectedFieldId={selectedFieldId}
                           onSelectField={onSelectField}
                           inputBorderRadius={inputBorderRadius}
                           defaultInputHeightCls={defaultInputHeightCls}
                         />
-                      </div>
-                    );
-                  })}
-                </div>
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               </div>
             ))}
           </div>
