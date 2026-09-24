@@ -22,8 +22,10 @@ function createPrismaClient() {
     console.log('[DB] Connecting to Supabase PostgreSQL via Prisma')
   } else if (databaseUrl?.startsWith('file:')) {
     console.log('[DB] Connecting to SQLite:', databaseUrl?.substring(0, 40))
+  } else if (databaseUrl) {
+    console.log('[DB] Connecting to PostgreSQL via Prisma, URL prefix:', databaseUrl.substring(0, 30) + '...')
   } else {
-    console.log('[DB] Connecting to PostgreSQL via Prisma, URL prefix:', databaseUrl?.substring(0, 30) + '...')
+    console.log('[DB] Connecting via Prisma (DATABASE_URL not set)')
   }
 
   return new PrismaClient({
