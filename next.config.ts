@@ -74,8 +74,8 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
-        source: '/ai-employee',
-        destination: '/#ai-receptionist',
+        source: '/ai-receptionist',
+        destination: '/ai-employee',
         permanent: true,
       },
       {
