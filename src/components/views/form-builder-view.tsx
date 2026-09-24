@@ -133,7 +133,53 @@ export function FormBuilderView() {
       }
       const data = await res.json();
       const apiForms: ApiForm[] = data.forms || [];
-      setForms(apiForms.map(apiFormToFormItem));
+      const formItems = apiForms.map(apiFormToFormItem);
+      setForms(formItems);
+
+      // Restore active edit session on hard refresh if present
+      try {
+        if (typeof window !== 'undefined') {
+          const sp = new URLSearchParams(window.location.search);
+          const urlEditId = sp.get('editFormId') || sp.get('formId');
+          const storedEditId = sessionStorage.getItem('fieseros_active_edit_form_id');
+          const targetId = urlEditId || storedEditId;
+          if (targetId) {
+            const targetForm = formItems.find((f) => f.id === targetId || f.slug === targetId);
+            if (targetForm) {
+              setEditMode(true);
+              setEditFormId(targetForm.id);
+              setFormData({
+                id: targetForm.id,
+                slug: targetForm.slug,
+                name: targetForm.name || '',
+                description: targetForm.description || '',
+                type: targetForm.type || 'lead_capture',
+                status: targetForm.status || 'active',
+                fields: Array.isArray(targetForm.fields) ? [...targetForm.fields] : [],
+                submissionActions: targetForm.submissionActions
+                  ? {
+                      ...targetForm.submissionActions,
+                      additional: { ...(targetForm.submissionActions.additional || {}) },
+                    }
+                  : getDefaultActions(targetForm.type || 'lead_capture'),
+                fieldMappings: Array.isArray(targetForm.fieldMappings) ? [...targetForm.fieldMappings] : [],
+                welcomeMessage: targetForm.welcomeMessage || '',
+                completionMessage: targetForm.completionMessage || '',
+                isMultiStep: targetForm.isMultiStep,
+                steps: targetForm.steps,
+                primaryColor: targetForm.primaryColor || targetForm.theme?.primaryColor,
+                submitButtonText: targetForm.submitButtonText || targetForm.settings?.submitButtonText,
+                theme: targetForm.theme,
+                mediaPanel: targetForm.mediaPanel || targetForm.theme?.mediaPanel,
+                rules: targetForm.rules || [],
+                settings: targetForm.settings,
+              });
+              setActiveTab('details');
+              setShowCreateDialog(true);
+            }
+          }
+        }
+      } catch {}
     } catch (err) {
       setFormsError(err instanceof Error ? err.message : 'Failed to load forms');
       setForms([]);
@@ -149,6 +195,11 @@ export function FormBuilderView() {
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const resetFormData = useCallback(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('fieseros_active_edit_form_id');
+      }
+    } catch {}
     setFormData({
       name: '', description: '', type: 'lead_capture', status: 'active',
       fields: [],
@@ -269,6 +320,11 @@ export function FormBuilderView() {
   }, []);
 
   const handleOpenEdit = (form: FormItem) => {
+    try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('fieseros_active_edit_form_id', form.id);
+      }
+    } catch {}
     setEditMode(true);
     setEditFormId(form.id);
     setFormData({

@@ -4,20 +4,86 @@ import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-
 
 export const dynamic = 'force-dynamic';
 
+export interface PublicAgentConfig {
+  id: string;
+  slug: string;
+  name: string;
+  roleTitle: string;
+  avatarUrl: string;
+  statusText: string;
+  brandColor: string;
+  voiceTone: string;
+  welcomeGreeting: string;
+  greetingSubtitle?: string;
+  quickActions: FormAgentData['quickActions'];
+  navigation: FormAgentData['navigation'];
+  connectedForms: Array<{
+    id: string;
+    name: string;
+    description?: string | null;
+  }>;
+  channels: {
+    chatbot: FormAgentData['channels']['chatbot'];
+  };
+  updatedAt: string;
+}
+
+/**
+ * Sanitize full internal FormAgentData into a secure PublicAgentConfig.
+ * Strips private system prompts, guardrails, notification emails, phone numbers, and credentials.
+ */
+function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
+  return {
+    id: agent.id,
+    slug: agent.slug,
+    name: agent.name || 'AI Assistant',
+    roleTitle: agent.roleTitle || 'Customer Concierge',
+    avatarUrl: agent.avatarUrl || '',
+    statusText: agent.statusText || 'Online',
+    brandColor: agent.brandColor || '#059669',
+    voiceTone: agent.voiceTone || 'friendly',
+    welcomeGreeting: agent.welcomeGreeting || 'Hello! How can I assist you today?',
+    greetingSubtitle: agent.greetingSubtitle,
+    quickActions: Array.isArray(agent.quickActions) ? agent.quickActions : [],
+    navigation: agent.navigation || {
+      chatEnabled: true,
+      voiceEnabled: false,
+      formsEnabled: true,
+      historyEnabled: false,
+      presentationEnabled: false,
+      whatsappEnabled: false,
+    },
+    connectedForms: Array.isArray(agent.connectedForms)
+      ? agent.connectedForms.map((f) => ({
+          id: f.id,
+          name: f.name || 'Form',
+          description: f.description,
+        }))
+      : [],
+    channels: {
+      chatbot: agent.channels?.chatbot || {
+        enabled: true,
+        layoutMode: 'floating',
+        position: 'right',
+        layoutButtonToggle: true,
+        sidebarBehavior: 'overlay',
+        welcomeStyle: 'avatar',
+        greetingToggle: true,
+        placeholderMessage: 'Ask anything or complete a form...',
+        aiGeneratedGreeting: true,
+        popupDelaySeconds: 3,
+        autoOpenOnPageLoad: false,
+      },
+    },
+    updatedAt: agent.updatedAt || new Date().toISOString(),
+  };
+}
+
 /**
  * GET /api/public/agents/[slugOrId]
  *
  * Public endpoint (no auth required) to fetch an AI agent by slug or ID.
- * Used by:
- *   - Standalone agent page: /agent/[agentId]
- *   - Site-wide embed widget: <SiteAgentWidget agentId="..." />
- *   - External iframe embeds
- *
- * The endpoint merges the DB row with the configJson to produce a full
- * FormAgentData object. If the agent is not found, returns 404.
- *
- * CORS headers allow cross-origin requests so the widget can be embedded
- * on any website.
+ * Returns strictly sanitized PublicAgentConfig with CORS headers.
  */
 export async function GET(
   request: NextRequest,
@@ -30,36 +96,20 @@ export async function GET(
   }
 
   try {
-    // Try by slug first, then by ID
-    let agent = null;
-    try {
-      agent = await db.formAgent.findUnique({ where: { slug: slugOrId } });
-    } catch {
-      // slug column might not have a unique constraint — try findFirst
-      try {
-        agent = await db.formAgent.findFirst({ where: { slug: slugOrId } });
-      } catch {
-        // DB not available
-      }
-    }
-
-    if (!agent) {
-      try {
-        agent = await db.formAgent.findUnique({ where: { id: slugOrId } });
-      } catch {
-        // DB not available
-      }
-    }
+    let agent = await db.formAgent.findFirst({
+      where: {
+        OR: [{ slug: slugOrId }, { id: slugOrId }],
+      },
+    });
 
     if (!agent) {
       return NextResponse.json(
-        { error: 'Agent not found', fallback: { ...DEFAULT_FORM_AGENT, id: slugOrId } },
+        { error: 'Agent not found', fallback: sanitizePublicAgent({ ...DEFAULT_FORM_AGENT, id: slugOrId }) },
         { status: 404 },
       );
     }
 
-    // Merge DB row with configJson
-    const config = agent.configJson as Partial<FormAgentData>;
+    const config = (agent.configJson as Partial<FormAgentData>) || {};
     const merged: FormAgentData = {
       ...DEFAULT_FORM_AGENT,
       ...config,
@@ -77,8 +127,10 @@ export async function GET(
       updatedAt: agent.updatedAt.toISOString(),
     };
 
+    const publicConfig = sanitizePublicAgent(merged);
+
     return NextResponse.json(
-      { agent: merged },
+      { agent: publicConfig },
       {
         headers: {
           'Access-Control-Allow-Origin': '*',
@@ -91,7 +143,7 @@ export async function GET(
   } catch (error) {
     console.error('[public/agents] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to load agent', fallback: { ...DEFAULT_FORM_AGENT, id: slugOrId } },
+      { error: 'Failed to load agent', fallback: sanitizePublicAgent({ ...DEFAULT_FORM_AGENT, id: slugOrId }) },
       { status: 500 },
     );
   }

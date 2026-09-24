@@ -3,8 +3,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FormSchema, FormField } from '@/lib/forms/form-schema-types';
 import { WidgetRuntimeDispatcher } from './widgets/widget-runtime-dispatcher';
-import { ConversationalAgentRuntime } from './conversational-agent-runtime';
-import { AgentPreviewBridge } from './agent-preview-bridge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -482,8 +480,8 @@ export interface FormRuntimeRendererProps {
   formDescription?: string | null;
   schema: FormSchema;
   branding?: { businessName?: string; logoUrl?: string } | null;
-  mode?: 'paper' | 'card' | 'agent';
-  onModeChange?: (mode: 'paper' | 'card' | 'agent') => void;
+  mode?: 'paper' | 'card' | 'classic';
+  onModeChange?: (mode: 'paper' | 'card') => void;
   allowModeSwitch?: boolean;
   onSubmitSuccess?: (result: any) => void;
   previewMode?: boolean;
@@ -501,7 +499,20 @@ export function FormRuntimeRenderer({
   onSubmitSuccess,
   previewMode = false,
 }: FormRuntimeRendererProps) {
-  const [activeMode, setActiveMode] = useState<'paper' | 'card' | 'agent'>(initialMode);
+  const resolvedInitialMode: 'paper' | 'card' =
+    initialMode === 'card' || schema.theme?.layout === 'card' || (schema.settings as any)?.formLayout === 'single_question'
+      ? 'card'
+      : 'paper';
+  const [activeMode, setActiveMode] = useState<'paper' | 'card'>(resolvedInitialMode);
+
+  useEffect(() => {
+    const layout = schema.theme?.layout || (schema.settings as any)?.formLayout;
+    if (initialMode === 'card' || layout === 'card' || layout === 'single_question') {
+      setActiveMode('card');
+    } else {
+      setActiveMode('paper');
+    }
+  }, [initialMode, schema.theme?.layout, (schema.settings as any)?.formLayout]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   // ─── Initialize formData with default values SYNCHRONOUSLY ──────────────
   // This ensures calculation fields (form_calculation) have access to
@@ -707,11 +718,7 @@ export function FormRuntimeRenderer({
     }
   };
 
-  useEffect(() => {
-    setActiveMode(initialMode);
-  }, [initialMode]);
-
-  const handleModeSwitch = (newMode: 'paper' | 'card' | 'agent') => {
+  const handleModeSwitch = (newMode: 'paper' | 'card') => {
     setActiveMode(newMode);
     onModeChange?.(newMode);
   };
@@ -723,7 +730,7 @@ export function FormRuntimeRenderer({
   const mediaPanel = schema.mediaPanel || schema.theme?.mediaPanel;
   const isSplitLayout =
     (schema.theme?.layout === 'split_media' || (mediaPanel && mediaPanel.enabled !== false)) &&
-    activeMode !== 'agent';
+    activeMode === 'paper';
   const splitRatio = mediaPanel?.splitRatio || '50-50';
   const isRightSide = mediaPanel?.position === 'right';
 
@@ -1081,60 +1088,6 @@ export function FormRuntimeRenderer({
     );
   }
 
-  // Render Conversational AI Voice/Chat Agent Mode
-  if (activeMode === 'agent') {
-    const primaryColor = schema.theme?.primaryColor || '#059669';
-    return (
-      <div className="w-full max-w-xl mx-auto flex flex-col items-center">
-        {allowModeSwitch && (
-          <div className="flex justify-end gap-1.5 pb-3 w-full max-w-[380px]">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => handleModeSwitch('paper')}
-              className="text-xs h-7 rounded-lg cursor-pointer"
-            >
-              Classic Paper
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => handleModeSwitch('card')}
-              className="text-xs h-7 rounded-lg cursor-pointer"
-            >
-              Card Swipe
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => handleModeSwitch('agent')}
-              className="text-xs h-7 gap-1 font-semibold rounded-lg cursor-pointer shadow-xs"
-              style={{ color: primaryColor }}
-            >
-              <Bot className="size-3.5" /> AI Agent
-            </Button>
-          </div>
-        )}
-        {/* AgentPreviewBridge renders the AgentDeviceSimulator widget with
-            full interactive conversational experience. It reads schema.agentConfig
-            (or synthesizes a default) and uses live chat on live forms or simulated
-            chat in previewMode. */}
-        <div className="w-full flex justify-center">
-          <AgentPreviewBridge
-            schema={schema}
-            formName={formName}
-            formDescription={formDescription}
-            isTestMode={previewMode}
-            onSwitchToPaper={() => handleModeSwitch('paper')}
-          />
-        </div>
-      </div>
-    );
-  }
-
   // Render Classic Paper / Card Swipe / Split Media Mode
   const primaryColor = schema.theme?.primaryColor || '#059669';
   const buttonColor = schema.theme?.buttonColor || primaryColor;
@@ -1195,39 +1148,7 @@ export function FormRuntimeRenderer({
         if (!raw) return null;
         return <style dangerouslySetInnerHTML={{ __html: raw }} />;
       })()}
-      {/* Mode Switcher if enabled */}
-      {allowModeSwitch && (
-        <div className="flex justify-end gap-1.5 pb-1">
-          <Button
-            type="button"
-            variant={activeMode === 'paper' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => handleModeSwitch('paper')}
-            className="text-xs h-7 rounded-lg cursor-pointer"
-          >
-            Classic Paper
-          </Button>
-          <Button
-            type="button"
-            variant={activeMode === 'card' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => handleModeSwitch('card')}
-            className="text-xs h-7 rounded-lg cursor-pointer"
-          >
-            Card Swipe
-          </Button>
-          <Button
-            type="button"
-            variant={(activeMode as 'paper' | 'card' | 'agent') === 'agent' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => handleModeSwitch('agent')}
-            className="text-xs h-7 gap-1 font-semibold rounded-lg cursor-pointer"
-            style={{ color: primaryColor }}
-          >
-            <Bot className="size-3.5" /> AI Agent
-          </Button>
-        </div>
-      )}
+
 
       {/* Top Multi-Step Navigation Tabs (Desktop & Tablet) */}
       {isMultiStep && steps.length > 1 && (

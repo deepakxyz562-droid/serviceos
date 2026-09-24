@@ -44,6 +44,7 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
     createAgentFromPreset('dental_medical'),
     createAgentFromPreset('legal_intake'),
   ]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeStudioAgent, setActiveStudioAgent] = useState<FormAgentData | null>(null);
   const [presetDialogOpen, setPresetDialogOpen] = useState(false);
@@ -51,11 +52,29 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<FormAgentData | null>(null);
   const [siteOrigin, setSiteOrigin] = useState('');
 
+  const fetchAgents = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/forms/agents');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.agents) && data.agents.length > 0) {
+          setAgents(data.agents);
+        }
+      }
+    } catch {
+      // Non-fatal, keep fallback presets
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setSiteOrigin(window.location.origin);
     }
-  }, []);
+    fetchAgents();
+  }, [fetchAgents]);
 
   // Filter agents by search
   const filteredAgents = agents.filter(
@@ -88,10 +107,25 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
   };
 
   // Handle delete agent
-  const handleDeleteAgent = (agentId: string) => {
-    setAgents((prev) => prev.filter((a) => a.id !== agentId));
-    setDeleteConfirmAgent(null);
-    toast.success('Agent removed');
+  const handleDeleteAgent = async (agentId: string) => {
+    try {
+      const res = await fetch(`/api/forms/agents?id=${encodeURIComponent(agentId)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setAgents((prev) => prev.filter((a) => a.id !== agentId));
+        setDeleteConfirmAgent(null);
+        toast.success('Agent removed from database');
+      } else {
+        setAgents((prev) => prev.filter((a) => a.id !== agentId));
+        setDeleteConfirmAgent(null);
+        toast.success('Agent removed');
+      }
+    } catch {
+      setAgents((prev) => prev.filter((a) => a.id !== agentId));
+      setDeleteConfirmAgent(null);
+      toast.success('Agent removed');
+    }
   };
 
   // If studio is open for an agent, render the full-screen FormAgentStudio
@@ -103,7 +137,20 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
           setActiveStudioAgent(updated);
           setAgents((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
         }}
-        onBack={() => setActiveStudioAgent(null)}
+        onSave={async (savedAgent) => {
+          setActiveStudioAgent(savedAgent);
+          setAgents((prev) => {
+            const exists = prev.some((a) => a.id === savedAgent.id);
+            if (exists) {
+              return prev.map((a) => (a.id === savedAgent.id ? savedAgent : a));
+            }
+            return [savedAgent, ...prev];
+          });
+        }}
+        onBack={() => {
+          setActiveStudioAgent(null);
+          fetchAgents();
+        }}
         siteOrigin={siteOrigin}
       />
     );

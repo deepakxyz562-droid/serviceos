@@ -156,6 +156,22 @@ export interface FormMediaPanel {
   showTestimonial?: boolean;
 }
 
+export type FormLayout = 'classic' | 'card';
+
+export interface FormDocument {
+  id: string;
+  version: number;
+  name: string;
+  description?: string;
+  layout: FormLayout;
+  steps: FormStep[];
+  fields: FormField[];
+  rules: ConditionalRule[];
+  theme: FormTheme;
+  settings: FormSchema['settings'];
+  mediaPanel?: FormMediaPanel;
+}
+
 export interface FormTheme {
   primaryColor: string;
   backgroundColor: string;
@@ -172,7 +188,7 @@ export interface FormTheme {
   fontFamily?: string;
   logoUrl?: string | null;
   showTopBorder?: boolean; // Accent top border/line
-  layout?: 'classic' | 'card' | 'multi_step' | 'conversational' | 'split_media' | string;
+  layout?: FormLayout | 'multi_step' | 'conversational' | 'split_media' | string;
   mediaPanel?: FormMediaPanel;
   // ─── 2026 Background & Backdrop Customization ───
   backgroundImageUrl?: string | null;
@@ -396,13 +412,21 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
     ? Boolean((s as any).isMultiStep)
     : steps.length > 1;
 
+  const rawLayout = s.theme?.layout || (s.settings as any)?.formLayout;
+  const canonicalLayout: FormLayout =
+    rawLayout === 'card' || rawLayout === 'single_question' ? 'card' : 'classic';
+
   return {
     version: s.version || 1,
     isMultiStep,
     steps,
     fields: sanitizedFields,
     rules: Array.isArray(s.rules) ? s.rules : [],
-    theme: { ...DEFAULT_FORM_THEME, ...(s.theme || {}) },
+    theme: {
+      ...DEFAULT_FORM_THEME,
+      ...(s.theme || {}),
+      layout: s.theme?.layout || (s.settings as any)?.formLayout || DEFAULT_FORM_THEME.layout,
+    },
     settings: {
       submitButtonText: s.settings?.submitButtonText || 'Submit',
       successTitle: s.settings?.successTitle || 'Thank you!',

@@ -57,21 +57,27 @@ export async function POST(
       console.warn('Chat AI call failed, using intelligent rule responder:', e);
     }
 
-    // Heuristic response fallback
+    // Intelligent heuristic response fallback
     if (!replyText) {
       const lower = message.toLowerCase();
-      if (lower.includes('schedule') || lower.includes('appointment') || lower.includes('book')) {
-        replyText = `I would be happy to help you schedule an appointment! Please complete our **${agent.connectedForms?.[0]?.name || 'Appointment & Inquiry Form'}** so our team can reserve your preferred time slot.`;
-        suggestedFormId = agent.connectedForms?.[0]?.id || 'form_1';
-      } else if (lower.includes('form') || lower.includes('inquiry')) {
-        replyText = `Here is our **${agent.connectedForms?.[0]?.name || 'Inquiry Form'}**. Please fill out your contact details and dental notes.`;
-        suggestedFormId = agent.connectedForms?.[0]?.id || 'form_1';
-      } else if (lower.includes('hour') || lower.includes('time') || lower.includes('location')) {
-        replyText = `We are open **Monday through Friday from 8:00 AM to 6:00 PM**, and Saturday from 9:00 AM to 2:00 PM. Emergency walk-ins are always welcomed!`;
-      } else if (lower.includes('insurance') || lower.includes('price') || lower.includes('cost')) {
-        replyText = `We accept most major PPO dental insurances (Delta Dental, Cigna, MetLife, Aetna, Guardian) and offer flexible 0% interest payment plans!`;
+      const firstForm = agent.connectedForms?.[0];
+      const formName = firstForm?.name || 'Inquiry Form';
+      
+      if (lower.includes('schedule') || lower.includes('appointment') || lower.includes('book') || lower.includes('quote')) {
+        replyText = `I would be happy to help you with that! Please fill out our **${formName}** so our team can get started right away.`;
+        suggestedFormId = firstForm?.id || null;
+      } else if (lower.includes('form') || lower.includes('inquiry') || lower.includes('apply') || lower.includes('contact')) {
+        replyText = `Here is our **${formName}**. Please fill in your details and we'll take care of the rest.`;
+        suggestedFormId = firstForm?.id || null;
+      } else if (lower.includes('hour') || lower.includes('time') || lower.includes('open') || lower.includes('available')) {
+        replyText = `We are available to assist you Monday through Friday during standard business hours. You can also submit an inquiry anytime via our online form!`;
+        suggestedFormId = firstForm?.id || null;
+      } else if (lower.includes('price') || lower.includes('cost') || lower.includes('estimate') || lower.includes('fee')) {
+        replyText = `We provide clear, competitive pricing tailored to your needs. Please submit a quick request through our **${formName}** for an accurate estimate.`;
+        suggestedFormId = firstForm?.id || null;
       } else {
-        replyText = `Thank you for reaching out! I'm ${agent.name}, your ${agent.roleTitle}. How else can I assist you with your appointment or inquiry today?`;
+        replyText = `Thank you for reaching out! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I assist you today? You can also complete our **${formName}** at any time.`;
+        suggestedFormId = firstForm?.id || null;
       }
     }
 

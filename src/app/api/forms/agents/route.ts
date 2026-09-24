@@ -22,76 +22,68 @@ export async function GET(request: NextRequest) {
 
     // Fetch a single agent
     if (agentId || agentSlug) {
-      try {
-        const agent = agentId
-          ? await db.formAgent.findUnique({ where: { id: agentId } })
-          : await db.formAgent.findUnique({ where: { slug: agentSlug! } });
-
-        if (agent) {
-          // Merge DB row with the configJson (which contains the full FormAgentData)
-          const config = agent.configJson as Partial<FormAgentData>;
-          const merged: FormAgentData = {
-            ...DEFAULT_FORM_AGENT,
-            ...config,
-            id: agent.id,
-            tenantId: agent.tenantId || undefined,
-            slug: agent.slug,
-            name: agent.name,
-            roleTitle: agent.roleTitle,
-            avatarUrl: agent.avatarUrl,
-            statusText: agent.statusText,
-            brandColor: agent.brandColor,
-            voiceTone: agent.voiceTone as FormAgentData['voiceTone'],
-            welcomeGreeting: agent.welcomeGreeting,
-            greetingSubtitle: agent.greetingSubtitle || undefined,
-            updatedAt: agent.updatedAt.toISOString(),
-          };
-          return NextResponse.json({ agent: merged });
-        }
-      } catch {
-        // DB not available — fall through to default
+      const whereClause: any = agentId ? { id: agentId } : { slug: agentSlug! };
+      if (user?.tenantId) {
+        whereClause.tenantId = user.tenantId;
       }
 
-      // Fallback to default agent
-      const fallback = { ...DEFAULT_FORM_AGENT, id: agentId || agentSlug || 'default' };
-      return NextResponse.json({ agent: fallback });
+      const agent = await db.formAgent.findFirst({ where: whereClause });
+
+      if (agent) {
+        // Merge DB row with the configJson (which contains the full FormAgentData)
+        const config = (agent.configJson as Partial<FormAgentData>) || {};
+        const merged: FormAgentData = {
+          ...DEFAULT_FORM_AGENT,
+          ...config,
+          id: agent.id,
+          tenantId: agent.tenantId || undefined,
+          slug: agent.slug,
+          name: agent.name,
+          roleTitle: agent.roleTitle,
+          avatarUrl: agent.avatarUrl,
+          statusText: agent.statusText,
+          brandColor: agent.brandColor,
+          voiceTone: agent.voiceTone as FormAgentData['voiceTone'],
+          welcomeGreeting: agent.welcomeGreeting,
+          greetingSubtitle: agent.greetingSubtitle || undefined,
+          updatedAt: agent.updatedAt.toISOString(),
+        };
+        return NextResponse.json({ agent: merged });
+      }
+
+      return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
     // List all agents for the tenant
-    try {
-      const agents = await db.formAgent.findMany({
-        where: user?.tenantId ? { tenantId: user.tenantId } : {},
-        orderBy: { createdAt: 'desc' },
-      });
+    const agents = await db.formAgent.findMany({
+      where: user?.tenantId ? { tenantId: user.tenantId } : {},
+      orderBy: { createdAt: 'desc' },
+    });
 
-      if (agents.length > 0) {
-        const merged = agents.map((agent) => {
-          const config = agent.configJson as Partial<FormAgentData>;
-          return {
-            ...DEFAULT_FORM_AGENT,
-            ...config,
-            id: agent.id,
-            tenantId: agent.tenantId || undefined,
-            slug: agent.slug,
-            name: agent.name,
-            roleTitle: agent.roleTitle,
-            avatarUrl: agent.avatarUrl,
-            statusText: agent.statusText,
-            brandColor: agent.brandColor,
-            voiceTone: agent.voiceTone as FormAgentData['voiceTone'],
-            welcomeGreeting: agent.welcomeGreeting,
-            greetingSubtitle: agent.greetingSubtitle || undefined,
-            updatedAt: agent.updatedAt.toISOString(),
-          } as FormAgentData;
-        });
-        return NextResponse.json({ agents: merged });
-      }
-    } catch {
-      // DB not available — fall through to default
+    if (agents.length > 0) {
+      const merged = agents.map((agent) => {
+        const config = (agent.configJson as Partial<FormAgentData>) || {};
+        return {
+          ...DEFAULT_FORM_AGENT,
+          ...config,
+          id: agent.id,
+          tenantId: agent.tenantId || undefined,
+          slug: agent.slug,
+          name: agent.name,
+          roleTitle: agent.roleTitle,
+          avatarUrl: agent.avatarUrl,
+          statusText: agent.statusText,
+          brandColor: agent.brandColor,
+          voiceTone: agent.voiceTone as FormAgentData['voiceTone'],
+          welcomeGreeting: agent.welcomeGreeting,
+          greetingSubtitle: agent.greetingSubtitle || undefined,
+          updatedAt: agent.updatedAt.toISOString(),
+        } as FormAgentData;
+      });
+      return NextResponse.json({ agents: merged });
     }
 
-    // No agents in DB (or DB unavailable) — return the default
-    return NextResponse.json({ agents: [DEFAULT_FORM_AGENT] });
+    return NextResponse.json({ agents: [] });
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to fetch form agents', details: error instanceof Error ? error.message : 'Unknown' },
@@ -133,85 +125,106 @@ export async function POST(request: NextRequest) {
       ...restConfig
     } = body;
 
-    try {
-      // If body.id exists, try to update
-      if (body.id && !body.id.startsWith('agent_') && !body.id.startsWith('default')) {
-        const existing = await db.formAgent.findUnique({ where: { id: body.id } });
-        if (existing) {
-          const updated = await db.formAgent.update({
-            where: { id: body.id },
-            data: {
-              tenantId,
-              slug,
-              name,
-              roleTitle: roleTitle || 'AI Assistant',
-              avatarUrl: avatarUrl || '',
-              statusText: statusText || 'Online',
-              brandColor: brandColor || '#059669',
-              voiceTone: voiceTone || 'friendly',
-              welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
-              greetingSubtitle: greetingSubtitle || null,
-              configJson: body as unknown as object,
-            },
-          });
+    // If body.id exists, try to update
+    if (body.id && !body.id.startsWith('agent_') && !body.id.startsWith('default')) {
+      const whereClause: any = { id: body.id };
+      if (tenantId) whereClause.tenantId = tenantId;
 
-          return NextResponse.json({
-            success: true,
-            agent: {
-              ...body,
-              id: updated.id,
-              slug: updated.slug,
-              updatedAt: updated.updatedAt.toISOString(),
-            },
-          });
-        }
+      const existing = await db.formAgent.findFirst({ where: whereClause });
+      if (existing) {
+        const updated = await db.formAgent.update({
+          where: { id: existing.id },
+          data: {
+            tenantId,
+            slug,
+            name,
+            roleTitle: roleTitle || 'AI Assistant',
+            avatarUrl: avatarUrl || '',
+            statusText: statusText || 'Online',
+            brandColor: brandColor || '#059669',
+            voiceTone: voiceTone || 'friendly',
+            welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
+            greetingSubtitle: greetingSubtitle || null,
+            configJson: body as unknown as object,
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          agent: {
+            ...body,
+            id: updated.id,
+            slug: updated.slug,
+            updatedAt: updated.updatedAt.toISOString(),
+          },
+        });
       }
-
-      // Create new agent
-      const created = await db.formAgent.create({
-        data: {
-          tenantId,
-          slug,
-          name,
-          roleTitle: roleTitle || 'AI Assistant',
-          avatarUrl: avatarUrl || '',
-          statusText: statusText || 'Online',
-          brandColor: brandColor || '#059669',
-          voiceTone: voiceTone || 'friendly',
-          welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
-          greetingSubtitle: greetingSubtitle || null,
-          configJson: body as unknown as object,
-        },
-      });
-
-      return NextResponse.json({
-        success: true,
-        agent: {
-          ...body,
-          id: created.id,
-          slug: created.slug,
-          updatedAt: created.updatedAt.toISOString(),
-        },
-      });
-    } catch (dbError) {
-      // DB not available — return success with in-memory ID (graceful degradation)
-      console.warn('[forms/agents POST] DB unavailable, returning non-persisted agent:', dbError);
-      const agentId = body.id || `agent_${Date.now()}`;
-      return NextResponse.json({
-        success: true,
-        agent: {
-          ...DEFAULT_FORM_AGENT,
-          ...body,
-          id: agentId,
-          slug,
-          updatedAt: new Date().toISOString(),
-        },
-        warning: 'Agent saved in-memory only — database not available.',
-      });
     }
+
+    // Create new agent
+    const created = await db.formAgent.create({
+      data: {
+        tenantId,
+        slug,
+        name,
+        roleTitle: roleTitle || 'AI Assistant',
+        avatarUrl: avatarUrl || '',
+        statusText: statusText || 'Online',
+        brandColor: brandColor || '#059669',
+        voiceTone: voiceTone || 'friendly',
+        welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
+        greetingSubtitle: greetingSubtitle || null,
+        configJson: body as unknown as object,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      agent: {
+        ...body,
+        id: created.id,
+        slug: created.slug,
+        updatedAt: created.updatedAt.toISOString(),
+      },
+    });
   } catch (error) {
+    console.error('[forms/agents POST] Error saving agent:', error);
     return NextResponse.json(
-      { error: 'Failed to save form agent', details: error instanceof Error ? error.message : 'Unknown' },
+      { error: 'Failed to save form agent to database', details: error instanceof Error ? error.message : 'Unknown' },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * DELETE /api/forms/agents
+ * Deletes an agent belonging to the authenticated tenant.
+ */
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    const user = await getAuthUser();
+
+    if (!id) {
+      return NextResponse.json({ error: 'Agent ID is required' }, { status: 400 });
+    }
+
+    const whereClause: any = { id };
+    if (user?.tenantId) {
+      whereClause.tenantId = user.tenantId;
+    }
+
+    const result = await db.formAgent.deleteMany({ where: whereClause });
+    if (result.count === 0) {
+      return NextResponse.json({ error: 'Agent not found or not authorized' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, count: result.count });
+  } catch (error) {
+    console.error('[forms/agents DELETE] Error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete agent', details: error instanceof Error ? error.message : 'Unknown' },
       { status: 500 },
     );
   }
