@@ -603,31 +603,129 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
               const isLeftColumnActive = selectedColumn === 'left';
               const isRightColumnActive = selectedColumn === 'right';
 
+              const renderHeroMediaPanel = () => (
+                <div
+                  className={`${leftWidthClass} relative ${isMediaSelected ? 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg' : 'hover:outline hover:outline-1 hover:outline-emerald-400/40 hover:rounded-lg'}`}
+                  onClick={() => {
+                    onSelectColumn?.('left');
+                    onSelectField('__media_panel__');
+                  }}
+                >
+                  <FormMediaHeroPanel
+                    formId={undefined}
+                    mediaPanel={panel}
+                    formName={formData.name || 'Untitled Form'}
+                    formDescription={formData.description}
+                    primaryColor={primaryColor}
+                    formData={effectiveCanvasFormData}
+                    errors={{}}
+                    onChange={handleCanvasFieldChange}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs font-semibold text-white/90">
+                        <span className="flex items-center gap-1.5">
+                          <Columns className="size-3.5 text-emerald-400" />
+                          Left Hero Column Fields ({leftColumnFields.length})
+                        </span>
+                        {onOpenAddWidgetDialog && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectColumn?.('left');
+                              onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
+                            }}
+                            className="text-[11px] text-emerald-300 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="size-3" /> Add Field
+                          </button>
+                        )}
+                      </div>
+
+                      <DndContext
+                        sensors={dndSensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <SortableContext items={leftColumnFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                          <div className="flex flex-wrap gap-y-3 gap-x-3">
+                            {leftColumnFields.length > 0 ? (
+                              leftColumnFields.map((f) => (
+                                <div
+                                  key={f.id}
+                                  className="w-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectColumn?.('left');
+                                    onSelectField(f.id);
+                                  }}
+                                >
+                                  <SortableFieldWrapper
+                                    field={f}
+                                    value={effectiveCanvasFormData[f.id]}
+                                    onChange={(val) => handleCanvasFieldChange(f.id, val)}
+                                    allFormData={effectiveCanvasFormData}
+                                    selectedFieldId={selectedFieldId}
+                                    onSelectField={(id) => {
+                                      onSelectColumn?.('left');
+                                      onSelectField(id);
+                                    }}
+                                    inputBorderRadius={inputBorderRadius}
+                                    defaultInputHeightCls={defaultInputHeightCls}
+                                    onSetWidth={handleSetFieldWidth}
+                                    onDuplicate={handleDuplicateField}
+                                    onDelete={handleDeleteField}
+                                    onMoveUp={(id) => handleMoveField(id, 'up')}
+                                    onMoveDown={(id) => handleMoveField(id, 'down')}
+                                    onMoveToColumn={handleMoveFieldToColumn}
+                                    onMoveToStep={handleMoveFieldToStep}
+                                    onOpenSettings={(id) => {
+                                      onSelectColumn?.('left');
+                                      onSelectField(id);
+                                    }}
+                                    steps={steps}
+                                    hasColumns={true}
+                                  />
+                                </div>
+                              ))
+                            ) : (
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectColumn?.('left');
+                                }}
+                                className="w-full p-4 text-center rounded-xl border border-dashed border-white/20 bg-white/5 text-slate-300 text-xs hover:border-white/40 cursor-pointer transition-all"
+                              >
+                                <p className="text-[11px] font-medium text-slate-300">
+                                  No fields placed in Left Hero Column.
+                                </p>
+                                {onOpenAddWidgetDialog && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onSelectColumn?.('left');
+                                      onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
+                                    }}
+                                    className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
+                                  >
+                                    <Plus className="size-3" /> Add field to Left Column
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
+                    </div>
+                  </FormMediaHeroPanel>
+                </div>
+              );
+
               return (
                 <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[550px]">
-                  {/* LEFT HERO MEDIA COLUMN — uses shared FormMediaHeroPanel (Phase 4) */}
-                  {panel.position !== 'right' && (
-                    <div
-                      className={`${leftWidthClass} relative ${isMediaSelected ? 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg' : 'hover:outline hover:outline-1 hover:outline-emerald-400/40 hover:rounded-lg'}`}
-                      onClick={() => {
-                        onSelectColumn?.('left');
-                        onSelectField('__media_panel__');
-                      }}
-                    >
-                      <FormMediaHeroPanel
-                        formId={undefined}
-                        mediaPanel={panel}
-                        formName={formData.name || 'Untitled Form'}
-                        formDescription={formData.description}
-                        primaryColor={primaryColor}
-                        leftFields={leftColumnFields}
-                        formData={effectiveCanvasFormData}
-                        errors={{}}
-                        onChange={handleCanvasFieldChange}
-                      />
-                    </div>
-                  )}
-
+                  {/* LEFT HERO MEDIA COLUMN */}
+                  {panel.position !== 'right' && renderHeroMediaPanel()}
 
                   {/* RIGHT FORM FIELDS COLUMN (Stepped / Single Page) */}
                   <div
@@ -752,7 +850,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                             onSelectColumn?.('right');
                             onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
                           }}
-                          className="w-full h-10 border border-dashed border-border/60 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all flex items-center justify-center gap-1.5"
+                          className="w-full h-10 border border-dashed border-border/60 rounded-xl text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Plus className="size-3.5" /> Add field
                         </button>
@@ -780,7 +878,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                           type="button"
                           size="sm"
                           onClick={() => onStepChange(currentStepIndex + 1)}
-                          className="h-9 text-xs gap-1.5 px-4 font-bold"
+                          className="h-9 text-xs gap-1.5 px-4 font-bold cursor-pointer"
                           style={{ backgroundColor: buttonColor, color: buttonTextColor }}
                         >
                           Next Step <ArrowRight className="size-3" />
@@ -789,7 +887,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                         <Button
                           type="button"
                           size="sm"
-                          className="h-9 text-xs gap-1.5 px-5 font-bold shadow-md"
+                          className="h-9 text-xs gap-1.5 px-5 font-bold shadow-md cursor-pointer"
                           style={{ backgroundColor: buttonColor, color: buttonTextColor }}
                         >
                           {formData.settings?.submitButtonText || 'Submit Form ⚡'}
@@ -798,28 +896,8 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                     </div>
                   </div>
 
-                  {/* RIGHT-SIDE MEDIA COLUMN — uses shared FormMediaHeroPanel */}
-                  {panel.position === 'right' && (
-                    <div
-                      className={`${leftWidthClass} relative ${isMediaSelected ? 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg' : 'hover:outline hover:outline-1 hover:outline-emerald-400/40 hover:rounded-lg'}`}
-                      onClick={() => {
-                        onSelectColumn?.('left');
-                        onSelectField('__media_panel__');
-                      }}
-                    >
-                      <FormMediaHeroPanel
-                        formId={undefined}
-                        mediaPanel={panel}
-                        formName={formData.name || 'Untitled Form'}
-                        formDescription={formData.description}
-                        primaryColor={primaryColor}
-                        leftFields={leftColumnFields}
-                        formData={effectiveCanvasFormData}
-                        errors={{}}
-                        onChange={handleCanvasFieldChange}
-                      />
-                    </div>
-                  )}
+                  {/* RIGHT-SIDE MEDIA COLUMN */}
+                  {panel.position === 'right' && renderHeroMediaPanel()}
                 </div>
               );
             })()}

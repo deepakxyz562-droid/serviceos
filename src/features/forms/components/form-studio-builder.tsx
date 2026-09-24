@@ -721,6 +721,7 @@ export function FormStudioBuilder({
       widgetType: `payment_${gw.id}`,
       stepId: currentStepId,
       width: 'full',
+      layoutColumn: viewMode === 'split_media' ? selectedColumn : undefined,
       widgetConfig: {
         gatewayId: gw.id,
         fieldType: gw.fieldType,

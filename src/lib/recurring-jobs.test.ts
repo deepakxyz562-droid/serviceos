@@ -33,7 +33,7 @@ function weeklyMondaySchedule(overrides: Partial<Schedule> = {}): Schedule {
     weekOfMonth: null,
     timeOfDay: '09:00',
     endDate: null,
-    timezone: null,
+    timezone: 'UTC',
     ...overrides,
   };
 }
@@ -41,7 +41,7 @@ function weeklyMondaySchedule(overrides: Partial<Schedule> = {}): Schedule {
 describe('computeNextOccurrence — weekly Monday 09:00', () => {
   it('advances from one Monday to the next Monday', () => {
     // Sep 7 2026 is a Monday.
-    const sep7 = new Date('2026-09-07T09:00:00');
+    const sep7 = new Date('2026-09-07T09:00:00Z');
     const schedule = weeklyMondaySchedule();
     const next = computeNextOccurrence(schedule, sep7);
     expect(next).not.toBeNull();
@@ -50,7 +50,7 @@ describe('computeNextOccurrence — weekly Monday 09:00', () => {
   });
 
   it('does NOT return the same day (always advances at least 1 day)', () => {
-    const sep7 = new Date('2026-09-07T09:00:00');
+    const sep7 = new Date('2026-09-07T09:00:00Z');
     const schedule = weeklyMondaySchedule();
     const next = computeNextOccurrence(schedule, sep7);
     expect(next).not.toBeNull();
@@ -58,7 +58,7 @@ describe('computeNextOccurrence — weekly Monday 09:00', () => {
   });
 
   it('respects endDate — returns null when past the end', () => {
-    const sep7 = new Date('2026-09-07T09:00:00');
+    const sep7 = new Date('2026-09-07T09:00:00Z');
     const schedule = weeklyMondaySchedule({
       endDate: new Date('2026-09-10T00:00:00Z'), // before Sep 14
     });
@@ -68,7 +68,7 @@ describe('computeNextOccurrence — weekly Monday 09:00', () => {
 
   it('generates exactly 10 Mondays for a 10-visit schedule (no endDate)', () => {
     const schedule = weeklyMondaySchedule(); // no endDate
-    let cursor = new Date('2026-09-07T09:00:00'); // Sep 7 = visit #1
+    let cursor = new Date('2026-09-07T09:00:00Z'); // Sep 7 = visit #1
     const occurrences: Date[] = [cursor];
     for (let i = 0; i < 9; i++) {
       const next = computeNextOccurrence(schedule, cursor);
@@ -96,7 +96,7 @@ describe('computeNextOccurrence — weekly Monday 09:00', () => {
 
 describe('computeNextOccurrence — biweekly', () => {
   it('jumps 14 days (every other week)', () => {
-    const sep7 = new Date('2026-09-07T09:00:00'); // Monday
+    const sep7 = new Date('2026-09-07T09:00:00Z'); // Monday
     const schedule = weeklyMondaySchedule({ frequency: 'biweekly' });
     const next = computeNextOccurrence(schedule, sep7);
     expect(next).not.toBeNull();
@@ -107,7 +107,7 @@ describe('computeNextOccurrence — biweekly', () => {
 
 describe('computeNextOccurrence — monthly', () => {
   it('advances to the same day-of-month next month', () => {
-    const sep7 = new Date('2026-09-07T09:00:00');
+    const sep7 = new Date('2026-09-07T09:00:00Z');
     const schedule: Schedule = {
       frequency: 'monthly',
       dayOfWeek: null,
@@ -115,7 +115,7 @@ describe('computeNextOccurrence — monthly', () => {
       weekOfMonth: null,
       timeOfDay: '09:00',
       endDate: null,
-      timezone: null,
+      timezone: 'UTC',
     };
     const next = computeNextOccurrence(schedule, sep7);
     expect(next).not.toBeNull();
@@ -124,7 +124,7 @@ describe('computeNextOccurrence — monthly', () => {
   });
 
   it('clamps day 31 to the last day of months without 31 days', () => {
-    const aug31 = new Date('2026-08-31T09:00:00');
+    const aug31 = new Date('2026-08-31T09:00:00Z');
     const schedule: Schedule = {
       frequency: 'monthly',
       dayOfWeek: null,
@@ -132,7 +132,7 @@ describe('computeNextOccurrence — monthly', () => {
       weekOfMonth: null,
       timeOfDay: '09:00',
       endDate: null,
-      timezone: null,
+      timezone: 'UTC',
     };
     const next = computeNextOccurrence(schedule, aug31);
     expect(next).not.toBeNull();
@@ -146,7 +146,7 @@ describe('computeNextOccurrence — nth weekday of month', () => {
   it('computes "2nd Tuesday of next month"', () => {
     // Sep 7 2026 (Monday) → next month = October 2026
     // 2nd Tuesday of October 2026 = Oct 13
-    const sep7 = new Date('2026-09-07T09:00:00');
+    const sep7 = new Date('2026-09-07T09:00:00Z');
     const TUESDAY = 2;
     const schedule: Schedule = {
       frequency: 'monthly',
@@ -155,7 +155,7 @@ describe('computeNextOccurrence — nth weekday of month', () => {
       weekOfMonth: 2, // 2nd occurrence
       timeOfDay: '09:00',
       endDate: null,
-      timezone: null,
+      timezone: 'UTC',
     };
     const next = computeNextOccurrence(schedule, sep7);
     expect(next).not.toBeNull();
@@ -262,7 +262,7 @@ describe('no-show / cancelled jobs do not block recurrence', () => {
     // The schedule processor uses nextRunAt (a date), NOT the previous job's
     // completion status. So if Sep 7's job is "no-show" (never completed),
     // Sep 14 is STILL generated on schedule.
-    const sep7 = new Date('2026-09-07T09:00:00');
+    const sep7 = new Date('2026-09-07T09:00:00Z');
     const schedule = weeklyMondaySchedule();
     const next = computeNextOccurrence(schedule, sep7);
     expect(next).not.toBeNull();

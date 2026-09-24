@@ -135,7 +135,7 @@ describe('Canonical Widget Registry & Form Architecture Tests', () => {
     //      inline cases in widget-runtime-dispatcher.tsx and work fine, they
     //      just haven't been refactored to lazy imports yet)
     //   - Known gaps closed by Phase R4 (sms_otp_confirmation, most_frequent_answer)
-    const LAYOUT_ONLY = new Set(['divider', 'hidden', 'heading', 'paragraph', 'section_break']);
+    const LAYOUT_ONLY = new Set(['divider', 'hidden', 'heading', 'paragraph', 'section_break', 'columns_container']);
     const LEGACY_SWITCH_ONLY = new Set([
       'form_calculation', 'sms_otp_verification', 'voice_recorder',
       // R4 scope — will be removed from this set once R4a/R4b ship:

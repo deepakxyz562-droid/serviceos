@@ -83,6 +83,7 @@ export function FormMediaHeroPanel({
   formData,
   errors = {},
   onChange,
+  children,
 }: {
   formId?: string;
   mediaPanel?: import('@/lib/forms/form-schema-types').FormMediaPanel;
@@ -93,6 +94,7 @@ export function FormMediaHeroPanel({
   formData?: Record<string, any>;
   errors?: Record<string, string>;
   onChange?: (fieldId: string, val: any) => void;
+  children?: React.ReactNode;
 }) {
   const [isMuted, setIsMuted] = useState(mediaPanel?.videoMuted ?? true);
   const showMedia = mediaPanel?.showMedia !== false;
@@ -283,8 +285,12 @@ export function FormMediaHeroPanel({
           </div>
         )}
 
-        {/* Left Column Form Fields / Widgets */}
-        {leftFields && leftFields.length > 0 && (
+        {/* Left Column Form Fields / Widgets or interactive children (Editor Mode) */}
+        {children ? (
+          <div className="pt-3 border-t border-white/10 text-left">
+            {children}
+          </div>
+        ) : leftFields && leftFields.length > 0 ? (
           <div className="space-y-3 pt-3 border-t border-white/10 text-left">
             {leftFields.map((field) => (
               <div key={field.id} className="space-y-1.5">
@@ -308,7 +314,7 @@ export function FormMediaHeroPanel({
               </div>
             ))}
           </div>
-        )}
+        ) : null}
 
         {/* Testimonial */}
         {showTestimonial && testimonial && (
