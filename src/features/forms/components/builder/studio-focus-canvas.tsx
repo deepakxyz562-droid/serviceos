@@ -93,7 +93,7 @@ interface StudioFocusCanvasProps {
   onSelectField: (fieldId: string | null) => void;
   selectedColumn?: 'left' | 'right';
   onSelectColumn?: (col: 'left' | 'right') => void;
-  viewMode: 'focus' | 'paper' | 'split_media';
+  viewMode: 'classic' | 'card' | 'split_media';
   // Collapsed sidebars state & toggle triggers
   isWidgetPaletteCollapsed?: boolean;
   onToggleWidgetPalette?: () => void;
@@ -326,7 +326,13 @@ export function StudioFocusCanvas({
   // Move Field to Another Step
   const handleMoveFieldToStep = (fieldId: string, targetStepId: string) => {
     handleUpdateField(fieldId, { stepId: targetStepId });
-    toast.success('Question moved to new step');
+    toast.success('Field moved to new step');
+  };
+
+  // Move Field to Another Column (left/right)
+  const handleMoveFieldToColumn = (fieldId: string, column: 'left' | 'right') => {
+    handleUpdateField(fieldId, { layoutColumn: column });
+    toast.success(`Field moved to ${column === 'left' ? 'left hero' : 'right form'} column`);
   };
 
   // Add Step handler
@@ -633,46 +639,16 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                     }`}
                   >
                     <div className="space-y-4">
-                      {/* Top Action & Column Status Header */}
-                      <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/60">
-                        <div className="min-w-0">
-                          <h3 className="text-sm sm:text-base font-bold text-foreground truncate">
-                            {steps.length > 1 ? activeStep.title || `Step ${currentStepIndex + 1}` : formData.name || 'Request a Quote / Booking'}
-                          </h3>
-                          <p className="text-[11px] text-muted-foreground truncate">
-                            {steps.length > 1
-                              ? `Step ${currentStepIndex + 1} of ${steps.length} • ${progressPercent}% Complete`
-                              : formData.description || 'Fill in the details below to receive your upfront estimate.'}
+                      {/* Form Header — matches runtime (name + description, no step progress) */}
+                      <div className="pb-3 border-b border-border/60">
+                        <h3 className="text-sm sm:text-base font-bold text-foreground truncate">
+                          {formData.name || 'Untitled Form'}
+                        </h3>
+                        {formData.description && (
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {formData.description}
                           </p>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Badge
-                            variant="secondary"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectColumn?.('right');
-                            }}
-                            className={`text-[10px] font-bold gap-1 cursor-pointer transition-all ${
-                              isRightColumnActive
-                                ? 'bg-primary text-primary-foreground shadow-xs font-black'
-                                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                            }`}
-                          >
-                            👉 Form Column {isRightColumnActive && '✓'}
-                          </Badge>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleAddStep();
-                            }}
-                            className="h-6.5 text-[10px] font-semibold gap-1 px-2 border-dashed rounded-lg shadow-2xs cursor-pointer shrink-0"
-                          >
-                            <Plus className="size-2.5" /> Step
-                          </Button>
-                        </div>
+                        )}
                       </div>
 
                       {/* Stepper Carousel / Steps Indicator (Multi-Step only) */}
@@ -747,6 +723,15 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                   onSelectField={onSelectField}
                                   inputBorderRadius={inputBorderRadius}
                                   defaultInputHeightCls={defaultInputHeightCls}
+                                  onDuplicate={handleDuplicateField}
+                                  onDelete={handleDeleteField}
+                                  onMoveUp={(id) => handleMoveField(id, 'up')}
+                                  onMoveDown={(id) => handleMoveField(id, 'down')}
+                                  onMoveToColumn={handleMoveFieldToColumn}
+                                  onMoveToStep={handleMoveFieldToStep}
+                                  onOpenSettings={(id) => { onSelectField(id); }}
+                                  steps={steps}
+                                  hasColumns={viewMode === 'split_media'}
                                 />
                               ))
                             ) : (
@@ -838,7 +823,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
               );
             })()}
           </div>
-        ) : viewMode === 'focus' ? (
+        ) : viewMode === 'card' ? (
           /* ════ 1. FOCUS CARD MULTI-STEP VIEW (Typeform Parity) ════ */
           <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-6 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl p-6 sm:p-10 transition-all">
             {/* Left Media Block */}
@@ -875,24 +860,10 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                   >
                     {isMultiStep ? currentStepIndex + 1 : '1'}
                   </span>
-                  <input
-                    value={activeStep.title}
-                    onChange={(e) => {
-                      const newTitle = e.target.value;
-                      if (!isMultiStep) {
-                        onFormDataChange((prev) => ({ ...prev, name: newTitle }));
-                      } else {
-                        onFormDataChange((prev) => ({
-                          ...prev,
-                          steps: (prev.steps || steps).map((s, idx) =>
-                            idx === currentStepIndex ? { ...s, title: newTitle } : s
-                          ),
-                        }));
-                      }
-                    }}
-                    className="text-lg sm:text-xl font-bold text-foreground bg-transparent border-none outline-none focus:ring-0 w-full"
-                    placeholder="Step Title or Question..."
-                  />
+                  {/* Step title — NOT editable inline (matches runtime). Edit via Inspector. */}
+                  <h2 className="text-lg sm:text-xl font-bold text-foreground">
+                    {activeStep.title || (isMultiStep ? `Step ${currentStepIndex + 1}` : formData.name || 'Untitled Form')}
+                  </h2>
                 </div>
                 <p className="text-xs text-muted-foreground pl-8">
                   {isMultiStep ? 'Complete the questions in this step to proceed.' : 'Fill in the information below.'}
@@ -919,6 +890,14 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                           onSelectField={onSelectField}
                           inputBorderRadius={inputBorderRadius}
                           defaultInputHeightCls={defaultInputHeightCls}
+                          onDuplicate={handleDuplicateField}
+                          onDelete={handleDeleteField}
+                          onMoveUp={(id) => handleMoveField(id, 'up')}
+                          onMoveDown={(id) => handleMoveField(id, 'down')}
+                          onMoveToStep={handleMoveFieldToStep}
+                          onOpenSettings={(id) => { onSelectField(id); }}
+                          steps={steps}
+                          hasColumns={false}
                         />
                       ))
                     ) : (
@@ -1020,6 +999,14 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                           onSelectField={onSelectField}
                           inputBorderRadius={inputBorderRadius}
                           defaultInputHeightCls={defaultInputHeightCls}
+                          onDuplicate={handleDuplicateField}
+                          onDelete={handleDeleteField}
+                          onMoveUp={(id) => handleMoveField(id, 'up')}
+                          onMoveDown={(id) => handleMoveField(id, 'down')}
+                          onMoveToStep={handleMoveFieldToStep}
+                          onOpenSettings={(id) => { onSelectField(id); }}
+                          steps={steps}
+                          hasColumns={false}
                         />
                       ))}
                     </div>

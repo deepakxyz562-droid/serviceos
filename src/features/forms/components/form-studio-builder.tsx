@@ -973,12 +973,12 @@ export function FormStudioBuilder({
   };
 
   const handleOpenLive = async () => {
-    toast.info('Synchronizing live form...');
+    toast.info('Saving form and preparing live preview...');
     let savedResult: { id?: string; slug?: string } | void | null = null;
     try {
       savedResult = await onSave();
     } catch {
-      // continue
+      // continue — we'll try with formData.id as fallback
     }
     const currentId = savedResult?.id || savedResult?.slug || formData.id || (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : null);
     if (!currentId) {
@@ -986,7 +986,35 @@ export function FormStudioBuilder({
       return;
     }
     const targetUrl = `${resolvedOrigin}/form/${currentId}`;
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+
+    // ─── Fix race condition: poll the public API to confirm the form is ──
+    // ─── available before opening the live URL. Previously, window.open  ──
+    // ─── fired immediately after save, but the DB write might not be      ──
+    // ─── committed yet → 404 "Form not found or access denied".           ──
+    let formReady = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const checkRes = await fetch(`/api/public/forms/${encodeURIComponent(currentId)}`);
+        if (checkRes.ok) {
+          formReady = true;
+          break;
+        }
+      } catch {
+        // Network error — retry
+      }
+      // Wait 500ms before next attempt (total max 2.5 seconds)
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    if (formReady) {
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      toast.success('Live form opened in new tab');
+    } else {
+      // Form still not available after 5 attempts — open anyway (the user
+      // can refresh) and show a warning.
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      toast.warning('Form is saving. If the page shows an error, please refresh in a few seconds.');
+    }
   };
 
   const handleSendEmailInvites = async () => {
