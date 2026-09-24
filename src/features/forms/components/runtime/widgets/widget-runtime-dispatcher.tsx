@@ -21,6 +21,15 @@ import { Star, Shield, Lock, CreditCard, Sparkles, CheckSquare, Plus, Trash2 } f
 import { Button } from '@/components/ui/button';
 
 import { PAYMENT_GATEWAYS_REGISTRY } from '@/lib/forms/payments/payment-gateways-registry';
+import {
+  ImageWidget as ContentImageWidget,
+  ButtonWidget as ContentButtonWidget,
+  SpacerWidget as ContentSpacerWidget,
+  IconWidget as ContentIconWidget,
+  AlertWidget as ContentAlertWidget,
+  BadgeWidget as ContentBadgeWidget,
+  ListWidget as ContentListWidget,
+} from './content/content-widgets';
 
 interface WidgetRuntimeDispatcherProps {
   field: FormField;
@@ -483,6 +492,48 @@ export function WidgetRuntimeDispatcher({
             onChange={onChange}
             allFields={allFields || []}
             formId={formId}
+          />
+        </Suspense>
+      );
+    }
+
+    // ─── Elementor-style Content Widgets (Phase 4) ────────────────────
+    case 'image_widget':
+      return <ContentImageWidget {...widgetConfig} />;
+    case 'button_widget':
+      return <ContentButtonWidget {...widgetConfig} />;
+    case 'spacer_widget':
+      return <ContentSpacerWidget {...widgetConfig} />;
+    case 'icon_widget':
+      return <ContentIconWidget {...widgetConfig} />;
+    case 'alert_widget':
+      return <ContentAlertWidget {...widgetConfig} />;
+    case 'badge_widget':
+      return <ContentBadgeWidget {...widgetConfig} />;
+    case 'list_widget':
+      return <ContentListWidget {...widgetConfig} />;
+
+    // ─── Layout Containers (Phase 6) ─────────────────────────────────
+    case 'section_widget': {
+      const SectionWidget = lazy(() =>
+        import('./layout/section-widget').then((m) => ({ default: m.SectionWidget }))
+      );
+      return (
+        <Suspense fallback={<div className="h-20 bg-muted/20 rounded animate-pulse" />}>
+          <SectionWidget
+            title={widgetConfig.title}
+            description={widgetConfig.description}
+            backgroundColor={widgetConfig.backgroundColor}
+            padding={widgetConfig.padding}
+            borderRadius={widgetConfig.borderRadius}
+            showBorder={widgetConfig.showBorder}
+            borderColor={widgetConfig.borderColor}
+            childFields={(allFields || []).filter((f: any) => f.sectionId === field.id)}
+            formData={allFormData || {}}
+            onChange={onChange}
+            allFormData={allFormData || {}}
+            inputBorderRadius={inputBorderRadius}
+            defaultInputHeightCls={defaultInputHeightCls}
           />
         </Suspense>
       );

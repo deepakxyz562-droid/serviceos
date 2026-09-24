@@ -291,9 +291,12 @@ export function FormStudioBuilder({
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, any>>({});
   const [previewSubmitted, setPreviewSubmitted] = useState(false);
 
+  // ─── 3-Panel Elementor Layout (Phase 7) ──────────────────────────────
+  // Default: Elements (left) | Canvas (center) | Inspector (right)
+  // Pages Tree and AI Copilot are now DRAWERS (toggleable, not permanent)
   const [showWidgetPalette, setShowWidgetPalette] = useState(true);
-  const [showAiCopilot, setShowAiCopilot] = useState(false);
-  const [showPagesTree, setShowPagesTree] = useState(true);
+  const [showAiCopilot, setShowAiCopilot] = useState(false);  // drawer, not permanent
+  const [showPagesTree, setShowPagesTree] = useState(false);   // drawer, not permanent
   const [showInspector, setShowInspector] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   // viewMode is now the SAME as formLayout (no separate 'focus' | 'paper' | 'split_media')

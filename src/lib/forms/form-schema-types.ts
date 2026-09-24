@@ -5,6 +5,8 @@
  * Compatible with Drag-and-Drop builder, AI generator, Chatbot, and Embeds.
  */
 
+import { injectMediaPanelContent } from './form-node-schema';
+
 export type FormFieldType =
   | 'short_answer'
   | 'long_answer'

@@ -15,8 +15,9 @@ import { PHASE_1_WIDGETS } from './phase-1-widgets';
 import { PHASE_2_WIDGETS } from './phase-2-widgets';
 import { PHASE_3_WIDGETS } from './phase-3-widgets';
 import { PHASE_4_WIDGETS } from './phase-4-widgets';
+import { CONTENT_WIDGETS } from './content-widgets';
 
-export { PHASE_1_WIDGETS, PHASE_2_WIDGETS, PHASE_3_WIDGETS, PHASE_4_WIDGETS };
+export { PHASE_1_WIDGETS, PHASE_2_WIDGETS, PHASE_3_WIDGETS, PHASE_4_WIDGETS, CONTENT_WIDGETS };
 
 // ─── Basic Text & Choice Fields ─────────────────────────────────────────────
 
@@ -389,6 +390,39 @@ export const BASIC_FIELDS: FieldDefinition[] = [
         { label: 'User IP', value: 'ip' }, { label: 'User Agent', value: 'user_agent' },
       ] },
       { key: 'staticValue', label: 'Static value (if no auto-capture)', type: 'text', group: 'field_specific' },
+    ],
+  },
+  {
+    id: 'section_widget',
+    name: 'Section',
+    category: 'layout',
+    iconName: 'SquareStack',
+    description: 'Group fields into a visual section with title',
+    badge: 'LAYOUT',
+    tier: 'free',
+    createField: (label = 'Section') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'section_widget',
+      widgetConfig: {
+        title: 'Section Title',
+        description: '',
+        backgroundColor: 'transparent',
+        padding: '24px',
+        borderRadius: '16px',
+        showBorder: true,
+        borderColor: '',
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'title', label: 'Section Title', type: 'text', group: 'field_specific', default: 'Section Title' },
+      { key: 'description', label: 'Description', type: 'textarea', group: 'field_specific' },
+      { key: 'backgroundColor', label: 'Background Color', type: 'color', group: 'field_specific', default: 'transparent' },
+      { key: 'padding', label: 'Padding', type: 'text', group: 'field_specific', default: '24px' },
+      { key: 'borderRadius', label: 'Border Radius', type: 'text', group: 'field_specific', default: '16px' },
+      { key: 'showBorder', label: 'Show Border', type: 'toggle_with_description', group: 'field_specific', default: true },
+      { key: 'borderColor', label: 'Border Color', type: 'color', group: 'field_specific' },
     ],
   },
   {
@@ -1359,7 +1393,9 @@ export const WIDGET_FIELD_DEFINITIONS: FieldDefinition[] = [
 // ─── Registry Aggregation ───────────────────────────────────────────────────
 
 /**
- * The complete unified registry: basic + specialized + Phase 1 + 2 + 3 + 4 widgets.
+ * The complete unified registry: basic + specialized + Phase 1-4 + content widgets.
+ * Content widgets (image, button, spacer, icon, alert, badge, list) are
+ * Elementor-style visual elements that coexist with form fields.
  */
 export const FIELD_REGISTRY: FieldDefinition[] = [
   ...BASIC_FIELDS,
@@ -1368,6 +1404,7 @@ export const FIELD_REGISTRY: FieldDefinition[] = [
   ...PHASE_2_WIDGETS,
   ...PHASE_3_WIDGETS,
   ...PHASE_4_WIDGETS,
+  ...CONTENT_WIDGETS,
 ];
 
 const FIELD_REGISTRY_MAP = new Map<string, FieldDefinition>(
@@ -1512,6 +1549,7 @@ export const FIELD_CATEGORY_META: Array<{
   { id: 'choice', label: 'Choice Fields', iconName: 'CheckSquare' },
   { id: 'contact', label: 'Contact & Identity', iconName: 'Mail' },
   { id: 'datetime', label: 'Date & Time', iconName: 'Calendar' },
+  { id: 'content', label: 'Content Elements', iconName: 'Image' },
   { id: 'file', label: 'File Upload', iconName: 'Paperclip' },
   { id: 'media', label: 'Media & Inspection', iconName: 'Camera' },
   { id: 'signature', label: 'Signature', iconName: 'PenTool' },

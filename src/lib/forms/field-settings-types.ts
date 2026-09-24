@@ -232,6 +232,7 @@ export interface FieldDefinition {
     | 'basic'
     | 'choice'
     | 'datetime'
+    | 'content'
     | 'media'
     | 'payment'
     | 'calculation'
