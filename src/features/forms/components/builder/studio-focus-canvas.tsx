@@ -50,6 +50,7 @@ import {
 import { toast } from 'sonner';
 import type { EditorFormData, FormField } from '@/features/forms/types';
 import { WidgetRuntimeDispatcher } from '../runtime/widgets/widget-runtime-dispatcher';
+import { FormFieldRenderer, getFieldWidthClass } from '../runtime/shared-field-renderer';
 import { evaluateFormulaSafe } from '../runtime/form-runtime-renderer';
 import { getFieldById } from '@/lib/forms/field-registry';
 import { resolveIcon } from '@/lib/forms/icon-resolver';
@@ -119,6 +120,17 @@ export function StudioFocusCanvas({
   const buttonTextColor = formData.theme?.buttonTextColor || '#ffffff';
   const borderRadius = formData.theme?.borderRadius || '16px';
   const fontFamily = formData.theme?.fontFamily || 'Inter, sans-serif';
+  // ─── Theme props needed by FormFieldRenderer for per-field styling parity ──
+  // These MUST match the runtime renderer's values so the editor canvas
+  // applies the same per-field styling (borderRadius, inputHeight, etc.)
+  const inputBorderRadius = formData.theme?.inputBorderRadius || '12px';
+  const inputHeightMode = formData.theme?.inputHeight || 'medium';
+  const defaultInputHeightCls =
+    inputHeightMode === 'compact'
+      ? 'h-9 text-xs'
+      : inputHeightMode === 'large'
+      ? 'h-12 text-sm'
+      : 'h-11 text-xs';
 
   // Interactive canvas overrides for live testing in builder
   const [canvasOverrides, setCanvasOverrides] = useState<Record<string, any>>({});
@@ -166,9 +178,11 @@ export function StudioFocusCanvas({
         const cfg = (f.widgetConfig as Record<string, any>) || {};
         const wt = f.widgetType || f.type;
         if (wt === 'slider' || f.type === 'slider') {
-          // Use the slider's min value, or a sensible default (2400 sq ft).
-          const min = typeof cfg.min === 'number' ? cfg.min : 800;
-          data[f.id] = min > 0 ? min : 2400;
+          // Match the runtime's seed: use cfg.min, default to 0 (NOT 2400).
+          // Previously this defaulted to 2400, causing the editor to show
+          // different calculation values than the live form.
+          const min = typeof cfg.min === 'number' ? cfg.min : 0;
+          data[f.id] = min;
         } else if (f.type === 'numerical' || wt === 'numerical') {
           data[f.id] = 0;
         } else if (f.type === 'switch' || f.type === 'toggle' || wt === 'switch' || wt === 'toggle') {
@@ -289,56 +303,69 @@ export function StudioFocusCanvas({
     toast.success(`Added Step ${nextStepNum}`);
   };
 
-  // Width Class Resolver for CSS Grid / Flex
-  const getWidthClasses = (width?: string) => {
-    switch (width) {
-      case 'half':
-        return 'w-full md:w-[calc(50%-0.5rem)]';
-      case 'third':
-        return 'w-full md:w-[calc(33.333%-0.67rem)]';
-      case 'quarter':
-        return 'w-full md:w-[calc(25%-0.75rem)]';
-      default:
-        return 'w-full';
-    }
-  };
+  // Width Class Resolver — matches the runtime renderer's width classes EXACTLY.
+  // Previously the editor used `md:w-[calc(50%-0.5rem)]` while the runtime used
+  // `sm:w-[48.5%]`. Now both use the same classes via getFieldWidthClass.
+  const getWidthClasses = (width?: string) => getFieldWidthClass(width);
 
 /**
- * StudioFieldPreview — Top-level component for rendering a single field
- * in the studio editor canvas using the SAME WidgetRuntimeDispatcher
- * used by the live runtime. This ensures pixel-identical rendering.
+ * StudioFieldPreview — Thin wrapper around the shared FormFieldRenderer.
  *
- * Extracted to top-level (was previously a nested function inside
- * StudioFocusCanvas) so React doesn't remount all field widgets on
- * every parent render — which caused focus loss, scroll reset, and
- * janky editing.
+ * Uses mode="edit" so fields get click-to-select + selection ring + toolbar.
+ * The actual field rendering (label, widget, per-field styling, width
+ * classes) is handled by FormFieldRenderer — the SAME component used by
+ * the runtime renderer. This ensures pixel-perfect parity between
+ * editor, preview, and live form.
+ *
+ * Previously, this was a bespoke component that rendered a bare
+ * `<div className="w-full">` with ZERO per-field styling — causing
+ * the editor to look different from preview/live.
  */
 const StudioFieldPreview = React.memo(function StudioFieldPreview({
   field,
   canvasFormData,
   onCanvasFieldChange,
+  selectedFieldId,
+  onSelectField,
+  inputBorderRadius,
+  defaultInputHeightCls,
 }: {
   field: FormField;
   canvasFormData: Record<string, any>;
   onCanvasFieldChange?: (fieldId: string, val: any) => void;
+  selectedFieldId?: string | null;
+  onSelectField?: (fieldId: string) => void;
+  inputBorderRadius: string;
+  defaultInputHeightCls: string;
 }) {
   return (
-    <div className="w-full pointer-events-auto">
-      <WidgetRuntimeDispatcher
-        field={field as any}
-        value={canvasFormData[field.id]}
-        onChange={(val) => onCanvasFieldChange?.(field.id, val)}
-        allFormData={canvasFormData}
-        disabled={false}
-      />
-    </div>
+    <FormFieldRenderer
+      field={field}
+      value={canvasFormData[field.id]}
+      onChange={(val) => onCanvasFieldChange?.(field.id, val)}
+      allFormData={canvasFormData}
+      mode="edit"
+      selectedFieldId={selectedFieldId}
+      onSelectField={onSelectField}
+      inputBorderRadius={inputBorderRadius}
+      defaultInputHeightCls={defaultInputHeightCls}
+    />
   );
 });
 
   return (
     <div
       className={`relative flex-1 flex flex-col items-center justify-between overflow-y-auto p-4 sm:p-6 lg:p-8 select-none transition-all ${className}`}
-      style={{ backgroundColor }}
+      style={{
+        backgroundColor,
+        fontFamily,
+        color: textColor,
+        // ─── Apply theme borderRadius to the canvas container ─────────────
+        // Previously the editor declared `borderRadius` but never used it,
+        // while the runtime applied it. This caused card corners to differ.
+        // We apply it as a CSS variable so child elements can inherit it.
+        ['--form-radius' as any]: borderRadius,
+      }}
     >
       {/* ─── Outer Canvas Background Image Backdrop (if set in theme) ─── */}
       {formData.theme?.backgroundImageUrl && (
@@ -486,27 +513,31 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
               const isMediaSelected = selectedFieldId === '__media_panel__';
               const splitRatio = panel.splitRatio || '50-50';
 
+              // ─── Grid col-span classes — match the runtime EXACTLY ───────
+              // Previously the editor used flex with `lg:w-[40%]` while the
+              // runtime used grid with `lg:col-span-5` (≈41.67%). This caused
+              // visible width differences. Now both use the same grid approach.
               const leftWidthClass =
                 splitRatio === '40-60'
-                  ? 'lg:w-[40%]'
+                  ? 'lg:col-span-5'
                   : splitRatio === '60-40'
-                  ? 'lg:w-[60%]'
+                  ? 'lg:col-span-7'
                   : splitRatio === '35-65'
-                  ? 'lg:w-[35%]'
+                  ? 'lg:col-span-4'
                   : splitRatio === '30-70'
-                  ? 'lg:w-[30%]'
-                  : 'lg:w-1/2';
+                  ? 'lg:col-span-3'
+                  : 'lg:col-span-6';
 
               const rightWidthClass =
                 splitRatio === '40-60'
-                  ? 'lg:w-[60%]'
+                  ? 'lg:col-span-7'
                   : splitRatio === '60-40'
-                  ? 'lg:w-[40%]'
+                  ? 'lg:col-span-5'
                   : splitRatio === '35-65'
-                  ? 'lg:w-[65%]'
+                  ? 'lg:col-span-8'
                   : splitRatio === '30-70'
-                  ? 'lg:w-[70%]'
-                  : 'lg:w-1/2';
+                  ? 'lg:col-span-9'
+                  : 'lg:col-span-6';
 
               const activeStepFields = steps.length > 1 ? activeStep.fields : fields;
               const leftColumnFields = activeStepFields.filter((f) => f.layoutColumn === 'left');
@@ -515,8 +546,9 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
               const isRightColumnActive = selectedColumn === 'right';
 
               return (
-                <div className={`flex flex-col ${panel.position === 'right' ? 'lg:flex-row-reverse' : 'lg:flex-row'} min-h-[550px]`}>
-                  {/* LEFT HERO MEDIA COLUMN (Elementor Modular Column) */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[550px]">
+                  {/* LEFT HERO MEDIA COLUMN — rendered first if position !== 'right' */}
+                  {panel.position !== 'right' && (
                   <div
                     onClick={() => {
                       onSelectColumn?.('left');
@@ -858,6 +890,10 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                     field={f}
                                     canvasFormData={effectiveCanvasFormData}
                                     onCanvasFieldChange={handleCanvasFieldChange}
+                                    selectedFieldId={selectedFieldId}
+                                    onSelectField={onSelectField}
+                                    inputBorderRadius={inputBorderRadius}
+                                    defaultInputHeightCls={defaultInputHeightCls}
                                   />
                                 </div>
                               );
@@ -886,6 +922,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                       )}
                     </div>
                   </div>
+                  )}
 
                   {/* RIGHT FORM FIELDS COLUMN (Stepped / Single Page) */}
                   <div
@@ -1120,6 +1157,10 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                   field={f}
                                   canvasFormData={effectiveCanvasFormData}
                                   onCanvasFieldChange={handleCanvasFieldChange}
+                                  selectedFieldId={selectedFieldId}
+                                  onSelectField={onSelectField}
+                                  inputBorderRadius={inputBorderRadius}
+                                  defaultInputHeightCls={defaultInputHeightCls}
                                 />
                               </div>
                             );
@@ -1182,7 +1223,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                           size="sm"
                           onClick={() => onStepChange(currentStepIndex + 1)}
                           className="h-9 text-xs gap-1.5 px-4 font-bold"
-                          style={{ backgroundColor: primaryColor, color: '#ffffff' }}
+                          style={{ backgroundColor: buttonColor, color: buttonTextColor }}
                         >
                           Next Step <ArrowRight className="size-3" />
                         </Button>
@@ -1191,13 +1232,34 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                           type="button"
                           size="sm"
                           className="h-9 text-xs gap-1.5 px-5 font-bold shadow-md"
-                          style={{ backgroundColor: primaryColor, color: '#ffffff' }}
+                          style={{ backgroundColor: buttonColor, color: buttonTextColor }}
                         >
                           {formData.settings?.submitButtonText || 'Submit Form ⚡'}
                         </Button>
                       )}
                     </div>
                   </div>
+
+                  {/* RIGHT-SIDE MEDIA COLUMN — rendered last if position === 'right' */}
+                  {panel.position === 'right' && (
+                    <div
+                      onClick={() => {
+                        onSelectColumn?.('left');
+                        onSelectField('__media_panel__');
+                      }}
+                      className={`relative p-6 sm:p-8 text-white flex flex-col justify-between cursor-pointer group transition-all overflow-hidden ${leftWidthClass} ${
+                        isLeftColumnActive || isMediaSelected
+                          ? 'ring-4 ring-emerald-500/80 ring-offset-2 dark:ring-offset-slate-900 shadow-xl'
+                          : 'hover:brightness-105'
+                      }`}
+                      style={{ backgroundColor: panel.backgroundColor || '#0f172a' }}
+                    >
+                      <div className="text-center py-8 text-white/70 text-xs">
+                        <Monitor className="size-8 mx-auto mb-2 opacity-50" />
+                        Media panel appears here on the right side.
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -1402,6 +1464,10 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                           field={field}
                           canvasFormData={effectiveCanvasFormData}
                           onCanvasFieldChange={handleCanvasFieldChange}
+                          selectedFieldId={selectedFieldId}
+                          onSelectField={onSelectField}
+                          inputBorderRadius={inputBorderRadius}
+                          defaultInputHeightCls={defaultInputHeightCls}
                         />
                       </div>
                     );
@@ -1445,7 +1511,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                         }
                       }}
                       className="text-xs h-9 rounded-xl font-bold text-white shadow-md gap-1.5 px-4 cursor-pointer"
-                      style={{ backgroundColor: primaryColor }}
+                      style={{ backgroundColor: buttonColor, color: buttonTextColor }}
                     >
                       <span>{currentStepIndex === steps.length - 1 ? 'Complete & Submit' : 'OK · Continue'}</span>
                       <ArrowRight className="size-3.5" />
@@ -1625,6 +1691,10 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                           field={f}
                           canvasFormData={effectiveCanvasFormData}
                           onCanvasFieldChange={handleCanvasFieldChange}
+                          selectedFieldId={selectedFieldId}
+                          onSelectField={onSelectField}
+                          inputBorderRadius={inputBorderRadius}
+                          defaultInputHeightCls={defaultInputHeightCls}
                         />
                       </div>
                     );
