@@ -257,7 +257,7 @@ export function buildApiPayload(formData: EditorFormData) {
 
   const safeFields = Array.isArray(formData.fields) ? formData.fields : [];
   const safeMappings = Array.isArray(formData.fieldMappings) ? formData.fieldMappings : [];
-  const isMultiStep = formData.isMultiStep ?? true;
+  const isMultiStep = formData.isMultiStep ?? false;
 
   const normalizedSteps = isMultiStep && formData.steps && formData.steps.length > 0
     ? formData.steps
@@ -275,7 +275,7 @@ export function buildApiPayload(formData: EditorFormData) {
   }));
 
   const mediaPanel = formData.mediaPanel || formData.theme?.mediaPanel;
-  const themeLayout = formData.theme?.layout || (formData.settings?.formLayout === 'split_media' ? 'split_media' : formData.settings?.formLayout === 'single_question' ? 'card' : 'paper');
+  const themeLayout = formData.theme?.layout || (formData.settings?.formLayout === 'split_media' ? 'split_media' : formData.settings?.formLayout === 'single_question' ? 'card' : 'classic');
 
   const schemaObj = {
     version: 1,

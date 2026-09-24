@@ -257,11 +257,12 @@ export const DEFAULT_FORM_THEME: FormTheme = {
   buttonColor: '#059669',
   buttonTextColor: '#ffffff',
   showTopBorder: false,
-  layout: 'card',
+  layout: 'classic',
 };
 
 export const DEFAULT_FORM_SCHEMA: FormSchema = {
   version: 1,
+  isMultiStep: false,
   steps: [
     {
       id: 'step_1',

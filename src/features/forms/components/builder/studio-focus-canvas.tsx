@@ -111,7 +111,7 @@ export function StudioFocusCanvas({
   className = '',
 }: StudioFocusCanvasProps) {
   const fields = formData.fields || [];
-  const isMultiStep = formData.isMultiStep ?? true;
+  const isMultiStep = formData.isMultiStep ?? false;
   const primaryColor = formData.theme?.primaryColor || formData.primaryColor || '#059669';
   const backgroundColor = formData.theme?.backgroundColor || '#ffffff';
   const textColor = formData.theme?.textColor || '#0f172a';
@@ -119,6 +119,12 @@ export function StudioFocusCanvas({
   const buttonTextColor = formData.theme?.buttonTextColor || '#ffffff';
   const borderRadius = formData.theme?.borderRadius || '16px';
   const fontFamily = formData.theme?.fontFamily || 'Inter, sans-serif';
+
+  // Interactive canvas overrides for live testing in builder
+  const [canvasOverrides, setCanvasOverrides] = useState<Record<string, any>>({});
+  const handleCanvasFieldChange = (fieldId: string, val: any) => {
+    setCanvasOverrides((prev) => ({ ...prev, [fieldId]: val }));
+  };
 
   // Normalize steps
   const steps = useMemo(() => {
@@ -190,6 +196,10 @@ export function StudioFocusCanvas({
 
     return data;
   }, [fields]);
+
+  const effectiveCanvasFormData = useMemo(() => {
+    return { ...canvasFormData, ...canvasOverrides };
+  }, [canvasFormData, canvasOverrides]);
 
   const activeStep = steps[currentStepIndex] || steps[0] || { id: 'step_1', title: 'Step 1', fields: [] };
   const progressPercent = Math.round(((currentStepIndex + 1) / Math.max(steps.length, 1)) * 100);
@@ -306,16 +316,18 @@ export function StudioFocusCanvas({
 const StudioFieldPreview = React.memo(function StudioFieldPreview({
   field,
   canvasFormData,
+  onCanvasFieldChange,
 }: {
   field: FormField;
   canvasFormData: Record<string, any>;
+  onCanvasFieldChange?: (fieldId: string, val: any) => void;
 }) {
   return (
     <div className="w-full pointer-events-auto">
       <WidgetRuntimeDispatcher
         field={field as any}
         value={canvasFormData[field.id]}
-        onChange={() => {}}
+        onChange={(val) => onCanvasFieldChange?.(field.id, val)}
         allFormData={canvasFormData}
         disabled={false}
       />
@@ -844,8 +856,8 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                   </div>
                                   <StudioFieldPreview
                                     field={f}
-                                    canvasFormData={canvasFormData}
-                                    
+                                    canvasFormData={effectiveCanvasFormData}
+                                    onCanvasFieldChange={handleCanvasFieldChange}
                                   />
                                 </div>
                               );
@@ -1106,8 +1118,8 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
 
                                 <StudioFieldPreview
                                   field={f}
-                                  canvasFormData={canvasFormData}
-                                  
+                                  canvasFormData={effectiveCanvasFormData}
+                                  onCanvasFieldChange={handleCanvasFieldChange}
                                 />
                               </div>
                             );
@@ -1388,8 +1400,8 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                         {/* Input Type Preview */}
                         <StudioFieldPreview
                           field={field}
-                          canvasFormData={canvasFormData}
-                          
+                          canvasFormData={effectiveCanvasFormData}
+                          onCanvasFieldChange={handleCanvasFieldChange}
                         />
                       </div>
                     );
@@ -1611,8 +1623,8 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                         {/* Input Preview */}
                         <StudioFieldPreview
                           field={f}
-                          canvasFormData={canvasFormData}
-                          
+                          canvasFormData={effectiveCanvasFormData}
+                          onCanvasFieldChange={handleCanvasFieldChange}
                         />
                       </div>
                     );

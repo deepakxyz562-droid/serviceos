@@ -21,7 +21,7 @@ import {
   AlignLeft, CheckSquare, CircleDot, Paperclip, PenTool, LayoutTemplate,
   EyeOff, CreditCard, ShieldCheck, MapPin, Camera, DollarSign,
   ListPlus, HelpCircle, Code, ShieldAlert, Navigation, Map,
-  Sliders, Bot, Send, Search, RefreshCw, Layers, CalendarCheck,
+  Sliders, Send, Search, RefreshCw, Layers, CalendarCheck,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X,
   Wifi, Battery, Lock, Languages, AlertTriangle, Key, Share, Download, Film,
   ImageIcon
@@ -53,7 +53,6 @@ import type {
   EditorFormData, FieldType, FormField,
   FormStatus, FormType, PrimaryAction, FormSettingsConfig,
 } from '@/features/forms/types';
-import { DEFAULT_FORM_AGENT } from '@/features/forms/types/agent-types';
 import {
   PAYMENT_GATEWAYS_REGISTRY, PAYMENT_CATEGORIES, PaymentCategory,
   PaymentGatewayDef, searchPaymentGateways, getPaymentGatewayById,
@@ -62,7 +61,6 @@ import { QRCodePlaceholder } from './field-editor/qr-code-placeholder';
 import { FormImporterDialog } from './form-importer-dialog';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
-import { FormAgentStudio } from './agent-builder/form-agent-studio';
 import { TemplateExplorer } from './builder/template-explorer';
 import type { FormTemplate } from '@/lib/forms/templates';
 import { UnifiedFieldInspector } from './builder/unified-field-inspector';
@@ -107,7 +105,7 @@ export function FormStudioBuilder({
   siteOrigin,
 }: FormStudioBuilderProps) {
   // Studio navigation
-  const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'agent' | 'templates'>('build');
+  const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'templates'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const initialPreviewFormat: 'paper' | 'card' =
@@ -312,11 +310,6 @@ export function FormStudioBuilder({
         mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
       },
       mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
-      // Bridge the agent configuration from the studio's "AI Agent" tab into
-      // the runtime schema. The runtime renderer's `activeMode === 'agent'`
-      // branch will read this and render AgentDeviceSimulator — making the
-      // preview pixel-identical to the edit-mode widget.
-      agentConfig: formData.agentConfig,
       rules: (formData.rules as any[]) || [],
       settings: {
         submitButtonText: formData.submitButtonText || 'Submit',
@@ -886,21 +879,6 @@ export function FormStudioBuilder({
           >
             <Palette className="size-3.5" />
             <span>Design</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setStudioTab('agent'); setIsPreviewMode(false); }}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
-              studioTab === 'agent'
-                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Bot className="size-3.5" />
-            <span>AI Agent</span>
-            <span className="px-1 text-[8px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-full font-bold">2026</span>
           </button>
 
           <button
@@ -2384,66 +2362,7 @@ export function FormStudioBuilder({
           </main>
         )}
 
-        {/* ─── 4. AI AGENT STUDIO (NATIVE TO AI FORMS) ─── */}
-        {studioTab === 'agent' && !isPreviewMode && (
-          <div className="flex-1 flex overflow-hidden w-full">
-            <FormAgentStudio
-              initialAgent={
-                formData.agentConfig || {
-                  ...DEFAULT_FORM_AGENT,
-                  id: `agent_${formData.id || 'form_agent'}`,
-                  name: formData.name ? `${formData.name.slice(0, 20)} Assistant` : 'AI Assistant',
-                  roleTitle: formData.name ? `${formData.name.slice(0, 28)} AI Assistant` : 'Virtual Assistant',
-                  brandColor: formData.theme?.primaryColor || formData.primaryColor || '#059669',
-                  welcomeGreeting: `Hi! I'm your **AI Assistant** for **${formData.name || 'this form'}**. I can answer questions or help you fill out the form. How can I help?`,
-                  greetingSubtitle: formData.description || 'Ask me anything, or tap a quick action below.',
-                  // Derive quick actions from the form's own fields (first 2
-                  // non-decorative fields) so the agent is immediately useful
-                  // without manual configuration. Falls back to generic actions.
-                  quickActions: (() => {
-                    const actionableFields = (formData.fields || []).filter(
-                      (f: any) => f.label && !['heading', 'paragraph', 'divider'].includes(f.type),
-                    );
-                    if (actionableFields.length >= 2) {
-                      return actionableFields.slice(0, 2).map((f: any, idx: number) => ({
-                        id: `qa_form_${idx + 1}`,
-                        label: f.label.length > 30 ? f.label.slice(0, 28) + '…' : f.label,
-                        actionType: 'open_form' as const,
-                        payload: f.id,
-                      }));
-                    }
-                    return DEFAULT_FORM_AGENT.quickActions;
-                  })(),
-                  connectedForms: [
-                    {
-                      id: formData.id || 'form_1',
-                      name: formData.name || 'Untitled Form',
-                      description: formData.description,
-                      submissionCount: 0,
-                    },
-                  ],
-                }
-              }
-              onChange={(updatedAgent) => {
-                onFormDataChange((prev) => ({
-                  ...prev,
-                  agentConfig: updatedAgent,
-                }));
-              }}
-              onSave={async (savedAgent) => {
-                onFormDataChange((prev) => ({
-                  ...prev,
-                  agentConfig: savedAgent,
-                }));
-                await onSave();
-              }}
-              onBack={() => setStudioTab('build')}
-              siteOrigin={siteOrigin}
-            />
-          </div>
-        )}
-
-        {/* ─── 5. TEMPLATE EXPLORER (FULL-PAGE CATALOG + MODAL SUBMIT) ─── */}
+        {/* ─── 4. TEMPLATE EXPLORER (FULL-PAGE CATALOG + MODAL SUBMIT) ─── */}
         {studioTab === 'templates' && !isPreviewMode && (
           <div className="flex-1 flex overflow-hidden w-full">
             <TemplateExplorer
