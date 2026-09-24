@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
+import { resolveFormLayout, layoutToRuntimeMode } from '@/lib/forms/resolve-form-layout';
 import dynamic from 'next/dynamic';
 
 const FormRuntimeRenderer = dynamic(
@@ -169,14 +170,12 @@ export default function PublicFormPage() {
     );
   }
 
-  // Resolve the form's saved layout mode. Forms are NEVER in 'agent' mode —
-  // the AI Agent is a separate product. If a legacy form has layout='conversational',
-  // fall back to 'paper' so it still renders correctly.
-  const formLayout = schema.theme?.layout || (schema.settings as any)?.formLayout;
-  const resolvedMode: 'paper' | 'card' =
-    formLayout === 'card' || formLayout === 'single_question'
-      ? 'card'
-      : 'paper';
+  // ─── Resolve the form's saved layout using the SHARED resolver ─────────
+  // This fixes the Open Live bug where split_media was lost (fell through to 'paper').
+  // Now /form/[formId], the builder preview, and the runtime all use the SAME
+  // resolver — so editor = preview = live.
+  const formLayout = resolveFormLayout(schema);
+  const resolvedMode = layoutToRuntimeMode(formLayout);
 
   const pageBgColor = schema.theme?.backgroundColor && schema.theme.backgroundColor !== '#ffffff'
     ? schema.theme.backgroundColor

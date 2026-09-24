@@ -52,7 +52,8 @@ import type { EditorFormData, FormField } from '@/features/forms/types';
 import { WidgetRuntimeDispatcher } from '../runtime/widgets/widget-runtime-dispatcher';
 import { FormFieldRenderer, getFieldWidthClass } from '../runtime/shared-field-renderer';
 import { SortableFieldWrapper } from '../runtime/sortable-field-wrapper';
-import { evaluateFormulaSafe } from '../runtime/form-runtime-renderer';
+import { evaluateFormulaSafe, FormMediaHeroPanel } from '../runtime/form-runtime-renderer';
+import { FormShell } from '../runtime/form-shell';
 import {
   DndContext,
   closestCenter,
@@ -598,306 +599,29 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
 
               return (
                 <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[550px]">
-                  {/* LEFT HERO MEDIA COLUMN — rendered first if position !== 'right' */}
+                  {/* LEFT HERO MEDIA COLUMN — uses shared FormMediaHeroPanel (Phase 4) */}
                   {panel.position !== 'right' && (
-                  <div
-                    onClick={() => {
-                      onSelectColumn?.('left');
-                      onSelectField('__media_panel__');
-                    }}
-                    className={`relative p-6 sm:p-8 text-white flex flex-col justify-between cursor-pointer group transition-all overflow-hidden ${leftWidthClass} ${
-                      isLeftColumnActive || isMediaSelected
-                        ? 'ring-4 ring-emerald-500/80 ring-offset-2 dark:ring-offset-slate-900 shadow-xl'
-                        : 'hover:brightness-105'
-                    }`}
-                    style={{ backgroundColor: panel.backgroundColor || '#0f172a' }}
-                  >
-                    {/* Column Background Photo Layer (if set) */}
-                    {panel.backgroundImageUrl && (
-                      <>
-                        <div
-                          className="absolute inset-0 z-0 bg-cover bg-center pointer-events-none transition-transform duration-500 group-hover:scale-105"
-                          style={{
-                            backgroundImage: `url(${panel.backgroundImageUrl})`,
-                            filter: panel.backgroundBlur === 'lg' ? 'blur(12px)' : panel.backgroundBlur === 'md' ? 'blur(6px)' : panel.backgroundBlur === 'sm' ? 'blur(3px)' : 'none',
-                          }}
-                        />
-                        <div
-                          className="absolute inset-0 z-0 pointer-events-none"
-                          style={{
-                            backgroundColor: '#000000',
-                            opacity: (panel.overlayOpacity ?? 70) / 100,
-                          }}
-                        />
-                      </>
-                    )}
-
-                    {/* Top Action Toolbar (Edit Left Panel / Hide Left Panel) */}
-                    <div className="relative z-10 flex items-center justify-between gap-2 mb-4">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {/* Column Status Badge */}
-                        <Badge
-                          variant="secondary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectColumn?.('left');
-                            onSelectField('__media_panel__');
-                          }}
-                          className={`text-[10px] font-bold gap-1 cursor-pointer transition-all ${
-                            isLeftColumnActive
-                              ? 'bg-emerald-500 text-white shadow-md font-black'
-                              : 'bg-white/20 text-white hover:bg-white/30 backdrop-blur'
-                          }`}
-                        >
-                          👈 Left Hero Column {isLeftColumnActive && '✓ (Active Target)'}
-                        </Badge>
-
-                        {/* 1. Trust Badge Widget */}
-                        {(panel.showBadge ?? Boolean(panel.badgeText)) && panel.badgeText && (
-                          <div className="group/badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-semibold backdrop-blur transition-all">
-                            <Star className="size-3 text-amber-400 fill-amber-400" />
-                            <span>{panel.badgeText}</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                updatePanel({ showBadge: false });
-                                toast.success('Removed badge from left column');
-                              }}
-                              className="opacity-0 group-hover/badge:opacity-100 hover:text-rose-400 p-0.5 ml-0.5 rounded transition-opacity"
-                              title="Delete Badge"
-                            >
-                              <X className="size-2.5" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <Badge
-                          variant="secondary"
-                          className={`text-[10px] font-bold gap-1 transition-opacity ${
-                            isMediaSelected
-                              ? 'bg-emerald-600 text-white opacity-100 shadow-xs'
-                              : 'bg-white/20 text-white opacity-0 group-hover:opacity-100 backdrop-blur'
-                          }`}
-                        >
-                          <Edit2 className="size-2.5" />
-                          <span>Edit Column Settings</span>
-                        </Badge>
-                      </div>
+                    <div
+                      className={`${leftWidthClass} relative ${isMediaSelected ? 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg' : 'hover:outline hover:outline-1 hover:outline-emerald-400/40 hover:rounded-lg'}`}
+                      onClick={() => {
+                        onSelectColumn?.('left');
+                        onSelectField('__media_panel__');
+                      }}
+                    >
+                      <FormMediaHeroPanel
+                        formId={undefined}
+                        mediaPanel={panel}
+                        formName={formData.name || 'Untitled Form'}
+                        formDescription={formData.description}
+                        primaryColor={primaryColor}
+                        leftFields={leftColumnFields}
+                        formData={effectiveCanvasFormData}
+                        errors={{}}
+                        onChange={handleCanvasFieldChange}
+                      />
                     </div>
-
-                    {/* 2. Visual Media Block (Photo, Video, Map, or Gradient) */}
-                    {(panel.showMedia ?? true) && (
-                      <div className="relative z-10 my-4 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl group/media">
-                        {/* Hover Quick Action to Delete/Change Media */}
-                        <div className="absolute top-2 right-2 z-20 opacity-0 group-hover/media:opacity-100 flex items-center gap-1 transition-opacity">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updatePanel({ showMedia: false });
-                              toast.success('Removed media widget from left column');
-                            }}
-                            className="p-1 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-[10px] flex items-center gap-1 shadow-md"
-                            title="Delete Media Block"
-                          >
-                            <Trash2 className="size-3" />
-                          </button>
-                        </div>
-
-                        {panel.mediaType === 'map' ? (
-                          <div className="relative w-full aspect-video min-h-[220px] bg-slate-950 overflow-hidden flex flex-col justify-between p-4">
-                            <iframe
-                              src={`https://maps.google.com/maps?q=${encodeURIComponent(panel.mapAddress || 'Austin, TX')}&t=&z=13&ie=UTF8&iwloc=&output=embed`}
-                              title="Location Map"
-                              className="absolute inset-0 w-full h-full border-0 pointer-events-none opacity-60 mix-blend-luminosity"
-                            />
-                            <div className="relative z-10 flex items-center justify-between">
-                              <Badge className="bg-rose-600 text-white text-[10px] gap-1 shadow-md">
-                                <MapPin className="size-3" /> Live Dispatch Area
-                              </Badge>
-                            </div>
-                            <div className="relative z-10 bg-slate-900/90 backdrop-blur border border-white/10 p-2.5 rounded-xl">
-                              <p className="text-xs font-bold text-white flex items-center gap-1.5">
-                                <MapPin className="size-3 text-rose-400" />
-                                {panel.mapAddress || 'Austin, TX Metro Area'}
-                              </p>
-                              {panel.mapServiceRadius && (
-                                <p className="text-[10px] text-slate-300 mt-0.5">
-                                  {panel.mapServiceRadius}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        ) : panel.mediaType === 'gradient' ? (
-                          <div className="relative w-full aspect-video min-h-[220px] overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-900 to-emerald-950 p-6 flex flex-col justify-center items-center text-center">
-                            <div className="size-32 rounded-full bg-primary/30 blur-2xl absolute -top-4 -left-4" />
-                            <div className="size-32 rounded-full bg-indigo-500/20 blur-2xl absolute -bottom-4 -right-4" />
-                            <div className="relative z-10 space-y-2">
-                              <div className="size-10 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center mx-auto text-primary">
-                                <Sparkles className="size-5" />
-                              </div>
-                              <p className="text-sm font-black text-white">2026 Luminous Canvas</p>
-                              <p className="text-[11px] text-slate-300 max-w-xs">Atmospheric glow with instant response guarantees.</p>
-                            </div>
-                          </div>
-                        ) : panel.mediaType === 'video' && panel.mediaUrl ? (
-                          panel.mediaUrl.includes('youtube.com') || panel.mediaUrl.includes('youtu.be') ? (
-                            <div className="aspect-video w-full">
-                              <iframe
-                                src={
-                                  panel.mediaUrl.includes('watch?v=')
-                                    ? panel.mediaUrl.replace('watch?v=', 'embed/').split('&')[0]
-                                    : panel.mediaUrl.replace('youtu.be/', 'www.youtube.com/embed/')
-                                }
-                                title="Video Hero"
-                                className="w-full h-full border-0 pointer-events-none"
-                              />
-                            </div>
-                          ) : (
-                            <video
-                              src={panel.mediaUrl}
-                              autoPlay
-                              loop
-                              muted
-                              playsInline
-                              className="w-full h-auto object-cover max-h-[280px]"
-                            />
-                          )
-                        ) : (
-                          <div className="relative w-full aspect-video overflow-hidden">
-                            <img
-                              src={panel.mediaUrl || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80'}
-                              alt="Hero Media"
-                              className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* 3. Headline, Subtitle & Value Benefits */}
-                    <div className="relative z-10 space-y-3 mt-auto">
-                      {(panel.showHeadline ?? true) && (
-                        <div className="group/head relative">
-                          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-snug">
-                            {panel.headline || formData.name || 'Fast & Reliable Professional Service'}
-                          </h2>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updatePanel({ showHeadline: false });
-                              toast.success('Removed headline');
-                            }}
-                            className="absolute top-0 -right-5 opacity-0 group-hover/head:opacity-100 hover:text-rose-400 p-0.5 rounded transition-opacity"
-                            title="Delete Headline"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </div>
-                      )}
-
-                      {(panel.showSubtitle ?? true) && panel.subtitle && (
-                        <div className="group/sub relative">
-                          <p className="text-xs text-slate-300 leading-relaxed">
-                            {panel.subtitle}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              updatePanel({ showSubtitle: false });
-                              toast.success('Removed subtitle');
-                            }}
-                            className="absolute top-0 -right-5 opacity-0 group-hover/sub:opacity-100 hover:text-rose-400 p-0.5 rounded transition-opacity"
-                            title="Delete Subtitle"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </div>
-                      )}
-
-                      {(panel.showBenefits ?? true) && panel.benefitsList && panel.benefitsList.length > 0 && (
-                        <div className="space-y-2 pt-2 border-t border-white/10 group/benefits relative">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Benefits</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                updatePanel({ showBenefits: false });
-                                toast.success('Removed benefits list');
-                              }}
-                              className="opacity-0 group-hover/benefits:opacity-100 hover:text-rose-400 text-[10px] font-semibold transition-opacity"
-                            >
-                              Delete List
-                            </button>
-                          </div>
-                          {panel.benefitsList.map((benefit, bIdx) => (
-                            <div key={bIdx} className="flex items-center justify-between gap-2 text-xs text-slate-200 group/item">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
-                                <span className="truncate">{benefit}</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const list = [...(panel.benefitsList || [])];
-                                  list.splice(bIdx, 1);
-                                  updatePanel({ benefitsList: list });
-                                }}
-                                className="opacity-0 group-hover/item:opacity-100 hover:text-rose-400 p-0.5 shrink-0"
-                                title="Delete Point"
-                              >
-                                <Trash2 className="size-2.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* 4. Left Column Widgets (Added directly to Left Hero) */}
-                      {leftColumnFields.length > 0 && (
-                        <div className="space-y-3 pt-3 border-t border-white/10">
-                          <div className="flex flex-wrap gap-y-3 gap-x-2.5">
-                            {leftColumnFields.map((f) => (
-                              <StudioFieldPreview
-                                key={f.id}
-                                field={f}
-                                canvasFormData={effectiveCanvasFormData}
-                                onCanvasFieldChange={handleCanvasFieldChange}
-                                selectedFieldId={selectedFieldId}
-                                onSelectField={onSelectField}
-                                inputBorderRadius={inputBorderRadius}
-                                defaultInputHeightCls={defaultInputHeightCls}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Add field to left column — subtle button */}
-                      {onOpenAddWidgetDialog && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectColumn?.('left');
-                            onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
-                          }}
-                          className="w-full h-8 bg-white/10 hover:bg-white/20 text-white border border-dashed border-white/20 text-xs font-semibold gap-1.5 rounded-xl flex items-center justify-center transition-all"
-                        >
-                          <Plus className="size-3" /> Add field
-                        </button>
-                      )}
-                    </div>
-                  </div>
                   )}
+
 
                   {/* RIGHT FORM FIELDS COLUMN (Stepped / Single Page) */}
                   <div
@@ -934,7 +658,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
                             }`}
                           >
-                            👉 Right Form Column {isRightColumnActive && '✓ (Active Target)'}
+                            👉 Form Column {isRightColumnActive && '✓'}
                           </Badge>
                           <Button
                             type="button"
@@ -1003,27 +727,36 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                         </div>
                       )}
 
-                      {/* Right Fields Grid — WYSIWYG: no editor cards, just the fields */}
-                      <div className="flex flex-wrap gap-y-4 gap-x-3">
-                        {rightColumnFields.length > 0 ? (
-                          rightColumnFields.map((f) => (
-                            <StudioFieldPreview
-                              key={f.id}
-                              field={f}
-                              canvasFormData={effectiveCanvasFormData}
-                              onCanvasFieldChange={handleCanvasFieldChange}
-                              selectedFieldId={selectedFieldId}
-                              onSelectField={onSelectField}
-                              inputBorderRadius={inputBorderRadius}
-                              defaultInputHeightCls={defaultInputHeightCls}
-                            />
-                          ))
-                        ) : (
-                          <div className="w-full p-8 text-center text-muted-foreground text-xs">
-                            <p>No fields yet. Click "+ Add field" below to add one.</p>
+                      {/* Right Fields Grid — WYSIWYG + Drag-and-Drop */}
+                      <DndContext
+                        sensors={dndSensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <SortableContext items={rightColumnFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                          <div className="flex flex-wrap gap-y-4 gap-x-3">
+                            {rightColumnFields.length > 0 ? (
+                              rightColumnFields.map((f) => (
+                                <SortableFieldWrapper
+                                  key={f.id}
+                                  field={f}
+                                  value={effectiveCanvasFormData[f.id]}
+                                  onChange={(val) => handleCanvasFieldChange(f.id, val)}
+                                  allFormData={effectiveCanvasFormData}
+                                  selectedFieldId={selectedFieldId}
+                                  onSelectField={onSelectField}
+                                  inputBorderRadius={inputBorderRadius}
+                                  defaultInputHeightCls={defaultInputHeightCls}
+                                />
+                              ))
+                            ) : (
+                              <div className="w-full p-8 text-center text-muted-foreground text-xs">
+                                <p>No fields yet. Click "+ Add field" below to add one.</p>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
+                        </SortableContext>
+                      </DndContext>
 
                       {/* Add Field Button — subtle, appears as a dashed divider */}
                       {onOpenAddWidgetDialog && (
@@ -1079,24 +812,26 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                     </div>
                   </div>
 
-                  {/* RIGHT-SIDE MEDIA COLUMN — rendered last if position === 'right' */}
+                  {/* RIGHT-SIDE MEDIA COLUMN — uses shared FormMediaHeroPanel */}
                   {panel.position === 'right' && (
                     <div
+                      className={`${leftWidthClass} relative ${isMediaSelected ? 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg' : 'hover:outline hover:outline-1 hover:outline-emerald-400/40 hover:rounded-lg'}`}
                       onClick={() => {
                         onSelectColumn?.('left');
                         onSelectField('__media_panel__');
                       }}
-                      className={`relative p-6 sm:p-8 text-white flex flex-col justify-between cursor-pointer group transition-all overflow-hidden ${leftWidthClass} ${
-                        isLeftColumnActive || isMediaSelected
-                          ? 'ring-4 ring-emerald-500/80 ring-offset-2 dark:ring-offset-slate-900 shadow-xl'
-                          : 'hover:brightness-105'
-                      }`}
-                      style={{ backgroundColor: panel.backgroundColor || '#0f172a' }}
                     >
-                      <div className="text-center py-8 text-white/70 text-xs">
-                        <Monitor className="size-8 mx-auto mb-2 opacity-50" />
-                        Media panel appears here on the right side.
-                      </div>
+                      <FormMediaHeroPanel
+                        formId={undefined}
+                        mediaPanel={panel}
+                        formName={formData.name || 'Untitled Form'}
+                        formDescription={formData.description}
+                        primaryColor={primaryColor}
+                        leftFields={leftColumnFields}
+                        formData={effectiveCanvasFormData}
+                        errors={{}}
+                        onChange={handleCanvasFieldChange}
+                      />
                     </div>
                   )}
                 </div>
@@ -1164,27 +899,36 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                 </p>
               </div>
 
-              {/* Step Sub-Fields Render — WYSIWYG: no editor cards */}
-              <div className="flex flex-wrap gap-y-4 gap-x-3 pl-0 sm:pl-8">
-                {activeStep.fields.length > 0 ? (
-                  activeStep.fields.map((field) => (
-                    <StudioFieldPreview
-                      key={field.id}
-                      field={field}
-                      canvasFormData={effectiveCanvasFormData}
-                      onCanvasFieldChange={handleCanvasFieldChange}
-                      selectedFieldId={selectedFieldId}
-                      onSelectField={onSelectField}
-                      inputBorderRadius={inputBorderRadius}
-                      defaultInputHeightCls={defaultInputHeightCls}
-                    />
-                  ))
-                ) : (
-                  <div className="w-full p-8 text-center text-muted-foreground text-xs">
-                    <p>No questions yet.</p>
+              {/* Step Sub-Fields Render — WYSIWYG + Drag-and-Drop */}
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext items={activeStep.fields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                  <div className="flex flex-wrap gap-y-4 gap-x-3 pl-0 sm:pl-8">
+                    {activeStep.fields.length > 0 ? (
+                      activeStep.fields.map((field) => (
+                        <SortableFieldWrapper
+                          key={field.id}
+                          field={field}
+                          value={effectiveCanvasFormData[field.id]}
+                          onChange={(val) => handleCanvasFieldChange(field.id, val)}
+                          allFormData={effectiveCanvasFormData}
+                          selectedFieldId={selectedFieldId}
+                          onSelectField={onSelectField}
+                          inputBorderRadius={inputBorderRadius}
+                          defaultInputHeightCls={defaultInputHeightCls}
+                        />
+                      ))
+                    ) : (
+                      <div className="w-full p-8 text-center text-muted-foreground text-xs">
+                        <p>No questions yet.</p>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </SortableContext>
+              </DndContext>
 
               {/* Step Navigation Controls (Typeform Enter to Continue) */}
               {isMultiStep && (
@@ -1252,7 +996,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                       onClick={() => onOpenAddWidgetDialog(sIdx, step.id)}
                       className="h-7 text-[11px] font-semibold gap-1 text-emerald-600 border-emerald-200 dark:border-emerald-800"
                     >
-                      <Plus className="size-3" /> Add Widget
+                      <Plus className="size-3" /> Add field
                     </Button>
                   )}
                 </div>
@@ -1285,14 +1029,6 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
             ))}
           </div>
         )}
-      </div>
-
-      {/* ─── Bottom Status Footer ─── */}
-      <div className="w-full max-w-4xl py-4 flex items-center justify-between text-xs text-muted-foreground border-t border-slate-200/60 dark:border-slate-800/60 mt-6">
-        <span className="flex items-center gap-1">
-          <Lock className="size-3 text-emerald-500" /> 256-bit SSL Encrypted Form
-        </span>
-        <span>Powered by Fieseros GPTForm Studio</span>
       </div>
     </div>
   );

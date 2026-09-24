@@ -73,7 +73,7 @@ function parseVideoEmbed(url?: string): { type: 'youtube' | 'vimeo' | 'mp4' | 'n
 /**
  * 2026 Interactive Hero Media & Map Panel (Left or Right Column)
  */
-function FormMediaHeroPanel({
+export function FormMediaHeroPanel({
   formId,
   mediaPanel,
   formName,

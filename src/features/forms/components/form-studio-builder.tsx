@@ -84,6 +84,7 @@ import {
 import type { FieldDefinition } from '@/lib/forms/field-settings-types';
 import { resolveIcon } from '@/lib/forms/icon-resolver';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
+import { resolveFormLayout, layoutToRuntimeMode, type FormLayout } from '@/lib/forms/resolve-form-layout';
 
 export interface FormStudioBuilderProps {
   formData: EditorFormData;
@@ -105,21 +106,28 @@ export function FormStudioBuilder({
   siteOrigin,
 }: FormStudioBuilderProps) {
   // ─── Undo/Redo History (Jotform/Elementor parity) ─────────────────────
-  // Wraps onFormDataChange to record every change to a history stack.
-  // Keyboard shortcuts (Cmd+Z, Cmd+Shift+Z) are handled below.
+  // History stack + wrapped onFormDataChange that records every mutation.
+  // The wrapped version (onFormDataChangeWithHistory) is passed to child
+  // components instead of the raw onFormDataChange, so ALL mutations
+  // automatically go through history without needing to change call sites.
   const historyRef = useRef<{ past: EditorFormData[]; future: EditorFormData[] }>({
     past: [],
     future: [],
   });
   const [, forceHistoryUpdate] = useState(0);
+  const isUndoRedoRef = useRef(false); // prevents undo/redo from recording itself
 
-  const handleChangeWithHistory = useCallback(
+  // Wrapped version — records to history before applying the change
+  const onFormDataChangeWithHistory = useCallback(
     (updater: EditorFormData | ((prev: EditorFormData) => EditorFormData)) => {
       onFormDataChange((prev) => {
-        historyRef.current.past.push(prev);
-        if (historyRef.current.past.length > 50) historyRef.current.past.shift();
-        historyRef.current.future = [];
-        forceHistoryUpdate((n) => n + 1);
+        // Don't record if this is an undo/redo operation
+        if (!isUndoRedoRef.current) {
+          historyRef.current.past.push(prev);
+          if (historyRef.current.past.length > 50) historyRef.current.past.shift();
+          historyRef.current.future = [];
+          forceHistoryUpdate((n) => n + 1);
+        }
         return typeof updater === 'function' ? (updater as (p: EditorFormData) => EditorFormData)(prev) : updater;
       });
     },
@@ -127,6 +135,7 @@ export function FormStudioBuilder({
   );
 
   const undo = useCallback(() => {
+    isUndoRedoRef.current = true;
     onFormDataChange((prev) => {
       const past = historyRef.current.past;
       if (past.length === 0) return prev;
@@ -137,9 +146,11 @@ export function FormStudioBuilder({
       forceHistoryUpdate((n) => n + 1);
       return previous;
     });
+    setTimeout(() => { isUndoRedoRef.current = false; }, 0);
   }, [onFormDataChange]);
 
   const redo = useCallback(() => {
+    isUndoRedoRef.current = true;
     onFormDataChange((prev) => {
       const future = historyRef.current.future;
       if (future.length === 0) return prev;
@@ -150,6 +161,7 @@ export function FormStudioBuilder({
       forceHistoryUpdate((n) => n + 1);
       return next;
     });
+    setTimeout(() => { isUndoRedoRef.current = false; }, 0);
   }, [onFormDataChange]);
 
   const canUndo = historyRef.current.past.length > 0;
@@ -226,18 +238,29 @@ export function FormStudioBuilder({
   const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'templates'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
-  const initialPreviewFormat: 'paper' | 'card' =
-    formData.theme?.layout === 'card' || (formData.settings as any)?.formLayout === 'single_question'
-      ? 'card'
-      : 'paper';
-  // Form preview only. AI Agent has its own builder/simulator and publish flow.
-  const [previewFormat, setPreviewFormat] = useState<'paper' | 'card'>(initialPreviewFormat);
+  // ─── Unified Layout Vocabulary (Phase 2) ──────────────────────────────
+  // Replaced 7 competing terms (focus, paper, classic, single_question,
+  // all_on_one_page, split_media, card) with ONE canonical enum:
+  //   - 'classic'     = Jotform-style document form
+  //   - 'card'        = single-question / card experience
+  //   - 'split_media' = 2-part split hero (media + form)
+  //
+  // The resolved layout drives BOTH the editor canvas (viewMode) AND the
+  // preview pane (previewFormat) AND the runtime schema — so they're
+  // always in sync.
+  const initialFormLayout = resolveFormLayout(formData as any);
+  const [formLayout, setFormLayout] = useState<FormLayout>(initialFormLayout);
 
-  // Keep the preview selector synchronized with the form's saved presentation.
+  // Keep formLayout synced when formData changes (e.g. template applied)
   useEffect(() => {
-    const layout = formData.theme?.layout || (formData.settings as any)?.formLayout;
-    setPreviewFormat(layout === 'card' || layout === 'single_question' ? 'card' : 'paper');
+    const resolved = resolveFormLayout(formData as any);
+    setFormLayout(resolved);
   }, [formData.theme?.layout, formData.settings?.formLayout]);
+
+  // Preview mode — derived from formLayout (no separate state)
+  const previewFormat = layoutToRuntimeMode(formLayout);
+  // Note: previewFormat is now read-only (derived). To change it, update
+  // formData.theme.layout via setFormLayout + onFormDataChange.
   
   // Selection and Palette state
   // ─── Default to null (Jotform behavior) ─────────────────────────────────
@@ -273,12 +296,9 @@ export function FormStudioBuilder({
   const [showPagesTree, setShowPagesTree] = useState(true);
   const [showInspector, setShowInspector] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const initialLayout = formData.settings?.formLayout === 'split_media' || formData.theme?.layout === 'split_media'
-    ? 'split_media'
-    : formData.settings?.formLayout === 'all_on_one_page'
-    ? 'paper'
-    : 'focus';
-  const [viewMode, setViewMode] = useState<'focus' | 'paper' | 'split_media'>(initialLayout);
+  // viewMode is now the SAME as formLayout (no separate 'focus' | 'paper' | 'split_media')
+  // This eliminates the mismatch where viewMode and previewFormat could disagree.
+  const viewMode = formLayout;
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [currentThemeId, setCurrentThemeId] = useState('fieseros-emerald');
 
@@ -473,11 +493,8 @@ export function FormStudioBuilder({
         backgroundImageUrl: formData.theme?.backgroundImageUrl,
         backgroundOverlayOpacity: formData.theme?.backgroundOverlayOpacity,
         backgroundBlur: formData.theme?.backgroundBlur,
-        layout: formData.settings?.formLayout === 'single_question' || formData.theme?.layout === 'card' || viewMode === 'focus'
-          ? 'card'
-          : formData.settings?.formLayout === 'split_media' || formData.theme?.layout === 'split_media' || viewMode === 'split_media' || (formData.mediaPanel && formData.mediaPanel.enabled !== false)
-          ? 'split_media'
-          : 'paper',
+        // Use the unified formLayout value — no more competing vocabulary
+        layout: formLayout,
         mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
       },
       mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
@@ -1193,12 +1210,12 @@ export function FormStudioBuilder({
         <div className="h-10 border-b border-border/70 bg-slate-50/80 dark:bg-slate-950/80 px-4 flex items-center justify-between gap-3 shrink-0 select-none z-20">
           {/* Left: Layout View + Stepper Mode Switchers */}
           <div className="flex items-center gap-2">
-            {/* Focus (Typeform) vs Paper (Jotform) vs 2-Part Split (Elementor) */}
+            {/* Canonical layout selector: Classic | Card | Split Media */}
             <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-border/80 text-[11px] font-semibold">
               <button
                 type="button"
                 onClick={() => {
-                  setViewMode('focus');
+                  setFormLayout('card');
                   onFormDataChange((prev) => ({
                     ...prev,
                     theme: { ...(prev.theme || {}), layout: 'card' } as any,
@@ -1208,16 +1225,16 @@ export function FormStudioBuilder({
                 }}
                 className={cn(
                   'px-2 py-0.5 rounded-md transition-all cursor-pointer',
-                  viewMode === 'focus' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
+                  viewMode === 'card' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
                 )}
-                title="Typeform-style Focus Card flow"
+                title="Single-question card experience (Typeform-style)"
               >
-                🃏 Focus Flow
+                🃏 Card Flow
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  setViewMode('paper');
+                  setFormLayout('classic');
                   onFormDataChange((prev) => ({
                     ...prev,
                     theme: { ...(prev.theme || {}), layout: 'classic' } as any,
@@ -1227,16 +1244,16 @@ export function FormStudioBuilder({
                 }}
                 className={cn(
                   'px-2 py-0.5 rounded-md transition-all cursor-pointer',
-                  viewMode === 'paper' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
+                  viewMode === 'classic' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'
                 )}
-                title="Jotform-style Classic Document"
+                title="Jotform-style Classic Document (all fields on one page)"
               >
-                📄 Document
+                📄 Classic
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  setViewMode('split_media');
+                  setFormLayout('split_media');
                   updateMediaPanel({ enabled: true });
                   setSelectedFieldId('__media_panel__');
                   setShowInspector(true);
@@ -1245,9 +1262,9 @@ export function FormStudioBuilder({
                   'px-2.5 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1',
                   viewMode === 'split_media' ? 'bg-primary/10 text-primary shadow-2xs font-bold ring-1 ring-primary/30' : 'text-muted-foreground hover:text-foreground'
                 )}
-                title="2-Part Split Hero (Video / Image / Map Hero + Form)"
+                title="2-Part Split Hero (Media panel + Form column)"
               >
-                <span>🎬 2-Part Split Hero</span>
+                <span>🎬 Split Hero</span>
               </button>
             </div>
 
@@ -1418,7 +1435,7 @@ export function FormStudioBuilder({
             {/* Center: Live Focus WYSIWYG split canvas with Enter-to-continue & floating pill triggers */}
             <StudioFocusCanvas
               formData={formData}
-              onFormDataChange={onFormDataChange}
+              onFormDataChange={onFormDataChangeWithHistory}
               currentStepIndex={currentStepIndex}
               onStepChange={setCurrentStepIndex}
               selectedFieldId={selectedFieldId}
@@ -2610,20 +2627,20 @@ export function FormStudioBuilder({
               {/* Form Layout Indicator Badge (Jotform Style) */}
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs font-semibold px-2.5 py-1 bg-muted/40 border-border/60 gap-1.5">
-                  {viewMode === 'split_media' ? (
+                  {formLayout === 'split_media' ? (
                     <>
                       <span className="size-2 rounded-full bg-emerald-500" />
-                      <span>2-Column Split Hero Form</span>
+                      <span>Split Hero Form</span>
                     </>
-                  ) : previewFormat === 'paper' ? (
+                  ) : formLayout === 'classic' ? (
                     <>
                       <span className="size-2 rounded-full bg-blue-500" />
-                      <span>Classic Paper Form</span>
+                      <span>Classic Form</span>
                     </>
                   ) : (
                     <>
                       <span className="size-2 rounded-full bg-indigo-500" />
-                      <span>Card-by-Card Swipe Form</span>
+                      <span>Card Form</span>
                     </>
                   )}
                 </Badge>

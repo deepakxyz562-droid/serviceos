@@ -276,51 +276,8 @@ export const FormFieldRenderer = React.memo(function FormFieldRenderer({
         />
       </div>
 
-      {/* Edit-mode toolbar — shown when field is selected */}
-      {isEditMode && isSelected && (
-        <div className="absolute -top-7 right-0 flex items-center gap-0.5 bg-white dark:bg-slate-900 border border-border rounded-lg shadow-md px-1 py-0.5 z-20">
-          {onMoveField && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onMoveField(field.id, 'up'); }}
-              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-muted-foreground hover:text-foreground"
-              title="Move up"
-            >
-              ↑
-            </button>
-          )}
-          {onMoveField && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onMoveField(field.id, 'down'); }}
-              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-muted-foreground hover:text-foreground"
-              title="Move down"
-            >
-              ↓
-            </button>
-          )}
-          {onDuplicateField && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDuplicateField(field.id); }}
-              className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-muted-foreground hover:text-foreground text-xs"
-              title="Duplicate"
-            >
-              ⧉
-            </button>
-          )}
-          {onDeleteField && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDeleteField(field.id); }}
-              className="p-1 rounded hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-500 text-xs"
-              title="Delete"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      )}
+      {/* NOTE: Editor toolbar moved to EditorFieldOverlay (Phase 5).
+          FormFieldRenderer is now PURE visual — no editor chrome. */}
     </div>
   );
 });
