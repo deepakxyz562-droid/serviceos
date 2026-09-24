@@ -201,13 +201,19 @@ export function FormStudioBuilder({
         ],
       };
       const updated = { ...current, ...updates };
+      const isSplitActive = updated.enabled !== false;
       return {
         ...prev,
         mediaPanel: updated,
         theme: {
           ...(prev.theme || {}),
+          layout: isSplitActive ? 'split_media' : (prev.theme?.layout === 'split_media' ? 'classic' : prev.theme?.layout || 'classic'),
           mediaPanel: updated,
         } as any,
+        settings: {
+          ...(prev.settings || {}),
+          formLayout: isSplitActive ? 'split_media' : (prev.settings?.formLayout === 'split_media' ? 'all_on_one_page' : prev.settings?.formLayout || 'all_on_one_page'),
+        },
       };
     });
   }, [onFormDataChange]);
@@ -977,8 +983,12 @@ export function FormStudioBuilder({
                 type="button"
                 onClick={() => {
                   setViewMode('focus');
-                  updateSetting('formLayout', 'single_question');
-                  updateMediaPanel({ enabled: false });
+                  onFormDataChange((prev) => ({
+                    ...prev,
+                    theme: { ...(prev.theme || {}), layout: 'card' } as any,
+                    settings: { ...(prev.settings || {}), formLayout: 'single_question' },
+                    mediaPanel: { ...(prev.mediaPanel || prev.theme?.mediaPanel || {}), enabled: false } as any,
+                  }));
                 }}
                 className={cn(
                   'px-2 py-0.5 rounded-md transition-all cursor-pointer',
@@ -992,8 +1002,12 @@ export function FormStudioBuilder({
                 type="button"
                 onClick={() => {
                   setViewMode('paper');
-                  updateSetting('formLayout', 'all_on_one_page');
-                  updateMediaPanel({ enabled: false });
+                  onFormDataChange((prev) => ({
+                    ...prev,
+                    theme: { ...(prev.theme || {}), layout: 'classic' } as any,
+                    settings: { ...(prev.settings || {}), formLayout: 'all_on_one_page' },
+                    mediaPanel: { ...(prev.mediaPanel || prev.theme?.mediaPanel || {}), enabled: false } as any,
+                  }));
                 }}
                 className={cn(
                   'px-2 py-0.5 rounded-md transition-all cursor-pointer',
@@ -1007,7 +1021,6 @@ export function FormStudioBuilder({
                 type="button"
                 onClick={() => {
                   setViewMode('split_media');
-                  updateSetting('formLayout', 'split_media');
                   updateMediaPanel({ enabled: true });
                   setSelectedFieldId('__media_panel__');
                   setShowInspector(true);

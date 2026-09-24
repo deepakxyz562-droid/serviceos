@@ -275,7 +275,20 @@ export function buildApiPayload(formData: EditorFormData) {
   }));
 
   const mediaPanel = formData.mediaPanel || formData.theme?.mediaPanel;
-  const themeLayout = formData.theme?.layout || (formData.settings?.formLayout === 'split_media' ? 'split_media' : formData.settings?.formLayout === 'single_question' ? 'card' : 'classic');
+  const isSplitMedia =
+    formData.theme?.layout === 'split_media' ||
+    formData.settings?.formLayout === 'split_media' ||
+    (mediaPanel && mediaPanel.enabled !== false && Boolean(mediaPanel.mediaUrl || mediaPanel.backgroundImageUrl || mediaPanel.headline));
+
+  const isCard =
+    formData.theme?.layout === 'card' ||
+    formData.settings?.formLayout === 'single_question';
+
+  const themeLayout: 'split_media' | 'card' | 'classic' = isSplitMedia
+    ? 'split_media'
+    : isCard
+    ? 'card'
+    : 'classic';
 
   const schemaObj = {
     version: 1,

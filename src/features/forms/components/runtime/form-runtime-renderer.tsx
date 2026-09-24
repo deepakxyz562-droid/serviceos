@@ -1413,9 +1413,6 @@ export function FormRuntimeRenderer({
                       {field.helpText && !['heading', 'paragraph'].includes(field.type) && (
                         <p className="text-xs text-muted-foreground">{field.helpText}</p>
                       )}
-                      {(field.type === 'control_widget' || ['dropdown','radio','checkbox','short_answer','email','phone','numerical','date','time','long_answer','signature','rating','appointment','heading','paragraph','divider','slider','switch','toggle','multiple_choice','single_choice','calculation','form_calculation'].includes(field.type) || (field.widgetType && field.widgetType !== 'hidden')) && (
-                        <WidgetRuntimeDispatcher field={field} value={formData[field.id]} onChange={(val) => handleFieldChange(field.id, val)} allFormData={formData} formId={formId} />
-                      )}
                       {field.type === 'heading' && (() => {
                         const cfg = (field.widgetConfig as any) || {};
                         const level = cfg.level || 'h3';
@@ -1434,48 +1431,17 @@ export function FormRuntimeRenderer({
                         }
                         return <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>;
                       })()}
+                      {field.type === 'divider' && <hr className="my-3 border-border/60" />}
 
-                      {/* ─── P1 fix: handle ALL remaining field types so preview shows every field ───
-                          Previously these types were invisible (no render branch). Now they route
-                          through WidgetRuntimeDispatcher (which has the 3-layer resolver from R1)
-                          or render an appropriate input. Fixes "preview not showing all fields". */}
-                      {[
-                        'address', 'photo', 'file', 'currency', 'calculated',
-                        'image_upload_with_notes', 'route_planner', 'nearest_location',
-                        'service_area', 'payment_gateway', 'sms_otp', 'voice_recorder',
-                        'signature_pad', 'form_calculation', 'text_count', 'line_button',
-                        'bsb_checker', 'codice_fiscale', 'turnstile', 'france_region',
-                        'inventory_dropdown', 'digital_magazine', 'street_view',
-                        'most_frequent_answer',
-                      ].includes(field.type) && (
+                      {/* Universal Widget Dispatcher: renders every widget, alias, and fallback as interactive input */}
+                      {!['heading', 'paragraph', 'divider'].includes(field.type) && (
                         <WidgetRuntimeDispatcher
-                          field={{ ...field, widgetType: field.widgetType || field.type }}
+                          field={field}
                           value={formData[field.id]}
                           onChange={(val) => handleFieldChange(field.id, val)}
                           allFormData={formData}
                           formId={formId}
                         />
-                      )}
-
-                      {/* ─── P1 fix: fallback for truly unknown field types ───
-                          Renders a labeled placeholder so the field is visible (not invisible). */}
-                      {!field.widgetType && ![
-                        'short_answer', 'long_answer', 'email', 'phone', 'numerical', 'date', 'time',
-                        'dropdown', 'radio', 'checkbox', 'signature', 'rating', 'heading', 'paragraph',
-                        'control_widget', 'address', 'photo', 'file', 'currency', 'calculated',
-                        'image_upload_with_notes', 'route_planner', 'nearest_location', 'service_area',
-                        'payment_gateway', 'sms_otp', 'voice_recorder', 'signature_pad', 'form_calculation',
-                        'text_count', 'line_button', 'bsb_checker', 'codice_fiscale', 'turnstile',
-                        'france_region', 'inventory_dropdown', 'digital_magazine', 'street_view',
-                        'most_frequent_answer',
-                      ].includes(field.type) && (
-                        <div
-                          className="p-3 rounded-xl border border-dashed border-border/60 bg-muted/30 text-xs text-muted-foreground"
-                          style={inputStyle}
-                        >
-                          <span className="font-medium">{field.label}</span>
-                          {field.placeholder && <span className="block text-[10px] mt-0.5 opacity-70">{field.placeholder}</span>}
-                        </div>
                       )}
                     </div>
                   );
@@ -1591,19 +1557,6 @@ export function FormRuntimeRenderer({
                         settings like maxLength, validation, mask, confirmation, country dropdown,
                         calendar, format, decimals, thousandsSep, rows, showCounter, etc.
                         Exception: material/tier radio fields use the specialized estimator card below. */}
-                    {(field.type === 'control_widget' ||
-                      ['dropdown','radio','checkbox','short_answer','email','phone','numerical','date','time','long_answer','signature','rating','appointment','heading','paragraph','divider','address','file','slider','switch','toggle','multiple_choice','single_choice','calculation','form_calculation'].includes(field.type) ||
-                      (field.widgetType && field.widgetType !== 'hidden')) &&
-                      !(field.type === 'radio' && !field.widgetType && (field.id.includes('material') || field.id.includes('tier'))) && (
-                      <WidgetRuntimeDispatcher
-                        field={field}
-                        value={formData[field.id]}
-                        onChange={(val) => handleFieldChange(field.id, val)}
-                        allFormData={formData}
-                        formId={formId}
-                      />
-                    )}
-
                     {/* Scope / Area Interactive Slider */}
                     {!field.widgetType && (field.id.includes('size') || field.id.includes('area') || field.id.includes('sqft') || field.label.toLowerCase().includes('sq ft') || field.label.toLowerCase().includes('area')) && (
                       <div className="space-y-2 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 border border-border/80">
@@ -1666,8 +1619,6 @@ export function FormRuntimeRenderer({
                       </div>
                     )}
 
-                    {/* Standard Inputs — route through dispatcher for rich runtime components */}
-
                     {/* Headings / Paragraphs — respect level, align, text, allowHTML settings */}
                     {field.type === 'heading' && (() => {
                       const cfg = (field.widgetConfig as any) || {};
@@ -1687,57 +1638,19 @@ export function FormRuntimeRenderer({
                       }
                       return <p className="text-xs text-muted-foreground leading-relaxed w-full">{text}</p>;
                     })()}
+                    {field.type === 'divider' && <hr className="my-2 border-border/60 w-full" />}
 
-                    {/* ─── Divider: route through dispatcher if widgetType is set ─── */}
-                    {field.type === 'paragraph' && field.widgetType === 'divider' && (
+                    {/* Universal Widget Dispatcher: renders every widget, alias, and fallback as interactive input */}
+                    {!['heading', 'paragraph', 'divider'].includes(field.type) &&
+                      !(!field.widgetType && (field.id.includes('size') || field.id.includes('area') || field.id.includes('sqft') || field.label.toLowerCase().includes('sq ft') || field.label.toLowerCase().includes('area'))) &&
+                      !(!field.widgetType && field.type === 'radio' && (field.id.includes('material') || field.id.includes('tier'))) && (
                       <WidgetRuntimeDispatcher
                         field={field}
-                        value={undefined}
-                        onChange={() => {}}
-                        allFormData={formData}
-                        formId={formId}
-                      />
-                    )}
-
-                    {/* ─── P1 fix: handle ALL remaining field types (non-card mode) ───
-                        Same as card mode — route unhandled types through WidgetRuntimeDispatcher
-                        so they render instead of being invisible. */}
-                    {[
-                      'address', 'photo', 'file', 'currency', 'calculated',
-                      'image_upload_with_notes', 'route_planner', 'nearest_location',
-                      'service_area', 'payment_gateway', 'sms_otp', 'voice_recorder',
-                      'signature_pad', 'form_calculation', 'text_count', 'line_button',
-                      'bsb_checker', 'codice_fiscale', 'turnstile', 'france_region',
-                      'inventory_dropdown', 'digital_magazine', 'street_view',
-                      'most_frequent_answer',
-                    ].includes(field.type) && (
-                      <WidgetRuntimeDispatcher
-                        field={{ ...field, widgetType: field.widgetType || field.type }}
                         value={formData[field.id]}
                         onChange={(val) => handleFieldChange(field.id, val)}
                         allFormData={formData}
                         formId={formId}
                       />
-                    )}
-
-                    {/* ─── P1 fix: fallback for truly unknown field types ─── */}
-                    {!field.widgetType && ![
-                      'short_answer', 'long_answer', 'email', 'phone', 'numerical', 'date', 'time',
-                      'dropdown', 'radio', 'checkbox', 'signature', 'rating', 'heading', 'paragraph',
-                      'control_widget', 'address', 'photo', 'file', 'currency', 'calculated',
-                      'image_upload_with_notes', 'route_planner', 'nearest_location', 'service_area',
-                      'payment_gateway', 'sms_otp', 'voice_recorder', 'signature_pad', 'form_calculation',
-                      'text_count', 'line_button', 'bsb_checker', 'codice_fiscale', 'turnstile',
-                      'france_region', 'inventory_dropdown', 'digital_magazine', 'street_view',
-                      'most_frequent_answer',
-                    ].includes(field.type) && (
-                      <div
-                        className="p-3 rounded-xl border border-dashed border-border/60 bg-muted/30 text-xs text-muted-foreground"
-                        style={inputStyle}
-                      >
-                        <span className="font-medium">{field.label}</span>
-                        {field.placeholder && <span className="block text-[10px] mt-0.5 opacity-70">{field.placeholder}</span>}
-                      </div>
                     )}
 
                     {/* Error message */}

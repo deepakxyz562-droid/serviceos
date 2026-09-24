@@ -414,8 +414,14 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
     : steps.length > 1;
 
   const rawLayout = s.theme?.layout || (s.settings as any)?.formLayout;
-  const canonicalLayout: FormLayout =
-    rawLayout === 'card' || rawLayout === 'single_question' ? 'card' : 'classic';
+  const isSplitMedia =
+    rawLayout === 'split_media' ||
+    Boolean(s.mediaPanel && s.mediaPanel.enabled !== false && (s.mediaPanel.mediaUrl || s.mediaPanel.backgroundImageUrl || s.mediaPanel.headline)) ||
+    Boolean(s.theme?.mediaPanel && s.theme.mediaPanel.enabled !== false && (s.theme.mediaPanel.mediaUrl || s.theme.mediaPanel.backgroundImageUrl || s.theme.mediaPanel.headline));
+
+  const canonicalLayout = isSplitMedia
+    ? 'split_media'
+    : rawLayout || 'classic';
 
   return {
     version: s.version || 1,
@@ -426,7 +432,8 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
     theme: {
       ...DEFAULT_FORM_THEME,
       ...(s.theme || {}),
-      layout: s.theme?.layout || (s.settings as any)?.formLayout || DEFAULT_FORM_THEME.layout,
+      layout: canonicalLayout,
+      mediaPanel: s.mediaPanel || s.theme?.mediaPanel,
     },
     settings: {
       submitButtonText: s.settings?.submitButtonText || 'Submit',
