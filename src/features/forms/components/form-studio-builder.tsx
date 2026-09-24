@@ -378,7 +378,7 @@ export function FormStudioBuilder({
       widgetType: f.widgetType,
       widgetConfig: f.widgetConfig,
       width: f.width,
-      layoutColumn: f.layoutColumn || 'left',
+      layoutColumn: f.layoutColumn,
       stepId: f.stepId,
       defaultValue: f.defaultValue ?? (f.widgetConfig as any)?.defaultValue,
       hidden: (f as { hidden?: boolean }).hidden,

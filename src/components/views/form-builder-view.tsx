@@ -267,7 +267,7 @@ export function FormBuilderView() {
           placeholder: f.placeholder || '',
           helpText: f.helpText || f.description || '',
           width: f.width || 'full',
-          layoutColumn: f.layoutColumn || 'left',
+          layoutColumn: f.layoutColumn,
           stepId: f.stepId || 'step-1',
           defaultValue: f.defaultValue ?? f.widgetConfig?.defaultValue,
           widgetType: f.widgetType,

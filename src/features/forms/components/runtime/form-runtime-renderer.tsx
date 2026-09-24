@@ -37,7 +37,9 @@ import {
   Zap,
   Trash2,
   History,
+  MapPin,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 /**
@@ -130,158 +132,161 @@ function FormMediaHeroPanel({
     >
       {/* Background Image / Backdrop if present */}
       {mediaPanel?.backgroundImageUrl && (
-        <div
-          className="absolute inset-0 z-0 bg-cover bg-center transition-all duration-500"
-          style={{
-            backgroundImage: `url(${mediaPanel.backgroundImageUrl})`,
-            filter: mediaPanel?.backgroundBlur
-              ? `blur(${mediaPanel.backgroundBlur === 'lg' ? 16 : mediaPanel.backgroundBlur === 'md' ? 8 : mediaPanel.backgroundBlur === 'sm' ? 4 : Number(mediaPanel.backgroundBlur) || 0}px)`
-              : undefined,
-          }}
-        />
-      )}
-
-      {/* Dark vignette overlay */}
-      <div
-        className="absolute inset-0 z-0 bg-slate-950 pointer-events-none transition-opacity duration-300"
-        style={{
-          opacity: (mediaPanel?.overlayOpacity ?? (mediaPanel?.backgroundImageUrl ? 75 : 60)) / 100,
-        }}
-      />
-
-      {/* Background Media (Map / Gradient / Video / Image) */}
-      {showMedia && (
         <>
-          {isMap ? (
-            <div className="absolute inset-0 z-0 overflow-hidden bg-slate-950">
-              <iframe
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(mediaPanel?.mapAddress || 'Austin, TX')}&t=&z=${mediaPanel?.mapZoom || 13}&ie=UTF8&iwloc=&output=embed`}
-                title="Service Location Map"
-                className="w-full h-full object-cover scale-110 pointer-events-none opacity-50 mix-blend-luminosity"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-900/40" />
-            </div>
-          ) : isGradient ? (
-            <div className="absolute inset-0 z-0 bg-gradient-to-br from-indigo-950 via-slate-950 to-emerald-950">
-              <div className="absolute -top-24 -left-24 size-96 rounded-full blur-3xl opacity-35 bg-primary" />
-              <div className="absolute -bottom-24 -right-24 size-96 rounded-full blur-3xl opacity-30 bg-blue-600" />
-            </div>
-          ) : isVideo ? (
-            <div className="absolute inset-0 z-0 overflow-hidden">
-              {videoParsed.type === 'youtube' || videoParsed.type === 'vimeo' ? (
-                <iframe
-                  src={videoParsed.embedUrl}
-                  title="Media Video"
-                  className="w-full h-full object-cover scale-125 pointer-events-none opacity-40 mix-blend-luminosity"
-                  allow="autoplay; muted; fullscreen"
-                />
-              ) : (
-                <video
-                  src={videoParsed.embedUrl || mediaPanel?.mediaUrl}
-                  autoPlay={mediaPanel?.videoAutoplay ?? true}
-                  muted={isMuted}
-                  loop={mediaPanel?.videoLoop ?? true}
-                  playsInline
-                  className="w-full h-full object-cover opacity-40 mix-blend-luminosity"
-                />
-              )}
-              <div
-                className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-900/60"
-                style={{ opacity: (mediaPanel?.overlayOpacity ?? 80) / 100 }}
-              />
-            </div>
-          ) : hasImage && mediaPanel?.mediaUrl ? (
-            <div className="absolute inset-0 z-0 overflow-hidden">
-              <img
-                src={mediaPanel?.mediaUrl}
-                alt={headline}
-                className="w-full h-full object-cover opacity-45 transition-transform duration-700 hover:scale-105"
-              />
-              <div
-                className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/75 to-slate-900/50"
-                style={{ opacity: (mediaPanel?.overlayOpacity ?? 75) / 100 }}
-              />
-            </div>
-          ) : null}
+          <div
+            className="absolute inset-0 z-0 bg-cover bg-center transition-all duration-500"
+            style={{
+              backgroundImage: `url(${mediaPanel.backgroundImageUrl})`,
+              filter:
+                mediaPanel.backgroundBlur === 'lg'
+                  ? 'blur(12px)'
+                  : mediaPanel.backgroundBlur === 'md'
+                  ? 'blur(6px)'
+                  : mediaPanel.backgroundBlur === 'sm'
+                  ? 'blur(3px)'
+                  : 'none',
+            }}
+          />
+          <div
+            className="absolute inset-0 z-0 bg-black pointer-events-none transition-opacity duration-300"
+            style={{
+              opacity: (mediaPanel?.overlayOpacity ?? 70) / 100,
+            }}
+          />
         </>
       )}
 
-      {/* Top Media Header & Badge */}
-      <div className="relative z-10 space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          {showBadge && (
-            <>
-              {badge ? (
-                <span
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md border border-white/20"
-                  style={{ backgroundColor: `${primaryColor}30`, color: '#ffffff' }}
-                >
-                  <Sparkles className="size-3.5 text-amber-300" />
-                  {badge}
-                </span>
-              ) : isMap ? (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-600/30 backdrop-blur-md border border-rose-500/30 text-rose-200">
-                  <ShieldCheck className="size-3.5 text-rose-400" />
-                  Local Verified Service Area
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 backdrop-blur-md border border-white/15 text-white/90">
-                  <ShieldCheck className="size-3.5 text-emerald-400" />
-                  Verified &amp; Secure Intake
-                </span>
-              )}
-            </>
-          )}
+      {/* 1. Top Trust Badge Widget (Only when badgeText is provided) */}
+      {showBadge && mediaPanel?.badgeText && (
+        <div className="relative z-10 flex items-center justify-between gap-2 mb-4">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-white text-xs font-semibold backdrop-blur">
+            <Star className="size-3 text-amber-400 fill-amber-400" />
+            <span>{mediaPanel.badgeText}</span>
+          </div>
+        </div>
+      )}
 
-          {/* Sound toggle if HTML5 video */}
-          {showMedia && isVideo && videoParsed.type === 'mp4' && (
-            <button
-              type="button"
-              onClick={() => setIsMuted(!isMuted)}
-              className="size-7 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md flex items-center justify-center text-white/80 hover:text-white transition-all border border-white/10 ml-auto"
-              title={isMuted ? 'Unmute video' : 'Mute video'}
-            >
-              {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
-            </button>
+      {/* 2. Visual Media Block (Photo, Video, Map, or Gradient) */}
+      {showMedia && (
+        <div className="relative z-10 my-4 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl">
+          {isMap ? (
+            <div className="relative w-full aspect-video min-h-[220px] bg-slate-950 overflow-hidden flex flex-col justify-between p-4">
+              <iframe
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(mediaPanel?.mapAddress || 'Austin, TX')}&t=&z=${mediaPanel?.mapZoom || 13}&ie=UTF8&iwloc=&output=embed`}
+                title="Location Map"
+                className="absolute inset-0 w-full h-full border-0 pointer-events-none opacity-60 mix-blend-luminosity"
+              />
+              <div className="relative z-10 flex items-center justify-between">
+                <Badge className="bg-rose-600 text-white text-[10px] gap-1 shadow-md">
+                  <MapPin className="size-3" /> Live Dispatch Area
+                </Badge>
+              </div>
+              <div className="relative z-10 bg-slate-900/90 backdrop-blur border border-white/10 p-2.5 rounded-xl">
+                <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <MapPin className="size-3 text-rose-400" />
+                  {mediaPanel?.mapAddress || 'Austin, TX Metro Area'}
+                </p>
+                {mediaPanel?.mapServiceRadius && (
+                  <p className="text-[10px] text-slate-300 mt-0.5">
+                    {mediaPanel.mapServiceRadius}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : isGradient ? (
+            <div className="relative w-full aspect-video min-h-[220px] overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-900 to-emerald-950 p-6 flex flex-col justify-center items-center text-center">
+              <div className="size-32 rounded-full bg-primary/30 blur-2xl absolute -top-4 -left-4" />
+              <div className="size-32 rounded-full bg-indigo-500/20 blur-2xl absolute -bottom-4 -right-4" />
+              <div className="relative z-10 space-y-2">
+                <div className="size-10 rounded-2xl bg-white/10 backdrop-blur border border-white/20 flex items-center justify-center mx-auto text-primary">
+                  <Sparkles className="size-5" />
+                </div>
+                <p className="text-sm font-black text-white">2026 Luminous Canvas</p>
+                <p className="text-[11px] text-slate-300 max-w-xs">Atmospheric glow with instant response guarantees.</p>
+              </div>
+            </div>
+          ) : isVideo ? (
+            videoParsed.type === 'youtube' || videoParsed.type === 'vimeo' || (mediaPanel?.mediaUrl && (mediaPanel.mediaUrl.includes('youtube.com') || mediaPanel.mediaUrl.includes('youtu.be') || mediaPanel.mediaUrl.includes('vimeo.com'))) ? (
+              <div className="aspect-video w-full">
+                <iframe
+                  src={
+                    videoParsed.embedUrl ||
+                    (mediaPanel?.mediaUrl && mediaPanel.mediaUrl.includes('watch?v=')
+                      ? mediaPanel.mediaUrl.replace('watch?v=', 'embed/').split('&')[0]
+                      : mediaPanel?.mediaUrl?.replace('youtu.be/', 'www.youtube.com/embed/'))
+                  }
+                  title="Video Hero"
+                  className="w-full h-full border-0"
+                  allow="autoplay; muted; fullscreen"
+                />
+              </div>
+            ) : (
+              <div className="relative aspect-video w-full">
+                <video
+                  src={videoParsed.embedUrl || mediaPanel?.mediaUrl}
+                  autoPlay={mediaPanel?.videoAutoplay ?? true}
+                  loop={mediaPanel?.videoLoop ?? true}
+                  muted={isMuted}
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsMuted(!isMuted)}
+                  className="absolute bottom-2 right-2 size-7 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md flex items-center justify-center text-white text-xs z-20"
+                  title={isMuted ? 'Unmute video' : 'Mute video'}
+                >
+                  {isMuted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+                </button>
+              </div>
+            )
+          ) : (
+            <div className="relative w-full aspect-video overflow-hidden">
+              <img
+                src={
+                  mediaPanel?.mediaUrl ||
+                  mediaPanel?.backgroundImageUrl ||
+                  'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80'
+                }
+                alt={headline}
+                className="w-full h-full object-cover transition duration-500 hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
+            </div>
           )}
         </div>
+      )}
 
-        {(showHeadline || showSubtitle) && (
-          <div className="space-y-2 pt-2">
-            {showHeadline && (
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white leading-snug">
-                {headline}
-              </h2>
-            )}
-            {showSubtitle && subtitle && (
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-md">
-                {subtitle}
-              </p>
-            )}
-          </div>
+      {/* 3. Headline, Subtitle, Value Benefits & Left Fields (at the bottom) */}
+      <div className="relative z-10 space-y-3 mt-auto">
+        {showHeadline && (
+          <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-snug">
+            {headline}
+          </h2>
         )}
 
-        {/* Bullet Benefits List */}
+        {showSubtitle && subtitle && (
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {subtitle}
+          </p>
+        )}
+
         {showBenefits && benefits.length > 0 && (
-          <div className="space-y-2.5 pt-4">
+          <div className="space-y-2 pt-2 border-t border-white/10">
             {benefits.map((benefit, i) => (
-              <div key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-slate-200">
-                <div
-                  className="size-4 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                  style={{ backgroundColor: `${primaryColor}40` }}
-                >
-                  <CheckCircle2 className="size-3.5 text-emerald-400" />
-                </div>
+              <div key={i} className="flex items-center gap-2 text-xs text-slate-200">
+                <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
                 <span>{benefit}</span>
               </div>
             ))}
           </div>
         )}
+
         {/* Left Column Form Fields / Widgets */}
-        {leftFields.length > 0 && (
-          <div className="space-y-4 pt-4 border-t border-white/10 relative z-10">
+        {leftFields && leftFields.length > 0 && (
+          <div className="space-y-3 pt-3 border-t border-white/10 text-left">
             {leftFields.map((field) => (
-              <div key={field.id} className="space-y-1.5 text-left">
+              <div key={field.id} className="space-y-1.5">
                 <label className="block text-xs font-semibold text-white/90">
                   {field.label}
                   {field.required && <span className="text-rose-400 ml-0.5">*</span>}
@@ -303,12 +308,10 @@ function FormMediaHeroPanel({
             ))}
           </div>
         )}
-      </div>
 
-      {/* Bottom Testimonial / Social Proof */}
-      {showTestimonial && testimonial && (
-        <div className="relative z-10 pt-6">
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 shadow-sm space-y-1.5">
+        {/* Testimonial */}
+        {showTestimonial && testimonial && (
+          <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 shadow-sm space-y-1.5 mt-3">
             <div className="flex items-center gap-1 text-amber-400">
               {Array.from({ length: testimonial.rating || 5 }).map((_, i) => (
                 <Star key={i} className="size-3 fill-amber-400" />
@@ -321,8 +324,8 @@ function FormMediaHeroPanel({
               — {testimonial.author} {testimonial.role ? <span className="font-normal text-slate-400">({testimonial.role})</span> : ''}
             </p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -1175,34 +1178,38 @@ export function FormRuntimeRenderer({
 
           {/* Form Content Column */}
           <div className={`${isSplitLayout ? formColSpan : isEstimatorForm ? 'lg:col-span-7 w-full' : 'w-full'} flex flex-col justify-between`}>
-            {/* Header */}
-            <div className="p-6 sm:p-8 pb-4 border-b border-border/40">
-              {branding?.businessName && (
-                <p
-                  className="text-[10px] uppercase font-extrabold tracking-wider mb-1"
-                  style={{ color: primaryColor }}
-                >
-                  {branding.businessName}
-                </p>
-              )}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
-                    {formName}
-                  </h1>
-                  {formDescription && (
-                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
-                      {formDescription}
-                    </p>
-                  )}
-                </div>
-                {isEstimatorForm && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    <Sparkles className="size-3 text-emerald-500" /> Real-time Calculation
-                  </span>
+            {/* Header: Only show for non-split forms, or if branding is set */}
+            {(!isSplitLayout || branding?.businessName) && (
+              <div className="p-6 sm:p-8 pb-4 border-b border-border/40">
+                {branding?.businessName && (
+                  <p
+                    className="text-[10px] uppercase font-extrabold tracking-wider mb-1"
+                    style={{ color: primaryColor }}
+                  >
+                    {branding.businessName}
+                  </p>
+                )}
+                {!isSplitLayout && (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
+                        {formName}
+                      </h1>
+                      {formDescription && (
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-lg">
+                          {formDescription}
+                        </p>
+                      )}
+                    </div>
+                    {isEstimatorForm && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <Sparkles className="size-3 text-emerald-500" /> Real-time Calculation
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
+            )}
 
             {/* Content */}
             <CardContent className="p-6 sm:p-8 pt-6 flex-1">

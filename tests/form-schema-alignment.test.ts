@@ -74,4 +74,31 @@ describe('Form Schema Alignment & Multi-step Normalization', () => {
     const normalizedAgent = normalizeFormSchema(agentSchema);
     expect(normalizedAgent.theme.layout).toBe('conversational');
   });
+
+  it('preserves field layoutColumn and mediaPanel attributes', () => {
+    const splitSchema = {
+      theme: { layout: 'split_media' },
+      mediaPanel: {
+        enabled: true,
+        mediaType: 'image',
+        mediaUrl: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e',
+        headline: 'Online Booking & Scheduling',
+        subtitle: 'Fill out the form below',
+        badgeText: '⭐ 5-Star Pro',
+        benefitsList: ['Instant response', 'Licensed pro'],
+      },
+      fields: [
+        { id: 'f1', label: 'Full Name', type: 'text', layoutColumn: 'right' },
+        { id: 'f2', label: 'Left Widget', type: 'text', layoutColumn: 'left' },
+      ],
+    };
+
+    const normalized = normalizeFormSchema(splitSchema);
+    expect(normalized.theme.layout).toBe('split_media');
+    expect(normalized.mediaPanel?.mediaUrl).toBe('https://images.unsplash.com/photo-1621905251189-08b45d6a269e');
+    expect(normalized.mediaPanel?.headline).toBe('Online Booking & Scheduling');
+    expect(normalized.mediaPanel?.badgeText).toBe('⭐ 5-Star Pro');
+    expect(normalized.fields[0].layoutColumn).toBe('right');
+    expect(normalized.fields[1].layoutColumn).toBe('left');
+  });
 });

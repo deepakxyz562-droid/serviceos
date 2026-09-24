@@ -270,7 +270,7 @@ export function buildApiPayload(formData: EditorFormData) {
     ...f,
     id: f.id || `f_${idx + 1}`,
     stepId: isMultiStep ? (f.stepId && validStepIds.has(f.stepId) ? f.stepId : defaultStepId) : defaultStepId,
-    layoutColumn: f.layoutColumn || 'left',
+    layoutColumn: f.layoutColumn,
     defaultValue: f.defaultValue,
   }));
 
