@@ -78,7 +78,7 @@ const productLinks: NavProductItem[] = [
   {
     label: '24/7 AI Receptionist',
     desc: 'Autonomous voice agent answers calls & books jobs',
-    href: '/#ai-receptionist',
+    href: '/ai-employee',
     icon: Bot,
     badge: 'AI Powered',
   },
@@ -408,10 +408,10 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
 
           {/* Item 4: Pricing */}
           <Link
-            href="/#pricing"
+            href="/pricing"
             className={cn(
               'px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-              activePath === '/#pricing'
+              activePath === '/pricing'
                 ? 'text-foreground bg-accent'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
             )}
@@ -554,7 +554,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
                 </span>
               </Link>
               <Link
-                href="/#pricing"
+                href="/pricing"
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center justify-between p-2.5 text-xs font-medium text-foreground hover:bg-muted rounded-lg transition-colors"
               >

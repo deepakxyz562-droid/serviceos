@@ -43,13 +43,15 @@ export function getOrganizationSchema() {
     description:
       "Fieseros is the operating system for service businesses — scheduling, dispatch, invoicing, Email, SMS & Push notifications, and field service management.",
     foundingDate: "2024",
+    email: "support@fieseros.com",
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: "Wilmington",
+      addressRegion: "DE",
+      addressCountry: "US",
+    },
     // P2-2 (SEO): sameAs links Google's Knowledge Graph to our social profiles.
     // This consolidates entity identity and enables knowledge panel features.
-    //
-    // IMPORTANT: every sameAs URL MUST point to a profile that uses the EXACT
-    // brand name "Fieseros". A mismatched profile (e.g. a personal GitHub)
-    // weakens entity verification. Removed the GitHub link until a proper
-    // github.com/fieseros org page exists.
     sameAs: [
       "https://twitter.com/fieseros",
       "https://www.linkedin.com/company/fieseros",
@@ -59,6 +61,7 @@ export function getOrganizationSchema() {
     contactPoint: {
       "@type": "ContactPoint",
       contactType: "customer support",
+      email: "support@fieseros.com",
       url: `${SITE_URL}/contact-us`,
       availableLanguage: ["English"],
     },

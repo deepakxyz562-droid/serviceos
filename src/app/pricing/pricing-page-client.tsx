@@ -99,7 +99,7 @@ export function PricingPageClient() {
             <Link href="/request" className="inline-flex items-center gap-2 bg-white text-emerald-700 text-sm font-bold px-6 py-3 rounded-xl hover:bg-emerald-50 transition">
               <FileText className="size-4" /> Start Free <ArrowRight className="size-4" />
             </Link>
-            <Link href="/ai-forms" className="inline-flex items-center gap-2 bg-white/10 text-white text-sm font-bold px-6 py-3 rounded-xl hover:bg-white/20 transition border border-white/20">
+            <Link href="/gptform" className="inline-flex items-center gap-2 bg-white/10 text-white text-sm font-bold px-6 py-3 rounded-xl hover:bg-white/20 transition border border-white/20">
               <Zap className="size-4" /> Explore AI Forms
             </Link>
           </div>
@@ -209,7 +209,7 @@ export function PricingPageClient() {
           <h2 className="text-lg font-bold text-slate-900">Enterprise</h2>
           <p className="text-sm text-slate-500 mt-1">For large organizations</p>
           <p className="text-xs text-slate-400 mt-1">Unlimited users · White-label · Advanced security · HIPAA · SSO · Data retention · Custom onboarding</p>
-          <Link href="/contact" className="mt-3 inline-block">
+          <Link href="/contact-us" className="mt-3 inline-block">
             <Button variant="outline" size="sm" className="text-xs">Contact Sales</Button>
           </Link>
         </div>

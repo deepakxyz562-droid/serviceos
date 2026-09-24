@@ -11,14 +11,15 @@ import { GooglePlayBadge } from "@/components/brand/google-play-badge";
  */
 export function CornerstoneFooter() {
   const productLinks = [
+    { href: "/features", label: "Features Hub" },
     { href: "/field-service-software", label: "Field Service Software" },
     { href: "/scheduling-and-dispatch", label: "Scheduling & Dispatch" },
     { href: "/invoicing-and-payments", label: "Invoicing & Payments" },
     { href: "/customer-crm", label: "Customer CRM" },
     { href: "/technician-app", label: "Technician App" },
     { href: "/automations", label: "Automations" },
-    { href: "/#ai-receptionist", label: "AI Receptionist" },
-    { href: "/#pricing", label: "Pricing Plans" },
+    { href: "/ai-employee", label: "24/7 AI Voice Receptionist" },
+    { href: "/pricing", label: "Pricing Plans" },
   ];
 
   const marketplaceLinks = [

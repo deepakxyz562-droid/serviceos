@@ -508,12 +508,12 @@ const seoFeatures = [
 
 const footerLinks = {
   product: [
-    { label: 'Features', href: '#features' },
+    { label: 'Features Hub', href: '/features' },
     { label: 'GPTForm™ Smart Forms', href: '/gptform' },
     { label: '20,000+ Form Templates', href: '/templates' },
-    { label: 'AI Voice Receptionist', href: '#ai-receptionist' },
+    { label: '24/7 AI Voice Receptionist', href: '/ai-employee' },
     { label: 'Verified Marketplace', href: '/marketplace' },
-    { label: 'Pricing', href: '#pricing' },
+    { label: 'Pricing Plans', href: '/pricing' },
   ],
   industries: seoIndustries,
   compare: seoCompare,
@@ -564,10 +564,10 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-2.5">
+          <a href="/" className="flex items-center gap-2.5">
             <BrandMark size={32} className="shadow-emerald-500/20" />
             <span className="text-xl font-bold text-foreground tracking-tight">Fieseros</span>
-          </div>
+          </a>
 
           <div className="hidden md:flex items-center gap-6">
             {/* AI Solutions Dropdown */}
@@ -590,30 +590,30 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5">Jotform-parity templates with instant previews</p>
                   </a>
-                  <a href="#ai-receptionist" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block border-t border-border/50">
+                  <a href="/ai-employee" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block border-t border-border/50">
                     <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
-                      <PhoneCall className="size-4 text-purple-600" /> Voice Receptionist
+                      <PhoneCall className="size-4 text-purple-600" /> 24/7 AI Voice Receptionist
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">24/7 AI inbound phone answering &amp; emergency triage</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Autonomous phone answering, triage &amp; live booking</p>
                   </a>
                 </div>
               </div>
             </div>
 
+            <a href="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Features</a>
             <a href="/templates" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Templates</a>
             <a href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Marketplace</a>
-            <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Features</a>
             
             <div className="relative group">
-              <button type="button" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">
+              <a href="/industries" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">
                 Industries <ChevronDown className="w-3.5 h-3.5" />
-              </button>
+              </a>
               <div className="absolute left-0 top-full pt-3 invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 z-50">
                 <div className="w-72 rounded-xl border border-border bg-white shadow-lg p-2 grid grid-cols-1 gap-0.5 max-h-[70vh] overflow-y-auto">
                   {seoIndustries.map((i) => (
                     <a key={i.href} href={i.href} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors">{i.label}</a>
                   ))}
-                  <a href="/field-service-software" className="px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-accent rounded-md transition-colors mt-1 border-t border-border pt-2">All field service software →</a>
+                  <a href="/industries" className="px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-accent rounded-md transition-colors mt-1 border-t border-border pt-2">All 19+ industries hub →</a>
                 </div>
               </div>
             </div>
@@ -629,7 +629,7 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
                 </div>
               </div>
             </div>
-            <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</a>
+            <a href="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</a>
             <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">FAQ</a>
           </div>
 
@@ -659,13 +659,13 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
                 <p className="text-xs uppercase tracking-wider text-emerald-700 font-bold mb-1">AI &amp; Forms</p>
                 <a href="/gptform" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📝 GPTForm™ Smart Forms</a>
                 <a href="/templates" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📋 20,000+ Templates</a>
+                <a href="/ai-employee" className="flex items-center gap-2 text-sm font-semibold text-purple-600 hover:text-purple-700 py-1" onClick={() => setMobileMenuOpen(false)}>
+                  <PhoneCall className="size-4" /> 24/7 AI Voice Receptionist
+                </a>
                 <a href="/marketplace" className="block text-sm font-medium text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>🌐 Contractor Marketplace</a>
               </div>
-              <a href="#features" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Features</a>
-              <a href="#ai-receptionist" className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700 py-2" onClick={() => setMobileMenuOpen(false)}>
-                AI Voice Receptionist
-              </a>
-              <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
+              <a href="/features" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Features Hub</a>
+              <a href="/pricing" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Pricing Plans</a>
               <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
               <div className="pt-2">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground/70 mb-1">Industries</p>
@@ -675,7 +675,7 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
                 <a href="/electrical-contractor-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Electrical</a>
                 <a href="/landscaping-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Landscaping</a>
                 <a href="/pest-control-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Pest Control</a>
-                <a href="/field-service-software" className="block text-sm text-emerald-700 hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>All industries →</a>
+                <a href="/industries" className="block text-sm font-medium text-emerald-700 hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>All 19+ industries hub →</a>
               </div>
               <div className="pt-2">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground/70 mb-1">Compare</p>
