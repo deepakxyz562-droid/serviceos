@@ -59,6 +59,7 @@ import {
 } from '@/lib/forms/payments/payment-gateways-registry';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
 import { getFormContentFingerprint } from '@/features/forms/utils/form-helpers';
+import { injectMediaPanelContent } from '@/lib/forms/form-node-schema';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
 import { TemplateExplorer } from './builder/template-explorer';
 import type { FormTemplate } from '@/lib/forms/templates';
@@ -575,6 +576,22 @@ export function FormStudioBuilder({
       validation: f.validation,
     }));
 
+    const isSplit =
+      template.schema.theme?.layout === 'split_media' ||
+      Boolean(template.schema.mediaPanel || template.schema.theme?.mediaPanel) ||
+      template.schema.fields.some((f) => f.layoutColumn === 'left' || f.layoutColumn === 'right');
+
+    const rawMediaPanel = template.schema.mediaPanel || template.schema.theme?.mediaPanel;
+    const finalTemplateFields = isSplit && rawMediaPanel
+      ? injectMediaPanelContent(newFields as any, rawMediaPanel, template.name, template.shortDescription || template.description)
+      : newFields;
+
+    const templateResolvedLayout: FormLayout = isSplit
+      ? 'split_media'
+      : template.schema.theme?.layout === 'card'
+      ? 'card'
+      : (template.schema.theme?.layout as FormLayout) || (template.schema.settings?.formLayout as FormLayout) || 'classic';
+
     const templateSteps = template.schema.steps?.map((s) => ({
       id: s.id,
       title: s.title,
@@ -585,7 +602,7 @@ export function FormStudioBuilder({
 
     onFormDataChange((prev) => {
       const updatedFields =
-        mode === 'append' ? [...(prev.fields || []), ...newFields] : newFields;
+        mode === 'append' ? [...(prev.fields || []), ...finalTemplateFields] : finalTemplateFields;
       return {
         ...prev,
         name: customTitle || prev.name,
@@ -598,7 +615,7 @@ export function FormStudioBuilder({
           ...(prev.theme || {}),
           ...(template.schema.theme || {}),
           primaryColor: template.schema.theme?.primaryColor || prev.primaryColor || '#059669',
-          layout: template.schema.theme?.layout || template.schema.settings?.formLayout || 'paper',
+          layout: templateResolvedLayout,
           mediaPanel: template.schema.mediaPanel || template.schema.theme?.mediaPanel,
         } as any,
         mediaPanel: template.schema.mediaPanel || template.schema.theme?.mediaPanel || prev.mediaPanel,
@@ -606,15 +623,16 @@ export function FormStudioBuilder({
         settings: {
           ...(prev.settings || {}),
           ...(template.schema.settings as any || {}),
-          formLayout: (template.schema.theme?.layout || template.schema.settings?.formLayout) as any,
+          formLayout: templateResolvedLayout as any,
         },
       };
     });
 
-    setSelectedFieldId(newFields[0]?.id || null);
+    setFormLayout(templateResolvedLayout);
+    setSelectedFieldId(finalTemplateFields[0]?.id || null);
     setStudioTab('build');
     setIsPreviewMode(false);
-    toast.success(`Loaded "${template.name}" template with ${newFields.length} fields!`);
+    toast.success(`Loaded "${template.name}" template with ${finalTemplateFields.length} fields!`);
   };
 
   // Active field lookup

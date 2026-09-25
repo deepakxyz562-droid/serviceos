@@ -349,13 +349,25 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
         options: f.options,
         borderRadius: f.borderRadius,
         inputHeight: f.inputHeight,
+        layoutColumn: f.layoutColumn,
+        defaultValue: f.defaultValue,
+        kind: f.kind,
+        hidden: (f as any).hidden,
+        validation: f.validation,
       }))
     : [];
 
   if (!raw || typeof raw !== 'object') {
     if (fallbackList.length > 0) {
+      const hasSplitColumns = fallbackList.some(
+        (f) => f.layoutColumn === 'left' || f.layoutColumn === 'right'
+      );
       return {
         ...DEFAULT_FORM_SCHEMA,
+        theme: {
+          ...DEFAULT_FORM_THEME,
+          layout: hasSplitColumns ? 'split_media' : DEFAULT_FORM_THEME.layout,
+        },
         fields: fallbackList,
       };
     }
@@ -416,14 +428,15 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
     : steps.length > 1;
 
   const rawLayout = s.theme?.layout || (s.settings as any)?.formLayout;
-  // ─── FIX: Layout is determined ONLY by theme.layout / settings.formLayout ──
-  // Previously: Boolean(s.mediaPanel && s.mediaPanel.enabled !== false)
-  // This returned TRUE when enabled was undefined (common in templates),
-  // forcing the layout to split_media even when theme.layout = 'classic'.
-  // Now: mediaPanel is just config data for WHEN layout IS split_media.
-  const isSplitMedia = rawLayout === 'split_media';
-
   const rawPanel = s.mediaPanel || s.theme?.mediaPanel;
+  const hasSplitColumns = sanitizedFields.some(
+    (f) => f.layoutColumn === 'left' || f.layoutColumn === 'right'
+  );
+  const hasPanelMedia = Boolean(rawPanel && (rawPanel.enabled === true || rawPanel.mediaUrl || rawPanel.headline));
+
+  const isCard = rawLayout === 'card' || (s.settings as any)?.formLayout === 'single_question';
+  const isSplitMedia = !isCard && (rawLayout === 'split_media' || hasSplitColumns || hasPanelMedia);
+
   const resolvedMediaPanel = isSplitMedia
     ? {
         enabled: true,
@@ -466,6 +479,8 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
 
   const canonicalLayout = isSplitMedia
     ? 'split_media'
+    : isCard
+    ? 'card'
     : rawLayout || 'classic';
 
   return {

@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
       slug: form.slug,
       // Include the JSON-encoded config so the Form Builder list view can
       // render action badges, fields preview, etc. without an extra round-trip.
+      schemaJson: form.schemaJson,
       fieldsJson: form.fieldsJson,
       submissionActions: form.submissionActions,
       fieldMappingJson: form.fieldMappingJson,

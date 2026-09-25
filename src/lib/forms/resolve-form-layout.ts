@@ -39,26 +39,40 @@ export type FormLayout = 'classic' | 'card' | 'split_media';
  * Legacy values are normalized to the canonical 3-value enum.
  */
 export function resolveFormLayout(schema: {
-  theme?: { layout?: string } | null;
+  theme?: { layout?: string; mediaPanel?: any } | null;
   settings?: { formLayout?: string } | null;
+  fields?: Array<{ layoutColumn?: string }> | null;
+  mediaPanel?: { enabled?: boolean; mediaUrl?: string; headline?: string } | null;
 }): FormLayout {
   const raw =
     schema.theme?.layout ||
-    (schema.settings as any)?.formLayout ||
-    'classic';
+    (schema.settings as any)?.formLayout;
 
-  const normalized = String(raw).toLowerCase();
+  const normalized = raw ? String(raw).toLowerCase() : '';
+
+  if (normalized === 'card' || normalized === 'single_question' || normalized === 'focus') {
+    return 'card';
+  }
+
+  if (normalized === 'split_media') {
+    return 'split_media';
+  }
+
+  // Auto-detect split_media if schema has left/right columns
+  const hasSplitColumns = Array.isArray(schema.fields) && schema.fields.some(
+    (f) => f && (f.layoutColumn === 'left' || f.layoutColumn === 'right')
+  );
+  if (hasSplitColumns) {
+    return 'split_media';
+  }
+
+  // Auto-detect split_media if mediaPanel is configured with active content
+  const rawPanel = schema.mediaPanel || schema.theme?.mediaPanel;
+  if (rawPanel && (rawPanel.enabled === true || rawPanel.mediaUrl || rawPanel.headline)) {
+    return 'split_media';
+  }
 
   switch (normalized) {
-    case 'card':
-    case 'single_question':
-    case 'focus':
-      return 'card';
-
-    case 'split_media':
-      return 'split_media';
-
-    // Legacy terms that map to classic
     case 'paper':
     case 'classic':
     case 'all_on_one_page':

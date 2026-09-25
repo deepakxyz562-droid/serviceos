@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { getFormContentFingerprint, buildApiPayload } from '@/features/forms/utils/form-helpers';
 import { getFieldWidthClass } from '@/features/forms/components/runtime/shared-field-renderer';
 import { resolveFormLayout, layoutToRuntimeMode } from '@/lib/forms/resolve-form-layout';
+import { normalizeFormSchema } from '@/lib/forms/form-schema-types';
 import type { EditorFormData } from '@/features/forms/types';
 
 describe('Form Autosave & Runtime Fidelity', () => {
@@ -173,6 +174,85 @@ describe('Form Autosave & Runtime Fidelity', () => {
       // Verify no throw when formId is undefined (handles undefined safely)
       const elementWithoutId = QRCodePlaceholder({});
       expect(elementWithoutId).toBeDefined();
+    });
+  });
+
+  describe('2-Column & Split Media Auto-Detection', () => {
+    it('auto-detects split_media in resolveFormLayout when fields have left/right columns', () => {
+      const schemaWithColumns = {
+        theme: { layout: 'classic' }, // Even if theme defaulted to classic!
+        fields: [
+          { id: 'f1', layoutColumn: 'left' },
+          { id: 'f2', layoutColumn: 'right' },
+        ],
+      };
+      expect(resolveFormLayout(schemaWithColumns as any)).toBe('split_media');
+    });
+
+    it('auto-detects split_media in resolveFormLayout when mediaPanel has content', () => {
+      const schemaWithPanel = {
+        theme: { layout: 'classic' },
+        mediaPanel: { enabled: true, mediaUrl: 'https://example.com/hero.jpg' },
+      };
+      expect(resolveFormLayout(schemaWithPanel as any)).toBe('split_media');
+    });
+
+    it('preserves split_media in buildApiPayload when fields have layoutColumn assignments', () => {
+      const dataWithColumns: EditorFormData = {
+        ...baseFormData,
+        theme: undefined, // theme lost or not set!
+        settings: undefined,
+        fields: [
+          { id: 'left_1', type: 'short_answer', label: 'Sqft', layoutColumn: 'left' },
+          { id: 'right_1', type: 'short_answer', label: 'Total', layoutColumn: 'right' },
+        ],
+      };
+      const payload = buildApiPayload(dataWithColumns);
+      const savedSchema = JSON.parse(payload.schemaJson);
+      expect(savedSchema.theme.layout).toBe('split_media');
+      expect(savedSchema.fields[0].layoutColumn).toBe('left');
+      expect(savedSchema.fields[1].layoutColumn).toBe('right');
+    });
+  });
+
+  describe('normalizeFormSchema Fallback Fidelity', () => {
+    it('preserves layoutColumn, defaultValue, and kind from fallbackFields when schemaJson is null', () => {
+      const rawFields = [
+        {
+          id: 'mp_badge_1',
+          label: 'Trust Badge',
+          type: 'control_widget',
+          widgetType: 'badge_widget',
+          layoutColumn: 'left',
+          defaultValue: 'Guaranteed',
+          kind: 'content',
+        },
+        {
+          id: 'roof_sqft',
+          label: 'Roof Area',
+          type: 'slider',
+          layoutColumn: 'left',
+          defaultValue: 2200,
+        },
+        {
+          id: 'total_calc',
+          label: 'Total Calculation',
+          type: 'form_calculation',
+          layoutColumn: 'right',
+        },
+      ];
+
+      const normalized = normalizeFormSchema(null, rawFields);
+
+      // Verify layoutColumn is preserved on every field
+      expect(normalized.fields[0].layoutColumn).toBe('left');
+      expect(normalized.fields[0].kind).toBe('content');
+      expect(normalized.fields[1].layoutColumn).toBe('left');
+      expect(normalized.fields[1].defaultValue).toBe(2200);
+      expect(normalized.fields[2].layoutColumn).toBe('right');
+
+      // Verify theme auto-detects split_media from the split columns
+      expect(normalized.theme.layout).toBe('split_media');
     });
   });
 });

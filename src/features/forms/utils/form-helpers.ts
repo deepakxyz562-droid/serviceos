@@ -275,14 +275,21 @@ export function buildApiPayload(formData: EditorFormData) {
   }));
 
   const rawMediaPanel = formData.mediaPanel || formData.theme?.mediaPanel;
-  // ─── FIX: Layout is determined ONLY by theme.layout / settings.formLayout ──
-  // Previously: Boolean(rawMediaPanel && rawMediaPanel.enabled !== false)
-  // This returned TRUE when enabled was undefined (common in templates),
-  // forcing the layout to split_media even when the user wanted Classic.
-  // Now: mediaPanel is just config data for WHEN layout IS split_media.
-  const isSplitMedia =
+  const isCard =
+    formData.theme?.layout === 'card' ||
+    formData.settings?.formLayout === 'single_question';
+
+  const hasSplitColumns = preparedFields.some(
+    (f) => f && (f.layoutColumn === 'left' || f.layoutColumn === 'right')
+  );
+  const hasPanelMedia = Boolean(rawMediaPanel && (rawMediaPanel.enabled === true || rawMediaPanel.mediaUrl || rawMediaPanel.headline));
+
+  const isSplitMedia = !isCard && (
     formData.theme?.layout === 'split_media' ||
-    formData.settings?.formLayout === 'split_media';
+    formData.settings?.formLayout === 'split_media' ||
+    hasSplitColumns ||
+    hasPanelMedia
+  );
 
   const mediaPanel = isSplitMedia
     ? {
@@ -323,10 +330,6 @@ export function buildApiPayload(formData: EditorFormData) {
         mobileBehavior: rawMediaPanel?.mobileBehavior,
       }
     : rawMediaPanel;
-
-  const isCard =
-    formData.theme?.layout === 'card' ||
-    formData.settings?.formLayout === 'single_question';
 
   const themeLayout: 'split_media' | 'card' | 'classic' = isSplitMedia
     ? 'split_media'

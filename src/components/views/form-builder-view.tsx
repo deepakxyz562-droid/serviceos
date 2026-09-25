@@ -288,6 +288,11 @@ export function FormBuilderView() {
         const finalTemplateFields = isSplit && rawMediaPanel
           ? injectMediaPanelContent(templateFields as any, rawMediaPanel, template.name, template.shortDescription || template.description)
           : templateFields;
+        const templateResolvedLayout = isSplit
+          ? 'split_media'
+          : template.schema.theme?.layout === 'card'
+          ? 'card'
+          : template.schema.theme?.layout || template.schema.settings?.formLayout || 'classic';
 
         setFormData({
           name: template.name,
@@ -306,14 +311,14 @@ export function FormBuilderView() {
           theme: {
             ...(template.schema.theme || {}),
             primaryColor: template.schema.theme?.primaryColor || '#059669',
-            layout: template.schema.theme?.layout || template.schema.settings?.formLayout || 'paper',
+            layout: templateResolvedLayout,
             mediaPanel: template.schema.mediaPanel || template.schema.theme?.mediaPanel,
           } as any,
           mediaPanel: template.schema.mediaPanel || template.schema.theme?.mediaPanel,
           rules: template.schema.rules || [],
           settings: {
             ...(template.schema.settings as any || {}),
-            formLayout: (template.schema.theme?.layout || template.schema.settings?.formLayout) as any,
+            formLayout: templateResolvedLayout as any,
           },
         });
         setEditMode(false);
@@ -362,6 +367,30 @@ export function FormBuilderView() {
     });
     setActiveTab('details');
     setShowCreateDialog(true);
+
+    // Fetch full unstripped form schema from the API to guarantee 100% fidelity
+    authFetch(`/api/forms/${form.id}`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.form) {
+          const fullItem = apiFormToFormItem(data.form as ApiForm);
+          setFormData((prev) => {
+            if (prev.id !== form.id) return prev;
+            return {
+              ...prev,
+              ...fullItem,
+              fields: Array.isArray(fullItem.fields) && fullItem.fields.length > 0 ? fullItem.fields : prev.fields,
+              theme: fullItem.theme || prev.theme,
+              mediaPanel: fullItem.mediaPanel || fullItem.theme?.mediaPanel || prev.mediaPanel,
+              steps: fullItem.steps || prev.steps,
+              rules: fullItem.rules && fullItem.rules.length > 0 ? fullItem.rules : prev.rules,
+              settings: fullItem.settings || prev.settings,
+            };
+          });
+        }
+      })
+      .catch(() => {});
   };
 
   const handleSave = async (options?: { silent?: boolean }): Promise<{ id: string; slug?: string } | null> => {

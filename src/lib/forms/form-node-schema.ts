@@ -90,6 +90,8 @@ export function mediaPanelToContentWidgets(
       widgetType: 'badge_widget',
       label: 'Trust Badge',
       layoutColumn: 'left',
+      width: 'full',
+      stepId: 'step_1',
       widgetConfig: {
         text: badgeText,
         variant: 'solid',
@@ -109,6 +111,8 @@ export function mediaPanelToContentWidgets(
       widgetType: 'heading',
       label: headline,
       layoutColumn: 'left',
+      width: 'full',
+      stepId: 'step_1',
       widgetConfig: {
         level: 'h2',
         align: 'left',
@@ -126,6 +130,8 @@ export function mediaPanelToContentWidgets(
       type: 'paragraph',
       label: subtitle,
       layoutColumn: 'left',
+      width: 'full',
+      stepId: 'step_1',
       widgetConfig: {
         text: subtitle,
         allowHTML: false,
@@ -144,6 +150,8 @@ export function mediaPanelToContentWidgets(
       widgetType: 'image_widget',
       label: 'Hero Image',
       layoutColumn: 'left',
+      width: 'full',
+      stepId: 'step_1',
       widgetConfig: {
         src: imageUrl,
         alt: headline || 'Hero image',
@@ -166,6 +174,8 @@ export function mediaPanelToContentWidgets(
       widgetType: 'list_widget',
       label: 'Benefits List',
       layoutColumn: 'left',
+      width: 'full',
+      stepId: 'step_1',
       widgetConfig: {
         items: bullets,
         style: 'checkmark',
