@@ -84,6 +84,8 @@ import type { FieldDefinition } from '@/lib/forms/field-settings-types';
 import { resolveIcon } from '@/lib/forms/icon-resolver';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 import { resolveFormLayout, layoutToRuntimeMode, type FormLayout } from '@/lib/forms/resolve-form-layout';
+import { QRCodePlaceholder } from '@/features/forms/components/field-editor';
+import { FormImporterDialog } from './form-importer-dialog';
 
 export interface FormStudioBuilderProps {
   formData: EditorFormData;
@@ -2987,7 +2989,7 @@ export function FormStudioBuilder({
           </DialogHeader>
           <div className="py-4 flex flex-col items-center justify-center space-y-3">
             <div className="p-3 bg-white rounded-2xl border-2 border-emerald-500/30 shadow-md">
-              <QRCodePlaceholder />
+              <QRCodePlaceholder formId={formData.id || formData.slug || 'form'} />
             </div>
             <p className="text-[11px] text-muted-foreground font-mono break-all max-w-[220px]">
               {liveUrl}

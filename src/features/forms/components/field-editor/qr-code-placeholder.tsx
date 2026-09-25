@@ -12,11 +12,12 @@
 import { cn } from '@/lib/utils';
 
 export interface QRCodePlaceholderProps {
-  formId: string;
+  formId?: string;
 }
 
-export function QRCodePlaceholder({ formId }: QRCodePlaceholderProps) {
-  const seed = formId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+export function QRCodePlaceholder({ formId = 'default' }: QRCodePlaceholderProps) {
+  const safeId = formId || 'default';
+  const seed = safeId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const cells = Array.from({ length: 121 }, (_, i) => {
     const row = Math.floor(i / 11);
     const col = i % 11;

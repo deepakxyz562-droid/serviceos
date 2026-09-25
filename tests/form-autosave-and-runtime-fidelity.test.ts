@@ -155,4 +155,24 @@ describe('Form Autosave & Runtime Fidelity', () => {
       expect(getFieldWidthClass(undefined)).toBe('w-full');
     });
   });
+
+  describe('Form Studio Builder Dependencies & QR Code Safety', () => {
+    it('resolves QRCodePlaceholder and FormStudioBuilder modules without runtime ReferenceErrors', async () => {
+      const { QRCodePlaceholder } = await import('@/features/forms/components/field-editor/qr-code-placeholder');
+      const { FormStudioBuilder } = await import('@/features/forms/components/form-studio-builder');
+      expect(typeof QRCodePlaceholder).toBe('function');
+      expect(typeof FormStudioBuilder).toBe('function');
+    });
+
+    it('renders QRCodePlaceholder cleanly with and without formId', async () => {
+      const { QRCodePlaceholder } = await import('@/features/forms/components/field-editor/qr-code-placeholder');
+      // Verify no throw when formId is passed
+      const elementWithId = QRCodePlaceholder({ formId: 'form_123' });
+      expect(elementWithId).toBeDefined();
+
+      // Verify no throw when formId is undefined (handles undefined safely)
+      const elementWithoutId = QRCodePlaceholder({});
+      expect(elementWithoutId).toBeDefined();
+    });
+  });
 });
