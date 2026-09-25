@@ -26,13 +26,24 @@ import { resolveIcon } from '@/lib/forms/icon-resolver';
 
 // ─── Image Widget ─────────────────────────────────────────────────────
 
-export function ImageWidget({ src, alt, width, height, alignment, borderRadius, linkUrl, openInNewTab }: {
+export function ImageWidget(props: {
   src?: string; alt?: string; width?: string; height?: string; alignment?: string;
   borderRadius?: string; linkUrl?: string; openInNewTab?: boolean;
+  config?: Record<string, any>; field?: Record<string, any>;
 }) {
-  if (!src) return <div className="w-full h-32 bg-muted/30 rounded-lg flex items-center justify-center text-xs text-muted-foreground">No image URL set</div>;
+  const cfg = props.config || props.field?.widgetConfig || {};
+  const src = props.src || cfg.src || cfg.url || cfg.mediaUrl || cfg.imageUrl || '';
+  const alt = props.alt || cfg.alt || (props.field?.label as string) || '';
+  const width = props.width || cfg.width || '100%';
+  const height = props.height || cfg.height || 'auto';
+  const alignment = props.alignment || cfg.alignment || 'center';
+  const borderRadius = props.borderRadius || cfg.borderRadius || '0px';
+  const linkUrl = props.linkUrl || cfg.linkUrl || '';
+  const openInNewTab = props.openInNewTab ?? cfg.openInNewTab ?? true;
+
+  if (!src) return <div className="w-full h-32 bg-muted/30 rounded-lg flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border/80">No image URL set</div>;
   const alignClass = alignment === 'left' ? 'justify-start' : alignment === 'right' ? 'justify-end' : 'justify-center';
-  const img = <img src={src} alt={alt || ''} style={{ width: width || '100%', height: height || 'auto', borderRadius: borderRadius || '0px' }} className="max-w-full" />;
+  const img = <img src={src} alt={alt} style={{ width: width || '100%', height: height || 'auto', borderRadius: borderRadius || '0px' }} className="max-w-full object-cover" />;
   return (
     <div className={cn('flex w-full', alignClass)}>
       {linkUrl ? <a href={linkUrl} target={openInNewTab ? '_blank' : '_self'} rel="noopener noreferrer">{img}</a> : img}
@@ -42,16 +53,26 @@ export function ImageWidget({ src, alt, width, height, alignment, borderRadius, 
 
 // ─── Button Widget ────────────────────────────────────────────────────
 
-export function ButtonWidget({ text, linkUrl, openInNewTab, variant, size, alignment, fullWidth }: {
+export function ButtonWidget(props: {
   text?: string; linkUrl?: string; openInNewTab?: boolean;
   variant?: string; size?: string; alignment?: string; fullWidth?: boolean;
+  config?: Record<string, any>; field?: Record<string, any>;
 }) {
+  const cfg = props.config || props.field?.widgetConfig || {};
+  const text = props.text || cfg.text || (props.field?.label as string) || 'Click Here';
+  const linkUrl = props.linkUrl || cfg.linkUrl || '';
+  const openInNewTab = props.openInNewTab ?? cfg.openInNewTab ?? true;
+  const variant = props.variant || cfg.variant || 'default';
+  const size = props.size || cfg.size || 'medium';
+  const alignment = props.alignment || cfg.alignment || 'center';
+  const fullWidth = props.fullWidth ?? cfg.fullWidth ?? false;
+
   const alignClass = alignment === 'left' ? 'justify-start' : alignment === 'right' ? 'justify-end' : 'justify-center';
   const btnSize = size === 'small' ? 'sm' : size === 'large' ? 'lg' : 'default';
   return (
     <div className={cn('flex w-full', alignClass)}>
       <Button variant={variant as any || 'default'} size={btnSize as any} className={fullWidth ? 'w-full' : ''} asChild={!!linkUrl}>
-        {linkUrl ? <a href={linkUrl} target={openInNewTab ? '_blank' : '_self'} rel="noopener noreferrer">{text || 'Button'}</a> : (text || 'Button')}
+        {linkUrl ? <a href={linkUrl} target={openInNewTab ? '_blank' : '_self'} rel="noopener noreferrer">{text}</a> : text}
       </Button>
     </div>
   );
@@ -59,30 +80,46 @@ export function ButtonWidget({ text, linkUrl, openInNewTab, variant, size, align
 
 // ─── Spacer Widget ────────────────────────────────────────────────────
 
-export function SpacerWidget({ height }: { height?: number }) {
-  return <div style={{ height: `${height || 32}px` }} className="w-full" />;
+export function SpacerWidget(props: { height?: number; config?: Record<string, any>; field?: Record<string, any> }) {
+  const cfg = props.config || props.field?.widgetConfig || {};
+  const height = props.height ?? cfg.height ?? 32;
+  return <div style={{ height: `${height}px` }} className="w-full" />;
 }
 
 // ─── Icon Widget ──────────────────────────────────────────────────────
 
-export function IconWidget({ iconName, size, color, alignment }: {
+export function IconWidget(props: {
   iconName?: string; size?: number; color?: string; alignment?: string;
+  config?: Record<string, any>; field?: Record<string, any>;
 }) {
+  const cfg = props.config || props.field?.widgetConfig || {};
+  const iconName = props.iconName || cfg.iconName || cfg.icon || 'Star';
+  const size = props.size ?? cfg.size ?? 24;
+  const color = props.color || cfg.color || '#059669';
+  const alignment = props.alignment || cfg.alignment || 'center';
+
   const IconComp = resolveIcon(iconName || 'Star');
   const alignClass = alignment === 'left' ? 'justify-start' : alignment === 'right' ? 'justify-end' : 'justify-center';
   return (
     <div className={cn('flex w-full', alignClass)}>
-      <IconComp size={size || 24} color={color || '#059669'} />
+      <IconComp size={size} color={color} />
     </div>
   );
 }
 
 // ─── Alert Widget ──────────────────────────────────────────────────────
 
-export function AlertWidget({ text, type, showIcon, dismissible }: {
+export function AlertWidget(props: {
   text?: string; type?: string; showIcon?: boolean; dismissible?: boolean;
+  config?: Record<string, any>; field?: Record<string, any>;
 }) {
   const [dismissed, setDismissed] = React.useState(false);
+  const cfg = props.config || props.field?.widgetConfig || {};
+  const text = props.text || cfg.text || (props.field?.label as string) || 'Alert message';
+  const type = props.type || cfg.type || 'info';
+  const showIcon = props.showIcon ?? cfg.showIcon ?? true;
+  const dismissible = props.dismissible ?? cfg.dismissible ?? false;
+
   if (dismissed) return null;
   const icons = { info: Info, success: CheckCircle, warning: AlertTriangle, error: AlertCircle };
   const colors = {
@@ -95,7 +132,7 @@ export function AlertWidget({ text, type, showIcon, dismissible }: {
   return (
     <div className={cn('w-full p-3 rounded-lg border text-xs flex items-start gap-2', colors[type as keyof typeof colors] || colors.info)}>
       {showIcon !== false && <Icon className="size-4 shrink-0 mt-0.5" />}
-      <span className="flex-1">{text || 'Alert message'}</span>
+      <span className="flex-1">{text}</span>
       {dismissible && <button onClick={() => setDismissed(true)} className="shrink-0 opacity-60 hover:opacity-100"><X className="size-3" /></button>}
     </div>
   );
@@ -103,14 +140,20 @@ export function AlertWidget({ text, type, showIcon, dismissible }: {
 
 // ─── Badge Widget ─────────────────────────────────────────────────────
 
-export function BadgeWidget({ text, variant, alignment }: {
+export function BadgeWidget(props: {
   text?: string; variant?: string; alignment?: string;
+  config?: Record<string, any>; field?: Record<string, any>;
 }) {
+  const cfg = props.config || props.field?.widgetConfig || {};
+  const text = props.text || cfg.text || (props.field?.label as string) || 'Badge';
+  const variant = props.variant || cfg.variant || 'solid';
+  const alignment = props.alignment || cfg.alignment || 'left';
+
   const alignClass = alignment === 'left' ? 'justify-start' : alignment === 'right' ? 'justify-end' : 'justify-center';
   return (
     <div className={cn('flex w-full', alignClass)}>
-      <Badge variant={variant === 'outline' ? 'outline' : variant === 'subtle' ? 'secondary' : 'default'} className="text-xs px-3 py-1">
-        {text || 'Badge'}
+      <Badge variant={variant === 'outline' ? 'outline' : variant === 'subtle' ? 'secondary' : 'default'} className="text-xs px-3 py-1 font-semibold">
+        {text}
       </Badge>
     </div>
   );
@@ -118,10 +161,16 @@ export function BadgeWidget({ text, variant, alignment }: {
 
 // ─── List Widget ──────────────────────────────────────────────────────
 
-export function ListWidget({ items, style, iconColor }: {
+export function ListWidget(props: {
   items?: string[] | string; style?: string; iconColor?: string;
+  config?: Record<string, any>; field?: Record<string, any>;
 }) {
-  const list = typeof items === 'string' ? items.split('\n').filter(Boolean) : Array.isArray(items) ? items : [];
+  const cfg = props.config || props.field?.widgetConfig || {};
+  const rawItems = props.items || cfg.items || [];
+  const style = props.style || cfg.style || 'checkmark';
+  const iconColor = props.iconColor || cfg.iconColor || '#10b981';
+
+  const list = typeof rawItems === 'string' ? rawItems.split('\n').filter(Boolean) : Array.isArray(rawItems) ? rawItems : [];
   const icons = {
     checkmark: '✓', dot: '•', number: '', star: '★', none: '',
   };
@@ -131,9 +180,9 @@ export function ListWidget({ items, style, iconColor }: {
       {list.map((item, idx) => (
         <li key={idx} className="flex items-start gap-2 text-xs text-foreground/90">
           {style === 'number' ? (
-            <span className="shrink-0 font-bold text-xs" style={{ color: iconColor || '#10b981' }}>{idx + 1}.</span>
+            <span className="shrink-0 font-bold text-xs" style={{ color: iconColor }}>{idx + 1}.</span>
           ) : style !== 'none' ? (
-            <span className="shrink-0 font-bold text-sm" style={{ color: iconColor || '#10b981' }}>{bullet}</span>
+            <span className="shrink-0 font-bold text-sm" style={{ color: iconColor }}>{bullet}</span>
           ) : null}
           <span className="flex-1">{item}</span>
         </li>

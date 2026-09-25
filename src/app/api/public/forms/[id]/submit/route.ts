@@ -32,9 +32,15 @@ export async function POST(
     const submissionData = body.data || {};
 
     // ── 2. Find Form ───────────────────────────────────────────────────────
+    const trimmedId = typeof id === 'string' ? id.replace(/^-+|-+$/g, '') : id;
     const form = await db.form.findFirst({
       where: {
-        OR: [{ id }, { slug: id }],
+        OR: [
+          { id },
+          { id: trimmedId },
+          { slug: id },
+          { slug: trimmedId },
+        ],
         status: { not: 'archived' },
       },
       select: {

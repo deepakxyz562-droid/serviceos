@@ -91,7 +91,7 @@ export interface FormStudioBuilderProps {
   onFormDataChange: React.Dispatch<React.SetStateAction<EditorFormData>>;
   editMode: boolean;
   saving: boolean;
-  onSave: () => Promise<{ id?: string; slug?: string } | void | null>;
+  onSave: (options?: { silent?: boolean }) => Promise<{ id?: string; slug?: string } | void | null>;
   onExit: () => void;
   siteOrigin: string;
 }
@@ -189,12 +189,12 @@ export function FormStudioBuilder({
         clearTimeout(autosaveTimerRef.current);
       }
 
-      // Set up debounced autosave (3 second delay)
+      // Set up debounced autosave (1.2 second delay — Jotform style silent sync)
       if (editMode) {
         autosaveTimerRef.current = setTimeout(async () => {
           setAutosaveStatus('saving');
           try {
-            const result = await onSave();
+            const result = await onSave({ silent: true });
             if (result) {
               lastSavedFormDataRef.current = currentSerialized;
               setIsDirty(false);
@@ -208,7 +208,7 @@ export function FormStudioBuilder({
           } catch {
             setAutosaveStatus('error');
           }
-        }, 3000);
+        }, 1200);
       }
     }
 
@@ -219,10 +219,10 @@ export function FormStudioBuilder({
     };
   }, [formData]);
 
-  // Manual save handler — clears dirty state
+  // Manual save handler — clears dirty state with confirmation feedback
   const handleManualSave = useCallback(async () => {
     setAutosaveStatus('saving');
-    const result = await onSave();
+    const result = await onSave({ silent: false });
     if (result) {
       lastSavedFormDataRef.current = JSON.stringify(formData);
       setIsDirty(false);
@@ -2551,7 +2551,7 @@ export function FormStudioBuilder({
               {/* Universal 5-Pillar Publishing Engine */}
               <UniversalPublishCenter
                 formId={formData.id}
-                formSlug={formData.slug || (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'service-form')}
+                formSlug={formData.slug ? formData.slug.replace(/^-+|-+$/g, '') : (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : 'service-form')}
                 formName={formData.name || 'Untitled Form'}
                 formDescription={formData.description}
                 privacyLevel={privacyLevel}

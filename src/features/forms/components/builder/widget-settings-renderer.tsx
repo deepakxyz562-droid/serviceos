@@ -33,6 +33,7 @@ import {
 import type { FieldDefinition } from '@/lib/forms/field-settings-types';
 import { resolveIcon } from '@/lib/forms/icon-resolver';
 import { IconPickerDropdown } from './icon-picker-dropdown';
+import { ImagePickerControl } from './image-picker-modal';
 import { cn } from '@/lib/utils';
 
 export interface WidgetSettingsRendererProps {
@@ -666,7 +667,34 @@ export function WidgetSettingsRenderer({
           </div>
         );
 
+      case 'image_picker':
+        return (
+          <div key={setting.key} className="space-y-1">
+            <ImagePickerControl
+              label={setting.label}
+              value={String(value || setting.default || '')}
+              onChange={(url) => onChange(url)}
+              placeholder={setting.placeholder || 'Select or upload image...'}
+            />
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+
       default:
+        // Automatically use ImagePickerControl if setting key is src, imageUrl, mediaUrl, backgroundImageUrl
+        if (['src', 'imageUrl', 'url', 'mediaUrl', 'backgroundImageUrl'].includes(setting.key) && (definition.category === 'content' || definition.id === 'image_widget' || definition.id === 'static_image')) {
+          return (
+            <div key={setting.key} className="space-y-1">
+              <ImagePickerControl
+                label={setting.label}
+                value={String(value || setting.default || '')}
+                onChange={(url) => onChange(url)}
+                placeholder={setting.placeholder || 'Select or upload image...'}
+              />
+              {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+            </div>
+          );
+        }
         // Automatically use IconPickerDropdown if setting key is iconName or icon
         if (setting.key === 'iconName' || setting.key === 'icon') {
           return (

@@ -52,7 +52,7 @@ export const CONTENT_WIDGETS: FieldDefinition[] = [
       required: false,
     }),
     settingsSchema: [
-      { key: 'src', label: 'Image URL', type: 'text', group: 'field_specific', placeholder: 'https://...', helpText: 'Paste an image URL or upload.' },
+      { key: 'src', label: 'Image', type: 'image_picker', group: 'field_specific', placeholder: 'https://...', helpText: 'Upload image, choose from royalty-free stock photos, or paste URL.' },
       { key: 'alt', label: 'Alt Text', type: 'text', group: 'field_specific', placeholder: 'Describe the image...' },
       { key: 'width', label: 'Width', type: 'text', group: 'field_specific', default: '100%', placeholder: 'e.g. 100%, 300px, auto' },
       { key: 'height', label: 'Height', type: 'text', group: 'field_specific', default: 'auto', placeholder: 'e.g. auto, 200px' },

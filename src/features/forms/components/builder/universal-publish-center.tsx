@@ -60,11 +60,18 @@ export function UniversalPublishCenter({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activePreset, setActivePreset] = useState<'card' | 'flyer' | 'truck' | 'counter' | 'social'>('flyer');
 
-  const resolvedFormSlug =
+  const rawFormSlug =
     propFormSlug ||
     project?.forms?.[0]?.slug ||
     project?.slug ||
+    formId ||
+    (propFormName ? propFormName.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '') ||
     'service-request';
+
+  const resolvedFormSlug =
+    typeof rawFormSlug === 'string'
+      ? rawFormSlug.replace(/^-+|-+$/g, '') || formId || 'service-request'
+      : formId || 'service-request';
 
   const resolvedFormName =
     propFormName ||

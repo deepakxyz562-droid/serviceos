@@ -501,19 +501,19 @@ export function WidgetRuntimeDispatcher({
 
     // ─── Elementor-style Content Widgets (Phase 4) ────────────────────
     case 'image_widget':
-      return <ContentImageWidget {...widgetConfig} />;
+      return <ContentImageWidget config={config} field={field as any} />;
     case 'button_widget':
-      return <ContentButtonWidget {...widgetConfig} />;
+      return <ContentButtonWidget config={config} field={field as any} />;
     case 'spacer_widget':
-      return <ContentSpacerWidget {...widgetConfig} />;
+      return <ContentSpacerWidget config={config} field={field as any} />;
     case 'icon_widget':
-      return <ContentIconWidget {...widgetConfig} />;
+      return <ContentIconWidget config={config} field={field as any} />;
     case 'alert_widget':
-      return <ContentAlertWidget {...widgetConfig} />;
+      return <ContentAlertWidget config={config} field={field as any} />;
     case 'badge_widget':
-      return <ContentBadgeWidget {...widgetConfig} />;
+      return <ContentBadgeWidget config={config} field={field as any} />;
     case 'list_widget':
-      return <ContentListWidget {...widgetConfig} />;
+      return <ContentListWidget config={config} field={field as any} />;
 
     // ─── Layout Containers (Phase 6) ─────────────────────────────────
     case 'section_widget': {
@@ -523,19 +523,19 @@ export function WidgetRuntimeDispatcher({
       return (
         <Suspense fallback={<div className="h-20 bg-muted/20 rounded animate-pulse" />}>
           <SectionWidget
-            title={widgetConfig.title}
-            description={widgetConfig.description}
-            backgroundColor={widgetConfig.backgroundColor}
-            padding={widgetConfig.padding}
-            borderRadius={widgetConfig.borderRadius}
-            showBorder={widgetConfig.showBorder}
-            borderColor={widgetConfig.borderColor}
-            childFields={(allFields || []).filter((f: any) => f.sectionId === field.id)}
+            title={config.title}
+            description={config.description}
+            backgroundColor={config.backgroundColor}
+            padding={config.padding}
+            borderRadius={config.borderRadius}
+            showBorder={config.showBorder}
+            borderColor={config.borderColor}
+            childFields={[]}
             formData={allFormData || {}}
             onChange={onChange}
             allFormData={allFormData || {}}
-            inputBorderRadius={inputBorderRadius}
-            defaultInputHeightCls={defaultInputHeightCls}
+            inputBorderRadius="12px"
+            defaultInputHeightCls="h-11 text-xs"
           />
         </Suspense>
       );

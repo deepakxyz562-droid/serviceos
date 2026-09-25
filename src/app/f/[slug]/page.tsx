@@ -13,9 +13,15 @@ async function getForm(slug: string) {
     // falls back to form.id when slug is null). Try the slug column first,
     // then fall back to id lookup so both `/f/booking-request` and
     // `/f/cmqmokssc004m...` resolve to the right form.
+    const trimmed = slug.replace(/^-+|-+$/g, '')
     const bySlug = await db.form.findFirst({
       where: {
-        OR: [{ slug }, { id: slug }],
+        OR: [
+          { slug },
+          { slug: trimmed },
+          { id: slug },
+          { id: trimmed },
+        ],
         status: { not: 'archived' },
       },
       include: { _count: { select: { responses: true } } },
