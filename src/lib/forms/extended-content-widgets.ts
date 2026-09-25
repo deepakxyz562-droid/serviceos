@@ -1,0 +1,382 @@
+/**
+ * Extended Content Widgets — Elementor basic widget set (Part 2)
+ *
+ * These are the remaining Elementor basic widgets:
+ *   - Video, Image Box, Icon Box, Gallery, Carousel, Counter,
+ *     Testimonial, Tabs, Accordion, Progress Bar, Social Icons, HTML
+ *
+ * Each is a pure visual content widget with Elementor-style settings
+ * (Content + Style + Advanced groups).
+ */
+
+import type { FieldDefinition } from './field-settings-types';
+
+export const EXTENDED_CONTENT_WIDGETS: FieldDefinition[] = [
+  // ─── Video Widget ───────────────────────────────────────────────────
+  {
+    id: 'video_widget',
+    name: 'Video',
+    category: 'content',
+    iconName: 'Video',
+    description: 'Embed YouTube, Vimeo, or self-hosted video',
+    badge: 'CONTENT',
+    tier: 'free',
+    createField: (label = 'Video') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'video_widget',
+      widgetConfig: {
+        src: '',
+        videoType: 'youtube',
+        width: '100%',
+        height: 'auto',
+        aspectRatio: '16:9',
+        autoplay: false,
+        loop: false,
+        muted: false,
+        controls: true,
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'src', label: 'Video URL', type: 'text', group: 'field_specific', placeholder: 'https://youtube.com/watch?v=...' },
+      { key: 'videoType', label: 'Video Type', type: 'select', group: 'field_specific', default: 'youtube', options: [
+        { label: 'YouTube', value: 'youtube' }, { label: 'Vimeo', value: 'vimeo' }, { label: 'Self-hosted (MP4)', value: 'self' },
+      ] },
+      { key: 'aspectRatio', label: 'Aspect Ratio', type: 'select', group: 'field_specific', default: '16:9', options: [
+        { label: '16:9 (Widescreen)', value: '16:9' }, { label: '4:3 (Standard)', value: '4:3' }, { label: '1:1 (Square)', value: '1:1' }, { label: '9:16 (Vertical)', value: '9:16' },
+      ] },
+      { key: 'autoplay', label: 'Autoplay', type: 'toggle_with_description', group: 'field_specific', default: false },
+      { key: 'loop', label: 'Loop', type: 'toggle_with_description', group: 'field_specific', default: false },
+      { key: 'muted', label: 'Muted', type: 'toggle_with_description', group: 'field_specific', default: false },
+      { key: 'controls', label: 'Show Controls', type: 'toggle_with_description', group: 'field_specific', default: true },
+    ],
+  },
+
+  // ─── Image Box Widget ───────────────────────────────────────────────
+  {
+    id: 'image_box_widget',
+    name: 'Image Box',
+    category: 'content',
+    iconName: 'ImagePlus',
+    description: 'Image with headline and text',
+    badge: 'CONTENT',
+    tier: 'free',
+    createField: (label = 'Image Box') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'image_box_widget',
+      widgetConfig: {
+        imageSrc: '',
+        title: 'Your Title Here',
+        description: 'Add your description text here...',
+        titleColor: '',
+        descColor: '',
+        fontSize: '14px',
+        alignment: 'center',
+        gap: '12px',
+        imageWidth: '80px',
+        imageHeight: '80px',
+        imageRadius: '8px',
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'imageSrc', label: 'Image URL', type: 'text', group: 'field_specific', placeholder: 'https://...' },
+      { key: 'title', label: 'Title', type: 'text', group: 'field_specific', default: 'Your Title Here' },
+      { key: 'description', label: 'Description', type: 'textarea', group: 'field_specific', default: 'Add your description text here...' },
+      { key: 'alignment', label: 'Alignment', type: 'select', group: 'field_specific', default: 'center', options: [
+        { label: 'Left', value: 'left' }, { label: 'Center', value: 'center' }, { label: 'Right', value: 'right' },
+      ] },
+      { key: 'imageWidth', label: 'Image Width', type: 'text', group: 'advanced', default: '80px' },
+      { key: 'imageHeight', label: 'Image Height', type: 'text', group: 'advanced', default: '80px' },
+      { key: 'imageRadius', label: 'Image Border Radius', type: 'text', group: 'advanced', default: '8px' },
+      { key: 'gap', label: 'Gap Between Image and Text', type: 'text', group: 'advanced', default: '12px' },
+      { key: 'titleColor', label: 'Title Color', type: 'color', group: 'advanced' },
+      { key: 'descColor', label: 'Description Color', type: 'color', group: 'advanced' },
+      { key: 'fontSize', label: 'Font Size', type: 'text', group: 'advanced', default: '14px' },
+    ],
+  },
+
+  // ─── Icon Box Widget ────────────────────────────────────────────────
+  {
+    id: 'icon_box_widget',
+    name: 'Icon Box',
+    category: 'content',
+    iconName: 'Box',
+    description: 'Icon with headline and text',
+    badge: 'CONTENT',
+    tier: 'free',
+    createField: (label = 'Icon Box') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'icon_box_widget',
+      widgetConfig: {
+        icon: 'CheckCircle',
+        title: 'Your Title',
+        description: 'Add your description here...',
+        iconColor: '#059669',
+        iconSize: 40,
+        titleColor: '',
+        descColor: '',
+        fontSize: '14px',
+        alignment: 'center',
+        gap: '12px',
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'icon', label: 'Icon (Lucide name)', type: 'text', group: 'field_specific', default: 'CheckCircle' },
+      { key: 'title', label: 'Title', type: 'text', group: 'field_specific', default: 'Your Title' },
+      { key: 'description', label: 'Description', type: 'textarea', group: 'field_specific', default: 'Add your description here...' },
+      { key: 'alignment', label: 'Alignment', type: 'select', group: 'field_specific', default: 'center', options: [
+        { label: 'Left', value: 'left' }, { label: 'Center', value: 'center' }, { label: 'Right', value: 'right' },
+      ] },
+      { key: 'iconColor', label: 'Icon Color', type: 'color', group: 'advanced', default: '#059669' },
+      { key: 'iconSize', label: 'Icon Size (px)', type: 'number', group: 'advanced', default: 40, min: 16, max: 120 },
+      { key: 'titleColor', label: 'Title Color', type: 'color', group: 'advanced' },
+      { key: 'descColor', label: 'Description Color', type: 'color', group: 'advanced' },
+      { key: 'fontSize', label: 'Font Size', type: 'text', group: 'advanced', default: '14px' },
+      { key: 'gap', label: 'Gap', type: 'text', group: 'advanced', default: '12px' },
+    ],
+  },
+
+  // ─── Counter Widget ─────────────────────────────────────────────────
+  {
+    id: 'counter_widget',
+    name: 'Counter',
+    category: 'content',
+    iconName: 'Hash',
+    description: 'Animated number counter',
+    badge: 'CONTENT',
+    tier: 'free',
+    createField: (label = 'Counter') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'counter_widget',
+      widgetConfig: {
+        value: 12500,
+        prefix: '',
+        suffix: '+',
+        duration: 2000,
+        title: 'Happy Customers',
+        numberColor: '#059669',
+        titleColor: '',
+        fontSize: '32px',
+        titleFontSize: '14px',
+        alignment: 'center',
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'value', label: 'Number', type: 'number', group: 'field_specific', default: 12500 },
+      { key: 'prefix', label: 'Prefix (e.g. $)', type: 'text', group: 'field_specific', default: '' },
+      { key: 'suffix', label: 'Suffix (e.g. +)', type: 'text', group: 'field_specific', default: '+' },
+      { key: 'title', label: 'Title', type: 'text', group: 'field_specific', default: 'Happy Customers' },
+      { key: 'duration', label: 'Animation Duration (ms)', type: 'number', group: 'field_specific', default: 2000 },
+      { key: 'alignment', label: 'Alignment', type: 'select', group: 'field_specific', default: 'center', options: [
+        { label: 'Left', value: 'left' }, { label: 'Center', value: 'center' }, { label: 'Right', value: 'right' },
+      ] },
+      { key: 'numberColor', label: 'Number Color', type: 'color', group: 'advanced', default: '#059669' },
+      { key: 'titleColor', label: 'Title Color', type: 'color', group: 'advanced' },
+      { key: 'fontSize', label: 'Number Font Size', type: 'text', group: 'advanced', default: '32px' },
+      { key: 'titleFontSize', label: 'Title Font Size', type: 'text', group: 'advanced', default: '14px' },
+    ],
+  },
+
+  // ─── Testimonial Widget ─────────────────────────────────────────────
+  {
+    id: 'testimonial_widget',
+    name: 'Testimonial',
+    category: 'content',
+    iconName: 'Quote',
+    description: 'Customer testimonial with photo',
+    badge: 'CONTENT',
+    tier: 'free',
+    createField: (label = 'Testimonial') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'testimonial_widget',
+      widgetConfig: {
+        text: 'Fieseros transformed our service business. We went from paper invoices to fully automated scheduling and payments in 2 days.',
+        author: 'John Smith',
+        role: 'Owner, Smith HVAC',
+        avatar: '',
+        rating: 5,
+        textColor: '',
+        authorColor: '',
+        fontSize: '14px',
+        bgColor: '',
+        borderRadius: '12px',
+        padding: '24px',
+        alignment: 'left',
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'text', label: 'Testimonial Text', type: 'textarea', group: 'field_specific', default: 'Fieseros transformed our service business...' },
+      { key: 'author', label: 'Author Name', type: 'text', group: 'field_specific', default: 'John Smith' },
+      { key: 'role', label: 'Author Role/Company', type: 'text', group: 'field_specific', default: 'Owner, Smith HVAC' },
+      { key: 'avatar', label: 'Avatar Image URL', type: 'text', group: 'field_specific', placeholder: 'https://...' },
+      { key: 'rating', label: 'Star Rating (1-5)', type: 'number', group: 'field_specific', default: 5, min: 1, max: 5 },
+      { key: 'alignment', label: 'Alignment', type: 'select', group: 'field_specific', default: 'left', options: [
+        { label: 'Left', value: 'left' }, { label: 'Center', value: 'center' },
+      ] },
+      { key: 'textColor', label: 'Text Color', type: 'color', group: 'advanced' },
+      { key: 'authorColor', label: 'Author Color', type: 'color', group: 'advanced' },
+      { key: 'fontSize', label: 'Font Size', type: 'text', group: 'advanced', default: '14px' },
+      { key: 'bgColor', label: 'Background Color', type: 'color', group: 'advanced' },
+      { key: 'borderRadius', label: 'Border Radius', type: 'text', group: 'advanced', default: '12px' },
+      { key: 'padding', label: 'Padding', type: 'text', group: 'advanced', default: '24px' },
+    ],
+  },
+
+  // ─── Progress Bar Widget ────────────────────────────────────────────
+  {
+    id: 'progress_bar_widget',
+    name: 'Progress Bar',
+    category: 'content',
+    iconName: 'BarChart3',
+    description: 'Animated progress bar',
+    badge: 'CONTENT',
+    tier: 'free',
+    createField: (label = 'Progress') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'progress_bar_widget',
+      widgetConfig: {
+        value: 75,
+        label: 'Project Completion',
+        barColor: '#059669',
+        trackColor: '#e2e8f0',
+        textColor: '',
+        fontSize: '14px',
+        height: '8px',
+        borderRadius: '4px',
+        showLabel: true,
+        showPercentage: true,
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'value', label: 'Progress Value (%)', type: 'number', group: 'field_specific', default: 75, min: 0, max: 100 },
+      { key: 'label', label: 'Label', type: 'text', group: 'field_specific', default: 'Project Completion' },
+      { key: 'showLabel', label: 'Show Label', type: 'toggle_with_description', group: 'field_specific', default: true },
+      { key: 'showPercentage', label: 'Show Percentage', type: 'toggle_with_description', group: 'field_specific', default: true },
+      { key: 'barColor', label: 'Bar Color', type: 'color', group: 'advanced', default: '#059669' },
+      { key: 'trackColor', label: 'Track Color', type: 'color', group: 'advanced', default: '#e2e8f0' },
+      { key: 'textColor', label: 'Text Color', type: 'color', group: 'advanced' },
+      { key: 'fontSize', label: 'Font Size', type: 'text', group: 'advanced', default: '14px' },
+      { key: 'height', label: 'Bar Height', type: 'text', group: 'advanced', default: '8px' },
+      { key: 'borderRadius', label: 'Border Radius', type: 'text', group: 'advanced', default: '4px' },
+    ],
+  },
+
+  // ─── Social Icons Widget ───────────────────────────────────────────
+  {
+    id: 'social_icons_widget',
+    name: 'Social Icons',
+    category: 'content',
+    iconName: 'Share2',
+    description: 'Row of social media icons',
+    badge: 'CONTENT',
+    tier: 'free',
+    createField: (label = 'Social Icons') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'social_icons_widget',
+      widgetConfig: {
+        items: [
+          { platform: 'facebook', url: 'https://facebook.com' },
+          { platform: 'twitter', url: 'https://twitter.com' },
+          { platform: 'instagram', url: 'https://instagram.com' },
+        ],
+        iconSize: 20,
+        iconColor: '#64748b',
+        iconHoverColor: '#059669',
+        gap: '12px',
+        alignment: 'center',
+        bgColor: '',
+        padding: '12px',
+        borderRadius: '8px',
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'iconSize', label: 'Icon Size (px)', type: 'number', group: 'field_specific', default: 20, min: 12, max: 48 },
+      { key: 'iconColor', label: 'Icon Color', type: 'color', group: 'advanced', default: '#64748b' },
+      { key: 'iconHoverColor', label: 'Hover Color', type: 'color', group: 'advanced', default: '#059669' },
+      { key: 'gap', label: 'Gap Between Icons', type: 'text', group: 'advanced', default: '12px' },
+      { key: 'alignment', label: 'Alignment', type: 'select', group: 'field_specific', default: 'center', options: [
+        { label: 'Left', value: 'left' }, { label: 'Center', value: 'center' }, { label: 'Right', value: 'right' },
+      ] },
+      { key: 'bgColor', label: 'Background Color', type: 'color', group: 'advanced' },
+      { key: 'padding', label: 'Padding', type: 'text', group: 'advanced', default: '12px' },
+      { key: 'borderRadius', label: 'Border Radius', type: 'text', group: 'advanced', default: '8px' },
+    ],
+  },
+
+  // ─── HTML Widget ────────────────────────────────────────────────────
+  {
+    id: 'html_widget',
+    name: 'HTML',
+    category: 'content',
+    iconName: 'Code',
+    description: 'Insert custom HTML code',
+    badge: 'CONTENT',
+    tier: 'free',
+    createField: (label = 'HTML') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'html_widget',
+      widgetConfig: {
+        html: '<div style="text-align:center; padding:20px; background:#f8fafc; border-radius:8px;">\n  <p>Custom HTML content here</p>\n</div>',
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'html', label: 'HTML Code', type: 'textarea', group: 'field_specific', default: '<div style="text-align:center; padding:20px; background:#f8fafc; border-radius:8px;">\n  <p>Custom HTML content here</p>\n</div>', helpText: 'Enter raw HTML. Script tags are sanitized for security.' },
+    ],
+  },
+
+  // ─── Accordion Widget ───────────────────────────────────────────────
+  {
+    id: 'accordion_widget',
+    name: 'Accordion',
+    category: 'content',
+    iconName: 'ChevronDown',
+    description: 'Collapsible FAQ-style content',
+    badge: 'CONTENT',
+    tier: 'free',
+    createField: (label = 'Accordion') => ({
+      label,
+      type: 'control_widget',
+      widgetType: 'accordion_widget',
+      widgetConfig: {
+        items: 'Question 1|Answer 1 text here\nQuestion 2|Answer 2 text here\nQuestion 3|Answer 3 text here',
+        defaultOpen: 0,
+        titleColor: '',
+        textColor: '',
+        titleBgColor: '',
+        contentBgColor: '',
+        fontSize: '14px',
+        borderColor: '#e2e8f0',
+        borderRadius: '8px',
+        gap: '8px',
+      },
+      required: false,
+    }),
+    settingsSchema: [
+      { key: 'items', label: 'Items (Question|Answer, one per line)', type: 'textarea', group: 'field_specific', default: 'Question 1|Answer 1 text here\nQuestion 2|Answer 2 text here\nQuestion 3|Answer 3 text here', helpText: 'Format: Question|Answer (pipe separator), one per line.' },
+      { key: 'defaultOpen', label: 'Default Open Index (0=first, -1=none)', type: 'number', group: 'field_specific', default: 0 },
+      { key: 'titleColor', label: 'Title Color', type: 'color', group: 'advanced' },
+      { key: 'textColor', label: 'Content Color', type: 'color', group: 'advanced' },
+      { key: 'titleBgColor', label: 'Title Background', type: 'color', group: 'advanced' },
+      { key: 'contentBgColor', label: 'Content Background', type: 'color', group: 'advanced' },
+      { key: 'fontSize', label: 'Font Size', type: 'text', group: 'advanced', default: '14px' },
+      { key: 'borderColor', label: 'Border Color', type: 'color', group: 'advanced', default: '#e2e8f0' },
+      { key: 'borderRadius', label: 'Border Radius', type: 'text', group: 'advanced', default: '8px' },
+      { key: 'gap', label: 'Gap Between Items', type: 'text', group: 'advanced', default: '8px' },
+    ],
+  },
+];

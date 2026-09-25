@@ -30,6 +30,17 @@ import {
   BadgeWidget as ContentBadgeWidget,
   ListWidget as ContentListWidget,
 } from './content/content-widgets';
+import {
+  VideoWidget,
+  ImageBoxWidget,
+  IconBoxWidget,
+  CounterWidget,
+  TestimonialWidget,
+  ProgressBarWidget,
+  SocialIconsWidget,
+  HtmlWidget,
+  AccordionWidget,
+} from './content/extended-content-widgets';
 
 interface WidgetRuntimeDispatcherProps {
   field: FormField;
@@ -514,6 +525,26 @@ export function WidgetRuntimeDispatcher({
       return <ContentBadgeWidget config={config} field={field as any} />;
     case 'list_widget':
       return <ContentListWidget config={config} field={field as any} />;
+
+    // ─── Extended Elementor Content Widgets ───────────────────────────
+    case 'video_widget':
+      return <VideoWidget {...widgetConfig} />;
+    case 'image_box_widget':
+      return <ImageBoxWidget {...widgetConfig} />;
+    case 'icon_box_widget':
+      return <IconBoxWidget {...widgetConfig} />;
+    case 'counter_widget':
+      return <CounterWidget {...widgetConfig} />;
+    case 'testimonial_widget':
+      return <TestimonialWidget {...widgetConfig} />;
+    case 'progress_bar_widget':
+      return <ProgressBarWidget {...widgetConfig} />;
+    case 'social_icons_widget':
+      return <SocialIconsWidget {...widgetConfig} />;
+    case 'html_widget':
+      return <HtmlWidget {...widgetConfig} />;
+    case 'accordion_widget':
+      return <AccordionWidget {...widgetConfig} />;
 
     // ─── Layout Containers (Phase 6) ─────────────────────────────────
     case 'section_widget': {

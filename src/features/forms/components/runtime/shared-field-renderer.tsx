@@ -180,17 +180,40 @@ export const FormFieldRenderer = React.memo(function FormFieldRenderer({
   // For heading/paragraph/divider fields, render without the standard wrapper
   if (field.type === 'heading') {
     const cfg = (field.widgetConfig as Record<string, any>) || {};
-    const level = cfg.level || 'h3';
+    const text = cfg.text || field.label || 'Heading';
+    const level = cfg.level || 'h2';
     const align = cfg.align || 'left';
     const alignClass = align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
-    const sizeClass = level === 'h1' ? 'text-2xl' : level === 'h2' ? 'text-xl' : level === 'h4' ? 'text-sm' : 'text-base';
     const Tag = level as keyof JSX.IntrinsicElements;
+    const headingStyle: React.CSSProperties = {
+      ...(cfg.textColor ? { color: cfg.textColor } : {}),
+      ...(cfg.fontSize ? { fontSize: cfg.fontSize } : {}),
+      ...(cfg.fontWeight ? { fontWeight: cfg.fontWeight } : {}),
+      ...(cfg.textTransform ? { textTransform: cfg.textTransform } : {}),
+      ...(cfg.textDecoration ? { textDecoration: cfg.textDecoration } : {}),
+      ...(cfg.lineHeight ? { lineHeight: cfg.lineHeight } : {}),
+      ...(cfg.letterSpacing ? { letterSpacing: cfg.letterSpacing } : {}),
+      ...(cfg.backgroundColor ? { backgroundColor: cfg.backgroundColor } : {}),
+      ...(cfg.paddingTop ? { paddingTop: cfg.paddingTop } : {}),
+      ...(cfg.paddingBottom ? { paddingBottom: cfg.paddingBottom } : {}),
+      ...(cfg.marginTop ? { marginTop: cfg.marginTop } : {}),
+      ...(cfg.marginBottom ? { marginBottom: cfg.marginBottom } : {}),
+    };
+    const headingContent = (
+      <Tag className={`w-full ${alignClass}`} style={headingStyle}>
+        {cfg.linkUrl ? (
+          <a href={cfg.linkUrl} target={cfg.openInNewTab ? '_blank' : '_self'} rel="noopener noreferrer" className="hover:opacity-80 transition-opacity">
+            {text}
+          </a>
+        ) : text}
+      </Tag>
+    );
     return (
       <div
         className={cn('w-full', isEditMode && isSelected && 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg', isEditMode && 'cursor-pointer')}
         onClick={isEditMode ? (e) => { e.stopPropagation(); onSelectField?.(field.id); } : undefined}
       >
-        <Tag className={`${sizeClass} font-bold text-foreground pt-2 border-b border-border/60 pb-1 w-full ${alignClass}`}>{field.label}</Tag>
+        {headingContent}
       </div>
     );
   }
@@ -199,15 +222,29 @@ export const FormFieldRenderer = React.memo(function FormFieldRenderer({
     const cfg = (field.widgetConfig as Record<string, any>) || {};
     const text = cfg.text || field.helpText || field.label || '';
     const allowHTML = cfg.allowHTML || false;
+    const alignment = cfg.alignment || 'left';
+    const alignClass = alignment === 'center' ? 'text-center' : alignment === 'right' ? 'text-right' : alignment === 'justify' ? 'text-justify' : 'text-left';
+    const textStyle: React.CSSProperties = {
+      ...(cfg.textColor ? { color: cfg.textColor } : {}),
+      ...(cfg.fontSize ? { fontSize: cfg.fontSize } : {}),
+      ...(cfg.fontWeight ? { fontWeight: cfg.fontWeight } : {}),
+      ...(cfg.lineHeight ? { lineHeight: cfg.lineHeight } : {}),
+      ...(cfg.letterSpacing ? { letterSpacing: cfg.letterSpacing } : {}),
+      ...(cfg.backgroundColor ? { backgroundColor: cfg.backgroundColor } : {}),
+      ...(cfg.marginTop ? { marginTop: cfg.marginTop } : {}),
+      ...(cfg.marginBottom ? { marginBottom: cfg.marginBottom } : {}),
+      ...(cfg.paddingTop ? { paddingTop: cfg.paddingTop } : {}),
+      ...(cfg.paddingBottom ? { paddingBottom: cfg.paddingBottom } : {}),
+    };
     return (
       <div
         className={cn('w-full', isEditMode && isSelected && 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg', isEditMode && 'cursor-pointer')}
         onClick={isEditMode ? (e) => { e.stopPropagation(); onSelectField?.(field.id); } : undefined}
       >
         {allowHTML ? (
-          <div className="text-xs text-muted-foreground leading-relaxed w-full" dangerouslySetInnerHTML={{ __html: text }} />
+          <div className={`${alignClass} w-full`} style={textStyle} dangerouslySetInnerHTML={{ __html: text }} />
         ) : (
-          <p className="text-xs text-muted-foreground leading-relaxed w-full">{text}</p>
+          <p className={`${alignClass} w-full`} style={textStyle}>{text}</p>
         )}
       </div>
     );

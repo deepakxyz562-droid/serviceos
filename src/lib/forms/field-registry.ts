@@ -16,8 +16,9 @@ import { PHASE_2_WIDGETS } from './phase-2-widgets';
 import { PHASE_3_WIDGETS } from './phase-3-widgets';
 import { PHASE_4_WIDGETS } from './phase-4-widgets';
 import { CONTENT_WIDGETS } from './content-widgets';
+import { EXTENDED_CONTENT_WIDGETS } from './extended-content-widgets';
 
-export { PHASE_1_WIDGETS, PHASE_2_WIDGETS, PHASE_3_WIDGETS, PHASE_4_WIDGETS, CONTENT_WIDGETS };
+export { PHASE_1_WIDGETS, PHASE_2_WIDGETS, PHASE_3_WIDGETS, PHASE_4_WIDGETS, CONTENT_WIDGETS, EXTENDED_CONTENT_WIDGETS };
 
 // ─── Basic Text & Choice Fields ─────────────────────────────────────────────
 
@@ -332,32 +333,125 @@ export const BASIC_FIELDS: FieldDefinition[] = [
   },
   {
     id: 'heading',
-    name: 'Section Heading',
-    category: 'layout',
+    name: 'Heading',
+    category: 'content',
     iconName: 'Heading',
-    description: 'Bold heading text to label sections',
+    description: 'Eye-catching headlines and section headers',
+    badge: 'CONTENT',
     tier: 'free',
-    createField: (label = 'Section Heading') => ({ label, type: 'heading', widgetType: 'heading', widgetConfig: { level: 'h3', align: 'left' } }),
+    createField: (label = 'Add Your Heading Text') => ({
+      label,
+      type: 'heading',
+      widgetType: 'heading',
+      widgetConfig: {
+        text: 'Add Your Heading Text',
+        level: 'h2',
+        align: 'left',
+        linkUrl: '',
+        openInNewTab: false,
+        textColor: '',
+        fontSize: '',
+        fontWeight: '700',
+        textTransform: 'none',
+        textDecoration: 'none',
+        lineHeight: '1.2',
+        letterSpacing: '0px',
+        backgroundColor: '',
+        paddingTop: '8px',
+        paddingBottom: '8px',
+        marginTop: '0px',
+        marginBottom: '16px',
+      },
+    }),
     settingsSchema: [
-      { key: 'level', label: 'Heading level', type: 'select', group: 'field_specific', default: 'h3', options: [
-        { label: 'H1', value: 'h1' }, { label: 'H2', value: 'h2' }, { label: 'H3', value: 'h3' }, { label: 'H4', value: 'h4' },
+      // ─── CONTENT ──────────────────────────────────────────────────────
+      { key: 'text', label: 'Heading Text', type: 'textarea', group: 'field_specific', default: 'Add Your Heading Text', placeholder: 'Enter your heading text...' },
+      { key: 'level', label: 'HTML Tag', type: 'select', group: 'field_specific', default: 'h2', options: [
+        { label: 'H1', value: 'h1' }, { label: 'H2', value: 'h2' }, { label: 'H3', value: 'h3' },
+        { label: 'H4', value: 'h4' }, { label: 'H5', value: 'h5' }, { label: 'H6', value: 'h6' },
       ] },
+      { key: 'linkUrl', label: 'Link URL (optional)', type: 'text', group: 'field_specific', placeholder: 'https://...' },
+      { key: 'openInNewTab', label: 'Open in new tab', type: 'toggle_with_description', group: 'field_specific', default: false },
       { key: 'align', label: 'Alignment', type: 'select', group: 'field_specific', default: 'left', options: [
         { label: 'Left', value: 'left' }, { label: 'Center', value: 'center' }, { label: 'Right', value: 'right' },
       ] },
+      // ─── STYLE ───────────────────────────────────────────────────────
+      { key: 'textColor', label: 'Text Color', type: 'color', group: 'advanced', helpText: 'Leave empty for theme default.' },
+      { key: 'fontSize', label: 'Font Size (e.g. 24px, 1.5rem)', type: 'text', group: 'advanced', placeholder: 'auto' },
+      { key: 'fontWeight', label: 'Font Weight', type: 'select', group: 'advanced', default: '700', options: [
+        { label: 'Normal (400)', value: '400' }, { label: 'Medium (500)', value: '500' },
+        { label: 'Semibold (600)', value: '600' }, { label: 'Bold (700)', value: '700' },
+        { label: 'Extrabold (800)', value: '800' }, { label: 'Black (900)', value: '900' },
+      ] },
+      { key: 'textTransform', label: 'Text Transform', type: 'select', group: 'advanced', default: 'none', options: [
+        { label: 'None', value: 'none' }, { label: 'UPPERCASE', value: 'uppercase' },
+        { label: 'lowercase', value: 'lowercase' }, { label: 'Capitalize', value: 'capitalize' },
+      ] },
+      { key: 'textDecoration', label: 'Text Decoration', type: 'select', group: 'advanced', default: 'none', options: [
+        { label: 'None', value: 'none' }, { label: 'Underline', value: 'underline' },
+        { label: 'Line Through', value: 'line-through' }, { label: 'Overline', value: 'overline' },
+      ] },
+      { key: 'lineHeight', label: 'Line Height (e.g. 1.2)', type: 'text', group: 'advanced', default: '1.2' },
+      { key: 'letterSpacing', label: 'Letter Spacing (e.g. 0px, 2px)', type: 'text', group: 'advanced', default: '0px' },
+      { key: 'backgroundColor', label: 'Background Color', type: 'color', group: 'advanced' },
+      // ─── SPACING ─────────────────────────────────────────────────────
+      { key: 'marginTop', label: 'Margin Top', type: 'text', group: 'advanced', default: '0px' },
+      { key: 'marginBottom', label: 'Margin Bottom', type: 'text', group: 'advanced', default: '16px' },
+      { key: 'paddingTop', label: 'Padding Top', type: 'text', group: 'advanced', default: '8px' },
+      { key: 'paddingBottom', label: 'Padding Bottom', type: 'text', group: 'advanced', default: '8px' },
     ],
   },
   {
     id: 'paragraph',
-    name: 'Paragraph Block',
-    category: 'layout',
+    name: 'Text Editor',
+    category: 'content',
     iconName: 'FileText',
-    description: 'Static text/description shown to user',
+    description: 'Rich text block with full typography control',
+    badge: 'CONTENT',
     tier: 'free',
-    createField: (label = 'Paragraph') => ({ label: '', type: 'paragraph', widgetConfig: { text: 'Add your descriptive text here...' } }),
+    createField: (label = 'Text Block') => ({
+      label: '',
+      type: 'paragraph',
+      widgetType: 'paragraph',
+      widgetConfig: {
+        text: 'Add your descriptive text here...',
+        allowHTML: false,
+        alignment: 'left',
+        textColor: '',
+        fontSize: '14px',
+        fontWeight: '400',
+        lineHeight: '1.5',
+        letterSpacing: '0px',
+        backgroundColor: '',
+        marginTop: '0px',
+        marginBottom: '16px',
+        paddingTop: '0px',
+        paddingBottom: '0px',
+      },
+    }),
     settingsSchema: [
-      { key: 'text', label: 'Paragraph text', type: 'textarea', group: 'field_specific' },
-      { key: 'allowHTML', label: 'Allow HTML', type: 'toggle_with_description', group: 'field_specific', default: false },
+      // ─── CONTENT ──────────────────────────────────────────────────────
+      { key: 'text', label: 'Text Content', type: 'textarea', group: 'field_specific', default: 'Add your descriptive text here...' },
+      { key: 'allowHTML', label: 'Allow HTML', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Enable to render HTML tags in the text.' },
+      { key: 'alignment', label: 'Alignment', type: 'select', group: 'field_specific', default: 'left', options: [
+        { label: 'Left', value: 'left' }, { label: 'Center', value: 'center' }, { label: 'Right', value: 'right' }, { label: 'Justify', value: 'justify' },
+      ] },
+      // ─── STYLE ───────────────────────────────────────────────────────
+      { key: 'textColor', label: 'Text Color', type: 'color', group: 'advanced' },
+      { key: 'fontSize', label: 'Font Size (e.g. 14px, 1rem)', type: 'text', group: 'advanced', default: '14px' },
+      { key: 'fontWeight', label: 'Font Weight', type: 'select', group: 'advanced', default: '400', options: [
+        { label: 'Normal (300)', value: '300' }, { label: 'Regular (400)', value: '400' },
+        { label: 'Medium (500)', value: '500' }, { label: 'Semibold (600)', value: '600' },
+        { label: 'Bold (700)', value: '700' },
+      ] },
+      { key: 'lineHeight', label: 'Line Height', type: 'text', group: 'advanced', default: '1.5' },
+      { key: 'letterSpacing', label: 'Letter Spacing', type: 'text', group: 'advanced', default: '0px' },
+      { key: 'backgroundColor', label: 'Background Color', type: 'color', group: 'advanced' },
+      // ─── SPACING ─────────────────────────────────────────────────────
+      { key: 'marginTop', label: 'Margin Top', type: 'text', group: 'advanced', default: '0px' },
+      { key: 'marginBottom', label: 'Margin Bottom', type: 'text', group: 'advanced', default: '16px' },
+      { key: 'paddingTop', label: 'Padding Top', type: 'text', group: 'advanced', default: '0px' },
+      { key: 'paddingBottom', label: 'Padding Bottom', type: 'text', group: 'advanced', default: '0px' },
     ],
   },
   {
@@ -1405,6 +1499,7 @@ export const FIELD_REGISTRY: FieldDefinition[] = [
   ...PHASE_3_WIDGETS,
   ...PHASE_4_WIDGETS,
   ...CONTENT_WIDGETS,
+  ...EXTENDED_CONTENT_WIDGETS,
 ];
 
 const FIELD_REGISTRY_MAP = new Map<string, FieldDefinition>(

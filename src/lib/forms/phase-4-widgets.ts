@@ -149,10 +149,6 @@ const WIDGET_SPECS: WidgetSpec[] = [
   ]],
 
   // ─── Utility Widgets (15) ───────────────────────────────────────────────────
-  ['progress_bar_widget', 'Progress Bar', 'layout', 'BarChart3', 'Visual progress indicator', 'POPULAR', 'free', [
-    { key: 'steps', label: 'Total steps', type: 'number', group: 'field_specific', default: 5 },
-    { key: 'currentStep', label: 'Current step', type: 'number', group: 'field_specific', default: 1 },
-  ]],
   ['page_break_widget', 'Page Break', 'layout', 'SeparatorHorizontal', 'Multi-step page break', 'POPULAR', 'free', [
     { key: 'apiKey', label: 'API Key', type: 'text', group: 'field_specific' },
     { key: 'syncMode', label: 'Sync Mode', type: 'select', group: 'field_specific', default: 'realtime', options: [

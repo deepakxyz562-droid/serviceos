@@ -149,12 +149,74 @@ export function BadgeWidget(props: {
   const variant = props.variant || cfg.variant || 'solid';
   const alignment = props.alignment || cfg.alignment || 'left';
 
+  // Elementor-style: read all custom style props
+  const icon = cfg.icon || '';
+  const iconSize = cfg.iconSize || 14;
+  const textColor = cfg.textColor || '';
+  const bgColor = cfg.bgColor || '';
+  const iconColor = cfg.iconColor || textColor;
+  const fontSize = cfg.fontSize || '12px';
+  const fontWeight = cfg.fontWeight || '600';
+  const borderRadius = cfg.borderRadius || '9999px';
+  const borderColor = cfg.borderColor || '';
+  const borderWidth = cfg.borderWidth || '1px';
+  const paddingX = cfg.paddingX || '12px';
+  const paddingY = cfg.paddingY || '6px';
+  const linkUrl = cfg.linkUrl || '';
+  const openInNewTab = cfg.openInNewTab !== false;
+
   const alignClass = alignment === 'left' ? 'justify-start' : alignment === 'right' ? 'justify-end' : 'justify-center';
+
+  // Build the badge style based on variant + custom overrides
+  const badgeStyle: React.CSSProperties = {
+    fontSize,
+    fontWeight,
+    borderRadius,
+    paddingInline: paddingX,
+    paddingBlock: paddingY,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    ...(textColor ? { color: textColor } : {}),
+    ...(bgColor ? { backgroundColor: bgColor } : {}),
+    ...(borderColor ? { borderColor, borderWidth, borderStyle: 'solid' } : {}),
+  };
+
+  // If no custom colors, use preset variant
+  if (!textColor && !bgColor && !borderColor) {
+    if (variant === 'outline') {
+      badgeStyle.border = '1px solid currentColor';
+      badgeStyle.backgroundColor = 'transparent';
+    } else if (variant === 'subtle') {
+      badgeStyle.backgroundColor = 'rgba(5, 150, 105, 0.1)';
+      badgeStyle.color = '#059669';
+    } else {
+      // solid
+      badgeStyle.backgroundColor = '#059669';
+      badgeStyle.color = '#ffffff';
+    }
+  }
+
+  const IconComp = icon ? (LucideIcons as any)[icon] : null;
+
+  const badgeContent = (
+    <>
+      {IconComp && <IconComp size={iconSize} color={iconColor || undefined} />}
+      <span>{text}</span>
+    </>
+  );
+
   return (
     <div className={cn('flex w-full', alignClass)}>
-      <Badge variant={variant === 'outline' ? 'outline' : variant === 'subtle' ? 'secondary' : 'default'} className="text-xs px-3 py-1 font-semibold">
-        {text}
-      </Badge>
+      {linkUrl ? (
+        <a href={linkUrl} target={openInNewTab ? '_blank' : '_self'} rel="noopener noreferrer" style={badgeStyle} className="inline-flex items-center gap-1.5 hover:opacity-90 transition-opacity">
+          {badgeContent}
+        </a>
+      ) : (
+        <span style={badgeStyle}>
+          {badgeContent}
+        </span>
+      )}
     </div>
   );
 }
@@ -169,20 +231,51 @@ export function ListWidget(props: {
   const rawItems = props.items || cfg.items || [];
   const style = props.style || cfg.style || 'checkmark';
   const iconColor = props.iconColor || cfg.iconColor || '#10b981';
+  const iconSize = cfg.iconSize || 16;
+  const textColor = cfg.textColor || '';
+  const fontSize = cfg.fontSize || '14px';
+  const fontWeight = cfg.fontWeight || '400';
+  const lineHeight = cfg.lineHeight || '1.6';
+  const spaceBetween = cfg.spaceBetween || '8px';
+  const showDivider = cfg.divider || false;
+  const dividerColor = cfg.dividerColor || '#e2e8f0';
+  const marginTop = cfg.marginTop || '0px';
+  const marginBottom = cfg.marginBottom || '16px';
 
   const list = typeof rawItems === 'string' ? rawItems.split('\n').filter(Boolean) : Array.isArray(rawItems) ? rawItems : [];
   const icons = {
     checkmark: '✓', dot: '•', number: '', star: '★', none: '',
   };
   const bullet = icons[style as keyof typeof icons] || '✓';
+
+  const listStyle: React.CSSProperties = {
+    ...(marginTop ? { marginTop } : {}),
+    ...(marginBottom ? { marginBottom } : {}),
+  };
+  const itemStyle: React.CSSProperties = {
+    ...(textColor ? { color: textColor } : {}),
+    fontSize,
+    fontWeight,
+    lineHeight,
+  };
+
   return (
-    <ul className="w-full space-y-1.5">
+    <ul className="w-full" style={listStyle}>
       {list.map((item, idx) => (
-        <li key={idx} className="flex items-start gap-2 text-xs text-foreground/90">
+        <li
+          key={idx}
+          className="flex items-start gap-2"
+          style={{
+            ...itemStyle,
+            paddingBottom: idx < list.length - 1 ? spaceBetween : '0',
+            borderBottom: showDivider && idx < list.length - 1 ? `1px solid ${dividerColor}` : 'none',
+            marginBottom: idx < list.length - 1 ? spaceBetween : '0',
+          }}
+        >
           {style === 'number' ? (
-            <span className="shrink-0 font-bold text-xs" style={{ color: iconColor }}>{idx + 1}.</span>
+            <span className="shrink-0 font-bold" style={{ color: iconColor, fontSize: iconSize }}>{idx + 1}.</span>
           ) : style !== 'none' ? (
-            <span className="shrink-0 font-bold text-sm" style={{ color: iconColor }}>{bullet}</span>
+            <span className="shrink-0 font-bold" style={{ color: iconColor, fontSize: iconSize }}>{bullet}</span>
           ) : null}
           <span className="flex-1">{item}</span>
         </li>
