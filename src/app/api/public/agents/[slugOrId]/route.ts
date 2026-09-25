@@ -17,6 +17,12 @@ export interface PublicAgentConfig {
   greetingSubtitle?: string;
   quickActions: FormAgentData['quickActions'];
   navigation: FormAgentData['navigation'];
+  style?: FormAgentData['style'];
+  settings?: {
+    fileUploadEnabled?: boolean;
+    allowScreenSharing?: boolean;
+    memoryEnabled?: boolean;
+  };
   connectedForms: Array<{
     id: string;
     name: string;
@@ -53,6 +59,12 @@ function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
       presentationEnabled: false,
       whatsappEnabled: false,
     },
+    style: agent.style,
+    settings: {
+      fileUploadEnabled: agent.settings?.fileUploadEnabled ?? true,
+      allowScreenSharing: agent.settings?.allowScreenSharing ?? false,
+      memoryEnabled: agent.settings?.memoryEnabled ?? true,
+    },
     connectedForms: Array.isArray(agent.connectedForms)
       ? agent.connectedForms.map((f) => ({
           id: f.id,
@@ -71,8 +83,9 @@ function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
         greetingToggle: true,
         placeholderMessage: 'Ask anything or complete a form...',
         aiGeneratedGreeting: true,
-        popupDelaySeconds: 3,
-        autoOpenOnPageLoad: false,
+        showButtons: true,
+        primaryColor: agent.brandColor || '#059669',
+        greetingBubble: `👋 Need help? Chat with ${agent.name || 'our AI Assistant'}!`,
       },
     },
     updatedAt: agent.updatedAt || new Date().toISOString(),

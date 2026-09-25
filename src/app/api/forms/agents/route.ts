@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
 
     // Fetch a single agent
     if (agentId || agentSlug) {
-      const whereClause: any = agentId ? { id: agentId } : { slug: agentSlug! };
+      const identifier = agentId || agentSlug!;
+      const whereClause: any = {
+        OR: [{ id: identifier }, { slug: identifier }],
+      };
       if (user?.tenantId) {
         whereClause.tenantId = user.tenantId;
       }
