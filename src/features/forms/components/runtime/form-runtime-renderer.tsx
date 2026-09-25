@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FormSchema, FormField } from '@/lib/forms/form-schema-types';
+import { resolveFormLayout } from '@/lib/forms/resolve-form-layout';
 import { WidgetRuntimeDispatcher } from './widgets/widget-runtime-dispatcher';
 import { FormFieldRenderer } from './shared-field-renderer';
 import { Card, CardContent } from '@/components/ui/card';
@@ -685,15 +686,16 @@ export function FormRuntimeRenderer({
   onSubmitSuccess,
   previewMode = false,
 }: FormRuntimeRendererProps) {
+  const formLayout = resolveFormLayout(schema);
   const resolvedInitialMode: 'paper' | 'card' =
-    initialMode === 'card' || schema.theme?.layout === 'card' || (schema.settings as any)?.formLayout === 'single_question'
+    initialMode === 'card' || formLayout === 'card'
       ? 'card'
       : 'paper';
   const [activeMode, setActiveMode] = useState<'paper' | 'card'>(resolvedInitialMode);
 
   useEffect(() => {
-    const layout = schema.theme?.layout || (schema.settings as any)?.formLayout;
-    if (initialMode === 'card' || layout === 'card' || layout === 'single_question') {
+    const layout = resolveFormLayout(schema);
+    if (initialMode === 'card' || layout === 'card') {
       setActiveMode('card');
     } else {
       setActiveMode('paper');
@@ -922,7 +924,7 @@ export function FormRuntimeRenderer({
   // Previously: (mediaPanel && mediaPanel.enabled !== false) returned TRUE
   // when enabled was undefined, forcing split_media layout on Classic forms.
   // Now: split_media is only active when theme.layout === 'split_media'.
-  const isSplitLayout = schema.theme?.layout === 'split_media' && activeMode === 'paper';
+  const isSplitLayout = formLayout === 'split_media' && activeMode === 'paper';
   const splitRatio = mediaPanel?.splitRatio || '50-50';
   const isRightSide = mediaPanel?.position === 'right';
 

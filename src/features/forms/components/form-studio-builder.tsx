@@ -57,9 +57,8 @@ import {
   PAYMENT_GATEWAYS_REGISTRY, PAYMENT_CATEGORIES, PaymentCategory,
   PaymentGatewayDef, searchPaymentGateways, getPaymentGatewayById,
 } from '@/lib/forms/payments/payment-gateways-registry';
-import { QRCodePlaceholder } from './field-editor/qr-code-placeholder';
-import { FormImporterDialog } from './form-importer-dialog';
-import { FormRenderer } from './runtime/form-renderer';
+import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
+import { getFormContentFingerprint } from '@/features/forms/utils/form-helpers';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
 import { TemplateExplorer } from './builder/template-explorer';
 import type { FormTemplate } from '@/lib/forms/templates';
@@ -175,12 +174,12 @@ export function FormStudioBuilder({
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedFormDataRef = useRef<string>(JSON.stringify(formData));
+  const lastSavedFingerprintRef = useRef<string>(getFormContentFingerprint(formData));
 
-  // Mark dirty when formData changes (but not on first render)
+  // Mark dirty when user-authored form content changes (ignoring server metadata like id, slug, timestamps)
   useEffect(() => {
-    const currentSerialized = JSON.stringify(formData);
-    if (currentSerialized !== lastSavedFormDataRef.current) {
+    const currentFingerprint = getFormContentFingerprint(formData);
+    if (currentFingerprint !== lastSavedFingerprintRef.current) {
       setIsDirty(true);
       setAutosaveStatus('idle');
 
@@ -190,13 +189,16 @@ export function FormStudioBuilder({
       }
 
       // Set up debounced autosave (1.2 second delay — Jotform style silent sync)
-      if (editMode) {
+      // Only autosave if form has a valid name and at least one labeled field
+      const hasName = Boolean(formData.name?.trim());
+      const hasFields = Array.isArray(formData.fields) && formData.fields.some((f) => f?.label?.trim());
+      if (hasName && hasFields) {
         autosaveTimerRef.current = setTimeout(async () => {
           setAutosaveStatus('saving');
           try {
             const result = await onSave({ silent: true });
             if (result) {
-              lastSavedFormDataRef.current = currentSerialized;
+              lastSavedFingerprintRef.current = currentFingerprint;
               setIsDirty(false);
               setLastSavedAt(new Date());
               setAutosaveStatus('saved');
@@ -217,14 +219,15 @@ export function FormStudioBuilder({
         clearTimeout(autosaveTimerRef.current);
       }
     };
-  }, [formData]);
+  }, [formData, onSave]);
 
   // Manual save handler — clears dirty state with confirmation feedback
   const handleManualSave = useCallback(async () => {
     setAutosaveStatus('saving');
+    const fingerprint = getFormContentFingerprint(formData);
     const result = await onSave({ silent: false });
     if (result) {
-      lastSavedFormDataRef.current = JSON.stringify(formData);
+      lastSavedFingerprintRef.current = fingerprint;
       setIsDirty(false);
       setLastSavedAt(new Date());
       setAutosaveStatus('saved');
@@ -961,10 +964,11 @@ export function FormStudioBuilder({
 
   // ─── Publish Helpers ────────────────────────────────────────────────────────
   const resolvedOrigin = siteOrigin || (typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com');
-  const formSlug = formData.slug || (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'form');
+  const rawFormSlug = formData.slug || (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'form');
+  const formSlug = typeof rawFormSlug === 'string' ? rawFormSlug.replace(/^-+|-+$/g, '') || 'form' : 'form';
   const canonicalFormId = formData.id || formSlug;
   const liveUrl = `${resolvedOrigin}/form/${canonicalFormId}`;
-  const directHostedUrl = `${resolvedOrigin}/f/${formData.slug || canonicalFormId}`;
+  const directHostedUrl = `${resolvedOrigin}/f/${formData.slug ? formData.slug.replace(/^-+|-+$/g, '') : canonicalFormId}`;
   const embedScript = `<script src="${resolvedOrigin}/embed.js" data-form-id="${canonicalFormId}" async></script>`;
   const embedIframe = `<iframe src="${liveUrl}" width="100%" height="650" frameborder="0" style="border-radius:12px; border:none; width:100%;" allow="camera; microphone; geolocation"></iframe>`;
   const popupScript = `<button onclick="window.FieserosForm && window.FieserosForm.open('${canonicalFormId}')" class="fieseros-btn">Open Form</button>\n<script src="${resolvedOrigin}/embed.js" async></script>`;
@@ -977,20 +981,46 @@ export function FormStudioBuilder({
   };
 
   const handleOpenLive = async () => {
+    // 1. If form is already persisted and has no unsaved changes, open synchronously
+    // without awaiting network save so browser popup blockers never trigger.
+    const existingId = formData.id || (formData.slug ? formData.slug.replace(/^-+|-+$/g, '') : null);
+    if (existingId && !isDirty && autosaveStatus !== 'saving') {
+      const targetUrl = `${resolvedOrigin}/form/${existingId}`;
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      toast.success('Live form opened in new tab');
+      return;
+    }
+
+    // 2. If form needs to be saved first:
+    // Synchronously open blank tab within the user-gesture tick to prevent browser popup blockers,
+    // then redirect the tab once onSave completes.
+    const newTab = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
     let savedResult: { id?: string; slug?: string } | void | null = null;
     try {
       savedResult = await onSave();
+      const currentId =
+        savedResult?.id ||
+        (savedResult?.slug ? savedResult.slug.replace(/^-+|-+$/g, '') : null) ||
+        formData.id ||
+        (formData.slug ? formData.slug.replace(/^-+|-+$/g, '') : null) ||
+        (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : null);
+
+      if (!currentId) {
+        if (newTab && !newTab.closed) newTab.close();
+        toast.error('Please name and save your form first');
+        return;
+      }
+      const targetUrl = `${resolvedOrigin}/form/${currentId}`;
+      if (newTab && !newTab.closed) {
+        newTab.location.href = targetUrl;
+      } else {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      }
+      toast.success('Live form opened in new tab');
     } catch {
-      // continue — we'll try with formData.id as fallback
+      if (newTab && !newTab.closed) newTab.close();
+      toast.error('Failed to save form before opening');
     }
-    const currentId = savedResult?.id || savedResult?.slug || formData.id || (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : null);
-    if (!currentId) {
-      toast.error('Please name and save your form first');
-      return;
-    }
-    const targetUrl = `${resolvedOrigin}/form/${currentId}`;
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
-    toast.success('Live form opened in new tab');
   };
 
   const handleSendEmailInvites = async () => {
@@ -2703,11 +2733,12 @@ export function FormStudioBuilder({
                       'pb-6',
                     )}
                   >
-                    <FormRenderer
+                    <FormRuntimeRenderer
                       schema={runtimeSchema}
                       formName={formData.name || 'Untitled Form'}
                       formDescription={formData.description}
-                      mode="preview"
+                      mode={previewFormat}
+                      previewMode={true}
                     />
                   </div>
                   {/* Home Indicator */}
@@ -2726,11 +2757,12 @@ export function FormStudioBuilder({
                   </div>
                   {/* Tablet Screen Internal Scrollable Content */}
                   <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-2 pb-8">
-                    <FormRenderer
+                    <FormRuntimeRenderer
                       schema={runtimeSchema}
                       formName={formData.name || 'Untitled Form'}
                       formDescription={formData.description}
-                      mode="preview"
+                      mode={previewFormat}
+                      previewMode={true}
                     />
                   </div>
                   {/* Tablet Home Indicator */}
@@ -2767,11 +2799,12 @@ export function FormStudioBuilder({
                   {/* Desktop Screen Internal Scrollable Content */}
                   <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-start">
                     <div className="w-full max-w-2xl pb-16">
-                      <FormRenderer
+                      <FormRuntimeRenderer
                         schema={runtimeSchema}
                         formName={formData.name || 'Untitled Form'}
                         formDescription={formData.description}
-                        mode="preview"
+                        mode={previewFormat}
+                        previewMode={true}
                       />
                     </div>
                   </div>

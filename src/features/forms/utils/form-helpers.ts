@@ -393,7 +393,40 @@ export function buildApiPayload(formData: EditorFormData) {
     whatsappOwnerTemplate: formData.submissionActions?.whatsappOwnerTemplate || '',
     whatsappUserTemplate: formData.submissionActions?.whatsappUserTemplate || '',
     whatsappAiGenerated: formData.submissionActions?.aiGenerateUserMessage || false,
+    slug: formData.slug
+      ? formData.slug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+      : formData.name
+      ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+      : undefined,
   };
+}
+
+/**
+ * Computes a deterministic fingerprint of authorable form contents.
+ * Excludes server-generated metadata (id, slug, timestamps, submission counts)
+ * to prevent false dirty states and infinite autosave loops upon save completion.
+ */
+export function getFormContentFingerprint(data: EditorFormData): string {
+  if (!data) return '';
+  return JSON.stringify({
+    name: data.name || '',
+    description: data.description || '',
+    type: data.type || '',
+    status: data.status || '',
+    fields: data.fields || [],
+    steps: data.steps || [],
+    isMultiStep: Boolean(data.isMultiStep),
+    theme: data.theme || {},
+    settings: data.settings || {},
+    rules: data.rules || [],
+    submissionActions: data.submissionActions || {},
+    mediaPanel: data.mediaPanel || {},
+    welcomeMessage: data.welcomeMessage || '',
+    completionMessage: data.completionMessage || '',
+    submitButtonText: data.submitButtonText || '',
+    primaryColor: data.primaryColor || '',
+    agentConfig: data.agentConfig || null,
+  });
 }
 
 // ─── Small selectors (kept here for reuse) ──────────────────────────────────

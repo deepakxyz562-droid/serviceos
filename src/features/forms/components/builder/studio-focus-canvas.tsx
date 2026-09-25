@@ -54,7 +54,6 @@ import { FormFieldRenderer, getFieldWidthClass } from '../runtime/shared-field-r
 import { SortableFieldWrapper } from '../runtime/sortable-field-wrapper';
 import { evaluateFormulaSafe } from '../runtime/form-runtime-renderer';
 import { FormShell } from '../runtime/form-shell';
-import { FormRenderer } from '../runtime/form-renderer';
 import {
   DndContext,
   closestCenter,

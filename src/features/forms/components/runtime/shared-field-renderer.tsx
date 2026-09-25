@@ -171,7 +171,7 @@ export const FormFieldRenderer = React.memo(function FormFieldRenderer({
 }: FormFieldRendererProps) {
   const isEditMode = mode === 'edit';
   const isSelected = isEditMode && selectedFieldId === field.id;
-  const widthClass = getFieldWidthClass(field.width);
+  const widthClass = isEditMode ? 'w-full' : getFieldWidthClass(field.width);
   const labelHidden = isLabelHidden(field);
   const labelAlignClass = getLabelAlignClass(field);
   const fieldStyle = getFieldStyle(field);

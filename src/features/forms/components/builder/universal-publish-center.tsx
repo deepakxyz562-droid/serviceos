@@ -65,7 +65,7 @@ export function UniversalPublishCenter({
     project?.forms?.[0]?.slug ||
     project?.slug ||
     formId ||
-    (propFormName ? propFormName.toLowerCase().replace(/[^a-z0-9]+/g, '-') : '') ||
+    (propFormName ? propFormName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '') ||
     'service-request';
 
   const resolvedFormSlug =
