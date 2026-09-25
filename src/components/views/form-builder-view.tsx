@@ -45,6 +45,7 @@ import { AiWebsiteFormDialog } from '@/features/forms/components/ai-website-form
 import { ChatbotBuilderView } from '@/components/views/chatbot-builder-view';
 import { useAppStore } from '@/store/app-store';
 import { Bot } from 'lucide-react';
+import { injectMediaPanelContent } from '@/lib/forms/form-node-schema';
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
@@ -282,12 +283,18 @@ export function FormBuilderView() {
         })) || [{ id: 'step-1', title: 'Step 1: Details' }];
         const hasMultiSteps = (template.schema.steps?.length || 0) > 1;
 
+        const isSplit = template.schema.theme?.layout === 'split_media' || Boolean(template.schema.mediaPanel || template.schema.theme?.mediaPanel);
+        const rawMediaPanel = template.schema.mediaPanel || template.schema.theme?.mediaPanel;
+        const finalTemplateFields = isSplit && rawMediaPanel
+          ? injectMediaPanelContent(templateFields as any, rawMediaPanel, template.name, template.shortDescription || template.description)
+          : templateFields;
+
         setFormData({
           name: template.name,
           description: template.shortDescription || template.description || '',
           type: 'lead_capture',
           status: 'active',
-          fields: templateFields,
+          fields: finalTemplateFields as any,
           submissionActions: getDefaultActions('lead_capture'),
           fieldMappings: [],
           welcomeMessage: '',

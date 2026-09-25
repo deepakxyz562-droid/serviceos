@@ -977,7 +977,6 @@ export function FormStudioBuilder({
   };
 
   const handleOpenLive = async () => {
-    toast.info('Saving form and preparing live preview...');
     let savedResult: { id?: string; slug?: string } | void | null = null;
     try {
       savedResult = await onSave();
@@ -990,35 +989,8 @@ export function FormStudioBuilder({
       return;
     }
     const targetUrl = `${resolvedOrigin}/form/${currentId}`;
-
-    // ─── Fix race condition: poll the public API to confirm the form is ──
-    // ─── available before opening the live URL. Previously, window.open  ──
-    // ─── fired immediately after save, but the DB write might not be      ──
-    // ─── committed yet → 404 "Form not found or access denied".           ──
-    let formReady = false;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      try {
-        const checkRes = await fetch(`/api/public/forms/${encodeURIComponent(currentId)}`);
-        if (checkRes.ok) {
-          formReady = true;
-          break;
-        }
-      } catch {
-        // Network error — retry
-      }
-      // Wait 500ms before next attempt (total max 2.5 seconds)
-      await new Promise((r) => setTimeout(r, 500));
-    }
-
-    if (formReady) {
-      window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      toast.success('Live form opened in new tab');
-    } else {
-      // Form still not available after 5 attempts — open anyway (the user
-      // can refresh) and show a warning.
-      window.open(targetUrl, '_blank', 'noopener,noreferrer');
-      toast.warning('Form is saving. If the page shows an error, please refresh in a few seconds.');
-    }
+    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    toast.success('Live form opened in new tab');
   };
 
   const handleSendEmailInvites = async () => {
@@ -2711,7 +2683,7 @@ export function FormStudioBuilder({
             </div>
 
             {/* Preview Viewport Container */}
-            <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-center">
+            <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-start">
               {/* 1. Mobile Phone Mockup */}
               {previewDevice === 'mobile' && (
                 <div className="w-[380px] max-w-full h-[740px] max-h-[85vh] rounded-[44px] border-[10px] border-slate-900 shadow-2xl bg-background flex flex-col overflow-hidden relative shrink-0">
@@ -2793,7 +2765,7 @@ export function FormStudioBuilder({
                     </a>
                   </div>
                   {/* Desktop Screen Internal Scrollable Content */}
-                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-center">
+                  <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-start">
                     <div className="w-full max-w-2xl pb-16">
                       <FormRenderer
                         schema={runtimeSchema}

@@ -209,29 +209,50 @@ export function StudioFocusCanvas({
       }
     }
 
-    // ─── Evaluate form_calculation fields using the seeded values ──────────
-    // This gives the editor a live (read-only) preview of what the formula
-    // produces. Previously, the FormCalculation widget would show "$0.00"
-    // because allFormData had no seeded input values.
-    for (const f of fields) {
-      if (f.widgetType === 'form_calculation' || f.type === 'calculation') {
-        const cfg = (f.widgetConfig as Record<string, any>) || {};
-        const formula = String(cfg.formula || '');
-        if (formula) {
-          const result = evaluateFormulaSafe(formula, data, fields as any);
-          if (result !== null && !isNaN(result)) {
-            data[f.id] = result;
+    // ─── Evaluate form_calculation fields using multi-pass resolution ──────
+    for (let pass = 0; pass < 3; pass++) {
+      let passChanged = false;
+      for (const f of fields) {
+        if (f.widgetType === 'form_calculation' || f.type === 'calculation') {
+          const cfg = (f.widgetConfig as Record<string, any>) || {};
+          const formula = String(cfg.formula || '');
+          if (formula) {
+            const result = evaluateFormulaSafe(formula, data, fields as any);
+            if (result !== null && !isNaN(result) && data[f.id] !== result) {
+              data[f.id] = result;
+              passChanged = true;
+            }
           }
         }
       }
+      if (!passChanged) break;
     }
 
     return data;
   }, [fields]);
 
   const effectiveCanvasFormData = useMemo(() => {
-    return { ...canvasFormData, ...canvasOverrides };
-  }, [canvasFormData, canvasOverrides]);
+    const combined: Record<string, any> = { ...canvasFormData, ...canvasOverrides };
+    // Synchronously resolve formula calculations across up to 3 passes for overrides
+    for (let pass = 0; pass < 3; pass++) {
+      let passChanged = false;
+      for (const f of fields) {
+        if (f.widgetType === 'form_calculation' || f.type === 'calculation') {
+          const cfg = (f.widgetConfig as Record<string, any>) || {};
+          const formula = String(cfg.formula || '');
+          if (formula) {
+            const result = evaluateFormulaSafe(formula, combined, fields as any);
+            if (result !== null && !isNaN(result) && combined[f.id] !== result) {
+              combined[f.id] = result;
+              passChanged = true;
+            }
+          }
+        }
+      }
+      if (!passChanged) break;
+    }
+    return combined;
+  }, [canvasFormData, canvasOverrides, fields]);
 
   const activeStep = steps[currentStepIndex] || steps[0] || { id: 'step_1', title: 'Step 1', fields: [] };
   const progressPercent = Math.round(((currentStepIndex + 1) / Math.max(steps.length, 1)) * 100);

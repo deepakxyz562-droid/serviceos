@@ -12,6 +12,8 @@ interface FormCalculationProps {
   value?: number;
   onChange: (calcValue: number) => void;
   disabled?: boolean;
+  label?: string;
+  field?: { label?: string; id?: string };
 }
 
 /**
@@ -30,6 +32,11 @@ function parseFieldToNumber(val: unknown): number {
   // 1. Array of values (e.g. Multi-select Checkboxes)
   if (Array.isArray(val)) {
     return val.reduce((acc, item) => acc + parseFieldToNumber(item), 0);
+  }
+
+  // 1.5 Object with value property
+  if (typeof val === 'object' && val !== null && 'value' in (val as Record<string, unknown>)) {
+    return parseFieldToNumber((val as Record<string, unknown>).value);
   }
 
   const str = String(val).trim();
@@ -67,9 +74,11 @@ export function FormCalculation({
   value = 0,
   onChange,
   disabled = false,
+  label,
+  field,
 }: FormCalculationProps) {
   const calculatedResult = useMemo(() => {
-    if (!formula.trim()) return 0;
+    if (!formula.trim()) return typeof value === 'number' ? value : 0;
 
     try {
       // 1. Replace [field_id] and {{field_id}} tokens with resolved numerical values
@@ -91,40 +100,26 @@ export function FormCalculation({
         .replace(/sqrt\(/g, 'Math.sqrt(');
 
       // 3. Sanitize: allow only numbers, operators, parentheses, decimals, and
-      //    ternary syntax. This is a whitelist approach — anything not in the
-      //    allowed set is stripped, preventing code injection.
-      //    Allowed: digits, + - * / % ( ) . , ? : ! = > < & | whitespace
-      //    Math.* functions are expanded inline (step 2), so after sanitization
-      //    only numeric expressions remain.
+      //    ternary syntax.
       const sanitized = evalString
-        // Remove all Math.xxx( calls — replace with their numeric argument
-        // (we can't safely eval Math functions without the eval risk)
-        // Instead, we support a limited set of inline functions:
-        .replace(/Math\.round\(([^)]+)\)/g, '($1)')  // round(x) → x (simplified)
+        .replace(/Math\.round\(([^)]+)\)/g, '($1)')
         .replace(/Math\.floor\(([^)]+)\)/g, '($1)')
         .replace(/Math\.ceil\(([^)]+)\)/g, '($1)')
         .replace(/Math\.abs\(([^)]+)\)/g, '($1)')
         .replace(/Math\.(max|min)\(([^)]+)\)/g, '($2)')
         .replace(/Math\.sqrt\(([^)]+)\)/g, '($1)')
-        // Now strip everything except safe math characters
         .replace(/[^0-9+\-*/%().,\s?:!=><&|]/g, '');
 
-      if (!sanitized.trim()) return 0;
+      if (!sanitized.trim()) return typeof value === 'number' ? value : 0;
 
       // 4. Safe mathematical evaluation using a restricted scope.
-      //    The sanitized string only contains numbers, operators, parentheses,
-      //    and ternary syntax — no identifiers, no function calls, no access
-      //    to window/document/globalThis.
-      //    We use Function constructor as a sandboxed evaluator since the
-      //    input is already whitelisted to numeric characters only.
-      //    Alternative: a proper expression parser library like expr-eval.
       const result = new Function(`"use strict"; return (${sanitized});`)();
       const num = Number(result);
-      return isNaN(num) || !isFinite(num) ? 0 : num;
+      return isNaN(num) || !isFinite(num) ? (typeof value === 'number' ? value : 0) : num;
     } catch {
-      return 0;
+      return typeof value === 'number' ? value : 0;
     }
-  }, [formula, allFormData]);
+  }, [formula, allFormData, value]);
 
   const lastEmittedRef = React.useRef<number | undefined>(undefined);
   const onChangeRef = React.useRef(onChange);
@@ -144,16 +139,22 @@ export function FormCalculation({
     }
   }, [calculatedResult, value]);
 
+  const titleText = label || field?.label || 'Calculated Total';
+  const displayNum = typeof calculatedResult === 'number' && !isNaN(calculatedResult) ? calculatedResult : 0;
+
   return (
     <div className="p-3.5 rounded-xl bg-muted/40 border border-border/80 flex items-center justify-between">
       <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-        <Calculator className="size-4 text-emerald-600" />
-        <span>Calculated Total</span>
+        <Calculator className="size-4 text-emerald-600 shrink-0" />
+        <span className="truncate max-w-[200px]">{titleText}</span>
       </div>
       <div className="text-right">
-        <span className="text-base font-black text-foreground">
+        <span className="text-base font-black text-foreground font-mono">
           {prefix}
-          {calculatedResult.toFixed(decimals)}
+          {displayNum.toLocaleString('en-US', {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          })}
           {suffix}
         </span>
       </div>

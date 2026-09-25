@@ -105,11 +105,19 @@ export function FormMediaHeroPanel({
   onSelectMediaField?: (field: string) => void;
 }) {
   const [isMuted, setIsMuted] = useState(mediaPanel?.videoMuted ?? true);
-  const showMedia = mediaPanel?.showMedia !== false;
-  const showBadge = mediaPanel?.showBadge !== false;
-  const showHeadline = mediaPanel?.showHeadline !== false;
-  const showSubtitle = mediaPanel?.showSubtitle !== false;
-  const showBenefits = mediaPanel?.showBenefits !== false;
+  const hasInjectedContent = leftFields.some(
+    (f) =>
+      f.id.startsWith('mp_') ||
+      (f as any).kind === 'content' ||
+      f.widgetType === 'badge_widget' ||
+      f.widgetType === 'list_widget' ||
+      f.widgetType === 'image_widget'
+  );
+  const showMedia = !hasInjectedContent && mediaPanel?.showMedia !== false;
+  const showBadge = !hasInjectedContent && mediaPanel?.showBadge !== false;
+  const showHeadline = !hasInjectedContent && mediaPanel?.showHeadline !== false;
+  const showSubtitle = !hasInjectedContent && mediaPanel?.showSubtitle !== false;
+  const showBenefits = !hasInjectedContent && mediaPanel?.showBenefits !== false;
   const showTestimonial = mediaPanel?.showTestimonial !== false;
 
   const rawPanel = (mediaPanel || {}) as any;
@@ -460,27 +468,53 @@ export function FormMediaHeroPanel({
           </div>
         ) : leftFields && leftFields.length > 0 ? (
           <div className="space-y-3 pt-3 border-t border-white/10 text-left">
-            {leftFields.map((field) => (
-              <div key={field.id} className="space-y-1.5">
-                <label className="block text-xs font-semibold text-white/90">
-                  {field.label}
-                  {field.required && <span className="text-rose-400 ml-0.5">*</span>}
-                </label>
-                <div className="bg-white/95 dark:bg-slate-900/95 text-slate-900 dark:text-slate-100 p-3 rounded-xl backdrop-blur shadow-sm">
-                  <WidgetRuntimeDispatcher
-                    field={field as any}
+            {leftFields.map((field) => {
+              const isContent =
+                field.type === 'heading' ||
+                field.type === 'paragraph' ||
+                field.type === 'divider' ||
+                field.widgetType === 'badge_widget' ||
+                field.widgetType === 'list_widget' ||
+                field.widgetType === 'image_widget' ||
+                (field as any).kind === 'content';
+
+              if (isContent) {
+                return (
+                  <FormFieldRenderer
+                    key={field.id}
+                    field={field}
                     value={formData ? formData[field.id] : undefined}
                     onChange={(val) => onChange?.(field.id, val)}
                     allFormData={formData}
-                    disabled={false}
                     formId={formId}
+                    mode="live"
+                    errors={errors}
                   />
+                );
+              }
+
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-white/90">
+                    {field.label}
+                    {field.required && <span className="text-rose-400 ml-0.5">*</span>}
+                  </label>
+                  <div className="bg-white/95 dark:bg-slate-900/95 text-slate-900 dark:text-slate-100 p-3 rounded-xl backdrop-blur shadow-sm">
+                    <WidgetRuntimeDispatcher
+                      field={field as any}
+                      value={formData ? formData[field.id] : undefined}
+                      onChange={(val) => onChange?.(field.id, val)}
+                      allFormData={formData}
+                      disabled={false}
+                      formId={formId}
+                    />
+                  </div>
+                  {errors[field.id] && (
+                    <p className="text-[11px] text-rose-400">{errors[field.id]}</p>
+                  )}
                 </div>
-                {errors[field.id] && (
-                  <p className="text-[11px] text-rose-400">{errors[field.id]}</p>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : null}
 
@@ -572,6 +606,12 @@ export function evaluateFormulaSafe(
         return isNaN(num) ? acc : acc + num;
       }, 0);
       return String(sum);
+    }
+
+    if (typeof v === 'object' && v !== null && 'value' in (v as Record<string, unknown>)) {
+      const innerVal = (v as Record<string, unknown>).value;
+      const n = typeof innerVal === 'number' ? innerVal : parseFloat(String(innerVal).replace(/[^0-9.-]/g, ''));
+      return Number.isNaN(n) ? '0' : String(n);
     }
 
     const str = String(v).trim();

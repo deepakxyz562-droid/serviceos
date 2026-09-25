@@ -267,6 +267,8 @@ export function WidgetRuntimeDispatcher({
           value={typeof value === 'number' ? value : 0}
           onChange={onChange}
           disabled={interactiveDisabled}
+          label={field.label || (config.label as string)}
+          field={field}
         />
       );
 
