@@ -11,8 +11,8 @@ import type { FormSchema } from '@/lib/forms/form-schema-types';
 import { resolveFormLayout, layoutToRuntimeMode } from '@/lib/forms/resolve-form-layout';
 import dynamic from 'next/dynamic';
 
-const FormRuntimeRenderer = dynamic(
-  () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => ({ default: m.FormRuntimeRenderer })),
+const FormRenderer = dynamic(
+  () => import('@/features/forms/components/runtime/form-renderer').then((m) => ({ default: m.FormRenderer })),
   {
     ssr: false,
     loading: () => (
@@ -187,14 +187,13 @@ export default function PublicFormPage() {
       style={pageBgColor ? { backgroundColor: pageBgColor } : undefined}
     >
       <div className="w-full max-w-5xl">
-        <FormRuntimeRenderer
+        <FormRenderer
           formId={formId}
+          schema={schema}
           formName={formName}
           formDescription={formDescription}
-          schema={schema}
           branding={branding}
-          allowModeSwitch={false}
-          mode={resolvedMode}
+          mode="live"
         />
       </div>
     </div>

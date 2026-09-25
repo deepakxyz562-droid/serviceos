@@ -52,8 +52,9 @@ import type { EditorFormData, FormField } from '@/features/forms/types';
 import { WidgetRuntimeDispatcher } from '../runtime/widgets/widget-runtime-dispatcher';
 import { FormFieldRenderer, getFieldWidthClass } from '../runtime/shared-field-renderer';
 import { SortableFieldWrapper } from '../runtime/sortable-field-wrapper';
-import { evaluateFormulaSafe, FormMediaHeroPanel } from '../runtime/form-runtime-renderer';
+import { evaluateFormulaSafe } from '../runtime/form-runtime-renderer';
 import { FormShell } from '../runtime/form-shell';
+import { FormRenderer } from '../runtime/form-renderer';
 import {
   DndContext,
   closestCenter,
@@ -603,6 +604,11 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
               const isLeftColumnActive = selectedColumn === 'left';
               const isRightColumnActive = selectedColumn === 'right';
 
+              // ─── Left/Right Column: Generic Widget Container (Phase 4) ──────
+              // NO FormMediaHeroPanel — renders leftColumnFields directly
+              // (including mediaPanel-migrated content widgets from Phase 2)
+              // The column background (color, image, overlay) is applied via
+              // inline style — controlled via Inspector, not hardcoded content.
               const renderHeroMediaPanel = () => (
                 <div
                   className={`${leftWidthClass} relative ${isMediaSelected ? 'outline outline-2 outline-emerald-500 outline-offset-2 rounded-lg' : 'hover:outline hover:outline-1 hover:outline-emerald-400/40 hover:rounded-lg'}`}
@@ -611,114 +617,65 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                     onSelectColumn?.('left');
                     onSelectField('__media_panel__');
                   }}
+                  style={{
+                    backgroundColor: panel.backgroundColor || '#0f172a',
+                    backgroundImage: panel.backgroundImageUrl ? `url(${panel.backgroundImageUrl})` : undefined,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }}
                 >
-                  <FormMediaHeroPanel
-                    formId={undefined}
-                    mediaPanel={panel}
-                    formName={formData.name || 'Untitled Form'}
-                    formDescription={formData.description}
-                    primaryColor={primaryColor}
-                    formData={effectiveCanvasFormData}
-                    errors={{}}
-                    onChange={handleCanvasFieldChange}
-                    editable={true}
-                    onUpdateMediaPanel={updatePanel}
-                    onSelectMediaField={(field) => {
-                      onSelectColumn?.('left');
-                      onSelectField('__media_panel__');
-                    }}
-                  >
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between text-xs font-semibold text-white/90">
-                        <span className="flex items-center gap-1.5">
-                          <Columns className="size-3.5 text-emerald-400" />
-                          Left Column Widgets ({leftColumnFields.length})
-                        </span>
-                        {onOpenAddWidgetDialog && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectColumn?.('left');
-                              onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
-                            }}
-                            className="text-[11px] text-emerald-300 hover:text-white bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
-                          >
-                            <Plus className="size-3" /> Add Widget
-                          </button>
-                        )}
-                      </div>
+                  {/* Background overlay */}
+                  {panel.backgroundImageUrl && (
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ backgroundColor: '#000', opacity: (panel.overlayOpacity ?? 70) / 100 }}
+                    />
+                  )}
 
-                      <DndContext
-                        sensors={dndSensors}
-                        collisionDetection={closestCenter}
-                        onDragEnd={handleDragEnd}
-                      >
-                        <SortableContext items={leftColumnFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                          <div className="space-y-3">
-                            {leftColumnFields.length > 0 ? (
-                              leftColumnFields.map((f) => (
-                                <SortableFieldWrapper
-                                  key={f.id}
-                                  field={f}
-                                  value={effectiveCanvasFormData[f.id]}
-                                  onChange={(val) => handleCanvasFieldChange(f.id, val)}
-                                  allFormData={effectiveCanvasFormData}
-                                  selectedFieldId={selectedFieldId}
-                                  onSelectField={(id) => {
-                                    onSelectColumn?.('left');
-                                    onSelectField(id);
-                                  }}
-                                  inputBorderRadius={inputBorderRadius}
-                                  defaultInputHeightCls={defaultInputHeightCls}
-                                  onSetWidth={handleSetFieldWidth}
-                                  onDuplicate={handleDuplicateField}
-                                  onDelete={handleDeleteField}
-                                  onMoveUp={(id) => handleMoveField(id, 'up')}
-                                  onMoveDown={(id) => handleMoveField(id, 'down')}
-                                  onMoveToColumn={handleMoveFieldToColumn}
-                                  onMoveToStep={handleMoveFieldToStep}
-                                  onOpenSettings={(id) => {
-                                    onSelectColumn?.('left');
-                                    onSelectField(id);
-                                  }}
-                                  steps={steps}
-                                  hasColumns={true}
-                                />
-                              ))
-                            ) : (
-                              <div
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onSelectColumn?.('left');
-                                }}
-                                className="w-full p-3 text-center rounded-xl border border-dashed border-white/20 bg-white/5 text-slate-300 text-xs hover:border-white/40 cursor-pointer transition-all"
-                              >
-                                <p className="text-[11px] font-medium text-slate-300">
-                                  Drag or add generic widgets here (heading, paragraph, etc.)
-                                </p>
-                                {onOpenAddWidgetDialog && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onSelectColumn?.('left');
-                                      onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
-                                    }}
-                                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer"
-                                  >
-                                    <Plus className="size-3" /> Add Widget to Left Column
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </SortableContext>
-                      </DndContext>
-                    </div>
-                  </FormMediaHeroPanel>
+                  {/* Generic widgets — rendered directly (no FormMediaHeroPanel) */}
+                  <div className="relative z-10 p-6 sm:p-8 text-white space-y-3">
+                    <DndContext
+                      sensors={dndSensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext items={leftColumnFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-3">
+                          {leftColumnFields.length > 0 ? (
+                            leftColumnFields.map((f) => (
+                              <SortableFieldWrapper
+                                key={f.id}
+                                field={f}
+                                value={effectiveCanvasFormData[f.id]}
+                                onChange={(val) => handleCanvasFieldChange(f.id, val)}
+                                allFormData={effectiveCanvasFormData}
+                                selectedFieldId={selectedFieldId}
+                                onSelectField={(id) => { onSelectColumn?.('left'); onSelectField(id); }}
+                                inputBorderRadius={inputBorderRadius}
+                                defaultInputHeightCls={defaultInputHeightCls}
+                                onDuplicate={handleDuplicateField}
+                                onDelete={handleDeleteField}
+                                onMoveUp={(id) => handleMoveField(id, 'up')}
+                                onMoveDown={(id) => handleMoveField(id, 'down')}
+                                onMoveToColumn={handleMoveFieldToColumn}
+                                onMoveToStep={handleMoveFieldToStep}
+                                onOpenSettings={(id) => { onSelectColumn?.('left'); onSelectField(id); }}
+                                steps={steps}
+                                hasColumns={true}
+                              />
+                            ))
+                          ) : (
+                            <div className="w-full p-4 text-center rounded-xl border border-dashed border-white/20 bg-white/5 text-slate-300 text-xs">
+                              <p>Add widgets here — heading, image, paragraph, etc.</p>
+                            </div>
+                          )}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
                 </div>
               );
+
 
               return (
                 <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[550px]">

@@ -59,7 +59,7 @@ import {
 } from '@/lib/forms/payments/payment-gateways-registry';
 import { QRCodePlaceholder } from './field-editor/qr-code-placeholder';
 import { FormImporterDialog } from './form-importer-dialog';
-import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
+import { FormRenderer } from './runtime/form-renderer';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
 import { TemplateExplorer } from './builder/template-explorer';
 import type { FormTemplate } from '@/lib/forms/templates';
@@ -2731,12 +2731,11 @@ export function FormStudioBuilder({
                       'pb-6',
                     )}
                   >
-                    <FormRuntimeRenderer
-                      previewMode={true}
+                    <FormRenderer
+                      schema={runtimeSchema}
                       formName={formData.name || 'Untitled Form'}
                       formDescription={formData.description}
-                      schema={runtimeSchema}
-                      mode={previewFormat}
+                      mode="preview"
                     />
                   </div>
                   {/* Home Indicator */}
@@ -2755,12 +2754,11 @@ export function FormStudioBuilder({
                   </div>
                   {/* Tablet Screen Internal Scrollable Content */}
                   <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-2 pb-8">
-                    <FormRuntimeRenderer
-                      previewMode={true}
+                    <FormRenderer
+                      schema={runtimeSchema}
                       formName={formData.name || 'Untitled Form'}
                       formDescription={formData.description}
-                      schema={runtimeSchema}
-                      mode={previewFormat}
+                      mode="preview"
                     />
                   </div>
                   {/* Tablet Home Indicator */}
@@ -2797,12 +2795,11 @@ export function FormStudioBuilder({
                   {/* Desktop Screen Internal Scrollable Content */}
                   <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-center">
                     <div className="w-full max-w-2xl pb-16">
-                      <FormRuntimeRenderer
-                        previewMode={true}
+                      <FormRenderer
+                        schema={runtimeSchema}
                         formName={formData.name || 'Untitled Form'}
                         formDescription={formData.description}
-                        schema={runtimeSchema}
-                        mode={previewFormat}
+                        mode="preview"
                       />
                     </div>
                   </div>

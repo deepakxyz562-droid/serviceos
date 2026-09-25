@@ -32,6 +32,7 @@ import {
   FIELD_REGISTRY,
   BASIC_FIELDS,
   PHASE_1_WIDGETS,
+  CONTENT_WIDGETS,
   searchFields,
 } from '@/lib/forms/field-registry';
 import type { FieldDefinition } from '@/lib/forms/field-settings-types';
@@ -106,11 +107,24 @@ export function StudioWidgetPalette({
     return results.filter((f) => (!basicIds.has(f.id) || f.id === 'appointment') && !f.unavailable);
   }, [searchQuery, selectedWidgetCategory]);
 
-  const CONTENT_BLOCK_IDS = useMemo(() => new Set(['static_image', 'map_embed', 'video_embed', 'heading', 'paragraph', 'divider']), []);
+  // ─── Phase 1: Include new Elementor-style content widgets ──────────
+  const CONTENT_BLOCK_IDS = useMemo(() => new Set([
+    'static_image', 'map_embed', 'video_embed', 'heading', 'paragraph', 'divider',
+    // New content widgets from Phase 1
+    'image_widget', 'button_widget', 'spacer_widget', 'icon_widget',
+    'alert_widget', 'badge_widget', 'list_widget', 'section_widget', 'columns_container',
+  ]), []);
 
   const contentWidgets = useMemo(() => {
-    return filteredBasic.filter((def) => CONTENT_BLOCK_IDS.has(def.id));
-  }, [filteredBasic, CONTENT_BLOCK_IDS]);
+    // Merge BASIC_FIELDS content widgets with new CONTENT_WIDGETS
+    const fromBasic = filteredBasic.filter((def) => CONTENT_BLOCK_IDS.has(def.id));
+    const fromContent = CONTENT_WIDGETS.filter((def) => {
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return true;
+      return def.name.toLowerCase().includes(q) || def.description?.toLowerCase().includes(q) || def.id.toLowerCase().includes(q);
+    });
+    return [...fromBasic, ...fromContent];
+  }, [filteredBasic, CONTENT_BLOCK_IDS, searchQuery]);
 
   const formInputFields = useMemo(() => {
     return filteredBasic.filter((def) => !CONTENT_BLOCK_IDS.has(def.id));
