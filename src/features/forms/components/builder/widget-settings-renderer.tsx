@@ -32,6 +32,7 @@ import {
 } from '@/lib/forms/field-settings-types';
 import type { FieldDefinition } from '@/lib/forms/field-settings-types';
 import { resolveIcon } from '@/lib/forms/icon-resolver';
+import { IconPickerDropdown } from './icon-picker-dropdown';
 import { cn } from '@/lib/utils';
 
 export interface WidgetSettingsRendererProps {
@@ -653,7 +654,33 @@ export function WidgetSettingsRenderer({
       }
 
       case 'icon_picker':
+        return (
+          <div key={setting.key} className="space-y-1">
+            <Label className="text-[11px] font-semibold">{setting.label}</Label>
+            <IconPickerDropdown
+              value={String(value || setting.default || 'Star')}
+              onChange={(iconName) => onChange(iconName)}
+              placeholder={setting.placeholder || 'Select icon...'}
+            />
+            {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+          </div>
+        );
+
       default:
+        // Automatically use IconPickerDropdown if setting key is iconName or icon
+        if (setting.key === 'iconName' || setting.key === 'icon') {
+          return (
+            <div key={setting.key} className="space-y-1">
+              <Label className="text-[11px] font-semibold">{setting.label}</Label>
+              <IconPickerDropdown
+                value={String(value || setting.default || 'Star')}
+                onChange={(iconName) => onChange(iconName)}
+                placeholder={setting.placeholder || 'Select icon...'}
+              />
+              {setting.helpText && <p className="text-[10px] text-muted-foreground">{setting.helpText}</p>}
+            </div>
+          );
+        }
         return (
           <div key={setting.key} className="space-y-1">
             <Label className="text-[11px] font-semibold">{setting.label}</Label>

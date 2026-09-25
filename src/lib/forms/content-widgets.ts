@@ -154,7 +154,7 @@ export const CONTENT_WIDGETS: FieldDefinition[] = [
       required: false,
     }),
     settingsSchema: [
-      { key: 'iconName', label: 'Icon Name (Lucide)', type: 'text', group: 'field_specific', default: 'CheckCircle', helpText: 'Any icon from lucide-react (e.g. Star, CheckCircle, Phone).' },
+      { key: 'iconName', label: 'Select Icon', type: 'icon_picker', group: 'field_specific', default: 'CheckCircle', helpText: 'Select an icon from the visual library or type a Lucide icon name.' },
       { key: 'size', label: 'Size (px)', type: 'number', group: 'field_specific', default: 24, min: 12, max: 120 },
       { key: 'color', label: 'Color', type: 'color', group: 'field_specific', default: '#059669' },
       { key: 'alignment', label: 'Alignment', type: 'select', group: 'field_specific', default: 'center', options: [

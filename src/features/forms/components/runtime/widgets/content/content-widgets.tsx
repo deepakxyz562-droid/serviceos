@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertCircle, CheckCircle, Info, AlertTriangle, X } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
+import { resolveIcon } from '@/lib/forms/icon-resolver';
 
 // ─── Image Widget ─────────────────────────────────────────────────────
 
@@ -67,7 +68,7 @@ export function SpacerWidget({ height }: { height?: number }) {
 export function IconWidget({ iconName, size, color, alignment }: {
   iconName?: string; size?: number; color?: string; alignment?: string;
 }) {
-  const IconComp = (LucideIcons as any)[iconName || 'Star'] || LucideIcons.Star;
+  const IconComp = resolveIcon(iconName || 'Star');
   const alignClass = alignment === 'left' ? 'justify-start' : alignment === 'right' ? 'justify-end' : 'justify-center';
   return (
     <div className={cn('flex w-full', alignClass)}>
