@@ -96,8 +96,6 @@ export default function StandaloneAgentPage() {
     );
   }
 
-  const [previewPage, setPreviewPage] = useState<'greeting' | 'conversation'>('conversation');
-
   return (
     <div className="min-h-screen bg-slate-200/90 dark:bg-slate-950 flex flex-col items-center justify-center p-2 sm:p-6">
       {/* Standalone Agent Container — centered, app-like layout */}
@@ -105,8 +103,7 @@ export default function StandaloneAgentPage() {
         <AgentDeviceSimulator
           agent={agent}
           isTestMode={false}
-          previewPage={previewPage}
-          onSwitchPage={(p) => setPreviewPage(p)}
+          previewPage="conversation"
         />
       </div>
 

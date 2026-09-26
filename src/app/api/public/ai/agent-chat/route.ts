@@ -79,6 +79,21 @@ export async function POST(req: NextRequest) {
               if (branding.supportEmail) tenantEmail = branding.supportEmail;
             } catch { /* ignore parse errors */ }
           }
+        } else {
+          // Try resolving via FormAgent (AI Chatbot Studio agents)
+          const formAgent = await db.formAgent.findFirst({
+            where: { OR: [{ id: agentId }, { slug: agentId }] },
+            include: {
+              tenant: { select: { id: true, name: true, phone: true, email: true } },
+            },
+          });
+          if (formAgent) {
+            tenantId = formAgent.tenantId || undefined;
+            workspaceId = formAgent.id;
+            tenantName = formAgent.tenant?.name || formAgent.name;
+            tenantPhone = formAgent.tenant?.phone || '';
+            tenantEmail = formAgent.tenant?.email || '';
+          }
         }
       }
     }

@@ -82,12 +82,15 @@ const CHANNELS_LIST: Array<{
   { id: 'platforms', label: 'PLATFORMS', subtitle: 'Add your Agent to other platforms', icon: LayoutTemplate },
 ];
 
-interface FormAgentStudioProps {
+export interface FormAgentStudioProps {
   initialAgent?: FormAgentData;
   onChange?: (updated: FormAgentData) => void;
   onSave?: (agent: FormAgentData) => Promise<void> | void;
   onBack?: () => void;
   siteOrigin?: string;
+  hideHeader?: boolean;
+  controlledTab?: 'build' | 'train' | 'publish';
+  onTabChange?: (tab: 'build' | 'train' | 'publish') => void;
 }
 
 export function FormAgentStudio({
@@ -96,9 +99,17 @@ export function FormAgentStudio({
   onSave,
   onBack,
   siteOrigin,
+  hideHeader = false,
+  controlledTab,
+  onTabChange,
 }: FormAgentStudioProps) {
   const [agent, setAgentState] = useState<FormAgentData>(initialAgent);
-  const [studioTab, setStudioTab] = useState<'build' | 'train' | 'publish'>('build');
+  const [internalStudioTab, setInternalStudioTab] = useState<'build' | 'train' | 'publish'>('build');
+  const studioTab = controlledTab ?? internalStudioTab;
+  const setStudioTab = (tab: 'build' | 'train' | 'publish') => {
+    setInternalStudioTab(tab);
+    onTabChange?.(tab);
+  };
   const [selectedChannel, setSelectedChannel] = useState<AgentChannelType>('chatbot');
   const [rightDrawerMode, setRightDrawerMode] = useState<'channel_settings' | 'designer'>('channel_settings');
   const [rightDrawerOpen, setRightDrawerOpen] = useState<boolean>(true);
@@ -185,7 +196,8 @@ export function FormAgentStudio({
       {/* ═══════════════════════════════════════════════════════════════════════
           1. TOP NAVIGATION BAR (BUILD | TRAIN | PUBLISH + ⚙️ SETTINGS)
          ═══════════════════════════════════════════════════════════════════════ */}
-      <header className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 flex items-center justify-between shrink-0 z-30 shadow-2xs">
+      {!hideHeader && (
+        <header className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 flex items-center justify-between shrink-0 z-30 shadow-2xs">
         {/* Left: Product Dropdown + Agent Name */}
         <div className="flex items-center gap-3">
           {onBack && (
@@ -307,6 +319,7 @@ export function FormAgentStudio({
           </Button>
         </div>
       </header>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
           2. 3-PANEL WORKSPACE (16 CHANNELS | CANVAS | RIGHT DRAWER)

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FormAgentData,
   FaqPair,
@@ -58,6 +58,58 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   const [faqQ, setFaqQ] = useState('');
   const [faqA, setFaqA] = useState('');
   const [guardrailInput, setGuardrailInput] = useState('');
+
+  // Real Document Upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  const handleRealFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingDoc(true);
+    const toastId = toast.loading(`Uploading and indexing "${file.name}"...`);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
+
+      const res = await fetch('/api/ai/knowledge/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.document) {
+        toast.success(`"${file.name}" successfully indexed into Knowledge Base!`, { id: toastId });
+        const newDoc: TrainingDocument = {
+          id: data.document.id || `doc_${Date.now()}`,
+          name: file.name,
+          size: file.size,
+          type: (file.name.split('.').pop()?.toLowerCase() as any) || 'pdf',
+          status: 'indexed',
+          snippet: `Uploaded ${file.name} (${(file.size / 1024).toFixed(0)} KB)`,
+          indexedAt: new Date().toISOString(),
+        };
+
+        onChange({
+          ...agent,
+          knowledge: {
+            ...agent.knowledge,
+            documents: [...(agent.knowledge.documents || []), newDoc],
+          },
+        });
+      } else {
+        toast.error(data.error || 'Failed to upload document', { id: toastId });
+      }
+    } catch {
+      toast.error('Network error during file upload', { id: toastId });
+    } finally {
+      setUploadingDoc(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   // Unanswered Questions Review Queue
   const [unansweredList, setUnansweredList] = useState<UnansweredQuestion[]>([]);
@@ -424,31 +476,28 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
             </div>
           ))}
 
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleRealFileUpload}
+            accept=".pdf,.doc,.docx,.txt,.csv,.md"
+            className="hidden"
+          />
+
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => {
-              const mockDoc: TrainingDocument = {
-                id: `doc_${Date.now()}`,
-                name: 'Service_Catalog_Warranty.pdf',
-                size: 180000,
-                type: 'pdf',
-                status: 'indexed',
-                indexedAt: new Date().toISOString(),
-              };
-              onChange({
-                ...agent,
-                knowledge: {
-                  ...agent.knowledge,
-                  documents: [...(agent.knowledge.documents || []), mockDoc],
-                },
-              });
-              toast.success('Document uploaded and indexed into knowledge base!');
-            }}
-            className="w-full text-xs h-8 border-dashed border-border hover:border-blue-500 gap-1.5"
+            disabled={uploadingDoc}
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full text-xs h-8 border-dashed border-border hover:border-blue-500 gap-1.5 cursor-pointer"
           >
-            <Upload className="size-3.5 text-blue-600" /> Upload PDF, Doc, or Notion Page
+            {uploadingDoc ? (
+              <Loader2 className="size-3.5 text-blue-600 animate-spin" />
+            ) : (
+              <Upload className="size-3.5 text-blue-600" />
+            )}
+            <span>{uploadingDoc ? 'Indexing Document...' : 'Upload PDF, Doc, or Text File'}</span>
           </Button>
         </CardContent>
       </Card>
