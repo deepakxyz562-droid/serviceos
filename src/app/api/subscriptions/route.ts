@@ -80,6 +80,8 @@ export async function GET() {
     const plan = subscription?.plan ?? tenant?.plan ?? 'starter';
     const billingCycle = subscription?.billingCycle ?? 'monthly';
     const status = subscription?.status ?? tenant?.planStatus ?? 'trial';
+    const isStandalone = (tenant as any)?.signupMode === 'standalone' || plan.startsWith('standalone');
+    const tenantSignupMode = (tenant as any)?.signupMode ?? 'standard';
 
     // ─── Real usage stats ───────────────────────────────────────────────
     // Users: active users on this tenant
@@ -320,6 +322,8 @@ export async function GET() {
       pendingDowngrade, // { plan, effectiveAt, billingCycle } | null
       billingEvents, // last 10 audit-log entries
       plans, // DB-backed plan catalog for the UI
+      isStandalone,
+      tenantSignupMode,
     };
 
     cache.set(cacheKey, responsePayload, SUBSCRIPTION_CACHE_TTL);
