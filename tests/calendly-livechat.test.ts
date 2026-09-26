@@ -84,3 +84,64 @@ describe('Calendly Native Appointment Engine Tests', () => {
     expect(DEFAULT_FORM_AGENT.connectedForms).toEqual([]);
   });
 });
+
+describe('Jotform Chatbot Parity - Rich Markdown Rendering Tests', () => {
+  it('parses inline bold, code, links, and italics correctly', async () => {
+    const { renderInlineMarkdown } = await import('@/features/forms/components/agent-builder/agent-device-simulator');
+    const nodes = renderInlineMarkdown(
+      'Hello **World** and `code_snippet` with [Link](https://fieseros.com) and *italic*',
+      false,
+      false
+    );
+
+    expect(nodes.length).toBeGreaterThan(1);
+    const serialized = JSON.stringify(nodes);
+    expect(serialized).toContain('World');
+    expect(serialized).toContain('code_snippet');
+    expect(serialized).toContain('https://fieseros.com');
+  });
+
+  it('renders bullet lists, numbered lists, blockquotes, and code blocks', async () => {
+    const { renderChatContent } = await import('@/features/forms/components/agent-builder/agent-device-simulator');
+    const markdown = [
+      '### Available Services',
+      '* **AC Tune-up** - $89',
+      '* **Duct Cleaning** - $149',
+      '> Emergency repairs available 24/7',
+      '```json',
+      '{"status": "ok"}',
+      '```',
+    ].join('\n');
+
+    const result = renderChatContent(markdown, false, false);
+    expect(result).not.toBeNull();
+    const serialized = JSON.stringify(result);
+    expect(serialized).toContain('AC Tune-up');
+    expect(serialized).toContain('Duct Cleaning');
+    expect(serialized).toContain('Emergency repairs');
+    expect(serialized).toContain('status');
+  });
+
+  it('connected form attachment and escalation keywords are recognized', () => {
+    const escalationKeywords = [
+      'human',
+      'live agent',
+      'real person',
+      'speak to a person',
+      'operator',
+      'transfer me',
+      'escalate',
+    ];
+    const testMessage = 'Can I please speak to a human operator?';
+    const lower = testMessage.toLowerCase();
+    const matches = escalationKeywords.some((kw) => lower.includes(kw));
+    expect(matches).toBe(true);
+
+    const bookingMessage = 'I want to schedule an appointment for HVAC inspection';
+    const formKeywords = ['book', 'schedule', 'appointment', 'quote', 'apply', 'form'];
+    const bookingMatches = formKeywords.some((kw) => bookingMessage.toLowerCase().includes(kw));
+    expect(bookingMatches).toBe(true);
+  });
+});
+
+

@@ -17,19 +17,16 @@ export async function POST(
 
     // Retrieve relevant vector embeddings from knowledge base
     let retrievedKnowledge = '';
-    try {
-      if (message) {
-        const kbResults = await searchKnowledgeBase({
-          query: message,
-          limit: 3,
-          tenantId: agent.tenantId,
-        });
+    const kbScope = agent.tenantId || (id !== 'preview' ? id : undefined);
+    if (kbScope && message) {
+      try {
+        const kbResults = await searchKnowledgeBase(kbScope, message, 3);
         if (kbResults && kbResults.length > 0) {
-          retrievedKnowledge = `Indexed Knowledge Base Documents:\n${kbResults.map((doc) => `- ${doc.content || doc.snippet}`).join('\n')}`;
+          retrievedKnowledge = `Indexed Knowledge Base Documents:\n${kbResults.map((doc: any) => `- ${doc.content || doc.snippet || ''}`).join('\n')}`;
         }
+      } catch (err) {
+        console.warn('[forms/agent-chat] KB search warning:', err);
       }
-    } catch {
-      // Non-fatal, proceed with static knowledge
     }
 
     // If connected form exists, load its field schema to enable natural conversational form filling
@@ -76,6 +73,77 @@ export async function POST(
       .filter(Boolean)
       .join('\n\n');
 
+    const lowerMessage = (message || '').toLowerCase().trim();
+    const primaryConnectedForm = agent.connectedForms?.[0];
+
+    // Check for human escalation intent
+    const isEscalationRequest = [
+      'human',
+      'live agent',
+      'real person',
+      'speak to a person',
+      'talk to a person',
+      'talk to a human',
+      'speak to a human',
+      'operator',
+      'representative',
+      'live chat',
+      'support agent',
+      'customer service',
+      'transfer me',
+      'escalate',
+    ].some((kw) => lowerMessage.includes(kw));
+
+    if (isEscalationRequest) {
+      let liveSessionId: string | null = null;
+      try {
+        const resolvedTenantId = agent.tenantId || (await db.tenant.findFirst({ select: { id: true } }))?.id;
+        if (resolvedTenantId) {
+          const session = await db.publicChatSession.create({
+            data: {
+              tenantId: resolvedTenantId,
+              status: 'waiting_for_agent',
+              visitorName: 'Chatbot Visitor',
+              visitorEmail: null,
+            },
+          });
+          liveSessionId = session.id;
+
+          // Seed previous chat history so operator sees full context
+          if (Array.isArray(history) && history.length > 0) {
+            const historyMessages = history.slice(-8).map((h: any) => ({
+              sessionId: session.id,
+              senderType: h.sender === 'user' ? 'visitor' : 'bot',
+              senderName: h.sender === 'user' ? 'Visitor' : agent.name,
+              body: h.text || '',
+            }));
+            await db.publicChatMessage.createMany({
+              data: [
+                ...historyMessages,
+                {
+                  sessionId: session.id,
+                  senderType: 'visitor',
+                  senderName: 'Visitor',
+                  body: message,
+                },
+              ],
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[forms/agent-chat] Human escalation session creation warning:', err);
+      }
+
+      return NextResponse.json({
+        success: true,
+        reply: `I am connecting you with a live specialist right away. An operator has been notified and will join the conversation momentarily.`,
+        escalatedToHuman: true,
+        sessionId: liveSessionId,
+        suggestedFormId: primaryConnectedForm?.id || null,
+        agentName: agent.name,
+      });
+    }
+
     let replyText = '';
     let suggestedFormId: string | null = null;
 
@@ -104,8 +172,8 @@ export async function POST(
 
     // Intelligent heuristic response fallback
     if (!replyText) {
-      const lower = message.toLowerCase();
-      const firstForm = agent.connectedForms?.[0];
+      const lower = lowerMessage;
+      const firstForm = primaryConnectedForm;
       const formName = firstForm?.name || 'Inquiry Form';
       
       if (lower.includes('schedule') || lower.includes('appointment') || lower.includes('book') || lower.includes('quote')) {
@@ -126,10 +194,18 @@ export async function POST(
       }
     }
 
+    // Always resolve connected form recommendation if query touches on booking, quotes, forms, or applications
+    if (!suggestedFormId && primaryConnectedForm?.id) {
+      const formIntentKeywords = ['book', 'schedule', 'appointment', 'quote', 'apply', 'form', 'contact', 'consultation', 'service', 'inquiry'];
+      if (formIntentKeywords.some((kw) => lowerMessage.includes(kw) || replyText.toLowerCase().includes(kw))) {
+        suggestedFormId = primaryConnectedForm.id;
+      }
+    }
+
     return NextResponse.json({
       success: true,
       reply: replyText,
-      suggestedFormId,
+      suggestedFormId: suggestedFormId || primaryConnectedForm?.id || null,
       agentName: agent.name,
     });
   } catch (error) {

@@ -51,6 +51,42 @@ export function LiveChatView() {
   const [filter, setFilter] = useState<'active' | 'closed' | 'all'>('active')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
+  const prevWaitingCountRef = useRef<number>(-1)
+
+  // Web Audio API chime generator (melodic 2-tone bell: G5 -> C6)
+  const playEscalationChime = useCallback(() => {
+    try {
+      if (typeof window === 'undefined') return;
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(784, now); // G5
+      gain1.gain.setValueAtTime(0.2, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.3);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1046.5, now + 0.12); // C6
+      gain2.gain.setValueAtTime(0.25, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.55);
+    } catch {
+      // Audio context policy guard
+    }
+  }, []);
 
   // AI assistant state — Suggest Reply (3 tones) + Summarize.
   // Cleared on session switch (see the selectedSessionId effect below).
@@ -66,13 +102,22 @@ export function LiveChatView() {
       const res = await fetch(`/api/chat/sessions?status=${filter}`)
       if (!res.ok) return
       const data = await res.json()
-      setSessions(data.sessions || [])
+      const list: ChatSession[] = data.sessions || []
+      const waitingCount = list.filter((s) => s.status === 'waiting_for_agent').length
+
+      // Play audio chime when a new waiting session arrives
+      if (prevWaitingCountRef.current !== -1 && waitingCount > prevWaitingCountRef.current) {
+        playEscalationChime()
+      }
+      prevWaitingCountRef.current = waitingCount
+
+      setSessions(list)
     } catch {
       // silent
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [filter, playEscalationChime])
 
   useEffect(() => {
     setLoading(true)

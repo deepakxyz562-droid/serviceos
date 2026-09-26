@@ -404,6 +404,14 @@ export function FormAgentStudio({
                     'w-full max-w-4xl mx-auto flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden transition-all duration-300',
                     isSidebar && isPushContent && (isLeftPos ? 'pl-[390px]' : 'pr-[390px]')
                   )}
+                  style={
+                    agent.style?.pageBackgroundStart && agent.style?.pageBackgroundEnd
+                      ? {
+                          background: `linear-gradient(135deg, ${agent.style.pageBackgroundStart}25, ${agent.style.pageBackgroundEnd}45)`,
+                          borderColor: agent.brandColor ? `${agent.brandColor}40` : undefined,
+                        }
+                      : undefined
+                  }
                 >
                   {/* Dummy Website Header Skeleton */}
                   <div className="flex items-center justify-between pb-4 border-b border-slate-200/60 dark:border-slate-800">

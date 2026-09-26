@@ -73,6 +73,240 @@ function isColorDark(colorStr?: string): boolean {
   return false;
 }
 
+// ─── Rich Chat Markdown Formatting (Jotform Parity) ─────────────────────────
+
+export function renderInlineMarkdown(text: string, isDark: boolean, isUser: boolean): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const regex = /(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) {
+      nodes.push(text.slice(last, m.index));
+    }
+    const token = m[0];
+    if (token.startsWith('[') && token.includes('](') && token.endsWith(')')) {
+      const labelMatch = token.match(/^\[(.*?)\]\((.*?)\)$/);
+      if (labelMatch) {
+        const [, label, url] = labelMatch;
+        nodes.push(
+          <a
+            key={key++}
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              'underline font-medium hover:opacity-80 transition-opacity inline-flex items-center gap-0.5',
+              isUser
+                ? 'text-white underline decoration-white/60'
+                : isDark
+                ? 'text-blue-400 decoration-blue-400/60'
+                : 'text-blue-600 decoration-blue-600/60'
+            )}
+          >
+            {label}
+          </a>
+        );
+      } else {
+        nodes.push(token);
+      }
+    } else if (token.startsWith('**') && token.endsWith('**')) {
+      nodes.push(
+        <strong
+          key={key++}
+          className={cn(
+            'font-bold',
+            isUser ? 'text-white' : isDark ? 'text-white' : 'text-slate-900'
+          )}
+        >
+          {token.slice(2, -2)}
+        </strong>
+      );
+    } else if (token.startsWith('`') && token.endsWith('`')) {
+      nodes.push(
+        <code
+          key={key++}
+          className={cn(
+            'rounded px-1.5 py-0.5 text-[0.9em] font-mono font-medium',
+            isUser
+              ? 'bg-white/20 text-white'
+              : isDark
+              ? 'bg-slate-700/80 text-blue-300 border border-slate-600'
+              : 'bg-slate-200/80 text-blue-700 border border-slate-300'
+          )}
+        >
+          {token.slice(1, -1)}
+        </code>
+      );
+    } else if (token.startsWith('*') && token.endsWith('*')) {
+      nodes.push(
+        <em key={key++} className="italic">
+          {token.slice(1, -1)}
+        </em>
+      );
+    }
+    last = m.index + token.length;
+  }
+  if (last < text.length) {
+    nodes.push(text.slice(last));
+  }
+  return nodes;
+}
+
+export function renderChatContent(text: string, isDark: boolean, isUser = false) {
+  if (!text) return null;
+  const blocks: React.ReactNode[] = [];
+  const lines = text.split('\n');
+  let bullets: string[] = [];
+  let isNumbered = false;
+  let key = 0;
+  let i = 0;
+
+  const flushBullets = () => {
+    if (bullets.length === 0) return;
+    if (isNumbered) {
+      blocks.push(
+        <ol key={key++} className="my-1.5 space-y-1 list-decimal list-inside pl-1 text-xs">
+          {bullets.map((b, idx) => (
+            <li key={idx} className="leading-relaxed">
+              {renderInlineMarkdown(b, isDark, isUser)}
+            </li>
+          ))}
+        </ol>
+      );
+    } else {
+      blocks.push(
+        <ul key={key++} className="my-1.5 space-y-1 pl-1 text-xs">
+          {bullets.map((b, idx) => (
+            <li key={idx} className="flex items-start gap-1.5 leading-relaxed">
+              <span
+                className={cn(
+                  'mt-1.5 size-1.5 shrink-0 rounded-full',
+                  isUser ? 'bg-white/80' : isDark ? 'bg-blue-400' : 'bg-blue-600'
+                )}
+              />
+              <span className="flex-1">{renderInlineMarkdown(b, isDark, isUser)}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    bullets = [];
+    isNumbered = false;
+  };
+
+  while (i < lines.length) {
+    const raw = lines[i];
+    const line = raw.trimEnd();
+
+    // Check for fenced code block ```
+    if (line.startsWith('```')) {
+      flushBullets();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trimEnd().startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      blocks.push(
+        <pre
+          key={key++}
+          className={cn(
+            'my-1.5 p-2 rounded-lg text-[11px] font-mono overflow-x-auto leading-relaxed',
+            isUser
+              ? 'bg-black/25 text-white'
+              : isDark
+              ? 'bg-slate-900 border border-slate-700 text-slate-200'
+              : 'bg-slate-200/90 border border-slate-300 text-slate-800'
+          )}
+        >
+          <code>{codeLines.join('\n')}</code>
+        </pre>
+      );
+      i++;
+      continue;
+    }
+
+    // Check for Blockquotes (> quote)
+    if (line.startsWith('> ')) {
+      flushBullets();
+      blocks.push(
+        <div
+          key={key++}
+          className={cn(
+            'my-1.5 rounded-r-lg border-l-2 px-2.5 py-1 text-xs italic leading-relaxed',
+            isUser
+              ? 'border-white bg-white/10 text-white'
+              : isDark
+              ? 'border-blue-400 bg-blue-500/10 text-slate-200'
+              : 'border-blue-600 bg-blue-50 text-slate-800'
+          )}
+        >
+          {renderInlineMarkdown(line.slice(2), isDark, isUser)}
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // Check for Headings (#, ##, ###)
+    if (line.startsWith('### ') || line.startsWith('## ') || line.startsWith('# ')) {
+      flushBullets();
+      const headingText = line.replace(/^#+\s*/, '');
+      blocks.push(
+        <div
+          key={key++}
+          className={cn(
+            'mt-2 mb-1 font-bold text-xs',
+            isUser ? 'text-white' : isDark ? 'text-white' : 'text-slate-900'
+          )}
+        >
+          {renderInlineMarkdown(headingText, isDark, isUser)}
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // Check for Bullet list (- item, * item, • item)
+    const bulletMatch = line.match(/^\s*[-•*]\s+(.*)$/);
+    if (bulletMatch) {
+      if (isNumbered && bullets.length > 0) flushBullets();
+      isNumbered = false;
+      bullets.push(bulletMatch[1]);
+      i++;
+      continue;
+    }
+
+    // Check for Numbered list (1. item, 1) item)
+    const numberedMatch = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (numberedMatch) {
+      if (!isNumbered && bullets.length > 0) flushBullets();
+      isNumbered = true;
+      bullets.push(numberedMatch[1]);
+      i++;
+      continue;
+    }
+
+    flushBullets();
+    if (line.trim() === '') {
+      blocks.push(<div key={key++} className="h-1" />);
+    } else {
+      blocks.push(
+        <div key={key++} className="leading-relaxed">
+          {renderInlineMarkdown(line, isDark, isUser)}
+        </div>
+      );
+    }
+    i++;
+  }
+  flushBullets();
+
+  return <div className="space-y-1">{blocks}</div>;
+}
+
 export function AgentDeviceSimulator({
   agent,
   isTestMode = true,
@@ -90,19 +324,22 @@ export function AgentDeviceSimulator({
   const [screenSharingActive, setScreenSharingActive] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [activeFormModal, setActiveFormModal] = useState<ConnectedFormRef | null>(null);
+  const [escalatedToHuman, setEscalatedToHuman] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize greeting on load
+  // Initialize greeting on load — automatically attach primary connected form if available
   useEffect(() => {
+    const primaryForm = agent.connectedForms?.[0];
     setMessages([
       {
         id: 'msg_greet',
         sender: 'ai',
         text: agent.welcomeGreeting || `Hi! I'm **${agent.name}**, your **AI Agent** and **${agent.roleTitle}**. How can I help you?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedForm: primaryForm,
       },
     ]);
-  }, [agent.welcomeGreeting, agent.name, agent.roleTitle]);
+  }, [agent.welcomeGreeting, agent.name, agent.roleTitle, agent.connectedForms]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -120,8 +357,11 @@ export function AgentDeviceSimulator({
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    if (!textToSend) setInputText('');
+    setInputText('');
     setSending(true);
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
 
     try {
       const targetAgentId = agent.id || 'preview';
@@ -130,17 +370,21 @@ export function AgentDeviceSimulator({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message,
-          history: messages,
+          history: [...messages, userMsg],
           agentConfig: agent,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
 
+      if (data.escalatedToHuman) {
+        setEscalatedToHuman(true);
+      }
+
       if (res.ok && data.reply) {
         const matchedForm = data.suggestedFormId
           ? agent.connectedForms?.find((f) => f.id === data.suggestedFormId) || agent.connectedForms?.[0]
-          : undefined;
+          : agent.connectedForms?.[0];
 
         const aiMsg: ChatMsg = {
           id: `ai_${Date.now()}`,
@@ -214,6 +458,10 @@ export function AgentDeviceSimulator({
   const chatBg = agent.style?.chatBg || '#ffffff';
   const isDark = agent.style?.isDark ?? isColorDark(chatBg);
   const titleColor = agent.style?.titleColor || (isDark ? '#ffffff' : '#0A1551');
+  const headerBgStart = agent.style?.agentBackgroundStart || brandColor;
+  const headerBgEnd = agent.style?.agentBackgroundEnd || brandColor;
+  const headerGradient = `linear-gradient(135deg, ${headerBgStart}, ${headerBgEnd})`;
+  const isHeaderDark = isColorDark(headerBgStart);
   const isSidebarLayout = agent.channels?.chatbot?.layoutMode === 'sidebar';
   const allowFileUpload = agent.settings?.fileUploadEnabled ?? true;
   const allowScreenShare = agent.settings?.allowScreenSharing ?? false;
@@ -366,9 +614,12 @@ export function AgentDeviceSimulator({
     >
       {/* ── TOP AGENT BAR ── */}
       <div
-        className="px-4 py-3 flex items-center justify-between text-white shrink-0 shadow-xs z-10"
+        className={cn(
+          "px-4 py-3 flex items-center justify-between shrink-0 shadow-xs z-10 transition-all",
+          isHeaderDark ? "text-white" : "text-slate-900"
+        )}
         style={{
-          background: `linear-gradient(135deg, ${brandColor}, ${brandColor}ee)`,
+          background: headerGradient,
         }}
       >
         <div className="flex items-center gap-2.5">
@@ -385,16 +636,16 @@ export function AgentDeviceSimulator({
               <h2 className="text-xs font-bold leading-none tracking-tight" style={{ color: titleColor }}>
                 {agent.name}
               </h2>
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white/20 text-white leading-none">
+              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none", isHeaderDark ? "bg-white/20 text-white" : "bg-black/10 text-slate-900")}>
                 AI
               </span>
               {memoryActive && (
-                <span className="text-[8px] font-semibold px-1 rounded bg-black/20 text-white/90 flex items-center gap-0.5" title="Agent remembers context">
+                <span className={cn("text-[8px] font-semibold px-1 rounded flex items-center gap-0.5", isHeaderDark ? "bg-black/20 text-white/90" : "bg-white/60 text-slate-800")} title="Agent remembers context">
                   <Brain className="size-2.5" /> Memory
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-white/85 mt-0.5 leading-none">{agent.roleTitle}</p>
+            <p className={cn("text-[10px] mt-0.5 leading-none", isHeaderDark ? "text-white/85" : "text-slate-700")}>{agent.roleTitle}</p>
           </div>
         </div>
 
@@ -405,10 +656,13 @@ export function AgentDeviceSimulator({
               variant="ghost"
               size="icon"
               onClick={() => setActiveTab('forms')}
-              title="Forms"
-              className="size-7 rounded-full text-white/80 hover:text-white hover:bg-white/10"
+              title="Connected Forms"
+              className={cn("size-7 rounded-full relative", isHeaderDark ? "text-white/80 hover:text-white hover:bg-white/10" : "text-slate-700 hover:text-slate-900 hover:bg-black/10")}
             >
               <FileText className="size-3.5" />
+              <span className="absolute -top-0.5 -right-0.5 size-3.5 bg-blue-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
+                {agent.connectedForms?.length}
+              </span>
             </Button>
           )}
 
@@ -457,46 +711,28 @@ export function AgentDeviceSimulator({
         </div>
       </div>
 
+      {/* ── HUMAN OPERATOR ESCALATION ALERT BANNER ── */}
+      {escalatedToHuman && (
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-3.5 py-2 flex items-center gap-2 text-[11px] text-amber-700 dark:text-amber-300 font-medium animate-in fade-in shrink-0">
+          <span className="size-2 rounded-full bg-amber-500 animate-ping" />
+          <span>Connecting with a live specialist... An operator has been notified.</span>
+        </div>
+      )}
+
       {/* ── TAB 1: CHAT TAB CONTENT ── */}
       {activeTab === 'chat' && (
         <>
           <div className="flex-1 overflow-y-auto min-h-0 relative flex flex-col p-4 space-y-4">
-            {/* Welcome Text + Action Buttons Card */}
-            {messages.length <= 1 && (
-              <div className="space-y-3 pt-1">
-                <p className={cn('text-xs leading-relaxed font-semibold', isDark ? 'text-slate-100' : 'text-slate-800')}>
-                  Hi! I&apos;m <strong className="font-bold text-blue-400">{agent.name}</strong>, your <strong className="font-bold">AI Agent</strong> and <strong className="font-bold">{agent.roleTitle}</strong>. How can I help you?
-                </p>
-
-                {(agent.channels?.chatbot?.showButtons ?? true) && (
-                  <div className="flex flex-wrap gap-2">
-                    {(agent.quickActions || []).map((qa) => (
-                      <button
-                        key={qa.id}
-                        type="button"
-                        onClick={() => handleQuickActionClick(qa)}
-                        className={cn(
-                          'py-1.5 px-3 rounded-xl border text-xs font-semibold transition-all shadow-2xs',
-                          isDark
-                            ? 'bg-slate-800/90 border-slate-700 text-slate-100 hover:bg-slate-700 hover:border-slate-500'
-                            : 'bg-slate-50 border-slate-300 text-slate-800 hover:bg-blue-50 hover:border-blue-400'
-                        )}
-                      >
-                        {qa.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Messages Stream */}
-            {messages.slice(1).map((msg) => {
+            {messages.map((msg, index) => {
               const isAi = msg.sender === 'ai';
               return (
                 <div
-                  key={msg.id}
-                  className={cn('flex items-start gap-2 max-w-[88%]', isAi ? 'mr-auto' : 'ml-auto flex-row-reverse')}
+                  key={msg.id || index}
+                  className={cn(
+                    'flex items-start gap-2 max-w-[88%] animate-in fade-in slide-in-from-bottom-2 duration-200',
+                    isAi ? 'mr-auto' : 'ml-auto flex-row-reverse'
+                  )}
                 >
                   {isAi && (
                     <img
@@ -506,7 +742,7 @@ export function AgentDeviceSimulator({
                     />
                   )}
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 flex-1 min-w-0">
                     <div
                       className={cn(
                         'p-3 rounded-2xl text-xs leading-relaxed shadow-2xs break-words font-medium',
@@ -518,8 +754,49 @@ export function AgentDeviceSimulator({
                       )}
                       style={!isAi ? { background: brandColor } : undefined}
                     >
-                      <p className="whitespace-pre-wrap">{msg.text}</p>
+                      {renderChatContent(msg.text, isDark, !isAi)}
                     </div>
+
+                    {/* Quick action buttons on initial greeting message */}
+                    {index === 0 && isAi && (agent.channels?.chatbot?.showButtons ?? true) && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {/* Auto-injected Connected Form Quick Chip if available */}
+                        {agent.connectedForms && agent.connectedForms.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const f = agent.connectedForms![0];
+                              setActiveFormModal(f);
+                              onOpenFormInModal?.(f);
+                            }}
+                            className={cn(
+                              'py-1.5 px-3 rounded-xl border text-xs font-semibold transition-all shadow-2xs flex items-center gap-1.5 text-left',
+                              isDark
+                                ? 'bg-blue-950/70 border-blue-600/70 text-blue-200 hover:bg-blue-900/80 hover:border-blue-400'
+                                : 'bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100 hover:border-blue-400'
+                            )}
+                          >
+                            <FileText className="size-3 text-blue-500" />
+                            <span>Fill {agent.connectedForms[0].name}</span>
+                          </button>
+                        )}
+                        {(agent.quickActions || []).map((qa) => (
+                          <button
+                            key={qa.id}
+                            type="button"
+                            onClick={() => handleQuickActionClick(qa)}
+                            className={cn(
+                              'py-1.5 px-3 rounded-xl border text-xs font-semibold transition-all shadow-2xs text-left',
+                              isDark
+                                ? 'bg-slate-800/90 border-slate-700 text-slate-100 hover:bg-slate-700 hover:border-slate-500'
+                                : 'bg-white border-slate-300 text-slate-800 hover:bg-blue-50 hover:border-blue-400'
+                            )}
+                          >
+                            {qa.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Connected Form Recommendation Card */}
                     {msg.suggestedForm && (
@@ -563,15 +840,15 @@ export function AgentDeviceSimulator({
             })}
 
             {sending && (
-              <div className="flex items-center gap-2 mr-auto">
+              <div className="flex items-center gap-2 mr-auto animate-in fade-in duration-200">
                 <img
                   src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
                   alt={agent.name}
-                  className="size-6 rounded-full object-cover shrink-0"
+                  className="size-6 rounded-full object-cover shrink-0 mt-0.5"
                 />
                 <div className={cn(
-                  'p-3 rounded-2xl text-xs flex items-center gap-1.5 shadow-2xs',
-                  isDark ? 'bg-slate-800 text-slate-200 border border-slate-700' : 'bg-slate-100 text-slate-800'
+                  'p-3 rounded-2xl rounded-tl-xs text-xs flex items-center gap-1.5 shadow-2xs',
+                  isDark ? 'bg-slate-800 text-slate-200 border border-slate-700' : 'bg-slate-100 text-slate-800 border border-slate-200/60'
                 )}>
                   <span className="size-1.5 rounded-full bg-blue-500 animate-bounce" />
                   <span className="size-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0.2s]" />

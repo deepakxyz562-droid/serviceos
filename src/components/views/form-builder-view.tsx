@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   FileInput, Plus, Search, Trash2, Eye, Pencil, Code, MessageCircle,
   CheckCircle2, Loader2, BarChart3, MoreVertical, TrendingUp,
-  AlertCircle, Sparkles, Inbox,
+  AlertCircle, Sparkles, Inbox, Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -815,7 +815,7 @@ export function FormBuilderView() {
 
       {/* ─── Mode Switcher Tabs (AI Forms | Chatbot Builder | Submissions) ── */}
       <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'forms' | 'chatbots' | 'submissions')} className="w-full space-y-6">
-        <TabsList className="grid w-full max-w-xl grid-cols-3">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
           <TabsTrigger value="forms" className="gap-1.5 text-xs font-semibold">
             <FileInput className="size-3.5" /> AI Forms
           </TabsTrigger>
@@ -823,7 +823,7 @@ export function FormBuilderView() {
             <Bot className="size-3.5" /> Chatbot Builder
           </TabsTrigger>
           <TabsTrigger value="submissions" className="gap-1.5 text-xs font-semibold">
-            <Inbox className="size-3.5" /> Submissions
+            <Calendar className="size-3.5 text-emerald-600" /> Appointments &amp; Submissions
             {totalSubmissions > 0 && (
               <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">
                 {totalSubmissions}

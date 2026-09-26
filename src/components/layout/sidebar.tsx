@@ -229,7 +229,7 @@ const standaloneNavSections: NavSection[] = [
     items: [
       { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
       { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
-      { view: 'formSubmissions', label: 'Submissions', icon: Inbox },
+      { view: 'formSubmissions', label: 'Appointments & Submissions', icon: Calendar },
       { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
       { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
       { view: 'aiReceptionist', label: 'AI Employee', icon: PhoneCall },

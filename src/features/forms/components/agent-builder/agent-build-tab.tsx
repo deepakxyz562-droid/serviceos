@@ -1176,6 +1176,36 @@ export function AgentBuildTab({
                           </div>
                         </div>
                       )}
+
+                      {/* 1-Click Starter Form Connector */}
+                      <div className="pt-2 border-t border-slate-700/50 space-y-1.5">
+                        <label className="text-[10px] font-medium text-slate-400 block">1-Click Starter Forms:</label>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {[
+                            { id: `form_booking_${agent.id || 'default'}`, name: `${agent.name} - Consultation Booking Form`, description: 'Collect respondent contact details & appointment timeslot' },
+                            { id: `form_intake_${agent.id || 'default'}`, name: `${agent.name} - Service Intake Form`, description: 'Capture customer requirements, timeline, and budget' },
+                          ].filter((sf) => !(agent.connectedForms || []).some((cf) => cf.id === sf.id)).map((sf) => (
+                            <button
+                              key={sf.id}
+                              type="button"
+                              onClick={() => {
+                                const updated = [...(agent.connectedForms || []), sf];
+                                onChange({ ...agent, connectedForms: updated });
+                                toast.success(`Attached "${sf.name}" to AI Agent!`);
+                              }}
+                              className="w-full flex items-center justify-between p-2 rounded-lg bg-blue-950/40 hover:bg-blue-900/50 border border-blue-700/50 text-left text-xs transition-colors"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <p className="font-semibold text-blue-200 truncate">{sf.name}</p>
+                                <p className="text-[9px] text-blue-300/80 truncate">{sf.description}</p>
+                              </div>
+                              <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-bold shrink-0">
+                                + Connect
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

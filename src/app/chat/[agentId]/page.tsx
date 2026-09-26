@@ -17,8 +17,8 @@ export default function PublicChatPage() {
 
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<FormAgentData | null>(null);
-  const [previewPage, setPreviewPage] = useState<'greeting' | 'conversation'>('greeting');
-  const [forceFullView, setForceFullView] = useState(false);
+  const [previewPage, setPreviewPage] = useState<'greeting' | 'conversation'>('conversation');
+  const [forceFullView, setForceFullView] = useState(true);
 
   useEffect(() => {
     async function loadAgent() {
@@ -34,14 +34,7 @@ export default function PublicChatPage() {
           const data = await publicRes.json();
           if (data.agent) {
             setAgent(data.agent);
-            // Default to greeting if floating or avatar/quick_input welcome is enabled, unless user requested full conversation
-            if (initialViewParam === 'conversation') {
-              setPreviewPage('conversation');
-            } else if (data.agent.channels?.chatbot?.layoutMode === 'floating') {
-              setPreviewPage('greeting');
-            } else {
-              setPreviewPage('conversation');
-            }
+            setPreviewPage('conversation');
             return;
           }
         }
@@ -152,9 +145,9 @@ export default function PublicChatPage() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // MODE 2: FLOATING WIDGET LAYOUT (Bottom-Right / Bottom-Left Launcher)
+  // MODE 2: FLOATING WIDGET LAYOUT (Demo Mode only)
   // ═══════════════════════════════════════════════════════════════════════════
-  if (layoutMode === 'floating' && !forceFullView) {
+  if (layoutMode === 'floating' && !forceFullView && searchParams.get('demo') === '1') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative flex flex-col justify-between overflow-hidden">
         {/* Top Floating Helper Controls */}
