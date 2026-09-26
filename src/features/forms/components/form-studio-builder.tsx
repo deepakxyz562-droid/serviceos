@@ -24,7 +24,7 @@ import {
   Sliders, Send, Search, RefreshCw, Layers, CalendarCheck,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X,
   Wifi, Battery, Lock, Languages, AlertTriangle, Key, Share, Download, Film,
-  ImageIcon, Undo2, Redo2,
+  ImageIcon, Undo2, Redo2, Bot,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,8 @@ import {
   PaymentGatewayDef, searchPaymentGateways, getPaymentGatewayById,
 } from '@/lib/forms/payments/payment-gateways-registry';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
+import { FormAgentStudio } from './agent-builder/form-agent-studio';
+import { DEFAULT_FORM_AGENT } from '../types/agent-types';
 import { getFormContentFingerprint } from '@/features/forms/utils/form-helpers';
 import { injectMediaPanelContent } from '@/lib/forms/form-node-schema';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
@@ -241,7 +243,7 @@ export function FormStudioBuilder({
     return result;
   }, [onSave, formData]);
   // Studio navigation
-  const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'templates'>('build');
+  const [studioTab, setStudioTab] = useState<'build' | 'agent' | 'settings' | 'publish' | 'templates'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   // ─── Unified Layout Vocabulary (Phase 2) ──────────────────────────────
@@ -1121,6 +1123,20 @@ export function FormStudioBuilder({
           >
             <Palette className="size-3.5" />
             <span>Design</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setStudioTab('agent'); setIsPreviewMode(false); }}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
+              studioTab === 'agent' && !isPreviewMode
+                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Bot className="size-3.5" />
+            <span>AI Agent</span>
           </button>
 
           <button
@@ -2669,6 +2685,22 @@ export function FormStudioBuilder({
               onBackToBuild={() => setStudioTab('build')}
               onApplyTemplate={handleApplyTemplate}
               currentFieldCount={formData.fields.length}
+            />
+          </div>
+        )}
+
+        {/* ─── 5. AI AGENT STUDIO (OPTIONAL STANDALONE/INTEGRATED AGENT) ─── */}
+        {studioTab === 'agent' && !isPreviewMode && (
+          <div className="flex-1 flex overflow-hidden w-full">
+            <FormAgentStudio
+              initialAgent={formData.agentConfig || {
+                ...DEFAULT_FORM_AGENT,
+                id: `agent_${formData.id || 'form'}`,
+                name: `${formData.name || 'Form'} Assistant`,
+                connectedForms: formData.id ? [{ id: formData.id, name: formData.name || 'Form', description: formData.description }] : []
+              }}
+              onChange={(updated) => onFormDataChange({ ...formData, agentConfig: updated })}
+              siteOrigin={siteOrigin}
             />
           </div>
         )}

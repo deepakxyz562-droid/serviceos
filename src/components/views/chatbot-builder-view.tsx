@@ -14,12 +14,15 @@ import {
   Bot, Plus, Search, Sparkles, MessageSquare, Phone, Globe,
   Layers, CheckCircle2, Copy, ExternalLink, Trash2, Settings,
   BarChart3, RefreshCw, Smartphone, Code, ShieldCheck, Share2,
-  ChevronRight, Users, MessageCircle, FileInput, Flame, ShieldAlert
+  ChevronRight, Users, MessageCircle, FileInput, Flame, ShieldAlert,
+  Loader2, Wand2, FileText, ArrowRight, LayoutTemplate
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -48,6 +51,11 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
   const [search, setSearch] = useState('');
   const [activeStudioAgent, setActiveStudioAgent] = useState<FormAgentData | null>(null);
   const [presetDialogOpen, setPresetDialogOpen] = useState(false);
+  const [creationTab, setCreationTab] = useState<'ai' | 'form' | 'templates' | 'scratch'>('ai');
+  const [promptInput, setPromptInput] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [availableForms, setAvailableForms] = useState<Array<{ id: string; name: string; description?: string }>>([]);
+  const [loadingForms, setLoadingForms] = useState(false);
   const [embedModalAgent, setEmbedModalAgent] = useState<FormAgentData | null>(null);
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<FormAgentData | null>(null);
   const [siteOrigin, setSiteOrigin] = useState('');
@@ -72,6 +80,13 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setSiteOrigin(window.location.origin);
+      const params = new URLSearchParams(window.location.search);
+      const promptParam = params.get('prompt');
+      if (promptParam) {
+        setPromptInput(promptParam);
+        setCreationTab('ai');
+        setPresetDialogOpen(true);
+      }
     }
     fetchAgents();
   }, [fetchAgents]);
@@ -96,6 +111,118 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
     if (a.channels?.gmail?.enabled) count++;
     return s + count;
   }, 0);
+
+  const fetchAvailableForms = async () => {
+    setLoadingForms(true);
+    try {
+      const res = await fetch('/api/forms');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.forms)) {
+          setAvailableForms(data.forms);
+        }
+      }
+    } catch {
+      // non-fatal
+    } finally {
+      setLoadingForms(false);
+    }
+  };
+
+  const handleGenerateWithAI = async (customPrompt?: string) => {
+    const text = customPrompt || promptInput;
+    if (!text.trim() || isGenerating) return;
+
+    setIsGenerating(true);
+    const toastId = toast.loading('Generating AI Agent from your prompt...');
+
+    try {
+      const res = await fetch('/api/forms/agents/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text.trim() }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.agent) {
+        setAgents((prev) => [data.agent, ...prev]);
+        setPresetDialogOpen(false);
+        setPromptInput('');
+        setActiveStudioAgent(data.agent);
+        toast.success(`✨ Created ${data.agent.name}!`, { id: toastId });
+      } else {
+        toast.error(data.error || 'Failed to generate agent', { id: toastId });
+      }
+    } catch {
+      toast.error('Network error during AI generation', { id: toastId });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCreateFromForm = (form: { id: string; name: string; description?: string }) => {
+    const timestamp = Date.now();
+    const newAgent: FormAgentData = {
+      ...DEFAULT_FORM_AGENT,
+      id: `agent_${timestamp}`,
+      slug: `${form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-agent`,
+      name: `${form.name} Assistant`,
+      roleTitle: `${form.name} Concierge`,
+      welcomeGreeting: `Hello! I am your AI assistant for ${form.name}. How can I assist you today?`,
+      greetingSubtitle: 'I can answer your questions and help you complete the form.',
+      connectedForms: [
+        {
+          id: form.id,
+          name: form.name,
+          description: form.description,
+        },
+      ],
+      quickActions: [
+        {
+          id: `qa_${timestamp}_1`,
+          label: `Complete ${form.name}`,
+          actionType: 'open_form',
+          payload: form.id,
+          icon: 'FileText',
+        },
+        {
+          id: `qa_${timestamp}_2`,
+          label: 'Ask a Question',
+          actionType: 'custom_message',
+          payload: 'Can you tell me more about your services and pricing?',
+          icon: 'MessageSquare',
+        },
+      ],
+      channels: {
+        ...DEFAULT_FORM_AGENT.channels,
+        chatbot: {
+          ...DEFAULT_FORM_AGENT.channels.chatbot,
+          greetingBubble: `👋 Need help completing ${form.name}? Chat with our AI!`,
+        },
+      },
+    };
+
+    setAgents((prev) => [newAgent, ...prev]);
+    setPresetDialogOpen(false);
+    setActiveStudioAgent(newAgent);
+    toast.success(`✨ Created AI Assistant connected to ${form.name}`);
+  };
+
+  const handleCreateFromScratch = () => {
+    const timestamp = Date.now();
+    const newAgent: FormAgentData = {
+      ...DEFAULT_FORM_AGENT,
+      id: `agent_${timestamp}`,
+      slug: `custom-agent-${timestamp.toString(36)}`,
+      name: 'Custom AI Assistant',
+      roleTitle: 'Customer Concierge',
+      welcomeGreeting: 'Hello! How can I assist you today?',
+    };
+    setAgents((prev) => [newAgent, ...prev]);
+    setPresetDialogOpen(false);
+    setActiveStudioAgent(newAgent);
+    toast.success('Created new AI Agent from scratch');
+  };
 
   // Handle create from preset
   const handleCreateFromPreset = (preset: IndustryAgentPreset) => {
@@ -429,59 +556,236 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
         })}
       </div>
 
-      {/* ─── Industry Preset Selection Dialog ───────────────────────────────── */}
-      <Dialog open={presetDialogOpen} onOpenChange={setPresetDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-              <Sparkles className="size-5 text-blue-600" />
-              Choose an AI Agent Industry Template
+      {/* ─── 4-Way "Create AI Agent" Dialog (Jotform Parity) ────────────────── */}
+      <Dialog
+        open={presetDialogOpen}
+        onOpenChange={(open) => {
+          setPresetDialogOpen(open);
+          if (open && availableForms.length === 0) {
+            fetchAvailableForms();
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl max-h-[88vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-5 pb-3 border-b">
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <Sparkles className="size-4 text-blue-600" />
+              Create AI Agent &amp; Chatbot
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Select a pre-trained agent for your business type or customize from scratch.
+              Choose how you want to build your conversational AI assistant:
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
-            {INDUSTRY_AGENT_PRESETS.map((preset) => (
-              <div
-                key={preset.id}
-                onClick={() => handleCreateFromPreset(preset)}
-                className="p-3.5 rounded-xl border border-border/80 hover:border-blue-500/60 hover:bg-blue-50/30 dark:hover:bg-blue-950/20 cursor-pointer transition-all flex flex-col justify-between space-y-2 group"
-              >
-                <div className="flex items-start gap-3">
-                  <img
-                    src={preset.avatarUrl}
-                    alt={preset.agentName}
-                    className="size-10 rounded-xl object-cover ring-1 ring-border shrink-0"
+          <Tabs
+            value={creationTab}
+            onValueChange={(v) => {
+              setCreationTab(v as any);
+              if (v === 'form' && availableForms.length === 0) {
+                fetchAvailableForms();
+              }
+            }}
+            className="flex-1 flex flex-col min-h-0"
+          >
+            <div className="px-5 pt-3 border-b bg-muted/20">
+              <TabsList className="grid grid-cols-4 w-full h-9 bg-muted/60 p-0.5">
+                <TabsTrigger value="ai" className="text-xs gap-1.5 font-semibold">
+                  <Wand2 className="size-3.5 text-blue-600" /> Generate with AI
+                </TabsTrigger>
+                <TabsTrigger value="form" className="text-xs gap-1.5 font-semibold">
+                  <FileText className="size-3.5 text-emerald-600" /> From a Form
+                </TabsTrigger>
+                <TabsTrigger value="templates" className="text-xs gap-1.5 font-semibold">
+                  <LayoutTemplate className="size-3.5 text-purple-600" /> Templates
+                </TabsTrigger>
+                <TabsTrigger value="scratch" className="text-xs gap-1.5 font-semibold">
+                  <Plus className="size-3.5" /> Scratch
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              {/* TAB 1: GENERATE WITH AI */}
+              <TabsContent value="ai" className="mt-0 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-foreground">
+                    Describe what you want your AI Chatbot to do:
+                  </label>
+                  <Textarea
+                    placeholder="e.g., Create a 24/7 dental emergency intake bot that collects patient symptoms, verifies insurance, and books urgent appointments."
+                    value={promptInput}
+                    onChange={(e) => setPromptInput(e.target.value)}
+                    rows={4}
+                    className="text-xs resize-none"
                   />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-xs font-bold text-foreground group-hover:text-blue-600">
-                        {preset.agentName}
-                      </p>
-                      {preset.badge && (
-                        <Badge className="text-[8px] px-1 py-0 h-3.5 bg-blue-600 text-white font-bold border-none">
-                          {preset.badge}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 truncate">
-                      {preset.industryName}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">
-                      {preset.description}
-                    </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-semibold text-muted-foreground">Or click an example prompt:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      '24/7 HVAC Emergency Dispatcher for AC & Heating',
+                      'Dental Emergency Intake & Appointment Booking',
+                      'Plumbing Quote & Leak Assessment Bot',
+                      'Legal Case Screening & Consultation Intake',
+                      'Auto Repair & Oil Change Scheduling Assistant',
+                    ].map((example) => (
+                      <button
+                        key={example}
+                        type="button"
+                        onClick={() => {
+                          setPromptInput(example);
+                          handleGenerateWithAI(example);
+                        }}
+                        className="text-[11px] px-2.5 py-1 rounded-full border border-border/80 bg-background hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-muted-foreground hover:text-foreground transition-all text-left"
+                      >
+                        ⚡ {example}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] font-bold text-blue-600">
-                  <span>Deploy {preset.agentName}</span>
-                  <Plus className="size-3.5 group-hover:scale-125 transition-transform" />
+                <div className="pt-3 border-t flex justify-end">
+                  <Button
+                    type="button"
+                    disabled={isGenerating || !promptInput.trim()}
+                    onClick={() => handleGenerateWithAI()}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-2 px-4 h-9 shadow-xs"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Generating Agent...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="size-3.5" />
+                        Generate AI Agent
+                      </>
+                    )}
+                  </Button>
                 </div>
-              </div>
-            ))}
-          </div>
+              </TabsContent>
+
+              {/* TAB 2: START FROM A FORM */}
+              <TabsContent value="form" className="mt-0 space-y-3">
+                <div className="p-3 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-500/20">
+                  <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                    Transform any static web form into an interactive conversational AI experience.
+                  </p>
+                  <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
+                    The agent will guide visitors field-by-field and submit the completed form to your CRM.
+                  </p>
+                </div>
+
+                {loadingForms ? (
+                  <div className="p-8 text-center text-muted-foreground text-xs flex items-center justify-center gap-2">
+                    <Loader2 className="size-4 animate-spin text-emerald-600" /> Loading your forms...
+                  </div>
+                ) : availableForms.length === 0 ? (
+                  <div className="p-6 text-center border border-dashed rounded-xl space-y-2">
+                    <FileText className="size-8 text-muted-foreground/60 mx-auto" />
+                    <p className="text-xs font-semibold">No existing forms found</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Create a form first in GPTForm Studio or generate a chatbot from scratch.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[45vh] overflow-y-auto pr-1">
+                    {availableForms.map((form) => (
+                      <div
+                        key={form.id}
+                        onClick={() => handleCreateFromForm(form)}
+                        className="p-3 rounded-xl border border-border/80 hover:border-emerald-500 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 cursor-pointer transition-all flex flex-col justify-between group"
+                      >
+                        <div>
+                          <div className="flex items-center gap-1.5 font-bold text-xs group-hover:text-emerald-600 text-foreground">
+                            <FileText className="size-3.5 text-emerald-600" />
+                            <span className="truncate">{form.name}</span>
+                          </div>
+                          {form.description && (
+                            <p className="text-[10px] text-muted-foreground line-clamp-2 mt-1">
+                              {form.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="pt-2 mt-2 border-t border-border/40 flex items-center justify-between text-[11px] font-bold text-emerald-600">
+                          <span>Build Chatbot</span>
+                          <ArrowRight className="size-3.5 group-hover:translate-x-1 transition-transform" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* TAB 3: INDUSTRY TEMPLATES */}
+              <TabsContent value="templates" className="mt-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {INDUSTRY_AGENT_PRESETS.map((preset) => (
+                    <div
+                      key={preset.id}
+                      onClick={() => handleCreateFromPreset(preset)}
+                      className="p-3.5 rounded-xl border border-border/80 hover:border-purple-500/60 hover:bg-purple-50/30 dark:hover:bg-purple-950/20 cursor-pointer transition-all flex flex-col justify-between space-y-2 group"
+                    >
+                      <div className="flex items-start gap-3">
+                        <img
+                          src={preset.avatarUrl}
+                          alt={preset.agentName}
+                          className="size-10 rounded-xl object-cover ring-1 ring-border shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-bold text-foreground group-hover:text-purple-600">
+                              {preset.agentName}
+                            </p>
+                            {preset.badge && (
+                              <Badge className="text-[8px] px-1 py-0 h-3.5 bg-purple-600 text-white font-bold border-none">
+                                {preset.badge}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] font-semibold text-purple-700 dark:text-purple-300 truncate">
+                            {preset.industryName}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">
+                            {preset.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px] font-bold text-purple-600">
+                        <span>Deploy Template</span>
+                        <Plus className="size-3.5 group-hover:scale-125 transition-transform" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+
+              {/* TAB 4: START FROM SCRATCH */}
+              <TabsContent value="scratch" className="mt-0 space-y-4">
+                <div className="p-6 text-center border rounded-xl space-y-3 bg-muted/20">
+                  <div className="size-12 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 flex items-center justify-center mx-auto">
+                    <Bot className="size-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold">Blank Custom Agent</h3>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                      Start with a clean slate. Configure your custom persona, upload your documents, connect forms, and set up your preferred channels.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleCreateFromScratch}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-2 px-4 shadow-xs"
+                  >
+                    <Plus className="size-3.5" /> Create Blank Agent
+                  </Button>
+                </div>
+              </TabsContent>
+            </div>
+          </Tabs>
         </DialogContent>
       </Dialog>
 

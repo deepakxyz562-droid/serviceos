@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai-client';
 import { searchKnowledgeBase } from '@/lib/ai-knowledge';
+import { db } from '@/lib/db';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
 
 export async function POST(
@@ -31,6 +32,30 @@ export async function POST(
       // Non-fatal, proceed with static knowledge
     }
 
+    // If connected form exists, load its field schema to enable natural conversational form filling
+    let formFieldsPrompt = '';
+    const primaryConnectedForm = agent.connectedForms?.[0];
+    if (primaryConnectedForm?.id) {
+      try {
+        const formRecord = await db.form.findFirst({
+          where: { OR: [{ id: primaryConnectedForm.id }, { slug: primaryConnectedForm.id }] },
+          select: { id: true, name: true, schemaJson: true },
+        });
+        if (formRecord?.schemaJson) {
+          const parsed = typeof formRecord.schemaJson === 'string' ? JSON.parse(formRecord.schemaJson) : formRecord.schemaJson;
+          if (Array.isArray(parsed?.fields) && parsed.fields.length > 0) {
+            const fieldSummaries = parsed.fields
+              .slice(0, 8)
+              .map((f: any) => `- "${f.label || f.id}" (${f.required ? 'required' : 'optional'})`)
+              .join('\n');
+            formFieldsPrompt = `Connected Form: "${formRecord.name}"\nFields to Collect Conversationally:\n${fieldSummaries}\n\nCONVERSATIONAL FORM FILLING INSTRUCTIONS:\nWhen a visitor expresses interest in booking, getting a quote, or requesting service, you can guide them conversationally through these questions 1 or 2 at a time rather than asking all at once. Validate inputs gently (e.g. verify phone or address). When key required details are provided, summarize their request warmly!`;
+          }
+        }
+      } catch {
+        // Non-fatal, proceed
+      }
+    }
+
     // Build context from agent knowledge base
     const knowledgeContext = [
       `Agent Persona: You are ${agent.name}, ${agent.roleTitle}.`,
@@ -43,6 +68,7 @@ export async function POST(
         ? `Known FAQs:\n${agent.knowledge.faqPairs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')}`
         : '',
       retrievedKnowledge,
+      formFieldsPrompt,
       agent.connectedForms?.length
         ? `Available Connected Forms to recommend:\n${agent.connectedForms.map((form) => `- Form ID "${form.id}": "${form.name}" (${form.description || ''})`).join('\n')}`
         : '',

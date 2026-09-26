@@ -151,6 +151,9 @@ export interface FormAgentData {
       showButtons: boolean;
       primaryColor: string;
       greetingBubble: string;
+      proactiveTrigger?: 'none' | 'delay' | 'scroll' | 'exit_intent';
+      triggerDelaySeconds?: number;
+      triggerScrollPercent?: number;
       layoutButton?: {
         greetingText: string;
         action1: string;
@@ -388,6 +391,9 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
       showButtons: true,
       primaryColor: '#0284c7',
       greetingBubble: '👋 Need help with your loan application? Chat with Nell!',
+      proactiveTrigger: 'none',
+      triggerDelaySeconds: 5,
+      triggerScrollPercent: 50,
       layoutButton: {
         greetingText: "Hi! I'm Nell, your AI Agent and Loan Application Guide. How can I help you?",
         action1: 'Begin loan application',

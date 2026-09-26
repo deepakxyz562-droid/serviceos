@@ -21,6 +21,7 @@ import {
   Wrench,
   Home,
   CheckCircle2,
+  MessageSquare,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
@@ -73,9 +74,42 @@ export function AiMarketingHeader() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/#ai-receptionist" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                  <Link href="/chatbot" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600">
+                      <Sparkles className="size-4" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-xs text-foreground">AI Chatbot Builder</p>
+                      <p className="text-[11px] text-muted-foreground">Autonomous chat with live CRM dispatch, booking &amp; payments</p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/ai-agent" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600">
                       <Bot className="size-4" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-xs text-foreground">AI Employee &amp; Agent</p>
+                      <p className="text-[11px] text-muted-foreground">Your website&apos;s 24/7 worker with 60s document training</p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/conversational-forms" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                    <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600">
+                      <MessageSquare className="size-4" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-xs text-foreground">Conversational Forms</p>
+                      <p className="text-[11px] text-muted-foreground">1-question-at-a-time interactive forms with 3.8x completion</p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/#ai-receptionist" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                    <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600">
+                      <Phone className="size-4" />
                     </div>
                     <div>
                       <p className="font-semibold text-xs text-foreground">24/7 AI Voice Receptionist</p>
@@ -187,6 +221,27 @@ export function AiMarketingHeader() {
             className="block text-sm font-semibold text-foreground py-1"
           >
             ✨ GPTForm™ AI Smart Forms
+          </Link>
+          <Link
+            href="/chatbot"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-sm font-semibold text-foreground py-1"
+          >
+            🤖 AI Chatbot Builder
+          </Link>
+          <Link
+            href="/ai-agent"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-sm font-semibold text-foreground py-1"
+          >
+            🧠 AI Employee &amp; Agent
+          </Link>
+          <Link
+            href="/conversational-forms"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-sm font-semibold text-foreground py-1"
+          >
+            💬 Conversational Forms
           </Link>
           <Link
             href="/templates"
