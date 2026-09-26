@@ -96,13 +96,6 @@ export interface FormStudioBuilderProps {
   onSave: (options?: { silent?: boolean }) => Promise<{ id?: string; slug?: string } | void | null>;
   onExit: () => void;
   siteOrigin: string;
-  hideHeader?: boolean;
-  controlledTab?: 'build' | 'settings' | 'publish' | 'templates';
-  onControlledTabChange?: (tab: 'build' | 'settings' | 'publish' | 'templates') => void;
-  externalPreviewMode?: boolean;
-  onExternalPreviewModeChange?: (preview: boolean) => void;
-  externalThemeModalOpen?: boolean;
-  onExternalThemeModalOpenChange?: (open: boolean) => void;
 }
 
 export function FormStudioBuilder({
@@ -113,13 +106,6 @@ export function FormStudioBuilder({
   onSave,
   onExit,
   siteOrigin,
-  hideHeader = false,
-  controlledTab,
-  onControlledTabChange,
-  externalPreviewMode,
-  onExternalPreviewModeChange,
-  externalThemeModalOpen,
-  onExternalThemeModalOpenChange,
 }: FormStudioBuilderProps) {
   // ─── Undo/Redo History (Jotform/Elementor parity) ─────────────────────
   // History stack + wrapped onFormDataChange that records every mutation.
@@ -255,20 +241,8 @@ export function FormStudioBuilder({
     return result;
   }, [onSave, formData]);
   // Studio navigation
-  const [internalStudioTab, setInternalStudioTab] = useState<'build' | 'settings' | 'publish' | 'templates'>('build');
-  const studioTab = controlledTab ?? internalStudioTab;
-  const setStudioTab = useCallback((tab: 'build' | 'settings' | 'publish' | 'templates') => {
-    setInternalStudioTab(tab);
-    onControlledTabChange?.(tab);
-  }, [onControlledTabChange]);
-
-  const [internalPreviewMode, setInternalPreviewMode] = useState(false);
-  const isPreviewMode = externalPreviewMode ?? internalPreviewMode;
-  const setIsPreviewMode = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
-    const next = typeof val === 'function' ? val(isPreviewMode) : val;
-    setInternalPreviewMode(next);
-    onExternalPreviewModeChange?.(next);
-  }, [isPreviewMode, onExternalPreviewModeChange]);
+  const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'templates'>('build');
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   // ─── Unified Layout Vocabulary (Phase 2) ──────────────────────────────
   // Replaced 7 competing terms (focus, paper, classic, single_question,
@@ -334,13 +308,7 @@ export function FormStudioBuilder({
   // viewMode is now the SAME as formLayout (no separate 'focus' | 'paper' | 'split_media')
   // This eliminates the mismatch where viewMode and previewFormat could disagree.
   const viewMode = formLayout;
-  const [internalThemeModalOpen, setInternalThemeModalOpen] = useState(false);
-  const themeModalOpen = externalThemeModalOpen ?? internalThemeModalOpen;
-  const setThemeModalOpen = useCallback((val: boolean | ((prev: boolean) => boolean)) => {
-    const next = typeof val === 'function' ? val(themeModalOpen) : val;
-    setInternalThemeModalOpen(next);
-    onExternalThemeModalOpenChange?.(next);
-  }, [themeModalOpen, onExternalThemeModalOpenChange]);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [currentThemeId, setCurrentThemeId] = useState('fieseros-emerald');
 
   // ─── Keyboard Shortcuts (Jotform/Elementor parity) ────────────────────
@@ -1098,8 +1066,7 @@ export function FormStudioBuilder({
       {/* ═════════════════════════════════════════════════════════════════════════
           TIER 1: GLOBAL STUDIO HEADER & LIFECYCLE BAR (Uncluttered, High Polish)
          ═════════════════════════════════════════════════════════════════════════ */}
-      {!hideHeader && (
-        <header className="h-14 border-b border-border/80 bg-background/95 backdrop-blur px-3 sm:px-5 flex items-center justify-between gap-3 shrink-0 z-30 select-none">
+      <header className="h-14 border-b border-border/80 bg-background/95 backdrop-blur px-3 sm:px-5 flex items-center justify-between gap-3 shrink-0 z-30 select-none">
         {/* Left: Back + Form Name + Status */}
         <div className="flex items-center gap-2.5 min-w-0">
           <Button
@@ -1289,7 +1256,6 @@ export function FormStudioBuilder({
           </Button>
         </div>
       </header>
-      )}
 
       {/* ═════════════════════════════════════════════════════════════════════════
           TIER 2: CONTEXTUAL CANVAS SUB-TOOLBAR (Build Tab Workspace Manager)

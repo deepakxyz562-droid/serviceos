@@ -33,7 +33,6 @@ import {
 } from '@/features/forms/utils/form-helpers';
 import { FormStudioBuilder } from '@/features/forms/components/form-studio-builder';
 import { FormAgentStudio } from '@/features/forms/components/agent-builder/form-agent-studio';
-import { ExperienceStudioShell } from '@/features/forms/components/studio/experience-studio-shell';
 import {
   DEFAULT_FORM_AGENT,
   FormAgentData,
@@ -712,15 +711,9 @@ export function FormBuilderView() {
 
   if (showAiAgentStudio) {
     return (
-      <ExperienceStudioShell
-        initialMode="conversation"
+      <FormAgentStudio
         initialAgent={agentStudioData || DEFAULT_FORM_AGENT}
-        formData={formData}
-        onFormDataChange={setFormData}
-        editMode={editMode}
-        saving={saving}
-        onSave={handleSave}
-        onExit={() => {
+        onBack={() => {
           setShowAiAgentStudio(false);
           setAgentStudioData(null);
         }}
@@ -731,9 +724,7 @@ export function FormBuilderView() {
 
   if (showCreateDialog) {
     return (
-      <ExperienceStudioShell
-        initialMode="form"
-        initialAgent={formData.agentConfig || agentStudioData || DEFAULT_FORM_AGENT}
+      <FormStudioBuilder
         formData={formData}
         onFormDataChange={setFormData}
         editMode={editMode}

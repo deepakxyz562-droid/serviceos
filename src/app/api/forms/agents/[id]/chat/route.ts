@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai-client';
-import { searchKnowledgeBase } from '@/lib/ai-knowledge';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
 
 export async function POST(
@@ -14,25 +13,11 @@ export async function POST(
 
     const agent: FormAgentData = agentConfig || DEFAULT_FORM_AGENT;
 
-    // Retrieve RAG snippets from indexed knowledge base if available
-    let ragSnippets = '';
-    if (agent.tenantId && message) {
-      try {
-        const ragResults = await searchKnowledgeBase(agent.tenantId, message, { limit: 3 });
-        if (ragResults && ragResults.length > 0) {
-          ragSnippets = `Relevant Knowledge Base Documentation:\n${ragResults.map((r) => `- ${r.snippet}`).join('\n')}`;
-        }
-      } catch (err) {
-        console.warn('RAG search skipped:', err);
-      }
-    }
-
     // Build context from agent knowledge base
     const knowledgeContext = [
       `Agent Persona: You are ${agent.name}, ${agent.roleTitle}.`,
       `Tone: ${agent.voiceTone}.`,
       `System Prompt: ${agent.knowledge?.systemPrompt || ''}`,
-      ragSnippets,
       agent.knowledge?.guardrails?.length
         ? `Strict Guardrails:\n- ${agent.knowledge.guardrails.join('\n- ')}`
         : '',

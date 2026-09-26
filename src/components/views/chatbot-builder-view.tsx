@@ -24,8 +24,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { FormAgentStudio } from '@/features/forms/components/agent-builder/form-agent-studio';
-import { ExperienceStudioShell } from '@/features/forms/components/studio/experience-studio-shell';
-import type { EditorFormData } from '@/features/forms/types';
 import {
   FormAgentData,
   DEFAULT_FORM_AGENT,
@@ -130,70 +128,26 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
     }
   };
 
-  const [agentFormData, setAgentFormData] = useState<EditorFormData>({
-    name: 'AI Assistant',
-    description: '',
-    type: 'lead_capture',
-    status: 'active',
-    fields: [],
-    submissionActions: {
-      primary: 'create_lead',
-      additional: {
-        sendWhatsAppOwner: false,
-        sendWhatsAppUser: false,
-        sendEmail: true,
-        addToCampaign: false,
-        notifySalesTeam: false,
-        callWebhook: false,
-      },
-      whatsappOwnerTemplate: '',
-      whatsappUserTemplate: '',
-      aiGenerateUserMessage: false,
-      webhookUrl: '',
-    },
-    fieldMappings: [],
-    welcomeMessage: '',
-    completionMessage: '',
-  });
-
-  // If studio is open for an agent, render the unified ExperienceStudioShell
+  // If studio is open for an agent, render the full-screen FormAgentStudio
   if (activeStudioAgent) {
     return (
-      <ExperienceStudioShell
-        initialMode="conversation"
+      <FormAgentStudio
         initialAgent={activeStudioAgent}
-        formData={{
-          ...agentFormData,
-          name: activeStudioAgent.name,
-          agentConfig: activeStudioAgent,
+        onChange={(updated) => {
+          setActiveStudioAgent(updated);
+          setAgents((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
         }}
-        onFormDataChange={setAgentFormData}
-        editMode={true}
-        saving={false}
-        onSave={async () => {
-          try {
-            const res = await fetch('/api/forms/agents', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(activeStudioAgent),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data?.agent) {
-                setActiveStudioAgent(data.agent);
-                setAgents((prev) => {
-                  const exists = prev.some((a) => a.id === data.agent.id);
-                  if (exists) return prev.map((a) => (a.id === data.agent.id ? data.agent : a));
-                  return [data.agent, ...prev];
-                });
-              }
-              toast.success('Experience & Agent saved successfully');
+        onSave={async (savedAgent) => {
+          setActiveStudioAgent(savedAgent);
+          setAgents((prev) => {
+            const exists = prev.some((a) => a.id === savedAgent.id);
+            if (exists) {
+              return prev.map((a) => (a.id === savedAgent.id ? savedAgent : a));
             }
-          } catch {
-            toast.error('Failed to save agent');
-          }
+            return [savedAgent, ...prev];
+          });
         }}
-        onExit={() => {
+        onBack={() => {
           setActiveStudioAgent(null);
           fetchAgents();
         }}

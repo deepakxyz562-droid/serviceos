@@ -140,116 +140,6 @@ export function AgentBuildTab({
     });
   };
 
-  const updatePhoneConfig = (updates: Partial<NonNullable<typeof agent.channels.phone>>) => {
-    onChange({
-      ...agent,
-      channels: {
-        ...agent.channels,
-        phone: {
-          ...agent.channels?.phone,
-          enabled: updates.enabled ?? agent.channels?.phone?.enabled ?? true,
-          phoneNumber: updates.phoneNumber ?? agent.channels?.phone?.phoneNumber ?? '',
-          voiceId: updates.voiceId ?? agent.channels?.phone?.voiceId ?? 'rachel',
-          recordCalls: updates.recordCalls ?? agent.channels?.phone?.recordCalls ?? true,
-          forwardingNumber: updates.forwardingNumber ?? agent.channels?.phone?.forwardingNumber ?? '',
-        },
-      },
-    });
-  };
-
-  const updateInstagramConfig = (updates: Partial<NonNullable<typeof agent.channels.instagram>>) => {
-    onChange({
-      ...agent,
-      channels: {
-        ...agent.channels,
-        instagram: {
-          ...agent.channels?.instagram,
-          enabled: updates.enabled ?? agent.channels?.instagram?.enabled ?? true,
-          accountHandle: updates.accountHandle ?? agent.channels?.instagram?.accountHandle ?? '',
-          autoReply: updates.autoReply ?? agent.channels?.instagram?.autoReply ?? true,
-          paired: updates.paired ?? agent.channels?.instagram?.paired ?? false,
-        },
-      },
-    });
-  };
-
-  const updateGmailConfig = (updates: Partial<NonNullable<typeof agent.channels.gmail>>) => {
-    onChange({
-      ...agent,
-      channels: {
-        ...agent.channels,
-        gmail: {
-          ...agent.channels?.gmail,
-          enabled: updates.enabled ?? agent.channels?.gmail?.enabled ?? true,
-          autoReply: updates.autoReply ?? agent.channels?.gmail?.autoReply ?? true,
-          replyDelaySeconds: updates.replyDelaySeconds ?? agent.channels?.gmail?.replyDelaySeconds ?? 30,
-          signature: updates.signature ?? agent.channels?.gmail?.signature ?? '',
-        },
-      },
-    });
-  };
-
-  const updateSmsConfig = (updates: Partial<NonNullable<typeof agent.channels.sms>>) => {
-    onChange({
-      ...agent,
-      channels: {
-        ...agent.channels,
-        sms: {
-          ...agent.channels?.sms,
-          enabled: updates.enabled ?? agent.channels?.sms?.enabled ?? true,
-          phoneNumber: updates.phoneNumber ?? agent.channels?.sms?.phoneNumber ?? '',
-          optOutKeyword: updates.optOutKeyword ?? agent.channels?.sms?.optOutKeyword ?? 'STOP',
-        },
-      },
-    });
-  };
-
-  const updateVoiceConfig = (updates: Partial<NonNullable<typeof agent.channels.voice>>) => {
-    onChange({
-      ...agent,
-      channels: {
-        ...agent.channels,
-        voice: {
-          ...agent.channels?.voice,
-          enabled: updates.enabled ?? agent.channels?.voice?.enabled ?? true,
-          realtimeStreaming: updates.realtimeStreaming ?? agent.channels?.voice?.realtimeStreaming ?? true,
-          voiceProvider: updates.voiceProvider ?? agent.channels?.voice?.voiceProvider ?? 'elevenlabs',
-        },
-      },
-    });
-  };
-
-  const updateMessengerConfig = (updates: Partial<NonNullable<typeof agent.channels.messenger>>) => {
-    onChange({
-      ...agent,
-      channels: {
-        ...agent.channels,
-        messenger: {
-          ...agent.channels?.messenger,
-          enabled: updates.enabled ?? agent.channels?.messenger?.enabled ?? true,
-          facebookPageId: updates.facebookPageId ?? agent.channels?.messenger?.facebookPageId ?? '',
-          greetingMessage: updates.greetingMessage ?? agent.channels?.messenger?.greetingMessage ?? '',
-        },
-      },
-    });
-  };
-
-  const updateCrmConfig = (updates: Partial<NonNullable<typeof agent.channels.crm>>) => {
-    onChange({
-      ...agent,
-      channels: {
-        ...agent.channels,
-        crm: {
-          ...agent.channels?.crm,
-          enabled: updates.enabled ?? agent.channels?.crm?.enabled ?? true,
-          provider: updates.provider ?? agent.channels?.crm?.provider ?? 'fieseros',
-          autoCreateLead: updates.autoCreateLead ?? agent.channels?.crm?.autoCreateLead ?? true,
-          syncNotes: updates.syncNotes ?? agent.channels?.crm?.syncNotes ?? true,
-        },
-      },
-    });
-  };
-
   const selectAvatar = (av: AgentAvatarItem) => {
     onChange({
       ...agent,
@@ -1300,8 +1190,6 @@ export function AgentBuildTab({
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Dedicated AI Reception Phone Number</Label>
                 <Input
-                  value={agent.channels?.phone?.phoneNumber || ''}
-                  onChange={(e) => updatePhoneConfig({ phoneNumber: e.target.value })}
                   placeholder="+1 (800) 555-0199"
                   className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
                 />
@@ -1309,192 +1197,26 @@ export function AgentBuildTab({
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">After-Hours Emergency Escalation</Label>
                 <Input
-                  value={agent.channels?.phone?.forwardingNumber || ''}
-                  onChange={(e) => updatePhoneConfig({ forwardingNumber: e.target.value })}
                   placeholder="+1 (555) on-call-tech"
                   className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
                 />
               </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <span className="text-xs text-slate-200">Record & Transcribe Calls</span>
-                <Switch
-                  checked={agent.channels?.phone?.recordCalls ?? true}
-                  onCheckedChange={(c) => updatePhoneConfig({ recordCalls: c })}
-                />
-              </div>
             </div>
           )}
 
-          {/* SMS Channel Settings */}
-          {activeChannel === 'sms' && (
+          {/* General Webhook / API Parameters for Other Channels */}
+          {!['standalone', 'whatsapp', 'phone'].includes(activeChannel) && (
             <div className="space-y-3">
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">SMS Bot Number</Label>
+                <Label className="text-xs font-semibold text-slate-300">Webhook / Dispatch Endpoint</Label>
                 <Input
-                  value={agent.channels?.sms?.phoneNumber || ''}
-                  onChange={(e) => updateSmsConfig({ phoneNumber: e.target.value })}
-                  placeholder="+1 (555) 019-2834"
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Opt-Out Compliance Keyword</Label>
-                <Input
-                  value={agent.channels?.sms?.optOutKeyword || 'STOP'}
-                  onChange={(e) => updateSmsConfig({ optOutKeyword: e.target.value })}
-                  placeholder="STOP"
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Instagram Channel Settings */}
-          {activeChannel === 'instagram' && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Instagram Account Handle</Label>
-                <Input
-                  value={agent.channels?.instagram?.accountHandle || ''}
-                  onChange={(e) => updateInstagramConfig({ accountHandle: e.target.value })}
-                  placeholder="@yourbusiness"
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100"
-                />
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <span className="text-xs text-slate-200">Auto-Reply to Direct Messages</span>
-                <Switch
-                  checked={agent.channels?.instagram?.autoReply ?? true}
-                  onCheckedChange={(c) => updateInstagramConfig({ autoReply: c })}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Gmail Channel Settings */}
-          {activeChannel === 'gmail' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <span className="text-xs text-slate-200">Auto-Generate Email Replies</span>
-                <Switch
-                  checked={agent.channels?.gmail?.autoReply ?? true}
-                  onCheckedChange={(c) => updateGmailConfig({ autoReply: c })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Email Signature</Label>
-                <Textarea
-                  value={agent.channels?.gmail?.signature || `Warm regards,\n${agent.name} — ${agent.roleTitle}`}
-                  onChange={(e) => updateGmailConfig({ signature: e.target.value })}
-                  className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[60px]"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Voice Channel Settings */}
-          {activeChannel === 'voice' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <span className="text-xs text-slate-200">Realtime Audio Streaming</span>
-                <Switch
-                  checked={agent.channels?.voice?.realtimeStreaming ?? true}
-                  onCheckedChange={(c) => updateVoiceConfig({ realtimeStreaming: c })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Voice Synthesis Engine</Label>
-                <select
-                  value={agent.channels?.voice?.voiceProvider || 'elevenlabs'}
-                  onChange={(e) => updateVoiceConfig({ voiceProvider: e.target.value as any })}
-                  className="w-full text-xs h-8 bg-slate-800 border border-slate-700 rounded-md text-slate-200 px-2"
-                >
-                  <option value="elevenlabs">ElevenLabs Neural Voice</option>
-                  <option value="openai">OpenAI Realtime Voice</option>
-                  <option value="cartesia">Cartesia Sonic (Ultra-Low Latency)</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Messenger Channel Settings */}
-          {activeChannel === 'messenger' && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Facebook Page ID</Label>
-                <Input
-                  value={agent.channels?.messenger?.facebookPageId || ''}
-                  onChange={(e) => updateMessengerConfig({ facebookPageId: e.target.value })}
-                  placeholder="10492817293849"
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* CRM Channel Settings */}
-          {activeChannel === 'crm' && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Connected CRM Target</Label>
-                <select
-                  value={agent.channels?.crm?.provider || 'fieseros'}
-                  onChange={(e) => updateCrmConfig({ provider: e.target.value as any })}
-                  className="w-full text-xs h-8 bg-slate-800 border border-slate-700 rounded-md text-slate-200 px-2"
-                >
-                  <option value="fieseros">Native Fieseros CRM & Operations</option>
-                  <option value="salesforce">Salesforce CRM</option>
-                  <option value="hubspot">HubSpot CRM</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <span className="text-xs text-slate-200">Auto-Create Lead on Conversation</span>
-                <Switch
-                  checked={agent.channels?.crm?.autoCreateLead ?? true}
-                  onCheckedChange={(c) => updateCrmConfig({ autoCreateLead: c })}
-                />
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <span className="text-xs text-slate-200">Sync Transcript & AI Notes</span>
-                <Switch
-                  checked={agent.channels?.crm?.syncNotes ?? true}
-                  onCheckedChange={(c) => updateCrmConfig({ syncNotes: c })}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* General Webhook / Embed for WordPress, Shopify, Canva, Platforms */}
-          {['wordpress', 'shopify', 'canva', 'platforms', 'agent_app'].includes(activeChannel) && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Webhook & Callback URL</Label>
-                <Input
-                  readOnly
-                  value={`https://fieseros.com/api/channels/${activeChannel}/webhook?agentId=${encodeURIComponent(agent.id || agent.slug)}`}
+                  defaultValue={`https://api.fieseros.com/channels/${activeChannel}/webhook`}
                   className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Shortcode / Embed Snippet</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    readOnly
-                    value={activeChannel === 'wordpress' ? `[fieseros_agent id="${agent.slug || agent.id}"]` : `<iframe src="https://fieseros.com/chat/${agent.slug || agent.id}" width="100%" height="600" />`}
-                    className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      navigator.clipboard.writeText(activeChannel === 'wordpress' ? `[fieseros_agent id="${agent.slug || agent.id}"]` : `<iframe src="https://fieseros.com/chat/${agent.slug || agent.id}" width="100%" height="600" />`);
-                      toast.success('Snippet copied!');
-                    }}
-                    className="h-8 px-2 text-xs"
-                  >
-                    <Copy className="size-3.5" />
-                  </Button>
-                </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <span className="text-xs text-slate-200">Auto-Qualify Inbound Leads</span>
+                <Switch defaultChecked />
               </div>
             </div>
           )}
