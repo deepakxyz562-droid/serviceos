@@ -87,9 +87,9 @@ interface Step1Data {
 interface Step3Data {
   plan: string;
   billing: 'monthly' | 'yearly';
-  // How the user wants to start: 'trial' (14-day free trial, no card) or
-  // 'pay' (subscribe & pay now via PayPal, immediate access).
-  startMode: 'trial' | 'pay';
+  // How the user wants to start: 'free' (permanent $0 free plan, no card),
+  // 'trial' (14-day free trial, no card) or 'pay' (subscribe & pay now).
+  startMode: 'trial' | 'pay' | 'free';
 }
 
 // ── Phase-3 Business Profile step ────────────────────────────────────────────
@@ -169,6 +169,24 @@ interface OnboardingPlan {
 }
 
 const FALLBACK_PLANS: OnboardingPlan[] = [
+  {
+    // FREE PLAN — $0 Free Forever for solo pros
+    id: 'free',
+    name: 'Free Forever',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    originalMonthlyPrice: 0,
+    description: 'For solo pros getting started — 100% free',
+    features: [
+      '1 user',
+      '100 lifetime jobs',
+      'Quotes, invoices & scheduling',
+      'Customer portal & reviews',
+      'Time tracking & digital signatures',
+      'AI Form Builder',
+    ],
+    icon: Sparkles,
+  },
   {
     // LAUNCH SPECIAL — $5/mo founding member offer. Monthly billing only.
     // Same features as Starter but at $5/mo instead of $29/mo.
@@ -299,6 +317,8 @@ function featuresFromJson(features: unknown): string[] {
 // Icon lookup by plan code — keeps the card UI consistent between
 // fallback and DB-backed plans.
 const PLAN_ICON_BY_CODE: Record<string, typeof Zap> = {
+  free: Sparkles,
+  launch_special: Zap,
   starter: Zap,
   growth: Star,
   business: Crown,
@@ -584,12 +604,12 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   );
 
   const createSubscription = useCallback(
-    async (plan: string, billing: string, startMode: 'trial' | 'pay') => {
+    async (plan: string, billing: string, startMode: 'trial' | 'pay' | 'free') => {
       try {
         const res = await fetch('/api/subscriptions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenantId, plan, billing, startMode }),
+          body: JSON.stringify({ tenantId, plan, billingCycle: billing, billing, startMode }),
         });
         if (!res.ok) {
           throw new Error('Failed to create subscription');
@@ -888,8 +908,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // Step 3 — Choose Your Plan (was Step 2 before phase-3)
   // -------------------------------------------------------------------------
 
-  // (was handleStep3Next) Now the 3rd step — Choose Your Plan
-  // Handles both start modes:
+  // Handles three start modes:
+  //   'free'  → activates the Free Forever plan ($0, 1 user, 100 jobs), advances to step 4.
   //   'trial' → creates a 14-day free-trial subscription, advances to step 4.
   //   'pay'   → saves the tenant's plan choice, then opens the PayPal
   //             checkout dialog INLINE (right here in onboarding). The dialog's
@@ -900,10 +920,19 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   //             step 4. On dialog close → advance with the "payment pending"
   //             banner visible as a fallback.
   const handleStep3Next = useCallback(
-    async (mode: 'trial' | 'pay') => {
+    async (mode: 'trial' | 'pay' | 'free') => {
       setSaving(true);
       try {
-        if (mode === 'trial') {
+        if (mode === 'free' || step3.plan === 'free') {
+          await createSubscription('free', 'monthly', 'free');
+          await saveTenantProgress({
+            onboardingStep: 4,
+            plan: 'free',
+          });
+          toast.success('Welcome to Free Forever! Your account is active with zero charges.');
+          setStep3((s) => ({ ...s, plan: 'free', startMode: 'free' }));
+          goNext();
+        } else if (mode === 'trial') {
           await createSubscription(step3.plan, step3.billing, 'trial');
           await saveTenantProgress({
             onboardingStep: 4,
@@ -997,9 +1026,9 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // -------------------------------------------------------------------------
 
   // Format a price using the live plan currency (DB-backed, defaults to
-  // USD). `0` is rendered as 'Custom' for the Enterprise plan.
-  const formatPrice = (amount: number) => {
-    if (amount === 0) return 'Custom';
+  // USD). `0` is rendered as '$0' for the Free plan or 'Custom' for Enterprise.
+  const formatPrice = (amount: number, isFree = false) => {
+    if (amount === 0) return isFree ? '$0' : 'Custom';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: planCurrency,
@@ -1755,7 +1784,19 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                 </div>
 
                 <div className="mb-4">
-                  {plan.monthlyPrice === 0 ? (
+                  {plan.id === 'free' ? (
+                    <div>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                          {formatPrice(0, true)}
+                        </span>
+                        <span className="text-sm text-muted-foreground">/forever</span>
+                      </div>
+                      <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 text-xs px-2 py-0.5 mt-1 font-medium">
+                        Free Forever · No Card Required
+                      </Badge>
+                    </div>
+                  ) : plan.monthlyPrice === 0 ? (
                     <div className="flex items-baseline gap-1">
                       <span className="text-2xl font-bold text-foreground">Custom</span>
                     </div>
@@ -1815,11 +1856,37 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                   ))}
                 </ul>
 
-                {/* Dual CTA: both "Start Free Trial" (14-day, no card) and
-                    "Subscribe & Pay Now" (immediate PayPal checkout) are
-                    offered on every paid plan once selected. Enterprise
-                    stays as "Contact Sales" (no self-serve checkout). */}
-                {plan.monthlyPrice === 0 ? (
+                {/* Plan CTAs:
+                    - Free plan: "Get Started Free" 1-click button (no card required)
+                    - Enterprise: "Contact Sales"
+                    - Paid plans:
+                        - Selected: "Start Free Trial" (14-day, no card) & "Subscribe & Pay Now" (inline checkout)
+                        - Not selected: "Select Plan" */}
+                {plan.id === 'free' ? (
+                  <Button
+                    type="button"
+                    variant={isSelected ? 'default' : 'outline'}
+                    className={cn(
+                      'w-full gap-1.5 font-semibold transition-all',
+                      isSelected
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'
+                        : 'hover:bg-emerald-50 text-emerald-700 border-emerald-300 dark:hover:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-700',
+                    )}
+                    disabled={saving}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setStep3((s) => ({ ...s, plan: 'free' }));
+                      handleStep3Next('free');
+                    }}
+                  >
+                    {saving && step3.plan === 'free' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    Get Started Free
+                  </Button>
+                ) : plan.monthlyPrice === 0 ? (
                   <Button
                     type="button"
                     variant={isSelected ? 'default' : 'outline'}
@@ -1972,6 +2039,28 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
             Everything is set up. Here are some quick actions to get you started.
           </motion.p>
         </div>
+
+        {/* Free Forever plan activation banner */}
+        {(step3.startMode === 'free' || step3.plan === 'free') && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55 }}
+            className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 dark:border-emerald-800 dark:bg-emerald-950/30"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+              <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                Free Forever plan active 🎉
+              </p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                Your account is ready with up to 100 lifetime jobs, CRM, scheduling, quotes, invoices, and forms — no credit card needed. You can upgrade anytime.
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* "Subscribe & Pay Now" outcome banner.
             - If the inline PayPal checkout SUCCEEDED → show a green success

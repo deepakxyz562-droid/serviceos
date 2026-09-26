@@ -381,6 +381,58 @@ interface PlanDef {
 
 const PLAN_DEFS: PlanDef[] = [
   {
+    // ── FREE PLAN — $0 Free Forever ─────────────────────────────────────────
+    // Free forever for solo professionals. Up to 100 lifetime jobs, basic CRM,
+    // scheduling, estimates, invoices, customer portal, and form builder.
+    code: 'free',
+    name: 'Free Forever',
+    description:
+      'For solo pros getting started. Free forever — up to 100 lifetime jobs, basic CRM, scheduling, quotes, invoices, and forms.',
+    monthlyPrice: 0,
+    yearlyPrice: 0,
+    originalMonthlyPrice: 0,
+    originalYearlyPrice: 0,
+    discountBadge: 'Free Forever — $0',
+    maxUsers: 1,
+    maxJobs: 100,
+    maxWorkflows: 2,
+    features: {
+      customerPortal: true,
+      estimates: true,
+      invoicing: true,
+      scheduling: true,
+      dispatchBoard: false,
+      gpsTracking: false,
+      customer360: true,
+      salesPipeline: true,
+      reviews: true,
+      knowledgeBase: true,
+      documentCenter: true,
+      timeTracking: true,
+      expenses: true,
+      digitalSignatures: true,
+      beforeAfterPhotos: true,
+      onlinePayments: false,
+      formBuilder: true,
+      whatsappIntegration: false,
+      emailIntegration: false,
+      smsNumbers: false,
+      aiAssistant: false,
+      apiAccess: false,
+    },
+    limits: {
+      maxEmployees: 1,
+      maxBranches: 1,
+      maxServiceAreas: 1,
+      maxUsers: 1,
+      maxJobs: 100,
+      maxWorkflows: 2,
+      storageQuotaMb: 1024, // 1GB
+    },
+    marketplaceAccess: 'browse_only',
+    sortOrder: 0, // Show first in pricing list
+  },
+  {
     // ── LAUNCH SPECIAL — $5/month founding member offer ──────────────────
     // Limited to first 100 customers. Monthly billing only (no annual).
     // Price locked at $5/mo for 12 months, then auto-renews at $29/mo
@@ -426,7 +478,7 @@ const PLAN_DEFS: PlanDef[] = [
       storageQuotaMb: 5120, // 5GB
     },
     marketplaceAccess: 'receive_bookings',
-    sortOrder: 0, // Show first in pricing list
+    sortOrder: 1, // Show after Free
   },
   {
     code: 'starter',
@@ -471,7 +523,7 @@ const PLAN_DEFS: PlanDef[] = [
       storageQuotaMb: 5120, // 5GB
     },
     marketplaceAccess: 'receive_bookings',
-    sortOrder: 1,
+    sortOrder: 2,
   },
   {
     code: 'growth',
@@ -534,7 +586,7 @@ const PLAN_DEFS: PlanDef[] = [
     },
     marketplaceAccess: 'receive_bookings',
     popular: true,
-    sortOrder: 2,
+    sortOrder: 3,
   },
   {
     code: 'business',
@@ -608,7 +660,7 @@ const PLAN_DEFS: PlanDef[] = [
       storageQuotaMb: 204800, // 200GB
     },
     marketplaceAccess: 'priority',
-    sortOrder: 3,
+    sortOrder: 4,
   },
   {
     code: 'enterprise',
@@ -685,7 +737,7 @@ const PLAN_DEFS: PlanDef[] = [
       storageQuotaMb: 999999,
     },
     marketplaceAccess: 'priority',
-    sortOrder: 4,
+    sortOrder: 5,
   },
   {
     code: 'ai_website_forms',

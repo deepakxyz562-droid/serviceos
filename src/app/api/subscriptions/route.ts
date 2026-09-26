@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validPlans = ['starter', 'growth', 'business', 'enterprise'];
+    const validPlans = ['free', 'starter', 'growth', 'business', 'enterprise', 'launch_special'];
     if (!validPlans.includes(plan)) {
       return NextResponse.json(
         { error: `Invalid plan. Must be one of: ${validPlans.join(', ')}` },
@@ -377,6 +377,58 @@ export async function POST(request: NextRequest) {
     // `amount` is the monthly price. Yearly totals (2 months free) live in
     // the Plan catalog (db.plan.yearlyPrice). See `src/lib/billing-seed.ts:PLAN_DEFS`.
     const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
+      free: {
+        amount: 0,
+        maxUsers: 1,
+        maxJobs: 100,
+        maxWorkflows: 2,
+        features: {
+          customerPortal: true,
+          estimates: true,
+          invoicing: true,
+          scheduling: true,
+          customer360: true,
+          salesPipeline: true,
+          reviews: true,
+          knowledgeBase: true,
+          documentCenter: true,
+          timeTracking: true,
+          expenses: true,
+          digitalSignatures: true,
+          beforeAfterPhotos: true,
+          onlinePayments: false,
+          whatsappIntegration: false,
+          customWorkflows: false,
+          apiAccess: false,
+          prioritySupport: false,
+        },
+      },
+      launch_special: {
+        amount: 5,
+        maxUsers: 5,
+        maxJobs: 200,
+        maxWorkflows: 10,
+        features: {
+          customerPortal: true,
+          estimates: true,
+          invoicing: true,
+          scheduling: true,
+          customer360: true,
+          salesPipeline: false,
+          reviews: true,
+          knowledgeBase: true,
+          documentCenter: true,
+          timeTracking: true,
+          expenses: true,
+          digitalSignatures: true,
+          beforeAfterPhotos: true,
+          onlinePayments: true,
+          whatsappIntegration: false,
+          customWorkflows: false,
+          apiAccess: false,
+          prioritySupport: false,
+        },
+      },
       starter: {
         amount: 29,
         maxUsers: 5,
@@ -428,13 +480,9 @@ export async function POST(request: NextRequest) {
     };
 
     const selectedPlan = planDetails[plan];
-    const cycle = billingCycle || 'monthly';
-    // startMode: 'trial' (default) creates a 14-day free-trial subscription
-    // with no payment required. 'pay' creates an active subscription
-    // immediately (used when the user chooses "Subscribe & Pay Now" — the
-    // actual PayPal capture happens via /api/paypal/capture-order, which
-    // then overwrites this record with the paid amount + endDate).
-    const mode = startMode === 'pay' ? 'pay' : 'trial';
+    const cycle = billingCycle || (body as any).billing || 'monthly';
+    const isFreePlan = plan === 'free' || startMode === 'free';
+    const mode = isFreePlan ? 'free' : (startMode === 'pay' ? 'pay' : 'trial');
 
     // Get current subscription
     const currentSub = await db.subscription.findFirst({
@@ -444,6 +492,7 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
 
+    // Free: active immediately, never expires (set to 10 years / 3650 days).
     // Trial: 14-day window, status='trial', endDate = trialEndsAt.
     // Pay: cycle-based endDate (1 month or 1 year), status='pending_payment'.
     //   The user has chosen to pay now but hasn't completed PayPal checkout.
@@ -455,7 +504,10 @@ export async function POST(request: NextRequest) {
 
     let endDate: Date;
     let subStatus: 'trial' | 'active' | 'pending_payment';
-    if (mode === 'trial') {
+    if (mode === 'free') {
+      endDate = new Date(now.getTime() + 3650 * 24 * 60 * 60 * 1000);
+      subStatus = 'active';
+    } else if (mode === 'trial') {
       endDate = trialEndsAt;
       subStatus = 'trial';
     } else {
@@ -482,6 +534,9 @@ export async function POST(request: NextRequest) {
     // (recurring) or /api/paypal/capture-order (one-time) after the user
     // completes checkout on the billing page. Until then the tenant stays
     // on trial so they retain 14-day trial access.
+    //
+    // startMode 'free' creates an 'active' record with 0 amount, null trialEndsAt,
+    // and full access to the free tier without time limits.
     const subscriptionData = {
       plan,
       status: subStatus,
@@ -490,9 +545,8 @@ export async function POST(request: NextRequest) {
       billingCycle: cycle,
       startDate: now,
       endDate,
-      // trialEndsAt is set for both modes — for 'pay' it's informational
-      // (the trial was bypassed); for 'trial' it's the gate the
-      // trial-paywall middleware checks.
+      // trialEndsAt is set only for 'trial' mode — for 'free' and 'pay' it's
+      // null so trial-paywall middleware does not block the user.
       trialEndsAt: mode === 'trial' ? trialEndsAt : null,
       maxUsers: selectedPlan.maxUsers,
       maxJobs: selectedPlan.maxJobs,
@@ -519,6 +573,8 @@ export async function POST(request: NextRequest) {
         });
 
     // Update tenant plan info:
+    //   - 'free' mode → planStatus='active', plan='free', trialEndsAt=null so the user
+    //     has permanent free tier access without trial gates or paywalls.
     //   - 'trial' mode → planStatus='trial' so trial-lifecycle cron +
     //     trial-paywall middleware engage. trialEndsAt is set.
     //   - 'pay' mode → planStatus stays 'trial' too! The user gets 14-day
@@ -529,10 +585,10 @@ export async function POST(request: NextRequest) {
       where: { id: tenantId },
       data: {
         plan,
-        planStatus: 'trial',
+        planStatus: mode === 'free' ? 'active' : 'trial',
         planStartedAt: now,
         planEndsAt: endDate,
-        ...(mode === 'trial' ? { trialEndsAt } : {}),
+        trialEndsAt: mode === 'trial' ? trialEndsAt : null,
       },
     });
 
