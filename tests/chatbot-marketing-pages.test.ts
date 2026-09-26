@@ -6,6 +6,13 @@ import { metadata as hvacMetadata } from '@/app/ai-chatbot-for-hvac/page';
 import { metadata as plumberMetadata } from '@/app/ai-chatbot-for-plumbers/page';
 import { metadata as vsJotformMetadata } from '@/app/fieseros-vs-jotform/page';
 import { metadata as vsChatbotMetadata } from '@/app/fieseros-vs-chatbot-com/page';
+import ChatbotPage from '@/app/chatbot/page';
+import AiAgentPage from '@/app/ai-agent/page';
+import ConversationalFormsPage from '@/app/conversational-forms/page';
+import AiChatbotForHvacPage from '@/app/ai-chatbot-for-hvac/page';
+import AiChatbotForPlumbersPage from '@/app/ai-chatbot-for-plumbers/page';
+import FieserosVsJotformPage from '@/app/fieseros-vs-jotform/page';
+import FieserosVsChatbotComPage from '@/app/fieseros-vs-chatbot-com/page';
 
 describe('Chatbot & AI Agent Marketing Pages SEO & Architecture', () => {
   it('defines valid metadata with canonical URLs for all core acquisition pages', () => {
@@ -37,5 +44,24 @@ describe('Chatbot & AI Agent Marketing Pages SEO & Architecture', () => {
 
     expect(vsChatbotMetadata.title).toContain('Fieseros vs ChatBot.com');
     expect(vsChatbotMetadata.alternates?.canonical).toBe('https://fieseros.com/fieseros-vs-chatbot-com');
+  });
+
+  it('renders all marketing pages during SSR without throwing ReferenceError', () => {
+    expect(ChatbotPage).toBeDefined();
+    expect(AiAgentPage).toBeDefined();
+    expect(ConversationalFormsPage).toBeDefined();
+    expect(AiChatbotForHvacPage).toBeDefined();
+    expect(AiChatbotForPlumbersPage).toBeDefined();
+    expect(FieserosVsJotformPage).toBeDefined();
+    expect(FieserosVsChatbotComPage).toBeDefined();
+
+    // Verify component executions succeed without ReferenceError (e.g. Phone is not defined)
+    expect(() => ChatbotPage()).not.toThrow();
+    expect(() => AiAgentPage()).not.toThrow();
+    expect(() => ConversationalFormsPage()).not.toThrow();
+    expect(() => AiChatbotForHvacPage()).not.toThrow();
+    expect(() => AiChatbotForPlumbersPage()).not.toThrow();
+    expect(() => FieserosVsJotformPage()).not.toThrow();
+    expect(() => FieserosVsChatbotComPage()).not.toThrow();
   });
 });

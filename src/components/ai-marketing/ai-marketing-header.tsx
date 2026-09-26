@@ -22,6 +22,7 @@ import {
   Home,
   CheckCircle2,
   MessageSquare,
+  Phone,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { Button } from '@/components/ui/button';
