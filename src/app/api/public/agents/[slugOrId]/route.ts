@@ -116,6 +116,55 @@ export async function GET(
     });
 
     if (!agent) {
+      // Check if slugOrId refers to a Form with agentConfig
+      const form = await db.form.findFirst({
+        where: {
+          OR: [{ slug: slugOrId }, { id: slugOrId }],
+        },
+      });
+
+      if (form) {
+        let formAgentConfig: Partial<FormAgentData> = {};
+        try {
+          const parsed = typeof form.schemaJson === 'string' ? JSON.parse(form.schemaJson) : form.schemaJson;
+          if (parsed && typeof parsed === 'object' && parsed.agentConfig) {
+            formAgentConfig = parsed.agentConfig;
+          }
+        } catch {
+          // ignore
+        }
+
+        const mergedFromForm: FormAgentData = {
+          ...DEFAULT_FORM_AGENT,
+          name: form.title ? `${form.title} Assistant` : DEFAULT_FORM_AGENT.name,
+          ...formAgentConfig,
+          id: form.id,
+          slug: form.slug,
+          tenantId: form.tenantId || undefined,
+          connectedForms: [
+            {
+              id: form.id,
+              name: form.title,
+              description: form.description || undefined,
+            },
+          ],
+          updatedAt: form.updatedAt.toISOString(),
+        };
+
+        const publicConfig = sanitizePublicAgent(mergedFromForm);
+        return NextResponse.json(
+          { agent: publicConfig },
+          {
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+              'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+            },
+          },
+        );
+      }
+
       return NextResponse.json(
         { error: 'Agent not found', fallback: sanitizePublicAgent({ ...DEFAULT_FORM_AGENT, id: slugOrId }) },
         { status: 404 },

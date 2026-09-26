@@ -140,6 +140,131 @@ export function AgentBuildTab({
     });
   };
 
+  const updatePhoneConfig = (updates: Partial<typeof agent.channels.phone>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        phone: {
+          ...agent.channels?.phone,
+          enabled: updates.enabled ?? agent.channels?.phone?.enabled ?? true,
+          phoneNumber: updates.phoneNumber ?? agent.channels?.phone?.phoneNumber ?? '',
+          voiceId: updates.voiceId ?? agent.channels?.phone?.voiceId ?? 'default',
+          recordCalls: updates.recordCalls ?? agent.channels?.phone?.recordCalls ?? true,
+          forwardingNumber: updates.forwardingNumber ?? agent.channels?.phone?.forwardingNumber ?? '',
+        },
+      },
+    });
+  };
+
+  const updateInstagramConfig = (updates: Partial<typeof agent.channels.instagram>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        instagram: {
+          ...agent.channels?.instagram,
+          enabled: updates.enabled ?? agent.channels?.instagram?.enabled ?? true,
+          accountHandle: updates.accountHandle ?? agent.channels?.instagram?.accountHandle ?? '',
+          autoReply: updates.autoReply ?? agent.channels?.instagram?.autoReply ?? true,
+          paired: updates.paired ?? agent.channels?.instagram?.paired ?? false,
+        },
+      },
+    });
+  };
+
+  const updateSmsConfig = (updates: Partial<typeof agent.channels.sms>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        sms: {
+          ...agent.channels?.sms,
+          enabled: updates.enabled ?? agent.channels?.sms?.enabled ?? true,
+          phoneNumber: updates.phoneNumber ?? agent.channels?.sms?.phoneNumber ?? '',
+          optOutKeyword: updates.optOutKeyword ?? agent.channels?.sms?.optOutKeyword ?? 'STOP',
+        },
+      },
+    });
+  };
+
+  const updateGmailConfig = (updates: Partial<typeof agent.channels.gmail>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        gmail: {
+          ...agent.channels?.gmail,
+          enabled: updates.enabled ?? agent.channels?.gmail?.enabled ?? true,
+          autoReply: updates.autoReply ?? agent.channels?.gmail?.autoReply ?? true,
+          replyDelaySeconds: updates.replyDelaySeconds ?? agent.channels?.gmail?.replyDelaySeconds ?? 30,
+          signature: updates.signature ?? agent.channels?.gmail?.signature ?? '',
+        },
+      },
+    });
+  };
+
+  const updateVoiceConfig = (updates: Partial<typeof agent.channels.voice>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        voice: {
+          ...agent.channels?.voice,
+          enabled: updates.enabled ?? agent.channels?.voice?.enabled ?? true,
+          realtimeStreaming: updates.realtimeStreaming ?? agent.channels?.voice?.realtimeStreaming ?? true,
+          voiceProvider: updates.voiceProvider ?? agent.channels?.voice?.voiceProvider ?? 'elevenlabs',
+        },
+      },
+    });
+  };
+
+  const updateMessengerConfig = (updates: Partial<typeof agent.channels.messenger>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        messenger: {
+          ...agent.channels?.messenger,
+          enabled: updates.enabled ?? agent.channels?.messenger?.enabled ?? true,
+          facebookPageId: updates.facebookPageId ?? agent.channels?.messenger?.facebookPageId ?? '',
+          greetingMessage: updates.greetingMessage ?? agent.channels?.messenger?.greetingMessage ?? '',
+        },
+      },
+    });
+  };
+
+  const updateCrmConfig = (updates: Partial<typeof agent.channels.crm>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        crm: {
+          ...agent.channels?.crm,
+          enabled: updates.enabled ?? agent.channels?.crm?.enabled ?? true,
+          provider: updates.provider ?? agent.channels?.crm?.provider ?? 'fieseros',
+          autoCreateLead: updates.autoCreateLead ?? agent.channels?.crm?.autoCreateLead ?? true,
+          syncNotes: updates.syncNotes ?? agent.channels?.crm?.syncNotes ?? true,
+        },
+      },
+    });
+  };
+
+  const updatePresentationConfig = (updates: Partial<typeof agent.channels.presentation>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        presentation: {
+          ...agent.channels?.presentation,
+          enabled: updates.enabled ?? agent.channels?.presentation?.enabled ?? true,
+          slideDeckUrl: updates.slideDeckUrl ?? agent.channels?.presentation?.slideDeckUrl ?? '',
+          autoPresentVoice: updates.autoPresentVoice ?? agent.channels?.presentation?.autoPresentVoice ?? true,
+        },
+      },
+    });
+  };
+
   const selectAvatar = (av: AgentAvatarItem) => {
     onChange({
       ...agent,
@@ -1186,26 +1311,259 @@ export function AgentBuildTab({
 
           {/* Phone Channel Settings */}
           {activeChannel === 'phone' && (
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Dedicated AI Reception Phone Number</Label>
                 <Input
                   placeholder="+1 (800) 555-0199"
+                  value={agent.channels?.phone?.phoneNumber || ''}
+                  onChange={(e) => updatePhoneConfig({ phoneNumber: e.target.value })}
                   className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
                 />
+                <p className="text-[10px] text-slate-400">Inbound phone number routed to AI voice receptionist.</p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">After-Hours Emergency Escalation</Label>
                 <Input
-                  placeholder="+1 (555) on-call-tech"
+                  placeholder="+1 (555) 234-5678"
+                  value={agent.channels?.phone?.forwardingNumber || ''}
+                  onChange={(e) => updatePhoneConfig({ forwardingNumber: e.target.value })}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                />
+                <p className="text-[10px] text-slate-400">Calls transferred here if customer requests urgent human escalation.</p>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-medium text-slate-200">Record & Transcribe Calls</span>
+                  <p className="text-[10px] text-slate-400">Generate transcripts and AI call summaries automatically</p>
+                </div>
+                <Switch
+                  checked={agent.channels?.phone?.recordCalls ?? true}
+                  onCheckedChange={(c) => updatePhoneConfig({ recordCalls: c })}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Instagram Channel Settings */}
+          {activeChannel === 'instagram' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Instagram Professional Handle</Label>
+                <Input
+                  placeholder="@yourbusiness"
+                  value={agent.channels?.instagram?.accountHandle || ''}
+                  onChange={(e) => updateInstagramConfig({ accountHandle: e.target.value })}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                />
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-medium text-slate-200">AI Direct Message Auto-Reply</span>
+                  <p className="text-[10px] text-slate-400">Respond to customer DMs with form booking links and assistance</p>
+                </div>
+                <Switch
+                  checked={agent.channels?.instagram?.autoReply ?? true}
+                  onCheckedChange={(c) => updateInstagramConfig({ autoReply: c })}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* SMS Channel Settings */}
+          {activeChannel === 'sms' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Inbound SMS Phone Number</Label>
+                <Input
+                  placeholder="+1 (555) 987-6543"
+                  value={agent.channels?.sms?.phoneNumber || ''}
+                  onChange={(e) => updateSmsConfig({ phoneNumber: e.target.value })}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Opt-Out / STOP Keyword</Label>
+                <Input
+                  placeholder="STOP"
+                  value={agent.channels?.sms?.optOutKeyword || 'STOP'}
+                  onChange={(e) => updateSmsConfig({ optOutKeyword: e.target.value })}
                   className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
                 />
               </div>
             </div>
           )}
 
-          {/* General Webhook / API Parameters for Other Channels */}
-          {!['standalone', 'whatsapp', 'phone'].includes(activeChannel) && (
+          {/* Gmail Channel Settings */}
+          {activeChannel === 'gmail' && (
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-medium text-slate-200">Auto-Reply to Inbound Inquiries</span>
+                  <p className="text-[10px] text-slate-400">Draft or send immediate answers to inbound emails</p>
+                </div>
+                <Switch
+                  checked={agent.channels?.gmail?.autoReply ?? true}
+                  onCheckedChange={(c) => updateGmailConfig({ autoReply: c })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Reply Delay (Seconds)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="300"
+                  value={agent.channels?.gmail?.replyDelaySeconds ?? 30}
+                  onChange={(e) => updateGmailConfig({ replyDelaySeconds: parseInt(e.target.value) || 0 })}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                />
+                <p className="text-[10px] text-slate-400">Simulates human review pacing before automated dispatch.</p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Email Footer Signature</Label>
+                <Textarea
+                  placeholder="Best regards,&#10;AI Concierge Team"
+                  value={agent.channels?.gmail?.signature || ''}
+                  onChange={(e) => updateGmailConfig({ signature: e.target.value })}
+                  className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[60px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Voice Channel Settings */}
+          {activeChannel === 'voice' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Voice Synthesis Engine</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['elevenlabs', 'openai', 'cartesia'] as const).map((prov) => (
+                    <button
+                      key={prov}
+                      type="button"
+                      onClick={() => updateVoiceConfig({ voiceProvider: prov })}
+                      className={cn(
+                        'py-2 px-2.5 rounded-lg border text-xs font-medium capitalize text-center transition-all',
+                        (agent.channels?.voice?.voiceProvider || 'elevenlabs') === prov
+                          ? 'border-blue-500 bg-blue-950/40 text-blue-300 font-bold'
+                          : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600',
+                      )}
+                    >
+                      {prov}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-medium text-slate-200">Real-time Audio Streaming</span>
+                  <p className="text-[10px] text-slate-400">Sub-500ms voice turnaround with interrupted speech handling</p>
+                </div>
+                <Switch
+                  checked={agent.channels?.voice?.realtimeStreaming ?? true}
+                  onCheckedChange={(c) => updateVoiceConfig({ realtimeStreaming: c })}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Messenger Channel Settings */}
+          {activeChannel === 'messenger' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Facebook Page ID / Username</Label>
+                <Input
+                  placeholder="fieseros_official"
+                  value={agent.channels?.messenger?.facebookPageId || ''}
+                  onChange={(e) => updateMessengerConfig({ facebookPageId: e.target.value })}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Messenger Greeting</Label>
+                <Textarea
+                  placeholder="Hello! Welcome to our Facebook page. How can we help today?"
+                  value={agent.channels?.messenger?.greetingMessage || ''}
+                  onChange={(e) => updateMessengerConfig({ greetingMessage: e.target.value })}
+                  className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[60px]"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* CRM Channel Settings */}
+          {activeChannel === 'crm' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Target CRM System</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['fieseros', 'hubspot', 'salesforce'] as const).map((crm) => (
+                    <button
+                      key={crm}
+                      type="button"
+                      onClick={() => updateCrmConfig({ provider: crm })}
+                      className={cn(
+                        'py-2 px-2.5 rounded-lg border text-xs font-medium capitalize text-center transition-all',
+                        (agent.channels?.crm?.provider || 'fieseros') === crm
+                          ? 'border-emerald-500 bg-emerald-950/40 text-emerald-300 font-bold'
+                          : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600',
+                      )}
+                    >
+                      {crm}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-medium text-slate-200">Auto-Create Lead on New Inquiries</span>
+                  <p className="text-[10px] text-slate-400">Automatically creates contact & customer profile in CRM</p>
+                </div>
+                <Switch
+                  checked={agent.channels?.crm?.autoCreateLead ?? true}
+                  onCheckedChange={(c) => updateCrmConfig({ autoCreateLead: c })}
+                />
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-medium text-slate-200">Sync Notes & Transcripts</span>
+                  <p className="text-[10px] text-slate-400">Append conversation summaries directly into customer timeline</p>
+                </div>
+                <Switch
+                  checked={agent.channels?.crm?.syncNotes ?? true}
+                  onCheckedChange={(c) => updateCrmConfig({ syncNotes: c })}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Presentation Channel Settings */}
+          {activeChannel === 'presentation' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Slide Deck URL</Label>
+                <Input
+                  placeholder="https://slides.google.com/..."
+                  value={agent.channels?.presentation?.slideDeckUrl || ''}
+                  onChange={(e) => updatePresentationConfig({ slideDeckUrl: e.target.value })}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                />
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <div className="space-y-0.5">
+                  <span className="text-xs font-medium text-slate-200">Auto-Present Slides with AI Voice</span>
+                  <p className="text-[10px] text-slate-400">AI automatically narrates each slide during customer viewings</p>
+                </div>
+                <Switch
+                  checked={agent.channels?.presentation?.autoPresentVoice ?? true}
+                  onCheckedChange={(c) => updatePresentationConfig({ autoPresentVoice: c })}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* General Webhook / API Parameters for Other Custom Channels */}
+          {!['standalone', 'whatsapp', 'phone', 'instagram', 'sms', 'gmail', 'voice', 'messenger', 'crm', 'presentation'].includes(activeChannel) && (
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Webhook / Dispatch Endpoint</Label>
@@ -1213,10 +1571,6 @@ export function AgentBuildTab({
                   defaultValue={`https://api.fieseros.com/channels/${activeChannel}/webhook`}
                   className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
                 />
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <span className="text-xs text-slate-200">Auto-Qualify Inbound Leads</span>
-                <Switch defaultChecked />
               </div>
             </div>
           )}

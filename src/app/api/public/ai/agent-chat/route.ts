@@ -56,28 +56,49 @@ export async function POST(req: NextRequest) {
         tenantPhone = tenant.phone || '';
         tenantEmail = tenant.email || '';
       } else {
-        // Try resolving via Form (supports both tenant-scoped and standalone forms)
-        const form = await db.form.findFirst({
+        // 1. Try resolving via FormAgent (chatbot studio agent)
+        const formAgent = await db.formAgent.findFirst({
           where: { OR: [{ id: agentId }, { slug: agentId }] },
           include: {
             tenant: { select: { id: true, name: true, phone: true, email: true } },
-            workspace: { select: { id: true, name: true, brandingJson: true } },
           },
         });
-        if (form) {
-          workspaceId = form.workspaceId || undefined;
-          if (form.tenant) {
-            tenantId = form.tenant.id;
-            tenantName = form.tenant.name;
-            tenantPhone = form.tenant.phone || '';
-            tenantEmail = form.tenant.email || '';
-          } else if (form.workspace) {
-            // Standalone form (no CRM tenant) — branding from workspace
-            tenantName = form.workspace.name;
-            try {
-              const branding = JSON.parse(form.workspace.brandingJson || '{}');
-              if (branding.supportEmail) tenantEmail = branding.supportEmail;
-            } catch { /* ignore parse errors */ }
+
+        if (formAgent) {
+          if (formAgent.tenant) {
+            tenantId = formAgent.tenant.id;
+            tenantName = formAgent.tenant.name;
+            tenantPhone = formAgent.tenant.phone || '';
+            tenantEmail = formAgent.tenant.email || '';
+          } else {
+            // Standalone FormAgent without explicit tenant
+            tenantId = formAgent.id;
+            tenantName = formAgent.name || 'AI Assistant';
+          }
+        } else {
+          // 2. Try resolving via Form (supports both tenant-scoped and standalone forms)
+          const form = await db.form.findFirst({
+            where: { OR: [{ id: agentId }, { slug: agentId }] },
+            include: {
+              tenant: { select: { id: true, name: true, phone: true, email: true } },
+              workspace: { select: { id: true, name: true, brandingJson: true } },
+            },
+          });
+          if (form) {
+            workspaceId = form.workspaceId || undefined;
+            if (form.tenant) {
+              tenantId = form.tenant.id;
+              tenantName = form.tenant.name;
+              tenantPhone = form.tenant.phone || '';
+              tenantEmail = form.tenant.email || '';
+            } else if (form.workspace) {
+              // Standalone form (no CRM tenant) — branding from workspace
+              tenantName = form.workspace.name;
+              try {
+                const branding = JSON.parse(form.workspace.brandingJson || '{}');
+                if (branding.supportEmail) tenantEmail = branding.supportEmail;
+              } catch { /* ignore parse errors */ }
+            }
           }
         }
       }

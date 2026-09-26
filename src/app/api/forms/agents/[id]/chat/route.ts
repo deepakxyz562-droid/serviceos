@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai-client';
+import { searchKnowledgeBase } from '@/lib/ai-knowledge';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
 
 export async function POST(
@@ -13,6 +14,23 @@ export async function POST(
 
     const agent: FormAgentData = agentConfig || DEFAULT_FORM_AGENT;
 
+    // Retrieve relevant vector embeddings from knowledge base
+    let retrievedKnowledge = '';
+    try {
+      if (message) {
+        const kbResults = await searchKnowledgeBase({
+          query: message,
+          limit: 3,
+          tenantId: agent.tenantId,
+        });
+        if (kbResults && kbResults.length > 0) {
+          retrievedKnowledge = `Indexed Knowledge Base Documents:\n${kbResults.map((doc) => `- ${doc.content || doc.snippet}`).join('\n')}`;
+        }
+      }
+    } catch {
+      // Non-fatal, proceed with static knowledge
+    }
+
     // Build context from agent knowledge base
     const knowledgeContext = [
       `Agent Persona: You are ${agent.name}, ${agent.roleTitle}.`,
@@ -24,6 +42,7 @@ export async function POST(
       agent.knowledge?.faqPairs?.length
         ? `Known FAQs:\n${agent.knowledge.faqPairs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')}`
         : '',
+      retrievedKnowledge,
       agent.connectedForms?.length
         ? `Available Connected Forms to recommend:\n${agent.connectedForms.map((form) => `- Form ID "${form.id}": "${form.name}" (${form.description || ''})`).join('\n')}`
         : '',

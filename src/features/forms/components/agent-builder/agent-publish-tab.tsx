@@ -52,8 +52,9 @@ export function AgentPublishTab({
     agent.channels?.chatbot?.greetingBubble || '👋 Have questions or want a quote? Ask our AI!'
   );
 
-  const standaloneUrl = `${siteOrigin}/chat/${agent.slug || 'clara-dental'}`;
-  const embedScript = `<script src="${siteOrigin}/embed/agent.js" data-agent="${agent.id}" data-position="${widgetPosition}" data-greeting="${encodeURIComponent(greetingText)}" data-color="${agent.brandColor || '#059669'}" async></script>`;
+  const slugOrId = agent.slug || agent.id;
+  const standaloneUrl = `${siteOrigin}/chat/${slugOrId}`;
+  const embedScript = `<script src="${siteOrigin}/api/public/agents/${slugOrId}/embed.js" async></script>`;
 
   const copyToClipboard = (text: string, type: 'code' | 'link') => {
     navigator.clipboard.writeText(text);
@@ -243,7 +244,7 @@ export function AgentPublishTab({
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            Status: <span className="font-semibold text-emerald-600">Paired ({agent.channels?.whatsapp?.phoneNumber || '+1 555-DENT'})</span>
+            Status: <span className="font-semibold text-emerald-600">{agent.channels?.whatsapp?.phoneNumber ? `Configured (${agent.channels.whatsapp.phoneNumber})` : 'Not configured'}</span>
           </CardContent>
         </Card>
 
@@ -273,7 +274,7 @@ export function AgentPublishTab({
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            Number: <span className="font-semibold text-foreground">{agent.channels?.phone?.phoneNumber || '1-800-555-DENT'}</span>
+            Number: <span className="font-semibold text-foreground">{agent.channels?.phone?.phoneNumber || 'Not assigned'}</span>
           </CardContent>
         </Card>
 
@@ -303,7 +304,7 @@ export function AgentPublishTab({
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            Status: <span className="font-semibold text-emerald-600">Active</span>
+            Status: <span className="font-semibold text-emerald-600">{agent.channels?.sms?.phoneNumber ? `Configured (${agent.channels.sms.phoneNumber})` : (agent.channels?.sms?.enabled ? 'Active' : 'Disabled')}</span>
           </CardContent>
         </Card>
 
@@ -333,7 +334,7 @@ export function AgentPublishTab({
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            Account: <span className="font-semibold text-foreground">@fieserosdental</span>
+            Account: <span className="font-semibold text-foreground">{agent.channels?.instagram?.accountHandle || 'Not linked'}</span>
           </CardContent>
         </Card>
       </div>

@@ -159,7 +159,7 @@ export function FormAgentStudio({
       } else if (res.ok) {
         toast.success('Agent changes saved to form!');
       } else {
-        toast.success('Agent changes saved to form!');
+        toast.error(data.error || 'Failed to save agent to database');
       }
     } catch {
       toast.error('Failed to save agent. Please try again.');

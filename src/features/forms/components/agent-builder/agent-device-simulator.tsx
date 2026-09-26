@@ -123,31 +123,9 @@ export function AgentDeviceSimulator({
     if (!textToSend) setInputText('');
     setSending(true);
 
-    // ─── TEST MODE: never hit the real chat API ──────────────────────────
-    // In the studio's preview viewport, the agent may not be saved yet, and
-    // we don't want to consume AI credits for a preview. Return a friendly
-    // simulated reply that surfaces the connected form (if any) so the user
-    // can verify the "Fill Form" handoff works end-to-end.
-    if (isTestMode) {
-      try {
-        await new Promise((r) => setTimeout(r, 500)); // brief thinking delay
-        const connectedForm = agent.connectedForms?.[0];
-        const aiMsg: ChatMsg = {
-          id: `ai_sim_${Date.now()}`,
-          sender: 'ai',
-          text: `Great question! In test mode I can't reach the live AI, but here's how I'd help: I can answer questions about ${agent.roleTitle || 'your inquiry'}, or you can fill out the connected form and I'll guide you through it.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          suggestedForm: connectedForm,
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-      } finally {
-        setSending(false);
-      }
-      return;
-    }
-
     try {
-      const res = await fetch(`/api/forms/agents/${agent.id}/chat`, {
+      const targetAgentId = agent.id || 'preview';
+      const res = await fetch(`/api/forms/agents/${encodeURIComponent(targetAgentId)}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -158,18 +136,33 @@ export function AgentDeviceSimulator({
       });
 
       const data = await res.json().catch(() => ({}));
-      const matchedForm = data.suggestedFormId
-        ? agent.connectedForms?.find((f) => f.id === data.suggestedFormId) || agent.connectedForms?.[0]
-        : undefined;
 
+      if (res.ok && data.reply) {
+        const matchedForm = data.suggestedFormId
+          ? agent.connectedForms?.find((f) => f.id === data.suggestedFormId) || agent.connectedForms?.[0]
+          : undefined;
+
+        const aiMsg: ChatMsg = {
+          id: `ai_${Date.now()}`,
+          sender: 'ai',
+          text: data.reply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          suggestedForm: matchedForm,
+        };
+
+        setMessages((prev) => [...prev, aiMsg]);
+        return;
+      }
+
+      // If live API returned non-OK status or in test mode without live keys, provide contextual fallback
+      const matchedForm = agent.connectedForms?.[0];
       const aiMsg: ChatMsg = {
         id: `ai_${Date.now()}`,
         sender: 'ai',
-        text: data.reply || `Thank you for asking! Based on your inquiry, I'm ready to assist you. Would you like to fill out our form to proceed?`,
+        text: data.reply || `Thank you for reaching out! As ${agent.name || 'your AI Assistant'} (${agent.roleTitle || 'Customer Concierge'}), I'm ready to help. You can ask anything or complete ${matchedForm?.name || 'our form'} to proceed.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedForm: matchedForm,
       };
-
       setMessages((prev) => [...prev, aiMsg]);
     } catch {
       setMessages((prev) => [
@@ -177,7 +170,7 @@ export function AgentDeviceSimulator({
         {
           id: `ai_fallback_${Date.now()}`,
           sender: 'ai',
-          text: `I'm happy to help you with your ${agent.roleTitle || 'application'}! You can ask questions or fill out our ${agent.connectedForms?.[0]?.name || 'inquiry form'}.`,
+          text: `I'm happy to help you with your inquiry! You can ask questions or complete ${agent.connectedForms?.[0]?.name || 'our form'} to proceed.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           suggestedForm: agent.connectedForms?.[0],
         },

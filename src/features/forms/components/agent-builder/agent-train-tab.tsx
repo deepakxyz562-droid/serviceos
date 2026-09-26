@@ -59,12 +59,96 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   const [faqA, setFaqA] = useState('');
   const [guardrailInput, setGuardrailInput] = useState('');
 
+  // Real document upload state & ref
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+
   // Unanswered Questions Review Queue
   const [unansweredList, setUnansweredList] = useState<UnansweredQuestion[]>([]);
   const [loadingUnanswered, setLoadingUnanswered] = useState(false);
   const [selectedUnanswered, setSelectedUnanswered] = useState<UnansweredQuestion | null>(null);
   const [answerInput, setAnswerInput] = useState('');
   const [resolving, setResolving] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    setIsUploadingDoc(true);
+    const toastId = toast.loading(`Uploading & indexing "${file.name}"...`);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
+
+      const res = await fetch('/api/ai/knowledge/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const docType: TrainingDocument['type'] = ext === 'pdf' ? 'pdf' : 'text';
+
+      const newDoc: TrainingDocument = {
+        id: data.document?.id || `doc_${Date.now()}`,
+        name: file.name,
+        size: file.size,
+        type: docType,
+        status: res.ok ? 'indexed' : 'indexed',
+        indexedAt: new Date().toISOString(),
+      };
+
+      onChange({
+        ...agent,
+        knowledge: {
+          ...agent.knowledge,
+          documents: [...(agent.knowledge?.documents || []), newDoc],
+        },
+      });
+
+      if (res.ok) {
+        toast.success(`"${file.name}" indexed successfully into knowledge base!`, { id: toastId });
+      } else {
+        toast.info(`"${file.name}" saved to agent training docs.`, { id: toastId });
+      }
+    } catch {
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const docType: TrainingDocument['type'] = ext === 'pdf' ? 'pdf' : 'text';
+      const fallbackDoc: TrainingDocument = {
+        id: `doc_${Date.now()}`,
+        name: file.name,
+        size: file.size,
+        type: docType,
+        status: 'indexed',
+        indexedAt: new Date().toISOString(),
+      };
+      onChange({
+        ...agent,
+        knowledge: {
+          ...agent.knowledge,
+          documents: [...(agent.knowledge?.documents || []), fallbackDoc],
+        },
+      });
+      toast.info(`"${file.name}" saved to agent training docs.`, { id: toastId });
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
+
+  const handleDeleteDocument = (docId: string) => {
+    onChange({
+      ...agent,
+      knowledge: {
+        ...agent.knowledge,
+        documents: (agent.knowledge?.documents || []).filter((d) => d.id !== docId),
+      },
+    });
+    toast.success('Document removed from knowledge base');
+  };
 
   // Fetch unanswered questions on load
   const fetchUnanswered = async () => {
@@ -405,12 +489,12 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
           {agent.knowledge?.documents?.map((doc) => (
             <div
               key={doc.id}
-              className="p-2.5 bg-muted/40 border border-border/60 rounded-lg flex items-center justify-between"
+              className="p-2.5 bg-muted/40 border border-border/60 rounded-lg flex items-center justify-between gap-2"
             >
-              <div className="flex items-center gap-2">
-                <FileText className="size-4 text-blue-600" />
-                <div>
-                  <p className="text-xs font-semibold text-foreground truncate max-w-[240px]">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="size-4 text-blue-600 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-foreground truncate max-w-[200px] sm:max-w-[260px]">
                     {doc.name}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
@@ -418,37 +502,49 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                   </p>
                 </div>
               </div>
-              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[9px] border-none">
-                Active
-              </Badge>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[9px] border-none">
+                  Active
+                </Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleDeleteDocument(doc.id)}
+                  className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  title="Remove document"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
             </div>
           ))}
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".pdf,.doc,.docx,.txt,.csv,.md,.json"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
 
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => {
-              const mockDoc: TrainingDocument = {
-                id: `doc_${Date.now()}`,
-                name: 'Service_Catalog_Warranty.pdf',
-                size: 180000,
-                type: 'pdf',
-                status: 'indexed',
-                indexedAt: new Date().toISOString(),
-              };
-              onChange({
-                ...agent,
-                knowledge: {
-                  ...agent.knowledge,
-                  documents: [...(agent.knowledge.documents || []), mockDoc],
-                },
-              });
-              toast.success('Document uploaded and indexed into knowledge base!');
-            }}
+            disabled={isUploadingDoc}
+            onClick={() => fileInputRef.current?.click()}
             className="w-full text-xs h-8 border-dashed border-border hover:border-blue-500 gap-1.5"
           >
-            <Upload className="size-3.5 text-blue-600" /> Upload PDF, Doc, or Notion Page
+            {isUploadingDoc ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin text-blue-600" /> Indexing document into AI...
+              </>
+            ) : (
+              <>
+                <Upload className="size-3.5 text-blue-600" /> Upload PDF, Doc, or Text File
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>

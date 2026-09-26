@@ -128,47 +128,64 @@ export async function POST(request: NextRequest) {
       ...restConfig
     } = body;
 
-    // If body.id exists, try to update
-    if (body.id && !body.id.startsWith('agent_') && !body.id.startsWith('default')) {
-      const whereClause: any = { id: body.id };
-      if (tenantId) whereClause.tenantId = tenantId;
-
-      const existing = await db.formAgent.findFirst({ where: whereClause });
-      if (existing) {
-        const updated = await db.formAgent.update({
-          where: { id: existing.id },
-          data: {
-            tenantId,
-            slug,
-            name,
-            roleTitle: roleTitle || 'AI Assistant',
-            avatarUrl: avatarUrl || '',
-            statusText: statusText || 'Online',
-            brandColor: brandColor || '#059669',
-            voiceTone: voiceTone || 'friendly',
-            welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
-            greetingSubtitle: greetingSubtitle || null,
-            configJson: body as unknown as object,
-          },
-        });
-
-        return NextResponse.json({
-          success: true,
-          agent: {
-            ...body,
-            id: updated.id,
-            slug: updated.slug,
-            updatedAt: updated.updatedAt.toISOString(),
-          },
-        });
-      }
+    // Check if an agent already exists by ID or by slug
+    let existing = null;
+    if (body.id) {
+      existing = await db.formAgent.findFirst({
+        where: {
+          OR: [{ id: body.id }, ...(body.slug ? [{ slug: body.slug }] : [])],
+          ...(tenantId ? { tenantId } : {}),
+        },
+      });
+    } else if (body.slug) {
+      existing = await db.formAgent.findFirst({
+        where: {
+          slug: body.slug,
+          ...(tenantId ? { tenantId } : {}),
+        },
+      });
     }
 
-    // Create new agent
+    if (existing) {
+      const updated = await db.formAgent.update({
+        where: { id: existing.id },
+        data: {
+          tenantId: tenantId || existing.tenantId,
+          slug: body.slug || existing.slug,
+          name,
+          roleTitle: roleTitle || 'AI Assistant',
+          avatarUrl: avatarUrl || '',
+          statusText: statusText || 'Online',
+          brandColor: brandColor || '#059669',
+          voiceTone: voiceTone || 'friendly',
+          welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
+          greetingSubtitle: greetingSubtitle || null,
+          configJson: body as unknown as object,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        agent: {
+          ...body,
+          id: updated.id,
+          slug: updated.slug,
+          updatedAt: updated.updatedAt.toISOString(),
+        },
+      });
+    }
+
+    // Creating new agent: ensure slug is unique
+    let resolvedSlug = slug;
+    const slugCollision = await db.formAgent.findUnique({ where: { slug: resolvedSlug } });
+    if (slugCollision) {
+      resolvedSlug = `${resolvedSlug}-${Math.random().toString(36).substring(2, 6)}`;
+    }
+
     const created = await db.formAgent.create({
       data: {
         tenantId,
-        slug,
+        slug: resolvedSlug,
         name,
         roleTitle: roleTitle || 'AI Assistant',
         avatarUrl: avatarUrl || '',
@@ -177,7 +194,7 @@ export async function POST(request: NextRequest) {
         voiceTone: voiceTone || 'friendly',
         welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
         greetingSubtitle: greetingSubtitle || null,
-        configJson: body as unknown as object,
+        configJson: { ...body, slug: resolvedSlug } as unknown as object,
       },
     });
 
