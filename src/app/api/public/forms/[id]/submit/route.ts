@@ -8,6 +8,7 @@ import {
   generateGoogleCalendarUrl,
   generateOutlookCalendarUrl,
 } from '@/lib/scheduling/calendar-helper';
+import { createAppointmentBooking } from '@/lib/scheduling/booking-service';
 
 /**
  * POST /api/public/forms/[id]/submit
@@ -138,55 +139,33 @@ export async function POST(
 
     if (apt.found && apt.scheduledAt && apt.scheduledEndTime) {
       try {
-        const googleUrl = generateGoogleCalendarUrl({
-          title: `${form.name} - ${respondentName || 'Appointment'}`,
-          description: `Appointment scheduled via ${form.name}\n\nNotes: ${apt.notes || ''}`,
-          scheduledAt: apt.scheduledAt,
-          scheduledEndTime: apt.scheduledEndTime,
+        const bookingResult = await createAppointmentBooking({
+          tenantId: form.tenantId || null,
+          formId: form.id,
+          title: `${form.name} - ${respondentName || respondentEmail || 'Scheduled Appointment'}`,
+          serviceName: form.name,
+          date: apt.scheduledAt.toISOString(),
+          durationMinutes: apt.durationMinutes || 30,
+          timezone: apt.timezone || 'UTC',
+          customer: {
+            name: respondentName || null,
+            email: respondentEmail || null,
+            phone: respondentPhone || null,
+          },
+          notes: apt.notes || `Booked via form: ${form.name}`,
+          source: 'form',
         });
 
-        const outlookUrl = generateOutlookCalendarUrl({
-          title: `${form.name} - ${respondentName || 'Appointment'}`,
-          description: `Appointment scheduled via ${form.name}\n\nNotes: ${apt.notes || ''}`,
-          scheduledAt: apt.scheduledAt,
-          scheduledEndTime: apt.scheduledEndTime,
-        });
-
+        createdBooking = bookingResult.booking;
         bookingDetails = {
           scheduledAt: apt.scheduledAt,
           scheduledEndTime: apt.scheduledEndTime,
-          dateStr: apt.dateStr || '',
-          slot: apt.rawSlot || '',
+          dateStr: apt.dateStr || bookingResult.dateStr,
+          slot: apt.rawSlot || bookingResult.timeStr,
           timezone: apt.timezone || 'UTC',
-          googleCalendarUrl: googleUrl,
-          outlookCalendarUrl: outlookUrl,
+          googleCalendarUrl: bookingResult.calendarUrls.google,
+          outlookCalendarUrl: bookingResult.calendarUrls.outlook,
         };
-
-        createdBooking = await db.booking.create({
-          data: {
-            title: `${form.name} - ${respondentName || respondentEmail || 'Scheduled Appointment'}`,
-            bookingType: 'instant',
-            status: 'confirmed',
-            source: 'form',
-            customerName: respondentName || null,
-            customerEmail: respondentEmail || null,
-            customerPhone: respondentPhone || null,
-            scheduledAt: apt.scheduledAt,
-            scheduledEndTime: apt.scheduledEndTime,
-            duration: apt.durationMinutes || 30,
-            notes: apt.notes || `Booked via form: ${form.name}`,
-            tenantId: form.tenantId || null,
-            workspaceId: form.workspaceId || null,
-            metadataJson: JSON.stringify({
-              formId: form.id,
-              formName: form.name,
-              responseId: response.id,
-              timezone: apt.timezone,
-              rawSlot: apt.rawSlot,
-              dateStr: apt.dateStr,
-            }),
-          },
-        });
       } catch (bookingErr) {
         console.error('[form-submit] Failed to auto-create booking:', bookingErr);
       }

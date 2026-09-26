@@ -3,6 +3,7 @@ import { callAI } from '@/lib/ai-client';
 import { searchKnowledgeBase } from '@/lib/ai-knowledge';
 import { db } from '@/lib/db';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
+import { isEscalationIntent, requestHumanHandoff } from '@/lib/chat/handoff-service';
 
 export async function POST(
   request: NextRequest,
@@ -76,69 +77,22 @@ export async function POST(
     const lowerMessage = (message || '').toLowerCase().trim();
     const primaryConnectedForm = agent.connectedForms?.[0];
 
-    // Check for human escalation intent
-    const isEscalationRequest = [
-      'human',
-      'live agent',
-      'real person',
-      'speak to a person',
-      'talk to a person',
-      'talk to a human',
-      'speak to a human',
-      'operator',
-      'representative',
-      'live chat',
-      'support agent',
-      'customer service',
-      'transfer me',
-      'escalate',
-    ].some((kw) => lowerMessage.includes(kw));
-
-    if (isEscalationRequest) {
-      let liveSessionId: string | null = null;
-      try {
-        const resolvedTenantId = agent.tenantId || (await db.tenant.findFirst({ select: { id: true } }))?.id;
-        if (resolvedTenantId) {
-          const session = await db.publicChatSession.create({
-            data: {
-              tenantId: resolvedTenantId,
-              status: 'waiting_for_agent',
-              visitorName: 'Chatbot Visitor',
-              visitorEmail: null,
-            },
-          });
-          liveSessionId = session.id;
-
-          // Seed previous chat history so operator sees full context
-          if (Array.isArray(history) && history.length > 0) {
-            const historyMessages = history.slice(-8).map((h: any) => ({
-              sessionId: session.id,
-              senderType: h.sender === 'user' ? 'visitor' : 'bot',
-              senderName: h.sender === 'user' ? 'Visitor' : agent.name,
-              body: h.text || '',
-            }));
-            await db.publicChatMessage.createMany({
-              data: [
-                ...historyMessages,
-                {
-                  sessionId: session.id,
-                  senderType: 'visitor',
-                  senderName: 'Visitor',
-                  body: message,
-                },
-              ],
-            });
-          }
-        }
-      } catch (err) {
-        console.warn('[forms/agent-chat] Human escalation session creation warning:', err);
-      }
+    // Check for human escalation intent via unified handoff service
+    if (isEscalationIntent(message)) {
+      const handoff = await requestHumanHandoff({
+        tenantId: agent.tenantId,
+        agentId: agent.id,
+        agentName: agent.name,
+        formId: primaryConnectedForm?.id || null,
+        message,
+        history,
+      });
 
       return NextResponse.json({
         success: true,
-        reply: `I am connecting you with a live specialist right away. An operator has been notified and will join the conversation momentarily.`,
+        reply: handoff.reply,
         escalatedToHuman: true,
-        sessionId: liveSessionId,
+        sessionId: handoff.liveSessionId,
         suggestedFormId: primaryConnectedForm?.id || null,
         agentName: agent.name,
       });

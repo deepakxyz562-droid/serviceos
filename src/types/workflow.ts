@@ -173,7 +173,7 @@ export type ViewType =
   // Automation
   | 'workflows' | 'canvas' | 'triggers' | 'variables' | 'executions' | 'formBuilder' | 'workflowAutomations'
   // Forms Product (standalone AI Forms)
-  | 'formsDashboard' | 'formSubmissions' | 'formsAnalytics'
+  | 'formsDashboard' | 'formSubmissions' | 'formAppointments' | 'formsAnalytics'
   // Operations
   | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'realtimeStatus' | 'employees' | 'employeePerformance' | 'timesheet' | 'recurringJobs'
   | 'inventory' | 'purchaseOrders'

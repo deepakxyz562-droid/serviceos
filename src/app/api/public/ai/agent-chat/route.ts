@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
 import { searchKnowledgeBase } from '@/lib/ai-knowledge';
+import { requestHumanHandoff, isEscalationIntent } from '@/lib/chat/handoff-service';
+import { createAppointmentBooking } from '@/lib/scheduling/booking-service';
 
 export const runtime = 'nodejs';
 
@@ -149,60 +151,36 @@ export async function POST(req: NextRequest) {
     if (action === 'confirm_booking' && bookingData) {
       const { name, phone, email, service, date, time, notes } = bookingData;
 
-      const newLead = await db.lead.create({
-        data: {
-          tenantId: tenantId || null,
-          name: name || 'Website Chat Visitor',
-          phone: phone || '',
+      const bookingResult = await createAppointmentBooking({
+        tenantId: tenantId || null,
+        workspaceId: workspaceId || null,
+        agentId: agentId || null,
+        serviceName: service || 'Service Consultation',
+        date: date || new Date().toISOString().split('T')[0],
+        time: time || '10:00 AM',
+        durationMinutes: 45,
+        customer: {
+          name: name || 'Chat Visitor',
           email: email || '',
-          serviceType: service || 'General Inquiry',
-          notes: `[Booked via AI Chat]\nPreferred Slot: ${date || 'Anytime'} at ${time || 'Flexible'}\nNotes: ${notes || 'None'}`,
-          status: 'new',
-          source: 'ai_chat_widget',
+          phone: phone || '',
         },
+        notes: `[Booked via AI Chat]\nNotes: ${notes || 'None'}`,
+        source: 'ai_chat_widget',
       });
-
-      let createdBooking: any = null;
-      try {
-        const aptDate = date ? new Date(date) : new Date();
-        createdBooking = await db.booking.create({
-          data: {
-            title: `${service || 'Service Appointment'} - ${name || 'Chat Visitor'}`,
-            bookingType: 'ai_auto',
-            status: 'confirmed',
-            source: 'website',
-            customerName: name || null,
-            customerEmail: email || null,
-            customerPhone: phone || null,
-            scheduledAt: aptDate,
-            duration: 45,
-            notes: `[Booked via AI Chat]\nPreferred Slot: ${date || 'Anytime'} at ${time || 'Flexible'}\nNotes: ${notes || 'None'}`,
-            tenantId: tenantId || null,
-            workspaceId: workspaceId || null,
-            metadataJson: JSON.stringify({
-              leadId: newLead.id,
-              service,
-              date,
-              time,
-            }),
-          },
-        });
-      } catch (e) {
-        console.error('[agent-chat] Failed to create booking:', e);
-      }
 
       return NextResponse.json(
         {
           success: true,
-          reply: `🎉 Great news, ${name || 'there'}! Your appointment request has been confirmed for **${date || 'upcoming'} at ${time || 'scheduled time'}**. Our team will contact you at ${phone || email || 'your number'} if any adjustments are needed.`,
+          reply: `🎉 Great news, ${name || 'there'}! Your appointment request has been confirmed for **${bookingResult.dateStr} at ${bookingResult.timeStr}**. Our team will contact you at ${phone || email || 'your number'} if any adjustments are needed.`,
           card: {
             type: 'booking_confirmation',
-            leadId: newLead.id,
-            bookingId: createdBooking?.id,
+            leadId: bookingResult.lead?.id,
+            bookingId: bookingResult.booking?.id,
+            calendarUrls: bookingResult.calendarUrls,
             name,
             service,
-            date,
-            time,
+            date: bookingResult.dateStr,
+            time: bookingResult.timeStr,
           },
         },
         { headers: CORS_HEADERS },
@@ -252,62 +230,26 @@ export async function POST(req: NextRequest) {
 
     // ─── Human Handoff / Escalation Action (Text.com Parity) ──────────────
     if (action === 'request_human') {
-      let liveSessionId: string | null = null;
-      if (tenantId) {
-        try {
-          const session = await db.publicChatSession.create({
-            data: {
-              tenantId,
-              workspaceId: workspaceId || null,
-              visitorName: body.visitorName || null,
-              visitorEmail: body.visitorEmail || null,
-              visitorPhone: body.visitorPhone || null,
-              status: 'waiting_for_agent',
-              lastMessageAt: new Date(),
-              metadataJson: JSON.stringify({
-                source: 'ai_chatbot_escalation',
-                agentId,
-                agentName: tenantName,
-              }),
-            },
-          });
-          liveSessionId = session.id;
-
-          // Seed transcript into PublicChatMessage rows for operator console context
-          if (Array.isArray(history) && history.length > 0) {
-            for (const h of history) {
-              if (!h || !h.content) continue;
-              await db.publicChatMessage.create({
-                data: {
-                  sessionId: session.id,
-                  senderType: h.role === 'user' ? 'visitor' : 'system',
-                  senderName: h.role === 'user' ? (body.visitorName || 'Visitor') : 'AI Assistant',
-                  body: String(h.content),
-                },
-              });
-            }
-          }
-
-          // Add system escalation alert message
-          await db.publicChatMessage.create({
-            data: {
-              sessionId: session.id,
-              senderType: 'system',
-              senderName: 'System',
-              body: `🔔 Visitor requested live human agent escalation.`,
-            },
-          });
-        } catch (err) {
-          console.error('[agent-chat] Failed to create live chat escalation session:', err);
-        }
-      }
+      const handoff = await requestHumanHandoff({
+        tenantId: tenantId || null,
+        workspaceId: workspaceId || null,
+        agentId: agentId || null,
+        agentName: tenantName,
+        visitor: {
+          name: body.visitorName || null,
+          email: body.visitorEmail || null,
+          phone: body.visitorPhone || null,
+        },
+        message: message || '',
+        history,
+      });
 
       return NextResponse.json(
         {
-          reply: `I have alerted our live operator team! A specialist from ${tenantName} has received your chat and will join momentarily.`,
+          reply: handoff.reply,
           humanHandoff: true,
-          status: 'waiting_for_agent',
-          sessionId: liveSessionId,
+          status: handoff.status,
+          sessionId: handoff.liveSessionId,
           businessName: tenantName,
         },
         { headers: CORS_HEADERS },

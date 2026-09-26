@@ -87,8 +87,8 @@ export function AgentBuildTab({
   onClose,
   onPreviewPageChange,
 }: AgentBuildTabProps) {
-  // Chatbot subtabs: 'layout' | 'welcome' | 'navigation' | 'greeting'
-  const [chatbotSubTab, setChatbotSubTab] = useState<'layout' | 'welcome' | 'navigation' | 'greeting'>('layout');
+  // Chatbot subtabs: 'layout' | 'welcome' | 'forms' | 'navigation' | 'greeting'
+  const [chatbotSubTab, setChatbotSubTab] = useState<'layout' | 'welcome' | 'forms' | 'navigation' | 'greeting'>('layout');
   // Designer subtabs: 'avatar' | 'style'
   const [designerSubTab, setDesignerSubTab] = useState<'avatar' | 'style'>('style');
 
@@ -727,8 +727,8 @@ export function AgentBuildTab({
       {mode === 'channel_settings' && activeChannel === 'chatbot' && (
         <div className="flex-1 flex flex-col min-h-0">
           {/* Sub-tabs header */}
-          <div className="border-b border-slate-800 px-3">
-            <div className="grid grid-cols-4 gap-1 text-[11px] font-bold">
+          <div className="border-b border-slate-800 px-2">
+            <div className="grid grid-cols-5 gap-0.5 text-[10px] font-bold">
               <button
                 type="button"
                 onClick={() => {
@@ -736,7 +736,7 @@ export function AgentBuildTab({
                   onPreviewPageChange?.('conversation');
                 }}
                 className={cn(
-                  'py-2.5 text-center transition-all border-b-2',
+                  'py-2.5 text-center transition-all border-b-2 truncate',
                   chatbotSubTab === 'layout'
                     ? 'border-blue-500 text-blue-400 font-bold'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -751,7 +751,7 @@ export function AgentBuildTab({
                   onPreviewPageChange?.('greeting');
                 }}
                 className={cn(
-                  'py-2.5 text-center transition-all border-b-2',
+                  'py-2.5 text-center transition-all border-b-2 truncate',
                   chatbotSubTab === 'welcome'
                     ? 'border-blue-500 text-blue-400 font-bold'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -762,17 +762,37 @@ export function AgentBuildTab({
               <button
                 type="button"
                 onClick={() => {
+                  setChatbotSubTab('forms');
+                  onPreviewPageChange?.('conversation');
+                }}
+                className={cn(
+                  'py-2.5 text-center transition-all border-b-2 flex items-center justify-center gap-1',
+                  chatbotSubTab === 'forms'
+                    ? 'border-blue-500 text-blue-400 font-bold'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                )}
+              >
+                <span>FORMS</span>
+                {(agent.connectedForms?.length ?? 0) > 0 && (
+                  <span className="size-3.5 rounded-full bg-blue-500 text-[8px] text-white flex items-center justify-center font-bold">
+                    {agent.connectedForms?.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   setChatbotSubTab('navigation');
                   onPreviewPageChange?.('conversation');
                 }}
                 className={cn(
-                  'py-2.5 text-center transition-all border-b-2',
+                  'py-2.5 text-center transition-all border-b-2 truncate',
                   chatbotSubTab === 'navigation'
                     ? 'border-blue-500 text-blue-400 font-bold'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
                 )}
               >
-                NAVIGATION
+                NAV
               </button>
               <button
                 type="button"
@@ -781,7 +801,7 @@ export function AgentBuildTab({
                   onPreviewPageChange?.('conversation');
                 }}
                 className={cn(
-                  'py-2.5 text-center transition-all border-b-2',
+                  'py-2.5 text-center transition-all border-b-2 truncate',
                   chatbotSubTab === 'greeting'
                     ? 'border-blue-500 text-blue-400 font-bold'
                     : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -1003,7 +1023,153 @@ export function AgentBuildTab({
               </div>
             )}
 
-            {/* ── 3. NAVIGATION TAB (Screenshot 3 - 6 exact switches + WhatsApp Phone Number configuration) ── */}
+            {/* ── 3. FORMS TAB (Dedicated Connected Forms Manager) ── */}
+            {chatbotSubTab === 'forms' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-800/40 space-y-1">
+                  <div className="flex items-center gap-1.5 text-blue-400 font-bold text-xs">
+                    <FileText className="size-3.5" />
+                    <span>Connected Forms Engine</span>
+                  </div>
+                  <p className="text-[10px] text-slate-300 leading-relaxed">
+                    Forms connected here are automatically accessible in chat, suggested when visitors ask about quotes or appointments, and rendered as interactive cards.
+                  </p>
+                </div>
+
+                {/* Primary Connected Form */}
+                {agent.connectedForms && agent.connectedForms.length > 0 && (
+                  <div className="p-3 rounded-xl bg-slate-800/90 border-2 border-blue-500/60 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-wider font-extrabold text-blue-400 flex items-center gap-1">
+                        <Sparkles className="size-3 text-amber-400" /> Primary Connected Form
+                      </span>
+                      <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-400 border-blue-500/30 font-bold">
+                        Auto-attached in Greeting
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 pr-2">
+                        <p className="font-bold text-slate-100 text-xs truncate">{agent.connectedForms[0].name}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{agent.connectedForms[0].description || 'Form responses auto-create CRM leads & calendar bookings'}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 shrink-0"
+                        onClick={() => {
+                          const updated = agent.connectedForms.slice(1);
+                          onChange({ ...agent, connectedForms: updated });
+                          toast.success(`Removed primary form "${agent.connectedForms[0].name}"`);
+                        }}
+                        title="Disconnect form"
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Additional Connected Forms */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-300">
+                      All Connected Forms ({(agent.connectedForms || []).length})
+                    </span>
+                  </div>
+
+                  {(agent.connectedForms || []).length > 1 ? (
+                    <div className="space-y-1.5">
+                      {agent.connectedForms.slice(1).map((cf) => (
+                        <div key={cf.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-700 text-xs">
+                          <div className="min-w-0 flex-1 pr-2">
+                            <p className="font-semibold text-slate-200 truncate">{cf.name}</p>
+                            {cf.description && <p className="text-[10px] text-slate-400 truncate">{cf.description}</p>}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 w-6 p-0 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30"
+                            onClick={() => {
+                              const updated = (agent.connectedForms || []).filter((f) => f.id !== cf.id);
+                              onChange({ ...agent, connectedForms: updated });
+                              toast.success(`Removed form "${cf.name}"`);
+                            }}
+                            title="Disconnect form"
+                          >
+                            <X className="size-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (agent.connectedForms || []).length === 0 ? (
+                    <div className="p-4 rounded-xl bg-slate-900/60 border border-dashed border-slate-700 text-center space-y-1.5">
+                      <p className="text-xs font-semibold text-slate-300">No forms connected yet</p>
+                      <p className="text-[10px] text-slate-400">Connect an existing form or attach a 1-click starter form below.</p>
+                    </div>
+                  ) : null}
+
+                  {/* Connect Available Forms from Account */}
+                  {availableForms.filter((af) => !(agent.connectedForms || []).some((cf) => cf.id === af.id)).length > 0 && (
+                    <div className="pt-2">
+                      <label className="text-[10px] font-medium text-slate-400 block mb-1">Available forms in your account:</label>
+                      <div className="space-y-1">
+                        {availableForms
+                          .filter((af) => !(agent.connectedForms || []).some((cf) => cf.id === af.id))
+                          .map((af) => (
+                            <button
+                              key={af.id}
+                              type="button"
+                              onClick={() => {
+                                const newConnected = [...(agent.connectedForms || []), { id: af.id, name: af.name, description: af.description }];
+                                onChange({ ...agent, connectedForms: newConnected });
+                                toast.success(`Connected form "${af.name}" to AI Agent`);
+                              }}
+                              className="w-full flex items-center justify-between p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-left text-xs transition-colors"
+                            >
+                              <span className="text-slate-300 truncate max-w-[200px]">{af.name}</span>
+                              <span className="text-[10px] text-blue-400 font-bold flex items-center gap-0.5">
+                                <Plus className="size-3" /> Connect
+                              </span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 1-Click Starter Forms */}
+                  <div className="pt-2 border-t border-slate-800 space-y-2">
+                    <label className="text-[10px] font-bold text-slate-300 block">✨ 1-Click Starter AI Forms:</label>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {[
+                        { id: `form_booking_${agent.id || 'default'}`, name: `${agent.name} - Consultation Booking Form`, description: 'Collect respondent contact details & appointment timeslot' },
+                        { id: `form_intake_${agent.id || 'default'}`, name: `${agent.name} - Service Intake Form`, description: 'Capture customer requirements, timeline, and budget' },
+                      ].filter((sf) => !(agent.connectedForms || []).some((cf) => cf.id === sf.id)).map((sf) => (
+                        <button
+                          key={sf.id}
+                          type="button"
+                          onClick={() => {
+                            const updated = [...(agent.connectedForms || []), sf];
+                            onChange({ ...agent, connectedForms: updated });
+                            toast.success(`Attached "${sf.name}" to AI Agent!`);
+                          }}
+                          className="w-full flex items-center justify-between p-2.5 rounded-xl bg-blue-950/40 hover:bg-blue-900/50 border border-blue-700/50 text-left text-xs transition-colors"
+                        >
+                          <div className="min-w-0 pr-2">
+                            <p className="font-semibold text-blue-200 truncate">{sf.name}</p>
+                            <p className="text-[9px] text-blue-300/80 truncate">{sf.description}</p>
+                          </div>
+                          <span className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded-md font-bold shrink-0">
+                            + Connect
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── 4. NAVIGATION TAB (Screenshot 3 - 6 exact switches + WhatsApp Phone Number configuration) ── */}
             {chatbotSubTab === 'navigation' && (
               <div className="space-y-3">
                 {/* 1. Chat */}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { FormAgentData, DEFAULT_FORM_AGENT } from '@/features/forms/types/agent-types';
+import { resolveAgentTheme } from '@/lib/theme/agent-theme';
 import { AgentDeviceSimulator } from '@/features/forms/components/agent-builder/agent-device-simulator';
 import { Loader2, AlertCircle, Sparkles, LayoutTemplate, Minimize2, Maximize2, ExternalLink } from 'lucide-react';
 import { Card } from '@/components/ui/card';
@@ -207,8 +208,18 @@ export default function PublicChatPage() {
   // ═══════════════════════════════════════════════════════════════════════════
   // MODE 3: FULL STANDALONE APP VIEW
   // ═══════════════════════════════════════════════════════════════════════════
+  const theme = resolveAgentTheme(agent);
+
   return (
-    <div className="min-h-screen bg-slate-200/90 dark:bg-slate-950 flex flex-col items-center justify-center p-2 sm:p-6">
+    <div
+      className={cn(
+        "min-h-screen flex flex-col items-center justify-center p-2 sm:p-6 transition-all duration-300",
+        theme.isDark && "dark"
+      )}
+      style={{
+        background: theme.pageBackgroundGradient,
+      }}
+    >
       {/* Top Toggle Switch */}
       {(layoutMode === 'floating' || isSidebar) && (
         <div className="mb-3">

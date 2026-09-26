@@ -203,6 +203,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   executions: ExecutionsView,
   formBuilder: FormBuilderView,
   formSubmissions: FormSubmissionsView,
+  formAppointments: (props: any) => <FormSubmissionsView {...props} initialTab="appointments" />,
   workflowAutomations: WorkflowAutomationsView,
   // Operations
   operations: OperationsView,

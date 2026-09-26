@@ -54,8 +54,8 @@ interface FormOption {
   name: string;
 }
 
-export function FormSubmissionsView() {
-  const [activeMainTab, setActiveMainTab] = useState<'submissions' | 'appointments'>('submissions');
+export function FormSubmissionsView({ initialTab = 'submissions' }: { initialTab?: 'submissions' | 'appointments' } = {}) {
+  const [activeMainTab, setActiveMainTab] = useState<'submissions' | 'appointments'>(initialTab);
   const [submissions, setSubmissions] = useState<FormSubmissionItem[]>([]);
   const [stats, setStats] = useState<FormStats>({
     total: 0,

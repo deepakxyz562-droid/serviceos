@@ -34,6 +34,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { FormAgentData, ConnectedFormRef } from '@/features/forms/types/agent-types';
+import { resolveAgentTheme } from '@/lib/theme/agent-theme';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -454,14 +455,13 @@ export function AgentDeviceSimulator({
     onRestartSession?.();
   };
 
-  const brandColor = agent.brandColor || '#0284c7';
-  const chatBg = agent.style?.chatBg || '#ffffff';
-  const isDark = agent.style?.isDark ?? isColorDark(chatBg);
-  const titleColor = agent.style?.titleColor || (isDark ? '#ffffff' : '#0A1551');
-  const headerBgStart = agent.style?.agentBackgroundStart || brandColor;
-  const headerBgEnd = agent.style?.agentBackgroundEnd || brandColor;
-  const headerGradient = `linear-gradient(135deg, ${headerBgStart}, ${headerBgEnd})`;
-  const isHeaderDark = isColorDark(headerBgStart);
+  const theme = resolveAgentTheme(agent);
+  const brandColor = theme.primaryColor;
+  const chatBg = theme.chatBg;
+  const isDark = theme.isDark;
+  const titleColor = theme.titleColor;
+  const headerGradient = theme.headerGradient;
+  const isHeaderDark = theme.isHeaderDark;
   const isSidebarLayout = agent.channels?.chatbot?.layoutMode === 'sidebar';
   const allowFileUpload = agent.settings?.fileUploadEnabled ?? true;
   const allowScreenShare = agent.settings?.allowScreenSharing ?? false;
