@@ -40,13 +40,8 @@ export interface ChatbotBuilderViewProps {
 }
 
 export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps = {}) {
-  // Active agents state
-  const [agents, setAgents] = useState<FormAgentData[]>([
-    DEFAULT_FORM_AGENT,
-    createAgentFromPreset('hvac_services'),
-    createAgentFromPreset('dental_medical'),
-    createAgentFromPreset('legal_intake'),
-  ]);
+  // Active agents state - initialized empty, populated from database
+  const [agents, setAgents] = useState<FormAgentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeStudioAgent, setActiveStudioAgent] = useState<FormAgentData | null>(null);
@@ -66,12 +61,12 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
       const res = await fetch('/api/forms/agents');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.agents) && data.agents.length > 0) {
+        if (Array.isArray(data.agents)) {
           setAgents(data.agents);
         }
       }
     } catch {
-      // Non-fatal, keep fallback presets
+      // Non-fatal, keep current state
     } finally {
       setLoading(false);
     }
@@ -415,8 +410,36 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
         </p>
       </div>
 
-      {/* ─── Active AI Agents Grid ──────────────────────────────────────────── */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+      {/* ─── Active AI Agents Grid or Empty State ────────────────────────────── */}
+      {agents.length === 0 && !loading ? (
+        <Card className="border-dashed border-border/80 p-12 text-center bg-card/40">
+          <Bot className="size-12 mx-auto text-blue-500/40 mb-3" />
+          <h3 className="text-base font-bold text-foreground">No AI Agents Deployed Yet</h3>
+          <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+            Build your first 24/7 conversational AI agent. Train it on your documents or website, and deploy across web widgets, WhatsApp, and phone lines in seconds.
+          </p>
+          <div className="flex items-center justify-center gap-3 mt-5">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold gap-1.5"
+              onClick={() => setPresetDialogOpen(true)}
+            >
+              <Sparkles className="size-3.5" /> Launch from Industry Template
+            </Button>
+            <Button
+              variant="outline"
+              className="text-xs font-semibold gap-1.5"
+              onClick={() => {
+                const blankAgent = createAgentFromPreset('generic_business', { name: 'New AI Agent', roleTitle: 'Custom Business Concierge' });
+                setAgents([blankAgent]);
+                setActiveStudioAgent(blankAgent);
+              }}
+            >
+              <Plus className="size-3.5" /> Start from Scratch
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {filteredAgents.map((agent) => {
           const activeChannels = [
             agent.channels?.chatbot?.enabled && 'Embed Widget',
@@ -555,6 +578,7 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
           );
         })}
       </div>
+      )}
 
       {/* ─── 4-Way "Create AI Agent" Dialog (Jotform Parity) ────────────────── */}
       <Dialog

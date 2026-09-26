@@ -359,14 +359,7 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
     presentationEnabled: false,
     whatsappEnabled: false,
   },
-  connectedForms: [
-    {
-      id: 'form_loan',
-      name: 'Loan Application Form',
-      description: 'Borrower financial and property intake form.',
-      submissionCount: 42,
-    },
-  ],
+  connectedForms: [],
   knowledge: {
     crawledUrls: ['https://example.com/rates'],
     documents: [],
@@ -537,9 +530,9 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
     borderRadius: 'lg',
   },
   metrics: {
-    totalConversations: 312,
-    totalFormSubmissions: 148,
-    avgSatisfactionRating: 4.95,
+    totalConversations: 0,
+    totalFormSubmissions: 0,
+    avgSatisfactionRating: 5.0,
   },
 };
 

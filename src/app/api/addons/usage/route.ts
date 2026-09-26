@@ -67,6 +67,9 @@ export async function GET(request: NextRequest) {
         remainingMinutes: 0,
         usedPercent: 0,
         remainingPercent: 100,
+        activeCalls: 0,
+        maxConcurrentCalls: 1,
+        maxCallDurationSeconds: 600,
       });
     }
 

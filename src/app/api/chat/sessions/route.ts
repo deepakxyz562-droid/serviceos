@@ -24,7 +24,9 @@ export async function GET(request: NextRequest) {
 
   try {
     const where: Record<string, unknown> = { tenantId: user.tenantId }
-    if (status !== 'all') {
+    if (status === 'active') {
+      where.status = { in: ['active', 'claimed', 'waiting_for_agent'] }
+    } else if (status !== 'all') {
       where.status = status
     }
 

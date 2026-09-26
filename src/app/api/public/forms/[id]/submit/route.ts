@@ -3,6 +3,11 @@ import { db } from '@/lib/db';
 import { normalizeFormSchema } from '@/lib/forms/form-schema-types';
 import { sendFormSubmissionEmails } from '@/lib/forms/form-email-service';
 import { checkFormSubmissionLimit, incrementTenantFormSubmissionCount } from '@/lib/plan-gate';
+import {
+  parseAppointmentFromSubmission,
+  generateGoogleCalendarUrl,
+  generateOutlookCalendarUrl,
+} from '@/lib/scheduling/calendar-helper';
 
 /**
  * POST /api/public/forms/[id]/submit
@@ -126,7 +131,68 @@ export async function POST(
 
     // ── 5. Trigger Action Connectors (Decoupled Engine) ────────────────────
 
-    // A. Send Emails (Business Notification + Customer Auto-Response)
+    // A. Native Appointment Engine (Calendly Alternative)
+    const apt = parseAppointmentFromSubmission(submissionData, normalizedSchema);
+    let createdBooking: any = null;
+    let bookingDetails: any = null;
+
+    if (apt.found && apt.scheduledAt && apt.scheduledEndTime) {
+      try {
+        const googleUrl = generateGoogleCalendarUrl({
+          title: `${form.name} - ${respondentName || 'Appointment'}`,
+          description: `Appointment scheduled via ${form.name}\n\nNotes: ${apt.notes || ''}`,
+          scheduledAt: apt.scheduledAt,
+          scheduledEndTime: apt.scheduledEndTime,
+        });
+
+        const outlookUrl = generateOutlookCalendarUrl({
+          title: `${form.name} - ${respondentName || 'Appointment'}`,
+          description: `Appointment scheduled via ${form.name}\n\nNotes: ${apt.notes || ''}`,
+          scheduledAt: apt.scheduledAt,
+          scheduledEndTime: apt.scheduledEndTime,
+        });
+
+        bookingDetails = {
+          scheduledAt: apt.scheduledAt,
+          scheduledEndTime: apt.scheduledEndTime,
+          dateStr: apt.dateStr || '',
+          slot: apt.rawSlot || '',
+          timezone: apt.timezone || 'UTC',
+          googleCalendarUrl: googleUrl,
+          outlookCalendarUrl: outlookUrl,
+        };
+
+        createdBooking = await db.booking.create({
+          data: {
+            title: `${form.name} - ${respondentName || respondentEmail || 'Scheduled Appointment'}`,
+            bookingType: 'instant',
+            status: 'confirmed',
+            source: 'form',
+            customerName: respondentName || null,
+            customerEmail: respondentEmail || null,
+            customerPhone: respondentPhone || null,
+            scheduledAt: apt.scheduledAt,
+            scheduledEndTime: apt.scheduledEndTime,
+            duration: apt.durationMinutes || 30,
+            notes: apt.notes || `Booked via form: ${form.name}`,
+            tenantId: form.tenantId || null,
+            workspaceId: form.workspaceId || null,
+            metadataJson: JSON.stringify({
+              formId: form.id,
+              formName: form.name,
+              responseId: response.id,
+              timezone: apt.timezone,
+              rawSlot: apt.rawSlot,
+              dateStr: apt.dateStr,
+            }),
+          },
+        });
+      } catch (bookingErr) {
+        console.error('[form-submit] Failed to auto-create booking:', bookingErr);
+      }
+    }
+
+    // B. Send Emails (Business Notification + Customer Auto-Response + Calendar Invites)
     if (form.tenantId) {
       sendFormSubmissionEmails({
         formTitle: form.name,
@@ -137,6 +203,7 @@ export async function POST(
         respondentPhone,
         schema: normalizedSchema,
         responseId: response.id,
+        bookingDetails,
       }).catch((err) => {
         console.error('[form-submit] Email trigger error:', err);
       });
@@ -197,6 +264,16 @@ export async function POST(
       successTitle: normalizedSchema.settings.successTitle,
       successMessage: normalizedSchema.settings.successMessage,
       redirectUrl: normalizedSchema.settings.redirectUrl || null,
+      booking: createdBooking
+        ? {
+            id: createdBooking.id,
+            scheduledAt: createdBooking.scheduledAt,
+            slot: apt.rawSlot,
+            timezone: apt.timezone,
+            googleCalendarUrl: bookingDetails?.googleCalendarUrl,
+            outlookCalendarUrl: bookingDetails?.outlookCalendarUrl,
+          }
+        : null,
     });
     // ─── CORS headers for embed (WordPress, Shopify, custom sites) ────────
     submitResponse.headers.set('Access-Control-Allow-Origin', '*');

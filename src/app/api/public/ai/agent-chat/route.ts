@@ -162,6 +162,35 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      let createdBooking: any = null;
+      try {
+        const aptDate = date ? new Date(date) : new Date();
+        createdBooking = await db.booking.create({
+          data: {
+            title: `${service || 'Service Appointment'} - ${name || 'Chat Visitor'}`,
+            bookingType: 'ai_auto',
+            status: 'confirmed',
+            source: 'website',
+            customerName: name || null,
+            customerEmail: email || null,
+            customerPhone: phone || null,
+            scheduledAt: aptDate,
+            duration: 45,
+            notes: `[Booked via AI Chat]\nPreferred Slot: ${date || 'Anytime'} at ${time || 'Flexible'}\nNotes: ${notes || 'None'}`,
+            tenantId: tenantId || null,
+            workspaceId: workspaceId || null,
+            metadataJson: JSON.stringify({
+              leadId: newLead.id,
+              service,
+              date,
+              time,
+            }),
+          },
+        });
+      } catch (e) {
+        console.error('[agent-chat] Failed to create booking:', e);
+      }
+
       return NextResponse.json(
         {
           success: true,
@@ -169,6 +198,7 @@ export async function POST(req: NextRequest) {
           card: {
             type: 'booking_confirmation',
             leadId: newLead.id,
+            bookingId: createdBooking?.id,
             name,
             service,
             date,
@@ -220,13 +250,64 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ─── Human Handoff / Escalation Action ─────────────────────────────────
+    // ─── Human Handoff / Escalation Action (Text.com Parity) ──────────────
     if (action === 'request_human') {
+      let liveSessionId: string | null = null;
+      if (tenantId) {
+        try {
+          const session = await db.publicChatSession.create({
+            data: {
+              tenantId,
+              workspaceId: workspaceId || null,
+              visitorName: body.visitorName || null,
+              visitorEmail: body.visitorEmail || null,
+              visitorPhone: body.visitorPhone || null,
+              status: 'waiting_for_agent',
+              lastMessageAt: new Date(),
+              metadataJson: JSON.stringify({
+                source: 'ai_chatbot_escalation',
+                agentId,
+                agentName: tenantName,
+              }),
+            },
+          });
+          liveSessionId = session.id;
+
+          // Seed transcript into PublicChatMessage rows for operator console context
+          if (Array.isArray(history) && history.length > 0) {
+            for (const h of history) {
+              if (!h || !h.content) continue;
+              await db.publicChatMessage.create({
+                data: {
+                  sessionId: session.id,
+                  senderType: h.role === 'user' ? 'visitor' : 'system',
+                  senderName: h.role === 'user' ? (body.visitorName || 'Visitor') : 'AI Assistant',
+                  body: String(h.content),
+                },
+              });
+            }
+          }
+
+          // Add system escalation alert message
+          await db.publicChatMessage.create({
+            data: {
+              sessionId: session.id,
+              senderType: 'system',
+              senderName: 'System',
+              body: `🔔 Visitor requested live human agent escalation.`,
+            },
+          });
+        } catch (err) {
+          console.error('[agent-chat] Failed to create live chat escalation session:', err);
+        }
+      }
+
       return NextResponse.json(
         {
-          reply: `I have alerted our team! A representative from ${tenantName} will join this chat or reach out to you shortly. You can also leave your phone or email below.`,
+          reply: `I have alerted our live operator team! A specialist from ${tenantName} has received your chat and will join momentarily.`,
           humanHandoff: true,
-          status: 'human_requested',
+          status: 'waiting_for_agent',
+          sessionId: liveSessionId,
           businessName: tenantName,
         },
         { headers: CORS_HEADERS },

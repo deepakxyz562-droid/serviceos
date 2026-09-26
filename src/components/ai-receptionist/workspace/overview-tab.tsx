@@ -73,14 +73,14 @@ export function OverviewTab({ data, onNavigate, onTestCall }: OverviewTabProps) 
         <KpiCard
           icon={PhoneCall}
           title="Concurrent Lines"
-          value={usage ? `${usage.activeCalls} / ${usage.maxConcurrentCalls}` : '0 / 1'}
+          value={usage && usage.maxConcurrentCalls != null ? `${usage.activeCalls ?? 0} / ${usage.maxConcurrentCalls}` : '0 / 1'}
           subtext="Simultaneous call capacity"
           color="blue"
         />
         <KpiCard
           icon={Clock}
           title="Max Duration"
-          value={usage ? `${Math.floor(usage.maxCallDurationSeconds / 60)} min` : '10 min'}
+          value={usage && usage.maxCallDurationSeconds ? `${Math.floor(usage.maxCallDurationSeconds / 60)} min` : '10 min'}
           subtext="Per call auto-limit"
           color="amber"
         />

@@ -1102,15 +1102,82 @@ export function AgentBuildTab({
                 </div>
 
                 {/* 4. Forms */}
-                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/80">
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-bold text-slate-200">Forms</p>
-                    <p className="text-[10px] text-slate-400">Allow users to view and fill connected forms</p>
+                <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-bold text-slate-200">Forms</p>
+                      <p className="text-[10px] text-slate-400">Allow users to view and fill connected forms</p>
+                    </div>
+                    <Switch
+                      checked={agent.navigation?.formsEnabled ?? true}
+                      onCheckedChange={(c) => onChange({ ...agent, navigation: { ...agent.navigation, formsEnabled: c } })}
+                    />
                   </div>
-                  <Switch
-                    checked={agent.navigation?.formsEnabled ?? true}
-                    onCheckedChange={(c) => onChange({ ...agent, navigation: { ...agent.navigation, formsEnabled: c } })}
-                  />
+
+                  {(agent.navigation?.formsEnabled ?? true) && (
+                    <div className="pt-2 border-t border-slate-700/60 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-300">Connected Forms ({(agent.connectedForms || []).length})</span>
+                      </div>
+
+                      {/* List of currently connected forms */}
+                      {(agent.connectedForms || []).length > 0 ? (
+                        <div className="space-y-1.5">
+                          {agent.connectedForms.map((cf) => (
+                            <div key={cf.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-700 text-xs">
+                              <div className="min-w-0 flex-1 pr-2">
+                                <p className="font-semibold text-slate-200 truncate">{cf.name}</p>
+                                {cf.description && <p className="text-[10px] text-slate-400 truncate">{cf.description}</p>}
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-rose-400 hover:bg-rose-950/30"
+                                onClick={() => {
+                                  const updated = (agent.connectedForms || []).filter((f) => f.id !== cf.id);
+                                  onChange({ ...agent, connectedForms: updated });
+                                  toast.success(`Removed form "${cf.name}"`);
+                                }}
+                                title="Disconnect form"
+                              >
+                                <X className="size-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-400 italic">No forms attached to this agent yet.</p>
+                      )}
+
+                      {/* Dropdown / list of available forms to connect */}
+                      {availableForms.filter((af) => !(agent.connectedForms || []).some((cf) => cf.id === af.id)).length > 0 && (
+                        <div className="pt-1.5">
+                          <label className="text-[10px] font-medium text-slate-400 block mb-1">Add available form:</label>
+                          <div className="space-y-1">
+                            {availableForms
+                              .filter((af) => !(agent.connectedForms || []).some((cf) => cf.id === af.id))
+                              .map((af) => (
+                                <button
+                                  key={af.id}
+                                  type="button"
+                                  onClick={() => {
+                                    const newConnected = [...(agent.connectedForms || []), { id: af.id, name: af.name, description: af.description }];
+                                    onChange({ ...agent, connectedForms: newConnected });
+                                    toast.success(`Connected form "${af.name}" to AI Agent`);
+                                  }}
+                                  className="w-full flex items-center justify-between p-1.5 rounded bg-slate-800 hover:bg-slate-700/80 border border-slate-700/50 text-left text-xs transition-colors"
+                                >
+                                  <span className="text-slate-300 truncate max-w-[180px]">{af.name}</span>
+                                  <span className="text-[10px] text-blue-400 font-bold flex items-center gap-0.5">
+                                    <Plus className="size-3" /> Connect
+                                  </span>
+                                </button>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* 5. Presentation */}

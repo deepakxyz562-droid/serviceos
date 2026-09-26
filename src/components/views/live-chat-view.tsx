@@ -258,6 +258,28 @@ export function LiveChatView() {
     }
   }
 
+  async function handleClaimSession() {
+    if (!selectedSessionId) return
+    try {
+      await fetch(`/api/chat/sessions/${selectedSessionId}/claim`, { method: 'POST' })
+      fetchSessions()
+      fetchMessages(selectedSessionId)
+    } catch {
+      // silent
+    }
+  }
+
+  async function handleHandBackToBot() {
+    if (!selectedSessionId) return
+    try {
+      await fetch(`/api/chat/sessions/${selectedSessionId}/claim?action=hand_back_to_bot`, { method: 'POST' })
+      fetchSessions()
+      fetchMessages(selectedSessionId)
+    } catch {
+      // silent
+    }
+  }
+
   const selectedSession = sessions.find((s) => s.id === selectedSessionId)
 
   return (
@@ -338,12 +360,14 @@ export function LiveChatView() {
                       )}
                       <div className="flex items-center gap-1.5 mt-1">
                         <Circle className={`h-2 w-2 fill-current ${
+                          s.status === 'waiting_for_agent' ? 'text-amber-500 animate-pulse' :
                           s.status === 'active' ? 'text-emerald-500' :
                           s.status === 'claimed' ? 'text-blue-500' :
                           'text-muted-foreground'
                         }`} />
                         <span className="text-xs text-muted-foreground">
-                          {s.status === 'active' ? 'Waiting' :
+                          {s.status === 'waiting_for_agent' ? 'Needs Agent' :
+                           s.status === 'active' ? 'Waiting' :
                            s.status === 'claimed' ? 'Claimed' :
                            'Closed'}
                         </span>
@@ -421,8 +445,29 @@ export function LiveChatView() {
                   )}
                   <span className="ml-1 hidden sm:inline">Summarize</span>
                 </Button>
-                <Badge variant={selectedSession.status === 'active' ? 'default' : 'secondary'} className="text-xs">
-                  {selectedSession.status}
+                {selectedSession.status === 'waiting_for_agent' || selectedSession.status === 'active' ? (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8"
+                    onClick={handleClaimSession}
+                  >
+                    Claim Chat
+                  </Button>
+                ) : selectedSession.status === 'claimed' ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-blue-600 border-blue-200 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-xs h-8"
+                    onClick={handleHandBackToBot}
+                  >
+                    Hand Back to AI
+                  </Button>
+                ) : null}
+                <Badge
+                  variant={selectedSession.status === 'waiting_for_agent' ? 'destructive' : selectedSession.status === 'active' ? 'default' : 'secondary'}
+                  className="text-xs"
+                >
+                  {selectedSession.status === 'waiting_for_agent' ? 'Needs Agent' : selectedSession.status}
                 </Badge>
                 {selectedSession.status !== 'closed' && (
                   <Button variant="ghost" size="sm" onClick={handleCloseSession}>

@@ -40,6 +40,7 @@ import {
   SubmissionDetailDrawer,
   FormSubmissionItem,
 } from '@/features/forms/components/submission-detail-drawer';
+import { FormAppointmentsTab } from '@/features/forms/components/appointments/form-appointments-tab';
 
 interface FormStats {
   total: number;
@@ -54,6 +55,7 @@ interface FormOption {
 }
 
 export function FormSubmissionsView() {
+  const [activeMainTab, setActiveMainTab] = useState<'submissions' | 'appointments'>('submissions');
   const [submissions, setSubmissions] = useState<FormSubmissionItem[]>([]);
   const [stats, setStats] = useState<FormStats>({
     total: 0,
@@ -187,8 +189,45 @@ export function FormSubmissionsView() {
         </div>
       </div>
 
-      {/* ─── Metric Overview Cards ──────────────────────────────────────── */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+      {/* ─── Mode Switcher: Submissions vs Calendly Appointments Engine ─── */}
+      <div className="flex items-center gap-2 border-b border-border/80 pb-2">
+        <button
+          onClick={() => setActiveMainTab('submissions')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            activeMainTab === 'submissions'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+          }`}
+        >
+          <Inbox className="size-4" />
+          All Submissions
+          <Badge variant="secondary" className="ml-1 text-[10px] py-0">
+            {stats.total}
+          </Badge>
+        </button>
+
+        <button
+          onClick={() => setActiveMainTab('appointments')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            activeMainTab === 'appointments'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+          }`}
+        >
+          <Calendar className="size-4" />
+          Appointments (Calendly Engine)
+          <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded">
+            Native
+          </span>
+        </button>
+      </div>
+
+      {activeMainTab === 'appointments' ? (
+        <FormAppointmentsTab />
+      ) : (
+        <>
+          {/* ─── Metric Overview Cards ──────────────────────────────────────── */}
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         <Card className="p-4 border-border">
           <div className="flex items-center gap-3">
             <div className="size-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300">
@@ -477,6 +516,8 @@ export function FormSubmissionsView() {
           </div>
         )}
       </Card>
+      </>
+      )}
 
       {/* Detail Inspector Slide-Over Drawer */}
       <SubmissionDetailDrawer

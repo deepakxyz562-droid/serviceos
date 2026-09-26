@@ -2,7 +2,7 @@ import { sendEmail } from '@/lib/email-send';
 import { db } from '@/lib/db';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 
-interface FormSubmissionEmailPayload {
+export interface FormSubmissionEmailPayload {
   formTitle: string;
   tenantId: string;
   data: Record<string, unknown>;
@@ -11,14 +11,24 @@ interface FormSubmissionEmailPayload {
   respondentPhone?: string;
   schema: FormSchema;
   responseId?: string;
+  bookingDetails?: {
+    scheduledAt: Date;
+    scheduledEndTime: Date;
+    dateStr: string;
+    slot: string;
+    timezone: string;
+    googleCalendarUrl?: string;
+    outlookCalendarUrl?: string;
+  };
 }
 
 /**
  * Sends actionable notification email to the business and optional auto-response to submitter.
- * Uses provider-agnostic `sendEmail()` with correct `Reply-To` headers and 1-click action buttons.
+ * Uses provider-agnostic `sendEmail()` with correct `Reply-To` headers, 1-click action buttons,
+ * and 1-click calendar sync when an appointment slot was booked.
  */
 export async function sendFormSubmissionEmails(payload: FormSubmissionEmailPayload) {
-  const { formTitle, tenantId, data, respondentName, respondentEmail, respondentPhone, schema, responseId } = payload;
+  const { formTitle, tenantId, data, respondentName, respondentEmail, respondentPhone, schema, responseId, bookingDetails } = payload;
 
   try {
     const tenant = await db.tenant.findUnique({
@@ -51,12 +61,27 @@ export async function sendFormSubmissionEmails(payload: FormSubmissionEmailPaylo
           )
           .join('');
 
+        const bookingBannerHtml = bookingDetails ? `
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+            <div style="font-size: 11px; font-weight: 700; color: #15803d; text-transform: uppercase; letter-spacing: 0.05em;">📅 Confirmed Appointment Booked</div>
+            <div style="color: #166534; font-size: 16px; font-weight: 700; margin: 4px 0 8px;">
+              ${bookingDetails.dateStr} &bull; ${bookingDetails.slot} (${bookingDetails.timezone})
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              ${bookingDetails.googleCalendarUrl ? `<a href="${bookingDetails.googleCalendarUrl}" target="_blank" style="display: inline-block; background: #16a34a; color: #ffffff; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none; margin-right: 6px;">Add to Google Calendar</a>` : ''}
+              ${bookingDetails.outlookCalendarUrl ? `<a href="${bookingDetails.outlookCalendarUrl}" target="_blank" style="display: inline-block; background: #0284c7; color: #ffffff; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; text-decoration: none;">Add to Outlook</a>` : ''}
+            </div>
+          </div>
+        ` : '';
+
         const emailHtml = `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 28px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
             <div style="padding-bottom: 16px; border-bottom: 2px solid #059669; margin-bottom: 20px;">
-              <span style="font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase; letter-spacing: 0.05em;">⚡ New Inbound Lead</span>
+              <span style="font-size: 11px; font-weight: 700; color: #059669; text-transform: uppercase; letter-spacing: 0.05em;">⚡ ${bookingDetails ? 'New Appointment & Lead' : 'New Inbound Lead'}</span>
               <h2 style="margin: 6px 0 0; color: #0f172a; font-size: 22px; font-weight: 800;">${formTitle}</h2>
             </div>
+
+            ${bookingBannerHtml}
             
             <div style="margin-bottom: 24px;">
               ${fieldsHtml}
@@ -86,7 +111,7 @@ export async function sendFormSubmissionEmails(payload: FormSubmissionEmailPaylo
             to: recipient,
             from: `Fieseros Forms <notifications@fieseros.com>`,
             replyTo: respondentEmail || undefined,
-            subject: `[New Lead] ${formTitle} - ${respondentName || respondentEmail || 'New Submission'}`,
+            subject: `[${bookingDetails ? 'Appointment Booked' : 'New Lead'}] ${formTitle} - ${respondentName || respondentEmail || 'New Submission'}`,
             html: emailHtml,
             tenantId,
           }).catch((err) => {
@@ -96,20 +121,40 @@ export async function sendFormSubmissionEmails(payload: FormSubmissionEmailPaylo
       }
     }
 
-    // ── 2. Send Customer Auto-Response (if enabled) ───────────────────────
+    // ── 2. Send Customer Auto-Response / Appointment Confirmation ─────────
     if (
-      schema.settings.actions.sendCustomerAutoresponse?.enabled &&
+      (schema.settings.actions.sendCustomerAutoresponse?.enabled || bookingDetails) &&
       respondentEmail
     ) {
-      const autoSubject = schema.settings.actions.sendCustomerAutoresponse.subject || 'Thank you for reaching out!';
-      const autoBody = schema.settings.actions.sendCustomerAutoresponse.messageBody || 'We have received your request and will contact you shortly.';
+      const autoSubject = bookingDetails
+        ? `Appointment Confirmed: ${formTitle} with ${businessName}`
+        : schema.settings.actions.sendCustomerAutoresponse?.subject || 'Thank you for reaching out!';
+      
+      const autoBody = schema.settings.actions.sendCustomerAutoresponse?.messageBody || 
+        (bookingDetails 
+          ? `Your appointment has been confirmed! We have reserved your time on our calendar.`
+          : 'We have received your request and will contact you shortly.');
+
+      const customerCalendarHtml = bookingDetails ? `
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin: 20px 0;">
+          <div style="font-size: 11px; font-weight: 700; color: #0284c7; text-transform: uppercase;">Your Reserved Time Slot</div>
+          <div style="font-size: 16px; font-weight: 700; color: #0f172a; margin: 4px 0 12px;">
+            ${bookingDetails.dateStr} &bull; ${bookingDetails.slot} (${bookingDetails.timezone})
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            ${bookingDetails.googleCalendarUrl ? `<a href="${bookingDetails.googleCalendarUrl}" target="_blank" style="display: inline-block; background: #0284c7; color: #ffffff; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none; margin-right: 6px;">📅 Add to Google Calendar</a>` : ''}
+            ${bookingDetails.outlookCalendarUrl ? `<a href="${bookingDetails.outlookCalendarUrl}" target="_blank" style="display: inline-block; background: #334155; color: #ffffff; padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; text-decoration: none;">📅 Add to Outlook</a>` : ''}
+          </div>
+        </div>
+      ` : '';
 
       const autoHtml = `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0;">
           <h3 style="color: #0f172a; margin-top: 0;">${businessName}</h3>
           <p style="color: #334155; font-size: 14px; line-height: 1.6; white-space: pre-line;">${autoBody}</p>
+          ${customerCalendarHtml}
           <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0 16px;" />
-          <p style="color: #94a3b8; font-size: 11px;">Sent via ${businessName}. Reply directly to this email if you have any questions.</p>
+          <p style="color: #94a3b8; font-size: 11px;">Sent via ${businessName}. Reply directly to this email if you have any questions or need to reschedule.</p>
         </div>
       `;
 
@@ -121,7 +166,7 @@ export async function sendFormSubmissionEmails(payload: FormSubmissionEmailPaylo
         html: autoHtml,
         tenantId,
       }).catch((err) => {
-        console.error('[form-email] Failed to send customer auto-response:', err);
+        console.error('[form-email] Failed to send customer confirmation:', err);
       });
     }
   } catch (error) {

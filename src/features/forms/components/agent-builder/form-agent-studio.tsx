@@ -109,6 +109,22 @@ export function FormAgentStudio({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState(agent.name);
   const [activeConnectedFormModal, setActiveConnectedFormModal] = useState<ConnectedFormRef | null>(null);
+  const [accountForms, setAccountForms] = useState<Array<{ id: string; name: string; description?: string }>>([]);
+
+  useEffect(() => {
+    fetch('/api/forms')
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data?.forms)) {
+          setAccountForms(data.forms.map((f: any) => ({
+            id: f.id,
+            name: f.name || 'Untitled Form',
+            description: f.description || '',
+          })));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const setAgent = (updater: FormAgentData | ((prev: FormAgentData) => FormAgentData)) => {
     setAgentState((prev) => {
@@ -505,7 +521,7 @@ export function FormAgentStudio({
               <AgentBuildTab
                 agent={agent}
                 onChange={setAgent}
-                availableForms={agent.connectedForms}
+                availableForms={accountForms}
                 activeChannel={selectedChannel}
                 mode={rightDrawerMode}
                 onClose={() => setRightDrawerOpen(false)}

@@ -50,6 +50,21 @@ export async function POST(
       return NextResponse.json({ success: true, status: 'closed' })
     }
 
+    if (action === 'hand_back_to_bot') {
+      await db.publicChatSession.update({
+        where: { id: sessionId },
+        data: { status: 'active', claimedById: null },
+      })
+      await db.publicChatMessage.create({
+        data: {
+          sessionId,
+          senderType: 'system',
+          body: 'Agent handed conversation back to AI Assistant.',
+        },
+      }).catch(() => {})
+      return NextResponse.json({ success: true, status: 'active', botActive: true })
+    }
+
     // Default: claim
     await db.publicChatSession.update({
       where: { id: sessionId },
