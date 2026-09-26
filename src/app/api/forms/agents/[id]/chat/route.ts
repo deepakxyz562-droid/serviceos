@@ -73,9 +73,8 @@ export async function POST(
     ]
       .filter(Boolean)
       .join('\n\n');
-
     const lowerMessage = (message || '').toLowerCase().trim();
-    const primaryConnectedForm = agent.connectedForms?.[0];
+
 
     // Check for human escalation intent via unified handoff service
     if (isEscalationIntent(message)) {
