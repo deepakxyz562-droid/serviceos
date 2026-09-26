@@ -33,6 +33,10 @@ const ListingOnboarding = dynamic(
   () => import('@/components/onboarding/listing-onboarding').then(m => ({ default: m.ListingOnboarding })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
+const StandaloneOnboarding = dynamic(
+  () => import('@/components/onboarding/standalone-onboarding').then(m => ({ default: m.StandaloneOnboarding })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
 const AppLayout = dynamic(
   () => import('@/components/layout/app-layout').then(m => ({ default: m.AppLayout })),
   { ssr: false, loading: () => <ViewLoader /> }
@@ -183,7 +187,7 @@ export default function HomePageClient() {
   //   'saas'           → full 4-step SaaSOnboarding wizard (signupMode='crm_trial')
   //   'listing'        → mini 1-step ListingOnboarding wizard (signupMode='listing_only')
   const [onboardingView, setOnboardingView] = useState<
-    null | 'mode_selector' | 'saas' | 'listing'
+    null | 'mode_selector' | 'saas' | 'listing' | 'standalone'
   >(null);
 
   // Handle Google OAuth callback URL parameters.
@@ -354,6 +358,8 @@ export default function HomePageClient() {
               setOnboardingView('listing');
             } else if (sm === 'crm_trial') {
               setOnboardingView('saas');
+            } else if (sm === 'standalone') {
+              setOnboardingView('standalone');
             } else {
               setOnboardingView('mode_selector');
             }
@@ -463,6 +469,8 @@ export default function HomePageClient() {
                   setOnboardingView('listing');
                 } else if (sm === 'crm_trial') {
                   setOnboardingView('saas');
+                } else if (sm === 'standalone') {
+                  setOnboardingView('standalone');
                 } else {
                   setOnboardingView('mode_selector');
                 }
@@ -968,6 +976,7 @@ export default function HomePageClient() {
             user={auth.user as any}
             onChooseCrm={() => setOnboardingView('saas')}
             onChooseListing={() => setOnboardingView('listing')}
+            onChooseStandalone={() => setOnboardingView('standalone')}
           />
           <PWAInstallBanner />
           <IOSInstallBanner />
@@ -1002,6 +1011,24 @@ export default function HomePageClient() {
               setOnboardingView(null);
               // Land the listing-only provider on their marketplace dashboard
               useAppStore.getState().setCurrentView('marketplaceDashboard');
+            }}
+          />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+    // 2-step standalone AI Forms & Chatbot onboarding wizard
+    if (onboardingView === 'standalone') {
+      return (
+        <>
+          <StandaloneOnboarding
+            tenant={auth.tenant as any}
+            user={auth.user as any}
+            onComplete={() => {
+              setOnboardingView(null);
+              // Land the standalone user directly in the Form Builder
+              useAppStore.getState().setCurrentView('formBuilder');
             }}
           />
           <PWAInstallBanner />

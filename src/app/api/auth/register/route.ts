@@ -98,8 +98,11 @@ export async function POST(request: NextRequest) {
         listingTier: isStandalone ? 'none' : 'claimed',
         publicProfileEnabled: isStandalone ? false : true,
         signupMode: isStandalone ? 'standalone' : (isFreePlan ? 'free' : 'crm_trial'),
-        onboardingCompleted: isStandalone || isFreePlan ? true : false,
-        onboardingStep: isStandalone || isFreePlan ? 4 : 1,
+        // Standalone users go through the 2-step StandaloneOnboarding wizard
+        // (website URL + plan choice), so onboardingCompleted must be false.
+        // Only the permanent free plan skips onboarding entirely.
+        onboardingCompleted: isFreePlan ? true : false,
+        onboardingStep: isFreePlan ? 4 : 1,
       },
     });
 
