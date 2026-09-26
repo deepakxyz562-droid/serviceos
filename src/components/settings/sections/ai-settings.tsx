@@ -40,7 +40,6 @@ export function AiSettings() {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [tenantId, setTenantId] = useState('');
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [subscribing, setSubscribing] = useState(false);
 
   const siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com';
 
@@ -63,24 +62,13 @@ export function AiSettings() {
       .catch(() => undefined);
   }, []);
 
-  const handleSubscribeAddon = async () => {
-    setSubscribing(true);
-    try {
-      const res = await fetch('/api/addon-subscriptions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ addonCode: 'ai_website_forms', billingCycle: 'monthly' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Subscription failed');
-      setIsSubscribed(true);
-      toast.success('🎉 AI Website Employee & Smart Forms activated successfully!');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Subscription failed');
-    } finally {
-      setSubscribing(false);
-    }
+  const handleSubscribeAddon = () => {
+    // Redirect to the Billing page with the add-on pre-selected.
+    // The billing page's PaymentMethodChooserDialog handles the real payment
+    // flow (PayPal or Creem) before activating the add-on.
+    window.location.href = '/settings?tab=billing&addon=ai_website_forms';
   };
+
 
   const handleCrawlWebsite = async () => {
     if (!crawlUrl.trim()) {
@@ -156,10 +144,9 @@ export function AiSettings() {
                       size="sm"
                       className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs shadow-xs font-semibold"
                       onClick={handleSubscribeAddon}
-                      disabled={subscribing}
                     >
-                      {subscribing ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-                      {subscribing ? 'Activating…' : 'Activate Add-on ($7/mo)'}
+                      <Sparkles className="size-3.5" />
+                      Subscribe ($7/mo)
                     </Button>
                   ) : (
                     <Button

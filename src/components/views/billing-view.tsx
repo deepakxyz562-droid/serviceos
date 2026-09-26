@@ -123,6 +123,8 @@ interface SubscriptionData {
   } | null;
   billingEvents?: BillingEventRecord[];
   plans?: CatalogPlan[];
+  isStandalone?: boolean;
+  tenantSignupMode?: string;
 }
 
 interface BillingEventRecord {
@@ -268,6 +270,27 @@ interface AddonSubscriptionRecord {
 // flow back through /api/subscriptions → data.plans.
 const FALLBACK_PLANS: Plan[] = [
   {
+    id: 'free',
+    name: 'Free Forever',
+    monthlyPrice: 0,
+    originalMonthlyPrice: 0,
+    originalYearlyPrice: 0,
+    yearlyPrice: 0,
+    description: 'For solo professionals getting started',
+    features: [
+      { text: '1 user', included: true },
+      { text: '100 jobs', included: true },
+      { text: '2 workflows', included: true },
+      { text: 'Estimates & Invoices', included: true },
+      { text: 'Scheduling & Calendar', included: true },
+      { text: 'Customer Portal', included: true },
+      { text: 'AI Form Builder', included: true },
+      { text: 'WhatsApp notifications', included: false },
+      { text: 'Lead pipeline', included: false },
+      { text: 'API access', included: false },
+    ],
+  },
+  {
     id: 'starter',
     name: 'Starter',
     monthlyPrice: 29,
@@ -352,6 +375,44 @@ const FALLBACK_PLANS: Plan[] = [
       { text: 'SLA guarantee', included: true },
       { text: 'On-premise option', included: true },
       { text: 'Dedicated account manager', included: true },
+    ],
+  },
+];
+
+// Fallback plans for standalone website embed subscribers (WordPress/Shopify)
+const FALLBACK_STANDALONE_PLANS: Plan[] = [
+  {
+    id: 'standalone_starter',
+    name: 'Standalone AI & Forms Starter',
+    monthlyPrice: 10,
+    originalMonthlyPrice: 19,
+    originalYearlyPrice: 190,
+    yearlyPrice: 100,
+    description: 'For standalone WordPress / Shopify website owners (1 AI Chat Agent, 5 Smart Forms, SES notifications).',
+    features: [
+      { text: '1 user', included: true },
+      { text: '50 jobs/month', included: true },
+      { text: '5 workflows', included: true },
+      { text: 'AI Website Forms', included: true },
+      { text: 'Conversational Booking', included: true },
+      { text: 'SES Notifications', included: true },
+    ],
+  },
+  {
+    id: 'standalone_business',
+    name: 'Standalone AI & Forms Business',
+    monthlyPrice: 19,
+    originalMonthlyPrice: 29,
+    originalYearlyPrice: 290,
+    yearlyPrice: 190,
+    description: 'For agencies & multi-site businesses (Unlimited AI Agents & Forms, PDF Knowledge Ingestion, Whitelabeling).',
+    features: [
+      { text: '5 users', included: true },
+      { text: '500 jobs/month', included: true },
+      { text: '50 workflows', included: true },
+      { text: 'Unlimited Forms & AI Agents', included: true },
+      { text: 'PDF Knowledge Ingestion', included: true },
+      { text: 'White-label Branding', included: true },
     ],
   },
 ];
@@ -512,6 +573,10 @@ export function BillingView() {
   const [subscribingAddonCode, setSubscribingAddonCode] = useState<string | null>(null);
   const [cancellingAddon, setCancellingAddon] = useState<AddonSubscriptionRecord | null>(null);
   const [isCancellingAddon, setIsCancellingAddon] = useState(false);
+  // Holds the add-on being paid for — opens PaymentMethodChooserDialog in add-on mode.
+  const [addonChooserPlan, setAddonChooserPlan] = useState<ChooserPlan | null>(null);
+  // PayPal checkout plan for the add-on (separate from main plan PayPal flow).
+  const [addonPaypalPlan, setAddonPaypalPlan] = useState<ChooserPlan | null>(null);
   // ── SMS Top-up state ──────────────────────────────────────────────────────
   const [showSmsTopupDialog, setShowSmsTopupDialog] = useState(false);
   const [selectedSmsPack, setSelectedSmsPack] = useState<string>('500_sms');
@@ -590,13 +655,26 @@ export function BillingView() {
     }
   }, [isLoading]);
 
+  const isStandaloneTenant =
+    data.isStandalone === true ||
+    data.tenantSignupMode === 'standalone' ||
+    String(data.plan || '').startsWith('standalone');
+
+  const fallbackList = isStandaloneTenant ? FALLBACK_STANDALONE_PLANS : FALLBACK_PLANS;
+
   // Compute the effective plan list: prefer DB-backed catalog from the API,
-  // fall back to the hardcoded FALLBACK_PLANS constant.
+  // fall back to the appropriate fallback constant.
+  // Segment standalone website embed plans from regular SaaS CRM plans so CRM
+  // users never see standalone plans, and standalone users only see their tier.
   const effectivePlans: Plan[] = (data.plans && data.plans.length > 0
     ? data.plans
         // Filter out add-on plans (ai_pro_addon, marketplace_*, etc.) — they
         // are rendered in the dedicated Add-ons section below.
-        .filter((cp) => !cp.isAddon)
+        .filter((cp) => {
+          if (cp.isAddon) return false;
+          const isStandalonePlan = cp.code.startsWith('standalone');
+          return isStandaloneTenant ? isStandalonePlan : !isStandalonePlan;
+        })
         .map((cp) => {
           // Map DB catalog plan → local Plan interface
           const features: PlanFeature[] = [
@@ -623,7 +701,7 @@ export function BillingView() {
             features,
           } as Plan;
         })
-    : FALLBACK_PLANS);
+    : fallbackList);
 
   // Add-on plans (DB-backed) — used to look up live prices for the Add-ons
   // section. Falls back to ADDON_CATALOG's fallbackMonthlyPrice when a plan
@@ -634,7 +712,7 @@ export function BillingView() {
 
   const trialDays = data.daysRemainingInTrial ?? getTrialDaysRemaining(data.trialEndsAt);
   const isTrialExpired = data.isTrialExpired === true;
-  const currentPlanData = effectivePlans.find((p) => p.id === data.plan) || FALLBACK_PLANS[0];
+  const currentPlanData = effectivePlans.find((p) => p.id === data.plan) || fallbackList[0];
   const currentPrice = isYearly ? (currentPlanData?.yearlyPrice || 0) : (currentPlanData?.monthlyPrice || 0);
 
   const smsLimit = data.usage?.sms?.limit ?? data.subscription?.smsQuota ?? 100;
@@ -669,15 +747,35 @@ export function BillingView() {
     },
   ];
 
+  // Tier rank mapping for standard and standalone plans to ensure
+  // upgrade vs downgrade is determined by rank and price, not array order.
+  const PLAN_TIER_RANK: Record<string, number> = {
+    free: 0,
+    launch_special: 1,
+    starter: 2,
+    growth: 3,
+    pro: 3,
+    business: 4,
+    enterprise: 5,
+    standalone_starter: 1,
+    standalone_business: 2,
+  };
+
   // Determine whether clicking a plan card is an upgrade or a downgrade.
   // Upgrades → PayPal checkout (immediate). Downgrades → schedule for next
   // renewal (Phase 3). Same plan → disabled.
   function getPlanDirection(plan: Plan): 'upgrade' | 'downgrade' | 'current' {
     if (plan.id === data.plan) return 'current';
-    const currentIdx = effectivePlans.findIndex((p) => p.id === data.plan);
-    const targetIdx = effectivePlans.findIndex((p) => p.id === plan.id);
-    if (targetIdx < 0 || currentIdx < 0) return 'upgrade';
-    return targetIdx > currentIdx ? 'upgrade' : 'downgrade';
+    const currentRank = PLAN_TIER_RANK[data.plan] ?? 0;
+    const targetRank = PLAN_TIER_RANK[plan.id] ?? 0;
+    if (targetRank !== currentRank) {
+      return targetRank > currentRank ? 'upgrade' : 'downgrade';
+    }
+    // If same tier rank (or unknown), compare price
+    const currentPlan = effectivePlans.find((p) => p.id === data.plan);
+    const currentPrice = isYearly ? (currentPlan?.yearlyPrice ?? 0) : (currentPlan?.monthlyPrice ?? 0);
+    const targetPrice = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
+    return targetPrice >= currentPrice ? 'upgrade' : 'downgrade';
   }
 
   async function handleUpgrade(plan: Plan) {
@@ -825,6 +923,36 @@ export function BillingView() {
   }, [refreshAddonSubscriptions]);
 
   async function handleSubscribeAddon(addonCode: string) {
+    // Look up the live price from the DB-backed plan catalog; fall back to
+    // ADDON_CATALOG's static price if the DB hasn't seeded the add-on yet.
+    const dbPlan = addonPlansFromDb.find((p) => p.code === addonCode);
+    const catalogEntry = ADDON_CATALOG.find((a) => a.code === addonCode);
+    const monthlyPrice = dbPlan?.monthlyPrice ?? catalogEntry?.fallbackMonthlyPrice ?? 0;
+    const yearlyPrice = dbPlan?.yearlyPrice ?? (monthlyPrice * 12);
+    const displayName = dbPlan?.name ?? catalogEntry?.name ?? addonCode;
+
+    // Build a ChooserPlan compatible with PaymentMethodChooserDialog.
+    const addonPlan: ChooserPlan = {
+      id: addonCode as ChooserPlan['id'],
+      name: displayName,
+      monthlyPrice,
+      yearlyPrice,
+    };
+
+    // Open the payment method chooser — user must pay before the add-on activates.
+    setAddonChooserPlan(addonPlan);
+  }
+
+  /**
+   * Called after payment provider confirms payment for an add-on.
+   * Calls POST /api/addon-subscriptions WITH a valid paymentProvider +
+   * providerSubscriptionId so the API can set status='active'.
+   */
+  async function handleAddonPaymentSuccess(
+    addonCode: string,
+    paymentProvider: string,
+    providerSubscriptionId: string,
+  ) {
     setSubscribingAddonCode(addonCode);
     try {
       const res = await authFetch('/api/addon-subscriptions', {
@@ -833,19 +961,15 @@ export function BillingView() {
         body: JSON.stringify({
           addonCode,
           billingCycle: isYearly ? 'yearly' : 'monthly',
+          paymentProvider,
+          providerSubscriptionId,
         }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || 'Failed to subscribe');
-      // If the API returned a checkout URL (real Creem/PayPal flow), redirect.
-      if (json.checkoutUrl) {
-        window.location.href = json.checkoutUrl;
-        return;
-      }
-      toast.success('Add-on activated', {
+      if (!res.ok) throw new Error(json.error || 'Failed to activate add-on');
+      toast.success('Add-on activated! 🎉', {
         description:
-          json.message ||
-          'Your add-on is now active. The charge will appear on your next invoice.',
+          json.message || 'Your add-on is now active. The charge will appear on your next invoice.',
       });
       await refreshAddonSubscriptions();
     } catch (err) {
@@ -854,8 +978,11 @@ export function BillingView() {
       });
     } finally {
       setSubscribingAddonCode(null);
+      setAddonPaypalPlan(null);
+      setAddonChooserPlan(null);
     }
   }
+
 
   async function handleCancelAddon() {
     if (!cancellingAddon) return;
@@ -1908,7 +2035,32 @@ export function BillingView() {
         }}
       />
 
-      {/* ── PayPal Checkout Dialog ─────────────────────────────────────── */}
+      {/* ── Add-on Payment Method Chooser Dialog ──────────────────────────── */}
+      {/* Separate from main plan chooser so add-on and plan flows don't clash. */}
+      <PaymentMethodChooserDialog
+        plan={addonChooserPlan}
+        billingCycle={isYearly ? 'yearly' : 'monthly'}
+        onClose={() => setAddonChooserPlan(null)}
+        onChoosePayPal={(p) => {
+          setAddonChooserPlan(null);
+          setAddonPaypalPlan(p);
+        }}
+      />
+
+      {/* ── Add-on PayPal Checkout Dialog ──────────────────────────────────── */}
+      {addonPaypalPlan && (
+        <PayPalCheckoutDialog
+          plan={addonPaypalPlan as Plan}
+          billingCycle={isYearly ? 'yearly' : 'monthly'}
+          onClose={() => setAddonPaypalPlan(null)}
+          onSuccess={() => {
+            const code = addonPaypalPlan.id as string;
+            handleAddonPaymentSuccess(code, 'paypal', `paypal-${code}-${Date.now()}`);
+          }}
+          prorationPreview={null}
+        />
+      )}
+
       {paypalCheckoutPlan && (
         <PayPalCheckoutDialog
           plan={paypalCheckoutPlan}

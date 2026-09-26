@@ -187,10 +187,29 @@ export async function POST(req: NextRequest) {
       nextBillingAt.setMonth(nextBillingAt.getMonth() + 1);
     }
 
-    // Create the AddonSubscription. paymentProvider='none' for now — the
-    // superadmin can mark it paid manually, or we'll wire up real Creem/PayPal
-    // checkout in a follow-up task. The tenant sees the add-on as active
-    // immediately so they can use the included features.
+    // ── Payment guard ─────────────────────────────────────────────────────
+    // Paid add-ons must not be activated without confirmed payment.
+    // The client must supply { paymentProvider, providerSubscriptionId } after
+    // a Creem/PayPal checkout completes. Superadmins may bypass this for manual
+    // activations (e.g. comping an add-on, migrating legacy records).
+    const paymentProvider = typeof body.paymentProvider === 'string' ? body.paymentProvider.trim() : '';
+    const providerSubscriptionId =
+      typeof body.providerSubscriptionId === 'string' ? body.providerSubscriptionId.trim() : '';
+    const isSuperAdmin = authUser.role === 'superadmin';
+
+    if (!isSuperAdmin && (!paymentProvider || !providerSubscriptionId)) {
+      return NextResponse.json(
+        {
+          error:
+            'Payment required. Please use the billing page to subscribe to this add-on.',
+          requiresPayment: true,
+        },
+        { status: 402 }
+      );
+    }
+
+    // Create the AddonSubscription with real payment information.
+    // paymentProvider defaults to 'superadmin' for manual activations by admins.
     const addon = await db.addonSubscription.create({
       data: {
         tenantId,
@@ -200,7 +219,8 @@ export async function POST(req: NextRequest) {
         amount,
         currency: plan.currency || 'USD',
         billingCycle,
-        paymentProvider: 'none',
+        paymentProvider: paymentProvider || 'superadmin',
+        providerSubscriptionId: providerSubscriptionId || null,
         startDate: now,
         nextBillingAt,
       },
@@ -210,9 +230,6 @@ export async function POST(req: NextRequest) {
       {
         addon: serializeAddon(addon),
         message: `${plan.name} activated successfully.`,
-        // checkoutUrl is null for now — real Creem/PayPal integration is a
-        // follow-up. The UI checks for this field and redirects if present.
-        checkoutUrl: null,
       },
       { status: 201 }
     );
