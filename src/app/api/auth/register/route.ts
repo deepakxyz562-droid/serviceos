@@ -97,7 +97,14 @@ export async function POST(request: NextRequest) {
         claimed: isStandalone ? false : true,
         listingTier: isStandalone ? 'none' : 'claimed',
         publicProfileEnabled: isStandalone ? false : true,
-        signupMode: isStandalone ? 'standalone' : (isFreePlan ? 'free' : 'crm_trial'),
+        // If a specific plan was requested (e.g. deep-link ?plan=standalone_starter),
+        // assign that mode directly. Otherwise set null so the Step 0 Product Picker
+        // (SignupModeSelector: CRM vs Listing vs AI Forms) is displayed after verification.
+        signupMode: isStandalone
+          ? 'standalone'
+          : (isFreePlan
+            ? 'free'
+            : (requestedPlan ? 'crm_trial' : null)),
         // Standalone users go through the 2-step StandaloneOnboarding wizard
         // (website URL + plan choice), so onboardingCompleted must be false.
         // Only the permanent free plan skips onboarding entirely.

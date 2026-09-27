@@ -468,11 +468,16 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     (auth?.tenant as any)?.plan === 'standalone_business' ||
     String((auth?.tenant as any)?.plan || '').startsWith('standalone') ||
     (auth?.user as any)?.role === 'standalone_user';
+  const standaloneAllowedViews = useMemo(() => new Set([
+    'formsDashboard', 'formBuilder', 'formSubmissions', 'formAppointments',
+    'liveChat', 'formsAnalytics', 'aiReceptionist', 'chatbotBuilder',
+    'integrations', 'billing', 'settings', 'notifications', 'helpCenter', 'activityLogs',
+  ]), []);
   useEffect(() => {
-    if (isStandaloneTenant && (currentView === 'dashboard' || currentView === 'marketplaceDashboard')) {
+    if (isStandaloneTenant && !standaloneAllowedViews.has(currentView)) {
       setCurrentView('formsDashboard');
     }
-  }, [isStandaloneTenant, currentView, setCurrentView]);
+  }, [isStandaloneTenant, currentView, setCurrentView, standaloneAllowedViews]);
 
   // Theme is handled at root level by next-themes <ThemeProvider>.
 

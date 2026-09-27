@@ -633,13 +633,14 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         if (!res.ok) return;
         const data = await res.json();
         if (!data?.plans || !Array.isArray(data.plans)) return;
-        // Filter out add-ons (ai_pro_addon etc.) — only standalone plans
-        // are shown on the plan picker.
-        const standalone = data.plans.filter(
-          (p: any) => !p.isAddon && !p.parentPlanCode,
+        // Filter out add-ons (ai_pro_addon etc.) and standalone AI Forms plans
+        // (standalone_starter, standalone_business) — the CRM onboarding wizard
+        // only presents CRM SaaS plans.
+        const crmPlans = data.plans.filter(
+          (p: any) => !p.isAddon && !p.parentPlanCode && !String(p.code || '').startsWith('standalone_'),
         );
-        if (standalone.length === 0) return;
-        const mapped: OnboardingPlan[] = standalone.map((p: any) => ({
+        if (crmPlans.length === 0) return;
+        const mapped: OnboardingPlan[] = crmPlans.map((p: any) => ({
           id: p.code,
           name: p.name,
           monthlyPrice: Number(p.monthlyPrice) || 0,

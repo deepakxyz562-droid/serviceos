@@ -8,6 +8,7 @@ import { applyHubDefaultsToTenant, revalidatePublicBusiness } from '@/lib/public
 import { computeProfileCompletion } from '@/lib/marketplace-eligibility';
 import { seedTenantDefaults } from '@/lib/seed-tenant-defaults';
 import { markSitemapDirtyForTenant } from '@/lib/sitemap';
+import { cache } from '@/lib/cache';
 
 // GET /api/tenants/[id] - Get tenant details
 export async function GET(
@@ -208,6 +209,8 @@ export async function PUT(
       // (enterprise tier only). The PUT handler validates the plan before
       // persisting the toggle — see updateData below.
       whiteLabelJson,
+      plan,
+      signupMode,
     } = body;
 
     // ── Detect onboarding completion transition ─────────────────────────
@@ -241,6 +244,8 @@ export async function PUT(
     if (settingsJson !== undefined) updateData.settingsJson = settingsJson;
     if (onboardingCompleted !== undefined) updateData.onboardingCompleted = onboardingCompleted;
     if (onboardingStep !== undefined) updateData.onboardingStep = onboardingStep;
+    if (plan !== undefined) updateData.plan = plan;
+    if (signupMode !== undefined) updateData.signupMode = signupMode;
 
     // Public Business Hub fields (all optional — only written when provided)
     if (publicProfileEnabled !== undefined) updateData.publicProfileEnabled = publicProfileEnabled;
@@ -297,6 +302,26 @@ export async function PUT(
       where: { id },
       data: updateData,
     });
+
+    // If plan is updated to standalone, sync workspace to 'forms' and subscription to standalone plan
+    if (plan !== undefined && String(plan).startsWith('standalone_')) {
+      await db.workspace.updateMany({
+        where: { tenantId: id },
+        data: { productType: 'forms' },
+      });
+      await db.subscription.updateMany({
+        where: { tenantId: id, status: { in: ['trial', 'active'] } },
+        data: { plan: String(plan) },
+      });
+    } else if (plan !== undefined && !String(plan).startsWith('standalone_')) {
+      await db.workspace.updateMany({
+        where: { tenantId: id },
+        data: { productType: 'crm' },
+      });
+    }
+
+    cache.invalidateByPrefix(`signup-mode:${id}`);
+    cache.invalidateByPrefix('product-type:');
 
     // ── Phase 3: Identity-change trigger ────────────────────────────────
     // If the tenant's name, address, city, phone, or website changed, any

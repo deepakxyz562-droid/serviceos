@@ -107,7 +107,7 @@ export async function requireCrmTenant(
     }
 
     const cacheKey = `signup-mode:${authUser.tenantId}`;
-    let tenant = cache.get<{ signupMode: string | null; listingTier: string | null }>(cacheKey);
+    let tenant = cache.get<{ signupMode: string | null; listingTier: string | null; plan: string | null }>(cacheKey);
 
     if (!tenant) {
       tenant = await db.tenant.findUnique({
@@ -115,6 +115,7 @@ export async function requireCrmTenant(
         select: {
           signupMode: true,
           listingTier: true,
+          plan: true,
         },
       });
       if (tenant) {
@@ -125,6 +126,24 @@ export async function requireCrmTenant(
     if (!tenant) {
       // Tenant doesn't exist — let the caller handle the 404.
       return null;
+    }
+
+    const isStandalone =
+      tenant.signupMode === 'standalone' ||
+      tenant.plan === 'standalone_starter' ||
+      tenant.plan === 'standalone_business' ||
+      String(tenant.plan || '').startsWith('standalone');
+
+    if (isStandalone) {
+      return NextResponse.json(
+        {
+          error:
+            'This feature requires a CRM plan. Your account is on the AI Forms standalone product.',
+          code: 'STANDALONE_FORMS_TENANT',
+          upgradeUrl: '/?view=billing',
+        },
+        { status: 403 }
+      );
     }
 
     const isListingOnly =
@@ -176,6 +195,32 @@ export async function isListingOnlyTenantId(
     return (
       tenant.signupMode === 'listing_only' ||
       tenant.listingTier === 'claimed_free'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * isStandaloneTenantId
+ * --------------------
+ * Synchronous check (by tenantId) for use in server components or API
+ * routes to determine if the tenant is on the standalone AI Forms product.
+ */
+export async function isStandaloneTenantId(
+  tenantId: string
+): Promise<boolean> {
+  try {
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { signupMode: true, plan: true },
+    });
+    if (!tenant) return false;
+    return (
+      tenant.signupMode === 'standalone' ||
+      tenant.plan === 'standalone_starter' ||
+      tenant.plan === 'standalone_business' ||
+      String(tenant.plan || '').startsWith('standalone')
     );
   } catch {
     return false;

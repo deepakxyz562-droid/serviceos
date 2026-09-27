@@ -369,7 +369,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validPlans = ['free', 'starter', 'growth', 'business', 'enterprise', 'launch_special'];
+    const validPlans = ['free', 'starter', 'growth', 'business', 'enterprise', 'launch_special', 'standalone_starter', 'standalone_business'];
     if (!validPlans.includes(plan)) {
       return NextResponse.json(
         { error: `Invalid plan. Must be one of: ${validPlans.join(', ')}` },
@@ -481,6 +481,32 @@ export async function POST(request: NextRequest) {
           prioritySupport: true,
         },
       },
+      standalone_starter: {
+        amount: 7,
+        maxUsers: 1,
+        maxJobs: 50,
+        maxWorkflows: 5,
+        features: {
+          aiWebsiteForms: true,
+          conversationalBooking: true,
+          standaloneSite: true,
+          maxForms: 5,
+        },
+      },
+      standalone_business: {
+        amount: 19,
+        maxUsers: 5,
+        maxJobs: 500,
+        maxWorkflows: 50,
+        features: {
+          aiWebsiteForms: true,
+          conversationalBooking: true,
+          standaloneSite: true,
+          unlimitedForms: true,
+          pdfKnowledgeIngest: true,
+          whiteLabel: true,
+        },
+      },
     };
 
     const selectedPlan = planDetails[plan];
@@ -585,6 +611,7 @@ export async function POST(request: NextRequest) {
     //     trial access while they complete PayPal checkout. Only when
     //     /api/paypal/activate-subscription runs does planStatus become
     //     'active'. This prevents granting paid access before payment.
+    const isStandalonePlan = String(plan).startsWith('standalone_');
     await db.tenant.update({
       where: { id: tenantId },
       data: {
@@ -593,13 +620,26 @@ export async function POST(request: NextRequest) {
         planStartedAt: now,
         planEndsAt: endDate,
         trialEndsAt: mode === 'trial' ? trialEndsAt : null,
+        ...(isStandalonePlan ? { signupMode: 'standalone', listingTier: 'none', claimed: false, publicProfileEnabled: false } : {}),
       },
     });
 
-    // Invalidate the GET cache — subscription state changed. Must happen
-    // BEFORE the return or the cache would serve stale trial/status data
-    // for up to 30s after a plan change.
+    if (isStandalonePlan) {
+      await db.workspace.updateMany({
+        where: { tenantId },
+        data: { productType: 'forms' },
+      });
+    } else if (plan !== 'free') {
+      await db.workspace.updateMany({
+        where: { tenantId },
+        data: { productType: 'crm' },
+      });
+    }
+
+    // Invalidate the GET cache — subscription and signup-mode state changed.
     cache.invalidateByPrefix('subscription:');
+    cache.invalidateByPrefix(`signup-mode:${tenantId}`);
+    cache.invalidateByPrefix('product-type:');
 
     return NextResponse.json({
       subscription: {

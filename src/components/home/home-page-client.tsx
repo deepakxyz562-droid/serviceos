@@ -333,40 +333,45 @@ export default function HomePageClient() {
 
           const tenantPlan = (data.tenant as any)?.plan as string | null | undefined;
           const sm = (data.tenant as any)?.signupMode as string | null | undefined;
-          const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business';
+          const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone');
 
-          if (isStandalone) {
-            setShowOnboarding(false);
-            setOnboardingView(null);
-            if (typeof window !== 'undefined') {
-              const params = new URLSearchParams(window.location.search);
-              const viewParam = params.get('view') || params.get('tab');
-              if (viewParam === 'forms' || viewParam === 'formBuilder') {
-                useAppStore.getState().setCurrentView('formBuilder');
-              } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
-                useAppStore.getState().setCurrentView('aiReceptionist');
-              }
-            }
-          } else if (
+          const needsOnboarding =
             data.tenant &&
             !data.tenant.onboardingCompleted &&
             !isPlatformAdmin(data.user) &&
             data.user.role !== 'customer' &&
-            data.user.role !== 'employee'
-          ) {
-            if (sm === 'listing_only') {
+            data.user.role !== 'employee';
+
+          if (needsOnboarding) {
+            if (isStandalone || sm === 'standalone') {
+              setOnboardingView('standalone');
+            } else if (sm === 'listing_only') {
               setOnboardingView('listing');
             } else if (sm === 'crm_trial') {
               setOnboardingView('saas');
-            } else if (sm === 'standalone') {
-              setOnboardingView('standalone');
             } else {
               setOnboardingView('mode_selector');
             }
             setShowOnboarding(false);
-          } else if (isPlatformAdmin(data.user)) {
+          } else {
             setShowOnboarding(false);
             setOnboardingView(null);
+
+            if (isStandalone) {
+              if (typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search);
+                const viewParam = params.get('view') || params.get('tab');
+                if (viewParam === 'forms' || viewParam === 'formBuilder') {
+                  useAppStore.getState().setCurrentView('formBuilder');
+                } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
+                  useAppStore.getState().setCurrentView('aiReceptionist');
+                } else if (!viewParam || viewParam === 'dashboard' || viewParam === 'marketplaceDashboard') {
+                  useAppStore.getState().setCurrentView('formsDashboard');
+                }
+              } else {
+                useAppStore.getState().setCurrentView('formsDashboard');
+              }
+            }
           }
           if (typeof window !== 'undefined') {
             // Preserve existing token if available, or update with new one
@@ -444,40 +449,45 @@ export default function HomePageClient() {
               }
               const tenantPlan = (parsed.tenant as any)?.plan as string | null | undefined;
               const sm = (parsed.tenant as any)?.signupMode as string | null | undefined;
-              const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business';
+              const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone');
 
-              if (isStandalone) {
-                setShowOnboarding(false);
-                setOnboardingView(null);
-                if (typeof window !== 'undefined') {
-                  const params = new URLSearchParams(window.location.search);
-                  const viewParam = params.get('view') || params.get('tab');
-                  if (viewParam === 'forms' || viewParam === 'formBuilder') {
-                    useAppStore.getState().setCurrentView('formBuilder');
-                  } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
-                    useAppStore.getState().setCurrentView('aiReceptionist');
-                  }
-                }
-              } else if (
+              const needsOnboarding =
                 parsed.tenant &&
                 !parsed.tenant.onboardingCompleted &&
                 !isPlatformAdmin(parsed.user) &&
                 parsed.user.role !== 'customer' &&
-                parsed.user.role !== 'employee'
-              ) {
-                if (sm === 'listing_only') {
+                parsed.user.role !== 'employee';
+
+              if (needsOnboarding) {
+                if (isStandalone || sm === 'standalone') {
+                  setOnboardingView('standalone');
+                } else if (sm === 'listing_only') {
                   setOnboardingView('listing');
                 } else if (sm === 'crm_trial') {
                   setOnboardingView('saas');
-                } else if (sm === 'standalone') {
-                  setOnboardingView('standalone');
                 } else {
                   setOnboardingView('mode_selector');
                 }
                 setShowOnboarding(false);
-              } else if (isPlatformAdmin(parsed.user)) {
+              } else {
                 setShowOnboarding(false);
                 setOnboardingView(null);
+
+                if (isStandalone) {
+                  if (typeof window !== 'undefined') {
+                    const params = new URLSearchParams(window.location.search);
+                    const viewParam = params.get('view') || params.get('tab');
+                    if (viewParam === 'forms' || viewParam === 'formBuilder') {
+                      useAppStore.getState().setCurrentView('formBuilder');
+                    } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
+                      useAppStore.getState().setCurrentView('aiReceptionist');
+                    } else if (!viewParam || viewParam === 'dashboard' || viewParam === 'marketplaceDashboard') {
+                      useAppStore.getState().setCurrentView('formsDashboard');
+                    }
+                  } else {
+                    useAppStore.getState().setCurrentView('formsDashboard');
+                  }
+                }
               }
               return;
             }

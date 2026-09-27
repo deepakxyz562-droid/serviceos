@@ -240,42 +240,51 @@ describe('register/route.ts standalone onboarding flag', () => {
    * This avoids spinning up the full Next.js route with all its DB deps.
    */
 
-  function computeOnboardingFlags(signupPlan: string) {
+  function computeOnboardingFlags(signupPlan?: string, requestedPlan?: string) {
     const isFreePlan = signupPlan === 'free';
     const isStandalone =
       signupPlan === 'standalone_starter' || signupPlan === 'standalone_business';
 
-    // This mirrors the logic in register/route.ts after the fix applied in
-    // commit 6fed1786 — standalone no longer skips the onboarding wizard.
-    const signupMode = isStandalone ? 'standalone' : isFreePlan ? 'free' : 'crm_trial';
+    const signupMode = isStandalone
+      ? 'standalone'
+      : (isFreePlan
+        ? 'free'
+        : (requestedPlan ? 'crm_trial' : null));
     const onboardingCompleted = isFreePlan ? true : false;
     const onboardingStep = isFreePlan ? 4 : 1;
 
     return { signupMode, onboardingCompleted, onboardingStep, isStandalone };
   }
 
+  it('no explicit plan requested: signupMode=null so product picker is shown', () => {
+    const f = computeOnboardingFlags('starter', undefined);
+    expect(f.signupMode).toBeNull();
+    expect(f.onboardingCompleted).toBe(false);
+    expect(f.onboardingStep).toBe(1);
+  });
+
   it('standalone_starter: onboardingCompleted=false so wizard runs', () => {
-    const f = computeOnboardingFlags('standalone_starter');
+    const f = computeOnboardingFlags('standalone_starter', 'standalone_starter');
     expect(f.signupMode).toBe('standalone');
     expect(f.onboardingCompleted).toBe(false);
     expect(f.onboardingStep).toBe(1);
   });
 
   it('standalone_business: onboardingCompleted=false so wizard runs', () => {
-    const f = computeOnboardingFlags('standalone_business');
+    const f = computeOnboardingFlags('standalone_business', 'standalone_business');
     expect(f.signupMode).toBe('standalone');
     expect(f.onboardingCompleted).toBe(false);
   });
 
   it('free plan: onboardingCompleted=true (skips wizard)', () => {
-    const f = computeOnboardingFlags('free');
+    const f = computeOnboardingFlags('free', 'free');
     expect(f.signupMode).toBe('free');
     expect(f.onboardingCompleted).toBe(true);
     expect(f.onboardingStep).toBe(4);
   });
 
-  it('CRM trial: onboardingCompleted=false (goes through 4-step wizard)', () => {
-    const f = computeOnboardingFlags('starter');
+  it('explicit CRM plan requested: onboardingCompleted=false (goes through 4-step wizard)', () => {
+    const f = computeOnboardingFlags('starter', 'starter');
     expect(f.signupMode).toBe('crm_trial');
     expect(f.onboardingCompleted).toBe(false);
     expect(f.onboardingStep).toBe(1);
@@ -302,19 +311,15 @@ describe('checkSession onboardingView routing', () => {
       tenantPlan === 'standalone_starter' ||
       tenantPlan === 'standalone_business';
 
-    if (isStandalone && onboardingCompleted) return null; // wizard done → app
-    if (isStandalone && !onboardingCompleted) return 'standalone';
+    if (onboardingCompleted) return null; // wizard done → app
 
-    if (!onboardingCompleted) {
-      if (signupMode === 'listing_only') return 'listing';
-      if (signupMode === 'crm_trial') return 'saas';
-      if (signupMode === 'standalone') return 'standalone';
-      return 'mode_selector'; // signupMode=null → fresh user, show picker
-    }
-    return null;
+    if (isStandalone || signupMode === 'standalone') return 'standalone';
+    if (signupMode === 'listing_only') return 'listing';
+    if (signupMode === 'crm_trial') return 'saas';
+    return 'mode_selector'; // signupMode=null → fresh user, show picker
   }
 
-  it('null signupMode → mode_selector (fresh user)', () => {
+  it('null signupMode → mode_selector (fresh user sees product picker)', () => {
     expect(resolveOnboardingView(null, 'starter', false)).toBe('mode_selector');
   });
 
@@ -344,5 +349,29 @@ describe('checkSession onboardingView routing', () => {
 
   it('listing_only + onboardingCompleted=true → null (wizard done)', () => {
     expect(resolveOnboardingView('listing_only', 'free', true)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 4: requireCrmTenant standalone blocking
+// ---------------------------------------------------------------------------
+
+describe('requireCrmTenant guard for standalone users', () => {
+  it('blocks standalone tenant with 403 and STANDALONE_FORMS_TENANT code', async () => {
+    const { requireCrmTenant } = await import('@/lib/require-crm-tenant');
+    mockGetAuthUser.mockResolvedValue({ id: 'user-1', tenantId: TENANT_ID });
+    mockPrismaFindUnique.mockResolvedValue({
+      id: TENANT_ID,
+      signupMode: 'standalone',
+      plan: 'standalone_starter',
+      listingTier: 'none',
+    });
+
+    const req = new NextRequest('http://localhost/api/leads');
+    const res = await requireCrmTenant(req);
+    expect(res).not.toBeNull();
+    expect(res?.status).toBe(403);
+    const data = await res?.json();
+    expect(data.code).toBe('STANDALONE_FORMS_TENANT');
   });
 });
