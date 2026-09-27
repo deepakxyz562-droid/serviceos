@@ -15,15 +15,33 @@ export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   const user = await getAuthUser()
-  if (!user?.tenantId) {
+  if (!user?.tenantId && !user?.workspaceId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status') || 'active'
+  const qTenantId = searchParams.get('tenantId')
+  const qWorkspaceId = searchParams.get('workspaceId')
 
   try {
-    const where: Record<string, unknown> = { tenantId: user.tenantId }
+    const where: Record<string, unknown> = {}
+
+    if (user.isSuperAdmin && (qTenantId || qWorkspaceId)) {
+      if (qTenantId) where.tenantId = qTenantId
+      if (qWorkspaceId) where.workspaceId = qWorkspaceId
+    } else {
+      const orConds: Record<string, unknown>[] = []
+      if (user.tenantId) orConds.push({ tenantId: user.tenantId })
+      if (user.workspaceId) orConds.push({ workspaceId: user.workspaceId })
+
+      if (orConds.length > 1) {
+        where.OR = orConds
+      } else if (orConds.length === 1) {
+        Object.assign(where, orConds[0])
+      }
+    }
+
     if (status === 'active') {
       where.status = { in: ['active', 'claimed', 'waiting_for_agent'] }
     } else if (status !== 'all') {
@@ -46,17 +64,9 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Diagnostic log — helps distinguish "table empty" from "route crashed"
-    // when debugging "No active chat sessions" on production.
-    console.log(`[chat/sessions] tenantId=${user.tenantId} status=${status} found=${sessions.length}`)
+    console.log(`[chat/sessions] tenantId=${user.tenantId} workspaceId=${user.workspaceId} status=${status} found=${sessions.length}`)
 
     const result = sessions.map((s) => {
-      // Defensive: `messages` may be undefined if the DB adapter didn't
-      // resolve the include (e.g. Supabase REST adapter without the
-      // relation mapping). Use optional chaining so the route doesn't
-      // crash with TypeError → 500 → "No active chat sessions".
-      // Also sort client-side by createdAt DESC and take the first, since
-      // the Supabase adapter doesn't pass through nested orderBy/take.
       const sessionMessages = (s as { messages?: Array<{ body: string; senderType: string; createdAt: string }> }).messages
       const sortedMessages = sessionMessages
         ? [...sessionMessages].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -74,6 +84,8 @@ export async function GET(request: NextRequest) {
         lastMessage: sortedMessages[0] || null,
         formId: s.formId,
         formName: formData?.form?.name || null,
+        workspaceId: s.workspaceId,
+        metadataJson: s.metadataJson || '{}',
       }
     })
 

@@ -19,7 +19,7 @@ export async function POST(
   { params }: { params: Promise<{ sessionId: string }> },
 ) {
   const user = await getAuthUser()
-  if (!user?.tenantId) {
+  if (!user?.tenantId && !user?.workspaceId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -28,8 +28,15 @@ export async function POST(
   const action = searchParams.get('action') || 'claim'
 
   try {
+    const orConds: Record<string, unknown>[] = []
+    if (user.tenantId) orConds.push({ tenantId: user.tenantId })
+    if (user.workspaceId) orConds.push({ workspaceId: user.workspaceId })
+
     const session = await db.publicChatSession.findFirst({
-      where: { id: sessionId, tenantId: user.tenantId },
+      where: {
+        id: sessionId,
+        ...(user.isSuperAdmin ? {} : orConds.length > 1 ? { OR: orConds } : orConds[0] || {}),
+      },
     })
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 })

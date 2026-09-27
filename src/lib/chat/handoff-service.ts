@@ -146,10 +146,34 @@ export async function requestHumanHandoff(
   } = request;
 
   try {
-    // Resolve tenantId if missing
-    let tenantId = rawTenantId;
-    if (!tenantId) {
-      const firstTenant = await db.tenant.findFirst({ select: { id: true } });
+    // Resolve tenantId & workspaceId from request or linked Form/Agent
+    let tenantId = rawTenantId || null;
+    let effectiveWorkspaceId = workspaceId || null;
+
+    if ((!tenantId || !effectiveWorkspaceId) && formId) {
+      const formRecord = await db.form.findUnique({
+        where: { id: formId },
+        select: { tenantId: true, workspaceId: true },
+      }).catch(() => null);
+      if (formRecord) {
+        tenantId = tenantId || formRecord.tenantId;
+        effectiveWorkspaceId = effectiveWorkspaceId || formRecord.workspaceId;
+      }
+    }
+
+    if ((!tenantId || !effectiveWorkspaceId) && agentId) {
+      const agentRecord = await db.formAgent.findUnique({
+        where: { id: agentId },
+        select: { tenantId: true, workspaceId: true },
+      }).catch(() => null);
+      if (agentRecord) {
+        tenantId = tenantId || agentRecord.tenantId;
+        effectiveWorkspaceId = effectiveWorkspaceId || agentRecord.workspaceId;
+      }
+    }
+
+    if (!tenantId && !effectiveWorkspaceId) {
+      const firstTenant = await db.tenant.findFirst({ select: { id: true } }).catch(() => null);
       tenantId = firstTenant?.id || null;
     }
 
@@ -196,12 +220,12 @@ export async function requestHumanHandoff(
           }),
         },
       });
-    } else if (tenantId) {
+    } else if (tenantId || effectiveWorkspaceId) {
       // Create new session in waiting_for_agent status
       session = await db.publicChatSession.create({
         data: {
-          tenantId,
-          workspaceId: workspaceId || null,
+          tenantId: tenantId || null,
+          workspaceId: effectiveWorkspaceId || null,
           formId: formId || null,
           visitorName,
           visitorEmail,

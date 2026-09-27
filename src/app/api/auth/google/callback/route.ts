@@ -38,13 +38,13 @@ async function createTenantForGoogleUser(
     slugCounter++;
   }
 
+  const isStandalone = requestedPlan === 'standalone_starter' || requestedPlan === 'standalone_business' || requestedSignupMode === 'standalone';
   const defaultSignupPlan = await resolveSignupDefaultPlan();
   const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise'];
-  const signupPlan = requestedPlan && validPlans.includes(requestedPlan)
-    ? requestedPlan
-    : defaultSignupPlan;
+  const signupPlan = isStandalone
+    ? (requestedPlan && (requestedPlan === 'standalone_business' || requestedPlan === 'standalone_starter') ? requestedPlan : 'standalone_starter')
+    : (requestedPlan && validPlans.includes(requestedPlan) ? requestedPlan : defaultSignupPlan);
 
-  const isStandalone = signupPlan === 'standalone_starter' || signupPlan === 'standalone_business' || requestedSignupMode === 'standalone';
   const isListing = requestedSignupMode === 'listing_only';
   const isExplicitMode = !!requestedSignupMode || !!(requestedPlan && validPlans.includes(requestedPlan));
 

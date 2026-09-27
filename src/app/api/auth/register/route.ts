@@ -62,9 +62,11 @@ export async function POST(request: NextRequest) {
     //
     // Default plan: 'launch_special' when active, otherwise 'starter'. The
     // superadmin can deactivate the Launch Special promo from Plan Catalog —
-    // new signups then fall back to the standard Starter plan so registration
-    // never breaks. Existing launch_special subscribers keep their plan.
-    const requestedPlan = (body.plan || body.planCode || '').trim();
+    const requestedMode = (body.mode || body.signupMode || '').trim();
+    let requestedPlan = (body.plan || body.planCode || '').trim();
+    if (requestedMode === 'standalone' && !requestedPlan) {
+      requestedPlan = 'standalone_starter';
+    }
     const defaultSignupPlan = await resolveSignupDefaultPlan();
     const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise', 'free'];
 
@@ -76,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     // Free plan: no trial, no expiration, 100 lifetime jobs
     const isFreePlan = signupPlan === 'free';
-    const isStandalone = signupPlan === 'standalone_starter' || signupPlan === 'standalone_business';
+    const isStandalone = signupPlan === 'standalone_starter' || signupPlan === 'standalone_business' || requestedMode === 'standalone';
 
     const tenant = await db.tenant.create({
       data: {
@@ -173,34 +175,31 @@ export async function POST(request: NextRequest) {
       await db.subscription.create({
         data: {
           tenantId: tenant.id,
-          // Default plan resolved above (launch_special when active, else starter).
-        plan: signupPlan,
+          plan: signupPlan,
           status: 'trial',
-          amount: 0,
+          amount: signupPlan === 'standalone_business' ? 19 : (signupPlan === 'standalone_starter' ? 10 : 0),
           currency: 'USD',
           billingCycle: 'monthly',
           trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-          maxUsers: 5,
-          maxJobs: 200,
-          maxWorkflows: 10,
-          // SMS + email + WhatsApp quotas per plan
-          smsQuota: 100,          // Starter: 100 SMS/month
-          emailQuota: 200,        // Starter: 200 emails/month
-          whatsappQuota: 0,       // Starter: 0 (BYO WhatsApp)
-          featuresJson: JSON.stringify({
-            // WhatsApp is NOT platform-provided. It is BYO (user connects own
-            // Meta API). The whatsappIntegration flag gates the menu's
-            // visibility, but the actual sending requires a user-connected
-            // CommunicationProvider. See Issue 5.
-            whatsappIntegration: false,
-            customWorkflows: false,
-            apiAccess: false,
-            prioritySupport: false,
-          }),
-          // Trial credit system defaults — platform no longer provides WhatsApp
-          // so there are no trial WhatsApp credits. Email + SMS + Push are the
-          // platform-provided channels. WhatsApp unlocks when the user upgrades
-          // to a paid plan AND connects their own Meta API.
+          maxUsers: isStandalone ? (signupPlan === 'standalone_business' ? 10 : 1) : 5,
+          maxJobs: isStandalone ? 0 : 200,
+          maxWorkflows: isStandalone ? 5 : 10,
+          smsQuota: isStandalone ? 0 : 100,
+          emailQuota: isStandalone ? 100 : 200,
+          whatsappQuota: 0,
+          featuresJson: isStandalone
+            ? JSON.stringify({
+                aiAssistant: true,
+                aiFormGenerator: true,
+                formBuilder: true,
+                standaloneSite: true,
+              })
+            : JSON.stringify({
+                whatsappIntegration: false,
+                customWorkflows: false,
+                apiAccess: false,
+                prioritySupport: false,
+              }),
           trialWhatsappCredits: 0,
           trialWhatsappUsed: 0,
           platformWhatsappEnabled: false,

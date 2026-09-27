@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { callOpenRouter, extractJson } from '@/lib/ai-client'
+import { callAI, extractJson } from '@/lib/ai-client'
 import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker'
 
 /**
@@ -97,24 +97,14 @@ export async function POST(request: NextRequest) {
     }
     const messageType: MessageType = messageTypeRaw
 
-    // 3. AI service check (503 if not configured). Checked before DB work so
-    //    the client gets a fast, clear "not configured" signal.
-    if (!process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json(
-        { error: 'AI service not configured. Set OPENROUTER_API_KEY.' },
-        { status: 503 },
-      )
-    }
+    const orConds: Record<string, unknown>[] = []
+    if (user.tenantId) orConds.push({ tenantId: user.tenantId })
+    if (user.workspaceId) orConds.push({ workspaceId: user.workspaceId })
 
-    // 4. Load the conversation — tenant-scoped so a user can't pull AI
-    //    context for another tenant's chat. Mirrors the pattern in
-    //    /api/chat/sessions/[sessionId]/messages/route.ts.
-    //    Prisma model names: PublicChatSession / PublicChatMessage
-    //    (NOT ChatSession/ChatMessage — those don't exist in the schema).
     const session = await db.publicChatSession.findFirst({
       where: {
         id: sessionId,
-        ...(user.isSuperAdmin ? {} : { tenantId: user.tenantId ?? undefined }),
+        ...(user.isSuperAdmin ? {} : orConds.length > 1 ? { OR: orConds } : orConds[0] || {}),
       },
       include: {
         messages: { orderBy: { createdAt: 'asc' }, take: 200 },
@@ -149,13 +139,11 @@ export async function POST(request: NextRequest) {
 
     // 6. Branch on messageType
     if (messageType === 'summary') {
-      const __aiResult = await handleSummary(conversationText)
-      // Track AI usage (conditional — only for authenticated tenants on success)
+      const __aiResult = await handleSummary(conversationText, user?.tenantId || null)
       if (user?.tenantId && __aiResult.status === 200) await trackAiUsage(user.tenantId)
       return __aiResult
     }
-    const __aiResult = await handleReply(conversationText)
-    // Track AI usage (conditional — only for authenticated tenants on success)
+    const __aiResult = await handleReply(conversationText, user?.tenantId || null)
     if (user?.tenantId && __aiResult.status === 200) await trackAiUsage(user.tenantId)
     return __aiResult
   } catch (error: unknown) {
@@ -168,26 +156,27 @@ export async function POST(request: NextRequest) {
 
 // ─── Reply branch ──────────────────────────────────────────────────────────
 
-async function handleReply(conversationText: string) {
+async function handleReply(conversationText: string, tenantId: string | null) {
   const system =
     'You are an AI assistant helping a customer service agent. Based on the conversation, ' +
     'suggest 3 reply options with different tones: friendly, professional, concise. ' +
     "Each reply should directly address the customer's last message. " +
-    'Output JSON: `{ replies: [{ text, tone }] }`'
+    'Output JSON: `{ "replies": [{ "text": "...", "tone": "friendly"|"professional"|"concise" }] }`'
 
   let raw: string
   try {
-    const result = await callOpenRouter({
+    const result = await callAI({
       system,
       user: conversationText,
       json: true,
       temperature: 0.7,
       maxTokens: 800,
+      tenantId,
     })
     raw = result.content
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error('[ai/chat-suggested-reply] callOpenRouter (reply) failed:', msg)
+    console.error('[ai/chat-suggested-reply] callAI (reply) failed:', msg)
     return NextResponse.json(
       { error: `AI generation failed: ${msg.slice(0, 200)}` },
       { status: 502 },
@@ -232,24 +221,25 @@ async function handleReply(conversationText: string) {
 
 // ─── Summary branch ────────────────────────────────────────────────────────
 
-async function handleSummary(conversationText: string) {
+async function handleSummary(conversationText: string, tenantId: string | null) {
   const system =
     'Summarize this customer chat conversation in 1-2 sentences, focusing on the customer\'s ' +
-    'issue and current status. Output JSON: `{ summary: string }`'
+    'issue and current status. Output JSON: `{ "summary": "..." }`'
 
   let raw: string
   try {
-    const result = await callOpenRouter({
+    const result = await callAI({
       system,
       user: conversationText,
       json: true,
       temperature: 0.3,
-      maxTokens: 200,
+      maxTokens: 300,
+      tenantId,
     })
     raw = result.content
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error('[ai/chat-suggested-reply] callOpenRouter (summary) failed:', msg)
+    console.error('[ai/chat-suggested-reply] callAI (summary) failed:', msg)
     return NextResponse.json(
       { error: `AI generation failed: ${msg.slice(0, 200)}` },
       { status: 502 },

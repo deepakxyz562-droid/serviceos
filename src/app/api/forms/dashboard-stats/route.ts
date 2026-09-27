@@ -104,9 +104,63 @@ export async function GET(_request: NextRequest) {
     },
   });
 
+  // Appointments / Bookings stats (Calendly Engine)
+  const bookingScope = [
+    ...(tenantId ? [{ tenantId }] : []),
+    ...(formIds.length > 0 ? [{ formId: { in: formIds } }] : []),
+  ];
+
+  let totalBookings = 0;
+  let upcomingBookings: any[] = [];
+
+  if (bookingScope.length > 0) {
+    try {
+      const [bCount, bList] = await Promise.all([
+        db.booking.count({
+          where: bookingScope.length > 1 ? { OR: bookingScope } : bookingScope[0],
+        }),
+        db.booking.findMany({
+          where: {
+            ...(bookingScope.length > 1 ? { OR: bookingScope } : bookingScope[0]),
+            scheduledAt: { gte: new Date() },
+            status: { in: ['confirmed', 'pending', 'scheduled'] },
+          },
+          take: 5,
+          orderBy: { scheduledAt: 'asc' },
+          select: {
+            id: true,
+            title: true,
+            customerName: true,
+            customerEmail: true,
+            customerPhone: true,
+            scheduledAt: true,
+            scheduledEndTime: true,
+            status: true,
+            source: true,
+          },
+        }),
+      ]);
+      totalBookings = bCount;
+      upcomingBookings = bList;
+    } catch {
+      // non-fatal
+    }
+  }
+
   return NextResponse.json({
     totalForms,
     totalSubmissions,
+    totalBookings,
+    upcomingBookings: upcomingBookings.map((b) => ({
+      id: b.id,
+      title: b.title || 'Scheduled Appointment',
+      customerName: b.customerName || 'Customer',
+      customerEmail: b.customerEmail || '',
+      customerPhone: b.customerPhone || '',
+      scheduledAt: b.scheduledAt ? new Date(b.scheduledAt).toISOString() : null,
+      status: b.status || 'confirmed',
+      source: b.source || 'form',
+    })),
     conversionRate: (conversionRates._avg.conversionRate || 0) * 100,
     activeForms,
     aiAgentStatus,

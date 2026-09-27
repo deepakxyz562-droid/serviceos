@@ -149,6 +149,7 @@ export async function POST(
         visitorEmail: true,
         visitorPhone: true,
         tenantId: true,
+        workspaceId: true,
         unreadCount: true,
       },
     })
@@ -232,7 +233,7 @@ export async function POST(
       try {
         const recipients = await db.user.findMany({
           where: {
-            tenantId: session.tenantId,
+            ...(session.tenantId ? { tenantId: session.tenantId } : { workspaceId: session.workspaceId }),
             role: { in: ['owner', 'admin'] },
             isActive: true,
           },
@@ -247,7 +248,8 @@ export async function POST(
         await Promise.all(
           recipients.map(async (r) => {
             await createNotification({
-              tenantId: session.tenantId,
+              tenantId: session.tenantId || undefined,
+              workspaceId: session.workspaceId || undefined,
               recipientId: r.id,
               type: 'reminder',
               category: 'customer',

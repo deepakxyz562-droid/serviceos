@@ -614,6 +614,8 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   // undefined and the route to crash on `s.messages[0]`.
   PublicChatSession: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
+    form: { targetTable: 'Form', fkColumn: 'formId' },
     messages: { targetTable: 'PublicChatMessage', targetFkColumn: 'sessionId', isMany: true },
   },
   PublicChatMessage: {

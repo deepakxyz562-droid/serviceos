@@ -122,7 +122,7 @@ const WIDGET_SPECS: WidgetSpec[] = [
     ] },
     { key: 'defaultToCurrent', label: 'Default to current time', type: 'toggle_with_description', group: 'field_specific', default: false, description: 'Pre-fill with current date and time.' },
   ]],
-  ['appointment', 'Appointment Booking', 'datetime', 'CalendarCheck', 'Time-slot booking with availability', 'POPULAR', 'pro', [
+  ['appointment', 'Appointment Booking (Calendly)', 'datetime', 'CalendarCheck', 'Time-slot calendar booking with real-time availability (Calendly Engine)', 'POPULAR', 'pro', [
     { key: 'duration', label: 'Duration (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 480 },
     { key: 'interval', label: 'Slot interval (minutes)', type: 'number', group: 'field_specific', default: 30, min: 5, max: 120 },
     { key: 'leadTime', label: 'Min lead time (hours)', type: 'number', group: 'field_specific', default: 24, min: 0 },

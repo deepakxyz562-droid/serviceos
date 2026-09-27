@@ -146,9 +146,9 @@ export default function PublicChatPage() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // MODE 2: FLOATING WIDGET LAYOUT (Demo Mode only)
+  // MODE 2: FLOATING WIDGET LAYOUT (Interactive Floating View)
   // ═══════════════════════════════════════════════════════════════════════════
-  if (layoutMode === 'floating' && !forceFullView && searchParams.get('demo') === '1') {
+  if (layoutMode === 'floating' && !forceFullView) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative flex flex-col justify-between overflow-hidden">
         {/* Top Floating Helper Controls */}

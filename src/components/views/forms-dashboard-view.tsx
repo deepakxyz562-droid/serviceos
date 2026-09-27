@@ -12,6 +12,9 @@ import {
   ArrowRight,
   Plus,
   LayoutGrid,
+  Calendar,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +26,17 @@ import type { FormTemplate } from '@/lib/forms/templates';
 interface FormsDashboardStats {
   totalForms: number;
   totalSubmissions: number;
+  totalBookings?: number;
+  upcomingBookings?: Array<{
+    id: string;
+    title: string;
+    customerName: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    scheduledAt: string | null;
+    status: string;
+    source: string;
+  }>;
   conversionRate: number;
   activeForms: number;
   aiAgentStatus: 'none' | 'draft' | 'active' | 'paused';
@@ -116,6 +130,14 @@ export function FormsDashboardView() {
       onClick: () => setCurrentView('formSubmissions'),
     },
     {
+      label: 'Appointments',
+      value: stats?.totalBookings ?? 0,
+      icon: Calendar,
+      color: 'text-purple-600',
+      badge: 'Calendly Engine',
+      onClick: () => setCurrentView('formAppointments'),
+    },
+    {
       label: 'Conversion Rate',
       value: `${(stats?.conversionRate ?? 0).toFixed(1)}%`,
       icon: TrendingUp,
@@ -152,7 +174,7 @@ export function FormsDashboardView() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {kpiCards.map((kpi) => (
           <Card
             key={kpi.label}
@@ -160,9 +182,16 @@ export function FormsDashboardView() {
             onClick={kpi.onClick}
           >
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {kpi.label}
-              </CardTitle>
+              <div className="flex items-center gap-1.5">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {kpi.label}
+                </CardTitle>
+                {kpi.badge && (
+                  <span className="text-[9px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1 py-0.5 rounded">
+                    Native
+                  </span>
+                )}
+              </div>
               <kpi.icon className={cn('w-4 h-4', kpi.color)} />
             </CardHeader>
             <CardContent>
@@ -235,58 +264,133 @@ export function FormsDashboardView() {
         </Card>
       </div>
 
-      {/* Recent Submissions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between text-base">
-            <span>Recent Submissions</span>
-            <Button variant="ghost" size="sm" onClick={() => setCurrentView('formSubmissions')}>
-              View all
-              <ArrowRight className="w-3 h-3 ml-2" />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {stats?.recentSubmissions && stats.recentSubmissions.length > 0 ? (
-            <div className="space-y-3">
-              {stats.recentSubmissions.map((sub) => (
-                <div
-                  key={sub.id}
-                  className="flex items-center justify-between py-2 border-b last:border-0"
+      {/* Submissions & Calendly Appointments Grid */}
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Recent Submissions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between text-base">
+              <span className="flex items-center gap-2">
+                <Inbox className="w-4 h-4 text-emerald-600" />
+                Recent Inquiries &amp; Leads
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setCurrentView('formSubmissions')}>
+                View all
+                <ArrowRight className="w-3 h-3 ml-2" />
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stats?.recentSubmissions && stats.recentSubmissions.length > 0 ? (
+              <div className="space-y-3">
+                {stats.recentSubmissions.map((sub) => (
+                  <div
+                    key={sub.id}
+                    className="flex items-center justify-between py-2 border-b last:border-0"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+                        <Inbox className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {sub.respondent || 'Anonymous'}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {sub.formName}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {sub.hasLead && (
+                        <Badge variant="default" className="text-xs">Lead</Badge>
+                      )}
+                      <Badge variant="outline" className="text-xs">{sub.source}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(sub.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Inbox className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No submissions yet. Create a form and share it to start collecting leads.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Appointments (Calendly Engine) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between text-base">
+              <span className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-purple-600" />
+                Appointments &amp; Bookings
+                <span className="text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded ml-1">
+                  Calendly Engine
+                </span>
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setCurrentView('formAppointments')}>
+                Manage
+                <ArrowRight className="w-3 h-3 ml-2" />
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stats?.upcomingBookings && stats.upcomingBookings.length > 0 ? (
+              <div className="space-y-3">
+                {stats.upcomingBookings.map((b) => (
+                  <div
+                    key={b.id}
+                    className="flex items-center justify-between py-2 border-b last:border-0"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+                        <Clock className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {b.customerName || 'Customer'}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {b.title || 'Scheduled Appointment'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Badge variant="outline" className="text-xs capitalize border-purple-500/30 text-purple-600 dark:text-purple-400">
+                        {b.status}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {b.scheduledAt ? new Date(b.scheduledAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Calendar className="w-8 h-8 mx-auto mb-2 opacity-50 text-purple-500" />
+                <p className="text-sm font-medium">No upcoming appointments</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Add an Appointment field to any form to let customers book directly into your calendar.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 text-xs gap-1.5 border-purple-500/30 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                  onClick={() => setCurrentView('formAppointments')}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                      <Inbox className="w-4 h-4 text-emerald-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {sub.respondent || 'Anonymous'}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {sub.formName}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {sub.hasLead && (
-                      <Badge variant="default" className="text-xs">Lead</Badge>
-                    )}
-                    <Badge variant="outline" className="text-xs">{sub.source}</Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(sub.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Inbox className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No submissions yet. Create a form and share it to start collecting leads.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  <Calendar className="size-3.5" /> Open Calendly Booking Console
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Template Picker Dialog (T1.6) */}
       <TemplatePickerDialog

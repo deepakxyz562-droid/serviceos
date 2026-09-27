@@ -66,9 +66,29 @@ export function decryptKey(stored: string): string {
   const iv = buf.subarray(0, IV_LEN)
   const tag = buf.subarray(buf.length - TAG_LEN)
   const ciphertext = buf.subarray(IV_LEN, buf.length - TAG_LEN)
-  const decipher = createDecipheriv(ALGO, getKey(), iv)
-  decipher.setAuthTag(tag)
-  return decipher.update(ciphertext) + decipher.final('utf8')
+
+  // Candidate secrets in priority order:
+  // 1. Current derived key (from ENCRYPTION_KEY or NEXTAUTH_SECRET)
+  // 2. DEV_FALLBACK_KEY (for keys seeded/stored before ENCRYPTION_KEY was set in env)
+  // 3. Raw NEXTAUTH_SECRET or ENCRYPTION_KEY fallbacks
+  const candidateSecrets = [
+    getKey(),
+    createHash('sha256').update(DEV_FALLBACK_KEY).digest(),
+    process.env.NEXTAUTH_SECRET ? createHash('sha256').update(process.env.NEXTAUTH_SECRET).digest() : null,
+  ].filter((s): s is Buffer => s !== null)
+
+  let lastErr: unknown = null
+  for (const secretKey of candidateSecrets) {
+    try {
+      const decipher = createDecipheriv(ALGO, secretKey, iv)
+      decipher.setAuthTag(tag)
+      return decipher.update(ciphertext) + decipher.final('utf8')
+    } catch (err) {
+      lastErr = err
+    }
+  }
+
+  throw lastErr || new Error('Decryption failed with all candidate keys')
 }
 
 /**

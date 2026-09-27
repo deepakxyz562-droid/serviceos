@@ -75,9 +75,25 @@ export async function POST(request: NextRequest) {
     // ── 'crm_trial' path ──
     // Just record the choice. The trial created at registration stays active.
     if (mode === 'crm_trial') {
-      const updated = await db.tenant.update({
+      await db.$transaction(async (tx) => {
+        const existingSub = await tx.subscription.findFirst({
+          where: { tenantId: tenant.id },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (existingSub && existingSub.status === 'cancelled') {
+          await tx.subscription.update({
+            where: { id: existingSub.id },
+            data: { status: 'trial' },
+          });
+        }
+        await tx.tenant.update({
+          where: { id: tenant.id },
+          data: { signupMode: 'crm_trial' },
+        });
+      });
+
+      const updated = await db.tenant.findUnique({
         where: { id: tenant.id },
-        data: { signupMode: 'crm_trial' },
         select: {
           id: true,
           signupMode: true,
@@ -93,24 +109,31 @@ export async function POST(request: NextRequest) {
 
     // ── 'listing_only' path ──
     // Convert from trial → free listing-only provider.
-    // 1. Cancel any trial Subscription (mark status='cancelled').
-    // 2. Update tenant: listingTier='claimed_free', plan='free',
-    //    planStatus='active', trialEndsAt=null, signupMode='listing_only'.
+    // Update existing subscription row in-place to free plan (avoiding ghost cancelled rows).
     if (mode === 'listing_only') {
       await db.$transaction(async (tx) => {
-        // Cancel active trial subscriptions for this tenant. The Subscription
-        // model doesn't have a `cancelledAt` field, so we just set status.
-        await tx.subscription.updateMany({
-          where: {
-            tenantId: tenant.id,
-            status: { in: ['trial', 'active'] },
-          },
-          data: {
-            status: 'cancelled',
-            // Keep trialEndsAt on the subscription row for audit, but clear
-            // it on the tenant so expiry jobs don't fire.
-          },
+        const existingSub = await tx.subscription.findFirst({
+          where: { tenantId: tenant.id },
+          orderBy: { createdAt: 'desc' },
         });
+
+        if (existingSub) {
+          await tx.subscription.update({
+            where: { id: existingSub.id },
+            data: {
+              plan: 'free',
+              status: 'active',
+              amount: 0,
+            },
+          });
+          // Clean up any extra rows
+          await tx.subscription.deleteMany({
+            where: {
+              tenantId: tenant.id,
+              id: { not: existingSub.id },
+            },
+          });
+        }
 
         await tx.tenant.update({
           where: { id: tenant.id },
@@ -151,40 +174,54 @@ export async function POST(request: NextRequest) {
     const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
     await db.$transaction(async (tx) => {
-      // Cancel any existing CRM trial subscriptions before creating the
-      // standalone one. This prevents duplicate active subscriptions.
-      await tx.subscription.updateMany({
-        where: {
-          tenantId: tenant.id,
-          status: { in: ['trial', 'active'] },
-        },
-        data: { status: 'cancelled' },
+      const existingSub = await tx.subscription.findFirst({
+        where: { tenantId: tenant.id },
+        orderBy: { createdAt: 'desc' },
       });
 
-      // Create a fresh standalone_starter trial subscription.
-      await tx.subscription.create({
-        data: {
-          tenantId: tenant.id,
-          plan: 'standalone_starter',
-          status: 'trial',
-          amount: 0,
-          currency: 'USD',
-          billingCycle: 'monthly',
-          trialEndsAt,
-          maxUsers: 1,
-          maxJobs: 0,       // standalone has no jobs concept
-          maxWorkflows: 5,
-          smsQuota: 0,
-          emailQuota: 100,
-          whatsappQuota: 0,
-          featuresJson: JSON.stringify({
-            aiAssistant: true,
-            aiFormGenerator: true,
-            formBuilder: true,
-            standaloneSite: true,
-          }),
-        },
-      });
+      const standaloneSubData = {
+        plan: 'standalone_starter',
+        status: 'trial',
+        amount: 0,
+        currency: 'USD',
+        billingCycle: 'monthly',
+        trialEndsAt,
+        maxUsers: 1,
+        maxJobs: 0,       // standalone has no jobs concept
+        maxWorkflows: 5,
+        smsQuota: 0,
+        emailQuota: 100,
+        whatsappQuota: 0,
+        featuresJson: JSON.stringify({
+          aiAssistant: true,
+          aiFormGenerator: true,
+          formBuilder: true,
+          standaloneSite: true,
+        }),
+      };
+
+      if (existingSub) {
+        // In-place update so no ghost cancelled row appears in SuperAdmin
+        await tx.subscription.update({
+          where: { id: existingSub.id },
+          data: standaloneSubData,
+        });
+
+        // Delete any extra / duplicate rows for this tenant
+        await tx.subscription.deleteMany({
+          where: {
+            tenantId: tenant.id,
+            id: { not: existingSub.id },
+          },
+        });
+      } else {
+        await tx.subscription.create({
+          data: {
+            tenantId: tenant.id,
+            ...standaloneSubData,
+          },
+        });
+      }
 
       await tx.tenant.update({
         where: { id: tenant.id },

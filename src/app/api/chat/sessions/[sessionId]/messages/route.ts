@@ -23,7 +23,7 @@ export async function GET(
   { params }: { params: Promise<{ sessionId: string }> },
 ) {
   const user = await getAuthUser()
-  if (!user?.tenantId) {
+  if (!user?.tenantId && !user?.workspaceId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -32,9 +32,16 @@ export async function GET(
   const since = searchParams.get('since')
 
   try {
-    // Verify the session belongs to the admin's tenant.
+    const orConds: Record<string, unknown>[] = []
+    if (user.tenantId) orConds.push({ tenantId: user.tenantId })
+    if (user.workspaceId) orConds.push({ workspaceId: user.workspaceId })
+
+    // Verify the session belongs to the admin's tenant or workspace.
     const session = await db.publicChatSession.findFirst({
-      where: { id: sessionId, tenantId: user.tenantId },
+      where: {
+        id: sessionId,
+        ...(user.isSuperAdmin ? {} : orConds.length > 1 ? { OR: orConds } : orConds[0] || {}),
+      },
     })
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 })
@@ -81,7 +88,7 @@ export async function POST(
   { params }: { params: Promise<{ sessionId: string }> },
 ) {
   const user = await getAuthUser()
-  if (!user?.tenantId) {
+  if (!user?.tenantId && !user?.workspaceId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -100,9 +107,16 @@ export async function POST(
   }
 
   try {
-    // Verify session belongs to tenant.
+    const orConds: Record<string, unknown>[] = []
+    if (user.tenantId) orConds.push({ tenantId: user.tenantId })
+    if (user.workspaceId) orConds.push({ workspaceId: user.workspaceId })
+
+    // Verify session belongs to tenant or workspace.
     const session = await db.publicChatSession.findFirst({
-      where: { id: sessionId, tenantId: user.tenantId },
+      where: {
+        id: sessionId,
+        ...(user.isSuperAdmin ? {} : orConds.length > 1 ? { OR: orConds } : orConds[0] || {}),
+      },
     })
     if (!session) {
       return NextResponse.json({ error: 'Session not found' }, { status: 404 })

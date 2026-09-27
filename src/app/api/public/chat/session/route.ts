@@ -132,52 +132,79 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // --- Look up tenant -----------------------------------------------------
-  let tenant: { id: string; name: string; slug: string } | null = null
-  try {
-    tenant = await db.tenant.findFirst({
-      where: {
-        OR: [
-          { slug: businessSlug },
-          { publicSlug: businessSlug },
-        ],
-        suspendedAt: null,
-      },
-      select: { id: true, name: true, slug: true },
-    })
-  } catch (err) {
-    console.error('[public-chat/session] tenant lookup error:', err)
-    return NextResponse.json(
-      { error: 'Service unavailable' },
-      { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } },
-    )
-  }
-
-  if (!tenant) {
-    return NextResponse.json(
-      { error: 'Business not found' },
-      { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } },
-    )
-  }
-
-  // --- Look up form (optional, for GPTForm subscribers) -------------------
-  let formRecord: { id: string; name: string } | null = null
+  // --- Look up form first (if formId provided) ----------------------------
+  let formRecord: { id: string; name: string; tenantId: string | null; workspaceId: string | null } | null = null
   if (formId) {
     try {
       formRecord = await db.form.findFirst({
-        where: { id: formId, tenantId: tenant.id },
-        select: { id: true, name: true },
+        where: { id: formId },
+        select: { id: true, name: true, tenantId: true, workspaceId: true },
       })
     } catch (formErr) {
       console.warn('[public-chat/session] form lookup failed:', formErr)
     }
   }
 
+  // --- Look up tenant or workspace ----------------------------------------
+  let tenant: { id: string; name: string; slug: string } | null = null
+  let workspace: { id: string; name: string; slug: string } | null = null
+
+  if (formRecord?.tenantId) {
+    tenant = await db.tenant.findUnique({
+      where: { id: formRecord.tenantId },
+      select: { id: true, name: true, slug: true },
+    }).catch(() => null)
+  }
+
+  if (!tenant && businessSlug) {
+    try {
+      tenant = await db.tenant.findFirst({
+        where: {
+          OR: [
+            { slug: businessSlug },
+            { publicSlug: businessSlug },
+          ],
+          suspendedAt: null,
+        },
+        select: { id: true, name: true, slug: true },
+      })
+    } catch (err) {
+      console.error('[public-chat/session] tenant lookup error:', err)
+    }
+  }
+
+  if (!tenant && businessSlug) {
+    try {
+      workspace = await db.workspace.findFirst({
+        where: {
+          OR: [
+            { slug: businessSlug },
+            { id: businessSlug },
+          ],
+        },
+        select: { id: true, name: true, slug: true },
+      })
+    } catch (err) {
+      console.error('[public-chat/session] workspace lookup error:', err)
+    }
+  }
+
+  const effectiveTenantId = formRecord?.tenantId || tenant?.id || null
+  const effectiveWorkspaceId = formRecord?.workspaceId || workspace?.id || null
+
+  if (!effectiveTenantId && !effectiveWorkspaceId) {
+    return NextResponse.json(
+      { error: 'Business not found' },
+      { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } },
+    )
+  }
+
   // --- Create session + initial system message ---------------------------
   try {
     const session = await db.publicChatSession.create({
       data: {
-        tenantId: tenant.id,
+        tenantId: effectiveTenantId,
+        workspaceId: effectiveWorkspaceId,
         formId: formRecord?.id || null,  // link chat to the form it originated from
         visitorName,
         visitorPhone,
@@ -201,16 +228,11 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // --- Notify tenant admins (owners + admins) -----------------------------
-    // The header bell polls /api/notifications/unread-count every 60s, so
-    // creating an AppNotification here makes the bell ring within a minute
-    // of a visitor starting a chat — without needing socket.io. The admin
-    // LiveChatView already polls /api/chat/sessions every 5s, so once the
-    // admin clicks through, they get near-real-time message updates.
+    // --- Notify tenant / workspace admins (owners + admins) -----------------
     try {
       const recipients = await db.user.findMany({
         where: {
-          tenantId: tenant.id,
+          ...(effectiveTenantId ? { tenantId: effectiveTenantId } : { workspaceId: effectiveWorkspaceId }),
           role: { in: ['owner', 'admin'] },
           isActive: true,
         },
@@ -224,27 +246,13 @@ export async function POST(req: NextRequest) {
           ? `${visitorEmail} started a new live chat on your website`
           : 'A new live chat was started on your website'
 
-      // Fire-and-forget — notification failures must not break chat creation.
-      // For each recipient we do THREE things:
-      //   1. createNotification() → in-app bell + inbox row (polled every 60s)
-      //   2. sendWebPushToUser()  → REAL Web Push to the admin's device(s).
-      //   3. sendEmail()          → Email notification (email-first path).
-      //      This ensures the admin knows about the chat even if:
-      //        - browser is closed
-      //        - Web Push permissions aren't granted
-      //        - admin is on mobile without the PWA installed
-      //      Email is the universal fallback that always delivers.
-      //
-      // The push uses tag=`livechat-{sessionId}` + requireInteraction=true so
-      // the notification PERSISTS until the admin clicks it (WhatsApp-style:
-      // the alert doesn't auto-vanish after 5 seconds). Subsequent visitor
-      // messages reuse the SAME tag, so the notification is UPDATED in place
-      // rather than stacking — exactly like WhatsApp shows one notification
-      // per conversation, refreshed with the latest message.
+      const businessName = tenant?.name || workspace?.name || formRecord?.name || 'Our Team'
+
       await Promise.all(
         recipients.map(async (r) => {
           await createNotification({
-            tenantId: tenant.id,
+            tenantId: effectiveTenantId || undefined,
+            workspaceId: effectiveWorkspaceId || undefined,
             recipientId: r.id,
             type: 'reminder',
             category: 'customer',
@@ -263,11 +271,9 @@ export async function POST(req: NextRequest) {
             }),
           })
 
-          // WhatsApp-style device push. Fire-and-forget — a push failure
-          // must never break chat creation. The in-app notification above
-          // already guarantees the bell rings.
+          // WhatsApp-style device push. Fire-and-forget
           try {
-            await sendWebPushToUser(r.id, tenant.id, {
+            await sendWebPushToUser(r.id, effectiveTenantId || effectiveWorkspaceId || '', {
               title: 'New live chat request',
               body: messageText,
               url: `/?view=liveChat&session=${session.id}`,
@@ -284,10 +290,7 @@ export async function POST(req: NextRequest) {
             console.warn('[public-chat/session] push send failed:', pushErr)
           }
 
-          // Email notification (email-first path). Fire-and-forget —
-          // email failures must never break chat creation. This is the
-          // universal fallback that works even when Web Push permissions
-          // aren't granted or the admin's browser is closed.
+          // Email notification (email-first path). Fire-and-forget
           if (r.email) {
             try {
               const firstMessage = typeof body.firstMessage === 'string'
@@ -299,7 +302,7 @@ export async function POST(req: NextRequest) {
                 visitorEmail,
                 visitorPhone,
                 firstMessage,
-                tenantName: tenant.name,
+                tenantName: businessName,
                 sessionId: session.id,
                 dashboardUrl,
                 formName: formRecord?.name || null,
@@ -309,7 +312,7 @@ export async function POST(req: NextRequest) {
                 subject,
                 html,
                 text,
-                tenantId: tenant.id,
+                tenantId: effectiveTenantId || undefined,
                 usageType: 'transactional',
               })
             } catch (emailErr) {
@@ -325,8 +328,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         sessionId: session.id,
-        tenantId: tenant.id,
-        tenantName: tenant.name,
+        tenantId: effectiveTenantId,
+        workspaceId: effectiveWorkspaceId,
+        businessName: tenant?.name || workspace?.name || 'Our Team',
         message: 'Chat started',
       },
       { headers: { 'Access-Control-Allow-Origin': '*' } },
