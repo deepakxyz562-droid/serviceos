@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
 import { isEscalationIntent, requestHumanHandoff } from '@/lib/chat/handoff-service';
+import { tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
+import { syncChatConversation } from '@/lib/chat/chat-session-sync';
 
 export async function POST(
   request: NextRequest,
@@ -165,30 +167,62 @@ export async function POST(
       });
     }
 
+    const effectiveTenantId = formRecord?.tenantId || agent.tenantId || null;
+    const effectiveWorkspaceId = formRecord?.workspaceId || (agent as any).workspaceId || null;
+
     let replyText = '';
     let suggestedFormId: string | null = null;
+    let bookingCard: any = null;
 
-    try {
-      const messages = [
-        {
-          role: 'system' as const,
-          content: `${knowledgeContext}\n\nKeep responses concise, helpful, and formatted with markdown. If the user expresses intent to register, schedule, book, or submit an inquiry, recommend completing the connected form.`,
-        },
-        ...history.slice(-6).map((h: any) => ({
-          role: h.sender === 'user' ? ('user' as const) : ('assistant' as const),
-          content: h.text,
-        })),
-        { role: 'user' as const, content: message },
-      ];
+    // Check for real appointment booking execution
+    const bookingResult = await tryExecuteChatBooking({
+      tenantId: effectiveTenantId,
+      workspaceId: effectiveWorkspaceId,
+      formId: primaryConnectedForm?.id || null,
+      agentId: agent.id && agent.id !== 'preview' ? agent.id : null,
+      serviceName: primaryConnectedForm?.name || agent.roleTitle || 'Consultation & Appointment',
+      message,
+      history,
+    });
 
-      const aiRes = await callAI({
-        messages,
-        temperature: 0.3,
-      });
+    if (bookingResult && bookingResult.success) {
+      bookingCard = {
+        type: 'booking_confirmation',
+        leadId: bookingResult.lead?.id,
+        bookingId: bookingResult.booking?.id,
+        calendarUrls: bookingResult.calendarUrls,
+        name: bookingResult.lead?.name || 'there',
+        service: primaryConnectedForm?.name || 'Appointment',
+        date: bookingResult.dateStr,
+        time: bookingResult.timeStr,
+      };
 
-      replyText = aiRes.content || '';
-    } catch (e) {
-      console.warn('Chat AI call failed, using intelligent rule responder:', e);
+      replyText = `🎉 Great news, ${bookingResult.lead?.name || 'there'}! Your appointment has been successfully scheduled and confirmed for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.\n\nOur team has added this to our calendar and will follow up with you. You can also add it to your calendar below!`;
+    }
+
+    if (!replyText) {
+      try {
+        const messages = [
+          {
+            role: 'system' as const,
+            content: `${knowledgeContext}\n\nKeep responses concise, helpful, and formatted with markdown. Never say cold deflective phrases like "please use our connected form". Help visitors conversationally: answer their questions directly, guide them through booking or submitting their inquiry right here in the chat, or invite them to tap the interactive form card below.\nIf the visitor provides appointment details (date, time, name), warmly summarize and confirm their appointment request.`,
+          },
+          ...history.slice(-6).map((h: any) => ({
+            role: h.sender === 'user' ? ('user' as const) : ('assistant' as const),
+            content: h.text,
+          })),
+          { role: 'user' as const, content: message },
+        ];
+
+        const aiRes = await callAI({
+          messages,
+          temperature: 0.3,
+        });
+
+        replyText = aiRes.content || '';
+      } catch (e) {
+        console.warn('Chat AI call failed, using intelligent rule responder:', e);
+      }
     }
 
     // Intelligent heuristic response fallback (used when LLM provider is temporarily unavailable)
@@ -234,10 +268,28 @@ export async function POST(
       }
     }
 
+    // Sync conversation into PublicChatSession and PublicChatMessage for real-time Live Chat board
+    const syncRes = await syncChatConversation({
+      sessionId: body.sessionId || null,
+      tenantId: effectiveTenantId,
+      workspaceId: effectiveWorkspaceId,
+      formId: primaryConnectedForm?.id || null,
+      agentId: agent.id && agent.id !== 'preview' ? agent.id : null,
+      visitorName: body.visitorName || null,
+      visitorEmail: body.visitorEmail || null,
+      visitorPhone: body.visitorPhone || null,
+      userMessage: message,
+      aiReply: replyText,
+      agentName: agent.name,
+    });
+
     return NextResponse.json({
       success: true,
       reply: replyText,
+      sessionId: syncRes.sessionId,
       suggestedFormId: suggestedFormId || primaryConnectedForm?.id || null,
+      suggestedForm: primaryConnectedForm || null,
+      card: bookingCard,
       agentName: agent.name,
     });
   } catch (error) {

@@ -181,9 +181,8 @@ export function LiveChatView() {
     setLoading(true)
     fetchSessions()
     const interval = setInterval(() => {
-      if (typeof document !== 'undefined' && document.hidden) return
       fetchSessions()
-    }, 6000)
+    }, 5000)
 
     const handleVisibility = () => {
       if (typeof document !== 'undefined' && !document.hidden) {
@@ -237,9 +236,8 @@ export function LiveChatView() {
     }
 
     pollRef.current = setInterval(() => {
-      if (typeof document !== 'undefined' && document.hidden) return
       fetchMessages(selectedSessionId, lastMsgTime())
-    }, 4000)
+    }, 3000)
 
     const handleVisibility = () => {
       if (typeof document !== 'undefined' && !document.hidden) {

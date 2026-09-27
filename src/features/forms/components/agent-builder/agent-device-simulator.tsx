@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   MessageSquare,
   Mic,
@@ -56,6 +56,7 @@ interface ChatMsg {
   suggestedForm?: ConnectedFormRef;
   senderName?: string;
   isLiveAgent?: boolean;
+  card?: any;
 }
 
 function isColorDark(colorStr?: string): boolean {
@@ -332,7 +333,126 @@ export function AgentDeviceSimulator({
   const [agentAvailable, setAgentAvailable] = useState<boolean | null>(null);
   const [operatorConnected, setOperatorConnected] = useState<boolean>(false);
   const [operatorName, setOperatorName] = useState<string | null>(null);
+  const [voiceTranscript, setVoiceTranscript] = useState<string>('');
+  const [agentSpeaking, setAgentSpeaking] = useState<boolean>(false);
+  const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Text-to-speech engine matching agent voice tone
+  const speakAiResponse = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window) || isMuted) return;
+
+    window.speechSynthesis.cancel();
+    const cleanText = text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/[*_#`~]/g, '')
+      .replace(/\n+/g, ' ')
+      .trim();
+
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = agent.voiceTone === 'energetic' ? 1.1 : agent.voiceTone === 'calm' ? 0.95 : 1.0;
+    utterance.pitch = agent.voiceTone === 'friendly' ? 1.05 : 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const englishVoice = voices.find((v) =>
+      v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Google') || v.name.includes('Karen') || v.name.includes('Alex'))
+    ) || voices.find((v) => v.lang.startsWith('en'));
+
+    if (englishVoice) utterance.voice = englishVoice;
+
+    utterance.onstart = () => setAgentSpeaking(true);
+    utterance.onend = () => {
+      setAgentSpeaking(false);
+      if (isCalling && recognitionRef.current) {
+        try { recognitionRef.current.start(); } catch {}
+      }
+    };
+    utterance.onerror = () => setAgentSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+  }, [agent.voiceTone, isCalling, isMuted]);
+
+  // Two-way interactive voice call toggle
+  const toggleVoiceCall = () => {
+    if (isCalling) {
+      setIsCalling(false);
+      setAgentSpeaking(false);
+      setVoiceTranscript('');
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      toast.info('Voice session ended');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('Voice recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsCalling(true);
+        toast.success(`Connected with ${agent.name}. Start speaking!`);
+      };
+
+      recognition.onresult = (event: any) => {
+        let currentTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            setVoiceTranscript(transcript);
+            handleSendMessage(transcript);
+            try { recognition.stop(); } catch {}
+            return;
+          } else {
+            currentTranscript += transcript;
+          }
+        }
+        setVoiceTranscript(currentTranscript);
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error !== 'no-speech') {
+          console.warn('[SpeechRecognition] error:', event.error);
+        }
+      };
+
+      recognition.onend = () => {
+        if (isCalling && !agentSpeaking) {
+          try { recognition.start(); } catch {}
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error('[SpeechRecognition] start error:', err);
+      toast.error('Could not access microphone. Please grant microphone permission.');
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   // Initialize greeting on load — automatically attach primary connected form if available
   useEffect(() => {
@@ -459,6 +579,10 @@ export function AgentDeviceSimulator({
 
       const data = await res.json().catch(() => ({}));
 
+      if (data.sessionId && !liveSessionId) {
+        setLiveSessionId(data.sessionId);
+      }
+
       if (data.escalatedToHuman) {
         setEscalatedToHuman(true);
         if (data.sessionId) setLiveSessionId(data.sessionId);
@@ -476,9 +600,13 @@ export function AgentDeviceSimulator({
           text: data.reply,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           suggestedForm: matchedForm,
+          card: data.card,
         };
 
         setMessages((prev) => [...prev, aiMsg]);
+        if (isCalling) {
+          speakAiResponse(data.reply);
+        }
         return;
       }
 
@@ -490,19 +618,27 @@ export function AgentDeviceSimulator({
         text: data.reply || `Thank you for reaching out! As ${agent.name || 'your AI Assistant'} (${agent.roleTitle || 'Customer Concierge'}), I'm ready to help. You can ask anything or complete ${matchedForm?.name || 'our form'} to proceed.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedForm: matchedForm,
+        card: data.card,
       };
       setMessages((prev) => [...prev, aiMsg]);
+      if (isCalling) {
+        speakAiResponse(aiMsg.text);
+      }
     } catch {
+      const fallbackText = `I'm happy to help you with your inquiry! You can ask questions or complete ${agent.connectedForms?.[0]?.name || 'our form'} to proceed.`;
       setMessages((prev) => [
         ...prev,
         {
           id: `ai_fallback_${Date.now()}`,
           sender: 'ai',
-          text: `I'm happy to help you with your inquiry! You can ask questions or complete ${agent.connectedForms?.[0]?.name || 'our form'} to proceed.`,
+          text: fallbackText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           suggestedForm: agent.connectedForms?.[0],
         },
       ]);
+      if (isCalling) {
+        speakAiResponse(fallbackText);
+      }
     } finally {
       setSending(false);
     }
@@ -949,6 +1085,64 @@ export function AgentDeviceSimulator({
                       </div>
                     )}
 
+                    {/* Card Protocol Rendering */}
+                    {msg.card?.type === 'slot_picker' && (
+                      <div className="p-3 rounded-xl border border-blue-500/30 bg-blue-50/50 dark:bg-blue-950/30 space-y-1.5">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                          <Calendar className="size-3 text-blue-500" />
+                          Select Booking Slot:
+                        </p>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {msg.card.slots?.map((slot: string, sIdx: number) => (
+                            <Button
+                              key={sIdx}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleSendMessage(`I would like to book the ${slot} slot.`)}
+                              className="text-[11px] h-7 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-950/50 border-blue-300 dark:border-blue-800"
+                            >
+                              {slot}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Booking Confirmation Card */}
+                    {msg.card?.type === 'booking_confirmation' && (
+                      <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/40 space-y-2">
+                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
+                          <CheckCircle2 className="size-3.5 text-emerald-500" />
+                          <span>Appointment Confirmed!</span>
+                        </div>
+                        <div className="text-[11px] text-emerald-900 dark:text-emerald-100 space-y-0.5">
+                          <p><strong>Date:</strong> {msg.card.date} at {msg.card.time}</p>
+                          {msg.card.service && <p><strong>Service:</strong> {msg.card.service}</p>}
+                          {msg.card.name && <p><strong>Name:</strong> {msg.card.name}</p>}
+                        </div>
+                        {msg.card.calendarUrls && (
+                          <div className="flex gap-2 pt-1">
+                            <a
+                              href={msg.card.calendarUrls.google}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 text-center py-1.5 px-2 text-[10px] font-bold rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 shadow-2xs transition-colors"
+                            >
+                              Google Calendar
+                            </a>
+                            <a
+                              href={msg.card.calendarUrls.outlook}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-1 text-center py-1.5 px-2 text-[10px] font-bold rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 shadow-2xs transition-colors"
+                            >
+                              Outlook
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Connected Form Recommendation Card */}
                     {msg.suggestedForm && (
                       <div
@@ -1067,14 +1261,34 @@ export function AgentDeviceSimulator({
             <img
               src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
               alt={agent.name}
-              className="size-24 rounded-full object-cover border-4 border-white shadow-2xl"
+              className={cn(
+                'size-24 rounded-full object-cover border-4 transition-all duration-300',
+                agentSpeaking
+                  ? 'border-emerald-500 ring-8 ring-emerald-500/20 shadow-2xl scale-105'
+                  : isCalling
+                  ? 'border-blue-500 ring-8 ring-blue-500/20 shadow-2xl'
+                  : 'border-white dark:border-slate-800 shadow-xl'
+              )}
             />
-            <div className="absolute inset-0 rounded-full border-4 border-blue-500 animate-ping opacity-25" />
+            {(isCalling || agentSpeaking) && (
+              <div
+                className={cn(
+                  'absolute inset-0 rounded-full border-4 animate-ping opacity-25',
+                  agentSpeaking ? 'border-emerald-500' : 'border-blue-500'
+                )}
+              />
+            )}
           </div>
 
           <div className="space-y-1">
             <h3 className={cn('text-sm font-bold', isDark ? 'text-white' : 'text-slate-900')}>{agent.name}</h3>
-            <p className={cn('text-xs', isDark ? 'text-slate-400' : 'text-slate-500')}>Voice Assistant • {agent.voiceTone} tone</p>
+            <p className={cn('text-xs', isDark ? 'text-slate-400' : 'text-slate-500')}>
+              {agentSpeaking
+                ? 'Speaking...'
+                : isCalling
+                ? 'Listening... Speak into microphone'
+                : `Voice Assistant • ${agent.voiceTone || 'professional'} tone`}
+            </p>
           </div>
 
           {/* Animated Waveform Visualizer */}
@@ -1082,11 +1296,35 @@ export function AgentDeviceSimulator({
             {[40, 70, 30, 90, 60, 100, 45, 80, 50, 95, 35, 65].map((h, i) => (
               <span
                 key={i}
-                className="w-1 bg-blue-500 rounded-full animate-pulse"
-                style={{ height: `${h}%`, animationDelay: `${i * 0.1}s` }}
+                className={cn(
+                  'w-1 rounded-full transition-all',
+                  agentSpeaking
+                    ? 'bg-emerald-500 animate-pulse'
+                    : isCalling
+                    ? 'bg-blue-500 animate-pulse'
+                    : isDark
+                    ? 'bg-slate-700'
+                    : 'bg-slate-300'
+                )}
+                style={{
+                  height: isCalling || agentSpeaking ? `${h}%` : '20%',
+                  animationDelay: `${i * 0.1}s`,
+                }}
               />
             ))}
           </div>
+
+          {/* Live speech transcript preview */}
+          {voiceTranscript && (
+            <div
+              className={cn(
+                'max-w-xs px-3 py-2 rounded-xl text-xs italic leading-relaxed border animate-in fade-in',
+                isDark ? 'bg-slate-800/80 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+              )}
+            >
+              &ldquo;{voiceTranscript}&rdquo;
+            </div>
+          )}
 
           <div className="flex items-center gap-4">
             <Button
@@ -1094,7 +1332,8 @@ export function AgentDeviceSimulator({
               size="icon"
               variant={isMuted ? 'destructive' : 'outline'}
               onClick={() => setIsMuted(!isMuted)}
-              className={cn('size-11 rounded-full shadow-md', isDark && 'border-slate-700 bg-slate-800 text-slate-100')}
+              className={cn('size-11 rounded-full shadow-md cursor-pointer', isDark && 'border-slate-700 bg-slate-800 text-slate-100')}
+              title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
             >
               {isMuted ? <VolumeX className="size-5" /> : <Volume2 className="size-5" />}
             </Button>
@@ -1102,14 +1341,12 @@ export function AgentDeviceSimulator({
             <Button
               type="button"
               size="icon"
-              onClick={() => {
-                setIsCalling(!isCalling);
-                toast(isCalling ? 'Call ended' : 'Voice session connected');
-              }}
+              onClick={toggleVoiceCall}
               className={cn(
-                'size-14 rounded-full text-white shadow-xl transition-transform hover:scale-105',
+                'size-14 rounded-full text-white shadow-xl transition-transform hover:scale-105 cursor-pointer',
                 isCalling ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
               )}
+              title={isCalling ? 'End Voice Call' : 'Start Voice Call'}
             >
               {isCalling ? <PhoneOff className="size-6" /> : <PhoneCall className="size-6" />}
             </Button>
@@ -1129,7 +1366,7 @@ export function AgentDeviceSimulator({
 
           <div className="space-y-2 pt-2">
             {(agent.connectedForms || [
-              { id: 'form_1', name: 'Service & Loan Application Form', description: 'Pre-qualification and documentation' },
+              { id: 'form_1', name: 'Intake & Inquiry Form', description: 'General inquiry and appointment request' },
             ]).map((form) => (
               <div
                 key={form.id}

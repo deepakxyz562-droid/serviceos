@@ -361,13 +361,14 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
   },
   connectedForms: [],
   knowledge: {
-    crawledUrls: ['https://example.com/rates'],
+    crawledUrls: [],
     documents: [],
     faqPairs: [
-      { id: 'faq_1', question: 'What is the minimum credit score?', answer: 'Our standard loan programs typically require a minimum credit score of 620.' },
+      { id: 'faq_1', question: 'How can I schedule an appointment or get in touch?', answer: 'You can schedule an appointment or submit your inquiry directly through our online form or right here in the chat!' },
+      { id: 'faq_2', question: 'What are your operating hours?', answer: 'Our online services and booking are available 24/7. Our live specialists are available Monday through Friday 8:00 AM to 6:00 PM.' },
     ],
-    systemPrompt: 'You are Nell, an expert loan application assistant. Guide borrowers through eligibility and loan applications.',
-    guardrails: ['Be reassuring and professional.'],
+    systemPrompt: 'You are a helpful, professional AI Assistant. Answer visitor questions accurately based on the business profile and knowledge base. Guide visitors through scheduling appointments, answering inquiries, and completing inquiries conversationally.',
+    guardrails: ['Be reassuring, helpful, and professional.', 'Help visitors schedule appointments, answer questions, or submit inquiries.'],
   },
   channels: {
     activeChannel: 'chatbot',

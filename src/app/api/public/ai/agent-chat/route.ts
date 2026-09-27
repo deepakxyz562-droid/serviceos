@@ -4,6 +4,8 @@ import { callAI } from '@/lib/ai-client';
 import { searchKnowledgeBase } from '@/lib/ai-knowledge';
 import { requestHumanHandoff, isEscalationIntent } from '@/lib/chat/handoff-service';
 import { createAppointmentBooking } from '@/lib/scheduling/booking-service';
+import { tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
+import { syncChatConversation } from '@/lib/chat/chat-session-sync';
 
 export const runtime = 'nodejs';
 
@@ -46,6 +48,8 @@ export async function POST(req: NextRequest) {
     let tenantPhone = '';
     let tenantEmail = '';
 
+    let primaryConnectedForm: any = null;
+
     if (agentId && !tenantId) {
       // Check if agentId is a Tenant id or Form id or AiAgent id
       const tenant = await db.tenant.findUnique({
@@ -67,6 +71,11 @@ export async function POST(req: NextRequest) {
         });
 
         if (formAgent) {
+          const agentConfig = (formAgent.configJson as any) || {};
+          if (Array.isArray(agentConfig.connectedForms) && agentConfig.connectedForms.length > 0) {
+            primaryConnectedForm = agentConfig.connectedForms[0];
+          }
+
           if (formAgent.tenant) {
             tenantId = formAgent.tenant.id;
             tenantName = formAgent.tenant.name;
@@ -87,6 +96,11 @@ export async function POST(req: NextRequest) {
             },
           });
           if (form) {
+            primaryConnectedForm = {
+              id: form.id,
+              name: form.name,
+              description: form.description,
+            };
             workspaceId = form.workspaceId || undefined;
             if (form.tenant) {
               tenantId = form.tenant.id;
@@ -322,30 +336,77 @@ If the user asks for a price/quote and matches a known service, you can optional
       { role: 'user' as const, content: message },
     ];
 
-    // 6. Call AI
-    const aiResponse = await callAI(conversationMessages, {
-      temperature: 0.7,
-      maxTokens: 500,
-    });
-
-    let rawReply = aiResponse.text || "Hello! How can I assist you today?";
+    // 6. Check for real natural language appointment booking execution
+    let rawReply = '';
     let cardData: Record<string, unknown> | null = null;
 
-    // Check for ```card ... ```
-    const cardMatch = rawReply.match(/```card\s*([\s\S]*?)\s*```/);
-    if (cardMatch) {
-      try {
-        cardData = JSON.parse(cardMatch[1]);
-        rawReply = rawReply.replace(/```card[\s\S]*?```/, '').trim();
-      } catch (err) {
-        console.warn('[agent-chat] Failed to parse card JSON:', err);
+    const bookingResult = await tryExecuteChatBooking({
+      tenantId: tenantId || null,
+      workspaceId: workspaceId || null,
+      formId: primaryConnectedForm?.id || null,
+      agentId: agentId || null,
+      serviceName: primaryConnectedForm?.name || 'Appointment & Consultation',
+      message,
+      history,
+    });
+
+    if (bookingResult && bookingResult.success) {
+      cardData = {
+        type: 'booking_confirmation',
+        leadId: bookingResult.lead?.id,
+        bookingId: bookingResult.booking?.id,
+        calendarUrls: bookingResult.calendarUrls,
+        name: bookingResult.lead?.name || 'there',
+        service: primaryConnectedForm?.name || 'Appointment',
+        date: bookingResult.dateStr,
+        time: bookingResult.timeStr,
+      };
+
+      rawReply = `🎉 Great news, ${bookingResult.lead?.name || 'there'}! Your appointment request has been confirmed and booked for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.\n\nOur team has added this to the calendar and will follow up with you. You can also add it to your calendar below!`;
+    }
+
+    if (!rawReply) {
+      const aiResponse = await callAI(conversationMessages, {
+        temperature: 0.7,
+        maxTokens: 500,
+      });
+
+      rawReply = aiResponse.text || "Hello! How can I assist you today?";
+
+      // Check for ```card ... ```
+      const cardMatch = rawReply.match(/```card\s*([\s\S]*?)\s*```/);
+      if (cardMatch) {
+        try {
+          cardData = JSON.parse(cardMatch[1]);
+          rawReply = rawReply.replace(/```card[\s\S]*?```/, '').trim();
+        } catch (err) {
+          console.warn('[agent-chat] Failed to parse card JSON:', err);
+        }
       }
     }
+
+    // Sync conversation into PublicChatSession and PublicChatMessage for real-time Live Chat board
+    const syncRes = await syncChatConversation({
+      sessionId: body.sessionId || null,
+      tenantId: tenantId || null,
+      workspaceId: workspaceId || null,
+      formId: primaryConnectedForm?.id || null,
+      agentId: agentId || null,
+      visitorName: body.visitorName || null,
+      visitorEmail: body.visitorEmail || null,
+      visitorPhone: body.visitorPhone || null,
+      userMessage: message,
+      aiReply: rawReply,
+      agentName: tenantName,
+    });
 
     return NextResponse.json(
       {
         reply: rawReply,
         card: cardData,
+        sessionId: syncRes.sessionId,
+        suggestedForm: primaryConnectedForm || undefined,
+        suggestedFormId: primaryConnectedForm?.id || undefined,
         citations: citations.length > 0 ? citations : undefined,
         businessName: tenantName,
       },

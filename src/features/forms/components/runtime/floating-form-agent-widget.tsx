@@ -21,6 +21,7 @@ import {
   Minimize2,
   Maximize2,
   ShieldCheck,
+  ArrowRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +59,7 @@ interface Message {
   text: string;
   citations?: CitationItem[];
   card?: any;
+  suggestedForm?: { id: string; name: string; description?: string };
   timestamp: string;
 }
 
@@ -201,6 +203,7 @@ export function FloatingFormAgentWidget({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           agentId: formId || agentId,
+          sessionId: liveSessionId || undefined,
           message: text,
           history: messages.map((m) => ({
             role: m.sender === 'user' ? 'user' : 'assistant',
@@ -211,18 +214,19 @@ export function FloatingFormAgentWidget({
 
       const data = await res.json();
       if (res.ok && data.reply) {
+        if (data.sessionId) setLiveSessionId(data.sessionId);
         const aiMsg: Message = {
           id: `ai_${Date.now()}`,
           sender: 'ai',
           text: data.reply,
           citations: data.citations,
           card: data.card,
+          suggestedForm: data.suggestedForm,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, aiMsg]);
         if (data.status === 'human_requested' || data.humanHandoff) {
           setHumanRequested(true);
-          if (data.sessionId) setLiveSessionId(data.sessionId);
           if (data.agentAvailable !== undefined) setAgentAvailable(data.agentAvailable);
         }
       } else {
@@ -564,6 +568,71 @@ export function FloatingFormAgentWidget({
                                 </Button>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {/* Booking Confirmation Card */}
+                        {m.card?.type === 'booking_confirmation' && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 space-y-2">
+                            <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-bold text-xs">
+                              <CheckCircle2 className="size-3.5 text-emerald-500" />
+                              <span>Appointment Confirmed!</span>
+                            </div>
+                            <div className="text-[11px] text-emerald-900 dark:text-emerald-100 space-y-0.5">
+                              <p><strong>Date:</strong> {m.card.date} at {m.card.time}</p>
+                              {m.card.service && <p><strong>Service:</strong> {m.card.service}</p>}
+                              {m.card.name && <p><strong>Name:</strong> {m.card.name}</p>}
+                            </div>
+                            {m.card.calendarUrls && (
+                              <div className="flex gap-2 pt-1">
+                                <a
+                                  href={m.card.calendarUrls.google}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex-1 text-center py-1 px-2 text-[10px] font-bold rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50"
+                                >
+                                  Google Calendar
+                                </a>
+                                <a
+                                  href={m.card.calendarUrls.outlook}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex-1 text-center py-1 px-2 text-[10px] font-bold rounded-lg bg-white dark:bg-slate-900 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50"
+                                >
+                                  Outlook
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Connected Form 1-Click Card */}
+                        {m.suggestedForm && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-white dark:bg-slate-900 border border-blue-500/30 shadow-xs space-y-2">
+                            <div className="flex items-center gap-2">
+                              <div className="size-7 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
+                                <FileText className="size-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-bold text-foreground truncate">{m.suggestedForm.name}</p>
+                                <p className="text-[10px] text-muted-foreground line-clamp-1">{m.suggestedForm.description || 'Fill out this form to submit your inquiry.'}</p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => {
+                                if (m.suggestedForm?.id) {
+                                  window.open(`/f/${m.suggestedForm.id}`, '_blank');
+                                } else {
+                                  setActiveTab('form');
+                                }
+                              }}
+                              className="w-full h-7 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white gap-1"
+                            >
+                              <span>Open &amp; Complete Form</span>
+                              <ArrowRight className="size-3" />
+                            </Button>
                           </div>
                         )}
                       </div>
