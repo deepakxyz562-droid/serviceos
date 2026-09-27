@@ -1028,16 +1028,19 @@ export function FormStudioBuilder({
     let savedResult: { id?: string; slug?: string } | void | null = null;
     try {
       savedResult = await onSave();
+      if (!savedResult && !existingId) {
+        if (newTab && !newTab.closed) newTab.close();
+        toast.error('Please name your form and add at least one question before opening live.');
+        return;
+      }
       const currentId =
         savedResult?.id ||
         (savedResult?.slug ? savedResult.slug.replace(/^-+|-+$/g, '') : null) ||
-        formData.id ||
-        (formData.slug ? formData.slug.replace(/^-+|-+$/g, '') : null) ||
-        (formData.name ? formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : null);
+        existingId;
 
       if (!currentId) {
         if (newTab && !newTab.closed) newTab.close();
-        toast.error('Please name and save your form first');
+        toast.error('Please save your form first');
         return;
       }
       const targetUrl = `${resolvedOrigin}/form/${currentId}`;
@@ -2159,13 +2162,27 @@ export function FormStudioBuilder({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <RadioGroup
-                    value={formData.settings?.formLayout || (formData.theme?.layout === 'split_media' ? 'split_media' : 'all_questions')}
+                    value={formLayout === 'split_media' ? 'split_media' : formLayout === 'card' ? 'single_question' : 'all_questions'}
                     onValueChange={(v: any) => {
-                      updateSetting('formLayout', v);
                       if (v === 'split_media') {
+                        setFormLayout('split_media');
                         updateMediaPanel({ enabled: true });
+                      } else if (v === 'single_question' || v === 'card') {
+                        setFormLayout('card');
+                        onFormDataChange((prev) => ({
+                          ...prev,
+                          theme: { ...(prev.theme || {}), layout: 'card' } as any,
+                          settings: { ...(prev.settings || {}), formLayout: 'single_question' },
+                          mediaPanel: { ...(prev.mediaPanel || prev.theme?.mediaPanel || {}), enabled: false } as any,
+                        }));
                       } else {
-                        updateMediaPanel({ enabled: false });
+                        setFormLayout('classic');
+                        onFormDataChange((prev) => ({
+                          ...prev,
+                          theme: { ...(prev.theme || {}), layout: 'classic' } as any,
+                          settings: { ...(prev.settings || {}), formLayout: 'all_on_one_page' },
+                          mediaPanel: { ...(prev.mediaPanel || prev.theme?.mediaPanel || {}), enabled: false } as any,
+                        }));
                       }
                     }}
                     className="grid grid-cols-1 sm:grid-cols-3 gap-3"
