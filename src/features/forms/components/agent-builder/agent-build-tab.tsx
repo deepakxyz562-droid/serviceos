@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   FormAgentData,
   QuickActionButton,
@@ -97,6 +97,30 @@ export function AgentBuildTab({
   const [avatarSearch, setAvatarSearch] = useState<string>('');
   const [aiPrompt, setAiPrompt] = useState<string>('Professional female loan officer in modern office');
   const [isGeneratingAiAvatar, setIsGeneratingAiAvatar] = useState<boolean>(false);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Avatar image must be under 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        onChange({
+          ...agent,
+          avatarUrl: dataUrl,
+        });
+        toast.success('Agent avatar photo updated successfully!');
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const chatbotConfig = agent.channels?.chatbot || {
     enabled: true,
@@ -512,10 +536,79 @@ export function AgentBuildTab({
 
                 {/* Upload Mode */}
                 {avatarMode === 'upload' && (
-                  <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center space-y-2 hover:border-purple-500 transition-colors cursor-pointer">
-                    <Upload className="size-6 text-slate-400 mx-auto" />
-                    <p className="text-xs font-semibold text-slate-200">Upload Photo</p>
-                    <p className="text-[10px] text-slate-400">PNG, JPG or WebP up to 5MB</p>
+                  <div className="space-y-3">
+                    <input
+                      ref={avatarFileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                    />
+
+                    {agent.avatarUrl ? (
+                      <div className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={agent.avatarUrl}
+                            alt="Current Avatar"
+                            className="size-12 rounded-full object-cover border-2 border-purple-500 shadow-xs"
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-slate-200">Active Avatar Photo</p>
+                            <p className="text-[10px] text-slate-400">Custom profile photo applied</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => avatarFileInputRef.current?.click()}
+                            className="h-7 text-xs border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600 gap-1"
+                          >
+                            <Upload className="size-3" /> Change
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              onChange({
+                                ...agent,
+                                avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80',
+                              });
+                              toast.info('Avatar reset to default');
+                            }}
+                            className="h-7 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30"
+                          >
+                            <Trash2 className="size-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div
+                      onClick={() => avatarFileInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center space-y-2 hover:border-purple-500 hover:bg-purple-950/10 transition-all cursor-pointer"
+                    >
+                      <div className="size-10 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center mx-auto">
+                        <Upload className="size-5" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-200">Upload New Photo</p>
+                      <p className="text-[10px] text-slate-400">PNG, JPG or WebP up to 5MB</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white mt-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          avatarFileInputRef.current?.click();
+                        }}
+                      >
+                        Choose File
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>

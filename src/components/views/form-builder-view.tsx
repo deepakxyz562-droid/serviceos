@@ -744,6 +744,9 @@ export function FormBuilderView() {
     return (
       <FormAgentStudio
         initialAgent={agentStudioData || DEFAULT_FORM_AGENT}
+        onChange={(updated) => {
+          setAgentStudioData(updated);
+        }}
         onBack={() => {
           setShowAiAgentStudio(false);
           setAgentStudioData(null);
@@ -1001,20 +1004,23 @@ export function FormBuilderView() {
                         size="sm"
                         className="flex-1 h-7 text-xs border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40"
                         onClick={() => {
+                          const existingConfig = (form as any).agentConfig;
                           const formAgent: FormAgentData = {
-                            ...DEFAULT_FORM_AGENT,
-                            id: `agent_${form.id}`,
-                            name: `${form.name.split(' ')[0] || 'AI'} Assistant`,
-                            roleTitle: `${form.name} AI Agent`,
-                            connectedForms: [
-                              {
-                                id: form.id,
-                                name: form.name,
-                                description: form.description,
-                                submissionCount: form.submissions,
-                              },
-                            ],
-                            welcomeGreeting: `Hi! I am your AI Assistant for **${form.name}**. How may I help you today?`,
+                            ...(existingConfig || DEFAULT_FORM_AGENT),
+                            id: existingConfig?.id || `agent_${form.id}`,
+                            name: existingConfig?.name || `${form.name.split(' ')[0] || 'AI'} Assistant`,
+                            roleTitle: existingConfig?.roleTitle || `${form.name} AI Agent`,
+                            connectedForms: existingConfig?.connectedForms?.length
+                              ? existingConfig.connectedForms
+                              : [
+                                  {
+                                    id: form.id,
+                                    name: form.name,
+                                    description: form.description,
+                                    submissionCount: form.submissions,
+                                  },
+                                ],
+                            welcomeGreeting: existingConfig?.welcomeGreeting || `Hi! I am your AI Assistant for **${form.name}**. How may I help you today?`,
                           };
                           setAgentStudioData(formAgent);
                           setShowAiAgentStudio(true);

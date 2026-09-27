@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FormAgentData,
   DEFAULT_FORM_AGENT,
@@ -134,9 +134,11 @@ export function FormAgentStudio({
     });
   };
 
-  // Sync initialAgent
+  // Sync initialAgent only when agent ID actually changes (e.g. switched to a different agent)
+  const initialAgentIdRef = useRef(initialAgent?.id);
   useEffect(() => {
-    if (initialAgent) {
+    if (initialAgent && initialAgent.id !== initialAgentIdRef.current) {
+      initialAgentIdRef.current = initialAgent.id;
       setAgentState(initialAgent);
       setTitleInput(initialAgent.name);
     }

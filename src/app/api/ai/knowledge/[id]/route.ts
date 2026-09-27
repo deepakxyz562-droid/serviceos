@@ -6,11 +6,12 @@ import { logActivity } from '@/lib/activity-log';
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthUser();
   if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-  if (user.role === 'customer' || !user.tenantId) return NextResponse.json({ error: 'Not available' }, { status: 403 });
+  if (user.role === 'customer') return NextResponse.json({ error: 'Not available' }, { status: 403 });
 
+  const tenantId = user.tenantId || (user as any).workspaceId || 'default';
   const { id } = await params;
   let deleted: boolean;
-  try { deleted = await deleteKnowledgeDocument(user.tenantId, id); } catch (err) {
+  try { deleted = await deleteKnowledgeDocument(tenantId, id); } catch (err) {
     console.error('[ai/knowledge/:id] delete failed:', err);
     return NextResponse.json({ error: 'Delete failed.' }, { status: 500 });
   }
@@ -18,7 +19,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   if (!deleted) return NextResponse.json({ error: 'Document not found.' }, { status: 404 });
 
   logActivity({
-    tenantId: user.tenantId,
+    tenantId,
     actorId: user.id,
     actorName: user.name ?? user.email,
     action: 'ai_knowledge_delete',

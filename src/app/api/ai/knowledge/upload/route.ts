@@ -59,11 +59,11 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    if (user.role === 'customer' || !user.tenantId) {
+    if (user.role === 'customer') {
       return NextResponse.json({ error: 'Not available for customer accounts' }, { status: 403 });
     }
 
-    const tenantId = user.tenantId;
+    const tenantId = user.tenantId || (user as any).workspaceId || 'default';
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const customTitle = formData.get('title') as string | null;

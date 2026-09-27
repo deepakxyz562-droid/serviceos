@@ -12,10 +12,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const tenantId = user.tenantId;
-    if (!tenantId) {
-      return NextResponse.json({ error: 'No active workspace/tenant found' }, { status: 400 });
-    }
+    const tenantId = user.tenantId || (user as any).workspaceId || 'default';
 
     const body = await req.json().catch(() => ({}));
     const { url, mode = 'sitemap', autoIngest = true, maxPages = 20 } = body;

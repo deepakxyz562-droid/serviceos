@@ -8,12 +8,13 @@ export const runtime = 'nodejs';
 export async function GET(req: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user || !user.tenantId) {
+    if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    const tenantId = user.tenantId || (user as any).workspaceId || 'default';
     const status = req.nextUrl.searchParams.get('status') === 'all' ? 'all' : 'pending';
-    const questions = listUnansweredQuestions(user.tenantId, status);
+    const questions = listUnansweredQuestions(tenantId, status);
 
     return NextResponse.json({ questions });
   } catch (error) {
@@ -24,10 +25,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user || !user.tenantId) {
+    if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    const tenantId = user.tenantId || (user as any).workspaceId || 'default';
     const body = await req.json().catch(() => ({}));
     const { id, action = 'resolve', answer, question } = body;
 
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
     if (action === 'resolve' && answer && typeof answer === 'string' && answer.trim()) {
       const qText = question || 'Answered Customer Question';
       await ingestKnowledgeDocument({
-        tenantId: user.tenantId,
+        tenantId,
         title: `FAQ: ${qText.slice(0, 80)}`,
         text: `Question: ${qText}\n\nAnswer: ${answer.trim()}`,
         sourceType: 'manual',
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const ok = resolveUnansweredQuestion(user.tenantId, id, action, answer);
+    const ok = resolveUnansweredQuestion(tenantId, id, action, answer);
 
     return NextResponse.json({ success: ok, id, action });
   } catch (error) {

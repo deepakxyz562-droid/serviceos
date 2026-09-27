@@ -18,8 +18,8 @@ export default function PublicChatPage() {
 
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<FormAgentData | null>(null);
-  const [previewPage, setPreviewPage] = useState<'greeting' | 'conversation'>('conversation');
-  const [forceFullView, setForceFullView] = useState(true);
+  const [previewPage, setPreviewPage] = useState<'greeting' | 'conversation'>('greeting');
+  const [forceFullView, setForceFullView] = useState(initialViewParam === 'full');
 
   useEffect(() => {
     async function loadAgent() {
@@ -35,7 +35,9 @@ export default function PublicChatPage() {
           const data = await publicRes.json();
           if (data.agent) {
             setAgent(data.agent);
-            setPreviewPage('conversation');
+            const isStandalone = data.agent.channels?.chatbot?.layoutMode === 'standalone';
+            setForceFullView(initialViewParam === 'full' || isStandalone);
+            setPreviewPage(initialViewParam === 'conversation' ? 'conversation' : 'greeting');
             return;
           }
         }
@@ -46,6 +48,8 @@ export default function PublicChatPage() {
           const data = await formsRes.json();
           if (data.agent) {
             setAgent(data.agent);
+            const isStandalone = data.agent.channels?.chatbot?.layoutMode === 'standalone';
+            setForceFullView(initialViewParam === 'full' || isStandalone);
             setPreviewPage(initialViewParam === 'conversation' ? 'conversation' : 'greeting');
             return;
           }
@@ -226,7 +230,10 @@ export default function PublicChatPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setForceFullView(false)}
+            onClick={() => {
+              setForceFullView(false);
+              setPreviewPage('greeting');
+            }}
             className="text-xs gap-1.5 h-8 bg-background shadow-xs border-border/80"
           >
             <Minimize2 className="size-3.5" /> Return to {isSidebar ? 'Sidebar' : 'Floating'} View

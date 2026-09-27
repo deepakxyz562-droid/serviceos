@@ -25,6 +25,11 @@ export async function POST(
         const kbResults = await searchKnowledgeBase(kbScope, message, 3);
         if (kbResults && kbResults.length > 0) {
           retrievedKnowledge = `Indexed Knowledge Base Documents:\n${kbResults.map((doc: any) => `- ${doc.content || doc.snippet || ''}`).join('\n')}`;
+        } else if (message.length > 15 && !['hi', 'hello', 'hey', 'start'].includes(message.trim().toLowerCase())) {
+          try {
+            const { recordUnansweredQuestion } = await import('@/lib/ai-unanswered-questions');
+            recordUnansweredQuestion(kbScope, message, 'forms_chat');
+          } catch { /* ignore */ }
         }
       } catch (err) {
         console.warn('[forms/agent-chat] KB search warning:', err);
