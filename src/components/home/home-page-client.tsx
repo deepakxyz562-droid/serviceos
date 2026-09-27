@@ -872,9 +872,21 @@ export default function HomePageClient() {
       } else {
         const tenantPlan = (tenant as any)?.plan as string | null | undefined;
         const sm = (tenant as any)?.signupMode as string | null | undefined;
-        const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business';
+        const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone');
 
-        if (isStandalone) {
+        if (!tenant || !tenant.onboardingCompleted) {
+          if (isStandalone) {
+            setOnboardingView('standalone');
+          } else if (sm === 'listing_only') {
+            setOnboardingView('listing');
+          } else if (sm === 'crm_trial') {
+            setOnboardingView('saas');
+          } else {
+            setOnboardingView('mode_selector');
+          }
+          setShowOnboarding(false);
+          toast.success('Welcome to Fieseros! Let\'s set up your workspace.');
+        } else if (isStandalone) {
           setShowOnboarding(false);
           setOnboardingView(null);
           toast.success('Welcome to Fieseros!');
@@ -886,19 +898,9 @@ export default function HomePageClient() {
             } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
               useAppStore.getState().setCurrentView('aiReceptionist');
             } else {
-              useAppStore.getState().setCurrentView('formBuilder');
+              useAppStore.getState().setCurrentView('formsDashboard');
             }
           }
-        } else if (!tenant || !tenant.onboardingCompleted) {
-          if (sm === 'listing_only') {
-            setOnboardingView('listing');
-          } else if (sm === 'crm_trial') {
-            setOnboardingView('saas');
-          } else {
-            setOnboardingView('mode_selector');
-          }
-          setShowOnboarding(false);
-          toast.success('Welcome to Fieseros! Let\'s set up your workspace.');
         } else {
           setShowOnboarding(false);
           setOnboardingView(null);
@@ -916,10 +918,12 @@ export default function HomePageClient() {
       const ru = returnUrlRef.current;
       if (ru && typeof window !== 'undefined') {
         returnUrlRef.current = null;
-        // Use a short timeout so the auth state + toasts settle before nav.
-        setTimeout(() => {
-          window.location.href = ru;
-        }, 600);
+        const cleanRu = ru.split('?')[0];
+        if (tenant?.onboardingCompleted && cleanRu !== '/gptform' && cleanRu !== '/login' && cleanRu !== '/register' && cleanRu !== '/') {
+          setTimeout(() => {
+            window.location.href = ru;
+          }, 600);
+        }
       }
     },
     [setAuth, setShowOnboarding]

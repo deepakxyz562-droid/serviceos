@@ -314,10 +314,22 @@ export async function GET(request: NextRequest) {
     });
 
     // Helper to build canonical success redirect URL
-    const buildSuccessUrl = (baseUrl: string, isStandalone: boolean) => {
+    const buildSuccessUrl = (baseUrl: string, isStandalone: boolean, needsOnboarding = false) => {
+      // If the tenant hasn't completed onboarding, always route to root with google_login=success
+      // so HomePageClient can render the onboarding wizard or mode selector.
+      // Do NOT send un-onboarded tenants to static landing pages like /gptform.
+      if (needsOnboarding) {
+        if (isStandalone || state.plan === 'standalone_starter' || state.plan === 'standalone_business') {
+          return `${baseUrl}/?google_login=success&view=formBuilder`;
+        }
+        return `${baseUrl}/?google_login=success`;
+      }
       if (state.redirect && state.redirect.startsWith('/')) {
-        const sep = state.redirect.includes('?') ? '&' : '?';
-        return `${baseUrl}${state.redirect}${sep}google_login=success`;
+        const cleanRedirect = state.redirect.split('?')[0];
+        if (cleanRedirect !== '/gptform' && cleanRedirect !== '/login' && cleanRedirect !== '/register' && cleanRedirect !== '/') {
+          const sep = state.redirect.includes('?') ? '&' : '?';
+          return `${baseUrl}${state.redirect}${sep}google_login=success`;
+        }
       }
       if (isStandalone || state.plan === 'standalone_starter' || state.plan === 'standalone_business') {
         return `${baseUrl}/?google_login=success&view=formBuilder`;
@@ -401,7 +413,7 @@ export async function GET(request: NextRequest) {
           workspaceId: workspace.id,
         });
         const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
-        const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone));
+        const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone, true));
         response.cookies.set({
           ...COOKIE_OPTIONS,
           value: newToken,
@@ -410,7 +422,8 @@ export async function GET(request: NextRequest) {
       }
 
       const isStandalone = existingUser.tenant?.signupMode === 'standalone' || existingUser.tenant?.plan === 'standalone_starter' || existingUser.tenant?.plan === 'standalone_business';
-      const response = NextResponse.redirect(buildSuccessUrl(baseUrl, !!isStandalone));
+      const needsOnboarding = !existingUser.tenant?.onboardingCompleted;
+      const response = NextResponse.redirect(buildSuccessUrl(baseUrl, !!isStandalone, needsOnboarding));
       response.cookies.set({
         ...COOKIE_OPTIONS,
         value: token,
@@ -455,7 +468,7 @@ export async function GET(request: NextRequest) {
 
     const baseUrl = getBaseUrl(request);
     const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
-    const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone));
+    const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone, true));
     response.cookies.set({
       ...COOKIE_OPTIONS,
       value: token,

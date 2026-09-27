@@ -244,19 +244,20 @@ export function SignupModeSelector({
                 <Bot className="size-6" />
               </div>
               <h2 className="text-lg font-semibold">AI Forms & Chatbot</h2>
-              <p className="text-xl font-bold mt-1">
-                Free for 14 days
-                <span className="text-xs font-normal text-muted-foreground block">then from $7/mo</span>
-              </p>
+              <div className="mt-1">
+                <span className="text-xl font-bold text-foreground">Free forever</span>
+                <span className="text-xs font-medium text-violet-600 dark:text-violet-400 block">3 forms & 100 submissions/mo · Upgrade anytime</span>
+              </div>
               <p className="text-sm text-muted-foreground mt-2">
                 Add an AI chatbot and smart lead-capture forms to your website. No CRM required.
               </p>
               <ul className="mt-4 space-y-1.5 text-sm">
                 {[
+                  '3 active AI forms + smart lead capture',
                   'AI Website Employee (24/7 chatbot)',
-                  'Smart lead-capture forms',
+                  '100 monthly submissions (0% fee)',
+                  'Embed on WordPress, Webflow, Shopify & HTML',
                   'WhatsApp & email notifications',
-                  'Embed on any website or WordPress',
                   'Upgrade to full CRM anytime',
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2">
@@ -271,13 +272,13 @@ export function SignupModeSelector({
                 disabled={busy !== null}
               >
                 {busy === 'standalone' ? (
-                  <><Loader2 className="size-4 animate-spin mr-2" />Setting up…</>
+                  <><Loader2 className="size-4 animate-spin mr-2" />Starting AI forms…</>
                 ) : (
-                  <>Get started free <ArrowRight className="size-4 ml-2" /></>
+                  <>Start free AI forms <ArrowRight className="size-4 ml-2" /></>
                 )}
               </Button>
               <p className="text-[11px] text-muted-foreground text-center mt-2">
-                No credit card required · Cancel anytime
+                No credit card required · Free forever
               </p>
             </CardContent>
           </Card>

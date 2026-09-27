@@ -375,3 +375,55 @@ describe('requireCrmTenant guard for standalone users', () => {
     expect(data.code).toBe('STANDALONE_FORMS_TENANT');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 5: OAuth marketing page redirect protection
+// ---------------------------------------------------------------------------
+
+describe('OAuth marketing page redirect protection', () => {
+  function computeRedirectUrl(
+    baseUrl: string,
+    redirectParam: string | undefined,
+    isStandalone: boolean,
+    needsOnboarding: boolean
+  ): string {
+    if (needsOnboarding) {
+      if (isStandalone) {
+        return `${baseUrl}/?google_login=success&view=formBuilder`;
+      }
+      return `${baseUrl}/?google_login=success`;
+    }
+    if (redirectParam && redirectParam.startsWith('/')) {
+      const cleanRedirect = redirectParam.split('?')[0];
+      if (cleanRedirect !== '/gptform' && cleanRedirect !== '/login' && cleanRedirect !== '/register' && cleanRedirect !== '/') {
+        const sep = redirectParam.includes('?') ? '&' : '?';
+        return `${baseUrl}${redirectParam}${sep}google_login=success`;
+      }
+    }
+    if (isStandalone) {
+      return `${baseUrl}/?google_login=success&view=formBuilder`;
+    }
+    return `${baseUrl}/?google_login=success`;
+  }
+
+  it('un-onboarded user arriving from /gptform is NOT redirected back to /gptform', () => {
+    const url = computeRedirectUrl('https://fieseros.com', '/gptform', false, true);
+    expect(url).toBe('https://fieseros.com/?google_login=success');
+    expect(url).not.toContain('/gptform');
+  });
+
+  it('un-onboarded standalone user is routed to formBuilder', () => {
+    const url = computeRedirectUrl('https://fieseros.com', '/gptform', true, true);
+    expect(url).toBe('https://fieseros.com/?google_login=success&view=formBuilder');
+  });
+
+  it('onboarded user with /gptform redirect is sanitized to root app', () => {
+    const url = computeRedirectUrl('https://fieseros.com', '/gptform', false, false);
+    expect(url).toBe('https://fieseros.com/?google_login=success');
+  });
+
+  it('onboarded user with valid deep link (e.g. /marketplace) is preserved', () => {
+    const url = computeRedirectUrl('https://fieseros.com', '/marketplace', false, false);
+    expect(url).toBe('https://fieseros.com/marketplace?google_login=success');
+  });
+});

@@ -93,14 +93,33 @@ const USE_CASE_OPTIONS: { id: UseCase; label: string; description: string; icon:
 
 const PLANS = [
   {
+    id: 'standalone_free',
+    name: 'Free Forever',
+    monthlyPrice: 0,
+    priceLabel: 'Free',
+    priceSubtext: 'forever',
+    icon: Sparkles,
+    color: 'violet',
+    features: [
+      '1 AI Website Employee (chatbot)',
+      '3 Smart Forms',
+      '100 monthly submissions (0% fee)',
+      'Lead capture & notifications',
+      'Embed on any website or WordPress',
+    ],
+  },
+  {
     id: 'standalone_starter',
     name: 'Starter',
     monthlyPrice: 7,
+    priceLabel: '$7',
+    priceSubtext: '/mo after 14-day trial',
     icon: Zap,
     color: 'violet',
     features: [
       '1 AI Website Employee (chatbot)',
-      '5 Smart Forms',
+      '10 Smart Forms',
+      '1,000 monthly submissions',
       'Lead capture & notifications',
       'Embed on any website',
       'Email support',
@@ -110,12 +129,15 @@ const PLANS = [
     id: 'standalone_business',
     name: 'Business',
     monthlyPrice: 19,
+    priceLabel: '$19',
+    priceSubtext: '/mo after 14-day trial',
     icon: Crown,
     color: 'violet',
     popular: true,
     features: [
       '3 AI Website Employees',
       'Unlimited Smart Forms',
+      '10,000 monthly submissions',
       'WhatsApp & email notifications',
       'WordPress & Shopify plugins',
       'Advanced analytics',
@@ -123,6 +145,8 @@ const PLANS = [
     ],
   },
 ] as const;
+
+type StandalonePlanId = (typeof PLANS)[number]['id'];
 
 const STEPS = [
   { id: 1, label: 'Website Details' },
@@ -148,9 +172,11 @@ export function StandaloneOnboarding({
   const [useCase, setUseCase] = useState<UseCase>('both');
   const [websiteError, setWebsiteError] = useState('');
 
-  // Step 2 state — default to whatever plan was set at registration
-  const [selectedPlan, setSelectedPlan] = useState<'standalone_starter' | 'standalone_business'>(
-    tenant?.plan === 'standalone_business' ? 'standalone_business' : 'standalone_starter'
+  // Step 2 state — default to whatever plan was set at registration or standalone_free
+  const [selectedPlan, setSelectedPlan] = useState<StandalonePlanId>(
+    tenant?.plan === 'standalone_business'
+      ? 'standalone_business'
+      : (tenant?.plan === 'standalone_starter' ? 'standalone_starter' : 'standalone_free')
   );
 
   const firstName = user?.name?.split(' ')[0] || 'there';
@@ -424,8 +450,8 @@ export function StandaloneOnboarding({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2">
                         <span className="font-semibold">{plan.name}</span>
-                        <span className="text-xl font-bold">${plan.monthlyPrice}</span>
-                        <span className="text-sm text-muted-foreground">/mo after trial</span>
+                        <span className="text-xl font-bold">{plan.priceLabel}</span>
+                        <span className="text-sm text-muted-foreground">{plan.priceSubtext}</span>
                       </div>
                       <ul className="mt-2 space-y-1">
                         {plan.features.map((f) => (
@@ -451,7 +477,7 @@ export function StandaloneOnboarding({
 
             <p className="text-center text-xs text-muted-foreground pt-1">
               <ShieldCheck className="inline size-3.5 text-violet-600 mr-1" />
-              14-day free trial on all plans · No credit card required · Cancel anytime
+              No credit card required · Free forever on Free plan · 14-day trial on paid plans
             </p>
           </div>
         )}
@@ -488,8 +514,10 @@ export function StandaloneOnboarding({
             >
               {saving ? (
                 <><Loader2 className="size-4 animate-spin mr-2" />Setting up…</>
+              ) : selectedPlan === 'standalone_free' ? (
+                <>Continue with Free plan <ArrowRight className="size-4 ml-2" /></>
               ) : (
-                <>Start free trial <ArrowRight className="size-4 ml-2" /></>
+                <>Start 14-day free trial <ArrowRight className="size-4 ml-2" /></>
               )}
             </Button>
           )}

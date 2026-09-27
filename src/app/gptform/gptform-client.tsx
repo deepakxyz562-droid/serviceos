@@ -222,7 +222,7 @@ export function GptFormClientView() {
           {/* Right Actions */}
           <div className="hidden sm:flex items-center gap-2.5">
             <Link
-              href="/login?redirect=/gptform"
+              href="/login"
               className="inline-flex items-center text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted h-9 px-3.5 rounded-lg transition"
             >
               Sign In
@@ -298,7 +298,7 @@ export function GptFormClientView() {
                 Pricing Plans
               </a>
               <Link
-                href="/login?redirect=/gptform"
+                href="/login"
                 onClick={() => setMobileOpen(false)}
                 className="w-full text-left rounded-lg p-2.5 text-xs font-semibold text-foreground hover:bg-muted block"
               >
