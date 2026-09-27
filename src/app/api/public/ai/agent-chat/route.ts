@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ─── Human Handoff / Escalation Action (Text.com Parity) ──────────────
-    if (action === 'request_human') {
+    if (action === 'request_human' || isEscalationIntent(message)) {
       const handoff = await requestHumanHandoff({
         tenantId: tenantId || null,
         workspaceId: workspaceId || null,
@@ -251,6 +251,8 @@ export async function POST(req: NextRequest) {
           status: handoff.status,
           sessionId: handoff.liveSessionId,
           businessName: tenantName,
+          agentAvailable: handoff.agentAvailable,
+          availability: handoff.availability,
         },
         { headers: CORS_HEADERS },
       );

@@ -10,6 +10,7 @@
 
 import { db } from '@/lib/db';
 import { createNotification } from '@/lib/notifications';
+import { checkAgentAvailability, type AgentAvailabilityResult } from '@/lib/presence';
 
 export interface ChatHistoryMessage {
   role?: 'user' | 'assistant' | 'system';
@@ -44,6 +45,8 @@ export interface HandoffResult {
   status: 'waiting_for_agent' | 'failed';
   reply: string;
   escalatedToHuman: boolean;
+  agentAvailable: boolean;
+  availability: AgentAvailabilityResult;
   metadata?: Record<string, unknown>;
 }
 
@@ -324,22 +327,39 @@ export async function requestHumanHandoff(
       }
     }
 
+    const availability = await checkAgentAvailability(tenantId, effectiveWorkspaceId);
+    const isAvailable = availability.isOnline && availability.isWithinHours;
+
+    const reply = isAvailable
+      ? `I have alerted our live operator team! A specialist from ${agentName} is currently online and will join this conversation momentarily. You can also share any additional details below.`
+      : `Our live specialists are currently offline or away (Operating Hours: ${availability.businessHoursText}). I have recorded your inquiry and alerted our team! Please leave your email or phone number below, or book a time directly on our calendar so we can follow up with you.`;
+
     return {
       success: true,
       liveSessionId,
       status: 'waiting_for_agent',
-      reply: `I have alerted our live operator team! A specialist from ${agentName} has received your chat and will join momentarily. You can also leave your phone or email below.`,
+      reply,
       escalatedToHuman: true,
+      agentAvailable: isAvailable,
+      availability,
       metadata,
     };
   } catch (error) {
     console.error('[handoff-service] Escalation failed:', error);
+    const fallbackAvailability: AgentAvailabilityResult = {
+      isOnline: false,
+      isWithinHours: true,
+      businessHoursText: 'Mon–Fri 8:00 AM – 6:00 PM',
+      onlineCount: 0,
+    };
     return {
       success: false,
       liveSessionId: null,
       status: 'failed',
-      reply: `I've notified our team! An agent will join as soon as possible. Please share your email or phone number so we can reach you.`,
+      reply: `I've notified our team! An agent will review your inquiry as soon as possible. Please share your email or phone number so we can reach you.`,
       escalatedToHuman: true,
+      agentAvailable: false,
+      availability: fallbackAvailability,
     };
   }
 }

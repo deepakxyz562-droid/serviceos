@@ -152,6 +152,8 @@ export async function POST(
         success: true,
         reply: handoff.reply,
         escalatedToHuman: true,
+        agentAvailable: handoff.agentAvailable,
+        availability: handoff.availability,
         sessionId: handoff.liveSessionId,
         suggestedFormId: primaryConnectedForm?.id || null,
         agentName: agent.name,

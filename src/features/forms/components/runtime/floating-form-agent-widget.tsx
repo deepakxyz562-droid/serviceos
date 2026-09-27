@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 export interface CitationItem {
   id: number;
@@ -51,7 +52,9 @@ export interface FloatingWidgetProps {
 
 interface Message {
   id: string;
-  sender: 'ai' | 'user' | 'system';
+  sender: 'ai' | 'user' | 'system' | 'agent';
+  senderName?: string;
+  isLiveAgent?: boolean;
   text: string;
   citations?: CitationItem[];
   card?: any;
@@ -76,6 +79,10 @@ export function FloatingFormAgentWidget({
   const [inputVal, setInputVal] = useState('');
   const [sending, setSending] = useState(false);
   const [humanRequested, setHumanRequested] = useState(false);
+  const [liveSessionId, setLiveSessionId] = useState<string | null>(null);
+  const [agentAvailable, setAgentAvailable] = useState<boolean | null>(null);
+  const [operatorConnected, setOperatorConnected] = useState<boolean>(false);
+  const [operatorName, setOperatorName] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -98,6 +105,62 @@ export function FloatingFormAgentWidget({
     }
   }, [isOpen, messages]);
 
+  // ── Poll for live specialist responses when human support requested ────────
+  useEffect(() => {
+    if (!liveSessionId) return;
+
+    let isMounted = true;
+    const pollMessages = async () => {
+      try {
+        const res = await fetch(`/api/public/chat/${encodeURIComponent(liveSessionId)}/messages`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted || !data.messages || !Array.isArray(data.messages)) return;
+
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newBackendMsgs: Message[] = [];
+          let hasAdmin = false;
+          let latestAdminName = '';
+
+          for (const m of data.messages) {
+            if (m.senderType === 'admin') {
+              hasAdmin = true;
+              if (m.senderName) latestAdminName = m.senderName;
+            }
+            if (!existingIds.has(m.id) && (m.senderType === 'admin' || m.senderType === 'system')) {
+              newBackendMsgs.push({
+                id: m.id,
+                sender: m.senderType === 'admin' ? 'agent' : 'ai',
+                senderName: m.senderName || 'Live Specialist',
+                isLiveAgent: m.senderType === 'admin',
+                text: m.body,
+                timestamp: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              });
+            }
+          }
+
+          if (hasAdmin) {
+            setOperatorConnected(true);
+            if (latestAdminName) setOperatorName(latestAdminName);
+          }
+
+          if (newBackendMsgs.length === 0) return prev;
+          return [...prev, ...newBackendMsgs];
+        });
+      } catch (err) {
+        console.warn('[floating-widget poll] error:', err);
+      }
+    };
+
+    const timer = setInterval(pollMessages, 3000);
+    pollMessages();
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [liveSessionId]);
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend !== undefined ? textToSend : inputVal).trim();
     if (!text || sending) return;
@@ -112,6 +175,25 @@ export function FloatingFormAgentWidget({
     setMessages((prev) => [...prev, userMsg]);
     setInputVal('');
     setSending(true);
+
+    // If escalated to live specialist, route message to live chat API
+    if (liveSessionId) {
+      try {
+        await fetch(`/api/public/chat/${encodeURIComponent(liveSessionId)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            body: text,
+            visitorName: 'Visitor',
+          }),
+        });
+      } catch (err) {
+        console.warn('[floating-widget send] error:', err);
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
 
     try {
       const res = await fetch('/api/public/ai/agent-chat', {
@@ -138,8 +220,10 @@ export function FloatingFormAgentWidget({
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, aiMsg]);
-        if (data.status === 'human_requested') {
+        if (data.status === 'human_requested' || data.humanHandoff) {
           setHumanRequested(true);
+          if (data.sessionId) setLiveSessionId(data.sessionId);
+          if (data.agentAvailable !== undefined) setAgentAvailable(data.agentAvailable);
         }
       } else {
         toast.error('Could not receive AI response');
@@ -165,6 +249,8 @@ export function FloatingFormAgentWidget({
         }),
       });
       const data = await res.json();
+      if (data.sessionId) setLiveSessionId(data.sessionId);
+      if (data.agentAvailable !== undefined) setAgentAvailable(data.agentAvailable);
       if (data.reply) {
         setMessages((prev) => [
           ...prev,
@@ -176,7 +262,12 @@ export function FloatingFormAgentWidget({
           },
         ]);
       }
-      toast.success('Human support requested. An agent will connect shortly!');
+      setActiveTab('chat');
+      toast.success(
+        data.agentAvailable === false
+          ? 'Notice: Specialists are currently offline (Mon–Fri 8am–6pm).'
+          : 'Human support requested. An agent will connect shortly!'
+      );
     } catch {
       toast.error('Failed to notify human support');
     } finally {
@@ -376,49 +467,112 @@ export function FloatingFormAgentWidget({
           {/* Chat Messages Body */}
           {activeTab === 'chat' && (
             <>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
-                {messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
-                        m.sender === 'user'
-                          ? 'bg-primary text-primary-foreground rounded-tr-xs shadow-sm'
-                          : 'bg-slate-100 dark:bg-slate-800 text-foreground rounded-tl-xs border border-slate-200/60 dark:border-slate-700/60 shadow-xs'
-                      }`}
-                    >
-                      {renderMessageWithCitations(m)}
-
-                      {/* Card Protocol Rendering */}
-                      {m.card?.type === 'slot_picker' && (
-                        <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                            <Calendar className="size-3 text-primary" />
-                            Select Booking Slot:
-                          </p>
-                          <div className="grid grid-cols-2 gap-1">
-                            {m.card.slots?.map((slot: string, sIdx: number) => (
-                              <Button
-                                key={sIdx}
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleSendMessage(`I would like to book the ${slot} slot.`)}
-                                className="text-[11px] h-7 bg-white dark:bg-slate-900 hover:bg-primary/10 border-primary/20"
-                              >
-                                {slot}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
+              {/* Live Human Handoff / Specialist Status Banner */}
+              {humanRequested && (
+                <div
+                  className={cn(
+                    'px-3 py-2 text-xs flex items-center justify-between gap-2 border-b shrink-0',
+                    operatorConnected
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-300'
+                      : agentAvailable === false
+                      ? 'bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300'
+                      : 'bg-blue-500/10 border-blue-500/20 text-blue-800 dark:text-blue-300'
+                  )}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={cn(
+                        'size-2 rounded-full shrink-0',
+                        operatorConnected
+                          ? 'bg-emerald-500'
+                          : agentAvailable === false
+                          ? 'bg-amber-500'
+                          : 'bg-blue-500 animate-ping'
                       )}
-                    </div>
-                    <span className="text-[9px] text-muted-foreground mt-1 px-1">
-                      {m.timestamp}
+                    />
+                    <span className="text-[11px] font-medium truncate">
+                      {operatorConnected
+                        ? `Live Specialist ${operatorName ? `(${operatorName})` : ''} connected!`
+                        : agentAvailable === false
+                        ? 'Specialists offline right now (Mon–Fri 8am–6pm).'
+                        : 'Connecting with a live specialist...'}
                     </span>
                   </div>
-                ))}
+                  {agentAvailable === false && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setActiveTab('form')}
+                      className="h-6 px-2 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white shrink-0"
+                    >
+                      Book Appointment
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+                {messages.map((m) => {
+                  const isUser = m.sender === 'user';
+                  const isLiveSpecialist = m.sender === 'agent' || m.isLiveAgent;
+                  return (
+                    <div
+                      key={m.id}
+                      className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
+                    >
+                      {isLiveSpecialist && (
+                        <div className="flex items-center gap-1 mb-1 px-1">
+                          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                            {m.senderName || 'Live Specialist'}
+                          </span>
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-semibold">
+                            Operator
+                          </span>
+                        </div>
+                      )}
+                      <div
+                        className={cn(
+                          'max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed',
+                          isUser
+                            ? 'bg-primary text-primary-foreground rounded-tr-xs shadow-sm'
+                            : isLiveSpecialist
+                            ? 'bg-emerald-50 dark:bg-emerald-950/50 text-foreground rounded-tl-xs border border-emerald-200 dark:border-emerald-800/80 shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-foreground rounded-tl-xs border border-slate-200/60 dark:border-slate-700/60 shadow-xs'
+                        )}
+                        style={isUser ? { backgroundColor: brandColor } : undefined}
+                      >
+                        {renderMessageWithCitations(m)}
+
+                        {/* Card Protocol Rendering */}
+                        {m.card?.type === 'slot_picker' && (
+                          <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1.5">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                              <Calendar className="size-3 text-primary" />
+                              Select Booking Slot:
+                            </p>
+                            <div className="grid grid-cols-2 gap-1">
+                              {m.card.slots?.map((slot: string, sIdx: number) => (
+                                <Button
+                                  key={sIdx}
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleSendMessage(`I would like to book the ${slot} slot.`)}
+                                  className="text-[11px] h-7 bg-white dark:bg-slate-900 hover:bg-primary/10 border-primary/20"
+                                >
+                                  {slot}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[9px] text-muted-foreground mt-1 px-1">
+                        {m.timestamp}
+                      </span>
+                    </div>
+                  );
+                })}
                 {sending && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground italic p-2 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit">
                     <Loader2 className="size-3.5 animate-spin text-primary" />
@@ -471,14 +625,26 @@ export function FloatingFormAgentWidget({
               </div>
 
               {humanRequested ? (
-                <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 space-y-1">
+                <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 space-y-2">
                   <p className="font-bold flex items-center justify-center gap-1.5">
                     <CheckCircle2 className="size-4 text-emerald-500" />
-                    Human Agent Alerted!
+                    {operatorConnected ? 'Specialist Connected!' : 'Human Agent Alerted!'}
                   </p>
-                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
-                    A specialist from {businessName} is reviewing your chat and will reply right here.
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300 leading-relaxed">
+                    {operatorConnected
+                      ? `You are now connected with ${operatorName || 'a live specialist'}. Switch back to the chat tab to talk live!`
+                      : agentAvailable === false
+                      ? `Specialists are currently outside normal business hours (Mon–Fri 8:00 AM – 6:00 PM). Please leave your message or book directly.`
+                      : `A specialist from ${businessName} has been alerted and will join this chat momentarily.`}
                   </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setActiveTab('chat')}
+                    className="w-full h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    Open Live Chat Room
+                  </Button>
                 </div>
               ) : (
                 <Button

@@ -327,3 +327,72 @@ function parseHHMM(value: string): number | null {
   if (h < 0 || h > 23 || m < 0 || m > 59) return null;
   return h * 60 + m;
 }
+
+export interface AgentAvailabilityResult {
+  isOnline: boolean;
+  isWithinHours: boolean;
+  businessHoursText: string;
+  onlineCount: number;
+}
+
+/**
+ * Check if a human specialist / live operator is available right now for a tenant or workspace.
+ * Evaluates both live presence (active within last 5 minutes) and business operating hours.
+ */
+export async function checkAgentAvailability(
+  tenantId?: string | null,
+  workspaceId?: string | null
+): Promise<AgentAvailabilityResult> {
+  const defaultHoursText = 'Mon–Fri 8:00 AM – 6:00 PM, Sat 9:00 AM – 3:00 PM';
+  let isWithinHours = true;
+  let isOnline = false;
+  let onlineCount = 0;
+
+  try {
+    if (tenantId) {
+      const withinHours = await isWithinBusinessHours(tenantId);
+      if (withinHours === false) {
+        isWithinHours = false;
+      }
+    }
+
+    // 5-minute activity window for live operator availability
+    const cutoff = new Date(Date.now() - 5 * 60 * 1000);
+
+    const orConds: Record<string, unknown>[] = [];
+    if (tenantId) orConds.push({ tenantId });
+    if (workspaceId) orConds.push({ workspaceId });
+
+    if (orConds.length > 0) {
+      const activeUsers = await db.user.findMany({
+        where: {
+          ...(orConds.length > 1 ? { OR: orConds } : orConds[0]),
+          role: { in: ['owner', 'admin', 'operator', 'agent', 'employee'] },
+          lastActivityAt: { gt: cutoff },
+          isActive: true,
+        },
+        select: { id: true },
+      }).catch(() => []);
+
+      const activeMonitors = await db.agentMonitor.findMany({
+        where: {
+          ...(orConds.length > 1 ? { OR: orConds } : orConds[0]),
+          lastActivityAt: { gt: cutoff },
+        },
+        select: { id: true },
+      }).catch(() => []);
+
+      onlineCount = Math.max(activeUsers.length, activeMonitors.length);
+      isOnline = onlineCount > 0;
+    }
+  } catch (err) {
+    console.warn('[presence] checkAgentAvailability error:', err);
+  }
+
+  return {
+    isOnline,
+    isWithinHours,
+    businessHoursText: defaultHoursText,
+    onlineCount,
+  };
+}

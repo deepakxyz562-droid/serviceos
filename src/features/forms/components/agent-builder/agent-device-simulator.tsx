@@ -50,10 +50,12 @@ interface AgentDeviceSimulatorProps {
 
 interface ChatMsg {
   id: string;
-  sender: 'ai' | 'user';
+  sender: 'ai' | 'user' | 'agent';
   text: string;
   timestamp: string;
   suggestedForm?: ConnectedFormRef;
+  senderName?: string;
+  isLiveAgent?: boolean;
 }
 
 function isColorDark(colorStr?: string): boolean {
@@ -326,6 +328,10 @@ export function AgentDeviceSimulator({
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [activeFormModal, setActiveFormModal] = useState<ConnectedFormRef | null>(null);
   const [escalatedToHuman, setEscalatedToHuman] = useState<boolean>(false);
+  const [liveSessionId, setLiveSessionId] = useState<string | null>(null);
+  const [agentAvailable, setAgentAvailable] = useState<boolean | null>(null);
+  const [operatorConnected, setOperatorConnected] = useState<boolean>(false);
+  const [operatorName, setOperatorName] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Initialize greeting on load — automatically attach primary connected form if available
@@ -346,6 +352,62 @@ export function AgentDeviceSimulator({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeTab, sending]);
 
+  // ── Poll for live specialist responses when session escalated ─────────────
+  useEffect(() => {
+    if (!liveSessionId) return;
+
+    let isMounted = true;
+    const pollMessages = async () => {
+      try {
+        const res = await fetch(`/api/public/chat/${encodeURIComponent(liveSessionId)}/messages`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!isMounted || !data.messages || !Array.isArray(data.messages)) return;
+
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newBackendMsgs: ChatMsg[] = [];
+          let hasAdmin = false;
+          let latestAdminName = '';
+
+          for (const m of data.messages) {
+            if (m.senderType === 'admin') {
+              hasAdmin = true;
+              if (m.senderName) latestAdminName = m.senderName;
+            }
+            if (!existingIds.has(m.id) && (m.senderType === 'admin' || m.senderType === 'system')) {
+              newBackendMsgs.push({
+                id: m.id,
+                sender: m.senderType === 'admin' ? 'agent' : 'ai',
+                senderName: m.senderName || 'Live Specialist',
+                isLiveAgent: m.senderType === 'admin',
+                text: m.body,
+                timestamp: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              });
+            }
+          }
+
+          if (hasAdmin) {
+            setOperatorConnected(true);
+            if (latestAdminName) setOperatorName(latestAdminName);
+          }
+
+          if (newBackendMsgs.length === 0) return prev;
+          return [...prev, ...newBackendMsgs];
+        });
+      } catch (err) {
+        console.warn('[live-chat poll] error:', err);
+      }
+    };
+
+    const timer = setInterval(pollMessages, 3000);
+    pollMessages();
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
+  }, [liveSessionId]);
+
   const handleSendMessage = async (textToSend?: string) => {
     const message = (textToSend || inputText).trim();
     if (!message || sending) return;
@@ -364,6 +426,25 @@ export function AgentDeviceSimulator({
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
 
+    // If already escalated to a human session, route message directly to live chat
+    if (liveSessionId) {
+      try {
+        await fetch(`/api/public/chat/${encodeURIComponent(liveSessionId)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            body: message,
+            visitorName: 'Visitor',
+          }),
+        });
+      } catch (err) {
+        console.warn('[live-chat send] error:', err);
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     try {
       const targetAgentId = agent.id || 'preview';
       const res = await fetch(`/api/forms/agents/${encodeURIComponent(targetAgentId)}/chat`, {
@@ -380,6 +461,8 @@ export function AgentDeviceSimulator({
 
       if (data.escalatedToHuman) {
         setEscalatedToHuman(true);
+        if (data.sessionId) setLiveSessionId(data.sessionId);
+        if (data.agentAvailable !== undefined) setAgentAvailable(data.agentAvailable);
       }
 
       if (res.ok && data.reply) {
@@ -443,6 +526,11 @@ export function AgentDeviceSimulator({
   };
 
   const resetChat = () => {
+    setEscalatedToHuman(false);
+    setLiveSessionId(null);
+    setAgentAvailable(null);
+    setOperatorConnected(false);
+    setOperatorName(null);
     setMessages([
       {
         id: 'msg_greet',
@@ -713,9 +801,51 @@ export function AgentDeviceSimulator({
 
       {/* ── HUMAN OPERATOR ESCALATION ALERT BANNER ── */}
       {escalatedToHuman && (
-        <div className="bg-amber-500/15 border-b border-amber-500/30 px-3.5 py-2 flex items-center gap-2 text-[11px] text-amber-700 dark:text-amber-300 font-medium animate-in fade-in shrink-0">
-          <span className="size-2 rounded-full bg-amber-500 animate-ping" />
-          <span>Connecting with a live specialist... An operator has been notified.</span>
+        <div
+          className={cn(
+            'px-3.5 py-2.5 flex items-center justify-between gap-2 text-[11px] font-medium animate-in fade-in shrink-0 border-b',
+            operatorConnected
+              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+              : agentAvailable === false
+              ? 'bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-300'
+              : 'bg-blue-500/15 border-blue-500/30 text-blue-800 dark:text-blue-300'
+          )}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className={cn(
+                'size-2 rounded-full shrink-0',
+                operatorConnected
+                  ? 'bg-emerald-500'
+                  : agentAvailable === false
+                  ? 'bg-amber-500'
+                  : 'bg-blue-500 animate-ping'
+              )}
+            />
+            <span className="truncate">
+              {operatorConnected
+                ? `Live Specialist ${operatorName ? `(${operatorName})` : ''} connected! You are chatting live.`
+                : agentAvailable === false
+                ? 'Specialists offline right now (Mon–Fri 8am–6pm). Leave a message or book below.'
+                : 'Connecting with a live specialist... An operator has been notified.'}
+            </span>
+          </div>
+          {agentAvailable === false && (
+            <button
+              type="button"
+              onClick={() => {
+                const matchedForm = agent.connectedForms?.[0];
+                if (matchedForm) {
+                  setActiveFormModal(matchedForm);
+                  onOpenFormInModal?.(matchedForm);
+                }
+              }}
+              className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+            >
+              <Calendar className="size-3" />
+              Book on Calendar
+            </button>
+          )}
         </div>
       )}
 
@@ -725,36 +855,57 @@ export function AgentDeviceSimulator({
           <div className="flex-1 overflow-y-auto min-h-0 relative flex flex-col p-4 space-y-4">
             {/* Messages Stream */}
             {messages.map((msg, index) => {
-              const isAi = msg.sender === 'ai';
+              const isUser = msg.sender === 'user';
+              const isLiveSpecialist = msg.sender === 'agent' || msg.isLiveAgent;
+              const isAi = !isUser && !isLiveSpecialist;
               return (
                 <div
                   key={msg.id || index}
                   className={cn(
                     'flex items-start gap-2 max-w-[88%] animate-in fade-in slide-in-from-bottom-2 duration-200',
-                    isAi ? 'mr-auto' : 'ml-auto flex-row-reverse'
+                    isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'
                   )}
                 >
-                  {isAi && (
+                  {isLiveSpecialist ? (
+                    <div className="size-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs ring-1 ring-emerald-400">
+                      <User className="size-3.5" />
+                    </div>
+                  ) : isAi ? (
                     <img
                       src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
                       alt={agent.name}
                       className="size-6 rounded-full object-cover shrink-0 mt-0.5"
                     />
-                  )}
+                  ) : null}
 
                   <div className="space-y-1.5 flex-1 min-w-0">
+                    {isLiveSpecialist && (
+                      <div className="flex items-center gap-1.5 px-0.5">
+                        <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          {msg.senderName || 'Live Specialist'}
+                        </span>
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-semibold">
+                          Human Operator
+                        </span>
+                      </div>
+                    )}
                     <div
                       className={cn(
                         'p-3 rounded-2xl text-xs leading-relaxed shadow-2xs break-words font-medium',
-                        isAi
+                        isLiveSpecialist
+                          ? isDark
+                            ? 'bg-emerald-950/40 border border-emerald-600/40 text-emerald-100 rounded-tl-xs shadow-emerald-950/30'
+                            : 'bg-emerald-50 border border-emerald-200 text-emerald-950 rounded-tl-xs'
+                          : isAi
                           ? isDark
                             ? 'bg-slate-800/95 border border-slate-700/80 text-slate-100 rounded-tl-xs shadow-slate-950/40'
                             : 'bg-slate-100 border border-slate-200/60 text-slate-900 rounded-tl-xs'
                           : 'text-white rounded-tr-xs shadow-sm'
                       )}
-                      style={!isAi ? { background: brandColor } : undefined}
+                      style={isUser ? { background: brandColor } : undefined}
                     >
-                      {renderChatContent(msg.text, isDark, !isAi)}
+                      {renderChatContent(msg.text, isDark, isUser)}
                     </div>
 
                     {/* Quick action buttons on initial greeting message */}
