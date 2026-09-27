@@ -915,7 +915,7 @@ export function FormRuntimeRenderer({
     onModeChange?.(newMode);
   };
 
-  const isMultiStep = (schema as any).isMultiStep !== false && (schema.steps && schema.steps.length > 1 && schema.theme?.layout !== 'classic');
+  const isMultiStep = (schema as any).isMultiStep !== false && Boolean(schema.steps && schema.steps.length > 1);
   const steps = isMultiStep && schema.steps?.length ? schema.steps : [{ id: 'step_1', title: 'Form Details' }];
   const currentStep = steps[currentStepIndex] || steps[0];
 

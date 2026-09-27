@@ -148,16 +148,8 @@ export async function POST(request: NextRequest) {
     const tenantId = resolveTenantId(authUser, body.tenantId);
     const workspaceId = resolveWorkspaceId(authUser, body.workspaceId);
 
-    // Auto-generate slug from name if not provided
-    const slug = providedSlug || await generateUniqueSlug(name);
-
-    // Check slug uniqueness
-    if (providedSlug) {
-      const existing = await db.form.findUnique({ where: { slug: providedSlug } });
-      if (existing) {
-        return NextResponse.json({ error: 'Slug already exists' }, { status: 409 });
-      }
-    }
+    // Auto-generate or auto-deduplicate slug
+    const slug = await generateUniqueSlug(providedSlug || name);
 
     const form = await db.form.create({
       data: {

@@ -37,6 +37,11 @@ interface AiWebsiteFormDialogProps {
     name: string;
     description: string;
     fields: FormField[];
+    steps?: Array<{ id: string; title: string; description?: string }>;
+    isMultiStep?: boolean;
+    theme?: any;
+    mediaPanel?: any;
+    settings?: any;
   }) => void;
 }
 
@@ -78,12 +83,13 @@ export function AiWebsiteFormDialog({
   const [prompt, setPrompt] = useState(
     'Create a roofing estimate form with roof size in sq ft, architectural material options, damage photos, customer e-signature and deposit payment.'
   );
+  const [websitePrompt, setWebsitePrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [progressStep, setProgressStep] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     const trimmedUrl = activeTab === 'website' ? url.trim() : '';
-    const trimmedPrompt = activeTab === 'prompt' ? prompt.trim() : prompt.trim();
+    const trimmedPrompt = activeTab === 'website' ? websitePrompt.trim() : prompt.trim();
 
     if (!trimmedUrl && !trimmedPrompt) {
       toast.error('Please enter a description or website URL');
@@ -93,17 +99,17 @@ export function AiWebsiteFormDialog({
     setLoading(true);
     setProgressStep(
       activeTab === 'website'
-        ? 'Fetching & analyzing website...'
+        ? 'Scanning website & extracting services...'
         : 'Analyzing requirements & synthesizing form schema...'
     );
 
     try {
       const stepTimer1 = setTimeout(() => {
-        setProgressStep('Synthesizing high-converting fields & calculation logic...');
+        setProgressStep('Synthesizing high-converting fields & trade logic...');
       }, 2000);
 
       const stepTimer2 = setTimeout(() => {
-        setProgressStep('Applying validation rules & widgets...');
+        setProgressStep('Applying validation rules & layout widgets...');
       }, 4000);
 
       const res = await fetch('/api/ai/form-from-url', {
@@ -124,7 +130,7 @@ export function AiWebsiteFormDialog({
       }
 
       const data = await res.json();
-      const schema = data.schema;
+      const schema = data.schema || {};
 
       // Map generated schema fields to editor FormField format
       const editorFields: FormField[] = (schema.fields || []).map((f: {
@@ -133,19 +139,35 @@ export function AiWebsiteFormDialog({
         type: string;
         required?: boolean;
         placeholder?: string;
+        helpText?: string;
         options?: Array<{ label: string; value: string }>;
         widgetType?: string;
         widgetConfig?: any;
+        stepId?: string;
+        width?: string;
+        layoutColumn?: 'left' | 'right';
       }) => ({
         id: f.id || `f-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
         label: f.label || 'Untitled Field',
         type: (f.type === 'numerical' ? 'number' : f.type === 'long_answer' ? 'textarea' : f.type === 'short_answer' ? 'text' : f.type) as FormField['type'],
         required: !!f.required,
         placeholder: f.placeholder || '',
+        helpText: f.helpText || '',
+        stepId: f.stepId || 'step_1',
+        width: (f.width as any) || 'full',
+        layoutColumn: f.layoutColumn,
         options: f.options ? f.options.map((o) => (typeof o === 'string' ? o : o.label || o.value)) : undefined,
         widgetType: f.widgetType,
         widgetConfig: f.widgetConfig,
       }));
+
+      const generatedSteps = Array.isArray(schema.steps) && schema.steps.length > 0
+        ? schema.steps.map((st: any, idx: number) => ({
+            id: st.id || `step_${idx + 1}`,
+            title: st.title || `Step ${idx + 1}`,
+            description: st.description || '',
+          }))
+        : undefined;
 
       toast.success('Form generated successfully with AI!');
       onFormGenerated({
@@ -156,6 +178,11 @@ export function AiWebsiteFormDialog({
           { id: `f-2`, label: 'Phone Number', type: 'phone', required: true, placeholder: '+1 (555) 000-0000' },
           { id: `f-3`, label: 'Service Needed', type: 'select', required: true, options: ['Repair', 'Installation', 'Maintenance'] },
         ],
+        steps: generatedSteps,
+        isMultiStep: schema.isMultiStep ?? (generatedSteps && generatedSteps.length > 1),
+        theme: schema.theme,
+        mediaPanel: schema.mediaPanel || schema.theme?.mediaPanel,
+        settings: schema.settings,
       });
 
       onOpenChange(false);
@@ -250,8 +277,8 @@ export function AiWebsiteFormDialog({
               <Label className="text-xs font-semibold">Special Instructions (Optional)</Label>
               <Textarea
                 placeholder="e.g. Include emergency urgency selector, ask for photos of problem, make phone number required..."
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                value={websitePrompt}
+                onChange={(e) => setWebsitePrompt(e.target.value)}
                 disabled={loading}
                 className="text-xs min-h-[70px]"
               />
@@ -278,7 +305,7 @@ export function AiWebsiteFormDialog({
           <Button
             size="sm"
             onClick={handleGenerate}
-            disabled={loading || (activeTab === 'website' ? !url.trim() && !prompt.trim() : !prompt.trim())}
+            disabled={loading || (activeTab === 'website' ? !url.trim() && !websitePrompt.trim() : !prompt.trim())}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5"
           >
             {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />}

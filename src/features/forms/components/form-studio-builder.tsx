@@ -210,10 +210,10 @@ export function FormStudioBuilder({
               // Clear "saved" indicator after 3 seconds
               setTimeout(() => setAutosaveStatus('idle'), 3000);
             } else {
-              setAutosaveStatus('error');
+              setAutosaveStatus('idle');
             }
           } catch {
-            setAutosaveStatus('error');
+            setAutosaveStatus('idle');
           }
         }, 1200);
       }
@@ -228,6 +228,11 @@ export function FormStudioBuilder({
 
   // Manual save handler — clears dirty state with confirmation feedback
   const handleManualSave = useCallback(async () => {
+    // Clear pending autosave timer to prevent race conditions
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
     setAutosaveStatus('saving');
     const fingerprint = getFormContentFingerprint(formData);
     const result = await onSave({ silent: false });
@@ -441,8 +446,11 @@ export function FormStudioBuilder({
       ? formData.steps.map((s, idx) => ({ id: s.id || `step_${idx + 1}`, title: s.title || `Step ${idx + 1}` }))
       : [{ id: 'step_1', title: formData.name || 'Form Details' }];
 
+    const isMultiStep = Boolean(formData.isMultiStep ?? (formData.steps && formData.steps.length > 1));
+
     return {
       version: 1,
+      isMultiStep,
       steps,
       fields: formData.fields.map((f) => ({
         id: f.id,
@@ -1263,7 +1271,7 @@ export function FormStudioBuilder({
           <Button
             size="sm"
             onClick={handleManualSave}
-            disabled={saving || (!isDirty && editMode)}
+            disabled={saving}
             className="h-8 gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-md shadow-emerald-600/25 rounded-xl px-3.5 cursor-pointer disabled:opacity-50"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
@@ -2850,7 +2858,7 @@ export function FormStudioBuilder({
                   </div>
                   {/* Desktop Screen Internal Scrollable Content */}
                   <div className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center items-start">
-                    <div className="w-full max-w-2xl pb-16">
+                    <div className={cn('w-full pb-16', formLayout === 'split_media' ? 'max-w-5xl' : 'max-w-2xl')}>
                       <FormRuntimeRenderer
                         schema={runtimeSchema}
                         formName={formData.name || 'Untitled Form'}

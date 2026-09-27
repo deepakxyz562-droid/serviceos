@@ -408,8 +408,10 @@ export function FormBuilderView() {
     try {
       const payload = buildApiPayload(formData);
 
-      if (editMode && editFormId) {
-        let res = await authFetch(`/api/forms/${editFormId}`, {
+      const targetId = editFormId || formData.id;
+
+      if (targetId) {
+        let res = await authFetch(`/api/forms/${targetId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -429,9 +431,10 @@ export function FormBuilderView() {
         const data = await res.json();
         const updated = apiFormToFormItem(data.form as ApiForm);
         setForms((prev) => {
-          const exists = prev.some((f) => f.id === updated.id || f.id === editFormId);
-          return exists ? prev.map((f) => (f.id === editFormId || f.id === updated.id ? updated : f)) : [updated, ...prev];
+          const exists = prev.some((f) => f.id === updated.id || f.id === targetId);
+          return exists ? prev.map((f) => (f.id === targetId || f.id === updated.id ? updated : f)) : [updated, ...prev];
         });
+        setEditMode(true);
         setEditFormId(updated.id);
         setFormData((prev) => ({ ...prev, id: updated.id, slug: updated.slug }));
         if (!options?.silent) toast.success('Form saved');
@@ -1106,6 +1109,11 @@ export function FormBuilderView() {
             name: generated.name,
             description: generated.description,
             fields: generated.fields.length > 0 ? generated.fields : prev.fields,
+            steps: generated.steps || prev.steps,
+            isMultiStep: generated.isMultiStep ?? (Boolean(generated.steps && generated.steps.length > 1)),
+            theme: generated.theme ? { ...(prev.theme || {}), ...generated.theme } : prev.theme,
+            mediaPanel: generated.mediaPanel || prev.mediaPanel,
+            settings: generated.settings ? { ...(prev.settings || {}), ...generated.settings } : prev.settings,
           }));
           setShowAiWebsiteDialog(false);
           setShowCreateDialog(true);

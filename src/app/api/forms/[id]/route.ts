@@ -139,7 +139,26 @@ export async function PUT(
     // reassignment. Super-admins can change tenantId via a dedicated
     // superadmin endpoint (not this one).
 
-    if (body.slug !== undefined) updateData.slug = body.slug;
+    if (body.slug !== undefined) {
+      let targetSlug = typeof body.slug === 'string'
+        ? body.slug.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
+        : '';
+      if (targetSlug && targetSlug !== existing.slug) {
+        const conflict = await db.form.findFirst({
+          where: { slug: targetSlug, id: { not: existing.id } },
+        });
+        if (conflict) {
+          let counter = 1;
+          let candidate = `${targetSlug}-${counter}`;
+          while (await db.form.findFirst({ where: { slug: candidate, id: { not: existing.id } } })) {
+            counter++;
+            candidate = `${targetSlug}-${counter}`;
+          }
+          targetSlug = candidate;
+        }
+        updateData.slug = targetSlug;
+      }
+    }
     if (body.createdById !== undefined) updateData.createdById = body.createdById;
 
     // Use existing.id for mutation
