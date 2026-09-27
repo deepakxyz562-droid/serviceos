@@ -52,33 +52,48 @@ export async function GET(request: NextRequest) {
       db.form.count({ where }),
     ]);
 
-    const formsWithCounts = forms.map((form) => ({
-      id: form.id,
-      name: form.name,
-      description: form.description,
-      type: form.type,
-      status: form.status,
-      slug: form.slug,
-      // Include the JSON-encoded config so the Form Builder list view can
-      // render action badges, fields preview, etc. without an extra round-trip.
-      schemaJson: form.schemaJson,
-      fieldsJson: form.fieldsJson,
-      submissionActions: form.submissionActions,
-      fieldMappingJson: form.fieldMappingJson,
-      welcomeMessage: form.welcomeMessage,
-      completionMessage: form.completionMessage,
-      whatsappOwnerTemplate: form.whatsappOwnerTemplate,
-      whatsappUserTemplate: form.whatsappUserTemplate,
-      whatsappAiGenerated: form.whatsappAiGenerated,
-      submissions: form.submissions,
-      conversionRate: form.conversionRate,
-      tenantId: form.tenantId,
-      workspaceId: form.workspaceId,
-      createdById: form.createdById,
-      createdAt: form.createdAt,
-      updatedAt: form.updatedAt,
-      responseCount: form._count.responses,
-    }));
+    const formsWithCounts = forms.map((form) => {
+      let resolvedSchemaJson = form.schemaJson;
+      if (!resolvedSchemaJson || resolvedSchemaJson === '{}') {
+        if (form.fieldsJson) {
+          try {
+            const parsed = typeof form.fieldsJson === 'string' ? JSON.parse(form.fieldsJson) : form.fieldsJson;
+            if (Array.isArray(parsed)) {
+              const meta = parsed.find((f: any) => f && (f.id === '__form_schema__' || f.widgetType === 'schema_metadata'));
+              if (meta?.schema) resolvedSchemaJson = JSON.stringify(meta.schema);
+            }
+          } catch {}
+        }
+      }
+
+      return {
+        id: form.id,
+        name: form.name,
+        description: form.description,
+        type: form.type,
+        status: form.status,
+        slug: form.slug,
+        // Include the JSON-encoded config so the Form Builder list view can
+        // render action badges, fields preview, etc. without an extra round-trip.
+        schemaJson: resolvedSchemaJson,
+        fieldsJson: form.fieldsJson,
+        submissionActions: form.submissionActions,
+        fieldMappingJson: form.fieldMappingJson,
+        welcomeMessage: form.welcomeMessage,
+        completionMessage: form.completionMessage,
+        whatsappOwnerTemplate: form.whatsappOwnerTemplate,
+        whatsappUserTemplate: form.whatsappUserTemplate,
+        whatsappAiGenerated: form.whatsappAiGenerated,
+        submissions: form.submissions,
+        conversionRate: form.conversionRate,
+        tenantId: form.tenantId,
+        workspaceId: form.workspaceId,
+        createdById: form.createdById,
+        createdAt: form.createdAt,
+        updatedAt: form.updatedAt,
+        responseCount: form._count.responses,
+      };
+    });
 
     return NextResponse.json({
       forms: formsWithCounts,
@@ -151,13 +166,31 @@ export async function POST(request: NextRequest) {
     // Auto-generate or auto-deduplicate slug
     const slug = await generateUniqueSlug(providedSlug || name);
 
+    let finalFieldsJson = typeof fieldsJson === 'string' ? fieldsJson : JSON.stringify(fieldsJson || []);
+    if (schemaJson) {
+      try {
+        const schemaObj = typeof schemaJson === 'string' ? JSON.parse(schemaJson) : schemaJson;
+        const parsedFields = JSON.parse(finalFieldsJson);
+        if (Array.isArray(parsedFields)) {
+          const filtered = parsedFields.filter((f) => f && f.id !== '__form_schema__' && f.widgetType !== 'schema_metadata');
+          filtered.push({
+            id: '__form_schema__',
+            widgetType: 'schema_metadata',
+            hidden: true,
+            schema: schemaObj,
+          });
+          finalFieldsJson = JSON.stringify(filtered);
+        }
+      } catch {}
+    }
+
     const form = await db.form.create({
       data: {
         name,
         description: description || null,
         type: type || 'lead_capture',
         status: 'active',
-        fieldsJson: typeof fieldsJson === 'string' ? fieldsJson : JSON.stringify(fieldsJson || []),
+        fieldsJson: finalFieldsJson,
         schemaJson: typeof schemaJson === 'string' ? schemaJson : JSON.stringify(schemaJson || {}),
         submissionActions: typeof submissionActions === 'string' ? submissionActions : JSON.stringify(submissionActions || []),
         fieldMappingJson: typeof fieldMappingJson === 'string' ? fieldMappingJson : JSON.stringify(fieldMappingJson || {}),
@@ -178,7 +211,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ form }, { status: 201 });
+    const enrichedForm = {
+      ...form,
+      schemaJson: form.schemaJson && form.schemaJson !== '{}'
+        ? form.schemaJson
+        : (schemaJson ? (typeof schemaJson === 'string' ? schemaJson : JSON.stringify(schemaJson)) : '{}'),
+    };
+
+    return NextResponse.json({ form: enrichedForm }, { status: 201 });
   } catch (error) {
     console.error('Create form error:', error);
     return NextResponse.json({ error: 'Failed to create form' }, { status: 500 });

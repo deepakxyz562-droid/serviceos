@@ -334,8 +334,19 @@ export const DEFAULT_FORM_SCHEMA: FormSchema = {
  * reconstruct their real schema from fieldsJson rather than dummy defaults.
  */
 export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormSchema {
-  const fallbackList: FormField[] = Array.isArray(fallbackFields) && fallbackFields.length > 0
-    ? fallbackFields.map((f, idx) => ({
+  // Check if fallbackFields contains embedded __form_schema__ metadata
+  if ((!raw || typeof raw !== 'object') && Array.isArray(fallbackFields)) {
+    const meta = fallbackFields.find((f: any) => f && (f.id === '__form_schema__' || f.widgetType === 'schema_metadata'));
+    if (meta?.schema && typeof meta.schema === 'object') {
+      raw = meta.schema;
+    }
+  }
+
+  const rawFallbackList = Array.isArray(fallbackFields) ? fallbackFields : [];
+  const cleanFallbackList = rawFallbackList.filter((f: any) => f && f.id !== '__form_schema__' && f.widgetType !== 'schema_metadata');
+
+  const fallbackList: FormField[] = cleanFallbackList.length > 0
+    ? cleanFallbackList.map((f, idx) => ({
         id: f.id || `f_${idx + 1}`,
         label: f.label || `Field ${idx + 1}`,
         type: f.type || 'short_answer',
@@ -362,8 +373,17 @@ export function normalizeFormSchema(raw: unknown, fallbackFields?: any[]): FormS
       const hasSplitColumns = fallbackList.some(
         (f) => f.layoutColumn === 'left' || f.layoutColumn === 'right'
       );
+      // Infer steps if fields have distinct stepIds
+      const distinctStepIds = Array.from(new Set(fallbackList.map((f) => f.stepId).filter(Boolean)));
+      const isMulti = distinctStepIds.length > 1;
+      const inferredSteps: FormStep[] = isMulti
+        ? distinctStepIds.map((id, idx) => ({ id: id as string, title: `Step ${idx + 1}` }))
+        : DEFAULT_FORM_SCHEMA.steps;
+
       return {
         ...DEFAULT_FORM_SCHEMA,
+        isMultiStep: isMulti,
+        steps: inferredSteps,
         theme: {
           ...DEFAULT_FORM_THEME,
           layout: hasSplitColumns ? 'split_media' : DEFAULT_FORM_THEME.layout,

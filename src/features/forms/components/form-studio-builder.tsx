@@ -442,11 +442,10 @@ export function FormStudioBuilder({
 
   // Convert editor formData to FormSchema for runtime rendering with 100% fidelity
   const runtimeSchema: FormSchema = useMemo(() => {
-    const steps = formData.isMultiStep && formData.steps && formData.steps.length > 0
-      ? formData.steps.map((s, idx) => ({ id: s.id || `step_${idx + 1}`, title: s.title || `Step ${idx + 1}` }))
-      : [{ id: 'step_1', title: formData.name || 'Form Details' }];
-
     const isMultiStep = Boolean(formData.isMultiStep ?? (formData.steps && formData.steps.length > 1));
+    const steps = formData.steps && formData.steps.length > 0
+      ? formData.steps.map((s, idx) => ({ id: s.id || `step_${idx + 1}`, title: s.title || `Step ${idx + 1}`, description: s.description }))
+      : [{ id: 'step_1', title: formData.name || 'Form Details' }];
 
     return {
       version: 1,
@@ -517,6 +516,7 @@ export function FormStudioBuilder({
         mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
       },
       mediaPanel: formData.mediaPanel || formData.theme?.mediaPanel,
+      agentConfig: formData.agentConfig,
       rules: (formData.rules as any[]) || [],
       settings: {
         submitButtonText: formData.submitButtonText || 'Submit',
@@ -526,7 +526,7 @@ export function FormStudioBuilder({
         ...(formData.settings || {}),
       },
     };
-  }, [formData]);
+  }, [formData, formLayout]);
 
   const handleImportSuccess = (importedSchema: FormSchema, importedName?: string) => {
     onFormDataChange((prev) => ({

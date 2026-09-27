@@ -22,6 +22,7 @@
 
 import { FIELD_TYPES as ENGINE_FIELD_TYPES } from '@/lib/form-field-types';
 import { safeParseJson } from '@/lib/json-parsers';
+import { resolveFormLayout } from '@/lib/forms/resolve-form-layout';
 import type {
   ApiForm, CRMFieldMapping, EditorFormData, EngineFieldType, FormField,
   FormItem, FormStatus, FormType, PrimaryAction, SubmissionActions,
@@ -116,13 +117,30 @@ export function apiFormToFormItem(api: ApiForm): FormItem {
     } catch {}
   }
 
+  // Unpack embedded schema from fieldsJson if schemaJson is null/empty
+  if (!parsedSchema && api.fieldsJson) {
+    try {
+      const raw = typeof api.fieldsJson === 'string' ? JSON.parse(api.fieldsJson) : api.fieldsJson;
+      if (Array.isArray(raw)) {
+        const meta = raw.find((f: any) => f && (f.id === '__form_schema__' || f.widgetType === 'schema_metadata'));
+        if (meta?.schema) {
+          parsedSchema = meta.schema;
+        }
+      } else if (raw && typeof raw === 'object') {
+        parsedSchema = raw.schema || raw;
+      }
+    } catch {}
+  }
+
+  const isNotMeta = (f: any) => f && f.id !== '__form_schema__' && f.widgetType !== 'schema_metadata';
+
   if (Array.isArray((api as any).fields)) {
-    fields = (api as any).fields;
+    fields = (api as any).fields.filter(isNotMeta);
   } else if (parsedSchema && Array.isArray(parsedSchema.fields) && parsedSchema.fields.length > 0) {
-    fields = parsedSchema.fields;
+    fields = parsedSchema.fields.filter(isNotMeta);
   } else if (api.fieldsJson) {
     const rawFields = safeJsonParse<any>(api.fieldsJson, []);
-    fields = Array.isArray(rawFields) ? rawFields : [];
+    fields = Array.isArray(rawFields) ? rawFields.filter(isNotMeta) : [];
   }
 
   const rawActions = safeJsonParse<Partial<SubmissionActions>>(
@@ -222,7 +240,9 @@ export function apiFormToFormItem(api: ApiForm): FormItem {
       : new Date().toISOString().split('T')[0],
     theme: parsedSchema?.theme,
     mediaPanel: parsedSchema?.mediaPanel || parsedSchema?.theme?.mediaPanel,
-    isMultiStep: parsedSchema?.isMultiStep,
+    isMultiStep: parsedSchema?.isMultiStep !== undefined
+      ? Boolean(parsedSchema.isMultiStep)
+      : Boolean(parsedSchema?.steps && parsedSchema.steps.length > 1),
     steps: parsedSchema?.steps,
     rules: parsedSchema?.rules || [],
     settings: parsedSchema?.settings,
@@ -257,9 +277,12 @@ export function buildApiPayload(formData: EditorFormData) {
 
   const safeFields = Array.isArray(formData.fields) ? formData.fields : [];
   const safeMappings = Array.isArray(formData.fieldMappings) ? formData.fieldMappings : [];
-  const isMultiStep = formData.isMultiStep ?? false;
 
-  const normalizedSteps = isMultiStep && formData.steps && formData.steps.length > 0
+  // Determine multi-step: true if explicitly set, or if author has created more than 1 step
+  const isMultiStep = Boolean(formData.isMultiStep ?? (formData.steps && formData.steps.length > 1));
+
+  // Never drop user-authored steps!
+  const normalizedSteps = formData.steps && formData.steps.length > 0
     ? formData.steps
     : [{ id: 'step_1', title: formData.name || 'Form Details' }];
 
@@ -269,29 +292,17 @@ export function buildApiPayload(formData: EditorFormData) {
   const preparedFields = safeFields.map((f, idx) => ({
     ...f,
     id: f.id || `f_${idx + 1}`,
-    stepId: isMultiStep ? (f.stepId && validStepIds.has(f.stepId) ? f.stepId : defaultStepId) : defaultStepId,
+    stepId: f.stepId && validStepIds.has(f.stepId) ? f.stepId : defaultStepId,
     layoutColumn: f.layoutColumn,
     defaultValue: f.defaultValue,
   }));
 
+  // Resolve canonical layout using shared resolver
+  const themeLayout: 'split_media' | 'card' | 'classic' = resolveFormLayout(formData as any);
+  const isSplitMedia = themeLayout === 'split_media';
+
   const rawMediaPanel = formData.mediaPanel || formData.theme?.mediaPanel;
-  const isCard =
-    formData.theme?.layout === 'card' ||
-    formData.settings?.formLayout === 'single_question';
-
-  const hasSplitColumns = preparedFields.some(
-    (f) => f && (f.layoutColumn === 'left' || f.layoutColumn === 'right')
-  );
-  const hasPanelMedia = Boolean(rawMediaPanel && (rawMediaPanel.enabled === true || rawMediaPanel.mediaUrl || rawMediaPanel.headline));
-
-  const isSplitMedia = !isCard && (
-    formData.theme?.layout === 'split_media' ||
-    formData.settings?.formLayout === 'split_media' ||
-    hasSplitColumns ||
-    hasPanelMedia
-  );
-
-  const mediaPanel = isSplitMedia
+  const mediaPanel = isSplitMedia || rawMediaPanel?.enabled === true
     ? {
         enabled: true,
         position: rawMediaPanel?.position || 'left',
@@ -331,12 +342,6 @@ export function buildApiPayload(formData: EditorFormData) {
       }
     : rawMediaPanel;
 
-  const themeLayout: 'split_media' | 'card' | 'classic' = isSplitMedia
-    ? 'split_media'
-    : isCard
-    ? 'card'
-    : 'classic';
-
   const schemaObj = {
     version: 1,
     isMultiStep,
@@ -361,12 +366,8 @@ export function buildApiPayload(formData: EditorFormData) {
       mediaPanel,
     },
     mediaPanel,
-    // Persist agentConfig if the user has configured an agent.
-    ...(formData.agentConfig &&
-      formData.agentConfig.id &&
-      formData.agentConfig.id !== 'agent_default'
-      ? { agentConfig: formData.agentConfig }
-      : {}),
+    // Persist agentConfig whenever present
+    ...(formData.agentConfig ? { agentConfig: formData.agentConfig } : {}),
     rules: formData.rules || [],
     settings: {
       submitButtonText: formData.submitButtonText || 'Submit',
@@ -377,12 +378,27 @@ export function buildApiPayload(formData: EditorFormData) {
     },
   };
 
+  // Ensure fieldsJson retains ALL authorable fields with fallback labels, plus embedded schema metadata for guaranteed persistence
+  const fieldsForLegacyJson = [
+    ...safeFields.map((f, idx) => ({
+      ...f,
+      id: f.id || `f_${idx + 1}`,
+      label: (f.label && f.label.trim()) || (f as any).placeholder || (f as any).title || `Field ${idx + 1}`,
+    })),
+    {
+      id: '__form_schema__',
+      widgetType: 'schema_metadata',
+      hidden: true,
+      schema: schemaObj,
+    },
+  ];
+
   return {
     name: formData.name,
     description: formData.description || null,
     type: formData.type,
     status: formData.status,
-    fieldsJson: JSON.stringify(safeFields.filter((f) => f && f.label && f.label.trim())),
+    fieldsJson: JSON.stringify(fieldsForLegacyJson),
     schemaJson: JSON.stringify(schemaObj),
     submissionActions: JSON.stringify(actionArray),
     fieldMappingJson: JSON.stringify(safeMappings),

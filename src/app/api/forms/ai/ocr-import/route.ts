@@ -83,10 +83,10 @@ TypeScript schema:
 Respond ONLY with valid parseable JSON.`;
 
     let userPrompt = '';
-    if (mode === 'image') {
+    if (mode === 'image' || mode === 'photo') {
       userPrompt = `Extract all form fields, input questions, signature areas, checkboxes, and tables from this paper form image data. If text was recognized, here it is: ${sourceText || 'Image document attached'}. Reconstruct it into a clean digital form.`;
     } else if (mode === 'url') {
-      userPrompt = `Reconstruct a digital form matching the purpose and questions found on this webpage (${url}):\n\n${sourceText.slice(0, 6000)}`;
+      userPrompt = `Analyze this business webpage (${url}) and its services:\n\n${sourceText.slice(0, 8000)}\n\nReconstruct a modern, high-converting digital intake / service booking form specifically tailored to the real services, offerings, and customer details needed by this business.`;
     } else {
       userPrompt = `Convert the following questions/notes into a structured interactive form:\n\n${sourceText}`;
     }

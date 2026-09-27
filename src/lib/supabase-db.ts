@@ -630,6 +630,7 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   },
   Form: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
     responses: { targetTable: 'FormResponse', targetFkColumn: 'formId', isMany: true },
   },
   FormResponse: {
@@ -2292,24 +2293,44 @@ class SupabaseModel {
     const { where, data } = options;
     const serialized = serializeData(data);
 
-    let query = this.client.from(this.tableName).update(serialized);
+    let query = this.client.from(this.tableName).update(serialized, { count: 'exact' });
 
     if (where) applyWhereFilters(query, where);
 
-    const { count, error } = await query;
+    let { count, error } = await query;
+
+    // Resilient retry loop: strip any column PostgREST rejects (e.g. `schemaJson` on Form)
+    let retryCount = 0;
+    while (error && retryCount < 4) {
+      const msg = error.message || '';
+      const missingColMatch = msg.match(
+        /(?:Could not find the (?:column )?['`"]?(\w+)['`"]?(?: column)? of|column ['`"]?(\w+)['`"]? of relation|column ['`"]?(\w+)['`"]? does not exist)/i
+      );
+      if (!missingColMatch) break;
+      const badCol = missingColMatch[1] || missingColMatch[2] || missingColMatch[3];
+      if (!badCol || !(badCol in serialized)) break;
+      delete serialized[badCol];
+      retryCount++;
+      let retryQuery = this.client.from(this.tableName).update(serialized, { count: 'exact' });
+      if (where) applyWhereFilters(retryQuery, where);
+      const retry = await retryQuery;
+      count = retry.count;
+      error = retry.error;
+    }
+
     if (error) {
       console.error(`[SupabaseDB] updateMany error on ${this.tableName}:`, error.message);
       return { count: 0 };
     }
 
-    return { count: count || 0 };
+    return { count: count ?? 0 };
   }
 
   async deleteMany(options: DeleteManyOptions = {}): Promise<{ count: number }> {
     if (this.isMissingTable) return { count: 0 };
 
     const { where } = options;
-    let query = this.client.from(this.tableName).delete();
+    let query = this.client.from(this.tableName).delete({ count: 'exact' });
 
     if (where) applyWhereFilters(query, where);
 
@@ -2319,7 +2340,7 @@ class SupabaseModel {
       return { count: 0 };
     }
 
-    return { count: count || 0 };
+    return { count: count ?? 0 };
   }
 
   async aggregate(options: Record<string, unknown>): Promise<unknown> {

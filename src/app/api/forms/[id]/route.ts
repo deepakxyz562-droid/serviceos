@@ -51,7 +51,8 @@ export async function GET(
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ form });
+    const enrichedForm = hydrateFormSchema(form);
+    return NextResponse.json({ form: enrichedForm });
   } catch (error) {
     console.error('Get form error:', error);
     return NextResponse.json({ error: 'Failed to fetch form' }, { status: 500 });
@@ -119,6 +120,29 @@ export async function PUT(
       // Same encryption pass for schemaJson-based forms (modern format).
       const sanitized = encryptSecretFieldsInSchema(schemaData);
       updateData.schemaJson = typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized);
+
+      // CRITICAL GUARANTEE: Embed schema metadata in fieldsJson so layout, theme,
+      // steps, and settings persist even when the physical DB table lacks schemaJson column
+      try {
+        let currentFieldsList: any[] = [];
+        if (updateData.fieldsJson) {
+          const parsed = typeof updateData.fieldsJson === 'string' ? JSON.parse(updateData.fieldsJson as string) : updateData.fieldsJson;
+          if (Array.isArray(parsed)) currentFieldsList = parsed;
+        } else if (existing.fieldsJson) {
+          const parsed = typeof existing.fieldsJson === 'string' ? JSON.parse(existing.fieldsJson) : existing.fieldsJson;
+          if (Array.isArray(parsed)) currentFieldsList = parsed;
+        }
+        const filtered = currentFieldsList.filter((f) => f && f.id !== '__form_schema__' && f.widgetType !== 'schema_metadata');
+        filtered.push({
+          id: '__form_schema__',
+          widgetType: 'schema_metadata',
+          hidden: true,
+          schema: typeof sanitized === 'string' ? JSON.parse(sanitized) : sanitized,
+        });
+        updateData.fieldsJson = JSON.stringify(filtered);
+      } catch (err) {
+        console.warn('[PUT form] Failed to embed schema in fieldsJson:', err);
+      }
     }
     if (body.submissionActions !== undefined) {
       updateData.submissionActions = typeof body.submissionActions === 'string' ? body.submissionActions : JSON.stringify(body.submissionActions);
@@ -162,10 +186,19 @@ export async function PUT(
     if (body.createdById !== undefined) updateData.createdById = body.createdById;
 
     // Use existing.id for mutation
-    const updateResult = await db.form.updateMany({
-      where: { id: existing.id },
-      data: updateData,
-    });
+    let updateResult: { count: number } = { count: 0 };
+    try {
+      await db.form.update({
+        where: { id: existing.id },
+        data: updateData,
+      });
+      updateResult = { count: 1 };
+    } catch {
+      updateResult = await db.form.updateMany({
+        where: { id: existing.id },
+        data: updateData,
+      });
+    }
 
     if (updateResult.count === 0) {
       return NextResponse.json({ error: 'Form not found or access denied' }, { status: 404 });
@@ -177,7 +210,8 @@ export async function PUT(
       include: { _count: { select: { responses: true } } },
     });
 
-    return NextResponse.json({ form });
+    const enrichedForm = hydrateFormSchema(form);
+    return NextResponse.json({ form: enrichedForm });
   } catch (error) {
     console.error('Update form error:', error);
     return NextResponse.json({ error: 'Failed to update form' }, { status: 500 });
@@ -300,3 +334,36 @@ function encryptSecretFieldsInSchema(schemaData: string | Record<string, unknown
   }
   return result;
 }
+
+/**
+ * Hydrate missing schemaJson on a Form record by inspecting fieldsJson
+ * for embedded __form_schema__ metadata.
+ */
+function hydrateFormSchema<T extends Record<string, any>>(form: T | null): T | null {
+  if (!form) return form;
+  if (!form.schemaJson || form.schemaJson === '{}') {
+    if (form.fieldsJson) {
+      try {
+        const parsed = typeof form.fieldsJson === 'string' ? JSON.parse(form.fieldsJson) : form.fieldsJson;
+        if (Array.isArray(parsed)) {
+          const meta = parsed.find((f: any) => f && (f.id === '__form_schema__' || f.widgetType === 'schema_metadata'));
+          if (meta?.schema) {
+            return {
+              ...form,
+              schemaJson: JSON.stringify(meta.schema),
+            };
+          }
+        } else if (parsed && typeof parsed === 'object') {
+          if (parsed.schema || parsed.fields) {
+            return {
+              ...form,
+              schemaJson: JSON.stringify(parsed.schema || parsed),
+            };
+          }
+        }
+      } catch { /* ignore */ }
+    }
+  }
+  return form;
+}
+

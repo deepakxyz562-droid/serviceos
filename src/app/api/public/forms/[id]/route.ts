@@ -39,7 +39,6 @@ export async function GET(
         description: true,
         type: true,
         status: true,
-        schemaJson: true,
         fieldsJson: true,
         submissionActions: true,
         welcomeMessage: true,
@@ -87,7 +86,19 @@ export async function GET(
     if (form.fieldsJson) {
       try {
         const parsed = typeof form.fieldsJson === 'string' ? JSON.parse(form.fieldsJson) : form.fieldsJson;
-        if (Array.isArray(parsed)) rawFields = parsed;
+        if (Array.isArray(parsed)) {
+          // Unpack embedded schema metadata if present
+          const meta = parsed.find((f: any) => f && (f.id === '__form_schema__' || f.widgetType === 'schema_metadata'));
+          if (meta?.schema && !schema) {
+            schema = meta.schema;
+          }
+          rawFields = parsed.filter((f: any) => f && f.id !== '__form_schema__' && f.widgetType !== 'schema_metadata');
+        } else if (parsed && typeof parsed === 'object') {
+          if (!schema && (parsed.schema || parsed.fields)) {
+            schema = parsed.schema || parsed;
+            rawFields = Array.isArray(parsed.fields) ? parsed.fields : [];
+          }
+        }
       } catch { /* ignore */ }
     }
 

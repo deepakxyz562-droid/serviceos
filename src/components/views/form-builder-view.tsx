@@ -364,6 +364,7 @@ export function FormBuilderView() {
       mediaPanel: form.mediaPanel || form.theme?.mediaPanel,
       rules: form.rules || [],
       settings: form.settings,
+      agentConfig: form.agentConfig,
     });
     setActiveTab('details');
     setShowCreateDialog(true);
@@ -383,9 +384,11 @@ export function FormBuilderView() {
               fields: Array.isArray(fullItem.fields) && fullItem.fields.length > 0 ? fullItem.fields : prev.fields,
               theme: fullItem.theme || prev.theme,
               mediaPanel: fullItem.mediaPanel || fullItem.theme?.mediaPanel || prev.mediaPanel,
-              steps: fullItem.steps || prev.steps,
-              rules: fullItem.rules && fullItem.rules.length > 0 ? fullItem.rules : prev.rules,
+              isMultiStep: fullItem.isMultiStep !== undefined ? fullItem.isMultiStep : prev.isMultiStep,
+              steps: Array.isArray(fullItem.steps) && fullItem.steps.length > 0 ? fullItem.steps : prev.steps,
+              rules: Array.isArray(fullItem.rules) ? fullItem.rules : prev.rules,
               settings: fullItem.settings || prev.settings,
+              agentConfig: fullItem.agentConfig || prev.agentConfig,
             };
           });
         }
@@ -398,9 +401,10 @@ export function FormBuilderView() {
       if (!options?.silent) toast.error('Form name is required');
       return null;
     }
-    const hasFields = formData.fields.some((f) => f.label && f.label.trim());
+    const hasFields = Array.isArray(formData.fields) && formData.fields.length > 0 &&
+      formData.fields.some((f) => (f.label && f.label.trim()) || (f as any).placeholder || (f as any).title || f.widgetType);
     if (!hasFields) {
-      if (!options?.silent) toast.error('At least one field with a label is required');
+      if (!options?.silent) toast.error('At least one field is required');
       return null;
     }
 
@@ -436,7 +440,19 @@ export function FormBuilderView() {
         });
         setEditMode(true);
         setEditFormId(updated.id);
-        setFormData((prev) => ({ ...prev, id: updated.id, slug: updated.slug }));
+        setFormData((prev) => ({
+          ...prev,
+          ...updated,
+          id: updated.id,
+          slug: updated.slug,
+          fields: Array.isArray(updated.fields) && updated.fields.length > 0 ? updated.fields : prev.fields,
+          steps: Array.isArray(updated.steps) && updated.steps.length > 0 ? updated.steps : prev.steps,
+          isMultiStep: updated.isMultiStep !== undefined ? updated.isMultiStep : prev.isMultiStep,
+          theme: updated.theme || prev.theme,
+          mediaPanel: updated.mediaPanel || updated.theme?.mediaPanel || prev.mediaPanel,
+          agentConfig: updated.agentConfig || prev.agentConfig,
+          settings: updated.settings || prev.settings,
+        }));
         if (!options?.silent) toast.success('Form saved');
         return { id: updated.id, slug: updated.slug };
       } else {
@@ -454,7 +470,19 @@ export function FormBuilderView() {
         setForms((prev) => [newForm, ...prev]);
         setEditMode(true);
         setEditFormId(newForm.id);
-        setFormData((prev) => ({ ...prev, id: newForm.id, slug: newForm.slug }));
+        setFormData((prev) => ({
+          ...prev,
+          ...newForm,
+          id: newForm.id,
+          slug: newForm.slug,
+          fields: Array.isArray(newForm.fields) && newForm.fields.length > 0 ? newForm.fields : prev.fields,
+          steps: Array.isArray(newForm.steps) && newForm.steps.length > 0 ? newForm.steps : prev.steps,
+          isMultiStep: newForm.isMultiStep !== undefined ? newForm.isMultiStep : prev.isMultiStep,
+          theme: newForm.theme || prev.theme,
+          mediaPanel: newForm.mediaPanel || newForm.theme?.mediaPanel || prev.mediaPanel,
+          agentConfig: newForm.agentConfig || prev.agentConfig,
+          settings: newForm.settings || prev.settings,
+        }));
         if (!options?.silent) toast.success('Form created');
         return { id: newForm.id, slug: newForm.slug };
       }
