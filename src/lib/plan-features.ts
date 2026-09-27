@@ -236,12 +236,12 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     document_center: true, role_permissions: false, advanced_reports: false,
     data_retention: false, advanced_security: false,
   },
-  // Business — adds AI Receptionist, SMS numbers, inventory, RBAC, reports
+  // Business — adds SMS numbers, inventory, RBAC, reports
   // (route_optimization stays false — see note above the trial block; the dead stub view is gone)
   business: {
     customers: true, leads: true, jobs: true, quotes: true, invoices: true,
     reports: true, customer_360: true, sales_pipeline: true, reviews: true,
-    live_chat: true, sms_numbers: true, ai_receptionist: true, whatsapp: true,
+    live_chat: true, sms_numbers: true, ai_receptionist: false, whatsapp: true,
     email_integration: true, omnichannel_inbox: true, ai_assistant: true,
     ai_quote_generator: true, ai_job_summary: true, ai_suggested_replies: true,
     ai_form_generator: true,
@@ -262,7 +262,7 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
   enterprise: {
     customers: true, leads: true, jobs: true, quotes: true, invoices: true,
     reports: true, customer_360: true, sales_pipeline: true, reviews: true,
-    live_chat: true, sms_numbers: true, ai_receptionist: true, whatsapp: true,
+    live_chat: true, sms_numbers: true, ai_receptionist: false, whatsapp: true,
     email_integration: true, omnichannel_inbox: true, ai_assistant: true,
     ai_quote_generator: true, ai_job_summary: true, ai_suggested_replies: true,
     ai_form_generator: true,

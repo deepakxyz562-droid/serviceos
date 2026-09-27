@@ -152,20 +152,21 @@ export function SignupModeSelector({
                 <Zap className="size-6" />
               </div>
               <h2 className="text-lg font-semibold">Grow with CRM</h2>
-              <p className="text-xl font-bold mt-1">
-                Free for 14 days
-                <span className="text-xs font-normal text-muted-foreground block">then from $29/mo</span>
-              </p>
+              <div className="mt-1">
+                <span className="text-xl font-bold text-foreground">Free forever</span>
+                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 block">Up to 100 jobs · 14-day trial on paid plans</span>
+              </div>
               <p className="text-sm text-muted-foreground mt-2">
-                Full-suite CRM: dispatch, invoicing, AI Receptionist, online bookings, quote inbox, and omnichannel messaging.
+                Complete service business OS: customer pipeline, scheduling, quotes, invoices, online booking, and omnichannel messaging.
               </p>
               <ul className="mt-4 space-y-1.5 text-sm">
                 {[
-                  'CRM + customer pipeline',
-                  'AI Receptionist (24/7 call answering)',
-                  'Online bookings & quote requests',
+                  'CRM + customer pipeline & contacts',
+                  'Quotes, invoices & online payments',
+                  'Scheduling & calendar dispatch',
+                  'Online bookings & customer portal',
                   'Omnichannel inbox (WhatsApp, SMS, Email)',
-                  'Invoicing & payments',
+                  'Up to 100 jobs free forever (upgrade anytime)',
                 ].map((f) => (
                   <li key={f} className="flex items-start gap-2">
                     <Check className="size-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -179,13 +180,13 @@ export function SignupModeSelector({
                 disabled={busy !== null}
               >
                 {busy === 'crm' ? (
-                  <><Loader2 className="size-4 animate-spin mr-2" />Starting trial…</>
+                  <><Loader2 className="size-4 animate-spin mr-2" />Starting CRM…</>
                 ) : (
-                  <>Start free trial <ArrowRight className="size-4 ml-2" /></>
+                  <>Start free CRM <ArrowRight className="size-4 ml-2" /></>
                 )}
               </Button>
               <p className="text-[11px] text-muted-foreground text-center mt-2">
-                No credit card required · Cancel anytime
+                No credit card required · Upgrade anytime
               </p>
             </CardContent>
           </Card>

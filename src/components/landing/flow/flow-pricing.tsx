@@ -46,7 +46,7 @@ const plans: Plan[] = [
     name: 'Business',
     monthly: 149,
     blurb: 'Full autonomous operations.',
-    features: ['Up to 25 users', 'AI receptionist (voice)', 'AI dispatcher', 'Live GPS map', 'Inventory', '200 GB storage'],
+    features: ['Up to 25 users', 'AI Dispatcher (Smart Dispatch)', 'Autonomous workflows', 'Live GPS map', 'Inventory', '200 GB storage'],
   },
   {
     name: 'Enterprise',

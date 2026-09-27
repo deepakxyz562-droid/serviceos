@@ -1,10 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, Sparkles, ArrowRight, Zap, Calendar, FileText, Briefcase } from 'lucide-react';
+import { Check, Sparkles, ArrowRight, Zap, Calendar, FileText, Briefcase, PhoneCall } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { AI_RECEPTIONIST_PLANS } from '@/lib/ai-receptionist-plans';
 
 const FORMS_PLANS = [
   {
@@ -74,7 +75,7 @@ const CRM_PLANS = [
     price: '$149',
     period: '/mo',
     tagline: 'For multi-branch operators',
-    features: ['Everything in Professional', 'Up to 25 users', 'AI Receptionist (voice)', 'AI Dispatcher', 'GPS + live technician map', 'Inventory + purchase orders', 'Recurring jobs', 'Role permissions', '200GB storage'],
+    features: ['Everything in Professional', 'Up to 25 users', 'AI Dispatcher (Smart Dispatch)', 'GPS + live technician map', 'Inventory + purchase orders', 'Recurring jobs', 'Role permissions', '200GB storage'],
     cta: 'Start 14-Day Trial',
     highlight: false,
   },
@@ -193,6 +194,54 @@ export function PricingPageClient() {
                   <Link href="/auth/signup">
                     <Button className={`w-full mt-4 text-xs ${plan.highlight ? 'bg-blue-600 hover:bg-blue-700' : ''}`} variant={plan.highlight ? 'default' : 'outline'} size="sm">
                       {plan.cta}
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* AI Voice Receptionist Add-on */}
+      <section className="py-12 bg-slate-900 text-white border-t border-slate-800">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="text-center mb-8">
+            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 mb-2">
+              <PhoneCall className="size-3 mr-1" /> Optional Voice Add-On
+            </Badge>
+            <h2 className="text-2xl md:text-3xl font-bold">24/7 AI Voice Receptionist</h2>
+            <p className="text-sm text-slate-400 mt-2 max-w-2xl mx-auto">
+              Add 24/7 autonomous phone answering to any Fieseros CRM plan (including Free). Runs on dedicated voice infrastructure with transparent minute quotas and 0% per-lead markups.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {AI_RECEPTIONIST_PLANS.map((plan) => (
+              <Card key={plan.code} className={`bg-slate-800/80 border-slate-700 text-white ${plan.highlighted ? 'border-purple-500 ring-2 ring-purple-500/30' : ''}`}>
+                <CardContent className="p-6">
+                  {plan.badge && (
+                    <Badge className="bg-purple-600 text-white text-[10px] mb-3">{plan.badge}</Badge>
+                  )}
+                  <h3 className="text-base font-bold text-white">{plan.name}</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">{plan.tagline}</p>
+                  <p className="text-3xl font-extrabold text-white mt-2">
+                    ${plan.price}
+                    <span className="text-sm font-normal text-slate-400">/mo</span>
+                  </p>
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-950/60 border border-purple-800/50 text-purple-300 text-xs font-semibold">
+                    <PhoneCall className="size-3.5" /> {plan.minutes} voice minutes included
+                  </div>
+                  <div className="mt-5 space-y-2">
+                    {plan.features.map((f) => (
+                      <div key={f} className="flex items-start gap-2 text-xs text-slate-300">
+                        <Check className="size-3.5 text-purple-400 shrink-0 mt-0.5" />
+                        <span>{f}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Link href="/auth/signup">
+                    <Button className={`w-full mt-6 text-xs ${plan.highlighted ? 'bg-purple-600 hover:bg-purple-700 text-white' : 'bg-slate-700 hover:bg-slate-600 text-white border-slate-600'}`} size="sm">
+                      Get AI Receptionist
                     </Button>
                   </Link>
                 </CardContent>

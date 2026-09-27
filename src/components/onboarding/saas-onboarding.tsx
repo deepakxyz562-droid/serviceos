@@ -227,7 +227,7 @@ const FALLBACK_PLANS: OnboardingPlan[] = [
     yearlyPrice: 1490, // 2 months free on yearly
     originalMonthlyPrice: 249,
     description: 'For multi-branch operators',
-    features: ['Up to 25 users', 'AI Receptionist + AI Dispatcher', 'Inventory + Purchase Orders', 'Recurring Jobs', 'Live Technician Map (GPS)', 'Advanced Reports', 'Role Permissions'],
+    features: ['Up to 25 users', 'AI Dispatcher (Smart Dispatch)', 'Inventory + Purchase Orders', 'Recurring Jobs', 'Live Technician Map (GPS)', 'Advanced Reports', 'Role Permissions'],
     icon: Crown,
   },
   {

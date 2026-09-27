@@ -637,8 +637,8 @@ const PLAN_DEFS: PlanDef[] = [
       liveChat: true,
       apiAccess: true,
       webhooks: true,
-      // Business additions
-      aiReceptionist: true,
+      // Business additions (Note: AI Receptionist is an independent paid add-on, not bundled)
+      aiReceptionist: false,
       aiAgents: true,
       aiPhoneNumbers: true,
       aiCallHistory: true,
@@ -709,8 +709,8 @@ const PLAN_DEFS: PlanDef[] = [
       liveChat: true,
       apiAccess: true,
       webhooks: true,
-      // Business additions
-      aiReceptionist: true,
+      // Business additions (Note: AI Receptionist is an independent paid add-on, not bundled)
+      aiReceptionist: false,
       aiAgents: true,
       aiPhoneNumbers: true,
       aiCallHistory: true,
