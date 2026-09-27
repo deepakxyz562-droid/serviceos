@@ -90,6 +90,7 @@ const viewLabels: Record<ViewType, string> = {
   contacts: 'Contacts',
   leadDiscovery: 'Lead Discovery',
   booking: 'Booking',
+  scheduling: 'Scheduling',
   calendar: 'Calendar',
   employees: 'Employees',
   reviews: 'Reviews',

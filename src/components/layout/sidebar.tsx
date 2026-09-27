@@ -44,6 +44,7 @@ import {
   LayoutTemplate,
   CalendarCheck,
   Calendar,
+  CalendarClock,
   Star,
   BookOpen,
   Receipt,
@@ -125,6 +126,7 @@ const ownerNavSections: NavSection[] = [
     title: 'Overview',
     items: [
       { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { view: 'scheduling', label: 'Scheduling', icon: CalendarClock },
       { view: 'calendar', label: 'Calendar', icon: Calendar },
       { view: 'reports', label: 'Reports', icon: BarChart3 },
     ],

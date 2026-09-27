@@ -15,6 +15,7 @@ import {
   generateOutlookCalendarUrl,
   generateIcsCalendar,
 } from '@/lib/scheduling/calendar-helper';
+import { pushBookingToGoogleCalendar } from '@/lib/scheduling/google-calendar-sync';
 
 export interface CustomerInput {
   name?: string | null;
@@ -38,7 +39,7 @@ export interface CreateBookingRequest {
   timezone?: string;
   customer?: CustomerInput;
   notes?: string | null;
-  source?: 'form' | 'website' | 'ai_chat_widget' | 'manual' | 'api';
+  source?: 'form' | 'website' | 'ai_chat_widget' | 'manual' | 'api' | 'scheduling_link';
   bypassAvailabilityCheck?: boolean;
 }
 
@@ -47,6 +48,7 @@ export interface BookingResult {
   booking: any;
   lead?: any;
   availableSlotMatched?: boolean;
+  meetingUrl?: string | null;
   calendarUrls: {
     google: string;
     outlook: string;
@@ -278,11 +280,53 @@ export async function createAppointmentBooking(
     },
   });
 
+  // 4. Push Event to Google Calendar & Auto-Generate Google Meet link if connected
+  let googleMeetUrl: string | null = null;
+  if (tenantId) {
+    try {
+      const tenant = await db.tenant.findUnique({
+        where: { id: tenantId },
+        select: { googleCalendarSyncEnabled: true },
+      });
+      if (tenant?.googleCalendarSyncEnabled) {
+        const gcalResult = await pushBookingToGoogleCalendar(tenantId, {
+          title: displayTitle,
+          description: `Appointment with ${customer.name || 'Client'}\nEmail: ${customer.email || 'N/A'}\nPhone: ${customer.phone || 'N/A'}\nNotes: ${notes || ''}`,
+          startTime: scheduledAt,
+          endTime: scheduledEndTime,
+          location: customer.address || undefined,
+          customerName: customer.name || undefined,
+          customerEmail: customer.email || undefined,
+          generateMeetingLink: true,
+        });
+
+        if (gcalResult.meetingUrl) {
+          googleMeetUrl = gcalResult.meetingUrl;
+        }
+
+        if (gcalResult.meetingUrl || gcalResult.eventId) {
+          try {
+            const currentMeta = JSON.parse(booking.metadataJson || '{}');
+            currentMeta.meetingUrl = gcalResult.meetingUrl;
+            currentMeta.googleCalendarEventId = gcalResult.eventId;
+            await db.booking.update({
+              where: { id: booking.id },
+              data: { metadataJson: JSON.stringify(currentMeta) },
+            });
+          } catch {}
+        }
+      }
+    } catch (gcalPushErr) {
+      console.warn('[booking-service] Google Calendar push warning:', gcalPushErr);
+    }
+  }
+
   return {
     success: true,
     booking,
     lead: createdLead,
     availableSlotMatched,
+    meetingUrl: googleMeetUrl,
     calendarUrls: {
       google: googleCalendarUrl,
       outlook: outlookCalendarUrl,

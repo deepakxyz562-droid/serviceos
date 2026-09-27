@@ -191,13 +191,18 @@ export async function POST(
         leadId: bookingResult.lead?.id,
         bookingId: bookingResult.booking?.id,
         calendarUrls: bookingResult.calendarUrls,
+        meetingUrl: bookingResult.meetingUrl,
         name: bookingResult.lead?.name || 'there',
         service: primaryConnectedForm?.name || 'Appointment',
         date: bookingResult.dateStr,
         time: bookingResult.timeStr,
       };
 
-      replyText = `🎉 Great news, ${bookingResult.lead?.name || 'there'}! Your appointment has been successfully scheduled and confirmed for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.\n\nOur team has added this to our calendar and will follow up with you. You can also add it to your calendar below!`;
+      const meetInfo = bookingResult.meetingUrl
+        ? `\n\n🎥 **Video Meeting Link:** [Join Google Meet](${bookingResult.meetingUrl})`
+        : '';
+
+      replyText = `🎉 Great news, ${bookingResult.lead?.name || 'there'}! Your appointment has been successfully scheduled and confirmed for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.${meetInfo}\n\nOur team has added this to our calendar. You can also add it to your calendar below!`;
     }
 
     if (!replyText) {

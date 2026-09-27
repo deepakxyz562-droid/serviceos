@@ -182,15 +182,20 @@ export async function POST(req: NextRequest) {
         source: 'ai_chat_widget',
       });
 
+      const meetInfo = bookingResult.meetingUrl
+        ? `\n\n🎥 **Video Meeting Link:** [Join Google Meet](${bookingResult.meetingUrl})`
+        : '';
+
       return NextResponse.json(
         {
           success: true,
-          reply: `🎉 Great news, ${name || 'there'}! Your appointment request has been confirmed for **${bookingResult.dateStr} at ${bookingResult.timeStr}**. Our team will contact you at ${phone || email || 'your number'} if any adjustments are needed.`,
+          reply: `🎉 Great news, ${name || 'there'}! Your appointment request has been confirmed for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.${meetInfo} Our team will contact you at ${phone || email || 'your number'} if any adjustments are needed.`,
           card: {
             type: 'booking_confirmation',
             leadId: bookingResult.lead?.id,
             bookingId: bookingResult.booking?.id,
             calendarUrls: bookingResult.calendarUrls,
+            meetingUrl: bookingResult.meetingUrl,
             name,
             service,
             date: bookingResult.dateStr,

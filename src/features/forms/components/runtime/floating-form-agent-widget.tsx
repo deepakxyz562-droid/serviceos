@@ -22,6 +22,7 @@ import {
   Maximize2,
   ShieldCheck,
   ArrowRight,
+  Video,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -583,6 +584,17 @@ export function FloatingFormAgentWidget({
                               {m.card.service && <p><strong>Service:</strong> {m.card.service}</p>}
                               {m.card.name && <p><strong>Name:</strong> {m.card.name}</p>}
                             </div>
+                            {m.card.meetingUrl && (
+                              <a
+                                href={m.card.meetingUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1.5 w-full py-1.5 px-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors"
+                              >
+                                <Video className="size-3.5" />
+                                <span>Join Google Meet</span>
+                              </a>
+                            )}
                             {m.card.calendarUrls && (
                               <div className="flex gap-2 pt-1">
                                 <a

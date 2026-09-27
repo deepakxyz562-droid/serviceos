@@ -142,34 +142,63 @@ async function getCalendarClient(tenantId: string) {
  * @param endDate End of the range (ISO string)
  * @returns Array of { start: Date, end: Date } busy periods
  */
+/**
+ * Fetch busy times from Google Calendar for a date range across up to 6 work/personal sub-calendars.
+ *
+ * Used by the slot engine to block unavailable times.
+ */
 export async function fetchGoogleCalendarBusyTimes(
   tenantId: string,
   startDate: string,
   endDate: string,
+  calendarIds?: string[],
 ): Promise<Array<{ start: Date; end: Date }>> {
   try {
     const calendar = await getCalendarClient(tenantId);
-    const oauth2Client = getOAuth2Client();
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
-      select: { googleCalendarEmail: true },
+      select: { googleCalendarEmail: true, featuresJson: true },
     });
 
-    // Query freebusy API
+    let targetCalendars = calendarIds && calendarIds.length > 0 ? calendarIds : [];
+    if (targetCalendars.length === 0 && tenant?.featuresJson) {
+      try {
+        const parsed = JSON.parse(tenant.featuresJson);
+        if (Array.isArray(parsed.schedulingConflictCalendars) && parsed.schedulingConflictCalendars.length > 0) {
+          targetCalendars = parsed.schedulingConflictCalendars;
+        }
+      } catch {}
+    }
+
+    if (targetCalendars.length === 0) {
+      targetCalendars = [tenant?.googleCalendarEmail || 'primary'];
+    }
+
+    // Query freebusy API across selected sub-calendars (up to 6)
     const response = await calendar.freebusy.query({
       requestBody: {
         timeMin: startDate,
         timeMax: endDate,
-        items: [{ id: tenant?.googleCalendarEmail || 'primary' }],
+        items: targetCalendars.slice(0, 6).map((id) => ({ id })),
       },
     });
 
-    const busyPeriods = response.data.calendars?.[tenant?.googleCalendarEmail || 'primary']?.busy || [];
+    const busyRanges: Array<{ start: Date; end: Date }> = [];
+    const calendarsData = response.data.calendars || {};
 
-    return busyPeriods.map((period: { start?: string; end?: string }) => ({
-      start: new Date(period.start || ''),
-      end: new Date(period.end || ''),
-    }));
+    for (const calId of Object.keys(calendarsData)) {
+      const busyList = calendarsData[calId]?.busy || [];
+      for (const period of busyList) {
+        if (period.start && period.end) {
+          busyRanges.push({
+            start: new Date(period.start),
+            end: new Date(period.end),
+          });
+        }
+      }
+    }
+
+    return busyRanges;
   } catch (error) {
     console.error('[google-calendar] Failed to fetch busy times:', error);
     return []; // Return empty on error — don't block all slots
@@ -177,13 +206,39 @@ export async function fetchGoogleCalendarBusyTimes(
 }
 
 /**
- * Push a booking to Google Calendar as an event.
+ * Fetch all sub-calendars for the connected Google Account.
+ * Allows user to choose which calendars to check for conflicts and which to write to.
+ */
+export async function fetchUserSubCalendars(tenantId: string): Promise<Array<{
+  id: string;
+  summary: string;
+  description?: string;
+  primary?: boolean;
+  backgroundColor?: string;
+  accessRole?: string;
+}>> {
+  try {
+    const calendar = await getCalendarClient(tenantId);
+    const res = await calendar.calendarList.list();
+    const items = res.data.items || [];
+    return items.map((item) => ({
+      id: item.id || '',
+      summary: item.summary || 'Untitled Calendar',
+      description: item.description || undefined,
+      primary: Boolean(item.primary),
+      backgroundColor: item.backgroundColor || '#4285F4',
+      accessRole: item.accessRole || 'reader',
+    }));
+  } catch (error) {
+    console.error('[google-calendar] Failed to list sub-calendars:', error);
+    return [];
+  }
+}
+
+/**
+ * Push a booking to Google Calendar with automatic Google Meet video conferencing generation.
  *
  * Called when a booking is confirmed.
- *
- * @param tenantId The tenant ID
- * @param booking The booking details
- * @returns The Google Calendar event ID (or null on failure)
  */
 export async function pushBookingToGoogleCalendar(
   tenantId: string,
@@ -195,34 +250,58 @@ export async function pushBookingToGoogleCalendar(
     location?: string;
     customerName?: string;
     customerEmail?: string;
+    generateMeetingLink?: boolean;
+    calendarId?: string;
   },
-): Promise<string | null> {
+): Promise<{ eventId: string | null; meetingUrl: string | null }> {
   try {
     const calendar = await getCalendarClient(tenantId);
+    const targetCalendarId = booking.calendarId || 'primary';
+
+    const requestBody: any = {
+      summary: booking.title,
+      description: booking.description || '',
+      start: {
+        dateTime: booking.startTime.toISOString(),
+      },
+      end: {
+        dateTime: booking.endTime.toISOString(),
+      },
+      location: booking.location || undefined,
+      attendees: booking.customerEmail ? [{ email: booking.customerEmail }] : [],
+      reminders: {
+        useDefault: true,
+      },
+    };
+
+    // Auto-generate Google Meet video conference link
+    if (booking.generateMeetingLink !== false) {
+      requestBody.conferenceData = {
+        createRequest: {
+          requestId: `meet_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
+        },
+      };
+    }
 
     const event = await calendar.events.insert({
-      calendarId: 'primary',
-      requestBody: {
-        summary: booking.title,
-        description: booking.description || '',
-        start: {
-          dateTime: booking.startTime.toISOString(),
-        },
-        end: {
-          dateTime: booking.endTime.toISOString(),
-        },
-        location: booking.location || undefined,
-        attendees: booking.customerEmail ? [{ email: booking.customerEmail }] : [],
-        reminders: {
-          useDefault: true,
-        },
-      },
+      calendarId: targetCalendarId,
+      conferenceDataVersion: 1,
+      requestBody,
     });
 
-    return event.data.id || null;
+    const meetingUrl =
+      event.data.hangoutLink ||
+      event.data.conferenceData?.entryPoints?.find((ep: any) => ep.entryPointType === 'video')?.uri ||
+      null;
+
+    return {
+      eventId: event.data.id || null,
+      meetingUrl,
+    };
   } catch (error) {
     console.error('[google-calendar] Failed to push booking:', error);
-    return null;
+    return { eventId: null, meetingUrl: null };
   }
 }
 
@@ -232,11 +311,12 @@ export async function pushBookingToGoogleCalendar(
 export async function deleteGoogleCalendarEvent(
   tenantId: string,
   eventId: string,
+  calendarId = 'primary',
 ): Promise<boolean> {
   try {
     const calendar = await getCalendarClient(tenantId);
     await calendar.events.delete({
-      calendarId: 'primary',
+      calendarId,
       eventId,
     });
     return true;

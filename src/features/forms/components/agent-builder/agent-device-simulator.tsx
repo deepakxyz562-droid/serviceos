@@ -29,6 +29,7 @@ import {
   Brain,
   Presentation,
   MessageCircle,
+  Video,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1120,6 +1121,17 @@ export function AgentDeviceSimulator({
                           {msg.card.service && <p><strong>Service:</strong> {msg.card.service}</p>}
                           {msg.card.name && <p><strong>Name:</strong> {msg.card.name}</p>}
                         </div>
+                        {msg.card.meetingUrl && (
+                          <a
+                            href={msg.card.meetingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-1.5 w-full py-1.5 px-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors"
+                          >
+                            <Video className="size-3.5" />
+                            <span>Join Google Meet</span>
+                          </a>
+                        )}
                         {msg.card.calendarUrls && (
                           <div className="flex gap-2 pt-1">
                             <a

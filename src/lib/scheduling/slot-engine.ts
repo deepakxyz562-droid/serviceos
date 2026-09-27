@@ -14,6 +14,7 @@
  */
 
 import { db } from '@/lib/db';
+import { fetchGoogleCalendarBusyTimes } from '@/lib/scheduling/google-calendar-sync';
 
 export interface TimeSlot {
   startTime: string;   // ISO 8601 datetime (UTC)
@@ -200,6 +201,20 @@ export async function calculateAvailableSlots(
           : null;
       return start && end ? { start, end } : null;
     }).filter((r): r is { start: Date; end: Date } => r !== null);
+
+    // Merge Google Calendar busy periods (checks up to 6 work/personal sub-calendars)
+    try {
+      const gcalBusy = await fetchGoogleCalendarBusyTimes(
+        tenantId,
+        dayStart.toISOString(),
+        dayEnd.toISOString()
+      );
+      if (Array.isArray(gcalBusy) && gcalBusy.length > 0) {
+        bookedRanges.push(...gcalBusy);
+      }
+    } catch (gcalErr) {
+      // Non-blocking: continue with database bookings if Google Calendar sync is offline
+    }
 
     const availableSlots = filteredSlots.filter((slot) => {
       const slotStart = new Date(slot.startTime);

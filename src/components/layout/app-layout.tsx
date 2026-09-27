@@ -119,6 +119,7 @@ const FormsDashboardView = lazy(() => import('@/components/views/forms-dashboard
 const FormsAnalyticsView = lazy(() => import('@/components/views/forms-analytics-view').then(m => ({ default: m.FormsAnalyticsView })));
 const OperationsView = lazy(() => import('@/components/views/operations-view').then(m => ({ default: m.OperationsView })));
 const CrmView = lazy(() => import('@/components/views/crm-view').then(m => ({ default: m.CrmView })));
+const SchedulingView = lazy(() => import('@/components/views/scheduling-view').then(m => ({ default: m.SchedulingView })));
 
 // Audience (enterprise CRM: Contacts → Groups → Tags → Segments → Campaigns)
 const GroupsView = lazy(() => import('@/components/views/groups-view').then(m => ({ default: m.GroupsView })));
@@ -208,6 +209,9 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   // Operations
   operations: OperationsView,
   booking: BookingView,
+  scheduling: SchedulingView,
+  meetingTypes: SchedulingView,
+  appointmentTypes: SchedulingView,
   calendar: CalendarView,
   jobs: JobsView,
   dispatch: DispatchView,
