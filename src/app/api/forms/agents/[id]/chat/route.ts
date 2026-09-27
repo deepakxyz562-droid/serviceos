@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai-client';
 import { searchKnowledgeBase } from '@/lib/ai-knowledge';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
 import { isEscalationIntent, requestHumanHandoff } from '@/lib/chat/handoff-service';
 
@@ -133,10 +134,15 @@ export async function POST(
 
     // Check for human escalation intent via unified handoff service
     if (isEscalationIntent(message)) {
+      const authUser = await getAuthUser().catch(() => null);
+      const effectiveTenantId = formRecord?.tenantId || agent.tenantId || authUser?.tenantId || null;
+      const effectiveWorkspaceId = formRecord?.workspaceId || authUser?.workspaceId || null;
+
       const handoff = await requestHumanHandoff({
-        tenantId: agent.tenantId,
-        agentId: agent.id,
-        agentName: agent.name,
+        tenantId: effectiveTenantId,
+        workspaceId: effectiveWorkspaceId,
+        agentId: agent.id && agent.id !== 'preview' ? agent.id : null,
+        agentName: agent.name || 'AI Assistant',
         formId: primaryConnectedForm?.id || null,
         message,
         history,

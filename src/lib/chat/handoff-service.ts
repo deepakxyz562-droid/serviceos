@@ -9,6 +9,7 @@
  */
 
 import { db } from '@/lib/db';
+import { createNotification } from '@/lib/notifications';
 
 export interface ChatHistoryMessage {
   role?: 'user' | 'assistant' | 'system';
@@ -210,6 +211,7 @@ export async function requestHumanHandoff(
         where: { id: session.id },
         data: {
           status: 'waiting_for_agent',
+          unreadCount: (session.unreadCount || 0) + 1,
           lastMessageAt: new Date(),
           visitorName: session.visitorName || visitorName,
           visitorEmail: session.visitorEmail || visitorEmail,
@@ -232,6 +234,7 @@ export async function requestHumanHandoff(
           visitorPhone,
           visitorFingerprint: visitor.fingerprint || null,
           status: 'waiting_for_agent',
+          unreadCount: 1,
           lastMessageAt: new Date(),
           metadataJson: JSON.stringify(metadata),
         },
@@ -279,6 +282,46 @@ export async function requestHumanHandoff(
           body: `🔔 Visitor requested live human agent escalation. Summary: ${recap}`,
         },
       }).catch(() => {});
+
+      // Dispatch urgent in-app notification to all tenant/workspace operators and admins
+      try {
+        const recipients = await db.user.findMany({
+          where: {
+            ...(tenantId ? { tenantId } : { workspaceId: effectiveWorkspaceId }),
+            role: { in: ['owner', 'admin', 'operator', 'agent'] },
+            isActive: true,
+          },
+          select: { id: true },
+        });
+
+        const snippet = message.length > 90 ? `${message.slice(0, 87)}...` : message;
+        const alertText = `${visitorName || 'A visitor'} requested live specialist assistance on ${agentName}${snippet ? `: "${snippet}"` : ''}`;
+
+        await Promise.all(
+          recipients.map((r) =>
+            createNotification({
+              tenantId: tenantId || effectiveWorkspaceId || '',
+              recipientId: r.id,
+              type: 'reminder',
+              category: 'customer',
+              title: '🔔 Live Agent Escalation',
+              message: alertText,
+              priority: 'urgent',
+              actionUrl: `/?view=liveChat&session=${liveSessionId}`,
+              actionLabel: 'Join Live Chat',
+              senderType: 'system',
+              metadataJson: JSON.stringify({
+                sessionId: liveSessionId,
+                agentName,
+                visitorName,
+                source: 'live_chat_escalation',
+              }),
+            }).catch(() => null)
+          )
+        );
+      } catch (notifErr) {
+        console.warn('[handoff-service] In-app notification creation failed:', notifErr);
+      }
     }
 
     return {

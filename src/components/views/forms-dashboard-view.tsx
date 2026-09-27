@@ -15,6 +15,7 @@ import {
   Calendar,
   Clock,
   CheckCircle2,
+  MessageSquare,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,8 @@ interface FormsDashboardStats {
   totalForms: number;
   totalSubmissions: number;
   totalBookings?: number;
+  waitingChatsCount?: number;
+  activeChatsCount?: number;
   upcomingBookings?: Array<{
     id: string;
     title: string;
@@ -135,7 +138,20 @@ export function FormsDashboardView() {
       icon: Calendar,
       color: 'text-purple-600',
       badge: 'Calendly Engine',
+      badgeClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
       onClick: () => setCurrentView('formAppointments'),
+    },
+    {
+      label: 'Live Chat',
+      value: stats?.activeChatsCount ?? 0,
+      icon: MessageSquare,
+      color: 'text-emerald-600',
+      badge: (stats?.waitingChatsCount ?? 0) > 0 ? `${stats?.waitingChatsCount} Waiting` : 'Text.com',
+      badgeClass:
+        (stats?.waitingChatsCount ?? 0) > 0
+          ? 'bg-amber-500 text-white font-bold animate-pulse'
+          : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+      onClick: () => setCurrentView('liveChat'),
     },
     {
       label: 'Conversion Rate',
@@ -173,8 +189,35 @@ export function FormsDashboardView() {
         </div>
       </div>
 
+      {/* ── HUMAN OPERATOR ESCALATION ALERT BANNER ── */}
+      {(stats?.waitingChatsCount ?? 0) > 0 && (
+        <div className="bg-amber-500/15 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in shadow-2xs">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-3 w-3 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                {stats?.waitingChatsCount} visitor(s) waiting for a live human specialist!
+              </p>
+              <p className="text-xs text-amber-800/80 dark:text-amber-300/80">
+                A customer on your website chat requested live operator assistance. Join the conversation now.
+              </p>
+            </div>
+          </div>
+          <Button
+            onClick={() => setCurrentView('liveChat')}
+            className="bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1.5 h-8 font-medium shrink-0 shadow-2xs"
+          >
+            Open Live Chat Console
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+      )}
+
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {kpiCards.map((kpi) => (
           <Card
             key={kpi.label}
@@ -187,8 +230,8 @@ export function FormsDashboardView() {
                   {kpi.label}
                 </CardTitle>
                 {kpi.badge && (
-                  <span className="text-[9px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1 py-0.5 rounded">
-                    Native
+                  <span className={cn('text-[9px] font-bold px-1 py-0.5 rounded', kpi.badgeClass || 'bg-purple-500/10 text-purple-600 dark:text-purple-400')}>
+                    {kpi.badge}
                   </span>
                 )}
               </div>

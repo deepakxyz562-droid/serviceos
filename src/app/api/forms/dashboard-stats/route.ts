@@ -147,10 +147,44 @@ export async function GET(_request: NextRequest) {
     }
   }
 
+  // Live Chat waiting and active count
+  const chatScope = [
+    ...(tenantId ? [{ tenantId }] : []),
+    ...(workspaceId ? [{ workspaceId }] : []),
+    ...(formIds.length > 0 ? [{ formId: { in: formIds } }] : []),
+  ];
+
+  let waitingChatsCount = 0;
+  let activeChatsCount = 0;
+  if (chatScope.length > 0) {
+    try {
+      const [waiting, active] = await Promise.all([
+        db.publicChatSession.count({
+          where: {
+            ...(chatScope.length > 1 ? { OR: chatScope } : chatScope[0]),
+            status: 'waiting_for_agent',
+          },
+        }),
+        db.publicChatSession.count({
+          where: {
+            ...(chatScope.length > 1 ? { OR: chatScope } : chatScope[0]),
+            status: { in: ['active', 'claimed', 'waiting_for_agent'] },
+          },
+        }),
+      ]);
+      waitingChatsCount = waiting;
+      activeChatsCount = active;
+    } catch {
+      // non-fatal
+    }
+  }
+
   return NextResponse.json({
     totalForms,
     totalSubmissions,
     totalBookings,
+    waitingChatsCount,
+    activeChatsCount,
     upcomingBookings: upcomingBookings.map((b) => ({
       id: b.id,
       title: b.title || 'Scheduled Appointment',
