@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
     // Build where clause. Customers are scoped by customerId; admins/employees
     // are scoped by tenantId (+ optional customerId filter).
     const where: Record<string, unknown> = {};
+    const andConditions: any[] = [];
 
     // Customers can only see their own bookings.
     // getAuthUser() already strips the `cust_` prefix, so user.id is the
@@ -57,7 +58,13 @@ export async function GET(request: NextRequest) {
     if (user.role === 'customer') {
       where.customerId = user.id;
     } else {
-      where.tenantId = user.tenantId;
+      andConditions.push({
+        OR: [
+          { tenantId: user.tenantId },
+          { tenantId: null },
+          { tenantId: 'preview' },
+        ],
+      });
       if (searchParams.get('customerId')) {
         where.customerId = searchParams.get('customerId');
       }
@@ -152,13 +159,19 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      where.OR = [
-        { title: { contains: search, ...CI } },
-        { customerName: { contains: search, ...CI } },
-        { customerPhone: { contains: search } },
-        { customerEmail: { contains: search, ...CI } },
-        { description: { contains: search, ...CI } },
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: search, ...CI } },
+          { customerName: { contains: search, ...CI } },
+          { customerPhone: { contains: search } },
+          { customerEmail: { contains: search, ...CI } },
+          { description: { contains: search, ...CI } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
     }
 
     const orderBy = sortBy === 'scheduledAt'

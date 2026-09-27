@@ -16,6 +16,7 @@ import {
   generateIcsCalendar,
 } from '@/lib/scheduling/calendar-helper';
 import { pushBookingToGoogleCalendar } from '@/lib/scheduling/google-calendar-sync';
+import { getAuthUser } from '@/lib/auth';
 
 export interface CustomerInput {
   name?: string | null;
@@ -155,8 +156,16 @@ export async function createAppointmentBooking(
     bypassAvailabilityCheck = false,
   } = params;
 
-  // Resolve tenantId if missing
-  let tenantId = rawTenantId;
+  // Resolve tenantId if missing or in preview
+  let tenantId = rawTenantId && rawTenantId !== 'preview' ? rawTenantId : null;
+  if (!tenantId) {
+    try {
+      const auth = await getAuthUser().catch(() => null);
+      if (auth?.tenantId) {
+        tenantId = auth.tenantId;
+      }
+    } catch {}
+  }
   if (!tenantId) {
     const firstTenant = await db.tenant.findFirst({ select: { id: true } });
     tenantId = firstTenant?.id || null;

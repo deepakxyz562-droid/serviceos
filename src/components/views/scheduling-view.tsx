@@ -40,6 +40,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/client-auth';
 import { EventType, WeeklyAvailabilitySettings, MeetingLocationType } from '@/features/scheduling/types/event-types';
 import { cn } from '@/lib/utils';
 
@@ -99,7 +100,7 @@ export function SchedulingView() {
   const fetchEventTypes = useCallback(async () => {
     setLoadingEvents(true);
     try {
-      const res = await fetch('/api/scheduling/event-types');
+      const res = await authFetch('/api/scheduling/event-types');
       if (res.ok) {
         const data = await res.json();
         setEventTypes(data.eventTypes || []);
@@ -115,7 +116,7 @@ export function SchedulingView() {
   const fetchMeetings = useCallback(async () => {
     setLoadingMeetings(true);
     try {
-      const res = await fetch('/api/bookings?limit=50');
+      const res = await authFetch('/api/bookings?limit=50');
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data.bookings) ? data.bookings : Array.isArray(data) ? data : [];
@@ -132,7 +133,7 @@ export function SchedulingView() {
   const fetchAvailability = useCallback(async () => {
     setLoadingAvailability(true);
     try {
-      const res = await fetch('/api/scheduling/availability');
+      const res = await authFetch('/api/scheduling/availability');
       if (res.ok) {
         const data = await res.json();
         setAvailability(data.availability);
@@ -148,7 +149,7 @@ export function SchedulingView() {
   const fetchCalendarSettings = useCallback(async () => {
     setLoadingCalendars(true);
     try {
-      const res = await fetch('/api/scheduling/calendars');
+      const res = await authFetch('/api/scheduling/calendars');
       if (res.ok) {
         const data = await res.json();
         setCalendarSettings(data);
@@ -186,7 +187,7 @@ export function SchedulingView() {
     const updated = { ...event, isActive: !event.isActive };
     setEventTypes((prev) => prev.map((e) => (e.id === event.id ? updated : e)));
     try {
-      await fetch(`/api/scheduling/event-types/${event.id}`, {
+      await authFetch(`/api/scheduling/event-types/${event.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: updated.isActive }),
@@ -203,7 +204,7 @@ export function SchedulingView() {
     try {
       if (editingEvent) {
         // Update existing
-        const res = await fetch(`/api/scheduling/event-types/${editingEvent.id}`, {
+        const res = await authFetch(`/api/scheduling/event-types/${editingEvent.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(eventForm),
@@ -215,7 +216,7 @@ export function SchedulingView() {
         }
       } else {
         // Create new
-        const res = await fetch('/api/scheduling/event-types', {
+        const res = await authFetch('/api/scheduling/event-types', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(eventForm),
@@ -238,7 +239,7 @@ export function SchedulingView() {
     if (!availability) return;
     setSavingAvailability(true);
     try {
-      const res = await fetch('/api/scheduling/availability', {
+      const res = await authFetch('/api/scheduling/availability', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(availability),
@@ -258,7 +259,7 @@ export function SchedulingView() {
     if (!calendarSettings) return;
     setSavingCalendars(true);
     try {
-      const res = await fetch('/api/scheduling/calendars', {
+      const res = await authFetch('/api/scheduling/calendars', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

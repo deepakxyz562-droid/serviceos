@@ -167,8 +167,10 @@ export async function POST(
       });
     }
 
-    const effectiveTenantId = formRecord?.tenantId || agent.tenantId || null;
-    const effectiveWorkspaceId = formRecord?.workspaceId || (agent as any).workspaceId || null;
+    const authUser = await getAuthUser().catch(() => null);
+    const firstTenant = await db.tenant.findFirst({ select: { id: true } }).catch(() => null);
+    const effectiveTenantId = formRecord?.tenantId || agent.tenantId || authUser?.tenantId || firstTenant?.id || null;
+    const effectiveWorkspaceId = formRecord?.workspaceId || (agent as any).workspaceId || authUser?.workspaceId || null;
 
     let replyText = '';
     let suggestedFormId: string | null = null;

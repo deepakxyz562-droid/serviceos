@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/client-auth';
 import {
   generateGoogleCalendarUrl,
   generateOutlookCalendarUrl,
@@ -66,7 +67,7 @@ export function FormAppointmentsTab() {
   const fetchBookings = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/bookings?limit=100');
+      const res = await authFetch('/api/bookings?limit=100');
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data.bookings) ? data.bookings : Array.isArray(data) ? data : [];
@@ -129,7 +130,7 @@ export function FormAppointmentsTab() {
       const duration = rescheduleBooking.duration || 30;
       const newScheduledEndTime = new Date(newScheduledAt.getTime() + duration * 60 * 1000);
 
-      const res = await fetch(`/api/bookings/${rescheduleBooking.id}`, {
+      const res = await authFetch(`/api/bookings/${rescheduleBooking.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -156,7 +157,7 @@ export function FormAppointmentsTab() {
     if (!cancelBooking) return;
     setCancelling(true);
     try {
-      const res = await fetch(`/api/bookings/${cancelBooking.id}`, {
+      const res = await authFetch(`/api/bookings/${cancelBooking.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

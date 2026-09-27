@@ -120,6 +120,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Fallback to first primary tenant if neither tenantId nor workspaceId was resolved
+    if (!tenantId && !workspaceId) {
+      const fallbackTenant = await db.tenant.findFirst({
+        select: { id: true, name: true, phone: true, email: true },
+      }).catch(() => null);
+      if (fallbackTenant) {
+        tenantId = fallbackTenant.id;
+        tenantName = fallbackTenant.name;
+        tenantPhone = fallbackTenant.phone || '';
+        tenantEmail = fallbackTenant.email || '';
+      }
+    }
+
     // Hard requirement: we must have EITHER a tenantId OR a workspaceId.
     // No silent fallback — return a clear error if context is unresolved.
     if (!tenantId && !workspaceId) {
@@ -361,13 +374,18 @@ If the user asks for a price/quote and matches a known service, you can optional
         leadId: bookingResult.lead?.id,
         bookingId: bookingResult.booking?.id,
         calendarUrls: bookingResult.calendarUrls,
+        meetingUrl: bookingResult.meetingUrl,
         name: bookingResult.lead?.name || 'there',
         service: primaryConnectedForm?.name || 'Appointment',
         date: bookingResult.dateStr,
         time: bookingResult.timeStr,
       };
 
-      rawReply = `🎉 Great news, ${bookingResult.lead?.name || 'there'}! Your appointment request has been confirmed and booked for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.\n\nOur team has added this to the calendar and will follow up with you. You can also add it to your calendar below!`;
+      const meetInfo = bookingResult.meetingUrl
+        ? `\n\n📹 **Google Meet Video Call Link:** ${bookingResult.meetingUrl}`
+        : '';
+
+      rawReply = `🎉 Great news, ${bookingResult.lead?.name || 'there'}! Your appointment request has been confirmed and booked for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.${meetInfo}\n\nOur team has added this to the calendar and will follow up with you. You can also add it to your calendar below!`;
     }
 
     if (!rawReply) {

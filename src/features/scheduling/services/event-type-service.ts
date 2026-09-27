@@ -77,25 +77,45 @@ export async function findEventTypeBySlug(
   eventSlug: string
 ): Promise<{ eventType: EventType | null; tenant: any }> {
   try {
-    // 1. Find tenant by slug or id
-    const tenant = await db.tenant.findFirst({
-      where: {
-        OR: [
-          { slug: tenantOrUserSlug },
-          { id: tenantOrUserSlug },
-        ],
-      },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        logo: true,
-        email: true,
-        phone: true,
-        featuresJson: true,
-        googleCalendarSyncEnabled: true,
-      },
-    });
+    let tenant = null;
+
+    // 1. Find tenant by slug or id if not preview
+    if (tenantOrUserSlug && tenantOrUserSlug !== 'preview') {
+      tenant = await db.tenant.findFirst({
+        where: {
+          OR: [
+            { slug: tenantOrUserSlug },
+            { id: tenantOrUserSlug },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logo: true,
+          email: true,
+          phone: true,
+          featuresJson: true,
+          googleCalendarSyncEnabled: true,
+        },
+      });
+    }
+
+    // 2. Fallback to default/primary tenant
+    if (!tenant) {
+      tenant = await db.tenant.findFirst({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          logo: true,
+          email: true,
+          phone: true,
+          featuresJson: true,
+          googleCalendarSyncEnabled: true,
+        },
+      });
+    }
 
     if (!tenant) {
       return { eventType: null, tenant: null };
@@ -106,7 +126,7 @@ export async function findEventTypeBySlug(
       (e) => e.slug.toLowerCase() === eventSlug.toLowerCase() || e.id === eventSlug
     );
 
-    return { eventType: matched || null, tenant };
+    return { eventType: matched || eventTypes[0] || null, tenant };
   } catch (err) {
     console.error('[event-type-service] findEventTypeBySlug error:', err);
     return { eventType: null, tenant: null };

@@ -95,6 +95,7 @@ export default function PublicBookingPage({
         } else {
           // If not found in dynamic tenant, provide high-fidelity fallback host & event
           setHost({
+            id: data?.host?.id || '',
             name: 'deepak chandra',
             email: 'deepakxyz159@gmail.com',
             googleCalendarConnected: true,
