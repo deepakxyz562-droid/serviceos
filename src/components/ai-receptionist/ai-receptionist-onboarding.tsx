@@ -215,7 +215,7 @@ function Step1Subscribe({ onComplete }: { onComplete: () => void }) {
           <PlanCard
             name="Starter"
             price="$29"
-            minutes="50 min"
+            minutes="150 min"
             features={['1 phone number', '1 concurrent call', '10-min max call', 'Lead capture', 'Appointment booking']}
             onSubscribe={() => handleSubscribe('AI_RECEPTIONIST_STARTER')}
             loading={loading}
@@ -223,7 +223,7 @@ function Step1Subscribe({ onComplete }: { onComplete: () => void }) {
           <PlanCard
             name="Pro"
             price="$59"
-            minutes="200 min"
+            minutes="400 min"
             features={['1 phone number', '3 concurrent calls', '10-min max call', 'All Starter features', 'Advanced analytics']}
             onSubscribe={() => handleSubscribe('AI_RECEPTIONIST_PRO')}
             loading={loading}
@@ -232,7 +232,7 @@ function Step1Subscribe({ onComplete }: { onComplete: () => void }) {
           <PlanCard
             name="Business"
             price="$129"
-            minutes="500 min"
+            minutes="1,000 min"
             features={['1 phone number', '10 concurrent calls', '10-min max call', 'All Pro features', 'Priority support']}
             onSubscribe={() => handleSubscribe('AI_RECEPTIONIST_BUSINESS')}
             loading={loading}

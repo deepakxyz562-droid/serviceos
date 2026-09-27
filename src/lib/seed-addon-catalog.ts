@@ -27,11 +27,11 @@ const ADDON_PRODUCTS = [
       {
         code: 'AI_RECEPTIONIST_STARTER',
         name: 'AI Receptionist Starter',
-        description: '50 AI voice minutes per month. 1 concurrent call. 1 phone number included.',
+        description: '150 AI voice minutes per month. 1 concurrent call. 1 phone number included.',
         price: 29.0,
         currency: 'USD',
         billingCycle: 'monthly',
-        includedSeconds: 3000, // 50 min × 60
+        includedSeconds: 9000, // 150 min × 60
         maxCallDurationSeconds: 600, // 10 min
         maxConcurrentCalls: 1,
         includedNumbers: 1,
@@ -41,11 +41,11 @@ const ADDON_PRODUCTS = [
         code: 'AI_RECEPTIONIST_PRO',
         name: 'AI Receptionist Pro',
         description:
-          '200 AI voice minutes per month. 3 concurrent calls. 1 phone number included. (Provisional — pricing subject to validation.)',
+          '400 AI voice minutes per month. 3 concurrent calls. 1 phone number included.',
         price: 59.0,
         currency: 'USD',
         billingCycle: 'monthly',
-        includedSeconds: 12000, // 200 min × 60
+        includedSeconds: 24000, // 400 min × 60
         maxCallDurationSeconds: 600,
         maxConcurrentCalls: 3,
         includedNumbers: 1,
@@ -54,11 +54,11 @@ const ADDON_PRODUCTS = [
       {
         code: 'AI_RECEPTIONIST_BUSINESS',
         name: 'AI Receptionist Business',
-        description: '500 AI voice minutes per month. 10 concurrent calls. 1 phone number included.',
+        description: '1,000 AI voice minutes per month. 10 concurrent calls. 1 phone number included.',
         price: 129.0,
         currency: 'USD',
         billingCycle: 'monthly',
-        includedSeconds: 30000, // 500 min × 60
+        includedSeconds: 60000, // 1,000 min × 60
         maxCallDurationSeconds: 600,
         maxConcurrentCalls: 10,
         includedNumbers: 1,

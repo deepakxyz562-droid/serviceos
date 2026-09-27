@@ -112,8 +112,38 @@ export function AiReceptionistWorkspace() {
     setTabInUrl(tab);
   };
 
+  const handleTestCallClick = () => {
+    if (!data.subscription) {
+      toast.error('Subscription required', {
+        description: 'Please select an AI Receptionist plan to make live test calls.',
+      });
+      handleTabChange('usage');
+      return;
+    }
+    setTestCallOpen(true);
+  };
+
+  const handleBuyNumberClick = () => {
+    if (!data.subscription) {
+      toast.error('Subscription required', {
+        description: 'Your AI Receptionist plan includes a dedicated phone line. Please select a plan first.',
+      });
+      handleTabChange('usage');
+      return;
+    }
+    setBuyDialogOpen(true);
+  };
+
   // Synchronize AI prompt, voice persona, and CRM function-calling tools with the live voice engine
   const handleSyncAgent = async () => {
+    if (!data.subscription) {
+      toast.error('Subscription required', {
+        description: 'Please select an AI Receptionist plan to activate and synchronize your live agent.',
+      });
+      handleTabChange('usage');
+      return;
+    }
+
     setSyncing(true);
     try {
       const res = await fetch('/api/addons/receptionist/deploy', {
@@ -246,7 +276,7 @@ export function AiReceptionistWorkspace() {
 
               <Button
                 size="sm"
-                onClick={() => setTestCallOpen(true)}
+                onClick={handleTestCallClick}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 text-xs h-8 sm:h-9 shadow-sm"
               >
                 <PhoneOutgoing className="size-3.5" />
@@ -310,7 +340,7 @@ export function AiReceptionistWorkspace() {
                   {!hasPhone && (
                     <Button
                       size="sm"
-                      onClick={() => setBuyDialogOpen(true)}
+                      onClick={handleBuyNumberClick}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-8"
                     >
                       <Phone className="size-3" />
@@ -355,7 +385,7 @@ export function AiReceptionistWorkspace() {
                   desc={hasPhone ? (primaryPhone?.number || 'Attached') : 'Claim your number'}
                   done={hasPhone}
                   actionLabel={hasPhone ? undefined : 'Get Number'}
-                  onAction={() => setBuyDialogOpen(true)}
+                  onAction={handleBuyNumberClick}
                 />
                 <SetupStep
                   num={4}
@@ -376,8 +406,8 @@ export function AiReceptionistWorkspace() {
             <OverviewTab
               data={data}
               onNavigate={handleTabChange}
-              onTestCall={() => setTestCallOpen(true)}
-              onBuyNumber={() => setBuyDialogOpen(true)}
+              onTestCall={handleTestCallClick}
+              onBuyNumber={handleBuyNumberClick}
             />
           )}
           {activeTab === 'receptionist' && (

@@ -46,9 +46,17 @@ async function createTenantForGoogleUser(
 
   const isStandalone = signupPlan === 'standalone_starter' || signupPlan === 'standalone_business' || requestedSignupMode === 'standalone';
   const isListing = requestedSignupMode === 'listing_only';
+  const isExplicitMode = !!requestedSignupMode || !!(requestedPlan && validPlans.includes(requestedPlan));
 
-  const signupMode = isStandalone ? 'standalone' : (isListing ? 'listing_only' : 'crm_trial');
-  const onboardingCompleted = isStandalone ? true : false;
+  // If a specific mode/plan was requested (e.g. via deep-link), assign that mode directly.
+  // Otherwise set null so the Step 0 Product Picker (SignupModeSelector: CRM vs Listing vs AI Forms)
+  // is presented upon login (matching email/password registration behavior).
+  const signupMode = isStandalone
+    ? 'standalone'
+    : (isListing
+      ? 'listing_only'
+      : (isExplicitMode ? 'crm_trial' : null));
+  const onboardingCompleted = false;
 
   const tenant = await db.tenant.create({
     data: {
@@ -59,13 +67,13 @@ async function createTenantForGoogleUser(
       planStatus: 'trial',
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
       onboardingCompleted,
-      onboardingStep: onboardingCompleted ? 4 : 1,
-      claimed: false,
-      listingTier: 'none',
+      onboardingStep: 1,
+      claimed: isStandalone ? false : true,
+      listingTier: isStandalone ? 'none' : 'claimed',
       signupMode,
       marketplaceOptIn: false,
       marketplaceTermsAcceptedAt: null,
-      publicProfileEnabled: false,
+      publicProfileEnabled: isStandalone ? false : true,
     },
   });
 
@@ -76,6 +84,7 @@ async function createTenantForGoogleUser(
       slug: `${slug}-workspace`,
       ownerId: userId,
       tenantId: tenant.id,
+      productType: isStandalone ? 'forms' : 'crm',
     },
   });
 
