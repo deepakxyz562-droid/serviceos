@@ -55,13 +55,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -83,11 +76,6 @@ import { toast } from 'sonner';
 export function GptFormClientView() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [empEmail, setEmpEmail] = useState('');
-  const [empPassword, setEmpPassword] = useState('');
-  const [empLoading, setEmpLoading] = useState(false);
-  const [empError, setEmpError] = useState<string | null>(null);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
 
   useEffect(() => {
@@ -95,31 +83,6 @@ export function GptFormClientView() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!empEmail.trim() || !empPassword) return;
-    setEmpLoading(true);
-    setEmpError(null);
-    try {
-      const res = await fetch('/api/auth/login?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: empEmail.trim(), password: empPassword }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || 'Invalid email or password');
-      }
-      toast.success('Signed in successfully');
-      setAuthModalOpen(false);
-      window.location.href = '/';
-    } catch (err) {
-      setEmpError(err instanceof Error ? err.message : 'Login failed');
-    } finally {
-      setEmpLoading(false);
-    }
-  };
 
   const getTierPrice = (base: number) => {
     if (billingPeriod === 'yearly') {
@@ -258,12 +221,12 @@ export function GptFormClientView() {
 
           {/* Right Actions */}
           <div className="hidden sm:flex items-center gap-2.5">
-            <button
-              onClick={() => setAuthModalOpen(true)}
-              className="text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted h-9 px-3.5 rounded-lg transition cursor-pointer"
+            <Link
+              href="/login?redirect=/gptform"
+              className="inline-flex items-center text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted h-9 px-3.5 rounded-lg transition"
             >
               Sign In
-            </button>
+            </Link>
 
             <Button
               asChild
@@ -334,68 +297,17 @@ export function GptFormClientView() {
               >
                 Pricing Plans
               </a>
-              <button
-                onClick={() => {
-                  setMobileOpen(false);
-                  setAuthModalOpen(true);
-                }}
-                className="w-full text-left rounded-lg p-2.5 text-xs font-semibold text-foreground hover:bg-muted cursor-pointer"
+              <Link
+                href="/login?redirect=/gptform"
+                onClick={() => setMobileOpen(false)}
+                className="w-full text-left rounded-lg p-2.5 text-xs font-semibold text-foreground hover:bg-muted block"
               >
                 Sign In
-              </button>
+              </Link>
             </nav>
           </div>
         )}
       </header>
-
-      {/* ── Auth Dialog ── */}
-      <Dialog open={authModalOpen} onOpenChange={setAuthModalOpen}>
-        <DialogContent className="max-w-sm p-6 border border-border bg-card">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-lg font-bold">Sign In to Fieseros</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Enter your credentials to access your forms and CRM dashboard.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSignIn} className="space-y-3.5 mt-2">
-            {empError && (
-              <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive">
-                {empError}
-              </div>
-            )}
-            <div>
-              <label className="text-xs font-semibold block mb-1">Work Email</label>
-              <input
-                type="email"
-                required
-                value={empEmail}
-                onChange={(e) => setEmpEmail(e.target.value)}
-                placeholder="name@company.com"
-                className="w-full h-9 rounded-lg border border-border bg-background px-3 text-xs outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold block mb-1">Password</label>
-              <input
-                type="password"
-                required
-                value={empPassword}
-                onChange={(e) => setEmpPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full h-9 rounded-lg border border-border bg-background px-3 text-xs outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-              />
-            </div>
-            <Button
-              type="submit"
-              disabled={empLoading}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 cursor-pointer"
-            >
-              {empLoading ? <Loader2 className="size-3.5 animate-spin mr-1.5" /> : <Lock className="size-3.5 mr-1.5" />}
-              {empLoading ? 'Signing In...' : 'Sign In'}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* ── SECTION 1: HERO (hero-grid) ── */}
       <section id="top" className="hero-grid relative pt-10 sm:pt-16 pb-12 sm:pb-20">
@@ -1003,8 +915,10 @@ export function GptFormClientView() {
             <div className="space-y-3">
               <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">AI &amp; Forms</h4>
               <ul className="space-y-2 text-slate-400">
+                <li><Link href="/ai-employee" className="hover:text-emerald-400 transition">24/7 AI Voice Receptionist</Link></li>
+                <li><Link href="/chatbot" className="hover:text-emerald-400 transition">AI Chatbot Builder</Link></li>
                 <li><Link href="/gptform" className="text-emerald-400 font-semibold hover:underline transition">GPTForm™ AI Platform</Link></li>
-                <li><Link href="/#ai-receptionist" className="hover:text-emerald-400 transition">24/7 AI Voice Receptionist</Link></li>
+                <li><Link href="/ai-agent" className="hover:text-emerald-400 transition">24/7 AI Employee &amp; Agent</Link></li>
                 <li><Link href="/templates" className="hover:text-emerald-400 transition">20,000+ Form Templates</Link></li>
                 <li><Link href="/templates/quote" className="hover:text-emerald-400 transition">Quote Calculators</Link></li>
               </ul>

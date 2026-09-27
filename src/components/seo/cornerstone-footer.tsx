@@ -19,6 +19,10 @@ export function CornerstoneFooter() {
     { href: "/technician-app", label: "Technician App" },
     { href: "/automations", label: "Automations" },
     { href: "/ai-employee", label: "24/7 AI Voice Receptionist" },
+    { href: "/chatbot", label: "AI Chatbot Builder" },
+    { href: "/gptform", label: "GPTForm™ Smart Forms" },
+    { href: "/templates", label: "20,000+ Form Templates" },
+    { href: "/ai-agent", label: "24/7 AI Employee & Agent" },
     { href: "/pricing", label: "Pricing Plans" },
   ];
 

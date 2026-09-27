@@ -102,6 +102,20 @@ export const solutionsLinks = {
   ],
   aiAndTools: [
     {
+      label: '24/7 AI Voice Receptionist',
+      desc: 'Autonomous voice agent answers phone calls & books jobs',
+      href: '/ai-employee',
+      icon: Bot,
+      badge: 'AI Voice',
+    },
+    {
+      label: 'AI Chatbot Builder',
+      desc: 'Autonomous website chatbot for lead capture & payments',
+      href: '/chatbot',
+      icon: Sparkles,
+      badge: 'Chatbot',
+    },
+    {
       label: 'GPTForm™ Smart Forms',
       desc: '200+ responsive widgets, photo drawing notes & 33 gateways',
       href: '/gptform',
@@ -109,18 +123,17 @@ export const solutionsLinks = {
       badge: 'New',
     },
     {
+      label: '24/7 AI Employee & Agent',
+      desc: 'Trained in 60s from your docs & website to answer & schedule',
+      href: '/ai-agent',
+      icon: Bot,
+    },
+    {
       label: '20,000+ Form Templates',
       desc: 'Jotform-parity template library with instant SEO previews',
       href: '/templates',
       icon: FileText,
       badge: '20K+',
-    },
-    {
-      label: '24/7 AI Voice Receptionist',
-      desc: 'Autonomous voice agent answers phone calls & books jobs',
-      href: '/#ai-receptionist',
-      icon: Bot,
-      badge: 'AI Voice',
     },
     {
       label: 'Free Invoice Generator',
@@ -181,15 +194,17 @@ export const solutionsLinks = {
 // Footer link groups
 export const footerLinks = {
   product: [
+    { label: '24/7 AI Voice Receptionist', href: '/ai-employee' },
+    { label: 'AI Chatbot Builder', href: '/chatbot' },
     { label: 'GPTForm™ Smart Forms', href: '/gptform' },
     { label: '20,000+ Form Templates', href: '/templates' },
+    { label: '24/7 AI Employee & Agent', href: '/ai-agent' },
     { label: 'CRM Overview', href: '/#crm-features' },
     { label: 'Scheduling & Dispatch', href: '/scheduling-and-dispatch' },
     { label: 'Invoicing & Payments', href: '/invoicing-and-payments' },
     { label: 'Customer CRM', href: '/customer-crm' },
     { label: 'Technician Mobile App', href: '/technician-app' },
     { label: 'Workflow Automations', href: '/automations' },
-    { label: 'AI Voice Receptionist', href: '/#ai-receptionist' },
     { label: 'Pricing Plans', href: '/#pricing' },
   ],
   marketplace: [

@@ -45,8 +45,10 @@ export function AiMarketingFooter() {
           <div className="space-y-3">
             <h4 className="font-semibold text-white uppercase tracking-wider text-[11px]">AI &amp; Forms</h4>
             <ul className="space-y-2 text-slate-400">
+              <li><Link href="/ai-employee" className="hover:text-emerald-400 transition">24/7 AI Voice Receptionist</Link></li>
+              <li><Link href="/chatbot" className="hover:text-emerald-400 transition">AI Chatbot Builder</Link></li>
               <li><Link href="/gptform" className="text-emerald-400 font-semibold hover:underline transition">GPTForm™ AI Platform</Link></li>
-              <li><Link href="/#ai-receptionist" className="hover:text-emerald-400 transition">24/7 AI Voice Receptionist</Link></li>
+              <li><Link href="/ai-agent" className="hover:text-emerald-400 transition">24/7 AI Employee &amp; Agent</Link></li>
               <li><Link href="/templates" className="hover:text-emerald-400 transition">20,000+ Form Templates</Link></li>
               <li><Link href="/templates/quote" className="hover:text-emerald-400 transition">Quote Calculators</Link></li>
             </ul>

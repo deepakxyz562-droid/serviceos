@@ -256,17 +256,37 @@ function Navbar({
                     {item.label}
                   </a>
                 ))}
-                <div className="pt-2 border-t border-border/60">
-                  <a
-                    href="#receptionist"
+                <div className="pt-2 border-t border-border/60 space-y-1">
+                  <Link
+                    href="/ai-employee"
                     className="flex items-center justify-between text-xs font-semibold text-primary p-2 rounded-lg hover:bg-accent"
-                    onClick={(e) => scrollToAnchor('#receptionist', e)}
+                    onClick={() => setMobileOpen(false)}
                   >
                     <span>24/7 AI Receptionist</span>
                     <span className="text-[10px] bg-accent text-accent-foreground border border-primary/20 px-2 py-0.5 rounded-full uppercase">
                       AI Voice
                     </span>
-                  </a>
+                  </Link>
+                  <Link
+                    href="/chatbot"
+                    className="flex items-center justify-between text-xs font-semibold text-primary p-2 rounded-lg hover:bg-accent"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    <span>AI Chatbot Builder</span>
+                    <span className="text-[10px] bg-accent text-accent-foreground border border-primary/20 px-2 py-0.5 rounded-full uppercase">
+                      Chatbot
+                    </span>
+                  </Link>
+                  <Link
+                    href="/gptform"
+                    className="flex items-center justify-between text-xs font-semibold text-primary p-2 rounded-lg hover:bg-accent"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    <span>GPTForm™ Smart Forms</span>
+                    <span className="text-[10px] bg-accent text-accent-foreground border border-primary/20 px-2 py-0.5 rounded-full uppercase">
+                      Forms
+                    </span>
+                  </Link>
                 </div>
               </AccordionContent>
             </AccordionItem>
