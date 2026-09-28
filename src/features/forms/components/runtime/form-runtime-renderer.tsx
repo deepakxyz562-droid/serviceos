@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { cn } from '@/lib/utils';
 import { FormSchema, FormField } from '@/lib/forms/form-schema-types';
 import { resolveFormLayout } from '@/lib/forms/resolve-form-layout';
 import { WidgetRuntimeDispatcher } from './widgets/widget-runtime-dispatcher';
