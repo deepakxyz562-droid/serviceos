@@ -62,15 +62,15 @@ export function AiMarketingHeader() {
                   Products <ChevronDown className="size-3.5 opacity-60" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-80 p-2 shadow-xl">
+              <DropdownMenuContent align="start" className="w-84 p-2 shadow-xl">
                 <DropdownMenuItem asChild>
                   <Link href="/gptform" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600">
                       <FileInput className="size-4" />
                     </div>
                     <div>
-                      <p className="font-semibold text-xs text-foreground">GPTForm™ Smart Forms</p>
-                      <p className="text-[11px] text-muted-foreground">AI form builder, live quote calculators &amp; 0% fee payments</p>
+                      <p className="font-semibold text-xs text-foreground">GPTForm™ AI Business Page</p>
+                      <p className="text-[11px] text-muted-foreground">One link to talk to customers, book calls, sell services &amp; get paid</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
@@ -81,7 +81,18 @@ export function AiMarketingHeader() {
                     </div>
                     <div>
                       <p className="font-semibold text-xs text-foreground">AI Chatbot Builder</p>
-                      <p className="text-[11px] text-muted-foreground">Autonomous chat with live CRM dispatch, booking &amp; payments</p>
+                      <p className="text-[11px] text-muted-foreground">11-channel AI chatbot with instant knowledge crawling &amp; booking</p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/ai-employee" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                    <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600">
+                      <Phone className="size-4" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-xs text-foreground">24/7 AI Voice Receptionist</p>
+                      <p className="text-[11px] text-muted-foreground">Answers inbound calls, quotes prices &amp; books appointments 24/7</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
@@ -91,41 +102,19 @@ export function AiMarketingHeader() {
                       <Bot className="size-4" />
                     </div>
                     <div>
-                      <p className="font-semibold text-xs text-foreground">AI Employee &amp; Agent</p>
-                      <p className="text-[11px] text-muted-foreground">Your website&apos;s 24/7 worker with 60s document training</p>
+                      <p className="font-semibold text-xs text-foreground">24/7 AI Employee &amp; Agent</p>
+                      <p className="text-[11px] text-muted-foreground">Autonomous CRM dispatch, instant quoting &amp; automated workflows</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <Link href="/conversational-forms" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600">
-                      <MessageSquare className="size-4" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-xs text-foreground">Conversational Forms</p>
-                      <p className="text-[11px] text-muted-foreground">1-question-at-a-time interactive forms with 3.8x completion</p>
-                    </div>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/#ai-receptionist" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
-                    <div className="p-1.5 rounded-lg bg-teal-500/10 text-teal-600">
-                      <Phone className="size-4" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-xs text-foreground">24/7 AI Voice Receptionist</p>
-                      <p className="text-[11px] text-muted-foreground">Answers phone calls, quotes prices &amp; books appointments</p>
-                    </div>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/#crm-features" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
+                  <Link href="/templates" className="flex items-start gap-2.5 p-2 rounded-md cursor-pointer">
                     <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600">
                       <Layers className="size-4" />
                     </div>
                     <div>
-                      <p className="font-semibold text-xs text-foreground">Field Service OS</p>
-                      <p className="text-[11px] text-muted-foreground">Dispatch, technician mobile app, invoicing &amp; CRM</p>
+                      <p className="font-semibold text-xs text-foreground">20,000+ Form &amp; Page Templates</p>
+                      <p className="text-[11px] text-muted-foreground">Pre-built intake forms, booking calendars, and service storefronts</p>
                     </div>
                   </Link>
                 </DropdownMenuItem>
@@ -221,7 +210,7 @@ export function AiMarketingHeader() {
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-semibold text-foreground py-1"
           >
-            ✨ GPTForm™ AI Smart Forms
+            ✨ GPTForm™ AI Business Page
           </Link>
           <Link
             href="/chatbot"
@@ -231,25 +220,25 @@ export function AiMarketingHeader() {
             🤖 AI Chatbot Builder
           </Link>
           <Link
+            href="/ai-employee"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block text-sm font-semibold text-foreground py-1"
+          >
+            📞 24/7 AI Voice Receptionist
+          </Link>
+          <Link
             href="/ai-agent"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-semibold text-foreground py-1"
           >
-            🧠 AI Employee &amp; Agent
-          </Link>
-          <Link
-            href="/conversational-forms"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block text-sm font-semibold text-foreground py-1"
-          >
-            💬 Conversational Forms
+            🧠 24/7 AI Employee &amp; Agent
           </Link>
           <Link
             href="/templates"
             onClick={() => setMobileMenuOpen(false)}
             className="block text-sm font-medium text-muted-foreground hover:text-foreground py-1"
           >
-            20,000+ Form Templates
+            📋 20,000+ Form &amp; Page Templates
           </Link>
           <Link
             href="/gptform#pricing"
