@@ -16,6 +16,7 @@ import {
   Clock,
   CheckCircle2,
   MessageSquare,
+  CalendarClock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -376,10 +377,16 @@ export function FormsDashboardView() {
                   Calendly Engine
                 </span>
               </span>
-              <Button variant="ghost" size="sm" onClick={() => setCurrentView('formAppointments')}>
-                Manage
-                <ArrowRight className="w-3 h-3 ml-2" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" className="text-xs text-blue-600 gap-1 font-semibold" onClick={() => setCurrentView('scheduling')}>
+                  <CalendarClock className="w-3.5 h-3.5" />
+                  Event Types
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setCurrentView('formAppointments')}>
+                  Manage
+                  <ArrowRight className="w-3 h-3 ml-1" />
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -421,14 +428,24 @@ export function FormsDashboardView() {
                 <p className="text-xs text-muted-foreground mt-1">
                   Add an Appointment field to any form to let customers book directly into your calendar.
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 text-xs gap-1.5 border-purple-500/30 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/30"
-                  onClick={() => setCurrentView('formAppointments')}
-                >
-                  <Calendar className="size-3.5" /> Open Calendly Booking Console
-                </Button>
+                <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1.5 border-purple-500/30 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                    onClick={() => setCurrentView('formAppointments')}
+                  >
+                    <Calendar className="size-3.5" /> Bookings Console
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1.5 border-blue-500/30 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                    onClick={() => setCurrentView('scheduling')}
+                  >
+                    <CalendarClock className="size-3.5" /> Event Types &amp; Availability
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>

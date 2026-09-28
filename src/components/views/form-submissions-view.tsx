@@ -23,6 +23,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileSpreadsheet,
+  CalendarClock,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,7 @@ import {
   FormSubmissionItem,
 } from '@/features/forms/components/submission-detail-drawer';
 import { FormAppointmentsTab } from '@/features/forms/components/appointments/form-appointments-tab';
+import { SchedulingView } from '@/components/views/scheduling-view';
 
 interface FormStats {
   total: number;
@@ -54,8 +56,8 @@ interface FormOption {
   name: string;
 }
 
-export function FormSubmissionsView({ initialTab = 'submissions' }: { initialTab?: 'submissions' | 'appointments' } = {}) {
-  const [activeMainTab, setActiveMainTab] = useState<'submissions' | 'appointments'>(initialTab);
+export function FormSubmissionsView({ initialTab = 'submissions' }: { initialTab?: 'submissions' | 'appointments' | 'scheduling' } = {}) {
+  const [activeMainTab, setActiveMainTab] = useState<'submissions' | 'appointments' | 'scheduling'>(initialTab);
   const [submissions, setSubmissions] = useState<FormSubmissionItem[]>([]);
   const [stats, setStats] = useState<FormStats>({
     total: 0,
@@ -189,7 +191,7 @@ export function FormSubmissionsView({ initialTab = 'submissions' }: { initialTab
         </div>
       </div>
 
-      {/* ─── Mode Switcher: Submissions vs Calendly Appointments Engine ─── */}
+      {/* ─── Mode Switcher: Submissions vs Calendly Appointments Engine vs Event Types ─── */}
       <div className="flex items-center gap-2 border-b border-border/80 pb-2">
         <button
           onClick={() => setActiveMainTab('submissions')}
@@ -220,9 +222,23 @@ export function FormSubmissionsView({ initialTab = 'submissions' }: { initialTab
             Native
           </span>
         </button>
+
+        <button
+          onClick={() => setActiveMainTab('scheduling')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+            activeMainTab === 'scheduling'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+          }`}
+        >
+          <CalendarClock className="size-4 text-blue-600" />
+          Event Types &amp; Calendly Setup
+        </button>
       </div>
 
-      {activeMainTab === 'appointments' ? (
+      {activeMainTab === 'scheduling' ? (
+        <SchedulingView />
+      ) : activeMainTab === 'appointments' ? (
         <FormAppointmentsTab />
       ) : (
         <>

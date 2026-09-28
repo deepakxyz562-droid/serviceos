@@ -178,6 +178,7 @@ const ownerNavSections: NavSection[] = [
     title: 'AI & Forms',
     items: [
       { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
+      { view: 'scheduling', label: 'Scheduling (Calendly)', icon: CalendarClock },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
     ],
@@ -231,12 +232,22 @@ const standaloneNavSections: NavSection[] = [
     items: [
       { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
       { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
+      { view: 'scheduling', label: 'Scheduling (Calendly)', icon: CalendarClock },
       { view: 'formSubmissions', label: 'Submissions', icon: Inbox },
       { view: 'formAppointments', label: 'Appointments', icon: Calendar },
       { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
       { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
       { view: 'aiReceptionist', label: 'AI Employee', icon: PhoneCall },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+    ],
+  },
+  {
+    title: 'CRM & Pipeline',
+    items: [
+      { view: 'leads', label: 'Leads', icon: Target },
+      { view: 'customers', label: 'Customers & Contacts', icon: Users },
+      { view: 'booking', label: 'CRM Bookings', icon: CalendarCheck },
+      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
     ],
   },
   {
@@ -249,6 +260,7 @@ const standaloneNavSections: NavSection[] = [
     title: 'Account',
     items: [
       { view: 'billing', label: 'Plan & Billing', icon: CreditCard },
+      { view: 'settings', label: 'Settings', icon: Settings },
     ],
   },
 ];

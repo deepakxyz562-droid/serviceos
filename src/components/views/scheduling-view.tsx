@@ -62,6 +62,7 @@ export function SchedulingView() {
     slug: string;
     duration: number;
     locationType: MeetingLocationType;
+    locationDetails?: string;
     description: string;
     color: string;
   }>({
@@ -69,6 +70,7 @@ export function SchedulingView() {
     slug: '30min',
     duration: 30,
     locationType: 'google_meet',
+    locationDetails: '',
     description: '30 min • Google Meet • One-on-One',
     color: '#2563EB',
   });
@@ -251,6 +253,44 @@ export function SchedulingView() {
       toast.error('Failed to save availability');
     } finally {
       setSavingAvailability(false);
+    }
+  };
+
+  // Delete Event Type
+  const handleDeleteEvent = async (id: string, title: string) => {
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+    try {
+      const res = await authFetch(`/api/scheduling/event-types/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        toast.success(`Event type "${title}" deleted`);
+        fetchEventTypes();
+      } else {
+        toast.error('Failed to delete event type');
+      }
+    } catch {
+      toast.error('Failed to delete event type');
+    }
+  };
+
+  // Cancel Meeting
+  const handleCancelMeeting = async (id: string) => {
+    if (!confirm('Are you sure you want to cancel this meeting?')) return;
+    try {
+      const res = await authFetch(`/api/bookings/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+      if (res.ok) {
+        toast.success('Meeting has been cancelled');
+        fetchMeetings();
+      } else {
+        toast.error('Failed to cancel meeting');
+      }
+    } catch {
+      toast.error('Failed to cancel meeting');
     }
   };
 
@@ -474,6 +514,7 @@ export function SchedulingView() {
                             slug: evt.slug,
                             duration: evt.duration,
                             locationType: evt.locationType,
+                            locationDetails: evt.locationDetails || '',
                             description: evt.description || '',
                             color: evt.color,
                           });
@@ -483,6 +524,17 @@ export function SchedulingView() {
                         title="Edit Event Type"
                       >
                         <Edit2 className="size-3.5" />
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteEvent(evt.id, evt.title)}
+                        className="size-8 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        title="Delete Event Type"
+                      >
+                        <Trash2 className="size-3.5" />
                       </Button>
                     </div>
                   </CardContent>
@@ -554,8 +606,16 @@ export function SchedulingView() {
                       <div className="space-y-0.5">
                         <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                           <span>{m.title}</span>
-                          <Badge variant="outline" className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border-emerald-200">
-                            Confirmed
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'text-[10px] font-semibold',
+                              m.status === 'cancelled'
+                                ? 'text-red-600 bg-red-50 border-red-200'
+                                : 'text-emerald-600 bg-emerald-50 border-emerald-200'
+                            )}
+                          >
+                            {m.status ? m.status.charAt(0).toUpperCase() + m.status.slice(1) : 'Confirmed'}
                           </Badge>
                         </h4>
                         <p className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
@@ -583,8 +643,19 @@ export function SchedulingView() {
                         </a>
                       ) : (
                         <Badge variant="secondary" className="text-xs">
-                          In-Person / Phone
+                          {m.serviceName || 'In-Person / Phone'}
                         </Badge>
+                      )}
+
+                      {m.status !== 'cancelled' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCancelMeeting(m.id)}
+                          className="text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 h-8 px-2.5 rounded-xl"
+                        >
+                          Cancel
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -618,34 +689,70 @@ export function SchedulingView() {
 
             <CardContent className="pt-4 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4 border-b">
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-foreground">Time Zone</Label>
-                  <Input
-                    value={availability?.timezone || 'America/New_York'}
-                    onChange={(e) =>
-                      setAvailability((prev) => (prev ? { ...prev, timezone: e.target.value } : null))
-                    }
-                    className="h-9 text-xs rounded-xl"
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={[
+                        'Asia/Kolkata', 'America/New_York', 'America/Chicago', 'America/Denver',
+                        'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Dubai',
+                        'Asia/Singapore', 'Australia/Sydney', 'UTC'
+                      ].includes(availability?.timezone || '') ? availability?.timezone : 'custom'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val !== 'custom') {
+                          setAvailability((prev) => (prev ? { ...prev, timezone: val } : null));
+                        }
+                      }}
+                      className="h-9 rounded-xl border bg-background px-3 text-xs font-medium flex-1"
+                    >
+                      <option value="Asia/Kolkata">Asia/Kolkata (IST - India)</option>
+                      <option value="America/New_York">America/New_York (EST - Eastern)</option>
+                      <option value="America/Chicago">America/Chicago (CST - Central)</option>
+                      <option value="America/Denver">America/Denver (MST - Mountain)</option>
+                      <option value="America/Los_Angeles">America/Los_Angeles (PST - Pacific)</option>
+                      <option value="Europe/London">Europe/London (GMT/BST - UK)</option>
+                      <option value="Europe/Paris">Europe/Paris (CET - Europe)</option>
+                      <option value="Asia/Dubai">Asia/Dubai (GST - UAE)</option>
+                      <option value="Asia/Singapore">Asia/Singapore (SGT / HK)</option>
+                      <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
+                      <option value="UTC">UTC (Universal Coordinated Time)</option>
+                      <option value="custom">Custom Timezone...</option>
+                    </select>
+
+                    <Input
+                      value={availability?.timezone || 'America/New_York'}
+                      onChange={(e) =>
+                        setAvailability((prev) => (prev ? { ...prev, timezone: e.target.value } : null))
+                      }
+                      placeholder="IANA Timezone"
+                      className="h-9 text-xs rounded-xl w-36 font-mono"
+                    />
+                  </div>
                   <p className="text-[10px] text-muted-foreground">
-                    e.g. Asia/Kolkata (IST), America/New_York (EST), America/Los_Angeles (PST)
+                    All booking slots will be computed and displayed in this timezone.
                   </p>
                 </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-foreground">Buffer Between Meetings (Minutes)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={60}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-foreground">Buffer Between Meetings</Label>
+                  <select
                     value={availability?.bufferTime || 0}
                     onChange={(e) =>
                       setAvailability((prev) => (prev ? { ...prev, bufferTime: Number(e.target.value) || 0 } : null))
                     }
-                    className="h-9 text-xs rounded-xl"
-                  />
+                    className="h-9 rounded-xl border bg-background px-3 text-xs font-medium w-full"
+                  >
+                    <option value={0}>0 minutes (No buffer)</option>
+                    <option value={5}>5 minutes gap</option>
+                    <option value={10}>10 minutes gap</option>
+                    <option value={15}>15 minutes gap</option>
+                    <option value={20}>20 minutes gap</option>
+                    <option value={30}>30 minutes gap</option>
+                    <option value={45}>45 minutes gap</option>
+                  </select>
                   <p className="text-[10px] text-muted-foreground">
-                    Extra gap between appointments for preparation or notes.
+                    Extra gap between appointments for preparation, travel, or notes.
                   </p>
                 </div>
               </div>
@@ -660,7 +767,7 @@ export function SchedulingView() {
                       day.isWorkingDay ? 'bg-card' : 'bg-slate-50 dark:bg-slate-900/40 opacity-60'
                     )}
                   >
-                    <div className="flex items-center gap-3 w-36">
+                    <div className="flex items-center gap-3 w-32 shrink-0">
                       <Switch
                         checked={day.isWorkingDay}
                         onCheckedChange={(checked) => {
@@ -676,34 +783,105 @@ export function SchedulingView() {
                     </div>
 
                     {day.isWorkingDay ? (
-                      <div className="flex items-center gap-2 text-xs">
-                        <Input
-                          type="time"
-                          value={day.startTime}
-                          onChange={(e) => {
-                            setAvailability((prev) => {
-                              if (!prev) return null;
-                              const days = [...prev.days];
-                              days[idx] = { ...days[idx], startTime: e.target.value };
-                              return { ...prev, days };
-                            });
-                          }}
-                          className="h-8 w-28 text-xs font-mono rounded-lg"
-                        />
-                        <span className="text-muted-foreground font-bold">-</span>
-                        <Input
-                          type="time"
-                          value={day.endTime}
-                          onChange={(e) => {
-                            setAvailability((prev) => {
-                              if (!prev) return null;
-                              const days = [...prev.days];
-                              days[idx] = { ...days[idx], endTime: e.target.value };
-                              return { ...prev, days };
-                            });
-                          }}
-                          className="h-8 w-28 text-xs font-mono rounded-lg"
-                        />
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-1 justify-end flex-wrap">
+                        {/* Working Hours */}
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Input
+                            type="time"
+                            value={day.startTime}
+                            onChange={(e) => {
+                              setAvailability((prev) => {
+                                if (!prev) return null;
+                                const days = [...prev.days];
+                                days[idx] = { ...days[idx], startTime: e.target.value };
+                                return { ...prev, days };
+                              });
+                            }}
+                            className="h-8 w-24 text-xs font-mono rounded-lg"
+                          />
+                          <span className="text-muted-foreground font-bold">-</span>
+                          <Input
+                            type="time"
+                            value={day.endTime}
+                            onChange={(e) => {
+                              setAvailability((prev) => {
+                                if (!prev) return null;
+                                const days = [...prev.days];
+                                days[idx] = { ...days[idx], endTime: e.target.value };
+                                return { ...prev, days };
+                              });
+                            }}
+                            className="h-8 w-24 text-xs font-mono rounded-lg"
+                          />
+                        </div>
+
+                        {/* Break Times */}
+                        {day.breakStart && day.breakEnd ? (
+                          <div className="flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 text-xs">
+                            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300">Break:</span>
+                            <Input
+                              type="time"
+                              value={day.breakStart}
+                              onChange={(e) => {
+                                setAvailability((prev) => {
+                                  if (!prev) return null;
+                                  const days = [...prev.days];
+                                  days[idx] = { ...days[idx], breakStart: e.target.value };
+                                  return { ...prev, days };
+                                });
+                              }}
+                              className="h-7 w-20 text-[11px] font-mono rounded bg-background"
+                            />
+                            <span className="text-muted-foreground font-bold">-</span>
+                            <Input
+                              type="time"
+                              value={day.breakEnd}
+                              onChange={(e) => {
+                                setAvailability((prev) => {
+                                  if (!prev) return null;
+                                  const days = [...prev.days];
+                                  days[idx] = { ...days[idx], breakEnd: e.target.value };
+                                  return { ...prev, days };
+                                });
+                              }}
+                              className="h-7 w-20 text-[11px] font-mono rounded bg-background"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setAvailability((prev) => {
+                                  if (!prev) return null;
+                                  const days = [...prev.days];
+                                  days[idx] = { ...days[idx], breakStart: null, breakEnd: null };
+                                  return { ...prev, days };
+                                });
+                              }}
+                              className="size-6 text-slate-400 hover:text-red-600 rounded-full"
+                              title="Remove Break"
+                            >
+                              ✕
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setAvailability((prev) => {
+                                if (!prev) return null;
+                                const days = [...prev.days];
+                                days[idx] = { ...days[idx], breakStart: '12:00', breakEnd: '13:00' };
+                                return { ...prev, days };
+                              });
+                            }}
+                            className="h-7 text-[11px] font-semibold text-muted-foreground hover:text-foreground px-2 border-dashed"
+                          >
+                            + Add Break
+                          </Button>
+                        )}
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground italic">Unavailable</span>
@@ -897,14 +1075,38 @@ export function SchedulingView() {
                   onChange={(e) => setEventForm({ ...eventForm, locationType: e.target.value as any })}
                   className="w-full h-9 rounded-xl border bg-background px-3 text-xs font-medium"
                 >
-                  <option value="google_meet">Google Meet (Auto-Link)</option>
+                  <option value="google_meet">Google Meet (Auto-Provisioned Link)</option>
                   <option value="phone">Phone Call</option>
                   <option value="zoom">Zoom</option>
                   <option value="teams">Microsoft Teams</option>
-                  <option value="in_person">In-Person</option>
+                  <option value="in_person">In-Person Meeting</option>
                 </select>
               </div>
             </div>
+
+            {eventForm.locationType !== 'google_meet' && (
+              <div className="space-y-1">
+                <Label className="text-xs font-bold">
+                  {eventForm.locationType === 'phone'
+                    ? 'Phone Number or Calling Instructions'
+                    : eventForm.locationType === 'in_person'
+                    ? 'Meeting Address / Physical Location'
+                    : 'Custom Conference URL / Meeting Link'}
+                </Label>
+                <Input
+                  value={eventForm.locationDetails || ''}
+                  onChange={(e) => setEventForm({ ...eventForm, locationDetails: e.target.value })}
+                  placeholder={
+                    eventForm.locationType === 'phone'
+                      ? 'e.g. Organizer will call attendee at scheduled time'
+                      : eventForm.locationType === 'in_person'
+                      ? 'e.g. 100 Main Street, Suite 400, New York, NY'
+                      : 'e.g. https://zoom.us/j/9876543210'
+                  }
+                  className="h-9 text-xs rounded-xl"
+                />
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label className="text-xs font-bold">Description / Instructions</Label>

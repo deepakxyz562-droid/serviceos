@@ -277,10 +277,32 @@ export default function PublicBookingPage({
                 <span>{eventType?.duration || 30} mins</span>
               </div>
 
-              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                <Video className="size-4 shrink-0" />
-                <span>Google Meet (Video Call)</span>
-              </div>
+              {eventType?.locationType === 'phone' ? (
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                  <Phone className="size-4 shrink-0" />
+                  <span>Phone Call</span>
+                </div>
+              ) : eventType?.locationType === 'zoom' ? (
+                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <Video className="size-4 shrink-0" />
+                  <span>Zoom Video Call</span>
+                </div>
+              ) : eventType?.locationType === 'teams' ? (
+                <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                  <Video className="size-4 shrink-0" />
+                  <span>Microsoft Teams</span>
+                </div>
+              ) : eventType?.locationType === 'in_person' ? (
+                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                  <MapPin className="size-4 shrink-0" />
+                  <span>In-Person Meeting</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                  <Video className="size-4 shrink-0" />
+                  <span>Google Meet (Video Call)</span>
+                </div>
+              )}
             </div>
 
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed whitespace-pre-line pt-2 border-t border-slate-200/60 dark:border-slate-800">
@@ -539,7 +561,7 @@ export default function PublicBookingPage({
               <div className="space-y-1">
                 <h2 className="text-xl font-black text-foreground">You are scheduled</h2>
                 <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                  A calendar invitation with video conference link has been sent to <strong>{email}</strong>.
+                  A calendar invitation and confirmation details have been sent to <strong>{email}</strong>.
                 </p>
               </div>
 
@@ -564,8 +586,8 @@ export default function PublicBookingPage({
                   </p>
                 </div>
 
-                {/* Google Meet Video Link */}
-                {confirmedBooking?.meetingUrl && (
+                {/* Google Meet or Video Link */}
+                {confirmedBooking?.meetingUrl ? (
                   <div className="pt-2 border-t">
                     <a
                       href={confirmedBooking.meetingUrl}
@@ -574,10 +596,24 @@ export default function PublicBookingPage({
                       className="flex items-center justify-center gap-1.5 w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors"
                     >
                       <Video className="size-4" />
-                      <span>Join Google Meet</span>
+                      <span>Join Video Conference</span>
                     </a>
                   </div>
-                )}
+                ) : eventType?.locationType === 'phone' ? (
+                  <div className="pt-2 border-t flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                    <Phone className="size-4 text-emerald-600 shrink-0" />
+                    <span>
+                      {eventType?.locationDetails || `Phone call: Organizer will call you at ${phone || 'your phone number'} at the scheduled time.`}
+                    </span>
+                  </div>
+                ) : eventType?.locationType === 'in_person' ? (
+                  <div className="pt-2 border-t flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                    <MapPin className="size-4 text-amber-600 shrink-0" />
+                    <span>
+                      {eventType?.locationDetails || 'In-Person meeting: Location specified in your calendar invitation.'}
+                    </span>
+                  </div>
+                ) : null}
 
                 {/* Add to Calendar links */}
                 {confirmedBooking?.calendarUrls && (

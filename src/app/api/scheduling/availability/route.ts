@@ -99,42 +99,49 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'days array is required' }, { status: 400 });
     }
 
-    // Upsert availability for each day of week
+    // Save availability for each day of week
     for (const d of days) {
-      await db.availability.upsert({
+      const existing = await db.availability.findFirst({
         where: {
-          tenantId_employeeId_dayOfWeek: {
-            tenantId: user.tenantId,
-            employeeId: null as any,
-            dayOfWeek: d.dayOfWeek,
-          },
-        },
-        update: {
-          isWorkingDay: d.isWorkingDay,
-          startTime: d.startTime || '09:00',
-          endTime: d.endTime || '17:00',
-          breakStart: d.breakStart || null,
-          breakEnd: d.breakEnd || null,
-          timezone,
-          bufferTime,
-          slotDuration,
-          leadTimeHours,
-        },
-        create: {
           tenantId: user.tenantId,
           employeeId: null,
           dayOfWeek: d.dayOfWeek,
-          isWorkingDay: d.isWorkingDay,
-          startTime: d.startTime || '09:00',
-          endTime: d.endTime || '17:00',
-          breakStart: d.breakStart || null,
-          breakEnd: d.breakEnd || null,
-          timezone,
-          bufferTime,
-          slotDuration,
-          leadTimeHours,
         },
       });
+
+      if (existing) {
+        await db.availability.update({
+          where: { id: existing.id },
+          data: {
+            isWorkingDay: Boolean(d.isWorkingDay),
+            startTime: d.startTime || '09:00',
+            endTime: d.endTime || '17:00',
+            breakStart: d.breakStart || null,
+            breakEnd: d.breakEnd || null,
+            timezone,
+            bufferTime: Number(bufferTime) || 0,
+            slotDuration: Number(slotDuration) || 30,
+            leadTimeHours: Number(leadTimeHours) || 2,
+          },
+        });
+      } else {
+        await db.availability.create({
+          data: {
+            tenantId: user.tenantId,
+            employeeId: null,
+            dayOfWeek: d.dayOfWeek,
+            isWorkingDay: Boolean(d.isWorkingDay),
+            startTime: d.startTime || '09:00',
+            endTime: d.endTime || '17:00',
+            breakStart: d.breakStart || null,
+            breakEnd: d.breakEnd || null,
+            timezone,
+            bufferTime: Number(bufferTime) || 0,
+            slotDuration: Number(slotDuration) || 30,
+            leadTimeHours: Number(leadTimeHours) || 2,
+          },
+        });
+      }
     }
 
     // Also update tenant timezone
