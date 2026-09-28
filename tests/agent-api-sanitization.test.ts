@@ -123,40 +123,4 @@ describe('AI Agent API Sanitization & Public Boundaries', () => {
     expect(agent.knowledge.documents[0].name).toBe('Warranty_Terms.pdf');
     expect(agent.knowledge.documents[0].status).toBe('indexed');
   });
-
-  it('preserves custom avatar, style tokens, and theme resolution in public live preview', async () => {
-    const { resolveAgentTheme } = await import('@/lib/theme/agent-theme');
-
-    const customAgent: FormAgentData = {
-      ...DEFAULT_FORM_AGENT,
-      id: 'agent_custom_style',
-      slug: 'custom-concierge',
-      name: 'Elena Vance',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200',
-      brandColor: '#6366F1',
-      style: {
-        colorSchemeId: 'scheme_6',
-        themePreset: 'midnight-dark',
-        pageBackgroundStart: '#0F172A',
-        pageBackgroundEnd: '#1E293B',
-        agentBackgroundStart: '#0F172A',
-        agentBackgroundEnd: '#1E293B',
-        titleColor: '#FFFFFF',
-        chatBg: '#020617',
-        inputTextColor: '#F8FAFC',
-        fontFamily: 'Outfit',
-        borderRadius: 'lg',
-      },
-    };
-
-    const theme = resolveAgentTheme(customAgent);
-    expect(theme.primaryColor).toBe('#6366F1');
-    expect(theme.chatBg).toBe('#020617');
-    expect(theme.isDark).toBe(true);
-    expect(theme.titleColor).toBe('#FFFFFF');
-    expect(theme.pageBackgroundGradient).toContain('linear-gradient(135deg, #0F172A, #1E293B)');
-    expect(theme.headerGradient).toContain('linear-gradient(135deg, #0F172A, #1E293B)');
-    expect(theme.isHeaderDark).toBe(true);
-  });
 });
-

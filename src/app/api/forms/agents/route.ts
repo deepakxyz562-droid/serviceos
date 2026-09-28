@@ -27,14 +27,7 @@ export async function GET(request: NextRequest) {
         OR: [{ id: identifier }, { slug: identifier }],
       };
       if (user?.tenantId) {
-        whereClause.AND = [
-          {
-            OR: [
-              { tenantId: user.tenantId },
-              { tenantId: null },
-            ],
-          },
-        ];
+        whereClause.tenantId = user.tenantId;
       }
 
       const agent = await db.formAgent.findFirst({ where: whereClause });
@@ -48,15 +41,14 @@ export async function GET(request: NextRequest) {
           id: agent.id,
           tenantId: agent.tenantId || undefined,
           slug: agent.slug,
-          name: agent.name || config.name || DEFAULT_FORM_AGENT.name,
-          roleTitle: agent.roleTitle || config.roleTitle || DEFAULT_FORM_AGENT.roleTitle,
-          avatarUrl: agent.avatarUrl || config.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl,
-          statusText: agent.statusText || config.statusText || 'Online',
-          brandColor: agent.brandColor || config.brandColor || DEFAULT_FORM_AGENT.brandColor,
-          voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
-          welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
-          greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
-          style: config.style || DEFAULT_FORM_AGENT.style,
+          name: agent.name,
+          roleTitle: agent.roleTitle,
+          avatarUrl: agent.avatarUrl,
+          statusText: agent.statusText,
+          brandColor: agent.brandColor,
+          voiceTone: agent.voiceTone as FormAgentData['voiceTone'],
+          welcomeGreeting: agent.welcomeGreeting,
+          greetingSubtitle: agent.greetingSubtitle || undefined,
           updatedAt: agent.updatedAt.toISOString(),
         };
         return NextResponse.json({ agent: merged });
@@ -67,14 +59,7 @@ export async function GET(request: NextRequest) {
 
     // List all agents for the tenant
     const agents = await db.formAgent.findMany({
-      where: user?.tenantId
-        ? {
-            OR: [
-              { tenantId: user.tenantId },
-              { tenantId: null },
-            ],
-          }
-        : {},
+      where: user?.tenantId ? { tenantId: user.tenantId } : {},
       orderBy: { createdAt: 'desc' },
     });
 
@@ -87,15 +72,14 @@ export async function GET(request: NextRequest) {
           id: agent.id,
           tenantId: agent.tenantId || undefined,
           slug: agent.slug,
-          name: agent.name || config.name || DEFAULT_FORM_AGENT.name,
-          roleTitle: agent.roleTitle || config.roleTitle || DEFAULT_FORM_AGENT.roleTitle,
-          avatarUrl: agent.avatarUrl || config.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl,
-          statusText: agent.statusText || config.statusText || 'Online',
-          brandColor: agent.brandColor || config.brandColor || DEFAULT_FORM_AGENT.brandColor,
-          voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
-          welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
-          greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
-          style: config.style || DEFAULT_FORM_AGENT.style,
+          name: agent.name,
+          roleTitle: agent.roleTitle,
+          avatarUrl: agent.avatarUrl,
+          statusText: agent.statusText,
+          brandColor: agent.brandColor,
+          voiceTone: agent.voiceTone as FormAgentData['voiceTone'],
+          welcomeGreeting: agent.welcomeGreeting,
+          greetingSubtitle: agent.greetingSubtitle || undefined,
           updatedAt: agent.updatedAt.toISOString(),
         } as FormAgentData;
       });
@@ -144,21 +128,20 @@ export async function POST(request: NextRequest) {
       ...restConfig
     } = body;
 
-    const effectiveAvatar = avatarUrl || (body.style as any)?.avatarUrl || body.avatarUrl || '';
-    const effectiveBrandColor = brandColor || (body.style as any)?.primaryColor || body.brandColor || '#059669';
-
     // Check if an agent already exists by ID or by slug
     let existing = null;
     if (body.id) {
       existing = await db.formAgent.findFirst({
         where: {
           OR: [{ id: body.id }, ...(body.slug ? [{ slug: body.slug }] : [])],
+          ...(tenantId ? { tenantId } : {}),
         },
       });
     } else if (body.slug) {
       existing = await db.formAgent.findFirst({
         where: {
           slug: body.slug,
+          ...(tenantId ? { tenantId } : {}),
         },
       });
     }
@@ -171,19 +154,13 @@ export async function POST(request: NextRequest) {
           slug: body.slug || existing.slug,
           name,
           roleTitle: roleTitle || 'AI Assistant',
-          avatarUrl: effectiveAvatar,
+          avatarUrl: avatarUrl || '',
           statusText: statusText || 'Online',
-          brandColor: effectiveBrandColor,
+          brandColor: brandColor || '#059669',
           voiceTone: voiceTone || 'friendly',
           welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
           greetingSubtitle: greetingSubtitle || null,
-          configJson: {
-            ...body,
-            id: existing.id,
-            slug: body.slug || existing.slug,
-            avatarUrl: effectiveAvatar,
-            brandColor: effectiveBrandColor,
-          } as unknown as object,
+          configJson: body as unknown as object,
         },
       });
 
@@ -193,8 +170,6 @@ export async function POST(request: NextRequest) {
           ...body,
           id: updated.id,
           slug: updated.slug,
-          avatarUrl: effectiveAvatar,
-          brandColor: effectiveBrandColor,
           updatedAt: updated.updatedAt.toISOString(),
         },
       });
@@ -213,18 +188,13 @@ export async function POST(request: NextRequest) {
         slug: resolvedSlug,
         name,
         roleTitle: roleTitle || 'AI Assistant',
-        avatarUrl: effectiveAvatar,
+        avatarUrl: avatarUrl || '',
         statusText: statusText || 'Online',
-        brandColor: effectiveBrandColor,
+        brandColor: brandColor || '#059669',
         voiceTone: voiceTone || 'friendly',
         welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
         greetingSubtitle: greetingSubtitle || null,
-        configJson: {
-          ...body,
-          slug: resolvedSlug,
-          avatarUrl: effectiveAvatar,
-          brandColor: effectiveBrandColor,
-        } as unknown as object,
+        configJson: { ...body, slug: resolvedSlug } as unknown as object,
       },
     });
 
@@ -234,8 +204,6 @@ export async function POST(request: NextRequest) {
         ...body,
         id: created.id,
         slug: created.slug,
-        avatarUrl: effectiveAvatar,
-        brandColor: effectiveBrandColor,
         updatedAt: created.updatedAt.toISOString(),
       },
     });
