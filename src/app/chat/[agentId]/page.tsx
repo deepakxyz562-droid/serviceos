@@ -224,8 +224,8 @@ export default function PublicChatPage() {
         background: theme.pageBackgroundGradient,
       }}
     >
-      {/* Top Toggle Switch (only if explicitly launched with ?view=widget) */}
-      {initialViewParam === 'widget' && (layoutMode === 'floating' || isSidebar) && (
+      {/* Top Toggle Switch */}
+      {(layoutMode === 'floating' || isSidebar) && (
         <div className="mb-3">
           <Button
             variant="outline"

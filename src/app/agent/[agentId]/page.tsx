@@ -175,8 +175,8 @@ export default function StandaloneAgentPage() {
         background: theme.pageBackgroundGradient,
       }}
     >
-      {/* Return to Floating View button only if explicitly opened with ?view=widget */}
-      {initialViewParam === 'widget' && layoutMode === 'floating' && (
+      {/* Return to Floating View button if agent is configured for floating layout */}
+      {layoutMode === 'floating' && (
         <div className="mb-3">
           <Button
             variant="outline"
