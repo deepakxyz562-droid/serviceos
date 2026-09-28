@@ -76,6 +76,7 @@ const ExpensesView = lazy(() => import('@/components/views/expenses-view').then(
 const CredentialsView = lazy(() => import('@/components/views/credentials-view').then(m => ({ default: m.CredentialsView })));
 const IntegrationsView = lazy(() => import('@/components/views/integrations-view').then(m => ({ default: m.IntegrationsView })));
 const SettingsView = lazy(() => import('@/components/views/settings-view').then(m => ({ default: m.SettingsView })));
+const GptFormSettingsView = lazy(() => import('@/components/views/gptform-settings-view').then(m => ({ default: m.GptFormSettingsView })));
 const BrandBrainView = lazy(() => import('@/components/views/tenant/brand-brain-view').then(m => ({ default: m.BrandBrainView })));
 const ReportsView = lazy(() => import('@/components/views/reports-view').then(m => ({ default: m.ReportsView })));
 const ActivityLogsView = lazy(() => import('@/components/views/activity-logs-view').then(m => ({ default: m.ActivityLogsView })));
@@ -175,9 +176,22 @@ export function MarketplaceDashboardRouter() {
   );
 }
 
+function UnifiedSettingsView(props: any) {
+  const auth = useAppStore((s) => s.auth);
+  const isStandalone =
+    (auth.tenant as any)?.signupMode === 'forms_standalone' ||
+    String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
+    (auth.user as any)?.role === 'standalone_user';
+
+  if (isStandalone) {
+    return <GptFormSettingsView {...props} />;
+  }
+  return <SettingsView {...props} />;
+}
+
 // ─── View mapping ───────────────────────────────────────────────────────────
 
-const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
+const viewComponents: Record<string, any> = {
   // Dashboard
   dashboard: DashboardView,
   // Forms product dashboard (standalone AI Forms)
@@ -232,7 +246,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   // System
   credentials: CredentialsView,
   integrations: IntegrationsView,
-  settings: SettingsView,
+  settings: UnifiedSettingsView,
   brandBrain: BrandBrainView,
   auditLogs: ReportsView,
   activityLogs: HistoryView,

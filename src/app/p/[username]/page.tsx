@@ -36,6 +36,7 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { CreatorOffer, CreatorProfileData, buildDefaultCreatorProfile } from '@/lib/creator-profile';
+import { formatCurrency } from '@/lib/currency-resolver';
 
 export default function CreatorPublicProfilePage({
   params,
@@ -320,10 +321,9 @@ export default function CreatorPublicProfilePage({
     );
   }
 
-  const formatPrice = (price: number, currency: string) => {
+  const formatPrice = (price: number, currency?: string) => {
     if (price === 0) return 'Free';
-    const symbol = currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : '$';
-    return `${symbol}${price.toLocaleString()}`;
+    return formatCurrency(price, currency || 'USD');
   };
 
   return (
@@ -811,7 +811,9 @@ export default function CreatorPublicProfilePage({
                 <div>
                   <span className="text-[10px] text-muted-foreground block">Query Fee</span>
                   <span className="text-sm font-black text-foreground">
-                    {selectedOfferForQuestion ? formatPrice(selectedOfferForQuestion.price, selectedOfferForQuestion.currency) : '₹199'}
+                    {selectedOfferForQuestion
+                      ? formatPrice(selectedOfferForQuestion.price, selectedOfferForQuestion.currency)
+                      : 'Free'}
                   </span>
                 </div>
 

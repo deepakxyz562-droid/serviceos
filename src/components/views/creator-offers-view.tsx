@@ -16,6 +16,7 @@ import {
   Eye,
   Check,
   Package,
+  Settings,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,8 +29,15 @@ import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
 import { CreatorOffer, CreatorProfileData, DEFAULT_OFFERS } from '@/lib/creator-profile';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
+import { CURRENCIES, currencyMap, formatCurrency, resolveEffectiveCurrency } from '@/lib/currency-resolver';
 
 export function CreatorOffersView({ embedded = false }: { embedded?: boolean } = {}) {
+  const auth = useAppStore((s) => s.auth);
+  const setActiveView = useAppStore((s) => s.setActiveView);
+  const effectiveCurrency = resolveEffectiveCurrency(auth?.tenant?.currency);
+  const currencySymbol = currencyMap[effectiveCurrency]?.symbol || '$';
+
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,8 +50,8 @@ export function CreatorOffersView({ embedded = false }: { embedded?: boolean } =
     slug: '',
     type: 'one_on_one',
     description: '',
-    price: 999,
-    currency: 'INR',
+    price: effectiveCurrency === 'INR' ? 999 : 49,
+    currency: effectiveCurrency,
     durationMinutes: 30,
     eventSlug: '30min',
     turnaroundHours: 24,
@@ -161,10 +169,10 @@ export function CreatorOffersView({ embedded = false }: { embedded?: boolean } =
     await handleSaveOffers(nextOffers);
   };
 
-  const formatPrice = (price: number, currency: string) => {
+  const formatPrice = (price: number, currency?: string) => {
     if (price === 0) return 'Free';
-    const symbol = currency === 'INR' ? '₹' : currency === 'EUR' ? '€' : '$';
-    return `${symbol}${price.toLocaleString()}`;
+    const c = currency || effectiveCurrency;
+    return formatCurrency(price, c);
   };
 
   return (
@@ -203,8 +211,8 @@ export function CreatorOffersView({ embedded = false }: { embedded?: boolean } =
                 slug: '',
                 type: 'one_on_one',
                 description: '',
-                price: 999,
-                currency: 'INR',
+                price: effectiveCurrency === 'INR' ? 999 : 49,
+                currency: effectiveCurrency,
                 durationMinutes: 30,
                 eventSlug: '30min',
                 turnaroundHours: 24,
@@ -237,8 +245,20 @@ export function CreatorOffersView({ embedded = false }: { embedded?: boolean } =
           </p>
         </Card>
         <Card className="p-4 rounded-2xl border">
-          <p className="text-xs text-muted-foreground">Primary Currency</p>
-          <p className="text-xl font-black text-blue-600">INR (₹)</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Primary Currency</p>
+            <button
+              type="button"
+              onClick={() => setActiveView('settings')}
+              className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer"
+            >
+              <span>Change</span>
+              <Settings className="size-2.5" />
+            </button>
+          </div>
+          <p className="text-xl font-black text-blue-600">
+            {effectiveCurrency} ({currencySymbol})
+          </p>
         </Card>
         <Card className="p-4 rounded-2xl border">
           <p className="text-xs text-muted-foreground">Payments Supported</p>
@@ -394,13 +414,15 @@ export function CreatorOffersView({ embedded = false }: { embedded?: boolean } =
               <div className="space-y-1">
                 <Label className="text-xs font-bold">Currency</Label>
                 <select
-                  value={offerForm.currency || 'INR'}
+                  value={offerForm.currency || effectiveCurrency}
                   onChange={(e) => setOfferForm({ ...offerForm, currency: e.target.value as any })}
                   className="w-full h-9 rounded-xl border bg-background px-3 text-xs font-medium font-mono"
                 >
-                  <option value="INR">INR (₹) - India</option>
-                  <option value="USD">USD ($) - Global</option>
-                  <option value="EUR">EUR (€) - Europe</option>
+                  {CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code} ({c.symbol}) — {c.name}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

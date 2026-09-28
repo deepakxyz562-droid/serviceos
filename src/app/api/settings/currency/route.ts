@@ -48,7 +48,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    if (authUser.role !== 'owner' && authUser.role !== 'admin') {
+    if (authUser.role !== 'owner' && authUser.role !== 'admin' && (authUser.role as string) !== 'standalone_user') {
       return NextResponse.json({ error: 'Only owners and admins can update currency settings' }, { status: 403 });
     }
 
