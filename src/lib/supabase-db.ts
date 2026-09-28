@@ -1094,7 +1094,7 @@ function applyOrderBy(
 
 // ── Helper: Convert dates to ISO strings in data objects ───────────────────
 
-function serializeData(data: Record<string, unknown>, currentRow?: Record<string, unknown>): Record<string, unknown> {
+export function serializeData(data: Record<string, unknown>, currentRow?: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
     if (value instanceof Date) {
@@ -1104,23 +1104,33 @@ function serializeData(data: Record<string, unknown>, currentRow?: Record<string
     } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
       // Handle Prisma atomic operations: { increment: N }, { decrement: N }, { multiply: N }, { divide: N }, { set: V }
       const op = value as Record<string, unknown>;
-      if ('increment' in op) {
-        const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
-        result[key] = (current as number) + (op.increment as number);
-      } else if ('decrement' in op) {
-        const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
-        result[key] = (current as number) - (op.decrement as number);
-      } else if ('multiply' in op) {
-        const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
-        result[key] = (current as number) * (op.multiply as number);
-      } else if ('divide' in op) {
-        const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
-        result[key] = (current as number) / (op.divide as number);
-      } else if ('set' in op) {
-        result[key] = op.set;
+      const opKeys = Object.keys(op);
+      const isPrismaAtomic = opKeys.length === 1 && (
+        'increment' in op ||
+        'decrement' in op ||
+        'multiply' in op ||
+        'divide' in op ||
+        'set' in op
+      );
+      if (isPrismaAtomic) {
+        if ('increment' in op) {
+          const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
+          result[key] = (current as number) + (op.increment as number);
+        } else if ('decrement' in op) {
+          const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
+          result[key] = (current as number) - (op.decrement as number);
+        } else if ('multiply' in op) {
+          const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
+          result[key] = (current as number) * (op.multiply as number);
+        } else if ('divide' in op) {
+          const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
+          result[key] = (current as number) / (op.divide as number);
+        } else if ('set' in op) {
+          result[key] = op.set;
+        }
       } else {
-        // Unknown object — skip it rather than sending a malformed value
-        console.warn(`[SupabaseDB] serializeData: skipping unrecognized atomic operation on field "${key}":`, value);
+        // Plain JSON object / JSONB column (e.g. configJson) — pass through to PostgREST
+        result[key] = value;
       }
     } else {
       result[key] = value;

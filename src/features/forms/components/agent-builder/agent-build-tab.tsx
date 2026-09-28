@@ -55,18 +55,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-
-// 8 Curated Color Schemes with Letter 'A' (Matching Screenshot 2)
-const COLOR_SCHEMES = [
-  { id: 'scheme_1', name: 'Sky White', bg: '#C5E3FA', endBg: '#D6E1E7', titleColor: '#0A1551', textBg: '#FFFFFF', letterColor: '#0284c7', isDark: false },
-  { id: 'scheme_2', name: 'Emerald Mint', bg: '#D1FAE5', endBg: '#E0F2FE', titleColor: '#064E3B', textBg: '#FFFFFF', letterColor: '#059669', isDark: false },
-  { id: 'scheme_3', name: 'Warm Amber', bg: '#FFEDD5', endBg: '#FEF3C7', titleColor: '#7C2D12', textBg: '#FFFFFF', letterColor: '#EA580C', isDark: false },
-  { id: 'scheme_4', name: 'Slate Dark', bg: '#E2E8F0', endBg: '#CBD5E1', titleColor: '#0F172A', textBg: '#334155', letterColor: '#F8FAFC', isDark: true },
-  { id: 'scheme_5', name: 'Olive Lime', bg: '#ECFCCB', endBg: '#F7FEE7', titleColor: '#365314', textBg: '#FFFFFF', letterColor: '#65A30D', isDark: false },
-  { id: 'scheme_6', name: 'Midnight Blue', bg: '#0F172A', endBg: '#1E293B', titleColor: '#FFFFFF', textBg: '#020617', letterColor: '#60A5FA', isDark: true },
-  { id: 'scheme_7', name: 'Magenta Berry', bg: '#FCE7F3', endBg: '#F3E8FF', titleColor: '#831843', textBg: '#831843', letterColor: '#FDF2F8', isDark: true },
-  { id: 'scheme_8', name: 'Royal Purple', bg: '#EDE9FE', endBg: '#DDD6FE', titleColor: '#4C1D95', textBg: '#4C1D95', letterColor: '#F5F3FF', isDark: true },
-];
+import { COLOR_SCHEMES } from '@/lib/theme/agent-theme';
 
 interface AgentBuildTabProps {
   agent: FormAgentData;
@@ -661,7 +650,7 @@ export function AgentBuildTab({
                         onClick={() => applyColorScheme(scheme)}
                         className={cn(
                           'p-2 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-center gap-1 aspect-square relative',
-                          agent.brandColor === scheme.letterColor
+                          (agent.style?.colorSchemeId === scheme.id || (!agent.style?.colorSchemeId && agent.brandColor === scheme.letterColor))
                             ? 'border-purple-500 ring-2 ring-purple-500/20 shadow-md scale-105'
                             : 'border-slate-800 hover:border-slate-700 bg-slate-800/40'
                         )}

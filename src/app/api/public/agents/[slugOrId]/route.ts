@@ -15,6 +15,22 @@ function toIsoString(val: unknown): string {
   }
 }
 
+function parseConfigJson(raw: unknown): Partial<FormAgentData> {
+  if (!raw) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Partial<FormAgentData>;
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 export interface PublicAgentConfig {
   id: string;
   slug: string;
@@ -53,7 +69,11 @@ export interface PublicAgentConfig {
  */
 function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
   const effectiveAvatar = agent.avatarUrl || (agent.style as any)?.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
-  const effectiveBrandColor = agent.brandColor || (agent.style as any)?.primaryColor || DEFAULT_FORM_AGENT.brandColor;
+  const effectiveBrandColor = agent.brandColor || (agent.style as any)?.letterColor || (agent.style as any)?.primaryColor || DEFAULT_FORM_AGENT.brandColor;
+  const mergedStyle = {
+    ...DEFAULT_FORM_AGENT.style,
+    ...(agent.style || {}),
+  };
 
   return {
     id: agent.id,
@@ -75,7 +95,7 @@ function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
       presentationEnabled: false,
       whatsappEnabled: false,
     },
-    style: agent.style || DEFAULT_FORM_AGENT.style,
+    style: mergedStyle,
     settings: {
       fileUploadEnabled: agent.settings?.fileUploadEnabled ?? true,
       allowScreenSharing: agent.settings?.allowScreenSharing ?? false,
@@ -189,9 +209,9 @@ export async function GET(
       );
     }
 
-    const config = (agent.configJson as Partial<FormAgentData>) || {};
-    const effectiveAvatar = config.avatarUrl || agent.avatarUrl || (config.style as any)?.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
-    const effectiveBrandColor = config.brandColor || agent.brandColor || (config.style as any)?.primaryColor || DEFAULT_FORM_AGENT.brandColor;
+    const config = parseConfigJson(agent.configJson);
+    const effectiveAvatar = config.avatarUrl || (config.style as any)?.avatarUrl || agent.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
+    const effectiveBrandColor = config.brandColor || (config.style as any)?.letterColor || (config.style as any)?.primaryColor || agent.brandColor || DEFAULT_FORM_AGENT.brandColor;
     const merged: FormAgentData = {
       ...DEFAULT_FORM_AGENT,
       ...config,
@@ -206,7 +226,10 @@ export async function GET(
       voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
       welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
       greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
-      style: config.style || (agent as any).style || DEFAULT_FORM_AGENT.style,
+      style: {
+        ...DEFAULT_FORM_AGENT.style,
+        ...(config.style || (agent as any).style || {}),
+      },
       updatedAt: toIsoString(agent.updatedAt),
     };
 

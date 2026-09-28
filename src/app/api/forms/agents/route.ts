@@ -16,6 +16,22 @@ function toIsoString(val: unknown): string {
   }
 }
 
+function parseConfigJson(raw: unknown): Partial<FormAgentData> {
+  if (!raw) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Partial<FormAgentData>;
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 /**
  * GET /api/forms/agents
  * List all agents for the authenticated tenant, or fetch a single agent by id/slug.
@@ -48,9 +64,9 @@ export async function GET(request: NextRequest) {
 
       if (agent) {
         // Merge DB row with the configJson (which contains the full FormAgentData)
-        const config = (agent.configJson as Partial<FormAgentData>) || {};
-        const effectiveAvatar = agent.avatarUrl || config.avatarUrl || (config.style as any)?.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
-        const effectiveBrandColor = agent.brandColor || config.brandColor || (config.style as any)?.primaryColor || DEFAULT_FORM_AGENT.brandColor;
+        const config = parseConfigJson(agent.configJson);
+        const effectiveAvatar = config.avatarUrl || (config.style as any)?.avatarUrl || agent.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
+        const effectiveBrandColor = config.brandColor || (config.style as any)?.letterColor || (config.style as any)?.primaryColor || agent.brandColor || DEFAULT_FORM_AGENT.brandColor;
         const merged: FormAgentData = {
           ...DEFAULT_FORM_AGENT,
           ...config,
@@ -65,7 +81,10 @@ export async function GET(request: NextRequest) {
           voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
           welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
           greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
-          style: config.style || DEFAULT_FORM_AGENT.style,
+          style: {
+            ...DEFAULT_FORM_AGENT.style,
+            ...(config.style || {}),
+          },
           updatedAt: toIsoString(agent.updatedAt),
         };
         return NextResponse.json({ agent: merged });
@@ -89,9 +108,9 @@ export async function GET(request: NextRequest) {
 
     if (agents.length > 0) {
       const merged = agents.map((agent) => {
-        const config = (agent.configJson as Partial<FormAgentData>) || {};
-        const effectiveAvatar = agent.avatarUrl || config.avatarUrl || (config.style as any)?.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
-        const effectiveBrandColor = agent.brandColor || config.brandColor || (config.style as any)?.primaryColor || DEFAULT_FORM_AGENT.brandColor;
+        const config = parseConfigJson(agent.configJson);
+        const effectiveAvatar = config.avatarUrl || (config.style as any)?.avatarUrl || agent.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
+        const effectiveBrandColor = config.brandColor || (config.style as any)?.letterColor || (config.style as any)?.primaryColor || agent.brandColor || DEFAULT_FORM_AGENT.brandColor;
         return {
           ...DEFAULT_FORM_AGENT,
           ...config,
@@ -106,7 +125,10 @@ export async function GET(request: NextRequest) {
           voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
           welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
           greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
-          style: config.style || DEFAULT_FORM_AGENT.style,
+          style: {
+            ...DEFAULT_FORM_AGENT.style,
+            ...(config.style || {}),
+          },
           updatedAt: toIsoString(agent.updatedAt),
         } as FormAgentData;
       });
@@ -155,8 +177,12 @@ export async function POST(request: NextRequest) {
       ...restConfig
     } = body;
 
-    const effectiveAvatar = avatarUrl || body.avatarUrl || (body.style as any)?.avatarUrl || '';
-    const effectiveBrandColor = brandColor || body.brandColor || (body.style as any)?.primaryColor || '#059669';
+    const effectiveAvatar = body.avatarUrl || avatarUrl || (body.style as any)?.avatarUrl || '';
+    const effectiveBrandColor = body.brandColor || (body.style as any)?.letterColor || (body.style as any)?.primaryColor || brandColor || '#059669';
+    const mergedStyle = {
+      ...(DEFAULT_FORM_AGENT.style || {}),
+      ...(body.style || {}),
+    };
 
     // Check if an agent already exists by ID or by slug
     let existing = null;
@@ -194,6 +220,7 @@ export async function POST(request: NextRequest) {
             slug: body.slug || existing.slug,
             avatarUrl: effectiveAvatar,
             brandColor: effectiveBrandColor,
+            style: mergedStyle,
           } as unknown as object,
         },
       });
@@ -206,6 +233,7 @@ export async function POST(request: NextRequest) {
           slug: updated.slug,
           avatarUrl: effectiveAvatar,
           brandColor: effectiveBrandColor,
+          style: mergedStyle,
           updatedAt: toIsoString(updated.updatedAt),
         },
       });
@@ -235,6 +263,7 @@ export async function POST(request: NextRequest) {
           slug: resolvedSlug,
           avatarUrl: effectiveAvatar,
           brandColor: effectiveBrandColor,
+          style: mergedStyle,
         } as unknown as object,
       },
     });
@@ -247,6 +276,7 @@ export async function POST(request: NextRequest) {
         slug: created.slug,
         avatarUrl: effectiveAvatar,
         brandColor: effectiveBrandColor,
+        style: mergedStyle,
         updatedAt: toIsoString(created.updatedAt),
       },
     });
