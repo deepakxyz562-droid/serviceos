@@ -13,6 +13,7 @@ import { AgentTrainTab } from './agent-train-tab';
 import { AgentPublishTab } from './agent-publish-tab';
 import { AgentSettingsDialog } from './agent-settings-dialog';
 import { AgentPresentationHub } from './agent-presentation-hub';
+import { AgentSetupWizard } from './agent-setup-wizard';
 import {
   ArrowLeft,
   Bot,
@@ -105,6 +106,7 @@ export function FormAgentStudio({
   const [previewPage, setPreviewPage] = useState<'conversation' | 'greeting'>('conversation');
   const [isTestMode, setIsTestMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleInput, setTitleInput] = useState(agent.name);
@@ -208,7 +210,20 @@ export function FormAgentStudio({
 
   const isSidebar = agent.channels?.chatbot?.layoutMode === 'sidebar';
   const isLeftPos = agent.channels?.chatbot?.position === 'left';
-  const isPushContent = agent.channels?.chatbot?.sidebarBehavior === 'push';
+  if (showWizard) {
+    return (
+      <AgentSetupWizard
+        initialAgent={agent}
+        siteOrigin={siteOrigin}
+        onComplete={(newAgent, formId) => {
+          setAgent(newAgent);
+          setShowWizard(false);
+          handleSave(newAgent, false);
+        }}
+        onCancel={() => setShowWizard(false)}
+      />
+    );
+  }
 
   return (
     <div className="flex-1 min-h-0 flex flex-col w-full bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden select-none">
@@ -310,8 +325,18 @@ export function FormAgentStudio({
           </div>
         </div>
 
-        {/* Right: Settings + Test Mode */}
-        <div className="flex items-center gap-3">
+        {/* Right: AI Wizard + Settings + Test Mode */}
+        <div className="flex items-center gap-2.5">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setShowWizard(true)}
+            className="h-8 text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3 rounded-lg shadow-xs gap-1.5 cursor-pointer"
+          >
+            <Sparkles className="size-3.5" />
+            <span>AI Setup Wizard</span>
+          </Button>
+
           <Button
             type="button"
             variant="ghost"
