@@ -60,6 +60,7 @@ import {
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
 import { FormAgentStudio } from './agent-builder/form-agent-studio';
 import { AgentDeviceSimulator } from './agent-builder/agent-device-simulator';
+import { AgentSetupWizard } from './agent-builder/agent-setup-wizard';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '../types/agent-types';
 import { getFormContentFingerprint } from '@/features/forms/utils/form-helpers';
 import { injectMediaPanelContent } from '@/lib/forms/form-node-schema';
@@ -320,6 +321,7 @@ export function FormStudioBuilder({
   const [currentThemeId, setCurrentThemeId] = useState('fieseros-emerald');
   const [canvasMode, setCanvasMode] = useState<'form' | 'agent'>('form');
   const [copilotProcessing, setCopilotProcessing] = useState(false);
+  const [showAgentWizard, setShowAgentWizard] = useState(false);
 
   // ─── Keyboard Shortcuts (Jotform/Elementor parity) ────────────────────
   // Cmd/Ctrl+Z = Undo, Cmd/Ctrl+Shift+Z = Redo, Cmd/Ctrl+S = Save,
@@ -1155,6 +1157,24 @@ export function FormStudioBuilder({
     }
   };
 
+  if (showAgentWizard) {
+    return (
+      <AgentSetupWizard
+        initialAgent={activeAgentData}
+        siteOrigin={siteOrigin}
+        onComplete={(newAgent) => {
+          setShowAgentWizard(false);
+          onFormDataChangeWithHistory((prev) => ({
+            ...prev,
+            agentConfig: newAgent,
+          }));
+          toast.success('AI Agent configured successfully!');
+        }}
+        onCancel={() => setShowAgentWizard(false)}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 min-h-0 flex flex-col w-full h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
       {/* ═════════════════════════════════════════════════════════════════════════
@@ -1635,8 +1655,37 @@ export function FormStudioBuilder({
 
             {/* Center: Live Focus WYSIWYG split canvas OR Live AI Agent Simulator */}
             {canvasMode === 'agent' ? (
-              <div className="flex-1 min-h-0 h-full flex flex-col bg-slate-100/90 dark:bg-slate-950/80 overflow-y-auto p-4 items-center justify-center">
-                <div className="w-full max-w-xl h-full flex flex-col items-center justify-center">
+              <div className="flex-1 min-h-0 h-full flex flex-col bg-slate-100/90 dark:bg-slate-950/80 overflow-y-auto p-4 items-center">
+                <div className="w-full max-w-xl flex items-center justify-between py-2 px-1 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs font-bold gap-1 bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300 border-violet-400/40">
+                      <Bot className="size-3.5" />
+                      Live AI Agent Simulator
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setShowAgentWizard(true)}
+                      className="h-7 text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg shadow-xs gap-1.5 cursor-pointer"
+                    >
+                      <Sparkles className="size-3" />
+                      <span>✨ AI Setup Wizard</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setStudioTab('agent'); setIsPreviewMode(false); }}
+                      className="h-7 text-xs font-semibold gap-1 text-slate-700 dark:text-slate-300 rounded-lg cursor-pointer"
+                    >
+                      <Settings className="size-3" />
+                      <span>Full Studio</span>
+                    </Button>
+                  </div>
+                </div>
+                <div className="w-full max-w-xl flex-1 min-h-0 flex flex-col items-center justify-center pb-4">
                   <AgentDeviceSimulator
                     agent={activeAgentData}
                     isTestMode={true}

@@ -219,6 +219,7 @@ const viewComponents: Record<string, any> = {
   variables: VariablesView,
   executions: ExecutionsView,
   formBuilder: FormBuilderView,
+  agentStudio: (props: any) => <FormBuilderView {...props} initialAgentStudio={true} />,
   formSubmissions: FormSubmissionsView,
   formAppointments: (props: any) => <FormSubmissionsView {...props} initialTab="appointments" />,
   creatorProfile: CreatorProfileView,
@@ -492,7 +493,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     (auth?.user as any)?.role === 'standalone_user';
   const standaloneAllowedViews = useMemo(() => new Set([
     // AI Forms & Creator Suite
-    'formsDashboard', 'formBuilder', 'formSubmissions', 'formAppointments',
+    'formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments',
     'creatorProfile', 'creatorOffers',
     'scheduling', 'meetingTypes', 'appointmentTypes',
     'liveChat', 'formsAnalytics', 'aiReceptionist', 'chatbotBuilder',
@@ -535,6 +536,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     viewId === 'omnichannel' ||
     viewId === 'dispatch' ||
     viewId === 'formBuilder' ||
+    viewId === 'agentStudio' ||
     viewId === 'chatbotBuilder';
 
   // Canvas, Omnichannel, Live Dispatch, Form Builder, and Chatbot Studio views need full-height flex layout.
@@ -544,6 +546,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     currentView === 'omnichannel' ||
     currentView === 'dispatch' ||
     currentView === 'formBuilder' ||
+    currentView === 'agentStudio' ||
     currentView === 'chatbotBuilder';
 
   // ─── Full-takeover console: SuperAdmin owns the entire viewport ─────────

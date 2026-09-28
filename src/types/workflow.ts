@@ -174,6 +174,7 @@ export type ViewType =
   | 'workflows' | 'canvas' | 'triggers' | 'variables' | 'executions' | 'formBuilder' | 'workflowAutomations'
   // Forms Product (standalone AI Forms), Creator Profile & Scheduling
   | 'formsDashboard' | 'formSubmissions' | 'formAppointments' | 'formsAnalytics'
+  | 'agentStudio'
   | 'scheduling' | 'meetingTypes' | 'appointmentTypes'
   | 'creatorProfile' | 'creatorOffers'
   // Operations
