@@ -583,7 +583,13 @@ export function GptFormSettingsView() {
               <div className="space-y-2 text-xs text-muted-foreground pt-2">
                 <p className="font-semibold text-foreground">Supported Payment Methods:</p>
                 <div className="flex flex-wrap gap-2">
-                  {['UPI (PhonePe, GPay, Paytm)', 'Visa / Mastercard / Amex', 'Apple Pay', 'Google Pay', 'Net Banking', 'International Cards'].map((m) => (
+                  {[
+                    'UPI (PhonePe, GPay, Paytm, QR)',
+                    'Visa / Mastercard / Amex / RuPay',
+                    'Apple Pay',
+                    'Google Pay',
+                    'International Cards (135+ Currencies)',
+                  ].map((m) => (
                     <Badge key={m} variant="secondary" className="text-[11px] py-0.5">
                       {m}
                     </Badge>
