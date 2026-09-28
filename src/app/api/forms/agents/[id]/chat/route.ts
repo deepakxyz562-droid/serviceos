@@ -49,7 +49,7 @@ export async function POST(
       try {
         formRecord = await db.form.findFirst({
           where: { OR: [{ id: primaryConnectedForm.id }, { slug: primaryConnectedForm.id }] },
-          select: { id: true, name: true, description: true, fieldsJson: true, tenantId: true, workspaceId: true },
+          select: { id: true, name: true, description: true, fieldsJson: true, schemaJson: true, tenantId: true, workspaceId: true },
         });
 
         if (formRecord) {
@@ -105,6 +105,26 @@ export async function POST(
             if (tenant) {
               businessProfilePrompt = `BUSINESS PROFILE & OPERATING HOURS:\n- Business Name: ${tenant.name}\n- Industry / Trade: ${tenant.industry || 'Professional Services'}\n- Phone: ${tenant.phone || 'Available online'}\n- Email: ${tenant.email || ''}\n- Operating Hours & Availability:\n  * Monday – Friday: 8:00 AM – 6:00 PM\n  * Saturday: 9:00 AM – 3:00 PM\n  * Sunday: Closed for regular calls (Online booking & emergency requests accepted 24/7)\n  * Appointment scheduling & online form available 24/7 with immediate confirmation\n- Offered Services: ${extractedServices.length > 0 ? extractedServices.slice(0, 12).join(', ') : 'Custom quotes, on-site service, consultations, and professional service inquiries'}`;
             }
+          }
+        } else if (primaryConnectedForm) {
+          // If form is not yet saved to DB (e.g. in-memory studio preview), extract fields from agent config or body
+          const fallbackFields = (primaryConnectedForm as any).fields || (body as any).formSchema?.fields || [];
+          if (Array.isArray(fallbackFields) && fallbackFields.length > 0) {
+            for (const f of fallbackFields) {
+              if (f?.options && Array.isArray(f.options)) {
+                for (const opt of f.options) {
+                  const label = typeof opt === 'string' ? opt : opt?.label || opt?.value;
+                  if (label && typeof label === 'string' && label.length < 50) {
+                    extractedServices.push(label);
+                  }
+                }
+              }
+            }
+            const fieldSummaries = fallbackFields
+              .slice(0, 10)
+              .map((f: any) => `- "${f.label || f.id}" (${f.required ? 'required' : 'optional'})`)
+              .join('\n');
+            formFieldsPrompt = `Connected Form: "${primaryConnectedForm.name || 'Service Request'}" (${primaryConnectedForm.description || 'Customer inquiry'})\nFields to Collect Conversationally:\n${fieldSummaries}\n\nCONVERSATIONAL FORM FILLING INSTRUCTIONS:\nWhen a visitor expresses interest in booking, getting a quote, or requesting service, guide them conversationally through these questions 1 or 2 at a time rather than asking all at once. Validate inputs gently (e.g. verify phone or address). When key required details are provided, summarize their request warmly!`;
           }
         }
       } catch (err) {

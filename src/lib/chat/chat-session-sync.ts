@@ -48,12 +48,35 @@ export async function syncChatConversation(params: ChatSyncParams): Promise<Chat
 
   if (!session) {
     isNewSession = true;
+
+    // Verify foreign keys exist to avoid Postgres FK constraint errors
+    let validTenantId: string | null = null;
+    if (tenantId) {
+      const t = await db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } }).catch(() => null);
+      if (t) validTenantId = t.id;
+    }
+
+    let validWorkspaceId: string | null = null;
+    if (workspaceId) {
+      const w = await db.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } }).catch(() => null);
+      if (w) validWorkspaceId = w.id;
+    }
+
+    let validFormId: string | null = null;
+    if (formId) {
+      const f = await db.form.findFirst({
+        where: { OR: [{ id: formId }, { slug: formId }] },
+        select: { id: true },
+      }).catch(() => null);
+      if (f) validFormId = f.id;
+    }
+
     try {
       session = await db.publicChatSession.create({
         data: {
-          tenantId: tenantId || null,
-          workspaceId: workspaceId || null,
-          formId: formId || null,
+          tenantId: validTenantId,
+          workspaceId: validWorkspaceId,
+          formId: validFormId,
           visitorName: visitorName || 'Chat Visitor',
           visitorEmail: visitorEmail || null,
           visitorPhone: visitorPhone || null,
@@ -71,7 +94,13 @@ export async function syncChatConversation(params: ChatSyncParams): Promise<Chat
       // Fallback: return pseudo session ID if DB constraint prevents creation
       return { sessionId: incomingSessionId || `temp_${Date.now()}`, isNewSession: false };
     }
-  } else {
+  }
+
+  if (!session) {
+    return { sessionId: incomingSessionId || `temp_${Date.now()}`, isNewSession: false };
+  }
+
+  if (!isNewSession) {
     // Update existing session's lastMessageAt and unreadCount
     await db.publicChatSession.update({
       where: { id: session.id },

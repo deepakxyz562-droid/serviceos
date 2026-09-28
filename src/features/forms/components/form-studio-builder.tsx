@@ -2722,9 +2722,28 @@ export function FormStudioBuilder({
                 ...DEFAULT_FORM_AGENT,
                 id: `agent_${formData.id || 'form'}`,
                 name: `${formData.name || 'Form'} Assistant`,
-                connectedForms: formData.id ? [{ id: formData.id, name: formData.name || 'Form', description: formData.description }] : []
+                connectedForms: formData.id ? [{
+                  id: formData.id,
+                  name: formData.name || 'Form',
+                  description: formData.description,
+                  fields: formData.fields,
+                }] : []
               }}
-              onChange={(updated) => onFormDataChange({ ...formData, agentConfig: updated })}
+              onChange={(updated) => {
+                onFormDataChangeWithHistory((prev) => ({
+                  ...prev,
+                  agentConfig: updated,
+                }));
+              }}
+              onSave={async (savedAgent) => {
+                onFormDataChangeWithHistory((prev) => ({
+                  ...prev,
+                  agentConfig: savedAgent,
+                }));
+                if (onSave) {
+                  await onSave();
+                }
+              }}
               siteOrigin={siteOrigin}
             />
           </div>

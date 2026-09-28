@@ -144,8 +144,14 @@ export function FormAgentStudio({
     }
   }, [initialAgent]);
 
-  const handleSave = async (overrideAgent?: FormAgentData, silent = false) => {
-    const targetAgent = overrideAgent || agent;
+  const handleSave = async (overrideAgent?: FormAgentData | unknown, silent = false) => {
+    const isAgentObject =
+      overrideAgent &&
+      typeof overrideAgent === 'object' &&
+      !('nativeEvent' in overrideAgent) &&
+      !('target' in overrideAgent) &&
+      'name' in overrideAgent;
+    const targetAgent: FormAgentData = isAgentObject ? (overrideAgent as FormAgentData) : agent;
     setSaving(true);
     try {
       // POST to the API first — this creates or updates the agent in the DB
@@ -179,12 +185,13 @@ export function FormAgentStudio({
         } else if (res.ok) {
           toast.success('Agent changes saved to form!');
         } else {
-          toast.error(data.error || 'Failed to save agent to database');
+          toast.error(data.error || data.details || 'Failed to save agent to database');
         }
       }
-    } catch {
+    } catch (err) {
+      console.error('[form-agent-studio] Save error:', err);
       if (!silent) {
-        toast.error('Failed to save agent. Please try again.');
+        toast.error(err instanceof Error ? err.message : 'Failed to save agent. Please try again.');
       }
     } finally {
       setSaving(false);
@@ -328,7 +335,7 @@ export function FormAgentStudio({
           <Button
             type="button"
             disabled={saving}
-            onClick={handleSave}
+            onClick={() => handleSave()}
             className="h-8 text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white px-3.5 rounded-lg shadow-xs"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : 'Publish'}

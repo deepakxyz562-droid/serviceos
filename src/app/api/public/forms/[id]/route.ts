@@ -40,6 +40,7 @@ export async function GET(
         type: true,
         status: true,
         fieldsJson: true,
+        schemaJson: true,
         submissionActions: true,
         welcomeMessage: true,
         completionMessage: true,
@@ -62,6 +63,28 @@ export async function GET(
     });
 
     if (!form) {
+      if (['form_1', 'form_sample', 'service-request', 'intake', 'form_booking_agent_form'].includes(id) || id.startsWith('sample_') || id.startsWith('preview_')) {
+        const sampleSchema: FormSchema = {
+          fields: [
+            { id: 'full_name', type: 'text', label: 'Full Name', required: true, placeholder: 'Jane Doe' },
+            { id: 'email', type: 'email', label: 'Email Address', required: true, placeholder: 'jane@example.com' },
+            { id: 'phone', type: 'phone', label: 'Phone Number', required: false, placeholder: '+1 (555) 000-0000' },
+            { id: 'service_type', type: 'select', label: 'Service Needed', required: true, options: ['Consultation & Quote', 'Standard Service Request', 'Emergency Dispatch', 'Follow-up Inspection'] },
+            { id: 'message', type: 'textarea', label: 'Project or Issue Details', required: false, placeholder: 'Please describe what you need assistance with...' },
+          ],
+          theme: { layout: 'classic', primaryColor: '#059669', borderRadius: '12px' },
+          settings: { submitButtonText: 'Submit Request', successTitle: 'Thank You!', successMessage: 'Your request has been received. Our team will contact you shortly.' },
+        };
+        return NextResponse.json({
+          id,
+          name: 'Service Inquiry & Booking Form',
+          slug: id,
+          description: 'Fill out this form to connect with our team and schedule service.',
+          schema: sampleSchema,
+          branding: { businessName: 'Customer Support Concierge' },
+          tenant: { name: 'Customer Support Concierge' },
+        });
+      }
       return NextResponse.json({ error: 'Form not found or inactive' }, { status: 404 });
     }
 

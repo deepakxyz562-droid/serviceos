@@ -158,7 +158,17 @@ export async function POST(request: NextRequest) {
     }
 
     const slug = body.slug || `agent-${Date.now()}`;
-    const tenantId = user?.tenantId || body.tenantId || null;
+    const candidateTenantId = user?.tenantId || body.tenantId || null;
+    let validTenantId: string | null = null;
+    if (candidateTenantId) {
+      const existingTenant = await db.tenant.findUnique({
+        where: { id: candidateTenantId },
+        select: { id: true },
+      }).catch(() => null);
+      if (existingTenant) {
+        validTenantId = existingTenant.id;
+      }
+    }
 
     // Extract top-level fields for columns; store the rest as JSON
     const {
@@ -204,7 +214,7 @@ export async function POST(request: NextRequest) {
       const updated = await db.formAgent.update({
         where: { id: existing.id },
         data: {
-          tenantId: tenantId || existing.tenantId,
+          tenantId: validTenantId || existing.tenantId,
           slug: body.slug || existing.slug,
           name,
           roleTitle: roleTitle || 'AI Assistant',
@@ -248,7 +258,7 @@ export async function POST(request: NextRequest) {
 
     const created = await db.formAgent.create({
       data: {
-        tenantId,
+        tenantId: validTenantId,
         slug: resolvedSlug,
         name,
         roleTitle: roleTitle || 'AI Assistant',
