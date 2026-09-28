@@ -2,32 +2,32 @@ import type { Metadata } from 'next';
 import { GptFormClientView } from './gptform-client';
 
 export const metadata: Metadata = {
-  title: 'GPTForm™ — Your Business. One AI-Powered Page. | Forms, Booking & Payments',
+  title: 'GPTForm™ — Free AI Form Builder, Online Forms & Conversational Booking',
   description:
-    'One link to talk to customers, capture leads, book appointments, sell services, and get paid. Replace Linktree, Typeform, Calendly, and Topmate with an all-in-one AI page with 0% platform fees.',
+    'Build high-converting smart forms in seconds with AI. JotForm-grade visual form builder with live formula calculations, 33+ payment gateways, conversational AI agents, and 20,000+ templates with 0% platform fees.',
   keywords: [
-    'GPTForm',
-    'AI business page',
-    'one link for your business',
-    'link in bio with booking',
-    'Topmate alternative',
-    'Linktree alternative',
-    'Calendly alternative',
-    'Typeform alternative',
     'AI form builder',
+    'free online form builder',
+    'Jotform alternative',
+    'Typeform alternative',
+    'conversational form builder',
+    'form calculation widget',
+    'online form creator',
+    'payment forms 0 percent fee',
+    'Stripe payment forms',
+    'quote calculator form',
+    'booking form scheduler',
+    'multi step form builder',
     'AI intake agent',
-    'consultation booking page',
-    'sell digital products 0 percent fee',
-    'creator storefront',
-    'Fieseros AI Studio',
+    'Fieseros GPTForm',
   ],
   alternates: {
     canonical: 'https://fieseros.com/gptform',
   },
   openGraph: {
-    title: 'GPTForm™ — Your Business. One AI-Powered Page.',
+    title: 'GPTForm™ — Free AI Form Builder, Online Forms & Conversational Booking',
     description:
-      'One link to talk to customers, capture leads, book appointments, sell services, and get paid. 0% platform fees.',
+      'Build smart online forms, live price calculators, and conversational AI booking agents in seconds. Connect 33+ payment gateways with 0% platform transaction fees.',
     url: 'https://fieseros.com/gptform',
     siteName: 'Fieseros AI Service OS',
     images: [
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
         url: 'https://fieseros.com/og-gptform.png',
         width: 1200,
         height: 630,
-        alt: 'GPTForm — Your Business. One AI-Powered Page.',
+        alt: 'GPTForm AI Form Builder & Conversational Intake Engine',
       },
     ],
     locale: 'en_US',
@@ -43,9 +43,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'GPTForm™ — Your Business. One AI-Powered Page.',
+    title: 'GPTForm™ — Free AI Form Builder & Conversational Intake Engine',
     description:
-      'One link to talk to customers, capture leads, book appointments, sell services, and get paid with 0% platform transaction fees.',
+      'Turn online forms and website conversations into booked jobs and direct payments. 33+ gateways, 0% fees, JotForm-grade calculations.',
     images: ['https://fieseros.com/og-gptform.png'],
     creator: '@fieseros',
   },
@@ -69,13 +69,13 @@ export default function GptFormPage() {
       {
         '@type': 'SoftwareApplication',
         '@id': 'https://fieseros.com/gptform#software',
-        name: 'GPTForm™ AI Business Page & Smart Forms',
+        name: 'GPTForm™ AI Form Builder',
         url: 'https://fieseros.com/gptform',
         operatingSystem: 'All (Web, iOS, Android)',
         applicationCategory: 'BusinessApplication',
-        applicationSubCategory: 'AI Business Page, Scheduling & Conversational Intake',
+        applicationSubCategory: 'Online Form Builder & Conversational Intake',
         description:
-          'Unified AI-powered business page and smart form platform. One link to talk to customers, capture leads, schedule calendar bookings, sell services & digital products, and process payments with 0% platform fees.',
+          'AI-powered online form builder, live pricing formula calculator, and conversational intake engine with 33+ payment gateways and 0% platform fees.',
         aggregateRating: {
           '@type': 'AggregateRating',
           ratingValue: '4.9',
@@ -89,7 +89,7 @@ export default function GptFormPage() {
             name: 'Free Forever Plan',
             price: '0',
             priceCurrency: 'USD',
-            description: '1 AI business page, 3 smart forms, 100 submissions/mo, 1:1 scheduling, 0% platform transaction fees.',
+            description: '3 active forms, 100 submissions/mo, 33+ payment gateways, 0% platform fees.',
           },
           {
             '@type': 'Offer',
@@ -102,7 +102,7 @@ export default function GptFormPage() {
               priceCurrency: 'USD',
               unitCode: 'MON',
             },
-            description: 'Custom domain, unlimited services, 1,000 submissions/mo, dynamic math calculations, digital signatures.',
+            description: '10 active forms, 1,000 submissions/mo, dynamic math calculations, digital e-signatures.',
           },
           {
             '@type': 'Offer',
@@ -115,19 +115,20 @@ export default function GptFormPage() {
               priceCurrency: 'USD',
               unitCode: 'MON',
             },
-            description: 'Unlimited pages & forms, 10,000 submissions/mo, 24/7 AI conversational agent, white-labeling.',
+            description: 'Unlimited forms, 10,000 submissions/mo, conversational AI form agents, white-labeling.',
           },
         ],
         featureList: [
-          'Unified AI-powered public profile page (fieseros.com/p/yourname)',
-          '24/7 conversational AI assistant trained on your knowledge base',
-          '1:1 & group calendar booking with Google Calendar / Outlook sync',
-          'Direct service monetization (Topmate-style paid calls, priority Q&A, digital downloads)',
-          'Natural language AI smart form builder with JotForm-grade calculations',
-          '33+ Connected payment gateways (Stripe, Creem MoR, UPI, Apple Pay) with 0% platform fees',
-          'Automatic unified CRM lead capture and pipeline tracking',
-          '20,000+ free canonical industry templates',
-          '1-click embed on WordPress, Webflow, Shopify, Framer, and custom HTML',
+          'Natural language AI form generator',
+          'JotForm-grade visual formula calculation pad',
+          'Date difference calculation (checkout - checkin)',
+          '33+ Connected payment gateways with 0% platform fees',
+          '2 form layouts: Classic Paper and Card Swipe, plus a separate AI Agent chatbot',
+          '20,000+ free canonical industry form templates',
+          'HTML5 smooth canvas digital e-signatures',
+          'Direct appointment scheduling with calendar availability sync',
+          'Elementor-style 2-column live estimate breakdown',
+          '1-click embed on WordPress, Webflow, Shopify, Wix, Squarespace & HTML',
         ],
       },
       {
@@ -143,7 +144,7 @@ export default function GptFormPage() {
           {
             '@type': 'ListItem',
             position: 2,
-            name: 'GPTForm AI Business Page',
+            name: 'GPTForm AI Form Builder',
             item: 'https://fieseros.com/gptform',
           },
         ],
@@ -154,66 +155,82 @@ export default function GptFormPage() {
         mainEntity: [
           {
             '@type': 'Question',
-            name: 'What is GPTForm and how does the AI Business Page work?',
+            name: 'How does the AI Form Generator work?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'GPTForm is your all-in-one AI-powered business page. Instead of sending visitors to multiple disconnected tools (Linktree, Typeform, Calendly, and Stripe), GPTForm gives you a single link (fieseros.com/p/yourname) where visitors can chat with your 24/7 AI assistant, fill project intake forms, book 1:1 consultations, buy digital products, and pay securely.',
+              text: 'You describe your form in plain English (e.g., "Build an emergency plumbing intake form with an address picker, quote calculation, and Stripe checkout"). GPTForm generates fields, formulas, validation logic, and design themes in under 10 seconds.',
             },
           },
           {
             '@type': 'Question',
-            name: 'Can I replace Linktree, Calendly, and Typeform with GPTForm?',
+            name: 'How is GPTForm different from Jotform and Typeform?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'Yes! GPTForm replaces your entire disconnected tool stack. You get an AI-powered link-in-bio, automated calendar scheduling, multi-step intake forms, digital product checkouts, and CRM lead capture all in one unified platform—saving you over $130 per month.',
+              text: 'GPTForm keeps form presentation and AI chat separate: choose Classic Paper or Card Swipe for the form, then optionally deploy a separate AI Agent chatbot that can open connected forms inside the chat. GPTForm also supports 33+ payment gateways with 0% platform transaction fees, JotForm-grade visual formula calculations, and 20,000+ free canonical templates.',
             },
           },
           {
             '@type': 'Question',
-            name: 'How does the 24/7 AI Assistant work on my page?',
+            name: 'Can I calculate complex math formulas and date differences?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'Your personal AI assistant is trained on your bio, portfolio, pricing, services, and FAQs. When potential clients visit your page, the AI answers their questions, clarifies requirements, recommends the right service, and guides them straight into booking or submitting a proposal.',
+              text: 'Yes. GPTForm includes a visual Formula Pad supporting arithmetic (+, -, *, /), date math differences ((checkout - checkin) * daily_rate), multi-select checkbox summation, conditional booleans, and standard Math functions (round, floor, ceil, max, min).',
             },
           },
           {
             '@type': 'Question',
-            name: 'What are the platform transaction fees?',
+            name: 'What is an AI Form Agent?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'GPTForm charges 0% platform transaction fees. Whether you sell a $99 strategy session, a $49 digital guide, or accept a deposit on a $5,000 project, you keep 100% of your earnings minus your processor standard interchange fee (Stripe or Creem MoR).',
+              text: 'An AI Form Agent transforms static form questions into a natural, conversational customer dialogue. Visitors can chat or speak, upload damage photos, and schedule appointments while the AI validates input and fills structured CRM fields automatically.',
             },
           },
           {
             '@type': 'Question',
-            name: 'Which payment methods and currencies are supported?',
+            name: 'Which payment gateways are supported and what are the fees?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'We support 33+ global payment gateways including Stripe, Creem MoR, Apple Pay, Google Pay, credit/debit cards, and UPI (India). Currencies automatically adapt based on visitor location (e.g. USD, EUR, GBP, INR, CAD, AUD).',
+              text: 'GPTForm connects to 33+ gateways including Stripe, Square, PayPal, Razorpay, Apple Pay, Google Pay, Afterpay, Klarna, GoCardless, and Mollie. Fieseros charges 0% platform transaction fees—you only pay your payment processor standard interchange rate.',
             },
           },
           {
             '@type': 'Question',
-            name: 'Can I still build standalone embeddable forms?',
+            name: 'How do I embed GPTForm on my website?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'Absolutely! You can build standalone forms, price quote calculators, customer surveys, and payment forms and embed them in 1 click into WordPress, Webflow, Shopify, Framer, Squarespace, or HTML.',
+              text: 'GPTForm embeds in 1 click using a single line of JavaScript, responsive iframe, or popover modal. It works seamlessly on WordPress, Webflow, Shopify, Wix, Squarespace, Framer, and custom HTML websites.',
             },
           },
           {
             '@type': 'Question',
-            name: 'How does the 1:1 scheduling sync with my calendar?',
+            name: 'How does live calendar booking prevent double-bookings?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'GPTForm synchronizes bidirectionally with Google Calendar and Outlook 365. It respects your existing busy times, sets custom buffer zones between meetings, and automatically generates Google Meet or Zoom video links upon booking.',
+              text: 'GPTForm integrates directly with Google Calendar, Outlook 365, and ServiceOS CRM schedules. It verifies technician availability in real time and offers next best slots with travel buffer calculations.',
             },
           },
           {
             '@type': 'Question',
-            name: 'Is there a free forever plan?',
+            name: 'Can I capture legally binding digital signatures?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'Yes! Our Free Forever tier gives you 1 AI-powered business page, 3 smart forms, 100 submissions per month, calendar booking, 0% platform fees, and access to 20,000+ templates with no credit card required.',
+              text: 'Yes. GPTForm includes an HTML5 smooth canvas E-Signature widget with timestamping, IP logging, and integration with Adobe Sign and DocuSign for compliance.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Is GPTForm secure and GDPR/CCPA compliant?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Yes. All submissions are encrypted in transit via TLS 1.3 and at rest with 256-bit AES encryption. GPTForm supports Cloudflare Turnstile bot protection, reCAPTCHA v3, and strict data privacy compliance.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Is there a free plan?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Yes. The Free Forever tier gives you 3 active smart forms, 100 monthly submissions, 33+ payment gateways with 0% fees, and full access to our 20,000+ template library without requiring a credit card.',
             },
           },
         ],
