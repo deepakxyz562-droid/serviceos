@@ -28,9 +28,9 @@ export default function StandaloneAgentPage() {
   const [agent, setAgent] = useState<FormAgentData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewPage, setPreviewPage] = useState<'greeting' | 'conversation'>(
-    initialViewParam === 'greeting' ? 'greeting' : 'conversation'
+    initialViewParam === 'conversation' ? 'conversation' : 'greeting'
   );
-  const [forceFullView, setForceFullView] = useState(initialViewParam !== 'widget');
+  const [forceFullView, setForceFullView] = useState(initialViewParam === 'full');
 
   useEffect(() => {
     async function loadAgent() {
@@ -47,8 +47,8 @@ export default function StandaloneAgentPage() {
           const data = await res.json();
           if (data.agent) {
             setAgent(data.agent);
-            setForceFullView(initialViewParam !== 'widget');
-            setPreviewPage(initialViewParam === 'greeting' ? 'greeting' : 'conversation');
+            setForceFullView(initialViewParam === 'full');
+            setPreviewPage(initialViewParam === 'conversation' ? 'conversation' : 'greeting');
           } else {
             setError('Agent not found');
           }
@@ -109,7 +109,15 @@ export default function StandaloneAgentPage() {
   // Floating Mode
   if (layoutMode === 'floating' && !forceFullView) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative flex flex-col justify-between overflow-hidden">
+      <div
+        className={cn(
+          "min-h-screen relative flex flex-col justify-between overflow-hidden transition-all duration-300",
+          theme.isDark && "dark"
+        )}
+        style={{
+          background: theme.pageBackgroundGradient,
+        }}
+      >
         {/* Top Floating Helper Controls */}
         <div className="p-3 sm:p-4 flex items-center justify-between z-10">
           <div className="flex items-center gap-2 bg-background/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-border/60 shadow-xs">

@@ -19,9 +19,9 @@ export default function PublicChatPage() {
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<FormAgentData | null>(null);
   const [previewPage, setPreviewPage] = useState<'greeting' | 'conversation'>(
-    initialViewParam === 'greeting' ? 'greeting' : 'conversation'
+    initialViewParam === 'conversation' ? 'conversation' : 'greeting'
   );
-  const [forceFullView, setForceFullView] = useState(initialViewParam !== 'widget');
+  const [forceFullView, setForceFullView] = useState(initialViewParam === 'full');
 
   useEffect(() => {
     async function loadAgent() {
@@ -37,8 +37,8 @@ export default function PublicChatPage() {
           const data = await publicRes.json();
           if (data.agent) {
             setAgent(data.agent);
-            setForceFullView(initialViewParam !== 'widget');
-            setPreviewPage(initialViewParam === 'greeting' ? 'greeting' : 'conversation');
+            setForceFullView(initialViewParam === 'full');
+            setPreviewPage(initialViewParam === 'conversation' ? 'conversation' : 'greeting');
             return;
           }
         }
@@ -49,8 +49,8 @@ export default function PublicChatPage() {
           const data = await formsRes.json();
           if (data.agent) {
             setAgent(data.agent);
-            setForceFullView(initialViewParam !== 'widget');
-            setPreviewPage(initialViewParam === 'greeting' ? 'greeting' : 'conversation');
+            setForceFullView(initialViewParam === 'full');
+            setPreviewPage(initialViewParam === 'conversation' ? 'conversation' : 'greeting');
             return;
           }
         }
@@ -105,13 +105,22 @@ export default function PublicChatPage() {
   const position = chatbot?.position || 'right';
   const isLeft = position === 'left' || position === 'bottom-left';
   const isSidebar = layoutMode === 'sidebar';
+  const theme = resolveAgentTheme(agent);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // MODE 1: SIDEBAR LAYOUT (Left or Right Pinned Dock)
   // ═══════════════════════════════════════════════════════════════════════════
   if (isSidebar && !forceFullView) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative overflow-hidden">
+      <div
+        className={cn(
+          "min-h-screen relative overflow-hidden transition-all duration-300",
+          theme.isDark && "dark"
+        )}
+        style={{
+          background: theme.pageBackgroundGradient,
+        }}
+      >
         {/* Background Demo Website Canvas */}
         <div className="hidden lg:flex flex-col items-center justify-center min-h-screen p-8 text-center text-muted-foreground">
           <div className="max-w-md space-y-3 p-6 rounded-2xl border border-dashed border-border/80 bg-background/50 backdrop-blur-xs">
@@ -154,7 +163,15 @@ export default function PublicChatPage() {
   // ═══════════════════════════════════════════════════════════════════════════
   if (layoutMode === 'floating' && !forceFullView) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative flex flex-col justify-between overflow-hidden">
+      <div
+        className={cn(
+          "min-h-screen relative flex flex-col justify-between overflow-hidden transition-all duration-300",
+          theme.isDark && "dark"
+        )}
+        style={{
+          background: theme.pageBackgroundGradient,
+        }}
+      >
         {/* Top Floating Helper Controls */}
         <div className="p-3 sm:p-4 flex items-center justify-between z-10">
           <div className="flex items-center gap-2 bg-background/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-border/60 shadow-xs">
@@ -212,8 +229,6 @@ export default function PublicChatPage() {
   // ═══════════════════════════════════════════════════════════════════════════
   // MODE 3: FULL STANDALONE APP VIEW
   // ═══════════════════════════════════════════════════════════════════════════
-  const theme = resolveAgentTheme(agent);
-
   return (
     <div
       className={cn(
