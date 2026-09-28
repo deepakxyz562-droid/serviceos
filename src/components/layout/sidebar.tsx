@@ -126,7 +126,6 @@ const ownerNavSections: NavSection[] = [
     title: 'Overview',
     items: [
       { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { view: 'scheduling', label: 'Scheduling', icon: CalendarClock },
       { view: 'calendar', label: 'Calendar', icon: Calendar },
       { view: 'reports', label: 'Reports', icon: BarChart3 },
     ],
@@ -177,11 +176,7 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'AI & Forms',
     items: [
-      { view: 'creatorProfile', label: 'Public Profile (@page)', icon: UserCircle },
-      { view: 'creatorOffers', label: 'Offers & Services', icon: Sparkles },
-      { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
-      { view: 'scheduling', label: 'Scheduling (Calendly)', icon: CalendarClock },
-      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+      { view: 'formBuilder', label: 'AI Forms & Studio', icon: FileInput },
       { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
     ],
   },
@@ -233,25 +228,19 @@ const standaloneNavSections: NavSection[] = [
     title: 'AI & Forms Suite',
     items: [
       { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { view: 'creatorProfile', label: 'Public Profile (@page)', icon: UserCircle },
-      { view: 'creatorOffers', label: 'Offers & Services', icon: Sparkles },
-      { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
-      { view: 'scheduling', label: 'Scheduling (Calendly)', icon: CalendarClock },
-      { view: 'formSubmissions', label: 'Submissions', icon: Inbox },
-      { view: 'formAppointments', label: 'Appointments', icon: Calendar },
+      { view: 'formBuilder', label: 'AI Forms & Studio', icon: FileInput },
       { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
       { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
       { view: 'aiReceptionist', label: 'AI Employee', icon: PhoneCall },
-      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
     ],
   },
   {
     title: 'CRM & Pipeline',
     items: [
+      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers & Contacts', icon: Users },
       { view: 'booking', label: 'CRM Bookings', icon: CalendarCheck },
-      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
     ],
   },
   {

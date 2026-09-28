@@ -122,6 +122,7 @@ export function CreatorProfileView() {
             variant="outline"
             size="sm"
             onClick={handleCopyLink}
+            disabled={!profile?.isEnabled}
             className="text-xs font-bold gap-1.5 rounded-xl h-9 shadow-2xs"
           >
             {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
@@ -132,9 +133,12 @@ export function CreatorProfileView() {
             href={`/p/${profile?.handle || 'creator'}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-white dark:bg-slate-900 text-foreground font-bold text-xs hover:bg-slate-50 transition-colors shadow-2xs h-9"
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-white dark:bg-slate-900 text-foreground font-bold text-xs hover:bg-slate-50 transition-colors shadow-2xs h-9",
+              !profile?.isEnabled && "opacity-60 pointer-events-none"
+            )}
           >
-            <span>View Live Page</span>
+            <span>{profile?.isEnabled ? 'View Live Page' : 'Draft (Unpublished)'}</span>
             <ExternalLink className="size-3.5" />
           </a>
 
@@ -147,6 +151,51 @@ export function CreatorProfileView() {
             <Save className="size-3.5" />
             <span>{saving ? 'Saving...' : 'Save Changes'}</span>
           </Button>
+        </div>
+      </div>
+
+      {/* ── Status & Opt-in Banner ── */}
+      <div className={cn(
+        'p-4 rounded-2xl border transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4',
+        profile?.isEnabled
+          ? 'bg-emerald-500/10 border-emerald-500/30'
+          : 'bg-amber-500/10 border-amber-500/30'
+      )}>
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            'size-10 rounded-xl flex items-center justify-center shrink-0 text-white font-bold',
+            profile?.isEnabled ? 'bg-emerald-600' : 'bg-amber-600'
+          )}>
+            <Globe className="size-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-foreground">
+                Public Profile Status: {profile?.isEnabled ? 'Published & Active' : 'Private / Unpublished (Draft)'}
+              </h3>
+              <Badge className={profile?.isEnabled ? 'bg-emerald-600 text-white text-[10px]' : 'bg-amber-600 text-white text-[10px]'}>
+                {profile?.isEnabled ? 'LIVE' : 'DRAFT'}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {profile?.isEnabled
+                ? `Your page is live for clients and visitors at /p/${profile?.handle || 'creator'}.`
+                : 'Turn this on only when you want to publish your Topmate-style creator storefront. Your CRM marketplace page remains separate.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <Label htmlFor="publish-toggle" className="text-xs font-bold text-foreground cursor-pointer">
+            {profile?.isEnabled ? 'Published' : 'Publish Page'}
+          </Label>
+          <Switch
+            id="publish-toggle"
+            checked={!!profile?.isEnabled}
+            onCheckedChange={(checked) =>
+              setProfile((prev) => (prev ? { ...prev, isEnabled: checked } : null))
+            }
+          />
         </div>
       </div>
 

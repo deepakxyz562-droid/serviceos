@@ -83,22 +83,28 @@ export async function GET(
           break;
         }
       }
-
-      // If still not matched, use primary candidate for high-fidelity fallback
-      if (!tenant && candidates.length > 0) {
-        tenant = candidates[0];
-      }
     }
 
     if (!tenant) {
-      return NextResponse.json({ error: 'Creator not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Creator not found', code: 'CREATOR_NOT_FOUND' },
+        { status: 404 }
+      );
     }
 
     const settings = safeParse(tenant.settingsJson, {});
     let profile: CreatorProfileData = settings.creatorProfile;
 
-    if (!profile) {
-      profile = buildDefaultCreatorProfile(tenant);
+    // Check if the user has explicitly published their public profile
+    if (!profile || !profile.isEnabled) {
+      return NextResponse.json(
+        {
+          error: 'This creator profile is currently private or has not been published yet.',
+          code: 'PROFILE_NOT_PUBLISHED',
+          marketplaceSlug: tenant.slug,
+        },
+        { status: 404 }
+      );
     }
 
     // Ensure handle matches requested cleanHandle if tenant was matched by slug
@@ -116,6 +122,7 @@ export async function GET(
         ...profile,
         offers: activeOffers,
         forms: (tenant as any).forms || [],
+        marketplaceSlug: tenant.slug,
       },
     });
   } catch (error: any) {

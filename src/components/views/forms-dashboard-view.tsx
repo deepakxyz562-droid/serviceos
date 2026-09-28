@@ -85,6 +85,8 @@ export function FormsDashboardView() {
     setCurrentView('formBuilder');
   };
 
+  const [creatorProfile, setCreatorProfile] = useState<any>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -101,6 +103,15 @@ export function FormsDashboardView() {
       } finally {
         if (!cancelled) setLoading(false);
       }
+
+      authFetch('/api/creator/profile')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!cancelled && d?.profile) {
+            setCreatorProfile(d.profile);
+          }
+        })
+        .catch(() => {});
     })();
     return () => { cancelled = true; };
   }, []);
@@ -221,53 +232,86 @@ export function FormsDashboardView() {
       )}
 
       {/* ── TOPMATE-STYLE PUBLIC STOREFRONT CARD ── */}
-      <div className="p-5 rounded-2xl border bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="size-11 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
-            <UserCircle className="size-6 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold">Your AI Business Page &amp; Creator Storefront</h3>
-              <Badge className="bg-white/20 text-white text-[10px] font-bold">Live</Badge>
+      {creatorProfile?.isEnabled ? (
+        <div className="p-5 rounded-2xl border bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="size-11 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
+              <UserCircle className="size-6 text-white" />
             </div>
-            <p className="text-xs text-white/80 mt-0.5">
-              One public link for your bio, 1:1 call bookings, priority Q&amp;A, and digital product checkout.
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold">Your Creator Storefront &amp; Public Page</h3>
+                <Badge className="bg-emerald-500 text-white text-[10px] font-bold">Live</Badge>
+              </div>
+              <p className="text-xs text-white/80 mt-0.5">
+                Live at /p/{creatorProfile.handle || 'creator'} for 1:1 call bookings, priority Q&amp;A, and digital product downloads.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCurrentView('creatorProfile')}
+              className="bg-white/10 hover:bg-white/20 border-white/30 text-white text-xs font-bold rounded-xl h-8 gap-1.5"
+            >
+              <UserCircle className="size-3.5" />
+              Edit Profile
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                sessionStorage.setItem('pendingFormStudioTab', 'offers');
+                setCurrentView('formBuilder');
+              }}
+              className="bg-white/10 hover:bg-white/20 border-white/30 text-white text-xs font-bold rounded-xl h-8 gap-1.5"
+            >
+              <Sparkles className="size-3.5" />
+              Special Offers
+            </Button>
+
+            <Button
+              size="sm"
+              onClick={() => window.open(`/p/${creatorProfile.handle || 'creator'}`, '_blank')}
+              className="bg-white hover:bg-slate-100 text-slate-900 text-xs font-bold rounded-xl h-8 gap-1.5 shadow-xs"
+            >
+              <span>View Live Page</span>
+              <ExternalLink className="size-3.5" />
+            </Button>
           </div>
         </div>
+      ) : (
+        <div className="p-5 rounded-2xl border border-blue-500/20 bg-blue-500/5 text-foreground shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="size-11 rounded-2xl bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/20">
+              <UserCircle className="size-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-foreground">Personal Creator Storefront (@page)</h3>
+                <Badge variant="outline" className="text-[10px] text-muted-foreground border-slate-300 dark:border-slate-700">Optional</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Want a personalized link-in-bio page to monetize 1:1 consultations and digital resources? Your primary CRM marketplace listing remains separate.
+              </p>
+            </div>
+          </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setCurrentView('creatorProfile')}
-            className="bg-white/10 hover:bg-white/20 border-white/30 text-white text-xs font-bold rounded-xl h-8 gap-1.5"
-          >
-            <UserCircle className="size-3.5" />
-            Edit Profile
-          </Button>
-
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setCurrentView('creatorOffers')}
-            className="bg-white/10 hover:bg-white/20 border-white/30 text-white text-xs font-bold rounded-xl h-8 gap-1.5"
-          >
-            <Sparkles className="size-3.5" />
-            Manage Offers
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={() => window.open('/p/creator', '_blank')}
-            className="bg-white hover:bg-slate-100 text-slate-900 text-xs font-bold rounded-xl h-8 gap-1.5 shadow-xs"
-          >
-            <span>Preview Page</span>
-            <ExternalLink className="size-3.5" />
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              onClick={() => setCurrentView('creatorProfile')}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl h-8 gap-1.5 shadow-xs"
+            >
+              <Sparkles className="size-3.5" />
+              Set Up &amp; Publish
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">

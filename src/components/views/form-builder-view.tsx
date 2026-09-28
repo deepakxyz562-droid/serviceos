@@ -44,6 +44,7 @@ import { DeleteConfirmDialog, EmbedDialog, PreviewDialog, ResponsesDialog,
 import { AiWebsiteFormDialog } from '@/features/forms/components/ai-website-form-dialog';
 import { ChatbotBuilderView } from '@/components/views/chatbot-builder-view';
 import { SchedulingView } from '@/components/views/scheduling-view';
+import { CreatorOffersView } from '@/components/views/creator-offers-view';
 import { useAppStore } from '@/store/app-store';
 import { Bot, CalendarClock } from 'lucide-react';
 import { injectMediaPanelContent } from '@/lib/forms/form-node-schema';
@@ -56,7 +57,24 @@ export function FormBuilderView() {
   const [formsError, setFormsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'forms' | 'chatbots' | 'scheduling' | 'submissions'>('forms');
+  const [viewMode, setViewMode] = useState<'forms' | 'chatbots' | 'scheduling' | 'offers' | 'submissions'>('forms');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'offers' || tabParam === 'scheduling' || tabParam === 'chatbots' || tabParam === 'submissions' || tabParam === 'forms') {
+        setViewMode(tabParam as any);
+      } else {
+        const storedTab = sessionStorage.getItem('pendingFormStudioTab');
+        if (storedTab && (storedTab === 'offers' || storedTab === 'scheduling' || storedTab === 'chatbots' || storedTab === 'submissions' || storedTab === 'forms')) {
+          setViewMode(storedTab as any);
+          sessionStorage.removeItem('pendingFormStudioTab');
+        }
+      }
+    }
+  }, []);
+
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const authTenant = useAppStore((s) => s.auth?.tenant) as any;
   const isStandalone = authTenant?.signupMode === 'forms_standalone';
@@ -848,20 +866,23 @@ export function FormBuilderView() {
         </div>
       </div>
 
-      {/* ─── Mode Switcher Tabs (AI Forms | Chatbot Builder | Scheduling | Submissions) ── */}
-      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'forms' | 'chatbots' | 'scheduling' | 'submissions')} className="w-full space-y-6">
-        <TabsList className="grid w-full max-w-3xl grid-cols-4">
+      {/* ─── Mode Switcher Tabs (AI Forms | Chatbot Builder | Scheduling | Special Offers | Submissions) ── */}
+      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'forms' | 'chatbots' | 'scheduling' | 'offers' | 'submissions')} className="w-full space-y-6">
+        <TabsList className="grid w-full max-w-4xl grid-cols-5">
           <TabsTrigger value="forms" className="gap-1.5 text-xs font-semibold">
             <FileInput className="size-3.5" /> AI Forms
           </TabsTrigger>
           <TabsTrigger value="chatbots" className="gap-1.5 text-xs font-semibold">
-            <Bot className="size-3.5" /> Chatbot Builder
+            <Bot className="size-3.5" /> Chatbots
           </TabsTrigger>
           <TabsTrigger value="scheduling" className="gap-1.5 text-xs font-semibold">
-            <CalendarClock className="size-3.5 text-blue-600" /> Scheduling (Calendly)
+            <CalendarClock className="size-3.5 text-blue-600" /> Scheduling
+          </TabsTrigger>
+          <TabsTrigger value="offers" className="gap-1.5 text-xs font-semibold">
+            <Sparkles className="size-3.5 text-purple-600" /> Special Offers
           </TabsTrigger>
           <TabsTrigger value="submissions" className="gap-1.5 text-xs font-semibold">
-            <Calendar className="size-3.5 text-emerald-600" /> Appointments &amp; Submissions
+            <Calendar className="size-3.5 text-emerald-600" /> Submissions
             {totalSubmissions > 0 && (
               <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">
                 {totalSubmissions}
@@ -1086,6 +1107,10 @@ export function FormBuilderView() {
 
         <TabsContent value="scheduling" className="mt-0 space-y-6">
           <SchedulingView />
+        </TabsContent>
+
+        <TabsContent value="offers" className="mt-0 space-y-6">
+          <CreatorOffersView />
         </TabsContent>
 
         <TabsContent value="submissions" className="mt-0">

@@ -24,7 +24,8 @@ export interface CreatorOffer {
 }
 
 export interface CreatorProfileData {
-  handle: string; // e.g. "deepak"
+  isEnabled: boolean; // Strictly opt-in: profile is only publicly published when true
+  handle: string; // e.g. "mybusiness"
   displayName: string;
   headline: string;
   bio: string;
@@ -33,9 +34,9 @@ export interface CreatorProfileData {
   bannerUrl?: string;
   themeColor: string; // Hex color e.g. "#2563EB"
   verified: boolean;
-  rating: number; // e.g. 4.9
-  reviewCount: number; // e.g. 128
-  sessionsCompleted: number; // e.g. 150
+  rating: number; // e.g. 5.0
+  reviewCount: number; // e.g. 0
+  sessionsCompleted: number; // e.g. 0
   socialLinks: {
     twitter?: string;
     linkedin?: string;
@@ -119,26 +120,25 @@ export function buildDefaultCreatorProfile(tenant: {
   logo?: string | null;
   currency?: string | null;
 }): CreatorProfileData {
+  const businessName = tenant.name || 'Creator';
   return {
+    isEnabled: false, // Strictly opt-in: not published automatically
     handle: tenant.slug || 'creator',
-    displayName: tenant.name || 'Deepak Chandra',
-    headline: 'SaaS Architect, AI Engineer & Founder',
-    bio: 'Helping founders, creators, and engineers build, launch, and monetize high-converting AI-powered products. Ex-Google, 10+ years engineering & product experience.',
-    location: 'Bangalore, India',
+    displayName: businessName,
+    headline: tenant.industry ? `${tenant.industry} Specialist & Consultant` : 'Professional Services & Consulting',
+    bio: `Welcome to ${businessName}'s public booking and services page. Explore 1:1 sessions, consultations, and digital resources below.`,
+    location: '',
     avatarUrl: tenant.logo || '',
     themeColor: '#2563EB',
-    verified: true,
-    rating: 4.9,
-    reviewCount: 86,
-    sessionsCompleted: 142,
+    verified: false,
+    rating: 5.0,
+    reviewCount: 0,
+    sessionsCompleted: 0,
     socialLinks: {
-      twitter: 'https://x.com',
-      linkedin: 'https://linkedin.com',
-      github: 'https://github.com',
-      website: `https://${tenant.slug}.fieseros.com`,
+      website: tenant.slug ? `https://${tenant.slug}.fieseros.com` : '',
     },
     aiAgentEnabled: true,
-    aiWelcomeMessage: 'Hi! I am Deepak’s AI Assistant. Ask me anything about his services, availability, or how he can help your project.',
+    aiWelcomeMessage: `Hi! I am ${businessName}’s AI Assistant. Ask me anything about our services, availability, or how we can help you.`,
     offers: DEFAULT_OFFERS.map((o) => ({
       ...o,
       currency: (tenant.currency as any) || 'INR',

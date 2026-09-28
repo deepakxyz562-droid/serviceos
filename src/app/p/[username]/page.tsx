@@ -25,6 +25,7 @@ import {
   FileText,
   FileInput,
   Zap,
+  UserCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +46,7 @@ export default function CreatorPublicProfilePage({
   const cleanUsername = (username || '').replace(/^@/, '');
 
   const [creator, setCreator] = useState<CreatorProfileData | null>(null);
+  const [marketplaceSlug, setMarketplaceSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<'all' | 'calls' | 'questions' | 'products' | 'forms'>('all');
@@ -75,12 +77,7 @@ export default function CreatorPublicProfilePage({
   const [questionSuccess, setQuestionSuccess] = useState(false);
 
   // AI Assistant Chat State
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'ai' | 'user'; text: string; offerId?: string }>>([
-    {
-      sender: 'ai',
-      text: `Hello! I am Deepak’s AI Assistant. Ask me anything about his technical background, 1:1 consultation availability, or which service best suits your project.`,
-    },
-  ]);
+  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'ai' | 'user'; text: string; offerId?: string }>>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
 
@@ -97,17 +94,24 @@ export default function CreatorPublicProfilePage({
 
         if (res.ok && data.creator) {
           setCreator(data.creator);
+          setMarketplaceSlug(data.creator.marketplaceSlug || null);
+          if (data.creator.aiWelcomeMessage) {
+            setChatMessages([
+              { sender: 'ai', text: data.creator.aiWelcomeMessage },
+            ]);
+          } else {
+            setChatMessages([
+              {
+                sender: 'ai',
+                text: `Hello! I am ${data.creator.displayName}’s AI Assistant. Ask me anything about available services, 1:1 consultation availability, or booking details.`,
+              },
+            ]);
+          }
         } else {
-          // Fallback to high-fidelity demo profile
-          setCreator(
-            buildDefaultCreatorProfile({
-              id: 'demo_tenant',
-              name: 'Deepak Chandra',
-              slug: cleanUsername,
-              industry: 'AI & SaaS Development',
-              currency: 'INR',
-            })
-          );
+          setError(data?.error || 'This creator profile is currently private or has not been published yet.');
+          if (data?.marketplaceSlug) {
+            setMarketplaceSlug(data.marketplaceSlug);
+          }
         }
       } catch (err: any) {
         if (isMounted) setError(err.message || 'Failed to load profile');
@@ -254,10 +258,10 @@ export default function CreatorPublicProfilePage({
       if (res.ok && data.reply) {
         setChatMessages((prev) => [...prev, { sender: 'ai', text: data.reply }]);
       } else {
-        // High fidelity intelligent response
-        let fallbackReply = `Deepak offers 1:1 strategy calls (₹999 for 30m), quick consultations, and technical architecture advisory. You can book a time slot directly on this page!`;
+        // Intelligent conversational response
+        let fallbackReply = `${creator?.displayName || 'The creator'} offers 1:1 strategy calls, consultations, and digital resources. You can book a time slot directly on this page!`;
         if (textToSend.toLowerCase().includes('price') || textToSend.toLowerCase().includes('cost')) {
-          fallbackReply = `Deepak's 30-min strategy session is ₹999, his 15-min discovery call is Free, and you can also submit a priority question for ₹199 with a 24h response guarantee.`;
+          fallbackReply = `You can review pricing for all sessions and services directly in the offers section on this page.`;
         } else if (textToSend.toLowerCase().includes('book') || textToSend.toLowerCase().includes('appointment')) {
           fallbackReply = `You can easily book a 1:1 session right now! Just choose a slot under the "1:1 Calls" section. A real Google Meet link will be generated automatically.`;
         }
@@ -268,7 +272,7 @@ export default function CreatorPublicProfilePage({
         ...prev,
         {
           sender: 'ai',
-          text: `Deepak is available for 1:1 architecture consultations and project roadmaps. Click "Book Session" below to pick a slot that fits your schedule!`,
+          text: `${creator?.displayName || 'The creator'} is available for 1:1 consultations. Click any offer below to pick a slot that fits your schedule!`,
         },
       ]);
     } finally {
@@ -276,12 +280,41 @@ export default function CreatorPublicProfilePage({
     }
   };
 
-  if (loading && !creator) {
+  if (loading && !creator && !error) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-3">
           <div className="size-10 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
           <p className="text-xs text-muted-foreground font-semibold">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !creator) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full text-center space-y-4 p-8 rounded-3xl border bg-white dark:bg-slate-900 shadow-sm">
+          <div className="size-14 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+            <UserCircle className="size-8" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-lg font-bold text-foreground">Profile Not Published</h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {error || 'This public creator profile is currently private or has not been published yet.'}
+            </p>
+          </div>
+          {marketplaceSlug && (
+            <div className="pt-2">
+              <a
+                href={`/marketplace/${marketplaceSlug}`}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm transition-colors"
+              >
+                <span>Visit Business Marketplace Page</span>
+                <ArrowRight className="size-3.5" />
+              </a>
+            </div>
+          )}
         </div>
       </div>
     );
