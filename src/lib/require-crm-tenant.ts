@@ -66,43 +66,12 @@ export async function requireCrmTenant(
       return null;
     }
 
-    // ── Phase 3: Block standalone Forms-only workspaces from CRM APIs ──
-    // A workspace with productType='forms' is a standalone AI Forms product
-    // user and should not access /api/leads, /api/jobs, /api/customers, etc.
-    // We check this regardless of whether tenantId exists (standalone users
-    // may have a Tenant row for billing backward-compat, but their workspace
-    // productType is 'forms').
-    if (authUser.workspaceId) {
-      const wsCacheKey = `product-type:${authUser.workspaceId}`;
-      let workspace = cache.get<{ productType: string }>(wsCacheKey);
+    // Standalone AI Forms accounts are unified with CRM capabilities
+    // (Forms + AI + Scheduling + CRM Leads/Customers/Bookings/Pipeline).
+    // They are fully authorized to access these endpoints.
 
-      if (!workspace) {
-        workspace = await db.workspace.findUnique({
-          where: { id: authUser.workspaceId },
-          select: { productType: true },
-        });
-        if (workspace) {
-          cache.set(wsCacheKey, workspace, SIGNUP_MODE_TTL);
-        }
-      }
-
-      if (workspace?.productType === 'forms') {
-        return NextResponse.json(
-          {
-            error:
-              'This feature requires a CRM plan. Your workspace is on the AI Forms standalone product.',
-            code: 'FORMS_ONLY_WORKSPACE',
-            upgradeUrl: '/?view=billing',
-          },
-          { status: 403 }
-        );
-      }
-    }
-
-    // ── Existing: block listing-only tenants from CRM APIs ──
     if (!authUser.tenantId) {
-      // No tenant and not a standalone Forms workspace — allow (let
-      // downstream checks handle 401 if needed).
+      // No tenant — allow (let downstream checks handle 401/404 if needed).
       return null;
     }
 
@@ -126,24 +95,6 @@ export async function requireCrmTenant(
     if (!tenant) {
       // Tenant doesn't exist — let the caller handle the 404.
       return null;
-    }
-
-    const isStandalone =
-      tenant.signupMode === 'standalone' ||
-      tenant.plan === 'standalone_starter' ||
-      tenant.plan === 'standalone_business' ||
-      String(tenant.plan || '').startsWith('standalone');
-
-    if (isStandalone) {
-      return NextResponse.json(
-        {
-          error:
-            'This feature requires a CRM plan. Your account is on the AI Forms standalone product.',
-          code: 'STANDALONE_FORMS_TENANT',
-          upgradeUrl: '/?view=billing',
-        },
-        { status: 403 }
-      );
     }
 
     const isListingOnly =

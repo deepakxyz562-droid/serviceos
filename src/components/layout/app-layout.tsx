@@ -477,8 +477,15 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     String((auth?.tenant as any)?.plan || '').startsWith('standalone') ||
     (auth?.user as any)?.role === 'standalone_user';
   const standaloneAllowedViews = useMemo(() => new Set([
+    // AI Forms & Creator Suite
     'formsDashboard', 'formBuilder', 'formSubmissions', 'formAppointments',
+    'creatorProfile', 'creatorOffers',
+    'scheduling', 'meetingTypes', 'appointmentTypes',
     'liveChat', 'formsAnalytics', 'aiReceptionist', 'chatbotBuilder',
+    // CRM, Deals & Bookings
+    'leads', 'customers', 'contacts', 'crm', 'customer360',
+    'booking', 'calendar', 'salesPipeline',
+    // System & Integrations
     'integrations', 'billing', 'settings', 'notifications', 'helpCenter', 'activityLogs',
   ]), []);
   useEffect(() => {

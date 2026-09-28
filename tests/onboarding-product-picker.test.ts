@@ -14,9 +14,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ---------------------------------------------------------------------------
 
 const mockPrismaUpdate = vi.fn();
+const mockPrismaSubUpdate = vi.fn();
+const mockPrismaSubDeleteMany = vi.fn();
 const mockPrismaUpdateMany = vi.fn();
 const mockPrismaCreate = vi.fn();
 const mockPrismaFindUnique = vi.fn();
+const mockPrismaFindFirst = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -26,14 +29,20 @@ vi.mock('@/lib/db', () => ({
     },
     subscription: {
       create: (...args: any[]) => mockPrismaCreate(...args),
+      update: (...args: any[]) => mockPrismaSubUpdate(...args),
       updateMany: (...args: any[]) => mockPrismaUpdateMany(...args),
+      findFirst: (...args: any[]) => mockPrismaFindFirst(...args),
+      deleteMany: (...args: any[]) => mockPrismaSubDeleteMany(...args),
     },
     $transaction: async (fn: (tx: any) => any) => {
       const tx = {
         tenant: { update: mockPrismaUpdate },
         subscription: {
           create: mockPrismaCreate,
+          update: mockPrismaSubUpdate,
           updateMany: mockPrismaUpdateMany,
+          findFirst: (...args: any[]) => mockPrismaFindFirst(...args),
+          deleteMany: mockPrismaSubDeleteMany,
         },
       };
       return fn(tx);
@@ -84,6 +93,8 @@ describe('POST /api/tenants/me/signup-mode', () => {
     vi.clearAllMocks();
     mockGetAuthUser.mockResolvedValue({ id: 'user-1', tenantId: TENANT_ID, role: 'owner' });
     mockPrismaFindUnique.mockResolvedValue(BASE_TENANT);
+    mockPrismaFindFirst.mockResolvedValue({ id: 'sub-existing', status: 'trial', plan: 'starter' });
+    mockPrismaSubUpdate.mockResolvedValue({ id: 'sub-existing' });
     mockPrismaUpdate.mockResolvedValue({ ...BASE_TENANT, id: TENANT_ID });
     mockPrismaUpdateMany.mockResolvedValue({ count: 1 });
     mockPrismaCreate.mockResolvedValue({ id: 'sub-1' });
@@ -113,15 +124,17 @@ describe('POST /api/tenants/me/signup-mode', () => {
   // ── crm_trial path ────────────────────────────────────────────────────────
 
   it('sets signupMode=crm_trial and returns 200', async () => {
-    mockPrismaUpdate.mockResolvedValue({
-      id: TENANT_ID,
-      signupMode: 'crm_trial',
-      listingTier: 'claimed',
-      plan: 'starter',
-      planStatus: 'trial',
-      trialEndsAt: new Date(),
-      onboardingCompleted: false,
-    });
+    mockPrismaFindUnique
+      .mockResolvedValueOnce(BASE_TENANT)
+      .mockResolvedValueOnce({
+        id: TENANT_ID,
+        signupMode: 'crm_trial',
+        listingTier: 'claimed',
+        plan: 'starter',
+        planStatus: 'trial',
+        trialEndsAt: new Date(),
+        onboardingCompleted: false,
+      });
     const res = await POST(makeRequest({ mode: 'crm_trial' }));
     expect(res.status).toBe(200);
     const data = await res.json();
@@ -152,11 +165,10 @@ describe('POST /api/tenants/me/signup-mode', () => {
     const data = await res.json();
     expect(data.tenant.signupMode).toBe('listing_only');
     expect(data.tenant.plan).toBe('free');
-    // Subscription must be cancelled
-    expect(mockPrismaUpdateMany).toHaveBeenCalledWith(
+    // Subscription must be updated in-place
+    expect(mockPrismaSubUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ status: { in: ['trial', 'active'] } }),
-        data: expect.objectContaining({ status: 'cancelled' }),
+        data: expect.objectContaining({ plan: 'free', status: 'active' }),
       })
     );
   });
@@ -178,20 +190,10 @@ describe('POST /api/tenants/me/signup-mode', () => {
       });
     const res = await POST(makeRequest({ mode: 'standalone' }));
     expect(res.status).toBe(200);
-    // Existing subscription was cancelled
-    expect(mockPrismaUpdateMany).toHaveBeenCalledWith(
+    // Existing subscription was updated in-place
+    expect(mockPrismaSubUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: 'cancelled' }),
-      })
-    );
-    // New standalone_starter subscription was created
-    expect(mockPrismaCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          plan: 'standalone_starter',
-          status: 'trial',
-          currency: 'USD',
-        }),
+        data: expect.objectContaining({ plan: 'standalone_starter', status: 'trial' }),
       })
     );
     // Tenant updated correctly
@@ -353,11 +355,11 @@ describe('checkSession onboardingView routing', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Suite 4: requireCrmTenant standalone blocking
+// Suite 4: requireCrmTenant standalone access & listing-only blocking
 // ---------------------------------------------------------------------------
 
 describe('requireCrmTenant guard for standalone users', () => {
-  it('blocks standalone tenant with 403 and STANDALONE_FORMS_TENANT code', async () => {
+  it('allows standalone tenant to access CRM endpoints without 403', async () => {
     const { requireCrmTenant } = await import('@/lib/require-crm-tenant');
     mockGetAuthUser.mockResolvedValue({ id: 'user-1', tenantId: TENANT_ID });
     mockPrismaFindUnique.mockResolvedValue({
@@ -369,10 +371,26 @@ describe('requireCrmTenant guard for standalone users', () => {
 
     const req = new NextRequest('http://localhost/api/leads');
     const res = await requireCrmTenant(req);
+    expect(res).toBeNull();
+  });
+
+  it('blocks listing-only tenant with 403 and LISTING_ONLY_TENANT code', async () => {
+    const { requireCrmTenant } = await import('@/lib/require-crm-tenant');
+    const LISTING_TENANT_ID = 'tenant-listing-only-777';
+    mockGetAuthUser.mockResolvedValue({ id: 'user-2', tenantId: LISTING_TENANT_ID });
+    mockPrismaFindUnique.mockResolvedValue({
+      id: LISTING_TENANT_ID,
+      signupMode: 'listing_only',
+      plan: 'free',
+      listingTier: 'claimed_free',
+    });
+
+    const req = new NextRequest('http://localhost/api/leads');
+    const res = await requireCrmTenant(req);
     expect(res).not.toBeNull();
     expect(res?.status).toBe(403);
     const data = await res?.json();
-    expect(data.code).toBe('STANDALONE_FORMS_TENANT');
+    expect(data.code).toBe('LISTING_ONLY_TENANT');
   });
 });
 
