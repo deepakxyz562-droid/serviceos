@@ -53,7 +53,7 @@ export interface WeeklyAvailabilitySettings {
 }
 
 export const DEFAULT_BOOKING_FIELDS: BookingField[] = [
-  { id: 'name', label: 'Your Name', type: 'text', required: true, placeholder: 'e.g. Deepak Chandra' },
+  { id: 'name', label: 'Your Name', type: 'text', required: true, placeholder: 'e.g. Alex Morgan' },
   { id: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'you@example.com' },
   { id: 'phone', label: 'Phone Number', type: 'phone', required: false, placeholder: '+1 (555) 000-0000' },
   { id: 'notes', label: 'Please share anything that will help prepare for our meeting', type: 'textarea', required: false },

@@ -92,12 +92,18 @@ export default function PublicBookingPage({
           setHost(data.host);
           setEventType(data.eventType);
           setSlots(data.slots || []);
-        } else {
           // If not found in dynamic tenant, provide high-fidelity fallback host & event
+          const fallbackHostName =
+            tenantOrUserSlug && tenantOrUserSlug !== 'preview'
+              ? tenantOrUserSlug
+                  .split('-')
+                  .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+                  .join(' ')
+              : 'Scheduling Host';
           setHost({
             id: data?.host?.id || '',
-            name: 'deepak chandra',
-            email: 'deepakxyz159@gmail.com',
+            name: fallbackHostName,
+            email: 'host@serviceos.co',
             googleCalendarConnected: true,
           });
           setEventType({
@@ -264,7 +270,7 @@ export default function PublicBookingPage({
 
             <div className="space-y-1">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                {host?.name || 'deepak chandra'}
+                {host?.name || 'Scheduling Host'}
               </p>
               <h1 className="text-xl md:text-2xl font-black text-foreground leading-tight">
                 {eventType?.title || '30 Minute Meeting'}

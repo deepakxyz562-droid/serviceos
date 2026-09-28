@@ -43,12 +43,33 @@ import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { EventType, WeeklyAvailabilitySettings, MeetingLocationType } from '@/features/scheduling/types/event-types';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
 
-export function SchedulingView() {
+export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}) {
+  const auth = useAppStore((state) => state.auth);
+  const tenantSlug = auth?.tenant?.slug || (auth?.user?.name ? auth.user.name.toLowerCase().replace(/[^a-z0-9]/g, '-') : '') || 'preview';
+  const hostName = auth?.user?.name || auth?.tenant?.name || 'Scheduling Host';
+  const hostInitials = hostName
+    .split(' ')
+    .filter(Boolean)
+    .map((p: string) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'SH';
+
+  const hostBadge = auth?.tenant?.planTier
+    ? `${String(auth.tenant.planTier).toUpperCase()} HOST`
+    : 'PRO HOST';
+
   const [activeTab, setActiveTab] = useState<'event-types' | 'upcoming' | 'availability' | 'calendars'>('event-types');
   const [eventTypes, setEventTypes] = useState<EventType[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Dynamic booking links
+  const primaryEventSlug = eventTypes.find((e) => e.isActive)?.slug || eventTypes[0]?.slug || '30min';
+  const landingPagePath = `/book/${tenantSlug}/${primaryEventSlug}`;
+  const getEventPath = (evtSlug: string) => `/book/${tenantSlug}/${evtSlug}`;
 
   // Onboarding Modal state
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -177,7 +198,7 @@ export function SchedulingView() {
   // Copy Link Helper
   const handleCopyLink = (slug: string, id: string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const fullUrl = `${origin}/book/${slug}`;
+    const fullUrl = `${origin}${getEventPath(slug)}`;
     navigator.clipboard.writeText(fullUrl);
     setCopiedId(id);
     toast.success('Public booking link copied to clipboard!');
@@ -330,23 +351,23 @@ export function SchedulingView() {
   }, [meetings, searchQuery]);
 
   return (
-    <div className="flex-1 space-y-6 p-4 md:p-8 max-w-7xl mx-auto w-full animate-in fade-in duration-300">
+    <div className={cn('w-full space-y-6 animate-in fade-in duration-300', !embedded ? 'p-4 md:p-8 flex-1' : 'pt-2')}>
       {/* ── Top Header / User Profile ── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b">
         <div className="flex items-center gap-3">
           <div className="size-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-md ring-2 ring-blue-500/20">
-            DC
+            {hostInitials}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-black tracking-tight text-foreground">deepak chandra</h1>
+              <h1 className="text-xl md:text-2xl font-black tracking-tight text-foreground">{hostName}</h1>
               <Badge variant="outline" className="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/50 border-blue-200">
-                PRO HOST
+                {hostBadge}
               </Badge>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
               <a
-                href="/book/30min"
+                href={landingPagePath}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-blue-600 hover:underline flex items-center gap-1 font-semibold text-blue-600"
@@ -475,11 +496,11 @@ export function SchedulingView() {
 
                   <CardContent className="pt-0 space-y-3">
                     <div className="flex items-center justify-between text-xs pt-2 border-t text-muted-foreground">
-                      <span className="font-mono text-[11px] text-slate-500 truncate max-w-[160px]">
-                        /book/{evt.slug}
+                      <span className="font-mono text-[11px] text-slate-500 truncate max-w-[200px]">
+                        {getEventPath(evt.slug)}
                       </span>
                       <a
-                        href={`/book/${evt.slug}`}
+                        href={getEventPath(evt.slug)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:underline font-bold text-xs flex items-center gap-1"

@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   FileInput, Plus, Search, Trash2, Eye, Pencil, Code, MessageCircle,
   CheckCircle2, Loader2, BarChart3, MoreVertical, TrendingUp,
-  AlertCircle, Sparkles, Inbox, Calendar,
+  AlertCircle, Sparkles, Inbox, Calendar, ExternalLink, Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -832,64 +832,142 @@ export function FormBuilderView() {
       )}
 
       {/* ─── Header ────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-4 pb-2 border-b">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 text-white">
-            <FileInput className="size-5" />
+          <div
+            className={cn(
+              'flex items-center justify-center size-12 rounded-2xl text-white shadow-md transition-all',
+              viewMode === 'forms' && 'bg-gradient-to-tr from-emerald-600 to-teal-600',
+              viewMode === 'chatbots' && 'bg-gradient-to-tr from-blue-600 to-indigo-600',
+              viewMode === 'scheduling' && 'bg-gradient-to-tr from-indigo-600 to-blue-600',
+              viewMode === 'offers' && 'bg-gradient-to-tr from-purple-600 to-pink-600',
+              viewMode === 'submissions' && 'bg-gradient-to-tr from-teal-600 to-emerald-600'
+            )}
+          >
+            {viewMode === 'forms' && <FileInput className="size-6" />}
+            {viewMode === 'chatbots' && <Bot className="size-6" />}
+            {viewMode === 'scheduling' && <CalendarClock className="size-6" />}
+            {viewMode === 'offers' && <Sparkles className="size-6" />}
+            {viewMode === 'submissions' && <Inbox className="size-6" />}
           </div>
           <div>
-            <h2 className="text-xl font-bold">AI &amp; Forms Studio</h2>
-            <p className="text-sm text-muted-foreground">Smart form generation, conversational chatbots &amp; lead pipelines</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl md:text-2xl font-black tracking-tight text-foreground">
+                {viewMode === 'forms' && 'AI Forms & Studio'}
+                {viewMode === 'chatbots' && 'AI Chatbots & Agents'}
+                {viewMode === 'scheduling' && 'Scheduling & Calendly Engine'}
+                {viewMode === 'offers' && 'Special Offers & Monetization'}
+                {viewMode === 'submissions' && 'Submissions & Inquiries'}
+              </h2>
+              <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-wider">
+                {viewMode === 'forms'
+                  ? 'Interactive Forms'
+                  : viewMode === 'chatbots'
+                  ? '11 Channels'
+                  : viewMode === 'scheduling'
+                  ? '1:1 & Group'
+                  : viewMode === 'offers'
+                  ? 'Topmate Monetization'
+                  : 'Lead Store'}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {viewMode === 'forms' && 'Smart conversational forms, quiz funnels, payment checkouts & real-time CRM capture.'}
+              {viewMode === 'chatbots' && 'Autonomous AI assistants for customer support, appointment scheduling, and automated qualification.'}
+              {viewMode === 'scheduling' && 'Seamless booking calendar with Google Meet, Zoom, custom availability, and conflict detection.'}
+              {viewMode === 'offers' && 'Sell 1:1 consultation calls, priority answers, and downloadable digital products via Creem & UPI.'}
+              {viewMode === 'submissions' && 'Unified inbox of inquiries, customer details, qualification scores, and booked meetings.'}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="border-blue-500/40 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 gap-1.5"
-            onClick={() => {
-              setAgentStudioData(DEFAULT_FORM_AGENT);
-              setShowAiAgentStudio(true);
-            }}
-          >
-            <Bot className="size-4 text-blue-600" /> AI Agent Studio
-          </Button>
-          <Button
-            variant="outline"
-            className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5"
-            onClick={() => setShowAiWebsiteDialog(true)}
-          >
-            <Sparkles className="size-4 text-emerald-600" /> Create with AI
-          </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleOpenCreate}>
-            <Plus className="size-4 mr-1.5" /> Create Form
-          </Button>
-        </div>
+
+        {viewMode === 'forms' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-blue-500/40 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 gap-1.5 h-9 rounded-xl font-bold text-xs"
+              onClick={() => {
+                setAgentStudioData(DEFAULT_FORM_AGENT);
+                setShowAiAgentStudio(true);
+              }}
+            >
+              <Bot className="size-4 text-blue-600" /> AI Agent Studio
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5 h-9 rounded-xl font-bold text-xs"
+              onClick={() => setShowAiWebsiteDialog(true)}
+            >
+              <Sparkles className="size-4 text-emerald-600" /> Create with AI
+            </Button>
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white h-9 rounded-xl font-bold text-xs shadow-xs"
+              onClick={handleOpenCreate}
+            >
+              <Plus className="size-4 mr-1" /> Create Form
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* ─── Mode Switcher Tabs (AI Forms | Chatbot Builder | Scheduling | Special Offers | Submissions) ── */}
-      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'forms' | 'chatbots' | 'scheduling' | 'offers' | 'submissions')} className="w-full space-y-6">
-        <TabsList className="grid w-full max-w-4xl grid-cols-5">
-          <TabsTrigger value="forms" className="gap-1.5 text-xs font-semibold">
-            <FileInput className="size-3.5" /> AI Forms
-          </TabsTrigger>
-          <TabsTrigger value="chatbots" className="gap-1.5 text-xs font-semibold">
-            <Bot className="size-3.5" /> Chatbots
-          </TabsTrigger>
-          <TabsTrigger value="scheduling" className="gap-1.5 text-xs font-semibold">
-            <CalendarClock className="size-3.5 text-blue-600" /> Scheduling
-          </TabsTrigger>
-          <TabsTrigger value="offers" className="gap-1.5 text-xs font-semibold">
-            <Sparkles className="size-3.5 text-purple-600" /> Special Offers
-          </TabsTrigger>
-          <TabsTrigger value="submissions" className="gap-1.5 text-xs font-semibold">
-            <Calendar className="size-3.5 text-emerald-600" /> Submissions
-            {totalSubmissions > 0 && (
-              <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4">
-                {totalSubmissions}
-              </Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
+      <Tabs
+        value={viewMode}
+        onValueChange={(v) => setViewMode(v as 'forms' | 'chatbots' | 'scheduling' | 'offers' | 'submissions')}
+        className="w-full space-y-6"
+      >
+        <div className="w-full bg-muted/50 p-1.5 rounded-2xl border flex items-center justify-between gap-1 overflow-x-auto shadow-2xs">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto p-0 bg-transparent gap-1.5">
+            <TabsTrigger
+              value="forms"
+              className="gap-2 text-xs sm:text-sm font-bold py-2.5 rounded-xl data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <FileInput className="size-4 text-emerald-600" />
+              <span>AI Forms</span>
+              {forms.length > 0 && (
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-muted">
+                  {forms.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="chatbots"
+              className="gap-2 text-xs sm:text-sm font-bold py-2.5 rounded-xl data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <Bot className="size-4 text-blue-600" />
+              <span>Chatbots</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="scheduling"
+              className="gap-2 text-xs sm:text-sm font-bold py-2.5 rounded-xl data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <CalendarClock className="size-4 text-indigo-600" />
+              <span>Scheduling</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="offers"
+              className="gap-2 text-xs sm:text-sm font-bold py-2.5 rounded-xl data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <Sparkles className="size-4 text-purple-600" />
+              <span>Special Offers</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="submissions"
+              className="gap-2 text-xs sm:text-sm font-bold py-2.5 rounded-xl data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <Inbox className="size-4 text-teal-600" />
+              <span>Submissions</span>
+              {totalSubmissions > 0 && (
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-muted">
+                  {totalSubmissions}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="forms" className="space-y-6 mt-0">
           {/* ─── Stats ─────────────────────────────────────────────────────────── */}
@@ -1019,15 +1097,45 @@ export function FormBuilderView() {
                       )}
                     </div>
 
+                    {/* Form URL Link Row */}
+                    <div className="flex items-center justify-between text-xs pt-2 border-t text-muted-foreground">
+                      <span className="font-mono text-[11px] text-slate-500 truncate max-w-[160px]">
+                        {getFormPath(form)}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(`${siteOrigin}${getFormPath(form)}`, 'Form URL')}
+                          className="text-[11px] text-slate-500 hover:text-foreground font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Copy className="size-3" />
+                          <span>Copy</span>
+                        </button>
+                        <span>•</span>
+                        <button
+                          type="button"
+                          onClick={() => openFormLink(form)}
+                          className="text-emerald-600 hover:underline font-bold text-xs flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <span>Open</span>
+                          <ExternalLink className="size-3" />
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Action buttons */}
-                    <div className="flex gap-1.5">
-                      <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => handleOpenEdit(form)}>
-                        <Pencil className="size-3 mr-1" /> Edit
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        size="sm"
+                        className="flex-1 h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-2xs"
+                        onClick={() => handleOpenEdit(form)}
+                      >
+                        <Pencil className="size-3.5 mr-1.5" /> Edit Builder
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1 h-7 text-xs border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                        className="flex-1 h-8 text-xs font-bold border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-xl"
                         onClick={() => {
                           const existingConfig = (form as any).agentConfig;
                           const formAgent: FormAgentData = {
@@ -1051,24 +1159,20 @@ export function FormBuilderView() {
                           setShowAiAgentStudio(true);
                         }}
                       >
-                        <Bot className="size-3 mr-1 text-blue-600" /> AI Agent
+                        <Bot className="size-3.5 mr-1.5 text-blue-600" /> AI Agent
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => { setSelectedForm(form); setShowResponsesDialog(true); fetchResponses(form.id); }}>
-                        <Eye className="size-3 mr-1" /> Responses
-                      </Button>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => { setSelectedForm(form); setShowPreviewDialog(true); }}>
-                        Preview
-                      </Button>
-                      <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => { setSelectedForm(form); setShowEmbedDialog(true); }}>
-                        <Code className="size-3 mr-1" /> Embed
-                      </Button>
-                      <Button size="sm" className="flex-1 h-7 text-xs bg-[#25D366] hover:bg-[#20BD5A] text-white" onClick={() => { setSelectedForm(form); setShowWhatsAppDialog(true); }}>
-                        <MessageCircle className="size-3 mr-1" /> WhatsApp
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-7 text-xs text-red-600 hover:bg-red-50" onClick={() => setShowDeleteConfirm(form)}>
-                        <Trash2 className="size-3" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs font-bold rounded-xl px-2.5"
+                        onClick={() => {
+                          setSelectedForm(form);
+                          setShowResponsesDialog(true);
+                          fetchResponses(form.id);
+                        }}
+                        title="View Inquiries & Responses"
+                      >
+                        <Eye className="size-3.5" />
                       </Button>
                     </div>
                   </CardContent>
@@ -1106,15 +1210,15 @@ export function FormBuilderView() {
         </TabsContent>
 
         <TabsContent value="scheduling" className="mt-0 space-y-6">
-          <SchedulingView />
+          <SchedulingView embedded={true} />
         </TabsContent>
 
         <TabsContent value="offers" className="mt-0 space-y-6">
-          <CreatorOffersView />
+          <CreatorOffersView embedded={true} />
         </TabsContent>
 
         <TabsContent value="submissions" className="mt-0">
-          <FormSubmissionsView />
+          <FormSubmissionsView embedded={true} onNavigateToScheduling={() => setViewMode('scheduling')} />
         </TabsContent>
       </Tabs>
 

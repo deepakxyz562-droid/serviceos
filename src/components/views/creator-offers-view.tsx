@@ -27,8 +27,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
 import { CreatorOffer, CreatorProfileData, DEFAULT_OFFERS } from '@/lib/creator-profile';
+import { cn } from '@/lib/utils';
 
-export function CreatorOffersView() {
+export function CreatorOffersView({ embedded = false }: { embedded?: boolean } = {}) {
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -167,7 +168,7 @@ export function CreatorOffersView() {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+    <div className={cn('w-full space-y-6 pb-12', embedded ? 'pt-2' : 'p-4 md:p-8')}>
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b">
         <div>

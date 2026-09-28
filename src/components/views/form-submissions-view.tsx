@@ -24,6 +24,7 @@ import {
   ChevronRight,
   FileSpreadsheet,
   CalendarClock,
+  ArrowRight,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import {
   SubmissionDetailDrawer,
   FormSubmissionItem,
@@ -56,7 +58,17 @@ interface FormOption {
   name: string;
 }
 
-export function FormSubmissionsView({ initialTab = 'submissions' }: { initialTab?: 'submissions' | 'appointments' | 'scheduling' } = {}) {
+export interface FormSubmissionsViewProps {
+  initialTab?: 'submissions' | 'appointments' | 'scheduling';
+  embedded?: boolean;
+  onNavigateToScheduling?: () => void;
+}
+
+export function FormSubmissionsView({
+  initialTab = 'submissions',
+  embedded = false,
+  onNavigateToScheduling,
+}: FormSubmissionsViewProps = {}) {
   const [activeMainTab, setActiveMainTab] = useState<'submissions' | 'appointments' | 'scheduling'>(initialTab);
   const [submissions, setSubmissions] = useState<FormSubmissionItem[]>([]);
   const [stats, setStats] = useState<FormStats>({
@@ -154,26 +166,34 @@ export function FormSubmissionsView({ initialTab = 'submissions' }: { initialTab
   };
 
   return (
-    <div className="space-y-6 w-full p-4 md:p-6 lg:p-8">
+    <div className={cn('space-y-6 w-full', embedded ? 'pt-2' : 'p-4 md:p-6 lg:p-8')}>
       {/* ─── Header & Top Actions ────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 text-white">
-            <Inbox className="size-5" />
+        {!embedded ? (
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 text-white">
+              <Inbox className="size-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Form Submissions &amp; Lead Store</h2>
+              <p className="text-sm text-muted-foreground">
+                Centralized inbox for appointments, quotes, contact forms &amp; AI inquiries
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold">Form Submissions &amp; Lead Store</h2>
-            <p className="text-sm text-muted-foreground">
-              Centralized inbox for appointments, quotes, contact forms &amp; AI inquiries
-            </p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs font-semibold px-2.5 py-0.5 border-emerald-500/30 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20">
+              Live Submissions Feed
+            </Badge>
           </div>
-        </div>
+        )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto">
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 text-xs"
+            className="gap-1.5 text-xs h-8"
             onClick={fetchSubmissions}
             disabled={loading}
           >
@@ -183,7 +203,7 @@ export function FormSubmissionsView({ initialTab = 'submissions' }: { initialTab
           <Button
             variant="outline"
             size="sm"
-            className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5 text-xs font-semibold"
+            className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 gap-1.5 text-xs font-semibold h-8"
             onClick={handleExportCsv}
           >
             <FileSpreadsheet className="size-3.5 text-emerald-600" /> Export CSV
@@ -191,53 +211,70 @@ export function FormSubmissionsView({ initialTab = 'submissions' }: { initialTab
         </div>
       </div>
 
-      {/* ─── Mode Switcher: Submissions vs Calendly Appointments Engine vs Event Types ─── */}
-      <div className="flex items-center gap-2 border-b border-border/80 pb-2">
-        <button
-          onClick={() => setActiveMainTab('submissions')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-            activeMainTab === 'submissions'
-              ? 'bg-primary text-primary-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-          }`}
-        >
-          <Inbox className="size-4" />
-          All Submissions
-          <Badge variant="secondary" className="ml-1 text-[10px] py-0">
-            {stats.total}
-          </Badge>
-        </button>
+      {/* ─── Mode Switcher: Submissions vs Calendly Appointments Engine ─── */}
+      <div className="flex items-center justify-between gap-2 border-b border-border/80 pb-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveMainTab('submissions')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+              activeMainTab === 'submissions'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <Inbox className="size-4" />
+            All Submissions
+            <Badge variant="secondary" className="ml-1 text-[10px] py-0 px-1.5">
+              {stats.total}
+            </Badge>
+          </button>
 
-        <button
-          onClick={() => setActiveMainTab('appointments')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-            activeMainTab === 'appointments'
-              ? 'bg-primary text-primary-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-          }`}
-        >
-          <Calendar className="size-4" />
-          Appointments (Calendly Engine)
-          <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded">
-            Native
-          </span>
-        </button>
+          <button
+            onClick={() => setActiveMainTab('appointments')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+              activeMainTab === 'appointments'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <Calendar className="size-4" />
+            Appointments (Calendly Engine)
+            <span className="text-[10px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded">
+              Native
+            </span>
+          </button>
 
-        <button
-          onClick={() => setActiveMainTab('scheduling')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-            activeMainTab === 'scheduling'
-              ? 'bg-primary text-primary-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-          }`}
-        >
-          <CalendarClock className="size-4 text-blue-600" />
-          Event Types &amp; Calendly Setup
-        </button>
+          {!onNavigateToScheduling && (
+            <button
+              onClick={() => setActiveMainTab('scheduling')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                activeMainTab === 'scheduling'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              }`}
+            >
+              <CalendarClock className="size-4 text-blue-600" />
+              Event Types &amp; Calendly Setup
+            </button>
+          )}
+        </div>
+
+        {onNavigateToScheduling && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onNavigateToScheduling}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 gap-1.5 font-semibold h-8"
+          >
+            <CalendarClock className="size-3.5" />
+            <span>Manage Event Types &amp; Availability</span>
+            <ArrowRight className="size-3" />
+          </Button>
+        )}
       </div>
 
       {activeMainTab === 'scheduling' ? (
-        <SchedulingView />
+        <SchedulingView embedded={embedded} />
       ) : activeMainTab === 'appointments' ? (
         <FormAppointmentsTab />
       ) : (
