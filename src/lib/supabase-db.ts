@@ -76,6 +76,7 @@ const TABLE_MAP: Record<string, string> = {
   quote: 'Quote',
   form: 'Form',
   formResponse: 'FormResponse',
+  formAgent: 'FormAgent',
   workflowAutomation: 'WorkflowAutomation',
   workspace: 'Workspace',
   workflow: 'Workflow',

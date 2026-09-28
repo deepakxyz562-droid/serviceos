@@ -144,7 +144,8 @@ export function FormAgentStudio({
     }
   }, [initialAgent]);
 
-  const handleSave = async () => {
+  const handleSave = async (overrideAgent?: FormAgentData, silent = false) => {
+    const targetAgent = overrideAgent || agent;
     setSaving(true);
     try {
       // POST to the API first — this creates or updates the agent in the DB
@@ -152,7 +153,7 @@ export function FormAgentStudio({
       const res = await fetch('/api/forms/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(agent),
+        body: JSON.stringify(targetAgent),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -162,8 +163,8 @@ export function FormAgentStudio({
       // agent rows on subsequent saves — the next POST will find the existing
       // row by ID and update it instead of creating a new one.
       const savedAgent: FormAgentData = data.agent
-        ? { ...agent, ...data.agent, id: data.agent.id || agent.id, slug: data.agent.slug || agent.slug }
-        : agent;
+        ? { ...targetAgent, ...data.agent, id: data.agent.id || targetAgent.id, slug: data.agent.slug || targetAgent.slug }
+        : targetAgent;
 
       setAgentState(savedAgent);
 
@@ -172,15 +173,19 @@ export function FormAgentStudio({
         await onSave(savedAgent);
       }
 
-      if (res.ok && data.agent) {
-        toast.success('AI Agent saved successfully!');
-      } else if (res.ok) {
-        toast.success('Agent changes saved to form!');
-      } else {
-        toast.error(data.error || 'Failed to save agent to database');
+      if (!silent) {
+        if (res.ok && data.agent) {
+          toast.success('AI Agent saved successfully!');
+        } else if (res.ok) {
+          toast.success('Agent changes saved to form!');
+        } else {
+          toast.error(data.error || 'Failed to save agent to database');
+        }
       }
     } catch {
-      toast.error('Failed to save agent. Please try again.');
+      if (!silent) {
+        toast.error('Failed to save agent. Please try again.');
+      }
     } finally {
       setSaving(false);
     }
@@ -280,7 +285,12 @@ export function FormAgentStudio({
             </button>
             <button
               type="button"
-              onClick={() => setStudioTab('publish')}
+              onClick={() => {
+                if (studioTab !== 'publish') {
+                  handleSave(agent, true);
+                }
+                setStudioTab('publish');
+              }}
               className={cn(
                 'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
                 studioTab === 'publish'
@@ -555,7 +565,12 @@ export function FormAgentStudio({
       {studioTab === 'publish' && (
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
           <div className="max-w-4xl mx-auto">
-            <AgentPublishTab agent={agent} onChange={setAgent} siteOrigin={siteOrigin} />
+            <AgentPublishTab
+              agent={agent}
+              onChange={setAgent}
+              siteOrigin={siteOrigin}
+              onSave={() => handleSave(agent)}
+            />
           </div>
         </div>
       )}

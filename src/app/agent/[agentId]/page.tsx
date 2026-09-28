@@ -27,8 +27,10 @@ export default function StandaloneAgentPage() {
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<FormAgentData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [previewPage, setPreviewPage] = useState<'greeting' | 'conversation'>('greeting');
-  const [forceFullView, setForceFullView] = useState(initialViewParam === 'full');
+  const [previewPage, setPreviewPage] = useState<'greeting' | 'conversation'>(
+    initialViewParam === 'greeting' ? 'greeting' : 'conversation'
+  );
+  const [forceFullView, setForceFullView] = useState(initialViewParam !== 'widget');
 
   useEffect(() => {
     async function loadAgent() {
@@ -45,9 +47,8 @@ export default function StandaloneAgentPage() {
           const data = await res.json();
           if (data.agent) {
             setAgent(data.agent);
-            const isStandalone = data.agent.channels?.chatbot?.layoutMode === 'standalone';
-            setForceFullView(initialViewParam === 'full' || isStandalone);
-            setPreviewPage(initialViewParam === 'conversation' ? 'conversation' : 'greeting');
+            setForceFullView(initialViewParam !== 'widget');
+            setPreviewPage(initialViewParam === 'greeting' ? 'greeting' : 'conversation');
           } else {
             setError('Agent not found');
           }
@@ -174,8 +175,8 @@ export default function StandaloneAgentPage() {
         background: theme.pageBackgroundGradient,
       }}
     >
-      {/* Return to Floating View button if agent is configured for floating layout */}
-      {layoutMode === 'floating' && (
+      {/* Return to Floating View button only if explicitly opened with ?view=widget */}
+      {initialViewParam === 'widget' && layoutMode === 'floating' && (
         <div className="mb-3">
           <Button
             variant="outline"

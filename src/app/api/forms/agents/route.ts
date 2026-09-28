@@ -5,6 +5,17 @@ import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-
 
 export const dynamic = 'force-dynamic';
 
+function toIsoString(val: unknown): string {
+  if (!val) return new Date().toISOString();
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'string') return val;
+  try {
+    return new Date(val as any).toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
 /**
  * GET /api/forms/agents
  * List all agents for the authenticated tenant, or fetch a single agent by id/slug.
@@ -27,7 +38,10 @@ export async function GET(request: NextRequest) {
         OR: [{ id: identifier }, { slug: identifier }],
       };
       if (user?.tenantId) {
-        whereClause.tenantId = user.tenantId;
+        whereClause.OR = [
+          { id: identifier },
+          { slug: identifier },
+        ];
       }
 
       const agent = await db.formAgent.findFirst({ where: whereClause });
@@ -35,21 +49,24 @@ export async function GET(request: NextRequest) {
       if (agent) {
         // Merge DB row with the configJson (which contains the full FormAgentData)
         const config = (agent.configJson as Partial<FormAgentData>) || {};
+        const effectiveAvatar = agent.avatarUrl || config.avatarUrl || (config.style as any)?.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
+        const effectiveBrandColor = agent.brandColor || config.brandColor || (config.style as any)?.primaryColor || DEFAULT_FORM_AGENT.brandColor;
         const merged: FormAgentData = {
           ...DEFAULT_FORM_AGENT,
           ...config,
           id: agent.id,
           tenantId: agent.tenantId || undefined,
           slug: agent.slug,
-          name: agent.name,
-          roleTitle: agent.roleTitle,
-          avatarUrl: agent.avatarUrl,
-          statusText: agent.statusText,
-          brandColor: agent.brandColor,
-          voiceTone: agent.voiceTone as FormAgentData['voiceTone'],
-          welcomeGreeting: agent.welcomeGreeting,
-          greetingSubtitle: agent.greetingSubtitle || undefined,
-          updatedAt: agent.updatedAt.toISOString(),
+          name: agent.name || config.name || DEFAULT_FORM_AGENT.name,
+          roleTitle: agent.roleTitle || config.roleTitle || DEFAULT_FORM_AGENT.roleTitle,
+          avatarUrl: effectiveAvatar,
+          statusText: agent.statusText || config.statusText || 'Online',
+          brandColor: effectiveBrandColor,
+          voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
+          welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
+          greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
+          style: config.style || DEFAULT_FORM_AGENT.style,
+          updatedAt: toIsoString(agent.updatedAt),
         };
         return NextResponse.json({ agent: merged });
       }
@@ -59,28 +76,38 @@ export async function GET(request: NextRequest) {
 
     // List all agents for the tenant
     const agents = await db.formAgent.findMany({
-      where: user?.tenantId ? { tenantId: user.tenantId } : {},
+      where: user?.tenantId
+        ? {
+            OR: [
+              { tenantId: user.tenantId },
+              { tenantId: null },
+            ],
+          }
+        : {},
       orderBy: { createdAt: 'desc' },
     });
 
     if (agents.length > 0) {
       const merged = agents.map((agent) => {
         const config = (agent.configJson as Partial<FormAgentData>) || {};
+        const effectiveAvatar = agent.avatarUrl || config.avatarUrl || (config.style as any)?.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
+        const effectiveBrandColor = agent.brandColor || config.brandColor || (config.style as any)?.primaryColor || DEFAULT_FORM_AGENT.brandColor;
         return {
           ...DEFAULT_FORM_AGENT,
           ...config,
           id: agent.id,
           tenantId: agent.tenantId || undefined,
           slug: agent.slug,
-          name: agent.name,
-          roleTitle: agent.roleTitle,
-          avatarUrl: agent.avatarUrl,
-          statusText: agent.statusText,
-          brandColor: agent.brandColor,
-          voiceTone: agent.voiceTone as FormAgentData['voiceTone'],
-          welcomeGreeting: agent.welcomeGreeting,
-          greetingSubtitle: agent.greetingSubtitle || undefined,
-          updatedAt: agent.updatedAt.toISOString(),
+          name: agent.name || config.name || DEFAULT_FORM_AGENT.name,
+          roleTitle: agent.roleTitle || config.roleTitle || DEFAULT_FORM_AGENT.roleTitle,
+          avatarUrl: effectiveAvatar,
+          statusText: agent.statusText || config.statusText || 'Online',
+          brandColor: effectiveBrandColor,
+          voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
+          welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
+          greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
+          style: config.style || DEFAULT_FORM_AGENT.style,
+          updatedAt: toIsoString(agent.updatedAt),
         } as FormAgentData;
       });
       return NextResponse.json({ agents: merged });
@@ -128,20 +155,21 @@ export async function POST(request: NextRequest) {
       ...restConfig
     } = body;
 
+    const effectiveAvatar = avatarUrl || body.avatarUrl || (body.style as any)?.avatarUrl || '';
+    const effectiveBrandColor = brandColor || body.brandColor || (body.style as any)?.primaryColor || '#059669';
+
     // Check if an agent already exists by ID or by slug
     let existing = null;
     if (body.id) {
       existing = await db.formAgent.findFirst({
         where: {
           OR: [{ id: body.id }, ...(body.slug ? [{ slug: body.slug }] : [])],
-          ...(tenantId ? { tenantId } : {}),
         },
       });
     } else if (body.slug) {
       existing = await db.formAgent.findFirst({
         where: {
           slug: body.slug,
-          ...(tenantId ? { tenantId } : {}),
         },
       });
     }
@@ -154,13 +182,19 @@ export async function POST(request: NextRequest) {
           slug: body.slug || existing.slug,
           name,
           roleTitle: roleTitle || 'AI Assistant',
-          avatarUrl: avatarUrl || '',
+          avatarUrl: effectiveAvatar,
           statusText: statusText || 'Online',
-          brandColor: brandColor || '#059669',
+          brandColor: effectiveBrandColor,
           voiceTone: voiceTone || 'friendly',
           welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
           greetingSubtitle: greetingSubtitle || null,
-          configJson: body as unknown as object,
+          configJson: {
+            ...body,
+            id: existing.id,
+            slug: body.slug || existing.slug,
+            avatarUrl: effectiveAvatar,
+            brandColor: effectiveBrandColor,
+          } as unknown as object,
         },
       });
 
@@ -170,7 +204,9 @@ export async function POST(request: NextRequest) {
           ...body,
           id: updated.id,
           slug: updated.slug,
-          updatedAt: updated.updatedAt.toISOString(),
+          avatarUrl: effectiveAvatar,
+          brandColor: effectiveBrandColor,
+          updatedAt: toIsoString(updated.updatedAt),
         },
       });
     }
@@ -188,13 +224,18 @@ export async function POST(request: NextRequest) {
         slug: resolvedSlug,
         name,
         roleTitle: roleTitle || 'AI Assistant',
-        avatarUrl: avatarUrl || '',
+        avatarUrl: effectiveAvatar,
         statusText: statusText || 'Online',
-        brandColor: brandColor || '#059669',
+        brandColor: effectiveBrandColor,
         voiceTone: voiceTone || 'friendly',
         welcomeGreeting: welcomeGreeting || 'Hello! How can I help you today?',
         greetingSubtitle: greetingSubtitle || null,
-        configJson: { ...body, slug: resolvedSlug } as unknown as object,
+        configJson: {
+          ...body,
+          slug: resolvedSlug,
+          avatarUrl: effectiveAvatar,
+          brandColor: effectiveBrandColor,
+        } as unknown as object,
       },
     });
 
@@ -204,7 +245,9 @@ export async function POST(request: NextRequest) {
         ...body,
         id: created.id,
         slug: created.slug,
-        updatedAt: created.updatedAt.toISOString(),
+        avatarUrl: effectiveAvatar,
+        brandColor: effectiveBrandColor,
+        updatedAt: toIsoString(created.updatedAt),
       },
     });
   } catch (error) {

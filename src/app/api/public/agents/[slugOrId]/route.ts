@@ -4,6 +4,17 @@ import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-
 
 export const dynamic = 'force-dynamic';
 
+function toIsoString(val: unknown): string {
+  if (!val) return new Date().toISOString();
+  if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'string') return val;
+  try {
+    return new Date(val as any).toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
 export interface PublicAgentConfig {
   id: string;
   slug: string;
@@ -30,6 +41,8 @@ export interface PublicAgentConfig {
   }>;
   channels: {
     chatbot: FormAgentData['channels']['chatbot'];
+    standalone?: { enabled: boolean; slug?: string };
+    voice?: { enabled: boolean };
   };
   updatedAt: string;
 }
@@ -39,14 +52,17 @@ export interface PublicAgentConfig {
  * Strips private system prompts, guardrails, notification emails, phone numbers, and credentials.
  */
 function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
+  const effectiveAvatar = agent.avatarUrl || (agent.style as any)?.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
+  const effectiveBrandColor = agent.brandColor || (agent.style as any)?.primaryColor || DEFAULT_FORM_AGENT.brandColor;
+
   return {
     id: agent.id,
     slug: agent.slug,
     name: agent.name || 'AI Assistant',
     roleTitle: agent.roleTitle || 'Customer Concierge',
-    avatarUrl: agent.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl,
+    avatarUrl: effectiveAvatar,
     statusText: agent.statusText || 'Online',
-    brandColor: agent.brandColor || DEFAULT_FORM_AGENT.brandColor,
+    brandColor: effectiveBrandColor,
     voiceTone: agent.voiceTone || 'friendly',
     welcomeGreeting: agent.welcomeGreeting || 'Hello! How can I assist you today?',
     greetingSubtitle: agent.greetingSubtitle,
@@ -59,7 +75,7 @@ function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
       presentationEnabled: false,
       whatsappEnabled: false,
     },
-    style: agent.style,
+    style: agent.style || DEFAULT_FORM_AGENT.style,
     settings: {
       fileUploadEnabled: agent.settings?.fileUploadEnabled ?? true,
       allowScreenSharing: agent.settings?.allowScreenSharing ?? false,
@@ -84,11 +100,13 @@ function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
         placeholderMessage: 'Ask anything or complete a form...',
         aiGeneratedGreeting: true,
         showButtons: true,
-        primaryColor: agent.brandColor || '#059669',
+        primaryColor: effectiveBrandColor,
         greetingBubble: `👋 Need help? Chat with ${agent.name || 'our AI Assistant'}!`,
       },
-    },
-    updatedAt: agent.updatedAt || new Date().toISOString(),
+      standalone: agent.channels?.standalone || { enabled: true },
+      voice: agent.channels?.voice || { enabled: true },
+    } as any,
+    updatedAt: toIsoString(agent.updatedAt),
   };
 }
 
@@ -148,7 +166,7 @@ export async function GET(
               description: form.description || undefined,
             },
           ],
-          updatedAt: form.updatedAt.toISOString(),
+          updatedAt: toIsoString(form.updatedAt),
         };
 
         const publicConfig = sanitizePublicAgent(mergedFromForm);
@@ -172,6 +190,8 @@ export async function GET(
     }
 
     const config = (agent.configJson as Partial<FormAgentData>) || {};
+    const effectiveAvatar = config.avatarUrl || agent.avatarUrl || (config.style as any)?.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl;
+    const effectiveBrandColor = config.brandColor || agent.brandColor || (config.style as any)?.primaryColor || DEFAULT_FORM_AGENT.brandColor;
     const merged: FormAgentData = {
       ...DEFAULT_FORM_AGENT,
       ...config,
@@ -180,14 +200,14 @@ export async function GET(
       slug: agent.slug,
       name: agent.name || config.name || DEFAULT_FORM_AGENT.name,
       roleTitle: agent.roleTitle || config.roleTitle || DEFAULT_FORM_AGENT.roleTitle,
-      avatarUrl: agent.avatarUrl || config.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl,
+      avatarUrl: effectiveAvatar,
       statusText: agent.statusText || config.statusText || 'Online',
-      brandColor: agent.brandColor || config.brandColor || DEFAULT_FORM_AGENT.brandColor,
+      brandColor: effectiveBrandColor,
       voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
       welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
       greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
-      style: config.style || agent.style || DEFAULT_FORM_AGENT.style,
-      updatedAt: agent.updatedAt.toISOString(),
+      style: config.style || (agent as any).style || DEFAULT_FORM_AGENT.style,
+      updatedAt: toIsoString(agent.updatedAt),
     };
 
     const publicConfig = sanitizePublicAgent(merged);
