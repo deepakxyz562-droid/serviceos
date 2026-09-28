@@ -48,6 +48,7 @@ import { CreatorOffersView } from '@/components/views/creator-offers-view';
 import { useAppStore } from '@/store/app-store';
 import { Bot, CalendarClock } from 'lucide-react';
 import { injectMediaPanelContent } from '@/lib/forms/form-node-schema';
+import { cn } from '@/lib/utils';
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
