@@ -103,26 +103,28 @@ export default function PublicBookingPage() {
     if (!selectedService || !selectedSlot || !customer.name || !customer.phone) return;
     setSubmitting(true);
     try {
-      const res = await fetch('/api/bookings', {
+      const res = await fetch('/api/public/scheduling/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId,
+          tenantSlug: slug,
           serviceId: selectedService.id,
-          title: selectedService.name,
-          customerName: customer.name,
-          customerPhone: customer.phone,
-          customerEmail: customer.email || undefined,
+          serviceName: selectedService.name,
+          customer: {
+            name: customer.name,
+            phone: customer.phone,
+            email: customer.email || `${customer.phone.replace(/[^0-9]/g, '')}@guest.local`,
+          },
           scheduledAt: selectedSlot.startTime,
-          scheduledEndTime: selectedSlot.endTime,
-          duration: selectedService.duration,
+          date: selectedDate,
+          time: selectedSlot.label,
           notes: customer.notes || undefined,
-          bookingType: 'instant',
-          source: 'website',
+          source: 'scheduling_link',
         }),
       });
       const data = await res.json();
-      if (data.success || data.booking || res.ok) {
+      if (res.ok && data.success) {
         setBookingConfirmed(true);
       } else {
         alert(data.error || 'Failed to book');

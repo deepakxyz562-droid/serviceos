@@ -17,6 +17,9 @@ import {
   CheckCircle2,
   MessageSquare,
   CalendarClock,
+  UserCircle,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -216,6 +219,55 @@ export function FormsDashboardView() {
           </Button>
         </div>
       )}
+
+      {/* ── TOPMATE-STYLE PUBLIC STOREFRONT CARD ── */}
+      <div className="p-5 rounded-2xl border bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="size-11 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
+            <UserCircle className="size-6 text-white" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold">Your AI Business Page &amp; Creator Storefront</h3>
+              <Badge className="bg-white/20 text-white text-[10px] font-bold">Live</Badge>
+            </div>
+            <p className="text-xs text-white/80 mt-0.5">
+              One public link for your bio, 1:1 call bookings, priority Q&amp;A, and digital product checkout.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCurrentView('creatorProfile')}
+            className="bg-white/10 hover:bg-white/20 border-white/30 text-white text-xs font-bold rounded-xl h-8 gap-1.5"
+          >
+            <UserCircle className="size-3.5" />
+            Edit Profile
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCurrentView('creatorOffers')}
+            className="bg-white/10 hover:bg-white/20 border-white/30 text-white text-xs font-bold rounded-xl h-8 gap-1.5"
+          >
+            <Sparkles className="size-3.5" />
+            Manage Offers
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => window.open('/p/creator', '_blank')}
+            className="bg-white hover:bg-slate-100 text-slate-900 text-xs font-bold rounded-xl h-8 gap-1.5 shadow-xs"
+          >
+            <span>Preview Page</span>
+            <ExternalLink className="size-3.5" />
+          </Button>
+        </div>
+      </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">

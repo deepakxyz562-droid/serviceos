@@ -49,6 +49,8 @@ const VariablesView = lazy(() => import('@/components/views/variables-view').the
 const ExecutionsView = lazy(() => import('@/components/views/executions-view').then(m => ({ default: m.ExecutionsView })));
 const FormBuilderView = lazy(() => import('@/components/views/form-builder-view').then(m => ({ default: m.FormBuilderView })));
 const FormSubmissionsView = lazy(() => import('@/components/views/form-submissions-view').then(m => ({ default: m.FormSubmissionsView })));
+const CreatorProfileView = lazy(() => import('@/components/views/creator-profile-view').then(m => ({ default: m.CreatorProfileView })));
+const CreatorOffersView = lazy(() => import('@/components/views/creator-offers-view').then(m => ({ default: m.CreatorOffersView })));
 const WorkflowAutomationsView = lazy(() => import('@/components/views/workflow-automations-view').then(m => ({ default: m.WorkflowAutomationsView })));
 
 // Operations
@@ -205,6 +207,8 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   formBuilder: FormBuilderView,
   formSubmissions: FormSubmissionsView,
   formAppointments: (props: any) => <FormSubmissionsView {...props} initialTab="appointments" />,
+  creatorProfile: CreatorProfileView,
+  creatorOffers: CreatorOffersView,
   workflowAutomations: WorkflowAutomationsView,
   // Operations
   operations: OperationsView,

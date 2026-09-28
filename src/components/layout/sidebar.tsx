@@ -177,6 +177,8 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'AI & Forms',
     items: [
+      { view: 'creatorProfile', label: 'Public Profile (@page)', icon: UserCircle },
+      { view: 'creatorOffers', label: 'Offers & Services', icon: Sparkles },
       { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
       { view: 'scheduling', label: 'Scheduling (Calendly)', icon: CalendarClock },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
@@ -231,6 +233,8 @@ const standaloneNavSections: NavSection[] = [
     title: 'AI & Forms Suite',
     items: [
       { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { view: 'creatorProfile', label: 'Public Profile (@page)', icon: UserCircle },
+      { view: 'creatorOffers', label: 'Offers & Services', icon: Sparkles },
       { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
       { view: 'scheduling', label: 'Scheduling (Calendly)', icon: CalendarClock },
       { view: 'formSubmissions', label: 'Submissions', icon: Inbox },
