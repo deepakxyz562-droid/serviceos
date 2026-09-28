@@ -83,6 +83,8 @@ export function FloatingFormAgentWidget({
   const [sending, setSending] = useState(false);
   const [humanRequested, setHumanRequested] = useState(false);
   const [liveSessionId, setLiveSessionId] = useState<string | null>(null);
+  const [aiSessionId, setAiSessionId] = useState<string | null>(null);
+  const [activeFormId, setActiveFormId] = useState<string | null>(formId || null);
   const [agentAvailable, setAgentAvailable] = useState<boolean | null>(null);
   const [operatorConnected, setOperatorConnected] = useState<boolean>(false);
   const [operatorName, setOperatorName] = useState<string | null>(null);
@@ -180,7 +182,7 @@ export function FloatingFormAgentWidget({
     setSending(true);
 
     // If escalated to live specialist, route message to live chat API
-    if (liveSessionId) {
+    if (humanRequested && liveSessionId) {
       try {
         await fetch(`/api/public/chat/${encodeURIComponent(liveSessionId)}/messages`, {
           method: 'POST',
@@ -203,8 +205,8 @@ export function FloatingFormAgentWidget({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agentId: formId || agentId,
-          sessionId: liveSessionId || undefined,
+          agentId: activeFormId || formId || agentId,
+          sessionId: aiSessionId || undefined,
           message: text,
           history: messages.map((m) => ({
             role: m.sender === 'user' ? 'user' : 'assistant',
@@ -215,7 +217,8 @@ export function FloatingFormAgentWidget({
 
       const data = await res.json();
       if (res.ok && data.reply) {
-        if (data.sessionId) setLiveSessionId(data.sessionId);
+        if (data.sessionId) setAiSessionId(data.sessionId);
+        if (data.suggestedForm?.id) setActiveFormId(data.suggestedForm.id);
         const aiMsg: Message = {
           id: `ai_${Date.now()}`,
           sender: 'ai',
@@ -228,6 +231,9 @@ export function FloatingFormAgentWidget({
         setMessages((prev) => [...prev, aiMsg]);
         if (data.status === 'human_requested' || data.humanHandoff) {
           setHumanRequested(true);
+          if (data.sessionId || data.liveSessionId) {
+            setLiveSessionId(data.liveSessionId || data.sessionId);
+          }
           if (data.agentAvailable !== undefined) setAgentAvailable(data.agentAvailable);
         }
       } else {
@@ -452,6 +458,20 @@ export function FloatingFormAgentWidget({
               <MessageSquare className="size-3.5 text-primary" />
               <span>AI Chat</span>
             </button>
+            {(formId || activeFormId) && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('form')}
+                className={`flex-1 text-xs py-1.5 px-2 rounded-xl font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  activeTab === 'form'
+                    ? 'bg-white dark:bg-slate-800 shadow-xs text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <FileText className="size-3.5 text-blue-500" />
+                <span>Form</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setActiveTab('human')}
@@ -635,10 +655,9 @@ export function FloatingFormAgentWidget({
                               size="sm"
                               onClick={() => {
                                 if (m.suggestedForm?.id) {
-                                  window.open(`/f/${m.suggestedForm.id}`, '_blank');
-                                } else {
-                                  setActiveTab('form');
+                                  setActiveFormId(m.suggestedForm.id);
                                 }
+                                setActiveTab('form');
                               }}
                               className="w-full h-7 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white gap-1"
                             >
@@ -690,6 +709,25 @@ export function FloatingFormAgentWidget({
                 </form>
               </div>
             </>
+          )}
+
+          {/* Connected Form Tab */}
+          {activeTab === 'form' && (
+            <div className="flex-1 flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950">
+              {(activeFormId || formId) ? (
+                <iframe
+                  src={`/form/${encodeURIComponent(activeFormId || formId!)}`}
+                  title="Form"
+                  className="w-full h-full border-0"
+                />
+              ) : (
+                <div className="flex-1 p-6 flex flex-col justify-center items-center text-center space-y-3">
+                  <FileText className="size-10 text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">No form is currently attached.</p>
+                  <Button size="sm" onClick={() => setActiveTab('chat')}>Back to Chat</Button>
+                </div>
+              )}
+            </div>
           )}
 
           {/* Live Human Handoff Tab */}

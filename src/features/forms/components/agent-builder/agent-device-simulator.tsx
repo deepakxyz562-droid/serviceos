@@ -330,6 +330,7 @@ export function AgentDeviceSimulator({
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [activeFormModal, setActiveFormModal] = useState<ConnectedFormRef | null>(null);
   const [escalatedToHuman, setEscalatedToHuman] = useState<boolean>(false);
+  const [aiSessionId, setAiSessionId] = useState<string | null>(null);
   const [liveSessionId, setLiveSessionId] = useState<string | null>(null);
   const [agentAvailable, setAgentAvailable] = useState<boolean | null>(null);
   const [operatorConnected, setOperatorConnected] = useState<boolean>(false);
@@ -547,8 +548,8 @@ export function AgentDeviceSimulator({
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
 
-    // If already escalated to a human session, route message directly to live chat
-    if (liveSessionId) {
+    // If already escalated to a human operator, route message directly to live chat
+    if (escalatedToHuman && liveSessionId) {
       try {
         await fetch(`/api/public/chat/${encodeURIComponent(liveSessionId)}/messages`, {
           method: 'POST',
@@ -573,6 +574,7 @@ export function AgentDeviceSimulator({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message,
+          sessionId: aiSessionId || undefined,
           history: [...messages, userMsg],
           agentConfig: agent,
         }),
@@ -580,8 +582,8 @@ export function AgentDeviceSimulator({
 
       const data = await res.json().catch(() => ({}));
 
-      if (data.sessionId && !liveSessionId) {
-        setLiveSessionId(data.sessionId);
+      if (data.sessionId && !aiSessionId) {
+        setAiSessionId(data.sessionId);
       }
 
       if (data.escalatedToHuman) {
@@ -650,8 +652,9 @@ export function AgentDeviceSimulator({
       onSwitchPage('conversation');
     }
     if (action.actionType === 'open_form') {
-      const form = agent.connectedForms?.find((f) => f.id === action.payload) || agent.connectedForms?.[0];
+      const form = agent.connectedForms?.find((f) => f.id === action.targetFormId || f.id === action.payload) || agent.connectedForms?.[0];
       if (form) {
+        setActiveFormModal(form);
         onOpenFormInModal?.(form);
         setActiveTab('forms');
       } else {
@@ -665,6 +668,7 @@ export function AgentDeviceSimulator({
   const resetChat = () => {
     setEscalatedToHuman(false);
     setLiveSessionId(null);
+    setAiSessionId(null);
     setAgentAvailable(null);
     setOperatorConnected(false);
     setOperatorName(null);
@@ -756,6 +760,40 @@ export function AgentDeviceSimulator({
               <p className={cn('text-xs leading-relaxed font-medium', isDark ? 'text-slate-100' : 'text-slate-800')}>
                 Hi! I&apos;m <strong className="font-bold text-blue-500">{agent.name}</strong>, your <strong className="font-bold">AI Agent</strong> and <strong className="font-bold">{agent.roleTitle}</strong>. How can I help you?
               </p>
+            )}
+
+            {/* Connected Form Launcher Card */}
+            {agent.connectedForms && agent.connectedForms.length > 0 && (
+              <div
+                onClick={() => {
+                  const form = agent.connectedForms![0];
+                  setActiveFormModal(form);
+                  onOpenFormInModal?.(form);
+                }}
+                className={cn(
+                  'p-3 rounded-2xl border flex items-center justify-between gap-2.5 cursor-pointer transition-all shadow-2xs group hover:scale-[1.01]',
+                  isDark
+                    ? 'bg-blue-950/40 border-blue-600/50 hover:border-blue-400'
+                    : 'bg-blue-50/70 border-blue-200 hover:border-blue-400'
+                )}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="size-8 rounded-xl bg-blue-600/20 text-blue-600 flex items-center justify-center shrink-0">
+                    <FileText className="size-4" />
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <p className={cn("text-xs font-bold truncate", isDark ? "text-blue-200" : "text-blue-950")}>
+                      {agent.connectedForms[0].name || (agent.connectedForms[0] as any).title}
+                    </p>
+                    <p className={cn("text-[10px] truncate", isDark ? "text-blue-400" : "text-blue-600")}>
+                      {agent.connectedForms[0].description || 'Click to fill out and submit'}
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-600 text-white group-hover:bg-blue-500 transition-colors">
+                  Open
+                </div>
+              </div>
             )}
 
             {(agent.channels?.chatbot?.showButtons ?? true) && (agent.quickActions || []).length > 0 && (
@@ -875,7 +913,7 @@ export function AgentDeviceSimulator({
         </div>
 
         <div className="flex items-center gap-1">
-          {agent.navigation?.formsEnabled && (agent.connectedForms?.length ?? 0) > 0 && (
+          {((agent.navigation?.formsEnabled ?? true) && (agent.connectedForms?.length ?? 0) > 0) && (
             <Button
               type="button"
               variant="ghost"
@@ -1388,8 +1426,8 @@ export function AgentDeviceSimulator({
                 )}
               >
                 <div className="space-y-0.5">
-                  <p className={cn('text-xs font-bold', isDark ? 'text-white' : 'text-slate-900')}>{form.name}</p>
-                  <p className={cn('text-[10px] line-clamp-1', isDark ? 'text-slate-400' : 'text-slate-500')}>{form.description}</p>
+                  <p className={cn('text-xs font-bold', isDark ? 'text-white' : 'text-slate-900')}>{form.name || (form as any).title || 'Form'}</p>
+                  <p className={cn('text-[10px] line-clamp-1', isDark ? 'text-slate-400' : 'text-slate-500')}>{form.description || 'Fill out and submit form'}</p>
                 </div>
                 <Button
                   type="button"
@@ -1532,7 +1570,7 @@ export function AgentDeviceSimulator({
             <div className="flex items-center gap-2">
               <FileText className="size-4 text-blue-600" />
               <div>
-                <h3 className="text-xs font-bold text-foreground line-clamp-1">{activeFormModal.name}</h3>
+                <h3 className="text-xs font-bold text-foreground line-clamp-1">{activeFormModal.name || (activeFormModal as any).title || 'Form'}</h3>
                 <p className="text-[10px] text-muted-foreground line-clamp-1">{activeFormModal.description || 'Fill and submit to complete inquiry'}</p>
               </div>
             </div>
@@ -1549,7 +1587,7 @@ export function AgentDeviceSimulator({
           <div className="flex-1 min-h-0 w-full overflow-y-auto p-2">
             <iframe
               src={`/form/${encodeURIComponent(activeFormModal.id)}`}
-              title={activeFormModal.name}
+              title={activeFormModal.name || (activeFormModal as any).title || 'Form'}
               className="w-full h-full min-h-[440px] border-0 rounded-xl"
             />
           </div>
