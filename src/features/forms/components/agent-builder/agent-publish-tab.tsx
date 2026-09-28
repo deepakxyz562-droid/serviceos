@@ -58,9 +58,30 @@ export function AgentPublishTab({
     agent.channels?.chatbot?.greetingBubble || '👋 Have questions or want a quote? Ask our AI!'
   );
 
+  const rawOrigin = siteOrigin || (typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com');
+  const cleanOrigin =
+    rawOrigin.includes('0.0.0.0') || rawOrigin.includes('127.0.0.1')
+      ? typeof window !== 'undefined' && window.location.hostname === 'localhost'
+        ? 'http://localhost:3000'
+        : 'https://fieseros.com'
+      : rawOrigin;
+
+  const [embedFormat, setEmbedFormat] = useState<'script' | 'iframe'>('script');
+
   const slugOrId = agent.slug || agent.id;
-  const standaloneUrl = `${siteOrigin}/chat/${slugOrId}`;
-  const embedScript = `<script src="${siteOrigin}/api/public/agents/${slugOrId}/embed.js" async></script>`;
+  const standaloneUrl = `${cleanOrigin}/chat/${slugOrId}`;
+  const embedScript = `<script src="${cleanOrigin}/api/public/agents/${slugOrId}/embed.js" async></script>`;
+
+  const posCss =
+    widgetPosition === 'bottom-left'
+      ? 'left: 16px;'
+      : widgetPosition === 'bottom-center'
+      ? 'left: 50%; transform: translateX(-50%);'
+      : 'right: 16px;';
+
+  const embedIframe = `<iframe \n  id="fieseros-agent-frame"\n  src="${cleanOrigin}/agent/${slugOrId}?embed=1" \n  title="${agent.name || 'AI Assistant'}" \n  allow="microphone; camera; clipboard-write" \n  loading="lazy" \n  style="position: fixed; z-index: 999999; border: none; background: transparent; overflow: hidden; bottom: 16px; ${posCss} width: 84px; height: 84px; border-radius: 50%; pointer-events: auto;">\n</iframe>`;
+
+  const activeSnippet = embedFormat === 'script' ? embedScript : embedIframe;
 
   const copyToClipboard = async (text: string, type: 'code' | 'link') => {
     if (onSave) {
@@ -160,13 +181,37 @@ export function AgentPublishTab({
             </div>
           </div>
 
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+            <div className="flex items-center gap-1 p-0.5 bg-muted/60 rounded-lg border border-border/60">
+              <button
+                type="button"
+                onClick={() => setEmbedFormat('script')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                  embedFormat === 'script' ? 'bg-blue-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                1-Line Script (Auto-expanding)
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmbedFormat('iframe')}
+                className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                  embedFormat === 'iframe' ? 'bg-blue-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Direct HTML iFrame
+              </button>
+            </div>
+            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">● Universal Embed (WordPress, Shopify, Webflow, HTML)</span>
+          </div>
+
           <div className="p-3 bg-slate-950 text-slate-100 rounded-xl font-mono text-[11px] relative">
-            <pre className="overflow-x-auto whitespace-pre-wrap">{embedScript}</pre>
+            <pre className="overflow-x-auto whitespace-pre-wrap">{activeSnippet}</pre>
             <Button
               type="button"
               size="sm"
-              onClick={() => copyToClipboard(embedScript, 'code')}
-              className="absolute top-2 right-2 h-7 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1"
+              onClick={() => copyToClipboard(activeSnippet, 'code')}
+              className="absolute top-2 right-2 h-7 px-2 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1 cursor-pointer"
             >
               {copiedCode ? <Check className="size-3" /> : <Copy className="size-3" />}
               <span>{copiedCode ? 'Copied' : 'Copy Code'}</span>

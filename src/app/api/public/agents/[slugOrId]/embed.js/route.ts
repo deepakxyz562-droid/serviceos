@@ -20,6 +20,39 @@ export const dynamic = 'force-dynamic';
  * This approach avoids shipping React to the host page (the iframe loads
  * our Next.js app which already has React bundled).
  */
+function resolvePublicOrigin(request: NextRequest): string {
+  const queryOrigin = request.nextUrl.searchParams.get('origin');
+  if (queryOrigin && queryOrigin.startsWith('http')) {
+    return queryOrigin.replace(/\/+$/, '');
+  }
+
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const hostHeader = request.headers.get('host') || '';
+  const effectiveHost = (forwardedHost || hostHeader).trim();
+
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const proto = forwardedProto || (effectiveHost.includes('localhost') ? 'http' : 'https');
+
+  if (effectiveHost && !effectiveHost.includes('0.0.0.0') && !effectiveHost.startsWith('127.0.0.1')) {
+    return `${proto}://${effectiveHost}`;
+  }
+
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    try {
+      const parsed = new URL(process.env.NEXT_PUBLIC_APP_URL);
+      if (!parsed.hostname.includes('0.0.0.0') && !parsed.hostname.startsWith('127.0.0.1')) {
+        return process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, '');
+      }
+    } catch {}
+  }
+
+  if (effectiveHost.includes('localhost')) {
+    return `http://${effectiveHost}`;
+  }
+
+  return 'https://fieseros.com';
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slugOrId: string }> },
@@ -33,7 +66,7 @@ export async function GET(
     });
   }
 
-  const origin = request.nextUrl.origin;
+  const origin = resolvePublicOrigin(request);
   const agentUrl = `${origin}/agent/${encodeURIComponent(slugOrId)}?embed=1`;
 
   let proactiveTrigger = 'none';
