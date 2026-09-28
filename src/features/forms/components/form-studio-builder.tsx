@@ -59,7 +59,8 @@ import {
 } from '@/lib/forms/payments/payment-gateways-registry';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
 import { FormAgentStudio } from './agent-builder/form-agent-studio';
-import { DEFAULT_FORM_AGENT } from '../types/agent-types';
+import { AgentDeviceSimulator } from './agent-builder/agent-device-simulator';
+import { DEFAULT_FORM_AGENT, FormAgentData } from '../types/agent-types';
 import { getFormContentFingerprint } from '@/features/forms/utils/form-helpers';
 import { injectMediaPanelContent } from '@/lib/forms/form-node-schema';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
@@ -317,6 +318,8 @@ export function FormStudioBuilder({
   const viewMode = formLayout;
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [currentThemeId, setCurrentThemeId] = useState('fieseros-emerald');
+  const [canvasMode, setCanvasMode] = useState<'form' | 'agent'>('form');
+  const [copilotProcessing, setCopilotProcessing] = useState(false);
 
   // ─── Keyboard Shortcuts (Jotform/Elementor parity) ────────────────────
   // Cmd/Ctrl+Z = Undo, Cmd/Ctrl+Shift+Z = Redo, Cmd/Ctrl+S = Save,
@@ -527,6 +530,84 @@ export function FormStudioBuilder({
       },
     };
   }, [formData, formLayout]);
+
+  const activeAgentData: FormAgentData = useMemo(() => {
+    return (formData.agentConfig as FormAgentData) || {
+      ...DEFAULT_FORM_AGENT,
+      id: `agent_${formData.id || 'form'}`,
+      name: `${formData.name || 'Service'} Assistant`,
+      welcomeMessage: `Hi! I'm your ${formData.name || 'Service'} Assistant. How can I help you today?`,
+      connectedForms: [{
+        id: formData.id || 'form_current',
+        name: formData.name || 'Service Form',
+        description: formData.description,
+        fields: formData.fields,
+      }],
+    };
+  }, [formData.agentConfig, formData.id, formData.name, formData.description, formData.fields]);
+
+  const handleAiCopilotInstruction = useCallback(async (promptText: string) => {
+    if (!promptText.trim()) return;
+    setCopilotProcessing(true);
+    try {
+      const res = await fetch('/api/forms/ai/copilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentSchema: runtimeSchema, instruction: promptText }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'AI Copilot failed to process command');
+      }
+
+      const updatedSchema = data.schema;
+      if (updatedSchema) {
+        if (updatedSchema.fields) {
+          const newFields: FormField[] = updatedSchema.fields.map((f: any, idx: number) => ({
+            id: f.id || `f_${idx + 1}`,
+            type: (f.type as FieldType) || 'text',
+            label: f.label || 'Question',
+            placeholder: f.placeholder || '',
+            helpText: f.helpText || f.description || '',
+            required: Boolean(f.required),
+            width: f.width || 'full',
+            layoutColumn: f.layoutColumn,
+            stepId: f.stepId,
+            defaultValue: f.defaultValue,
+            options: f.options?.map((o: any) => (typeof o === 'string' ? o : o.label)) || [],
+            widgetType: f.widgetType,
+            widgetConfig: f.widgetConfig,
+          }));
+
+          onFormDataChangeWithHistory((prev) => ({
+            ...prev,
+            fields: newFields,
+            primaryColor: updatedSchema.theme?.primaryColor || prev.primaryColor,
+            theme: updatedSchema.theme
+              ? {
+                  ...prev.theme,
+                  primaryColor: updatedSchema.theme.primaryColor || prev.theme?.primaryColor,
+                  backgroundColor: updatedSchema.theme.backgroundColor || prev.theme?.backgroundColor,
+                  textColor: updatedSchema.theme.textColor || prev.theme?.textColor,
+                  layout: updatedSchema.theme.layout || prev.theme?.layout,
+                }
+              : prev.theme,
+          }));
+
+          if (updatedSchema.theme?.layout) {
+            setFormLayout(updatedSchema.theme.layout as FormLayout);
+          }
+        }
+        toast.success(`AI applied: "${promptText.slice(0, 40)}${promptText.length > 40 ? '...' : ''}"`);
+      }
+    } catch (err: any) {
+      console.error('AI copilot error:', err);
+      toast.error(err.message || 'Could not process AI instruction');
+    } finally {
+      setCopilotProcessing(false);
+    }
+  }, [runtimeSchema, onFormDataChangeWithHistory]);
 
   const handleImportSuccess = (importedSchema: FormSchema, importedName?: string) => {
     onFormDataChange((prev) => ({
@@ -1289,8 +1370,45 @@ export function FormStudioBuilder({
          ═════════════════════════════════════════════════════════════════════════ */}
       {studioTab === 'build' && !isPreviewMode && (
         <div className="h-10 border-b border-border/70 bg-slate-50/80 dark:bg-slate-950/80 px-4 flex items-center justify-between gap-3 shrink-0 select-none z-20">
-          {/* Left: Layout View + Stepper Mode Switchers */}
+          {/* Left: Dual Canvas + Layout View + Stepper Mode Switchers */}
           <div className="flex items-center gap-2">
+            {/* Dual-Canvas Switcher: Form Canvas vs Live AI Agent Simulator */}
+            <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-border/80 text-[11px] font-semibold shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setCanvasMode('form')}
+                className={cn(
+                  'px-2.5 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5',
+                  canvasMode === 'form'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold shadow-2xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Visual Form Canvas"
+              >
+                <FileText className="size-3.5" />
+                <span>Form Canvas</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCanvasMode('agent')}
+                className={cn(
+                  'px-2.5 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5',
+                  canvasMode === 'agent'
+                    ? 'bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Live AI Agent Simulator"
+              >
+                <Bot className="size-3.5 text-violet-600" />
+                <span>AI Agent Simulator</span>
+                <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-violet-400/40 text-violet-600 bg-violet-500/10">
+                  Live
+                </Badge>
+              </button>
+            </div>
+
+            <Separator orientation="vertical" className="h-4" />
+
             {/* Canonical layout selector: Classic | Card | Split Media */}
             <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-border/80 text-[11px] font-semibold">
               <button
@@ -1480,6 +1598,8 @@ export function FormStudioBuilder({
                 onAddPaymentGateway={handleAddPaymentGateway}
                 onClose={() => setShowWidgetPalette(false)}
                 activeStepTitle={formData.steps?.[currentStepIndex]?.title || `Step ${currentStepIndex + 1}`}
+                onAiPrompt={handleAiCopilotInstruction}
+                isAiProcessing={copilotProcessing}
               />
             )}
 
@@ -1513,39 +1633,51 @@ export function FormStudioBuilder({
               />
             )}
 
-            {/* Center: Live Focus WYSIWYG split canvas with Enter-to-continue & floating pill triggers */}
-            <StudioFocusCanvas
-              formData={formData}
-              onFormDataChange={onFormDataChangeWithHistory}
-              currentStepIndex={currentStepIndex}
-              onStepChange={setCurrentStepIndex}
-              selectedFieldId={selectedFieldId}
-              selectedColumn={selectedColumn}
-              onSelectColumn={setSelectedColumn}
-              onSelectField={(id) => {
-                setSelectedFieldId(id);
-                setShowInspector(true);
-                if (id === '__media_panel__') {
-                  setSelectedColumn('left');
-                } else {
-                  const targetF = (formData.fields || []).find((f) => f.id === id);
-                  if (targetF?.layoutColumn) {
-                    setSelectedColumn(targetF.layoutColumn);
+            {/* Center: Live Focus WYSIWYG split canvas OR Live AI Agent Simulator */}
+            {canvasMode === 'agent' ? (
+              <div className="flex-1 min-h-0 h-full flex flex-col bg-slate-100/90 dark:bg-slate-950/80 overflow-y-auto p-4 items-center justify-center">
+                <div className="w-full max-w-xl h-full flex flex-col items-center justify-center">
+                  <AgentDeviceSimulator
+                    agent={activeAgentData}
+                    isTestMode={true}
+                    previewPage="conversation"
+                  />
+                </div>
+              </div>
+            ) : (
+              <StudioFocusCanvas
+                formData={formData}
+                onFormDataChange={onFormDataChangeWithHistory}
+                currentStepIndex={currentStepIndex}
+                onStepChange={setCurrentStepIndex}
+                selectedFieldId={selectedFieldId}
+                selectedColumn={selectedColumn}
+                onSelectColumn={setSelectedColumn}
+                onSelectField={(id) => {
+                  setSelectedFieldId(id);
+                  setShowInspector(true);
+                  if (id === '__media_panel__') {
+                    setSelectedColumn('left');
+                  } else {
+                    const targetF = (formData.fields || []).find((f) => f.id === id);
+                    if (targetF?.layoutColumn) {
+                      setSelectedColumn(targetF.layoutColumn);
+                    }
                   }
-                }
-              }}
-              viewMode={viewMode}
-              isWidgetPaletteCollapsed={!showWidgetPalette}
-              onToggleWidgetPalette={() => setShowWidgetPalette((v) => !v)}
-              isAiCopilotCollapsed={!showAiCopilot}
-              onToggleAiCopilot={() => setShowAiCopilot((v) => !v)}
-              isPagesTreeCollapsed={!showPagesTree}
-              onTogglePagesTree={() => setShowPagesTree((v) => !v)}
-              isInspectorCollapsed={!showInspector}
-              onToggleInspector={() => setShowInspector((v) => !v)}
-              onOpenAddWidgetDialog={() => setShowWidgetPalette(true)}
-              className="flex-1 min-h-0 h-full"
-            />
+                }}
+                viewMode={viewMode}
+                isWidgetPaletteCollapsed={!showWidgetPalette}
+                onToggleWidgetPalette={() => setShowWidgetPalette((v) => !v)}
+                isAiCopilotCollapsed={!showAiCopilot}
+                onToggleAiCopilot={() => setShowAiCopilot((v) => !v)}
+                isPagesTreeCollapsed={!showPagesTree}
+                onTogglePagesTree={() => setShowPagesTree((v) => !v)}
+                isInspectorCollapsed={!showInspector}
+                onToggleInspector={() => setShowInspector((v) => !v)}
+                onOpenAddWidgetDialog={() => setShowWidgetPalette(true)}
+                className="flex-1 min-h-0 h-full"
+              />
+            )}
 
             {/* Right Panel: Unified Field Inspector & Widget Settings */}
             {showInspector && (selectedField || selectedFieldId === '__media_panel__') && (

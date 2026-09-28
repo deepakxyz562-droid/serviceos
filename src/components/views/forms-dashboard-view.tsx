@@ -20,10 +20,17 @@ import {
   UserCircle,
   Sparkles,
   ExternalLink,
+  Bot,
+  CreditCard,
+  Wand2,
+  Loader2,
+  Send,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { TemplatePickerDialog } from '@/features/forms/components/builder/template-picker-dialog';
 import type { FormTemplate } from '@/lib/forms/templates';
@@ -65,12 +72,82 @@ interface FormsDashboardStats {
  * AI agent status, knowledge base status, and recent submissions.
  * This is the landing view for users with workspace.productType='forms'.
  */
+
+const DASHBOARD_QUICK_STARTERS = [
+  {
+    id: 'cleaning',
+    label: '🧹 Home Cleaning',
+    text: 'We are a home cleaning company serving London. We offer regular cleaning, deep cleaning and end-of-tenancy cleaning.',
+  },
+  {
+    id: 'plumbing',
+    label: '🔧 Emergency Plumbing',
+    text: 'We are a 24/7 emergency plumbing service in Manchester. We fix burst pipes, clogged drains, leaking faucets, and install hot water systems.',
+  },
+  {
+    id: 'hvac',
+    label: '❄️ HVAC Dispatch',
+    text: 'We provide heating, air conditioning repair, furnace maintenance, and new heat pump installations across Austin, Texas.',
+  },
+  {
+    id: 'dental',
+    label: '🩺 Dental Clinic',
+    text: 'We are a modern family dental clinic offering routine checkups, emergency toothache care, teeth whitening, and hygiene appointments.',
+  },
+  {
+    id: 'roofing',
+    label: '🏠 Roofing Estimate',
+    text: 'We are a licensed roofing contractor in Dallas specializing in storm damage inspection, roof replacement, shingle repair, and gutter systems.',
+  },
+  {
+    id: 'auto',
+    label: '🚗 Auto Repair',
+    text: 'We operate a full-service auto repair and diagnostic garage in Birmingham, offering brakes, engine diagnostics, oil changes, and towing.',
+  },
+];
+
 export function FormsDashboardView() {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const [stats, setStats] = useState<FormsDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+
+  const handleGenerateWithAi = async (customPrompt?: string) => {
+    const text = (customPrompt || aiPrompt).trim();
+    if (!text) {
+      toast.error('Please describe what you want to build');
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const res = await authFetch('/api/forms/ai-agent-wizard-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessDescription: text,
+          capabilities: ['answer_questions', 'capture_leads', 'generate_quotes', 'book_appointments', 'collect_files'],
+          save: true,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.savedFormId) {
+        toast.success('🎉 AI Form and Agent generated successfully!');
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('fieseros_active_edit_form_id', data.savedFormId);
+        }
+        setCurrentView('formBuilder');
+      } else {
+        toast.error(data.error || 'Failed to generate form');
+      }
+    } catch {
+      toast.error('Could not generate form. Please try again.');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
 
   const handlePickTemplate = (_template: FormTemplate) => {
     // The picked template id is stashed in sessionStorage; form-builder-view
@@ -201,6 +278,138 @@ export function FormsDashboardView() {
             <Plus className="w-4 h-4 mr-2" />
             Create Form
           </Button>
+        </div>
+      </div>
+
+      {/* ── INTENT-FIRST AI HERO: DESCRIBE WHAT YOU WANT TO CREATE ── */}
+      <div className="rounded-3xl border border-emerald-500/25 bg-gradient-to-b from-emerald-500/10 via-teal-500/5 to-transparent dark:from-emerald-950/40 dark:via-slate-900/40 dark:to-transparent p-5 sm:p-7 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="size-9 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
+              <Sparkles className="size-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
+                What do you want to create today?
+                <Badge variant="outline" className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+                  GPTForm 2026
+                </Badge>
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Describe your goal in plain English — AI will generate your form, booking calendar, Stripe payment, and conversational agent.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Big Natural Language Input */}
+        <div className="relative rounded-2xl border border-border/80 bg-white/95 dark:bg-slate-900/95 shadow-sm p-2 focus-within:ring-2 focus-within:ring-emerald-500/40 focus-within:border-emerald-500 transition-all">
+          <Textarea
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleGenerateWithAi();
+              }
+            }}
+            placeholder="e.g. Create a dental clinic booking form with treatment selection, 30-min calendar appointment slot, and £50 deposit..."
+            rows={3}
+            className="w-full text-xs sm:text-sm border-0 focus-visible:ring-0 resize-none bg-transparent p-2 text-foreground font-sans placeholder:text-muted-foreground/70"
+          />
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-border/50 px-2 pb-1">
+            {/* Quick Starters */}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 no-scrollbar">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase shrink-0">Quick Starters:</span>
+              {DASHBOARD_QUICK_STARTERS.slice(0, 4).map((qs) => (
+                <button
+                  key={qs.id}
+                  type="button"
+                  onClick={() => {
+                    setAiPrompt(qs.text);
+                    handleGenerateWithAi(qs.text);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 border border-border/70 transition-all cursor-pointer text-foreground shrink-0"
+                >
+                  {qs.label}
+                </button>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              disabled={aiGenerating}
+              onClick={() => handleGenerateWithAi()}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-5 rounded-xl shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer shrink-0 ml-auto"
+            >
+              {aiGenerating ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Generating Project...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="size-3.5" />
+                  Build with AI
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Start directly with Quick Action Pills */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+          <span className="text-[11px] font-bold text-muted-foreground">Or start directly with:</span>
+          <button
+            type="button"
+            onClick={() => setCurrentView('formBuilder')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-white dark:bg-slate-900 border border-border/80 hover:border-emerald-500 hover:text-emerald-600 transition-all cursor-pointer shadow-2xs"
+          >
+            <FileInput className="size-3.5 text-emerald-600" />
+            <span>Blank Form</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') sessionStorage.setItem('pendingFormStudioTab', 'chatbots');
+              setCurrentView('formBuilder');
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-white dark:bg-slate-900 border border-border/80 hover:border-emerald-500 hover:text-emerald-600 transition-all cursor-pointer shadow-2xs"
+          >
+            <Bot className="size-3.5 text-blue-600" />
+            <span>AI Agent Studio</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') sessionStorage.setItem('pendingFormStudioTab', 'scheduling');
+              setCurrentView('formBuilder');
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-white dark:bg-slate-900 border border-border/80 hover:border-emerald-500 hover:text-emerald-600 transition-all cursor-pointer shadow-2xs"
+          >
+            <Calendar className="size-3.5 text-purple-600" />
+            <span>Booking &amp; Calendar</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') sessionStorage.setItem('pendingFormStudioTab', 'offers');
+              setCurrentView('formBuilder');
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-white dark:bg-slate-900 border border-border/80 hover:border-emerald-500 hover:text-emerald-600 transition-all cursor-pointer shadow-2xs"
+          >
+            <CreditCard className="size-3.5 text-amber-600" />
+            <span>Payment &amp; Offers</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTemplatePickerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-white dark:bg-slate-900 border border-border/80 hover:border-emerald-500 hover:text-emerald-600 transition-all cursor-pointer shadow-2xs"
+          >
+            <LayoutGrid className="size-3.5 text-slate-600" />
+            <span>50+ Templates</span>
+          </button>
         </div>
       </div>
 

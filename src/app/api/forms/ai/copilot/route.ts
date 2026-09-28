@@ -625,6 +625,52 @@ export async function POST(request: NextRequest) {
           width: 'full',
         });
         updatedSchema = { ...currentSchema, fields: currentFields };
+      } else if (lower.includes('calendar') || lower.includes('booking') || lower.includes('appointment') || lower.includes('slot')) {
+        const currentFields = [...(currentSchema.fields || [])];
+        currentFields.push({
+          id: `widget_book_${Date.now()}`,
+          type: 'control_widget',
+          widgetType: 'calendar_booking',
+          label: 'Preferred Appointment Slot',
+          required: true,
+          width: 'full',
+          widgetConfig: { slotDurationMin: 30 },
+        });
+        updatedSchema = { ...currentSchema, fields: currentFields };
+      } else if (lower.includes('card layout') || lower.includes('card form') || lower.includes('single question')) {
+        updatedSchema = {
+          ...currentSchema,
+          theme: { ...(currentSchema.theme || {}), layout: 'card' },
+        };
+      } else if (lower.includes('split') || lower.includes('hero layout') || lower.includes('split media')) {
+        updatedSchema = {
+          ...currentSchema,
+          theme: { ...(currentSchema.theme || {}), layout: 'split_media' },
+        };
+      } else if (lower.includes('classic') || lower.includes('document')) {
+        updatedSchema = {
+          ...currentSchema,
+          theme: { ...(currentSchema.theme || {}), layout: 'classic' },
+        };
+      } else if (lower.includes('theme') || lower.includes('color')) {
+        let newColor = '#059669';
+        if (lower.includes('blue') || lower.includes('ocean')) newColor = '#2563eb';
+        else if (lower.includes('purple') || lower.includes('indigo')) newColor = '#7c3aed';
+        else if (lower.includes('amber') || lower.includes('orange')) newColor = '#d97706';
+        else if (lower.includes('rose') || lower.includes('red')) newColor = '#e11d48';
+        else if (lower.includes('dark') || lower.includes('black')) newColor = '#0f172a';
+        updatedSchema = {
+          ...currentSchema,
+          theme: { ...(currentSchema.theme || {}), primaryColor: newColor },
+        };
+      } else if (lower.includes('shorter') || lower.includes('simplify') || lower.includes('less fields')) {
+        const currentFields = (currentSchema.fields || []).filter(
+          (f: any) => f.required || ['email', 'phone', 'name'].some((k) => (f.label || '').toLowerCase().includes(k))
+        );
+        updatedSchema = { ...currentSchema, fields: currentFields.length >= 3 ? currentFields : currentSchema.fields };
+      } else if (lower.includes('make all required') || lower.includes('all fields required')) {
+        const currentFields = (currentSchema.fields || []).map((f: any) => ({ ...f, required: true }));
+        updatedSchema = { ...currentSchema, fields: currentFields };
       }
     }
 
