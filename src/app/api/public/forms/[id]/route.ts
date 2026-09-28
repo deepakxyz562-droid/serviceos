@@ -146,6 +146,27 @@ export async function GET(
       } catch { /* ignore */ }
     }
 
+    // Resolve branding: prefer tenant for CRM-bound forms, custom product name
+    // from workspace branding, or explicit form theme branding.
+    // NEVER leak internal personal workspace names (e.g. "Deepak Chandra's Workspace") to the public!
+    const themeBusinessName =
+      (sanitizedSchema?.theme as any)?.branding?.businessName ||
+      (sanitizedSchema?.theme as any)?.businessName ||
+      (sanitizedSchema?.settings as any)?.businessName;
+
+    const rawWorkspaceName = form.workspace?.name?.trim() || '';
+    const isInternalPersonalWorkspace =
+      !rawWorkspaceName ||
+      /'s\s+workspace$/i.test(rawWorkspaceName) ||
+      /^workspace$/i.test(rawWorkspaceName);
+
+    const resolvedBusinessName =
+      themeBusinessName ||
+      form.tenant?.name ||
+      workspaceBranding.productName ||
+      (!isInternalPersonalWorkspace ? rawWorkspaceName : '') ||
+      null;
+
     // ─── CORS headers for embed (WordPress, Shopify, custom sites) ────────
     // The embed.js SDK fetches form schema cross-origin. These headers allow
     // any site to read the response. Forms are public by design — no auth
@@ -158,11 +179,7 @@ export async function GET(
       type: form.type,
       schema: sanitizedSchema,
       branding: {
-        businessName:
-          form.tenant?.name ||
-          workspaceBranding.productName ||
-          form.workspace?.name ||
-          'Service Provider',
+        businessName: resolvedBusinessName,
         businessPhone: form.tenant?.phone || null,
         businessEmail: form.tenant?.email || workspaceBranding.supportEmail || null,
       },

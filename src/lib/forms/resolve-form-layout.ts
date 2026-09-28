@@ -58,7 +58,18 @@ export function resolveFormLayout(schema: {
     return 'split_media';
   }
 
-  // Auto-detect split_media if schema has left/right columns
+  // If user explicitly chose classic/paper, respect their choice 100%!
+  // Never let lingering mediaPanel data from templates force split_media on classic forms.
+  if (
+    normalized === 'classic' ||
+    normalized === 'paper' ||
+    normalized === 'all_on_one_page' ||
+    normalized === 'multi_step'
+  ) {
+    return 'classic';
+  }
+
+  // Auto-detect split_media only if unconfigured and schema has left/right columns
   const hasSplitColumns = Array.isArray(schema.fields) && schema.fields.some(
     (f) => f && (f.layoutColumn === 'left' || f.layoutColumn === 'right')
   );
@@ -66,20 +77,13 @@ export function resolveFormLayout(schema: {
     return 'split_media';
   }
 
-  // Auto-detect split_media if mediaPanel is configured with active content
+  // Auto-detect split_media only if mediaPanel is explicitly enabled
   const rawPanel = schema.mediaPanel || schema.theme?.mediaPanel;
-  if (rawPanel && (rawPanel.enabled === true || rawPanel.mediaUrl || rawPanel.headline)) {
+  if (rawPanel && rawPanel.enabled === true) {
     return 'split_media';
   }
 
-  switch (normalized) {
-    case 'paper':
-    case 'classic':
-    case 'all_on_one_page':
-    case 'multi_step': // Legacy templates use 'multi_step' for multi-page classic forms
-    default:
-      return 'classic';
-  }
+  return 'classic';
 }
 
 /**

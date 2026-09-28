@@ -114,14 +114,16 @@ export function FormMediaHeroPanel({
       f.widgetType === 'list_widget' ||
       f.widgetType === 'image_widget'
   );
+  const rawPanel = (mediaPanel || {}) as any;
+  const rawBadge = mediaPanel?.badgeText || rawPanel.badge;
+  const hasBadge = Boolean(rawBadge && typeof rawBadge === 'string' && rawBadge.trim().length > 0);
+  const showBadge = !hasInjectedContent && (editable || (mediaPanel?.showBadge !== false && hasBadge));
   const showMedia = !hasInjectedContent && mediaPanel?.showMedia !== false;
-  const showBadge = !hasInjectedContent && mediaPanel?.showBadge !== false;
   const showHeadline = !hasInjectedContent && mediaPanel?.showHeadline !== false;
   const showSubtitle = !hasInjectedContent && mediaPanel?.showSubtitle !== false;
   const showBenefits = !hasInjectedContent && mediaPanel?.showBenefits !== false;
   const showTestimonial = mediaPanel?.showTestimonial !== false;
 
-  const rawPanel = (mediaPanel || {}) as any;
   const mediaType = mediaPanel?.mediaType || rawPanel.type || 'image';
   const mediaUrl = mediaPanel?.mediaUrl || rawPanel.url;
 
@@ -143,7 +145,7 @@ export function FormMediaHeroPanel({
 
   const headline = mediaPanel?.headline || formName;
   const subtitle = mediaPanel?.subtitle || formDescription;
-  const badge = mediaPanel?.badgeText || rawPanel.badge;
+  const badge = rawBadge;
   const benefits = mediaPanel?.benefitsList || rawPanel.bullets || [
     'Guaranteed response within 15 minutes',
     'Licensed, insured & background-checked',
@@ -153,7 +155,7 @@ export function FormMediaHeroPanel({
 
   return (
     <div
-      className="relative flex flex-col justify-between overflow-hidden text-white p-6 sm:p-8 lg:p-10 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-[320px] lg:min-h-full select-text"
+      className="relative flex flex-col justify-between overflow-hidden text-white p-5 sm:p-6 lg:p-7 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-[260px] lg:min-h-full select-text"
       style={{
         backgroundColor: mediaPanel?.backgroundColor || '#0f172a',
       }}
@@ -187,7 +189,7 @@ export function FormMediaHeroPanel({
       {/* 1. Top Trust Badge Widget (Inline Editable in Editor mode) */}
       {showBadge && (
         <div
-          className="relative z-10 flex items-center justify-between gap-2 mb-4 group/badge"
+          className="relative z-10 flex items-center justify-between gap-2 mb-2 group/badge"
           onClick={(e) => {
             if (editable) {
               e.stopPropagation();
@@ -210,7 +212,7 @@ export function FormMediaHeroPanel({
                 className="bg-transparent border-none outline-none text-white text-xs font-semibold placeholder:text-white/50 w-auto min-w-[200px]"
               />
             ) : (
-              <span>{mediaPanel?.badgeText || '⭐ 5-Star Rated Service Pro'}</span>
+              <span>{rawBadge}</span>
             )}
           </div>
         </div>
@@ -219,7 +221,7 @@ export function FormMediaHeroPanel({
       {/* 2. Visual Media Block (Photo, Video, Map, or Gradient) */}
       {showMedia && (
         <div
-          className="relative z-10 my-4 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl group/media"
+          className="relative z-10 my-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-950/80 shadow-2xl group/media"
           onClick={(e) => {
             if (editable) {
               e.stopPropagation();
@@ -672,6 +674,7 @@ export interface FormRuntimeRendererProps {
   allowModeSwitch?: boolean;
   onSubmitSuccess?: (result: any) => void;
   previewMode?: boolean;
+  isEmbed?: boolean;
 }
 
 export function FormRuntimeRenderer({
@@ -685,7 +688,18 @@ export function FormRuntimeRenderer({
   allowModeSwitch = false,
   onSubmitSuccess,
   previewMode = false,
+  isEmbed = false,
 }: FormRuntimeRendererProps) {
+  const [inIframe, setInIframe] = useState(false);
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.self !== window.top) {
+        setInIframe(true);
+      }
+    } catch {}
+  }, []);
+  const embedded = Boolean(isEmbed || inIframe);
+
   const formLayout = resolveFormLayout(schema);
   const resolvedInitialMode: 'paper' | 'card' =
     initialMode === 'card' || formLayout === 'card'
@@ -1294,9 +1308,17 @@ export function FormRuntimeRenderer({
       ? 'blur(4px)'
       : 'none';
 
+  const displayBusinessName = (() => {
+    if (schema.theme?.showBranding === false) return null;
+    const name = branding?.businessName?.trim();
+    if (!name) return null;
+    if (/'s\s+workspace$/i.test(name) || /^workspace$/i.test(name) || name === 'Service Provider') return null;
+    return name;
+  })();
+
   const formElement = (
     <div
-      className={`relative z-10 w-full ${isSplitLayout || isEstimatorForm ? 'max-w-5xl' : 'max-w-xl'} mx-auto space-y-4 transition-all`}
+      className={`relative z-10 w-full ${isSplitLayout || isEstimatorForm ? 'max-w-5xl' : embedded ? 'max-w-full' : 'max-w-xl'} mx-auto ${embedded ? 'space-y-2' : 'space-y-4'} transition-all`}
       style={{
         fontFamily,
          
@@ -1380,10 +1402,15 @@ export function FormRuntimeRenderer({
       )}
 
       <Card
-        className="p-0 py-0 gap-0 shadow-xl border border-slate-200/90 dark:border-slate-800 overflow-hidden transition-all duration-300 bg-white dark:bg-slate-900 rounded-3xl"
+        className={cn(
+          "p-0 py-0 gap-0 overflow-hidden transition-all duration-300",
+          embedded
+            ? "border-0 shadow-none bg-transparent rounded-2xl"
+            : "shadow-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-3xl"
+        )}
         style={{
-          borderRadius,
-          backgroundColor,
+          borderRadius: embedded ? undefined : borderRadius,
+          backgroundColor: embedded ? 'transparent' : backgroundColor,
           color: textColor,
         }}
       >
@@ -1409,13 +1436,13 @@ export function FormRuntimeRenderer({
           {/* Form Content Column */}
           <div className={`${isSplitLayout ? formColSpan : isEstimatorForm ? 'lg:col-span-7 w-full' : 'w-full'} flex flex-col justify-between`}>
             {/* Header */}
-            <div className="p-6 sm:p-8 pb-4 border-b border-border/40">
-              {branding?.businessName && (
+            <div className="p-6 sm:p-8 pb-3">
+              {displayBusinessName && (
                 <p
                   className="text-[10px] uppercase font-extrabold tracking-wider mb-1"
                   style={{ color: primaryColor }}
                 >
-                  {branding.businessName}
+                  {displayBusinessName}
                 </p>
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1438,7 +1465,7 @@ export function FormRuntimeRenderer({
 
               {/* Stepper Carousel / Steps Indicator (Split Layout Multi-Step only — matches editor canvas) */}
               {isSplitLayout && steps.length > 1 && (
-                <div className="space-y-2 pt-3 mt-3 border-t border-border/40">
+                <div className="space-y-2 pt-3 mt-2">
                   {/* Progress Line */}
                   <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
@@ -1682,7 +1709,7 @@ export function FormRuntimeRenderer({
 
             {/* Navigation / Submit Controls */}
             {activeMode !== 'card' && (
-            <div className="flex justify-between items-center pt-5 border-t border-border/80">
+            <div className="flex justify-between items-center pt-5">
               {steps.length > 1 && currentStepIndex > 0 ? (
                 <Button
                   type="button"

@@ -42,8 +42,25 @@ export default function PublicFormPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const formId = params.formId as string;
-  const isTransparent = searchParams.get('transparent') === '1';
+  const isEmbedParam =
+    searchParams.get('embed') === '1' ||
+    searchParams.get('mode') === 'embed' ||
+    searchParams.get('view') === 'embed';
+  const isTransparent = searchParams.get('transparent') === '1' || isEmbedParam;
   const hideHeader = searchParams.get('hideHeader') === '1';
+  const hideBranding = searchParams.get('hideBranding') === '1';
+
+  // Detect if running inside an iframe
+  const [inIframe, setInIframe] = useState(false);
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.self !== window.top) {
+        setInIframe(true);
+      }
+    } catch {}
+  }, []);
+
+  const isEmbedded = isEmbedParam || isTransparent || inIframe;
 
   const [loading, setLoading] = useState(true);
   const [formName, setFormName] = useState('');
@@ -219,20 +236,22 @@ export default function PublicFormPage() {
   return (
     <div
       className={cn(
-        "min-h-screen py-4 sm:py-8 px-2 sm:px-6 lg:px-8 flex flex-col justify-center items-center",
-        isTransparent ? "bg-transparent" : "bg-slate-50/60 dark:bg-slate-950"
+        isEmbedded
+          ? "w-full p-0 m-0 bg-transparent flex flex-col"
+          : "min-h-screen py-4 sm:py-8 px-2 sm:px-6 lg:px-8 flex flex-col justify-center items-center bg-slate-50/60 dark:bg-slate-950"
       )}
-      style={isTransparent ? { backgroundColor: 'transparent' } : (pageBgColor ? { backgroundColor: pageBgColor } : undefined)}
+      style={isTransparent || isEmbedded ? { backgroundColor: 'transparent' } : (pageBgColor ? { backgroundColor: pageBgColor } : undefined)}
     >
-      <div className="w-full max-w-5xl">
+      <div className={cn("w-full", isEmbedded ? "max-w-full p-0 m-0" : "max-w-5xl")}>
         <FormRuntimeRenderer
           formId={formId}
           schema={schema}
           formName={hideHeader ? '' : formName}
           formDescription={hideHeader ? '' : formDescription}
-          branding={branding}
+          branding={hideBranding ? null : branding}
           allowModeSwitch={false}
           mode={resolvedMode}
+          isEmbed={isEmbedded}
         />
       </div>
     </div>
