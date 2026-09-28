@@ -22,10 +22,14 @@ import {
   Send,
   ArrowRight,
   CheckCircle2,
+  Sliders,
+  EyeOff,
+  Monitor,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -36,6 +40,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 export interface UniversalPublishCenterProps {
   project?: UniversalProject;
@@ -82,7 +87,48 @@ export function UniversalPublishCenter({
   const formUrl = `${siteOrigin}/f/${resolvedFormSlug}`;
   const mobileModeUrl = `${siteOrigin}/f/${resolvedFormSlug}?mode=mobile`;
 
-  const inlineEmbedCode = `<iframe \n  src="${formUrl}" \n  width="100%" \n  height="650" \n  frameborder="0" \n  style="border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 4px 12px rgba(0,0,0,0.05);">\n</iframe>`;
+  const [embedTransparent, setEmbedTransparent] = useState(false);
+  const [embedHideHeader, setEmbedHideHeader] = useState(false);
+  const [embedAutoResize, setEmbedAutoResize] = useState(true);
+  const [embedPlatform, setEmbedPlatform] = useState<'iframe' | 'wordpress' | 'shopify' | 'webflow' | 'react'>('iframe');
+  const [showEmbedPreview, setShowEmbedPreview] = useState(false);
+
+  const embedParams = new URLSearchParams();
+  if (embedTransparent) embedParams.set('transparent', '1');
+  if (embedHideHeader) embedParams.set('hideHeader', '1');
+  const embedQueryString = embedParams.toString() ? `?${embedParams.toString()}` : '';
+  const canonicalEmbedUrl = `${siteOrigin}/form/${formId || resolvedFormSlug}${embedQueryString}`;
+  const iframeId = `fieseros-form-${(resolvedFormSlug || 'embed').replace(/[^a-z0-9_-]/gi, '')}`;
+
+  const platformSnippets: Record<'iframe' | 'wordpress' | 'shopify' | 'webflow' | 'react', { code: string; label: string; tip: string }> = {
+    iframe: {
+      label: 'Standard iFrame (Universal)',
+      tip: 'Paste this snippet directly into any HTML page where you want the form to appear.',
+      code: `<iframe \n  id="${iframeId}"\n  src="${canonicalEmbedUrl}" \n  width="100%" \n  height="650" \n  frameborder="0" \n  style="border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); width: 100%; transition: height 0.2s ease; background: ${embedTransparent ? 'transparent' : '#ffffff'};"\n  allow="camera; microphone; clipboard-write"\n  loading="lazy">\n</iframe>${embedAutoResize ? `\n<script>\n  window.addEventListener('message', function(e) {\n    if (e.data && e.data.type === 'FIESEROS_FORM_RESIZE' && e.data.height) {\n      var el = document.getElementById('${iframeId}');\n      if (el) el.style.height = e.data.height + 'px';\n    }\n  });\n</script>` : ''}`,
+    },
+    wordpress: {
+      label: 'WordPress (Gutenberg / Elementor)',
+      tip: 'In Gutenberg, add a "Custom HTML" block. In Elementor, use the "HTML Code" widget and paste this code.',
+      code: `<!-- Fieseros Form Embed for WordPress -->\n<div class="fieseros-form-wrapper" style="width: 100%; max-width: 800px; margin: 0 auto;">\n  <iframe \n    id="${iframeId}"\n    src="${canonicalEmbedUrl}" \n    width="100%" \n    height="650" \n    frameborder="0" \n    style="border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); width: 100%; min-height: 480px; transition: height 0.2s ease; background: ${embedTransparent ? 'transparent' : '#ffffff'};"\n    allow="camera; microphone; clipboard-write">\n  </iframe>\n  <script>\n    window.addEventListener('message', function(e) {\n      if (e.data && e.data.type === 'FIESEROS_FORM_RESIZE' && e.data.height) {\n        var el = document.getElementById('${iframeId}');\n        if (el) el.style.height = e.data.height + 'px';\n      }\n    });\n  </script>\n</div>`,
+    },
+    shopify: {
+      label: 'Shopify Store (Liquid)',
+      tip: 'In Shopify Theme Editor, click "Add section" -> "Custom Liquid" or "Custom HTML", then paste this snippet.',
+      code: `<!-- Fieseros Form Shopify Liquid Block -->\n<div class="shopify-fieseros-form" style="width: 100%; padding: 20px 0;">\n  <iframe \n    id="${iframeId}"\n    src="${canonicalEmbedUrl}" \n    width="100%" \n    height="650" \n    frameborder="0" \n    style="border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); width: 100%; background: ${embedTransparent ? 'transparent' : '#ffffff'};"\n    allow="camera; microphone; clipboard-write">\n  </iframe>\n  <script>\n    window.addEventListener('message', function(e) {\n      if (e.data && e.data.type === 'FIESEROS_FORM_RESIZE' && e.data.height) {\n        var el = document.getElementById('${iframeId}');\n        if (el) el.style.height = e.data.height + 'px';\n      }\n    });\n  </script>\n</div>`,
+    },
+    webflow: {
+      label: 'Webflow',
+      tip: 'In Webflow Designer, press "A" -> Components -> Drag "Embed" element onto your page, paste code, and save.',
+      code: `<!-- Fieseros Form Webflow Embed -->\n<iframe \n  id="${iframeId}"\n  src="${canonicalEmbedUrl}" \n  width="100%" \n  height="650" \n  frameborder="0" \n  style="border-radius: 12px; border: 1px solid rgba(0,0,0,0.08); width: 100%; background: ${embedTransparent ? 'transparent' : '#ffffff'};"\n  allow="camera; microphone; clipboard-write">\n</iframe>\n<script>\n  window.addEventListener('message', function(e) {\n    if (e.data && e.data.type === 'FIESEROS_FORM_RESIZE' && e.data.height) {\n      var el = document.getElementById('${iframeId}');\n      if (el) el.style.height = e.data.height + 'px';\n    }\n  });\n</script>`,
+    },
+    react: {
+      label: 'React / Next.js Component',
+      tip: 'Copy this component directly into your React/Next.js codebase for responsive auto-resizing form embedding.',
+      code: `import React, { useEffect, useRef } from 'react';\n\nexport function ${(resolvedFormName || 'Service').replace(/[^a-zA-Z0-9]/g, '')}FormEmbed() {\n  const iframeRef = useRef<HTMLIFrameElement>(null);\n\n  useEffect(() => {\n    const handleMessage = (e: MessageEvent) => {\n      if (e.data?.type === 'FIESEROS_FORM_RESIZE' && e.data.height && iframeRef.current) {\n        iframeRef.current.style.height = e.data.height + 'px';\n      }\n    };\n    window.addEventListener('message', handleMessage);\n    return () => window.removeEventListener('message', handleMessage);\n  }, []);\n\n  return (\n    <iframe\n      ref={iframeRef}\n      src="${canonicalEmbedUrl}"\n      width="100%"\n      height="650"\n      frameBorder="0"\n      style={{\n        borderRadius: 12,\n        border: '1px solid rgba(0,0,0,0.08)',\n        width: '100%',\n        transition: 'height 0.2s ease',\n        background: '${embedTransparent ? 'transparent' : '#ffffff'}',\n      }}\n      allow="camera; microphone; clipboard-write"\n      loading="lazy"\n    />\n  );\n}`,
+    },
+  };
+
+  const inlineEmbedCode = platformSnippets[embedPlatform].code;
 
 
 
@@ -239,52 +285,209 @@ export function UniversalPublishCenter({
                   <p className="text-[10px] text-muted-foreground">Adapts seamlessly to phones, tablets, and desktop browsers.</p>
                 </div>
               </div>
+
+              {/* Social / WhatsApp Unfurl Card Preview */}
+              <div className="pt-2">
+                <div className="p-3 bg-muted/20 border border-border/70 rounded-xl space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Share2 className="size-3 text-blue-500" /> Social &amp; Messaging Card Preview (WhatsApp, iMessage, LinkedIn)
+                  </span>
+                  <div className="p-3 bg-card border border-border/80 rounded-lg shadow-2xs flex items-center gap-3">
+                    <div className="size-12 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-500/20 font-black text-sm">
+                      📝
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">fieseros.com/f</span>
+                        <span className="text-[10px] text-muted-foreground">• SSL Verified</span>
+                      </div>
+                      <p className="text-xs font-bold text-foreground truncate">{resolvedFormName}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        Fill out and submit this official online form securely on any phone or computer.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* ─── TAB 2: EMBED ON WEBSITE ─── */}
         <TabsContent value="embed" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Inline Form Embed */}
-            <Card className="rounded-2xl border-border/80 shadow-xs flex flex-col justify-between">
-              <div>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-bold flex items-center gap-2">
-                      <Code className="size-4 text-indigo-600" />
-                      Inline Form Embed (iFrame)
-                    </CardTitle>
-                    <Badge variant="outline" className="text-[9px] font-mono">WordPress / Webflow / HTML</Badge>
+          {/* Embed Customization Bar */}
+          <Card className="rounded-2xl border-border/80 shadow-xs bg-muted/20">
+            <CardHeader className="p-4 pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                  <Sliders className="size-3.5 text-indigo-600" />
+                  Embed Options &amp; Customization
+                </CardTitle>
+                <Badge variant="outline" className="text-[10px] bg-background font-mono">
+                  Live Parameters
+                </Badge>
+              </div>
+              <CardDescription className="text-[11px]">
+                Configure how your embedded form renders inside your host website.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Toggle 1: Auto-Resize */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-border/70 bg-background shadow-2xs">
+                  <div className="space-y-0.5 pr-2">
+                    <p className="text-xs font-bold text-foreground">Auto-Resize Height</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Dynamically matches questions to prevent double scrollbars.
+                    </p>
                   </div>
-                  <CardDescription className="text-xs">
-                    Embed the full form directly into a page or blog post on your website.
+                  <Switch
+                    checked={embedAutoResize}
+                    onCheckedChange={setEmbedAutoResize}
+                  />
+                </div>
+
+                {/* Toggle 2: Transparent */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-border/70 bg-background shadow-2xs">
+                  <div className="space-y-0.5 pr-2">
+                    <p className="text-xs font-bold text-foreground">Transparent BG</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Blends seamlessly into your website&apos;s custom background.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={embedTransparent}
+                    onCheckedChange={setEmbedTransparent}
+                  />
+                </div>
+
+                {/* Toggle 3: Hide Header */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-border/70 bg-background shadow-2xs">
+                  <div className="space-y-0.5 pr-2">
+                    <p className="text-xs font-bold text-foreground">Hide Form Header</p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">
+                      Omits internal title when your site already has an H1 heading.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={embedHideHeader}
+                    onCheckedChange={setEmbedHideHeader}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Platform Snippet Selector */}
+          <Card className="rounded-2xl border-border/80 shadow-xs">
+            <CardHeader className="p-4 pb-2 border-b border-border/60">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                    <Code className="size-3.5 text-indigo-600" />
+                    Platform-Specific Integration Snippet
+                  </CardTitle>
+                  <CardDescription className="text-[11px] mt-0.5">
+                    {platformSnippets[embedPlatform].tip}
                   </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="relative">
-                    <textarea
-                      readOnly
-                      rows={5}
-                      value={inlineEmbedCode}
-                      className="w-full text-xs font-mono p-3 bg-muted/50 border border-border/80 rounded-xl select-all resize-none focus:outline-hidden"
+                </div>
+
+                {/* Platform Switcher Buttons */}
+                <div className="flex flex-wrap gap-1 bg-muted/60 p-1 rounded-xl border border-border/60">
+                  {(
+                    [
+                      { id: 'iframe', label: 'HTML iFrame' },
+                      { id: 'wordpress', label: 'WordPress' },
+                      { id: 'shopify', label: 'Shopify' },
+                      { id: 'webflow', label: 'Webflow' },
+                      { id: 'react', label: 'React / Next.js' },
+                    ] as const
+                  ).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setEmbedPlatform(p.id)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer',
+                        embedPlatform === p.id
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-background/80'
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-4 space-y-3">
+              {/* Code Box */}
+              <div className="relative rounded-xl overflow-hidden border border-border/80 bg-slate-950 text-slate-100 font-mono text-[11px]">
+                <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900 border-b border-slate-800 text-[10px] text-slate-400">
+                  <span>{platformSnippets[embedPlatform].label}</span>
+                  <span className="text-emerald-400 font-bold">● CSP-Ready (frame-ancestors: *)</span>
+                </div>
+                <textarea
+                  readOnly
+                  rows={8}
+                  value={inlineEmbedCode}
+                  className="w-full p-3 bg-transparent text-slate-200 select-all resize-none focus:outline-hidden leading-relaxed"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Button
+                    size="sm"
+                    onClick={() => copyText(inlineEmbedCode, 'inline_embed', `${platformSnippets[embedPlatform].label} Code`)}
+                    className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl h-9 px-4 cursor-pointer shadow-xs"
+                  >
+                    {copiedKey === 'inline_embed' ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                    Copy Snippet
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowEmbedPreview(!showEmbedPreview)}
+                    className="gap-1.5 text-xs font-semibold rounded-xl h-9 px-3 cursor-pointer"
+                  >
+                    <Monitor className="size-3.5 text-indigo-600" />
+                    <span>{showEmbedPreview ? 'Hide Live Preview' : 'Test Live Embed'}</span>
+                  </Button>
+                </div>
+
+                <span className="text-[10px] text-muted-foreground">
+                  Works on WordPress, Shopify, Webflow, Squarespace, Wix &amp; Custom domains.
+                </span>
+              </div>
+
+              {/* Live Interactive Embed Preview */}
+              {showEmbedPreview && (
+                <div className="mt-4 p-4 rounded-2xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-3 animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                      <Monitor className="size-4 text-indigo-600" /> Live Embed Preview Container
+                    </span>
+                    <Badge variant="outline" className="text-[10px] bg-background">
+                      Simulated Host Page
+                    </Badge>
+                  </div>
+                  <div className="w-full rounded-xl border border-border/80 bg-background overflow-hidden shadow-xs min-h-[420px] p-2">
+                    <iframe
+                      id={`${iframeId}-preview`}
+                      src={canonicalEmbedUrl}
+                      width="100%"
+                      height="500"
+                      className="w-full border-none rounded-lg"
+                      title="Form Embed Live Preview"
                     />
                   </div>
-                </CardContent>
-              </div>
-              <div className="p-4 pt-0">
-                <Button
-                  size="sm"
-                  onClick={() => copyText(inlineEmbedCode, 'inline_embed', 'Inline Embed Code')}
-                  className="w-full h-9 gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl"
-                >
-                  {copiedKey === 'inline_embed' ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                  Copy iFrame Snippet
-                </Button>
-              </div>
-            </Card>
-
-          </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ─── TAB 3: MOBILE EXPERIENCE ─── */}

@@ -47,8 +47,12 @@ export function AgentPublishTab({
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  const rawPos = String(agent.channels?.chatbot?.position || '').toLowerCase();
+  const initialPos: 'bottom-right' | 'bottom-left' | 'bottom-center' =
+    rawPos.includes('left') ? 'bottom-left' : rawPos.includes('center') ? 'bottom-center' : 'bottom-right';
+
   const [widgetPosition, setWidgetPosition] = useState<'bottom-right' | 'bottom-left' | 'bottom-center'>(
-    agent.channels?.chatbot?.position || 'bottom-right'
+    initialPos
   );
   const [greetingText, setGreetingText] = useState(
     agent.channels?.chatbot?.greetingBubble || '👋 Have questions or want a quote? Ask our AI!'

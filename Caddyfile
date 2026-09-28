@@ -66,7 +66,6 @@ fieseros.com {
 	header {
 		# HSTS: 2 years, include subdomains, opt into browser preload list.
 		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-		X-Frame-Options "SAMEORIGIN"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(self), geolocation=(self), interest-cohort=()"
@@ -75,6 +74,12 @@ fieseros.com {
 		# it here too would double the maintenance burden and risk drift.
 		# Remove the `X-Powered-By` banner (Caddy adds its own — keep this off).
 		-X-Powered-By
+	}
+
+	# Frame protection on dashboard, admin, and sensitive app routes (embed routes allow framing)
+	@notEmbed not path /f/* /form/* /agent/* /chat/* /api/public/*
+	header @notEmbed {
+		X-Frame-Options "SAMEORIGIN"
 	}
 
 	# ── XTransformPort routing — route to per-tenant mini-services ───────────

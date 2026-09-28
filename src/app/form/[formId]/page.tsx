@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2, AlertCircle, Lock, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 import { resolveFormLayout, layoutToRuntimeMode } from '@/lib/forms/resolve-form-layout';
+import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 
 const FormRuntimeRenderer = dynamic(
@@ -39,7 +40,10 @@ const FormRuntimeRenderer = dynamic(
  */
 export default function PublicFormPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const formId = params.formId as string;
+  const isTransparent = searchParams.get('transparent') === '1';
+  const hideHeader = searchParams.get('hideHeader') === '1';
 
   const [loading, setLoading] = useState(true);
   const [formName, setFormName] = useState('');
@@ -51,6 +55,37 @@ export default function PublicFormPage() {
   const [passwordInput, setPasswordInput] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
+
+  // Auto-resize host iframe via postMessage on height change
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.parent === window) return;
+
+    const sendHeight = () => {
+      const height = Math.max(
+        document.body.scrollHeight,
+        document.documentElement.scrollHeight,
+        document.body.offsetHeight
+      );
+      try {
+        window.parent.postMessage({ type: 'FIESEROS_FORM_RESIZE', formId, height }, '*');
+      } catch {}
+    };
+
+    sendHeight();
+    const ro = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => sendHeight())
+      : null;
+
+    if (ro) ro.observe(document.body);
+    const interval = setInterval(sendHeight, 600);
+    const timeout = setTimeout(() => clearInterval(interval), 6000);
+
+    return () => {
+      if (ro) ro.disconnect();
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [formId, isUnlocked, schema]);
 
   const fetchForm = useCallback(async () => {
     if (!formId) return;
@@ -183,15 +218,18 @@ export default function PublicFormPage() {
 
   return (
     <div
-      className="min-h-screen bg-slate-50/60 dark:bg-slate-950 py-6 sm:py-10 px-3 sm:px-6 lg:px-8 flex flex-col justify-center items-center"
-      style={pageBgColor ? { backgroundColor: pageBgColor } : undefined}
+      className={cn(
+        "min-h-screen py-4 sm:py-8 px-2 sm:px-6 lg:px-8 flex flex-col justify-center items-center",
+        isTransparent ? "bg-transparent" : "bg-slate-50/60 dark:bg-slate-950"
+      )}
+      style={isTransparent ? { backgroundColor: 'transparent' } : (pageBgColor ? { backgroundColor: pageBgColor } : undefined)}
     >
       <div className="w-full max-w-5xl">
         <FormRuntimeRenderer
           formId={formId}
           schema={schema}
-          formName={formName}
-          formDescription={formDescription}
+          formName={hideHeader ? '' : formName}
+          formDescription={hideHeader ? '' : formDescription}
           branding={branding}
           allowModeSwitch={false}
           mode={resolvedMode}

@@ -23,6 +23,7 @@ export default function StandaloneAgentPage() {
   const searchParams = useSearchParams();
   const agentId = (params?.agentId as string) || '';
   const initialViewParam = searchParams.get('view'); // 'conversation' | 'greeting' | 'full'
+  const isEmbed = searchParams.get('embed') === '1';
 
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<FormAgentData | null>(null);
@@ -31,6 +32,33 @@ export default function StandaloneAgentPage() {
     initialViewParam === 'conversation' ? 'conversation' : 'greeting'
   );
   const [forceFullView, setForceFullView] = useState(initialViewParam === 'full');
+
+  // Handle postMessage communication with host parent website (when inside embed.js iframe)
+  useEffect(() => {
+    if (!isEmbed) return;
+    const handleMsg = (e: MessageEvent) => {
+      if (!e.data || typeof e.data !== 'object') return;
+      if (e.data.type === 'FIESEROS_AGENT_EXPAND') {
+        setPreviewPage('conversation');
+      } else if (e.data.type === 'FIESEROS_AGENT_COLLAPSE') {
+        setPreviewPage('greeting');
+      }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
+  }, [isEmbed]);
+
+  const handleSwitchPage = (page: 'greeting' | 'conversation') => {
+    setPreviewPage(page);
+    if (isEmbed && typeof window !== 'undefined' && window.parent) {
+      try {
+        window.parent.postMessage(
+          { type: page === 'conversation' ? 'FIESEROS_AGENT_EXPAND' : 'FIESEROS_AGENT_COLLAPSE' },
+          '*'
+        );
+      } catch {}
+    }
+  };
 
   useEffect(() => {
     async function loadAgent() {
@@ -67,6 +95,13 @@ export default function StandaloneAgentPage() {
   }, [agentId, initialViewParam]);
 
   if (loading) {
+    if (isEmbed) {
+      return (
+        <div className="w-full h-full bg-transparent flex items-center justify-center">
+          <Loader2 className="size-6 animate-spin text-emerald-600" />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center p-4">
         <div className="text-center space-y-3">
@@ -78,6 +113,9 @@ export default function StandaloneAgentPage() {
   }
 
   if (error || !agent) {
+    if (isEmbed) {
+      return null;
+    }
     return (
       <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center p-4">
         <Card className="max-w-md w-full text-center p-6 rounded-2xl shadow-sm">
@@ -106,7 +144,42 @@ export default function StandaloneAgentPage() {
   const isLeft = position === 'left' || position === 'bottom-left';
   const theme = resolveAgentTheme(agent);
 
-  // Floating Mode
+  // Embedded Headless Mode (inside third-party website via embed.js)
+  if (isEmbed) {
+    return (
+      <div className={cn("w-full h-full bg-transparent flex flex-col justify-end overflow-hidden select-none", theme.isDark && "dark")}>
+        {previewPage === 'greeting' ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => handleSwitchPage('conversation')}
+              className="relative size-16 rounded-full shadow-2xl p-0.5 border-2 border-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              style={{ background: theme.primaryColor || '#2563eb' }}
+              title={`Chat with ${agent.name}`}
+            >
+              <img
+                src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
+                alt={agent.name}
+                className="size-full rounded-full object-cover"
+              />
+              <span className="absolute bottom-0 right-0 size-4 rounded-full bg-emerald-500 border-2 border-white animate-pulse" />
+            </button>
+          </div>
+        ) : (
+          <div className="w-full h-full flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-border/80 bg-background">
+            <AgentDeviceSimulator
+              agent={agent}
+              isTestMode={false}
+              previewPage="conversation"
+              onSwitchPage={handleSwitchPage}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Floating Mode (Standalone preview on fieseros.com)
   if (layoutMode === 'floating' && !forceFullView) {
     return (
       <div
@@ -165,7 +238,7 @@ export default function StandaloneAgentPage() {
             agent={agent}
             isTestMode={false}
             previewPage={previewPage}
-            onSwitchPage={(p) => setPreviewPage(p)}
+            onSwitchPage={handleSwitchPage}
           />
         </div>
       </div>
@@ -191,7 +264,7 @@ export default function StandaloneAgentPage() {
             size="sm"
             onClick={() => {
               setForceFullView(false);
-              setPreviewPage('greeting');
+              handleSwitchPage('greeting');
             }}
             className="text-xs gap-1.5 h-8 bg-background shadow-xs border-border/80"
           >
@@ -206,7 +279,7 @@ export default function StandaloneAgentPage() {
           agent={agent}
           isTestMode={false}
           previewPage="conversation"
-          onSwitchPage={(p) => setPreviewPage(p)}
+          onSwitchPage={handleSwitchPage}
         />
       </div>
 

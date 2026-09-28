@@ -39,6 +39,7 @@ export async function GET(
   let proactiveTrigger = 'none';
   let triggerDelaySeconds = 5;
   let triggerScrollPercent = 50;
+  let widgetPosition: 'bottom-right' | 'bottom-left' | 'bottom-center' = 'bottom-right';
 
   try {
     const { db } = await import('@/lib/db');
@@ -53,6 +54,14 @@ export async function GET(
       triggerDelaySeconds = chatbot.triggerDelaySeconds || 5;
       triggerScrollPercent = chatbot.triggerScrollPercent || 50;
     }
+    const rawPos = String(chatbot.position || '').toLowerCase();
+    if (rawPos.includes('left')) {
+      widgetPosition = 'bottom-left';
+    } else if (rawPos.includes('center')) {
+      widgetPosition = 'bottom-center';
+    } else {
+      widgetPosition = 'bottom-right';
+    }
   } catch {
     // Non-fatal
   }
@@ -61,50 +70,73 @@ export async function GET(
   if (window.__FIESEROS_AGENT_EMBEDDED__) return;
   window.__FIESEROS_AGENT_EMBEDDED__ = true;
 
+  var position = ${JSON.stringify(widgetPosition)};
+  var posCollapsedCss = 'bottom:16px;right:16px;';
+  var posExpandedCss = 'bottom:16px;right:16px;';
+
+  if (position === 'bottom-left') {
+    posCollapsedCss = 'bottom:16px;left:16px;';
+    posExpandedCss = 'bottom:16px;left:16px;';
+  } else if (position === 'bottom-center') {
+    posCollapsedCss = 'bottom:16px;left:50%;transform:translateX(-50%);';
+    posExpandedCss = 'bottom:16px;left:50%;transform:translateX(-50%);';
+  }
+
+  var baseStyle = 'position:fixed;z-index:999999;border:none;background:transparent;overflow:hidden;transition:all 0.3s cubic-bezier(0.16,1,0.3,1);';
+  var collapsedStyle = baseStyle + posCollapsedCss + 'width:84px;height:84px;border-radius:50%;pointer-events:auto;';
+  var expandedStyle = baseStyle + posExpandedCss + 'width:400px;max-width:calc(100vw - 32px);height:620px;max-height:calc(100vh - 32px);border-radius:24px;box-shadow:0 16px 48px rgba(0,0,0,0.18);pointer-events:auto;';
+
   var container = document.createElement('div');
   container.id = 'fieseros-agent-embed';
-  container.style.cssText = 'position:fixed;bottom:0;left:0;width:0;height:0;z-index:99999;pointer-events:none;';
+  container.style.cssText = 'position:fixed;bottom:0;left:0;width:0;height:0;z-index:999999;pointer-events:none;';
   document.body.appendChild(container);
 
   var iframe = document.createElement('iframe');
   iframe.src = ${JSON.stringify(agentUrl)};
-  iframe.style.cssText = 'position:fixed;bottom:16px;right:16px;width:80px;height:80px;border:none;border-radius:50%;box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:99999;pointer-events:auto;transition:all 0.3s ease;';
+  iframe.style.cssText = collapsedStyle;
   iframe.setAttribute('title', 'AI Assistant');
-  iframe.setAttribute('allow', 'microphone; camera');
+  iframe.setAttribute('allow', 'microphone; camera; clipboard-write');
+  iframe.setAttribute('loading', 'lazy');
   container.appendChild(iframe);
 
   var expanded = false;
   function expandWidget() {
     if (expanded) return;
     expanded = true;
-    iframe.style.width = '380px';
-    iframe.style.height = '600px';
-    iframe.style.borderRadius = '20px';
+    iframe.style.cssText = expandedStyle;
     try {
-      iframe.contentWindow.postMessage({ type: 'FIESEROS_AGENT_EXPAND' }, '*');
+      if (iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'FIESEROS_AGENT_EXPAND' }, '*');
+      }
     } catch(err){}
   }
 
   function collapseWidget() {
+    if (!expanded) return;
     expanded = false;
-    iframe.style.width = '80px';
-    iframe.style.height = '80px';
-    iframe.style.borderRadius = '50%';
+    iframe.style.cssText = collapsedStyle;
     try {
-      iframe.contentWindow.postMessage({ type: 'FIESEROS_AGENT_COLLAPSE' }, '*');
+      if (iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'FIESEROS_AGENT_COLLAPSE' }, '*');
+      }
     } catch(err){}
   }
 
   window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'FIESEROS_AGENT_EXPAND') {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'FIESEROS_AGENT_EXPAND') {
       expandWidget();
-    } else if (e.data && e.data.type === 'FIESEROS_AGENT_COLLAPSE') {
+    } else if (e.data.type === 'FIESEROS_AGENT_COLLAPSE') {
       collapseWidget();
     }
   });
 
   iframe.addEventListener('load', function() {
-    iframe.contentWindow.postMessage({ type: 'FIESEROS_AGENT_INIT', slugOrId: ${JSON.stringify(slugOrId)} }, '*');
+    try {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'FIESEROS_AGENT_INIT', slugOrId: ${JSON.stringify(slugOrId)} }, '*');
+      }
+    } catch(err){}
   });
 
   // Proactive Triggers

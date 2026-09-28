@@ -155,16 +155,9 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // ─── Security headers applied to ALL routes ────────────────────────────
-        // Strict CSP that still allows:
-        //  • PayPal checkout (https://www.paypal.com — frame-src + script-src)
-        //  • Stripe (https://js.stripe.com — script-src + frame-src)
-        //  • Google Fonts (https://fonts.googleapis.com style, https://fonts.gstatic.com font)
-        //  • Inline scripts/styles ('unsafe-inline' — required by Next.js runtime)
-        //  • 'unsafe-eval' in dev (Turbopack/HMR needs it; production builds drop it)
-        //  • WebSocket upgrades (ws: wss:) for socket.io realtime + Vapi streams
-        //  • Any https image / connect (WhatsApp, webhooks, analytics)
-        source: '/:path*',
+        // ─── Security headers applied to standard internal / app routes ───────────
+        // Strict CSP and SAMEORIGIN frame protection for admin, dashboard, billing, settings
+        source: '/:path((?!f(?:/|$)|form(?:/|$)|agent(?:/|$)|chat(?:/|$)|api/public(?:/|$)).*)',
         headers: [
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
@@ -173,6 +166,30 @@ const nextConfig: NextConfig = {
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=(self), interest-cohort=()' },
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
           { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://maps.googleapis.com https://*.googleapis.com https://maps.gstatic.com https://js.stripe.com https://www.paypal.com https://www.gstatic.com https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https: ws: wss: data: blob: https://maps.googleapis.com https://*.googleapis.com https://*.google.com https://cloudflareinsights.com; frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" },
+        ],
+      },
+      {
+        // ─── Security headers for PUBLIC EMBED routes (/f/*, /form/*, /agent/*, /chat/*) ──
+        // Allows embedding on third-party websites (WordPress, Shopify, Webflow, React apps)
+        // using CSP frame-ancestors * and without X-Frame-Options SAMEORIGIN blocking.
+        source: '/:prefix(f|form|agent|chat)/:path*',
+        headers: [
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=*, microphone=*, geolocation=(self)' },
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://maps.googleapis.com https://*.googleapis.com https://maps.gstatic.com https://js.stripe.com https://www.paypal.com https://www.gstatic.com https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https: ws: wss: data: blob: https://maps.googleapis.com https://*.googleapis.com https://*.google.com https://cloudflareinsights.com; frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors *" },
+        ],
+      },
+      {
+        // ─── Headers for public embed script and API routes ───────────────────────
+        source: '/api/public/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, POST, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors *" },
         ],
       },
       {
