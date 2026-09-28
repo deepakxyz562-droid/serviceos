@@ -87,7 +87,9 @@ function sanitizePublicAgent(agent: FormAgentData): PublicAgentConfig {
         primaryColor: agent.brandColor || '#059669',
         greetingBubble: `👋 Need help? Chat with ${agent.name || 'our AI Assistant'}!`,
       },
-    },
+      standalone: agent.channels?.standalone || { enabled: true },
+      voice: agent.channels?.voice || { enabled: true },
+    } as any,
     updatedAt: agent.updatedAt || new Date().toISOString(),
   };
 }
@@ -180,13 +182,13 @@ export async function GET(
       slug: agent.slug,
       name: agent.name || config.name || DEFAULT_FORM_AGENT.name,
       roleTitle: agent.roleTitle || config.roleTitle || DEFAULT_FORM_AGENT.roleTitle,
-      avatarUrl: agent.avatarUrl || config.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl,
+      avatarUrl: config.avatarUrl || agent.avatarUrl || DEFAULT_FORM_AGENT.avatarUrl,
       statusText: agent.statusText || config.statusText || 'Online',
-      brandColor: agent.brandColor || config.brandColor || DEFAULT_FORM_AGENT.brandColor,
+      brandColor: config.brandColor || agent.brandColor || DEFAULT_FORM_AGENT.brandColor,
       voiceTone: (agent.voiceTone || config.voiceTone || 'friendly') as FormAgentData['voiceTone'],
       welcomeGreeting: agent.welcomeGreeting || config.welcomeGreeting || DEFAULT_FORM_AGENT.welcomeGreeting,
       greetingSubtitle: agent.greetingSubtitle || config.greetingSubtitle || undefined,
-      style: config.style || agent.style || DEFAULT_FORM_AGENT.style,
+      style: config.style || (agent as any).style || DEFAULT_FORM_AGENT.style,
       updatedAt: agent.updatedAt.toISOString(),
     };
 

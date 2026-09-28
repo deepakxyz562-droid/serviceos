@@ -35,12 +35,14 @@ interface AgentPublishTabProps {
   agent: FormAgentData;
   onChange: (updated: FormAgentData) => void;
   siteOrigin?: string;
+  onSave?: () => Promise<void> | void;
 }
 
 export function AgentPublishTab({
   agent,
   onChange,
   siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com',
+  onSave,
 }: AgentPublishTabProps) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -56,7 +58,12 @@ export function AgentPublishTab({
   const standaloneUrl = `${siteOrigin}/chat/${slugOrId}`;
   const embedScript = `<script src="${siteOrigin}/api/public/agents/${slugOrId}/embed.js" async></script>`;
 
-  const copyToClipboard = (text: string, type: 'code' | 'link') => {
+  const copyToClipboard = async (text: string, type: 'code' | 'link') => {
+    if (onSave) {
+      try {
+        await onSave();
+      } catch {}
+    }
     navigator.clipboard.writeText(text);
     if (type === 'code') {
       setCopiedCode(true);
@@ -207,6 +214,13 @@ export function AgentPublishTab({
               href={standaloneUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={async () => {
+                if (onSave) {
+                  try {
+                    await onSave();
+                  } catch {}
+                }
+              }}
               className="inline-flex items-center justify-center size-8 rounded-md border border-input hover:bg-muted shrink-0 text-muted-foreground hover:text-foreground"
               title="Open public page"
             >

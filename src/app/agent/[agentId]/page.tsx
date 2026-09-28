@@ -45,9 +45,9 @@ export default function StandaloneAgentPage() {
           const data = await res.json();
           if (data.agent) {
             setAgent(data.agent);
-            const isStandalone = data.agent.channels?.chatbot?.layoutMode === 'standalone';
-            setForceFullView(initialViewParam === 'full' || isStandalone);
-            setPreviewPage(initialViewParam === 'conversation' ? 'conversation' : 'greeting');
+            const isStandalone = data.agent.channels?.chatbot?.layoutMode === 'standalone' || data.agent.channels?.standalone?.enabled !== false;
+            setForceFullView(initialViewParam === 'full' || initialViewParam === 'conversation' || initialViewParam !== 'widget');
+            setPreviewPage(initialViewParam === 'greeting' ? 'greeting' : 'conversation');
           } else {
             setError('Agent not found');
           }
@@ -108,7 +108,10 @@ export default function StandaloneAgentPage() {
   // Floating Mode
   if (layoutMode === 'floating' && !forceFullView) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative flex flex-col justify-between overflow-hidden">
+      <div
+        className={cn("min-h-screen relative flex flex-col justify-between overflow-hidden", theme.isDark && "dark")}
+        style={{ background: theme.pageBackgroundGradient }}
+      >
         {/* Top Floating Helper Controls */}
         <div className="p-3 sm:p-4 flex items-center justify-between z-10">
           <div className="flex items-center gap-2 bg-background/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-border/60 shadow-xs">
@@ -129,15 +132,34 @@ export default function StandaloneAgentPage() {
 
         {/* Center Backdrop */}
         <div className="flex-1 flex flex-col items-center justify-center p-4 text-center">
-          <div className="max-w-sm space-y-2.5 p-6 rounded-3xl border border-dashed border-border/70 bg-background/40 backdrop-blur-xs">
-            <div className="size-12 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center mx-auto">
-              <Sparkles className="size-6" />
+          <div className="max-w-sm space-y-3 p-6 rounded-3xl border border-dashed border-border/70 bg-background/60 backdrop-blur-md shadow-lg">
+            <div className="size-16 rounded-2xl overflow-hidden mx-auto shadow-md border-2 border-white/80 dark:border-slate-700">
+              <img
+                src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
+                alt={agent.name}
+                className="size-full object-cover"
+              />
             </div>
-            <h3 className="text-sm font-bold text-foreground">Interactive AI Widget Live</h3>
+            <div>
+              <h3 className="text-sm font-bold text-foreground">{agent.name}</h3>
+              <p className="text-xs text-muted-foreground">{agent.roleTitle}</p>
+            </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Click the floating {chatbot?.welcomeStyle === 'avatar' ? 'Avatar Bubble' : 'Quick Input Launcher'} in the{' '}
               <strong>bottom-{isLeft ? 'left' : 'right'} corner</strong> to chat with <strong>{agent.name}</strong>.
             </p>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => {
+                setForceFullView(true);
+                setPreviewPage('conversation');
+              }}
+              className="text-xs gap-1.5 h-8 w-full mt-1 text-white"
+              style={{ background: theme.primaryColor }}
+            >
+              <Maximize2 className="size-3.5" /> Start Full Screen Chat
+            </Button>
           </div>
         </div>
 
