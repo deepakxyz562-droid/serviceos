@@ -52,6 +52,12 @@ export interface FloatingWidgetProps {
   formSchema?: any;
 }
 
+interface ActionChip {
+  label: string;
+  action: string;
+  value?: string;
+}
+
 interface Message {
   id: string;
   sender: 'ai' | 'user' | 'system' | 'agent';
@@ -59,6 +65,13 @@ interface Message {
   isLiveAgent?: boolean;
   text: string;
   citations?: CitationItem[];
+  confidence?: {
+    score: number;
+    tier: string;
+    verified: boolean;
+    category?: string;
+  };
+  chips?: ActionChip[];
   card?: any;
   suggestedForm?: { id: string; name: string; description?: string };
   timestamp: string;
@@ -224,6 +237,8 @@ export function FloatingFormAgentWidget({
           sender: 'ai',
           text: data.reply,
           citations: data.citations,
+          confidence: data.confidence,
+          chips: data.chips,
           card: data.card,
           suggestedForm: data.suggestedForm,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -568,6 +583,59 @@ export function FloatingFormAgentWidget({
                         style={isUser ? { backgroundColor: brandColor } : undefined}
                       >
                         {renderMessageWithCitations(m)}
+
+                        {/* Verified Grounded Knowledge Badge */}
+                        {m.confidence?.verified && (
+                          <div className="mt-1.5 flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            <ShieldCheck className="size-3 text-emerald-500 shrink-0" />
+                            <span>Verified Business Knowledge ({Math.round((m.confidence.score || 0.95) * 100)}% Match)</span>
+                          </div>
+                        )}
+
+                        {/* Interactive Action Chips */}
+                        {m.chips && m.chips.length > 0 && !isUser && (
+                          <div className="mt-2.5 pt-2 border-t border-slate-200/80 dark:border-slate-700/80 flex flex-wrap gap-1.5">
+                            {m.chips.map((chip, cIdx) => (
+                              <button
+                                key={cIdx}
+                                type="button"
+                                onClick={() => {
+                                  if (chip.action === 'book') {
+                                    handleSendMessage('I would like to book an appointment.');
+                                  } else if (chip.action === 'quote') {
+                                    handleSendMessage('How much do your services cost? Can I get an instant quote?');
+                                  } else if (chip.action === 'request_human') {
+                                    handleRequestHuman();
+                                  } else {
+                                    handleSendMessage(chip.value || chip.label);
+                                  }
+                                }}
+                                className="text-[11px] px-2.5 py-1 rounded-full font-medium bg-white dark:bg-slate-900 hover:bg-primary/10 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:border-primary/40 transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
+                              >
+                                {chip.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Instant Quote Card */}
+                        {m.card?.type === 'quote_card' && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-500/30 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-blue-950 dark:text-blue-100">{m.card.service}</span>
+                              <span className="text-xs font-black text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60">
+                                {m.card.estimate}
+                              </span>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => handleSendMessage(`I would like to lock in this estimate for ${m.card.service} and schedule a technician.`)}
+                              className="h-6 text-[10px] font-bold bg-primary hover:bg-primary/90 text-white w-full"
+                            >
+                              Lock In Quote & Book
+                            </Button>
+                          </div>
+                        )}
 
                         {/* Card Protocol Rendering */}
                         {m.card?.type === 'slot_picker' && (

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai-client';
-import { searchKnowledgeBase } from '@/lib/ai-knowledge';
+import { searchKnowledgeBase, searchKnowledgeBaseHybrid } from '@/lib/ai-knowledge';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
@@ -19,19 +19,26 @@ export async function POST(
 
     const agent: FormAgentData = agentConfig || DEFAULT_FORM_AGENT;
 
-    // Retrieve relevant vector embeddings from knowledge base
+    // Retrieve relevant vector embeddings from knowledge base (Hybrid RAG)
     let retrievedKnowledge = '';
+    let hybridResult: any = null;
+    let citations: Array<{ id: number; title: string; url?: string; snippet: string }> = [];
     const kbScope = agent.tenantId || (id !== 'preview' ? id : undefined);
+
     if (kbScope && message) {
       try {
-        const kbResults = await searchKnowledgeBase(kbScope, message, 3);
-        if (kbResults && kbResults.length > 0) {
-          retrievedKnowledge = `Indexed Knowledge Base Documents:\n${kbResults.map((doc: any) => `- ${doc.content || doc.snippet || ''}`).join('\n')}`;
+        hybridResult = await searchKnowledgeBaseHybrid(kbScope, message, { k: 3, strictMode: true });
+        citations = hybridResult.citations || [];
+
+        if (hybridResult.snippets && hybridResult.snippets.length > 0) {
+          retrievedKnowledge = `Indexed Knowledge Base Documents:\n${hybridResult.snippets.map((doc: any) => `- ${doc.content || doc.snippet || ''}`).join('\n')}`;
         } else if (message.length > 15 && !['hi', 'hello', 'hey', 'start'].includes(message.trim().toLowerCase())) {
           try {
             const { recordUnansweredQuestion } = await import('@/lib/ai-unanswered-questions');
             recordUnansweredQuestion(kbScope, message, 'forms_chat');
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       } catch (err) {
         console.warn('[forms/agent-chat] KB search warning:', err);
@@ -317,6 +324,19 @@ export async function POST(
       suggestedFormId: suggestedFormId || primaryConnectedForm?.id || null,
       suggestedForm: primaryConnectedForm || null,
       card: bookingCard,
+      citations: citations.length > 0 ? citations : undefined,
+      confidence: hybridResult
+        ? {
+            score: hybridResult.confidenceScore,
+            tier: hybridResult.confidenceTier,
+            verified: hybridResult.confidenceTier === 'HIGH' || !!hybridResult.structuredFactMatch,
+          }
+        : undefined,
+      chips: [
+        { label: '📅 Book Consultation', action: 'book' },
+        { label: '⚡ Request Quote', action: 'quote' },
+        { label: '💬 Talk to Specialist', action: 'request_human' },
+      ],
       agentName: agent.name,
     });
   } catch (error) {

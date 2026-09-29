@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { callAI } from '@/lib/ai-client';
-import { searchKnowledgeBase } from '@/lib/ai-knowledge';
+import { searchKnowledgeBase, searchKnowledgeBaseHybrid } from '@/lib/ai-knowledge';
 import { requestHumanHandoff, isEscalationIntent } from '@/lib/chat/handoff-service';
 import { createAppointmentBooking } from '@/lib/scheduling/booking-service';
 import { tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
@@ -226,37 +226,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Query Knowledge Base for Context & Citations
+    // 2. Query Knowledge Base for Context & Citations (Hybrid RAG + Confidence Gate)
     //    Use workspaceId for standalone forms, tenantId for CRM-bound.
     const kbScope = workspaceId || tenantId;
     let kbContext = '';
-    const citations: Array<{ id: number; title: string; url?: string; snippet: string }> = [];
+    let citations: Array<{ id: number; title: string; url?: string; snippet: string }> = [];
+    let hybridResult: any = null;
+    const responseChips: Array<{ label: string; action: string; value?: string }> = [
+      { label: '📅 Book Online', action: 'book' },
+      { label: '⚡ Get Instant Quote', action: 'quote' },
+      { label: '💬 Talk to a Human', action: 'request_human' },
+    ];
 
     if (kbScope) {
       try {
-        const searchResults = await searchKnowledgeBase(kbScope, message, 4);
-        if (searchResults.length > 0) {
-          kbContext = searchResults
-            .map((r, i) => {
-              const srcUrl = (r.documentTitle?.startsWith('http') ? r.documentTitle : undefined) || (r.content.match(/Source URL:\s*([^\s\n]+)/)?.[1]);
-              citations.push({
-                id: i + 1,
-                title: r.documentTitle || `Document ${i + 1}`,
-                url: srcUrl,
-                snippet: r.content.slice(0, 240),
-              });
-              return `[Source ${i + 1}: ${r.documentTitle}]\n${r.content}`;
-            })
+        hybridResult = await searchKnowledgeBaseHybrid(kbScope, message, { k: 4, strictMode: true });
+        citations = hybridResult.citations || [];
+
+        if (hybridResult.snippets.length > 0) {
+          kbContext = hybridResult.snippets
+            .map((r: any, i: number) => `[Source ${i + 1}: ${r.documentTitle}]\n${r.content}`)
             .join('\n\n');
-        } else if (message.length > 15 && !['hi', 'hello', 'hey', 'start'].includes(message.trim().toLowerCase())) {
-          // Record potential unanswered query
+        }
+
+        // Low confidence fallback on substantive questions -> record to unanswered questions
+        if (
+          hybridResult.shouldFallback &&
+          message.length > 15 &&
+          !['hi', 'hello', 'hey', 'start'].includes(message.trim().toLowerCase())
+        ) {
           try {
             const { recordUnansweredQuestion } = await import('@/lib/ai-unanswered-questions');
             recordUnansweredQuestion(kbScope, message, 'chat');
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       } catch (e) {
-        console.warn('[agent-chat] KB search skipped/empty:', e);
+        console.warn('[agent-chat] Hybrid KB search skipped/empty:', e);
       }
     }
 
@@ -305,7 +312,7 @@ export async function POST(req: NextRequest) {
       ? services.map((s) => `- ${s.name} ($${s.defaultPrice || 'Custom Quote'}): ${s.description || ''}`).join('\n')
       : '- General Service & Repair\n- Consultation & Estimate';
 
-    // 4. Construct AI Prompt
+    // 4. Construct AI Prompt with Zero-Hallucination Guardrails
     const systemPrompt = `You are the friendly, professional 24/7 AI Website Employee & Booking Assistant for "${tenantName}".
 Business Contact: Phone: ${tenantPhone || 'Available upon booking'}, Email: ${tenantEmail || 'support@' + tenantName.toLowerCase().replace(/\s+/g, '') + '.com'}
 
@@ -314,6 +321,18 @@ ${servicesList}
 
 KNOWLEDGE BASE & FAQS:
 ${kbContext || 'We provide top-tier professional field services with guaranteed customer satisfaction.'}
+
+CONFIDENCE & ZERO-HALLUCINATION GUARDRAIL:
+Confidence Level: ${hybridResult?.confidenceTier || 'NORMAL'}
+${
+  hybridResult?.structuredFactMatch
+    ? `VERIFIED DETERMINISTIC FACT FOUND (Confidence: ${Math.round(hybridResult.structuredFactMatch.confidence * 100)}%):\n"${hybridResult.structuredFactMatch.answer}"\nInstruction: Use this exact verified fact in your response. Do not invent contradictory numbers or rules.`
+    : hybridResult?.shouldFallback
+    ? `STRICT "DON'T GUESS" MODE ACTIVE (Confidence: Low):\nThe requested question was not found in our verified knowledge base.\nInstruction: Politely inform the visitor that you don't have our verified policy on that exact item yet, reassure them that you've logged this for the management team, and offer to have someone call them back or let them book an initial consultation. DO NOT GUESS PRICING OR SPECIFIC POLICIES.`
+    : hybridResult?.shouldClarify
+    ? `LOW CONFIDENCE - CLARIFYING MODE:\nThe knowledge base partially matches this query.\nInstruction: Answer what you know, but ask a targeted clarifying question (e.g. residential vs commercial, issue severity, or specific service type) before providing exact commitments.`
+    : `GROUNDED RAG MODE:\nAnswer from the provided knowledge base snippets. Append citations like [1] or [2] to facts.`
+}
 
 YOUR CAPABILITIES:
 1. Answer visitor questions accurately using the knowledge base and services listed above.
@@ -389,12 +408,13 @@ If the user asks for a price/quote and matches a known service, you can optional
     }
 
     if (!rawReply) {
-      const aiResponse = await callAI(conversationMessages, {
-        temperature: 0.7,
+      const aiResponse = await callAI({
+        messages: conversationMessages,
+        temperature: hybridResult?.shouldFallback ? 0.2 : 0.6,
         maxTokens: 500,
       });
 
-      rawReply = aiResponse.text || "Hello! How can I assist you today?";
+      rawReply = aiResponse.content || "Hello! How can I assist you today?";
 
       // Check for ```card ... ```
       const cardMatch = rawReply.match(/```card\s*([\s\S]*?)\s*```/);
@@ -431,6 +451,15 @@ If the user asks for a price/quote and matches a known service, you can optional
         suggestedForm: primaryConnectedForm || undefined,
         suggestedFormId: primaryConnectedForm?.id || undefined,
         citations: citations.length > 0 ? citations : undefined,
+        confidence: hybridResult
+          ? {
+              score: hybridResult.confidenceScore,
+              tier: hybridResult.confidenceTier,
+              verified: hybridResult.confidenceTier === 'HIGH' || !!hybridResult.structuredFactMatch,
+              category: hybridResult.structuredFactMatch?.category,
+            }
+          : undefined,
+        chips: responseChips,
         businessName: tenantName,
       },
       { headers: CORS_HEADERS },

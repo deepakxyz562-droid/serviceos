@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { crawlSitemap, crawlSingleUrl } from '@/lib/ai-crawler';
 import { ingestKnowledgeDocument } from '@/lib/ai-knowledge';
+import { extractStructuredFactsWithAI, extractDeterministicFacts } from '@/lib/ai-structured-facts';
+import { db } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +17,7 @@ export async function POST(req: NextRequest) {
     const tenantId = user.tenantId || (user as any).workspaceId || 'default';
 
     const body = await req.json().catch(() => ({}));
-    const { url, mode = 'sitemap', autoIngest = true, maxPages = 20 } = body;
+    const { url, mode = 'sitemap', autoIngest = true, maxPages = 20, extractFacts = true } = body;
 
     if (!url || typeof url !== 'string' || !url.trim()) {
       return NextResponse.json({ error: 'Target URL is required' }, { status: 400 });
@@ -32,9 +34,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (crawledPages.length === 0) {
-      return NextResponse.json({
-        error: 'No readable content could be extracted from this URL. Please check that the URL is public and accessible.',
-      }, { status: 422 });
+      return NextResponse.json(
+        {
+          error: 'No readable content could be extracted from this URL. Please check that the URL is public and accessible.',
+        },
+        { status: 422 }
+      );
     }
 
     const ingestedDocs: Array<{ id?: string; title: string; chunkCount?: number; url: string }> = [];
@@ -60,12 +65,60 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Dual-Brain Fact Extraction ──────────────────────────────────────────
+    let structuredFacts: any = null;
+    if (extractFacts && crawledPages.length > 0) {
+      try {
+        const deterministicPreview = extractDeterministicFacts(
+          crawledPages.map((p) => p.text).join('\n\n'),
+          crawledPages[0].title,
+          url.trim()
+        );
+        structuredFacts = await extractStructuredFactsWithAI(crawledPages, deterministicPreview);
+
+        // Ingest/update verified structured facts document
+        const existingFactDoc = await db.aiKnowledgeDocument.findFirst({
+          where: {
+            tenantId,
+            title: '[Verified Facts] Business Intelligence & Rates',
+          },
+        });
+
+        if (existingFactDoc) {
+          await db.aiKnowledgeDocument.update({
+            where: { id: existingFactDoc.id },
+            data: {
+              content: JSON.stringify(structuredFacts, null, 2),
+              charCount: JSON.stringify(structuredFacts).length,
+              status: 'ready',
+            },
+          });
+        } else {
+          await db.aiKnowledgeDocument.create({
+            data: {
+              tenantId,
+              title: '[Verified Facts] Business Intelligence & Rates',
+              sourceType: 'manual',
+              content: JSON.stringify(structuredFacts, null, 2),
+              charCount: JSON.stringify(structuredFacts).length,
+              chunkCount: 1,
+              status: 'ready',
+              createdBy: user.id,
+            },
+          });
+        }
+      } catch (factErr) {
+        console.warn('[ai-crawler] Fact extraction warning:', factErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       pagesDiscovered: crawledPages.length,
       pages: crawledPages.map((p) => ({ url: p.url, title: p.title, charCount: p.charCount })),
       ingestedCount: ingestedDocs.length,
       ingestedDocs,
+      structuredFacts,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

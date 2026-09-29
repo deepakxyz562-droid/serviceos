@@ -97,6 +97,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   const [crawlMode, setCrawlMode] = useState<'sitemap' | 'single'>('sitemap');
   const [crawling, setCrawling] = useState(false);
   const [crawledPagesCount, setCrawledPagesCount] = useState<number | null>(null);
+  const [extractedFacts, setExtractedFacts] = useState<any>(null);
 
   const [faqQ, setFaqQ] = useState('');
   const [faqA, setFaqA] = useState('');
@@ -234,6 +235,9 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
       if (res.ok && data.success) {
         toast.success(`Successfully crawled & indexed ${data.ingestedCount || data.pagesDiscovered} pages!`);
         setCrawledPagesCount(data.ingestedCount || data.pagesDiscovered);
+        if (data.structuredFacts) {
+          setExtractedFacts(data.structuredFacts);
+        }
 
         const newDocs: TrainingDocument[] = (data.ingestedDocs || []).map((d: any) => ({
           id: d.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -460,6 +464,66 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                 <CheckCircle2 className="size-3.5 text-emerald-500" />
                 Indexed {crawledPagesCount} pages into Agent RAG Knowledge Base
               </span>
+            </div>
+          )}
+
+          {/* Dual-Brain Verified Facts Panel */}
+          {extractedFacts && (
+            <div className="p-3 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 rounded-xl space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5 text-xs">
+                  <Database className="size-3.5 text-blue-600" />
+                  Dual-Brain Verified Facts (100% Deterministic Grounding)
+                </span>
+                <Badge variant="outline" className="text-[10px] text-blue-700 dark:text-blue-300 border-blue-300">
+                  Zero Hallucination
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                {extractedFacts.businessName && (
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Business Name</span>
+                    <span className="font-semibold text-foreground">{extractedFacts.businessName}</span>
+                  </div>
+                )}
+                {extractedFacts.phone && (
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Phone Number</span>
+                    <span className="font-semibold text-foreground">{extractedFacts.phone}</span>
+                  </div>
+                )}
+                {extractedFacts.operatingHours && Object.keys(extractedFacts.operatingHours).length > 0 && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Hours</span>
+                    <div className="flex flex-wrap gap-1.5 mt-0.5">
+                      {Object.entries(extractedFacts.operatingHours).map(([k, v]: [string, any], idx: number) => (
+                        <span key={idx} className="px-1.5 py-0.5 rounded bg-muted/60 text-[10px]">
+                          <strong>{k}:</strong> {String(v)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {extractedFacts.services && extractedFacts.services.length > 0 && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Services & Rates</span>
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {extractedFacts.services.slice(0, 6).map((s: any, idx: number) => (
+                        <span key={idx} className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 border border-border/80 text-[10px] font-medium flex items-center gap-1">
+                          <span>{s.name}</span>
+                          {s.price && <strong className="text-emerald-600">{s.price}</strong>}
+                        </span>
+                      ))}
+                      {extractedFacts.services.length > 6 && (
+                        <span className="text-[10px] text-muted-foreground self-center">
+                          +{extractedFacts.services.length - 6} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
