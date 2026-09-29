@@ -32,11 +32,69 @@ import {
   Code,
   BookOpen,
   Building2,
+  PhoneCall,
+  Calculator,
+  LayoutTemplate,
+  FileInput,
   type LucideIcon,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
 import { GooglePlayBadge } from '@/components/brand/google-play-badge';
 import { cn } from '@/lib/utils';
+
+// ─── AI & Smart Forms Catalog ───────────────────────────────────────────────
+export interface NavAiFormItem {
+  label: string;
+  desc: string;
+  href: string;
+  icon: LucideIcon;
+  badge?: string;
+}
+
+export const aiFormLinks: NavAiFormItem[] = [
+  {
+    label: '24/7 AI Voice Receptionist',
+    desc: 'Autonomous voice agent answers calls, triages emergencies & live books slots',
+    href: '/ai-employee',
+    icon: PhoneCall,
+    badge: 'Voice AI',
+  },
+  {
+    label: '24/7 AI Employee & Agent',
+    desc: 'Autonomous conversational employee across WhatsApp, SMS, Web & Email',
+    href: '/ai-agent',
+    icon: Bot,
+    badge: 'Autonomous',
+  },
+  {
+    label: 'AI Chatbot Builder',
+    desc: 'Custom trained knowledge-base chatbot to qualify leads & answer FAQs 24/7',
+    href: '/chatbot',
+    icon: MessageSquare,
+    badge: 'Lead Gen',
+  },
+  {
+    label: 'GPTForm™ AI Platform',
+    desc: 'Visual form builder, formula calculator pad, 200+ widgets & 33 gateways',
+    href: '/gptform',
+    icon: Sparkles,
+    badge: 'Core Builder',
+  },
+  {
+    label: '20,000+ Form Templates',
+    desc: 'Jotform-parity template library with 1-click clone across 20+ industries',
+    href: '/templates',
+    icon: LayoutTemplate,
+    badge: 'Templates',
+  },
+  {
+    label: 'Quote Calculators',
+    desc: 'Interactive 2-column estimators, date difference math & instant pricing',
+    href: '/templates/quote',
+    icon: Calculator,
+    badge: 'Calculators',
+  },
+];
 
 // ─── Products Catalog ────────────────────────────────────────────────────────
 interface NavProductItem {
@@ -252,6 +310,83 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
 
         {/* ── Desktop Navigation (4 Streamlined Items) ── */}
         <nav className="hidden lg:flex items-center gap-1.5">
+          {/* Dropdown 0: AI & Smart Forms */}
+          <div
+            className="relative"
+            onMouseEnter={() => handleMouseEnter('aiforms')}
+            onMouseLeave={handleMouseLeave}
+          >
+            <button
+              type="button"
+              onClick={() => setOpenDropdown((v) => (v === 'aiforms' ? null : 'aiforms'))}
+              aria-expanded={openDropdown === 'aiforms'}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg transition-colors',
+                aiFormLinks.some((a) => a.href === activePath) || openDropdown === 'aiforms'
+                  ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/15'
+                  : 'text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 hover:bg-emerald-500/10'
+              )}
+            >
+              <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              AI &amp; Forms
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'aiforms' && 'rotate-180')} />
+              <span className="inline-flex items-center justify-center px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 text-[9px] font-black uppercase tracking-wide">
+                New
+              </span>
+            </button>
+
+            {openDropdown === 'aiforms' && (
+              <div className="absolute left-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="w-[600px] rounded-2xl border border-border/80 bg-background p-4 shadow-2xl grid grid-cols-2 gap-2">
+                  {aiFormLinks.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activePath === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpenDropdown(null)}
+                        className={cn(
+                          'flex items-start gap-3 p-2.5 rounded-xl transition-all',
+                          isActive
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                            : 'hover:bg-muted/70 text-foreground'
+                        )}
+                      >
+                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-foreground truncate">{item.label}</span>
+                            {item.badge && (
+                              <span className="text-[9px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded-full">
+                                {item.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground line-clamp-2 leading-tight mt-0.5">
+                            {item.desc}
+                          </p>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                  <div className="col-span-2 mt-1 pt-2.5 border-t border-border flex items-center justify-between text-xs px-2 bg-emerald-50/40 dark:bg-emerald-950/20 -mx-4 -mb-4 p-3 rounded-b-2xl">
+                    <span className="text-muted-foreground font-medium">Ready to build or train your custom agent?</span>
+                    <Link
+                      href="/gptform"
+                      onClick={() => setOpenDropdown(null)}
+                      className="font-bold text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
+                    >
+                      Open GPTForm Studio <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Dropdown 1: Product */}
           <div
             className="relative"
@@ -691,6 +826,49 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
       {mobileMenuOpen && (
         <div className="lg:hidden fixed inset-x-0 top-16 bottom-0 z-50 bg-background/98 backdrop-blur-xl border-t border-border overflow-y-auto px-4 py-6 pb-20 animate-in fade-in duration-200">
           <div className="max-w-md mx-auto space-y-3">
+            {/* Mobile Section 0: AI & Smart Forms */}
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleMobileSection('aiforms')}
+                className="w-full flex items-center justify-between p-3.5 text-sm font-bold text-emerald-800 dark:text-emerald-300 text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>AI &amp; Smart Forms</span>
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full font-extrabold uppercase">
+                    New
+                  </span>
+                </div>
+                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'aiforms' && 'rotate-180')} />
+              </button>
+              {mobileSection === 'aiforms' && (
+                <div className="p-3 pt-0 border-t border-emerald-500/20 space-y-1 bg-background/50">
+                  {aiFormLinks.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center justify-between p-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <span>{item.label}</span>
+                        </div>
+                        {item.badge && (
+                          <span className="text-[9px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full font-medium">
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Mobile Section 1: Products */}
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <button

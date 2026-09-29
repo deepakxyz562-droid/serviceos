@@ -18,6 +18,7 @@ import {
   ChevronRight,
   ChevronDown,
   FileInput,
+  Calculator,
   Play,
   ArrowRight,
   Zap,
@@ -507,11 +508,19 @@ const seoFeatures = [
 ];
 
 const footerLinks = {
+  aiForms: [
+    { label: '24/7 AI Voice Receptionist', href: '/ai-employee' },
+    { label: 'AI Chatbot Builder', href: '/chatbot' },
+    { label: 'GPTForm™ AI Platform', href: '/gptform' },
+    { label: '24/7 AI Employee & Agent', href: '/ai-agent' },
+    { label: '20,000+ Form Templates', href: '/templates' },
+    { label: 'Quote Calculators', href: '/templates/quote' },
+  ],
   product: [
     { label: 'Features Hub', href: '/features' },
-    { label: 'GPTForm™ Smart Forms', href: '/gptform' },
-    { label: '20,000+ Form Templates', href: '/templates' },
-    { label: '24/7 AI Voice Receptionist', href: '/ai-employee' },
+    { label: 'Field Service Software', href: '/field-service-software' },
+    { label: 'Scheduling & Dispatch', href: '/scheduling-and-dispatch' },
+    { label: 'Invoicing & Payments', href: '/invoicing-and-payments' },
     { label: 'Verified Marketplace', href: '/marketplace' },
     { label: 'Pricing Plans', href: '/pricing' },
   ],
@@ -577,24 +586,42 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
                 <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">New</span>
               </button>
               <div className="absolute left-0 top-full pt-3 invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 z-50">
-                <div className="w-72 rounded-xl border border-border bg-white shadow-xl p-2 grid grid-cols-1 gap-1">
-                  <a href="/gptform" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
+                <div className="w-[340px] rounded-2xl border border-border bg-white dark:bg-slate-900 shadow-2xl p-2 grid grid-cols-1 gap-1">
+                  <a href="/ai-employee" className="p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors block">
                     <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
-                      <FileInput className="size-4 text-emerald-600" /> GPTForm™ Smart Forms
+                      <PhoneCall className="size-4 text-emerald-600" /> 24/7 AI Voice Receptionist
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">200+ widgets, photo drawing notes &amp; 33 gateways</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Autonomous call answering, triage &amp; live calendar booking</p>
                   </a>
-                  <a href="/templates" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block">
+                  <a href="/chatbot" className="p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors block">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                      <MessageSquare className="size-4 text-blue-600" /> AI Chatbot Builder
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Custom trained chatbot for 24/7 lead qualification &amp; FAQs</p>
+                  </a>
+                  <a href="/gptform" className="p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors block">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                      <Sparkles className="size-4 text-emerald-600" /> GPTForm™ AI Platform
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Visual form builder, calculation pad &amp; 33 gateways</p>
+                  </a>
+                  <a href="/ai-agent" className="p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors block">
+                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                      <Bot className="size-4 text-purple-600" /> 24/7 AI Employee &amp; Agent
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Autonomous customer operator across WhatsApp, SMS &amp; Web</p>
+                  </a>
+                  <a href="/templates" className="p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors block">
                     <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
                       <FileText className="size-4 text-emerald-600" /> 20,000+ Form Templates
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Jotform-parity templates with instant previews</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Jotform-parity template gallery with 1-click clone</p>
                   </a>
-                  <a href="/ai-employee" className="p-2.5 rounded-lg hover:bg-emerald-50 transition-colors block border-t border-border/50">
+                  <a href="/templates/quote" className="p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors block border-t border-border/60">
                     <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
-                      <PhoneCall className="size-4 text-purple-600" /> 24/7 AI Voice Receptionist
+                      <Calculator className="size-4 text-amber-600" /> Quote Calculators
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Autonomous phone answering, triage &amp; live booking</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Interactive 2-column estimators &amp; date difference math</p>
                   </a>
                 </div>
               </div>
@@ -657,11 +684,14 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
             <div className="px-4 py-4 space-y-3">
               <div className="pb-2 border-b">
                 <p className="text-xs uppercase tracking-wider text-emerald-700 font-bold mb-1">AI &amp; Forms</p>
-                <a href="/gptform" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📝 GPTForm™ Smart Forms</a>
-                <a href="/templates" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📋 20,000+ Templates</a>
-                <a href="/ai-employee" className="flex items-center gap-2 text-sm font-semibold text-purple-600 hover:text-purple-700 py-1" onClick={() => setMobileMenuOpen(false)}>
+                <a href="/ai-employee" className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400 py-1" onClick={() => setMobileMenuOpen(false)}>
                   <PhoneCall className="size-4" /> 24/7 AI Voice Receptionist
                 </a>
+                <a href="/chatbot" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>💬 AI Chatbot Builder</a>
+                <a href="/gptform" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📝 GPTForm™ AI Platform</a>
+                <a href="/ai-agent" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>🤖 24/7 AI Employee &amp; Agent</a>
+                <a href="/templates" className="block text-sm font-semibold text-emerald-600 hover:text-emerald-700 py-1" onClick={() => setMobileMenuOpen(false)}>📋 20,000+ Form Templates</a>
+                <a href="/templates/quote" className="block text-sm font-semibold text-amber-600 hover:text-amber-700 py-1" onClick={() => setMobileMenuOpen(false)}>🧮 Quote Calculators &amp; Estimators</a>
                 <a href="/marketplace" className="block text-sm font-medium text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>🌐 Contractor Marketplace</a>
               </div>
               <a href="/features" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Features Hub</a>
@@ -1947,20 +1977,35 @@ function Footer() {
             </div>
           </div>
 
-          <div className="md:col-span-2">
+          <div>
+            <h4 className="text-emerald-400 font-bold text-sm mb-4">AI &amp; Smart Forms</h4>
+            <ul className="space-y-2.5">
+              {footerLinks.aiForms.map((link) => (
+                <li key={link.href}>
+                  <a href={link.href} className="text-background/80 text-sm hover:text-emerald-400 transition-colors font-medium">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
             <h4 className="text-background font-semibold text-sm mb-4">Industries</h4>
-            <div className="grid grid-cols-2 gap-x-4">
-              <ul className="space-y-2.5">
-                {industriesColA.map((link) => (
-                  <li key={link.href}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
-                ))}
-              </ul>
-              <ul className="space-y-2.5">
-                {industriesColB.map((link) => (
-                  <li key={link.href}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
-                ))}
-              </ul>
-            </div>
+            <ul className="space-y-2.5">
+              {industriesColA.slice(0, 6).map((link) => (
+                <li key={link.href}>
+                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+              <li>
+                <a href="/industries" className="text-emerald-400 text-sm hover:underline font-medium">
+                  All 19+ Industries →
+                </a>
+              </li>
+            </ul>
           </div>
 
           <div>

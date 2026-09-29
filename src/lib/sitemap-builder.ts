@@ -250,17 +250,19 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     priority: number;
     changeFreq: MetadataRoute.Sitemap[number]["changeFrequency"];
   }[] = [
-    // ─── Core ────────────────────────────────────────────────────────────
+    // ─── Core AI & Forms Flagship ─────────────────────────────────────────
     { path: "", priority: 1.0, changeFreq: "weekly" },
-    { path: "/gptform", priority: 1.0, changeFreq: "weekly" },
+    { path: "/ai-employee", priority: 1.0, changeFreq: "weekly" },
     { path: "/chatbot", priority: 1.0, changeFreq: "weekly" },
+    { path: "/gptform", priority: 1.0, changeFreq: "weekly" },
     { path: "/ai-agent", priority: 1.0, changeFreq: "weekly" },
+    { path: "/templates", priority: 1.0, changeFreq: "daily" },
+    { path: "/templates/quote", priority: 0.9, changeFreq: "weekly" },
     { path: "/conversational-forms", priority: 0.9, changeFreq: "weekly" },
     { path: "/ai-chatbot-for-hvac", priority: 0.9, changeFreq: "weekly" },
     { path: "/ai-chatbot-for-plumbers", priority: 0.9, changeFreq: "weekly" },
     { path: "/fieseros-vs-jotform", priority: 0.9, changeFreq: "weekly" },
     { path: "/fieseros-vs-chatbot-com", priority: 0.9, changeFreq: "weekly" },
-    { path: "/templates", priority: 1.0, changeFreq: "daily" },
 
     // ─── Marketplace ─────────────────────────────────────────────────────
     { path: "/marketplace", priority: 0.9, changeFreq: "weekly" },

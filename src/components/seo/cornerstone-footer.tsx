@@ -10,6 +10,15 @@ import { GooglePlayBadge } from "@/components/brand/google-play-badge";
  * Server component — zero client JS.
  */
 export function CornerstoneFooter() {
+  const aiFormLinks = [
+    { href: "/ai-employee", label: "24/7 AI Voice Receptionist" },
+    { href: "/chatbot", label: "AI Chatbot Builder" },
+    { href: "/gptform", label: "GPTForm™ AI Platform" },
+    { href: "/ai-agent", label: "24/7 AI Employee & Agent" },
+    { href: "/templates", label: "20,000+ Form Templates" },
+    { href: "/templates/quote", label: "Quote Calculators & Math" },
+  ];
+
   const productLinks = [
     { href: "/features", label: "Features Hub" },
     { href: "/field-service-software", label: "Field Service Software" },
@@ -18,11 +27,6 @@ export function CornerstoneFooter() {
     { href: "/customer-crm", label: "Customer CRM" },
     { href: "/technician-app", label: "Technician App" },
     { href: "/automations", label: "Automations" },
-    { href: "/ai-employee", label: "24/7 AI Voice Receptionist" },
-    { href: "/chatbot", label: "AI Chatbot Builder" },
-    { href: "/gptform", label: "GPTForm™ Smart Forms" },
-    { href: "/templates", label: "20,000+ Form Templates" },
-    { href: "/ai-agent", label: "24/7 AI Employee & Agent" },
     { href: "/pricing", label: "Pricing Plans" },
   ];
 
@@ -205,6 +209,60 @@ export function CornerstoneFooter() {
         </div>
       </div>
 
+      {/* ── AI & Smart Forms Spotlight Strip ── */}
+      <div className="border-b border-border/60 bg-gradient-to-r from-emerald-500/10 via-purple-500/10 to-blue-500/10 dark:from-emerald-950/30 dark:via-purple-950/30 dark:to-blue-950/30 py-4">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30 shadow-2xs uppercase tracking-wide">
+                <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" /> AI Suite
+              </span>
+              <span className="text-xs font-bold text-foreground">
+                Autonomous AI Voice, Multichannel Agents &amp; Formula Calculation Forms
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <Link
+                href="/ai-employee"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border border-border/80 text-foreground font-semibold hover:border-emerald-500 hover:text-emerald-600 transition-colors shadow-2xs"
+              >
+                24/7 AI Voice Receptionist
+              </Link>
+              <Link
+                href="/chatbot"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border border-border/80 text-foreground font-semibold hover:border-emerald-500 hover:text-emerald-600 transition-colors shadow-2xs"
+              >
+                AI Chatbot Builder
+              </Link>
+              <Link
+                href="/gptform"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border border-border/80 text-foreground font-semibold hover:border-emerald-500 hover:text-emerald-600 transition-colors shadow-2xs"
+              >
+                GPTForm™ AI Platform
+              </Link>
+              <Link
+                href="/ai-agent"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border border-border/80 text-foreground font-semibold hover:border-emerald-500 hover:text-emerald-600 transition-colors shadow-2xs"
+              >
+                24/7 AI Employee &amp; Agent
+              </Link>
+              <Link
+                href="/templates"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-card border border-border/80 text-foreground font-semibold hover:border-emerald-500 hover:text-emerald-600 transition-colors shadow-2xs"
+              >
+                20,000+ Templates
+              </Link>
+              <Link
+                href="/templates/quote"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors shadow-2xs"
+              >
+                Quote Calculators →
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Free Tools Spotlight Strip ── */}
       <div className="border-b border-border/60 bg-emerald-50/30 dark:bg-emerald-950/20 py-5">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -256,10 +314,34 @@ export function CornerstoneFooter() {
       {/* ── Main Links Columns ── */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8">
-          {/* Column 1: Product */}
+          {/* Column 1: AI & Smart Forms (NEW) */}
+          <div>
+            <div className="flex items-center gap-1.5 mb-3.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                AI &amp; Smart Forms
+              </h3>
+              <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 px-1 py-0.2 rounded-full uppercase">
+                Core
+              </span>
+            </div>
+            <ul className="space-y-2 text-xs">
+              {aiFormLinks.map((link) => (
+                <li key={link.label}>
+                  <Link
+                    href={link.href}
+                    className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 font-medium transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Column 2: Product (Field Service OS) */}
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
-              Product
+              Field Service OS
             </h3>
             <ul className="space-y-2 text-xs">
               {productLinks.map((link) => (
