@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useTrialStatus, TrialPaywallOverlay, PastDueBanner } from '@/components/billing/trial-paywall';
 import { TenantPushManager } from '@/components/pwa/tenant-push-manager';
+import { CreateFormOrAgentModal } from '@/features/forms/components/wizard/create-form-or-agent-modal';
 
 // ─── Lazy-loaded views — organized by module ──────────────────────────────────
 
@@ -418,6 +419,9 @@ interface AppLayoutProps {
 
 export function AppLayout({ onLogout }: AppLayoutProps) {
   const { currentView, darkMode, setCurrentView, auth } = useAppStore();
+  const createFormWizardOpen = useAppStore((s) => s.createFormWizardOpen);
+  const createFormWizardInitialType = useAppStore((s) => s.createFormWizardInitialType);
+  const closeCreateFormWizard = useAppStore((s) => s.closeCreateFormWizard);
   const isMobile = useIsMobile();
   const trialStatus = useTrialStatus();
   const queryClient = useQueryClient();
@@ -649,6 +653,34 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
       {/* Global UpgradeModal — triggered by clicking locked menu items */}
       <UpgradeModal />
+
+      {/* Global Create Form or AI Agent Wizard Modal */}
+      <CreateFormOrAgentModal
+        open={createFormWizardOpen}
+        onOpenChange={(open) => {
+          if (!open) closeCreateFormWizard();
+        }}
+        initialType={createFormWizardInitialType}
+        onSuccess={({ formId, type, mode }) => {
+          closeCreateFormWizard();
+          if (mode === 'editor') {
+            if (formId) {
+              sessionStorage.setItem('fieseros_active_edit_form_id', formId);
+            }
+            if (type === 'agent') {
+              sessionStorage.setItem('open_agent_studio', 'true');
+            }
+          } else {
+            if (formId) {
+              sessionStorage.setItem('fieseros_highlight_form_id', formId);
+            }
+          }
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('forms:created', { detail: { formId, type, mode } }));
+          }
+          setCurrentView('formBuilder');
+        }}
+      />
     </div>
   );
 }

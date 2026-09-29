@@ -35,6 +35,7 @@ import {
   Users,
   FileText,
   Megaphone,
+  Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -810,7 +811,15 @@ export function DashboardView() {
             {subtitle}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          <Button
+            size="sm"
+            onClick={() => useAppStore.getState().openCreateFormWizard('form')}
+            className="bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-700 hover:to-blue-700 text-white font-bold text-xs h-9 px-3.5 rounded-xl shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer"
+          >
+            <Sparkles className="size-3.5" />
+            <span>Create Form / AI Agent</span>
+          </Button>
           <Badge variant="outline" className="text-xs px-3 py-1 border-emerald-300 text-emerald-700 bg-emerald-50">
             <Zap className="size-3 mr-1" /> Live
           </Badge>
@@ -1216,6 +1225,14 @@ export function DashboardView() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-3">
+              <Button
+                variant="outline"
+                className="justify-start gap-2.5 h-auto py-3 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-bold bg-emerald-500/5 cursor-pointer"
+                onClick={() => useAppStore.getState().openCreateFormWizard('hybrid')}
+              >
+                <Sparkles className="size-4 text-emerald-600" />
+                <span className="text-sm">Create Form or AI Agent</span>
+              </Button>
               <Button
                 className="justify-start gap-2.5 bg-emerald-600 hover:bg-emerald-700 h-auto py-3"
                 onClick={() => {

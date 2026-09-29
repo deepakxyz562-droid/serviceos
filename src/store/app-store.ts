@@ -134,6 +134,12 @@ interface AppState {
   // detail by row click — they have a `selectedX` + `openXDetail(x)` flow).
   pendingOpenEntity: PendingOpenEntity | null;
   setPendingOpenEntity: (e: PendingOpenEntity | null) => void;
+
+  // ── Global Create Form / AI Agent Wizard Modal ─────────────────────────
+  createFormWizardOpen: boolean;
+  createFormWizardInitialType: 'form' | 'agent' | 'hybrid' | null;
+  openCreateFormWizard: (initialType?: 'form' | 'agent' | 'hybrid') => void;
+  closeCreateFormWizard: () => void;
 }
 
 // Shape of the cross-view "open detail" signal.
@@ -259,6 +265,14 @@ export const useAppStore = create<AppState>()(
   // Cross-view "open entity detail" signal (Customer 360 clickable records)
   pendingOpenEntity: null,
   setPendingOpenEntity: (e) => set({ pendingOpenEntity: e }),
+
+  // Global Create Form / AI Agent Wizard Modal
+  createFormWizardOpen: false,
+  createFormWizardInitialType: null,
+  openCreateFormWizard: (initialType = 'form') =>
+    set({ createFormWizardOpen: true, createFormWizardInitialType: initialType }),
+  closeCreateFormWizard: () =>
+    set({ createFormWizardOpen: false, createFormWizardInitialType: null }),
     }),
     {
       name: 'fieseros-app-store',

@@ -97,6 +97,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
@@ -466,8 +467,16 @@ function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
         side={isExpanded ? 'bottom' : 'right'}
         align="start"
         sideOffset={6}
-        className="w-52"
+        className="w-56"
       >
+        <DropdownMenuItem
+          onClick={() => useAppStore.getState().openCreateFormWizard('hybrid')}
+          className="cursor-pointer font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 focus:bg-emerald-500/20 mb-1"
+        >
+          <Sparkles className="size-4 mr-2 text-emerald-600" />
+          <span>New Form or AI Agent</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {items.map((item) => {
           const Icon = item.icon;
           return (

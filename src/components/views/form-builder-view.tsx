@@ -64,6 +64,9 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'forms' | 'chatbots' | 'scheduling' | 'offers' | 'submissions'>('forms');
+  const [highlightedFormId, setHighlightedFormId] = useState<string | null>(null);
+
+  const openCreateFormWizard = useAppStore((s) => s.openCreateFormWizard);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -81,14 +84,14 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
       if (params.get('wizard') === '1' || sessionStorage.getItem('open_agent_setup_wizard') === 'true') {
         sessionStorage.removeItem('open_agent_setup_wizard');
-        setShowAgentWizard(true);
+        openCreateFormWizard('agent');
       }
       if (params.get('agentStudio') === '1' || sessionStorage.getItem('open_agent_studio') === 'true') {
         sessionStorage.removeItem('open_agent_studio');
         setShowAiAgentStudio(true);
       }
     }
-  }, []);
+  }, [openCreateFormWizard]);
 
   useEffect(() => {
     if (initialAgentStudio) {
@@ -222,6 +225,19 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           }
         }
       } catch {}
+
+      try {
+        if (typeof window !== 'undefined') {
+          const storedHighlight = sessionStorage.getItem('fieseros_highlight_form_id');
+          if (storedHighlight) {
+            setHighlightedFormId(storedHighlight);
+            sessionStorage.removeItem('fieseros_highlight_form_id');
+            setTimeout(() => {
+              setHighlightedFormId(null);
+            }, 6000);
+          }
+        }
+      } catch {}
     } catch (err) {
       setFormsError(err instanceof Error ? err.message : 'Failed to load forms');
       setForms([]);
@@ -233,6 +249,52 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   useEffect(() => {
     fetchForms();
   }, [fetchForms]);
+
+  useEffect(() => {
+    const handleFormCreated = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      fetchForms();
+      if (detail?.formId) {
+        if (detail?.mode === 'editor') {
+          authFetch(`/api/forms/${detail.formId}`)
+            .then(async (res) => {
+              if (!res.ok) return;
+              const data = await res.json();
+              if (data.form) {
+                const fullItem = apiFormToFormItem(data.form as ApiForm);
+                setFormData({
+                  ...fullItem,
+                  fields: Array.isArray(fullItem.fields) && fullItem.fields.length > 0 ? fullItem.fields : [],
+                  steps: Array.isArray(fullItem.steps) && fullItem.steps.length > 0 ? fullItem.steps : [],
+                });
+                setEditMode(true);
+                setEditFormId(detail.formId);
+                setShowCreateDialog(true);
+              }
+            })
+            .catch(() => {});
+        } else {
+          setHighlightedFormId(detail.formId);
+          setTimeout(() => {
+            setHighlightedFormId(null);
+          }, 6000);
+        }
+      }
+    };
+    window.addEventListener('forms:created', handleFormCreated);
+    return () => {
+      window.removeEventListener('forms:created', handleFormCreated);
+    };
+  }, [fetchForms]);
+
+  useEffect(() => {
+    if (highlightedFormId) {
+      const el = document.getElementById(`form-card-${highlightedFormId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [highlightedFormId, forms]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
@@ -943,7 +1005,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             <Button
               size="sm"
               className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white h-9 rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer"
-              onClick={() => setShowAgentWizard(true)}
+              onClick={() => openCreateFormWizard('agent')}
             >
               <Sparkles className="size-4" />
               <span>AI Agent Wizard</span>
@@ -961,11 +1023,10 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             </Button>
             <Button
               size="sm"
-              variant="outline"
-              className="border-border hover:bg-muted text-foreground h-9 rounded-xl font-bold text-xs shadow-2xs"
-              onClick={handleOpenCreate}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-xl font-bold text-xs shadow-sm gap-1.5 cursor-pointer"
+              onClick={() => openCreateFormWizard('form')}
             >
-              <Plus className="size-4 mr-1" /> Create Form
+              <Plus className="size-4" /> Create Form
             </Button>
           </div>
         )}
@@ -1088,8 +1149,16 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             {filteredForms.map((form) => {
               const actionBadges = getActionBadges(form.submissionActions);
+              const isHighlighted = highlightedFormId === form.id || highlightedFormId === form.slug;
               return (
-                <Card key={form.id} className="hover:shadow-md transition-all">
+                <Card
+                  key={form.id}
+                  id={`form-card-${form.id}`}
+                  className={cn(
+                    'hover:shadow-md transition-all duration-500',
+                    isHighlighted && 'ring-2 ring-emerald-500 shadow-xl shadow-emerald-500/25 bg-emerald-500/[0.04] dark:bg-emerald-950/20'
+                  )}
+                >
                   <CardContent className="p-4 space-y-3">
                     {/* Header */}
                     <div className="flex items-start justify-between gap-2">
@@ -1248,12 +1317,16 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
               <div className="flex items-center justify-center gap-3">
                 <Button
                   className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold gap-1.5 rounded-xl shadow-md shadow-emerald-600/20 cursor-pointer"
-                  onClick={() => setShowAgentWizard(true)}
+                  onClick={() => openCreateFormWizard('agent')}
                 >
                   <Sparkles className="size-4" /> Build with AI Wizard
                 </Button>
-                <Button variant="outline" className="rounded-xl font-bold cursor-pointer" onClick={handleOpenCreate}>
-                  <Plus className="size-4 mr-1.5" /> Create Blank Form
+                <Button
+                  variant="outline"
+                  className="rounded-xl font-bold cursor-pointer"
+                  onClick={() => openCreateFormWizard('form')}
+                >
+                  <Plus className="size-4 mr-1.5" /> Create Form
                 </Button>
               </div>
             </div>
