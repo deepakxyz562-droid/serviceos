@@ -119,6 +119,7 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
                 formDescription={template.shortDescription}
                 schema={normalizedSchema}
                 previewMode={true}
+                device="mobile"
               />
             </FormErrorBoundary>
           </div>
@@ -133,6 +134,7 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
                 formDescription={template.shortDescription}
                 schema={normalizedSchema}
                 previewMode={true}
+                device="tablet"
               />
             </FormErrorBoundary>
           </div>
@@ -146,6 +148,7 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
               formDescription={template.shortDescription}
               schema={normalizedSchema}
               previewMode={true}
+              device="desktop"
             />
           </FormErrorBoundary>
         </div>

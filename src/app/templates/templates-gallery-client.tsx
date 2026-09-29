@@ -1047,7 +1047,7 @@ export function TemplatesGalleryClient({
 
             <div>
               <h4 className="font-bold text-foreground mb-2">Categories</h4>
-              <div className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-48 overflow-y-auto">
                 {TEMPLATE_CATEGORIES.map((c) => (
                   <button
                     key={c.id}
@@ -1064,7 +1064,7 @@ export function TemplatesGalleryClient({
 
             <div>
               <h4 className="font-bold text-foreground mb-2">Features</h4>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {FEATURE_FILTERS.map((feat) => (
                   <label key={feat} className="flex items-center gap-2 text-xs">
                     <Checkbox

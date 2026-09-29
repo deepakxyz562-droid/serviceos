@@ -676,6 +676,8 @@ export interface FormRuntimeRendererProps {
   onSubmitSuccess?: (result: any) => void;
   previewMode?: boolean;
   isEmbed?: boolean;
+  device?: 'desktop' | 'tablet' | 'mobile';
+  forceSingleColumn?: boolean;
 }
 
 export function FormRuntimeRenderer({
@@ -690,6 +692,8 @@ export function FormRuntimeRenderer({
   onSubmitSuccess,
   previewMode = false,
   isEmbed = false,
+  device = 'desktop',
+  forceSingleColumn = false,
 }: FormRuntimeRendererProps) {
   const [inIframe, setInIframe] = useState(false);
   useEffect(() => {
@@ -977,9 +981,12 @@ export function FormRuntimeRenderer({
   const isSplitLayout = formLayout === 'split_media' && activeMode === 'paper';
   const splitRatio = mediaPanel?.splitRatio || '50-50';
   const isRightSide = mediaPanel?.position === 'right';
+  const isMobile = device === 'mobile' || Boolean(forceSingleColumn);
 
   const mediaColSpan =
-    splitRatio === '40-60'
+    isMobile
+      ? 'w-full'
+      : splitRatio === '40-60'
       ? 'lg:col-span-5'
       : splitRatio === '60-40'
       ? 'lg:col-span-7'
@@ -990,7 +997,9 @@ export function FormRuntimeRenderer({
       : 'lg:col-span-6';
 
   const formColSpan =
-    splitRatio === '40-60'
+    isMobile
+      ? 'w-full'
+      : splitRatio === '40-60'
       ? 'lg:col-span-7'
       : splitRatio === '60-40'
       ? 'lg:col-span-5'
@@ -1451,10 +1460,10 @@ export function FormRuntimeRenderer({
         }}
       >
 
-        <div className={isSplitLayout || isEstimatorForm ? 'grid grid-cols-1 lg:grid-cols-12 min-h-full' : ''}>
+        <div className={isSplitLayout || isEstimatorForm ? `grid grid-cols-1 ${isMobile ? '' : 'lg:grid-cols-12'} min-h-full` : ''}>
           {/* Media Hero Column (if Split Layout and positioned on the left) */}
           {isSplitLayout && !isRightSide && (
-            <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' ? 'hidden lg:flex' : ''}`}>
+            <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' && !isMobile ? 'hidden lg:flex' : ''}`}>
               <FormMediaHeroPanel
                 formId={formId}
                 mediaPanel={mediaPanel}
@@ -1736,7 +1745,7 @@ export function FormRuntimeRenderer({
                 </div>
               </div>
             ) : (
-            <div className="flex flex-wrap gap-y-4 justify-between">
+            <div className={`flex flex-wrap gap-y-4 justify-between ${isMobile ? 'flex-col w-full' : ''}`}>
               {currentStepFields.map((field) => (
                 <FormFieldRenderer
                   key={field.id}
@@ -1749,6 +1758,7 @@ export function FormRuntimeRenderer({
                   errors={errors}
                   inputBorderRadius={inputBorderRadius}
                   defaultInputHeightCls={defaultInputHeightCls}
+                  forceFullWidth={isMobile}
                 />
               ))}
             </div>
@@ -1805,7 +1815,7 @@ export function FormRuntimeRenderer({
 
           {/* Estimator Live Calculation Receipt Card (Right Column on Desktop) */}
           {isEstimatorForm && !isSplitLayout && (
-            <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-8 bg-slate-950 text-white rounded-3xl lg:rounded-l-none lg:rounded-r-3xl border-t lg:border-t-0 lg:border-l border-slate-800 shadow-inner">
+            <div className={`${isMobile ? 'w-full' : 'lg:col-span-5'} flex flex-col justify-between p-6 sm:p-8 bg-slate-950 text-white rounded-3xl lg:rounded-l-none lg:rounded-r-3xl border-t lg:border-t-0 lg:border-l border-slate-800 shadow-inner`}>
               <div className="space-y-6">
                 <div className="flex items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -1856,7 +1866,7 @@ export function FormRuntimeRenderer({
 
           {/* Media Hero Column (if Split Layout and positioned on the right) */}
           {isSplitLayout && isRightSide && (
-            <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' ? 'hidden lg:flex' : ''}`}>
+            <div className={`${mediaColSpan} flex flex-col ${mediaPanel?.mobileBehavior === 'hide' && !isMobile ? 'hidden lg:flex' : ''}`}>
               <FormMediaHeroPanel
                 formId={formId}
                 mediaPanel={mediaPanel}

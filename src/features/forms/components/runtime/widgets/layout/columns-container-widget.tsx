@@ -43,9 +43,11 @@ export function ColumnsContainerWidget({
     .map((id) => allFields.find((f) => f.id === id))
     .filter(Boolean) as FormField[];
 
-  // CSS grid template based on column count
-  const gridTemplateColumns =
-    columns === 3 ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)';
+  // Responsive CSS grid classes based on column count (breaks to 1 column on mobile)
+  const colClass =
+    columns === 3
+      ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
+      : 'grid-cols-1 sm:grid-cols-2';
 
   if (childFields.length === 0) {
     return (
@@ -60,9 +62,8 @@ export function ColumnsContainerWidget({
 
   return (
     <div
-      className="w-full grid gap-4"
+      className={cn('w-full grid gap-4', colClass)}
       style={{
-        gridTemplateColumns,
         gap,
       }}
     >

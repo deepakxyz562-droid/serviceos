@@ -445,7 +445,7 @@ export function PaymentGatewayRuntime({
             ) : gateway.id === 'payu_india' ? (
               /* 5. PAYU INDIA (UPI / QR / NetBanking) */
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="p-3 border border-border/80 rounded-xl bg-card flex flex-col items-center text-center">
                     <QrCode className="size-16 text-slate-800 dark:text-slate-200 mb-1" />
                     <span className="text-[11px] font-bold text-foreground">Scan UPI QR</span>
@@ -493,7 +493,7 @@ export function PaymentGatewayRuntime({
                     disabled={disabled}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-[11px] font-semibold text-muted-foreground">Payment Terms</label>
                     <Select defaultValue="net_30" disabled={disabled}>
@@ -539,7 +539,7 @@ export function PaymentGatewayRuntime({
                     disabled={disabled}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-[11px] font-semibold text-muted-foreground">Routing / Sort Code</label>
                     <Input
@@ -594,7 +594,7 @@ export function PaymentGatewayRuntime({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="text-[11px] font-semibold text-muted-foreground">Expiration</label>
                     <Input

@@ -95,7 +95,7 @@ export function DateRange({ value, onChange, config, disabled, field }: WidgetPr
             mode="range"
             selected={{ from: validFrom, to: validTo }}
             onSelect={select}
-            numberOfMonths={2}
+            numberOfMonths={1}
             disabled={[disabledDays]}
             initialFocus
           />

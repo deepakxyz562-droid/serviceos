@@ -50,6 +50,9 @@ export interface FormFieldRendererProps {
   /** Theme context (from the renderer/canvas) */
   inputBorderRadius: string;
   defaultInputHeightCls: string;
+
+  /** Force field to 100% full width (e.g. mobile device frame or mobile viewport) */
+  forceFullWidth?: boolean;
 }
 
 /**
@@ -57,7 +60,8 @@ export interface FormFieldRendererProps {
  * Previously, the editor used `md:w-[calc(50%-0.5rem)]` while the runtime used
  * `sm:w-[48.5%]`. Now both use the same classes.
  */
-export function getFieldWidthClass(width?: string): string {
+export function getFieldWidthClass(width?: string, forceFullWidth = false): string {
+  if (forceFullWidth) return 'w-full';
   switch (width) {
     case 'half':
       return 'w-full sm:w-[48.5%]';
@@ -168,10 +172,11 @@ export const FormFieldRenderer = React.memo(function FormFieldRenderer({
   disabled = false,
   inputBorderRadius,
   defaultInputHeightCls,
+  forceFullWidth = false,
 }: FormFieldRendererProps) {
   const isEditMode = mode === 'edit';
   const isSelected = isEditMode && selectedFieldId === field.id;
-  const widthClass = isEditMode ? 'w-full' : getFieldWidthClass(field.width);
+  const widthClass = isEditMode || forceFullWidth ? 'w-full' : getFieldWidthClass(field.width, forceFullWidth);
   const labelHidden = isLabelHidden(field);
   const labelAlignClass = getLabelAlignClass(field);
   const fieldStyle = getFieldStyle(field);

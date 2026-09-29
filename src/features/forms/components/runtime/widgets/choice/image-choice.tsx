@@ -45,13 +45,13 @@ export function ImageChoice({ value, onChange, config, disabled, field }: Widget
   };
 
   const colMap: Record<string, string> = {
-    '2': 'grid-cols-2',
-    '3': 'grid-cols-3',
-    '4': 'grid-cols-4',
+    '2': 'grid-cols-1 sm:grid-cols-2',
+    '3': 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3',
+    '4': 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4',
   };
 
   return (
-    <div className={`grid ${colMap[columns] || 'grid-cols-3'} gap-3`} role="group" aria-label={ariaLabel}>
+    <div className={`grid ${colMap[columns] || 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'} gap-3`} role="group" aria-label={ariaLabel}>
       {options.map((opt) => {
         const checked = selected.includes(opt.value);
         return (
