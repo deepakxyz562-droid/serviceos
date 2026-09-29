@@ -7,23 +7,24 @@ import { platforms, integrations } from "@/lib/seo/platform-config";
 import type { BreadcrumbItem } from "@/components/seo/breadcrumbs";
 
 export const metadata: Metadata = {
-  title: "Platforms — Embed Fieseros on Any Website | Fieseros",
+  title: "CMS Platforms & Embeds — WordPress, Shopify, Wix, Webflow | GPTForm",
   description:
-    "Embed Fieseros AI chat agent and smart forms on WordPress, Shopify, Wix, Webflow, Squarespace, or any custom HTML site. One snippet, 60-second setup, zero bloat.",
+    "Embed GPTForm AI Chatbot and dynamic intake forms on WordPress, Shopify, Wix, Webflow, Squarespace, or any custom HTML site. 1-line snippet, 60-second setup, zero plugin bloat.",
   keywords: [
-    "fieseros wordpress",
-    "fieseros shopify",
-    "fieseros wix",
-    "fieseros webflow",
-    "AI chat widget embed",
+    "GPTForm WordPress embed",
+    "GPTForm Shopify app",
+    "GPTForm Wix chatbot",
+    "GPTForm Webflow form",
+    "GPTForm Squarespace embed",
+    "AI chatbot widget embed",
     "smart forms embed",
     "website chat integration",
   ],
   alternates: { canonical: "https://fieseros.com/platform" },
   openGraph: {
-    title: "Platforms — Embed Fieseros on Any Website | Fieseros",
+    title: "CMS Platforms & Embeds — WordPress, Shopify, Wix, Webflow | GPTForm",
     description:
-      "Embed Fieseros AI chat agent and smart forms on any website — WordPress, Shopify, Wix, Webflow, Squarespace, or custom HTML. One snippet, 60-second setup.",
+      "Embed GPTForm AI Chatbot and smart forms on any website in 60 seconds with 1 line of code. No plugin conflicts, zero database bloat.",
     url: "https://fieseros.com/platform",
     siteName: "Fieseros",
     type: "website",
@@ -44,15 +45,14 @@ export default function PlatformHubPage() {
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-4">
             <Sparkles className="h-3.5 w-3.5" />
-            Platforms
+            CMS Platforms & Embeds
           </span>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground mb-4">
-            Embed Fieseros on any website
+            Embed GPTForm on any website in 60 seconds
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
             WordPress, Shopify, Wix, Webflow, Squarespace, or custom HTML —
-            one snippet and the AI chat agent + smart forms are live. No
-            plugins, no bloat, no developer required.
+            paste one lightweight snippet to activate an autonomous AI agent, interactive quote calculators, and real-time appointment booking. Zero plugin bloat, 100% Core Web Vitals friendly.
           </p>
         </div>
       </section>
@@ -74,7 +74,7 @@ export default function PlatformHubPage() {
                       <Icon className="h-6 w-6" />
                     </div>
                     <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                      Embed
+                      Embed Guide
                     </span>
                   </div>
                   <h2 className="text-lg font-bold text-foreground mb-2 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
@@ -84,7 +84,7 @@ export default function PlatformHubPage() {
                     {p.heroSubtitle}
                   </p>
                   <div className="mt-5 pt-3 border-t border-border/40 flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    <span>Setup guide</span>
+                    <span>View integration guide</span>
                     <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </Link>
@@ -99,11 +99,10 @@ export default function PlatformHubPage() {
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-b from-emerald-50/40 to-card dark:from-emerald-950/20 p-8 text-center">
             <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mb-2">
-              Looking to connect other apps?
+              Looking to connect business apps & calendars?
             </h2>
             <p className="text-sm text-muted-foreground mb-5 max-w-xl mx-auto">
-              Sync QuickBooks, Google Calendar, Stripe, and 6,000+ apps via
-              Zapier. See our integrations hub.
+              Sync Google Calendar, Stripe, QuickBooks Online, and 6,000+ business applications via Zapier with real-time webhooks.
             </p>
             <Link
               href="/integrations"
@@ -129,11 +128,11 @@ export default function PlatformHubPage() {
       </section>
 
       <CtaSection
-        title="Embed Fieseros in 60 seconds"
-        subtitle="Paste one snippet. The AI chat agent and smart forms are live on your site — capturing leads and booking jobs."
+        title="Deploy your AI agent in under 60 seconds"
+        subtitle="Paste one snippet into your header. Your AI agent and dynamic forms go live immediately — qualifying leads, answering questions, and booking appointments 24/7."
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
         secondaryCta={{ label: "View Pricing", href: "/pricing" }}
-        bullets={["14-day free trial", "No credit card required", "Cancel anytime"]}
+        bullets={["14-day free trial", "No credit card required", "0% platform fees"]}
       />
     </CornerstoneLayout>
   );
