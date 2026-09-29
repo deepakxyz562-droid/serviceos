@@ -105,14 +105,14 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
   const isSplitLayout = normalizedSchema?.theme?.layout === 'split_media' || Boolean(normalizedSchema?.mediaPanel?.enabled);
 
   return (
-    <div className="flex-1 min-w-0 bg-slate-100/80 dark:bg-slate-950 p-4 sm:p-6 lg:p-8 overflow-y-auto flex items-start justify-center">
+    <div className="flex-1 min-w-0 bg-slate-100/80 dark:bg-slate-950 p-1.5 sm:p-6 lg:p-8 overflow-y-auto flex items-start justify-center">
       {device === 'mobile' ? (
-        /* Mobile Frame */
-        <div className="w-[360px] bg-slate-900 rounded-[36px] p-3 shadow-2xl border-4 border-slate-800 transition-all my-2">
-          <div className="w-24 h-4 bg-slate-950 rounded-full mx-auto mb-3 flex items-center justify-center">
+        /* Mobile Frame — fluid on small screens to prevent horizontal overflow */
+        <div className="w-full max-w-[380px] bg-slate-900 rounded-2xl sm:rounded-[36px] p-1.5 sm:p-3 shadow-2xl border-2 sm:border-4 border-slate-800 transition-all my-1 sm:my-2">
+          <div className="hidden sm:flex w-24 h-4 bg-slate-950 rounded-full mx-auto mb-3 items-center justify-center">
             <div className="w-8 h-1 bg-slate-800 rounded-full" />
           </div>
-          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-3 sm:p-4 max-h-[68vh] overflow-y-auto shadow-inner">
+          <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-[24px] p-2 sm:p-4 max-h-[78vh] sm:max-h-[68vh] overflow-y-auto shadow-inner">
             <FormErrorBoundary fallback={renderFallback}>
               <FormRuntimeRenderer
                 formName={template.name}
@@ -125,8 +125,8 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
         </div>
       ) : device === 'tablet' ? (
         /* Tablet Frame */
-        <div className="w-full max-w-xl bg-slate-900 rounded-[28px] p-4 shadow-2xl border-4 border-slate-800 transition-all my-2">
-          <div className="bg-white dark:bg-slate-900 rounded-[18px] p-4 sm:p-6 max-h-[70vh] overflow-y-auto shadow-inner">
+        <div className="w-full max-w-xl bg-slate-900 rounded-2xl sm:rounded-[28px] p-2 sm:p-4 shadow-2xl border-2 sm:border-4 border-slate-800 transition-all my-1 sm:my-2">
+          <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-[18px] p-3 sm:p-6 max-h-[75vh] sm:max-h-[70vh] overflow-y-auto shadow-inner">
             <FormErrorBoundary fallback={renderFallback}>
               <FormRuntimeRenderer
                 formName={template.name}
@@ -138,8 +138,8 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
           </div>
         </div>
       ) : (
-        /* Desktop Paper Canvas */
-        <div className={`w-full ${isSplitLayout ? 'max-w-4xl lg:max-w-5xl' : 'max-w-2xl'} transition-all my-2 pt-2`}>
+        /* Desktop Paper Canvas — fluid and responsive */
+        <div className={`w-full ${isSplitLayout ? 'max-w-4xl lg:max-w-5xl' : 'max-w-2xl'} transition-all my-1 sm:my-2 pt-1 sm:pt-2`}>
           <FormErrorBoundary fallback={renderFallback}>
             <FormRuntimeRenderer
               formName={template.name}

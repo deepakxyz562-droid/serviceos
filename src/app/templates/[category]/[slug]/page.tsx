@@ -197,7 +197,7 @@ export default async function TemplateDetailPage({
           {/* Live preview */}
           <section id="preview" className="scroll-mt-4">
             <h2 className="text-lg font-bold text-foreground mb-3">Live Preview</h2>
-            <div className="rounded-xl border border-border bg-card overflow-hidden p-6">
+            <div className="rounded-xl border border-border bg-card overflow-hidden p-2 sm:p-6">
               <TemplateRuntimePreview
                 formName={template.name}
                 schema={template.schema}
@@ -225,8 +225,8 @@ export default async function TemplateDetailPage({
             <p className="text-xs text-muted-foreground mb-4">
               This template includes {fieldCount} fields. Here&apos;s what respondents will see:
             </p>
-            <div className="rounded-xl border border-border overflow-hidden">
-              <table className="w-full text-xs">
+            <div className="rounded-xl border border-border overflow-x-auto">
+              <table className="w-full text-xs min-w-[320px]">
                 <thead className="bg-muted/50">
                   <tr>
                     <th className="text-left p-3 font-semibold text-foreground">Field</th>

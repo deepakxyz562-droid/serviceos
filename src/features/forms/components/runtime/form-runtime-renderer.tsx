@@ -156,7 +156,7 @@ export function FormMediaHeroPanel({
 
   return (
     <div
-      className="relative flex flex-col justify-between overflow-hidden text-white p-5 sm:p-6 lg:p-7 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-[260px] lg:min-h-full select-text"
+      className="relative flex flex-col justify-between overflow-hidden text-white p-3.5 sm:p-5 lg:p-7 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-0 lg:min-h-full select-text"
       style={{
         backgroundColor: mediaPanel?.backgroundColor || '#0f172a',
       }}
@@ -251,7 +251,7 @@ export function FormMediaHeroPanel({
           )}
 
           {isMap ? (
-            <div className="relative w-full aspect-video min-h-[220px] bg-slate-950 overflow-hidden flex flex-col justify-between p-4">
+            <div className="relative w-full aspect-video min-h-[160px] sm:min-h-[220px] bg-slate-950 overflow-hidden flex flex-col justify-between p-3 sm:p-4">
               <iframe
                 src={`https://maps.google.com/maps?q=${encodeURIComponent(mediaPanel?.mapAddress || 'Austin, TX')}&t=&z=${mediaPanel?.mapZoom || 13}&ie=UTF8&iwloc=&output=embed`}
                 title="Location Map"
@@ -262,7 +262,7 @@ export function FormMediaHeroPanel({
                   <MapPin className="size-3" /> Live Dispatch Area
                 </Badge>
               </div>
-              <div className="relative z-10 bg-slate-900/90 backdrop-blur border border-white/10 p-2.5 rounded-xl">
+              <div className="relative z-10 bg-slate-900/90 backdrop-blur border border-white/10 p-2 sm:p-2.5 rounded-xl">
                 <p className="text-xs font-bold text-white flex items-center gap-1.5">
                   <MapPin className="size-3 text-rose-400" />
                   {mediaPanel?.mapAddress || 'Austin, TX Metro Area'}
@@ -275,7 +275,7 @@ export function FormMediaHeroPanel({
               </div>
             </div>
           ) : isGradient ? (
-            <div className="relative w-full aspect-video min-h-[220px] overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-900 to-emerald-950 p-6 flex flex-col justify-center items-center text-center">
+            <div className="relative w-full aspect-video min-h-[140px] sm:min-h-[220px] overflow-hidden bg-gradient-to-br from-indigo-950 via-slate-900 to-emerald-950 p-4 sm:p-6 flex flex-col justify-center items-center text-center">
               <div className="size-32 rounded-full bg-primary/30 blur-2xl absolute -top-4 -left-4" />
               <div className="size-32 rounded-full bg-indigo-500/20 blur-2xl absolute -bottom-4 -right-4" />
               <div className="relative z-10 space-y-2">
@@ -288,7 +288,7 @@ export function FormMediaHeroPanel({
             </div>
           ) : isVideo ? (
             videoParsed.type === 'youtube' || videoParsed.type === 'vimeo' || (mediaPanel?.mediaUrl && (mediaPanel.mediaUrl.includes('youtube.com') || mediaPanel.mediaUrl.includes('youtu.be') || mediaPanel.mediaUrl.includes('vimeo.com'))) ? (
-              <div className="aspect-video w-full">
+              <div className="aspect-video w-full max-h-48 sm:max-h-64 lg:max-h-none">
                 <iframe
                   src={
                     videoParsed.embedUrl ||
@@ -302,7 +302,7 @@ export function FormMediaHeroPanel({
                 />
               </div>
             ) : (
-              <div className="relative aspect-video w-full">
+              <div className="relative aspect-video w-full max-h-48 sm:max-h-64 lg:max-h-none">
                 <video
                   src={videoParsed.embedUrl || mediaPanel?.mediaUrl}
                   autoPlay={mediaPanel?.videoAutoplay ?? true}
@@ -325,7 +325,7 @@ export function FormMediaHeroPanel({
               </div>
             )
           ) : (
-            <div className="relative w-full aspect-video overflow-hidden">
+            <div className="relative w-full aspect-video max-h-44 sm:max-h-64 lg:max-h-none overflow-hidden">
               <img
                 src={
                   mediaPanel?.mediaUrl ||
@@ -454,7 +454,7 @@ export function FormMediaHeroPanel({
               </button>
             </div>
           ) : benefits.length > 0 ? (
-            <div className="space-y-2 pt-2 border-t border-white/10">
+            <div className="hidden sm:block space-y-2 pt-2 border-t border-white/10">
               {benefits.map((benefit, i) => (
                 <div key={i} className="flex items-center gap-2 text-xs text-slate-200">
                   <CheckCircle2 className="size-3.5 text-emerald-400 shrink-0" />
@@ -1472,7 +1472,7 @@ export function FormRuntimeRenderer({
           {/* Form Content Column */}
           <div className={`${isSplitLayout ? formColSpan : isEstimatorForm ? 'lg:col-span-7 w-full' : 'w-full'} flex flex-col justify-between`}>
             {/* Header */}
-            <div className="p-6 sm:p-8 pb-3">
+            <div className="p-4 sm:p-6 lg:p-8 pb-3">
               {displayBusinessName && (
                 <p
                   className="text-[10px] uppercase font-extrabold tracking-wider mb-1"
@@ -1558,7 +1558,7 @@ export function FormRuntimeRenderer({
             </div>
 
             {/* Content */}
-            <CardContent className="p-6 sm:p-8 pt-6 flex-1">
+            <CardContent className="p-3.5 sm:p-6 lg:p-8 pt-4 sm:pt-6 flex-1">
               <form onSubmit={handleSubmit} className="space-y-6">
                 <input type="text" name="_hp" className="hidden" tabIndex={-1} autoComplete="off" />
 

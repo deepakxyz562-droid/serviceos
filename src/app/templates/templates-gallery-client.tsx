@@ -292,8 +292,18 @@ export function TemplatesGalleryClient({
     seedTotal,
   ]);
 
+  // Auto-detect mobile screen for preview frame
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setPreviewDevice('mobile');
+    }
+  }, []);
+
   const openPreview = useCallback(async (template: FormTemplate, pushHistory = true) => {
     if (!template) return;
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setPreviewDevice('mobile');
+    }
     setPreviewTemplate(template);
     if (typeof window !== 'undefined' && pushHistory) {
       const primaryCat = template.categories?.[0] || 'general';
@@ -534,7 +544,7 @@ export function TemplatesGalleryClient({
 
       {/* ─── 3 FEATURED WORKFLOW HERO CARDS ─── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="flex md:grid overflow-x-auto md:overflow-visible gap-4 md:grid-cols-3 pb-2 md:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none snap-x snap-mandatory">
           {[
             {
               icon: CalendarCheck,
@@ -564,7 +574,7 @@ export function TemplatesGalleryClient({
               <button
                 key={card.title}
                 onClick={() => chooseGoal(card.goal)}
-                className={`group flex min-h-32 items-start gap-4 rounded-2xl border bg-gradient-to-br ${card.accent} p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
+                className={`group flex min-h-32 min-w-[270px] sm:min-w-0 flex-1 shrink-0 snap-start items-start gap-4 rounded-2xl border bg-gradient-to-br ${card.accent} p-4 sm:p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
                   isSelected ? 'ring-2 ring-emerald-500' : ''
                 }`}
               >
@@ -767,7 +777,7 @@ export function TemplatesGalleryClient({
               </div>
 
               {/* Sort Tabs */}
-              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-medium self-start sm:self-auto">
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-medium self-start sm:self-auto overflow-x-auto max-w-full scrollbar-none shrink-0">
                 {[
                   { id: 'featured', label: '⭐ Featured' },
                   { id: 'popular', label: '🔥 Popular' },
@@ -778,7 +788,7 @@ export function TemplatesGalleryClient({
                     key={s.id}
                     type="button"
                     onClick={() => setSort(s.id as any)}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                    className={`px-3 py-1.5 rounded-lg transition-all shrink-0 ${
                       sort === s.id
                         ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 font-bold shadow-xs'
                         : 'text-muted-foreground hover:text-foreground'
@@ -1088,35 +1098,35 @@ export function TemplatesGalleryClient({
           <DialogContent
             showCloseButton={false}
             style={{ paddingTop: 0 }}
-            className="!max-w-[1280px] sm:!max-w-[1280px] lg:!max-w-[1320px] w-[96vw] max-h-[94vh] flex flex-col !p-0 rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900"
+            className="!max-w-none sm:!max-w-[1280px] lg:!max-w-[1320px] w-full sm:w-[96vw] h-full sm:h-auto max-h-none sm:max-h-[94vh] inset-0 sm:inset-auto flex flex-col !p-0 rounded-none sm:rounded-2xl overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900"
           >
             {/* Modal Header */}
-            <DialogHeader className="px-6 py-4 border-b border-border bg-slate-50/50 dark:bg-slate-950/40 flex flex-row items-center justify-between space-y-0">
-              <div className="space-y-1 max-w-xl">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px] font-bold bg-white dark:bg-slate-900">
+            <DialogHeader className="px-4 py-3 sm:px-6 sm:py-4 border-b border-border bg-slate-50/50 dark:bg-slate-950/40 flex flex-row items-center justify-between space-y-0 shrink-0">
+              <div className="space-y-0.5 sm:space-y-1 max-w-[240px] sm:max-w-xl">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Badge variant="outline" className="text-[9px] sm:text-[10px] font-bold bg-white dark:bg-slate-900">
                     {getCategoryLabel(previewTemplate.categories?.[0] || 'general')}
                   </Badge>
                   {previewTemplate.industries?.[0] && previewTemplate.industries[0] !== 'general' && (
-                    <Badge variant="outline" className="text-[10px] font-bold bg-blue-50 text-blue-700 border-blue-200">
+                    <Badge variant="outline" className="text-[9px] sm:text-[10px] font-bold bg-blue-50 text-blue-700 border-blue-200">
                       {getIndustryLabel(previewTemplate.industries[0])}
                     </Badge>
                   )}
                 </div>
-                <DialogTitle className="text-lg sm:text-xl font-bold text-foreground">
+                <DialogTitle className="text-base sm:text-xl font-bold text-foreground truncate">
                   {previewTemplate.name}
                 </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground line-clamp-1">
+                <DialogDescription className="text-xs text-muted-foreground line-clamp-1 hidden sm:block">
                   {previewTemplate.shortDescription || 'Live interactive form preview with multi-mode experiences.'}
                 </DialogDescription>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handlePrevTemplate}
-                  className="size-8 p-0 rounded-lg"
+                  className="size-8 p-0 rounded-lg hidden sm:inline-flex"
                   aria-label="Previous template"
                 >
                   <ArrowLeft className="size-4" />
@@ -1125,7 +1135,7 @@ export function TemplatesGalleryClient({
                   variant="outline"
                   size="sm"
                   onClick={handleNextTemplate}
-                  className="size-8 p-0 rounded-lg"
+                  className="size-8 p-0 rounded-lg hidden sm:inline-flex"
                   aria-label="Next template"
                 >
                   <ArrowRight className="size-4" />
@@ -1147,10 +1157,10 @@ export function TemplatesGalleryClient({
               {/* Left Live Interactive Canvas */}
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-100/70 dark:bg-slate-950/60">
                 {/* Device Switcher Top Bar */}
-                <div className="px-5 py-2.5 border-b border-border/80 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xs flex items-center justify-between shrink-0">
+                <div className="px-3 sm:px-5 py-2 sm:py-2.5 border-b border-border/80 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xs flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                     <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-foreground font-bold">Live Interactive Preview</span>
+                    <span className="text-foreground font-bold text-[11px] sm:text-xs">Live Interactive Preview</span>
                     <span className="text-[11px] text-muted-foreground hidden sm:inline">• Test inputs & responsive layout</span>
                   </div>
 
@@ -1158,37 +1168,37 @@ export function TemplatesGalleryClient({
                     <Button
                       variant={previewDevice === 'desktop' ? 'secondary' : 'ghost'}
                       size="sm"
-                      className={`h-7 px-2.5 rounded-lg text-xs font-semibold gap-1.5 cursor-pointer ${
+                      className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-lg text-[11px] sm:text-xs font-semibold gap-1 sm:gap-1.5 cursor-pointer ${
                         previewDevice === 'desktop' ? 'text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold' : 'text-muted-foreground'
                       }`}
                       onClick={() => setPreviewDevice('desktop')}
                       aria-label="Desktop preview"
                     >
-                      <Monitor className="size-3.5" />
+                      <Monitor className="size-3 sm:size-3.5" />
                       <span className="hidden sm:inline">Desktop</span>
                     </Button>
                     <Button
                       variant={previewDevice === 'tablet' ? 'secondary' : 'ghost'}
                       size="sm"
-                      className={`h-7 px-2.5 rounded-lg text-xs font-semibold gap-1.5 cursor-pointer ${
+                      className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-lg text-[11px] sm:text-xs font-semibold gap-1 sm:gap-1.5 cursor-pointer ${
                         previewDevice === 'tablet' ? 'text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold' : 'text-muted-foreground'
                       }`}
                       onClick={() => setPreviewDevice('tablet')}
                       aria-label="Tablet preview"
                     >
-                      <Tablet className="size-3.5" />
+                      <Tablet className="size-3 sm:size-3.5" />
                       <span className="hidden sm:inline">Tablet</span>
                     </Button>
                     <Button
                       variant={previewDevice === 'mobile' ? 'secondary' : 'ghost'}
                       size="sm"
-                      className={`h-7 px-2.5 rounded-lg text-xs font-semibold gap-1.5 cursor-pointer ${
+                      className={`h-6 sm:h-7 px-2 sm:px-2.5 rounded-lg text-[11px] sm:text-xs font-semibold gap-1 sm:gap-1.5 cursor-pointer ${
                         previewDevice === 'mobile' ? 'text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold' : 'text-muted-foreground'
                       }`}
                       onClick={() => setPreviewDevice('mobile')}
                       aria-label="Mobile preview"
                     >
-                      <Smartphone className="size-3.5" />
+                      <Smartphone className="size-3 sm:size-3.5" />
                       <span className="hidden sm:inline">Mobile</span>
                     </Button>
                   </div>
@@ -1200,8 +1210,8 @@ export function TemplatesGalleryClient({
                 </div>
               </div>
 
-              {/* Right Modal Sidebar */}
-              <aside className="p-6 border-t lg:border-t-0 lg:border-l border-border bg-white dark:bg-slate-900 flex flex-col justify-between overflow-y-auto">
+              {/* Right Modal Sidebar (Desktop) */}
+              <aside className="hidden lg:flex p-6 border-l border-border bg-white dark:bg-slate-900 flex-col justify-between overflow-y-auto">
                 <div className="space-y-6">
                   <div>
                     <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
@@ -1254,6 +1264,28 @@ export function TemplatesGalleryClient({
                   </p>
                 </div>
               </aside>
+            </div>
+
+            {/* Mobile Sticky Action Bar (< lg) */}
+            <div className="lg:hidden shrink-0 border-t border-border bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3 px-4 flex items-center justify-between gap-3 z-30">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-foreground truncate">{previewTemplate.name}</p>
+                <Link
+                  href={`/templates/${previewTemplate.categories?.[0] || 'general'}/${previewTemplate.id}`}
+                  target="_blank"
+                  className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
+                >
+                  <span>View Details</span>
+                  <ExternalLink className="size-2.5" />
+                </Link>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => navigateToUseTemplate(previewTemplate)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 rounded-xl shadow-md gap-1.5 shrink-0 cursor-pointer"
+              >
+                <Sparkles className="size-3.5" /> Use Template
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
