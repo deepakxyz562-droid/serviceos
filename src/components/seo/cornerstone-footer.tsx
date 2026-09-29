@@ -26,6 +26,33 @@ export function CornerstoneFooter() {
     { href: "/pricing", label: "Pricing Plans" },
   ];
 
+  const useCaseLinks = [
+    { href: "/use-cases", label: "All Use Cases" },
+    { href: "/use-cases/lead-capture", label: "AI Lead Capture" },
+    { href: "/use-cases/appointment-booking", label: "Appointment Booking" },
+    { href: "/use-cases/quote-generation", label: "Quote Generation" },
+    { href: "/use-cases/payment-collection", label: "Payment Collection" },
+    { href: "/use-cases/review-collection", label: "Review Collection" },
+    { href: "/use-cases/lead-nurturing", label: "Lead Nurturing" },
+    { href: "/use-cases/customer-support", label: "AI Customer Support" },
+    { href: "/use-cases/job-dispatch", label: "Job Dispatch" },
+  ];
+
+  const platformIntegrationLinks = [
+    { href: "/platform", label: "All Platforms" },
+    { href: "/platform/wordpress", label: "WordPress" },
+    { href: "/platform/shopify", label: "Shopify" },
+    { href: "/platform/wix", label: "Wix" },
+    { href: "/platform/webflow", label: "Webflow" },
+    { href: "/platform/squarespace", label: "Squarespace" },
+    { href: "/platform/html", label: "Custom HTML" },
+    { href: "/integrations", label: "All Integrations" },
+    { href: "/integrations/google-calendar", label: "Google Calendar" },
+    { href: "/integrations/stripe", label: "Stripe Payments" },
+    { href: "/integrations/zapier", label: "Zapier" },
+    { href: "/integrations/quickbooks", label: "QuickBooks" },
+  ];
+
   const marketplaceLinks = [
     { href: "/marketplace", label: "Browse Pro Directory" },
     { href: "/marketplace", label: "Find Verified Contractors" },
@@ -80,22 +107,33 @@ export function CornerstoneFooter() {
     { href: "/housecall-pro-alternatives", label: "Housecall Pro Alternatives" },
     { href: "/servicetitan-alternatives", label: "ServiceTitan Alternatives" },
     { href: "/best-field-service-software", label: "Best Field Service Software" },
+    { href: "/fieseros-vs-jotform", label: "Fieseros vs Jotform" },
+    { href: "/fieseros-vs-typeform", label: "Fieseros vs Typeform" },
+    { href: "/fieseros-vs-chatbase", label: "Fieseros vs Chatbase" },
+    { href: "/fieseros-vs-tidio", label: "Fieseros vs Tidio" },
+    { href: "/ai-chatbot-alternatives", label: "AI Chatbot Alternatives" },
+    { href: "/conversational-forms-alternatives", label: "Conversational Forms Alternatives" },
   ];
 
-  const resourceLinks = [
-    { href: "/invoice-generator", label: "Free Invoice Generator" },
+  const companyLinks = [
+    { href: "/about", label: "About Fieseros" },
+    { href: "/careers", label: "Careers" },
+    { href: "/partners", label: "Partners" },
+    { href: "/press", label: "Press & Media" },
+    { href: "/why-fieseros", label: "Why Fieseros" },
+    { href: "/contact-us", label: "Contact Us" },
+  ];
+
+  const resourcesLinks = [
+    { href: "/resources", label: "Resources Hub" },
+    { href: "/case-studies", label: "Case Studies" },
     { href: "/blog", label: "Contractor Blog" },
     { href: "/docs/notifications-setup", label: "Notification Setup Guide" },
-    { href: "/contact-us", label: "Contact Us" },
     { href: "/privacy-policy", label: "Privacy Policy" },
     { href: "/terms-of-service", label: "Terms of Service" },
     { href: "/cookie-policy", label: "Cookie Policy" },
     { href: "/data-deletion", label: "Data Deletion Request" },
   ];
-
-  const half = Math.ceil(industryLinks.length / 2);
-  const industriesA = industryLinks.slice(0, half);
-  const industriesB = industryLinks.slice(half);
 
   return (
     <footer className="mt-auto border-t border-border/80 bg-muted/40 text-foreground">
@@ -217,7 +255,7 @@ export function CornerstoneFooter() {
 
       {/* ── Main Links Columns ── */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-8">
           {/* Column 1: Product */}
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
@@ -237,7 +275,45 @@ export function CornerstoneFooter() {
             </ul>
           </div>
 
-          {/* Column 2: Free Tools (Dedicated First-Class Column) */}
+          {/* Column 2: Use Cases (NEW) */}
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
+              Use Cases
+            </h3>
+            <ul className="space-y-2 text-xs">
+              {useCaseLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Column 3: Platform & Integrations (NEW) */}
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
+              Platform &amp; Integrations
+            </h3>
+            <ul className="space-y-2 text-xs">
+              {platformIntegrationLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Column 4: Free Tools */}
           <div>
             <div className="flex items-center gap-1.5 mb-3.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
@@ -265,7 +341,7 @@ export function CornerstoneFooter() {
             </ul>
           </div>
 
-          {/* Column 3: Marketplace */}
+          {/* Column 5: Marketplace + Services */}
           <div>
             <div className="flex items-center gap-1.5 mb-3.5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
@@ -305,43 +381,10 @@ export function CornerstoneFooter() {
             </ul>
           </div>
 
-          {/* Column 4-5: Industries (split into two sub-columns) */}
-          <div className="col-span-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
-              Industries Served
-            </h3>
-            <div className="grid grid-cols-2 gap-x-4">
-              <ul className="space-y-2 text-xs">
-                {industriesA.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors truncate block"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <ul className="space-y-2 text-xs">
-                {industriesB.map((link) => (
-                  <li key={link.href}>
-                    <Link
-                      href={link.href}
-                      className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors truncate block"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          {/* Column 6: Compare & Legal */}
+          {/* Column 6: Compare + Company + Resources */}
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-3.5">
-              Compare &amp; Legal
+              Compare
             </h3>
             <ul className="space-y-2 text-xs">
               {compareLinks.map((link) => (
@@ -356,11 +399,11 @@ export function CornerstoneFooter() {
               ))}
             </ul>
             <h4 className="text-xs font-bold uppercase tracking-wider text-foreground mb-2 mt-4">
-              Resources
+              Company
             </h4>
             <ul className="space-y-2 text-xs">
-              {resourceLinks.slice(1, 5).map((link) => (
-                <li key={link.label}>
+              {companyLinks.map((link) => (
+                <li key={link.href}>
                   <Link
                     href={link.href}
                     className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
@@ -370,6 +413,39 @@ export function CornerstoneFooter() {
                 </li>
               ))}
             </ul>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground mb-2 mt-4">
+              Resources
+            </h4>
+            <ul className="space-y-2 text-xs">
+              {resourcesLinks.map((link) => (
+                <li key={link.href}>
+                  <Link
+                    href={link.href}
+                    className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* ── Industries full-width row ── */}
+        <div className="mt-10 pt-8 border-t border-border/60">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground mb-4">
+            Industries Served
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-2">
+            {industryLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-xs text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors truncate block"
+              >
+                {link.label}
+              </Link>
+            ))}
           </div>
         </div>
 

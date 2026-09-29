@@ -315,6 +315,48 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
       changeFreq: "monthly",
     },
 
+    // ─── Use Cases (workflow-focused SEO pages) ─────────────────────────
+    { path: "/use-cases", priority: 0.9, changeFreq: "monthly" },
+    { path: "/use-cases/lead-capture", priority: 0.9, changeFreq: "monthly" },
+    { path: "/use-cases/appointment-booking", priority: 0.9, changeFreq: "monthly" },
+    { path: "/use-cases/quote-generation", priority: 0.9, changeFreq: "monthly" },
+    { path: "/use-cases/payment-collection", priority: 0.9, changeFreq: "monthly" },
+    { path: "/use-cases/review-collection", priority: 0.9, changeFreq: "monthly" },
+    { path: "/use-cases/lead-nurturing", priority: 0.9, changeFreq: "monthly" },
+    { path: "/use-cases/customer-support", priority: 0.9, changeFreq: "monthly" },
+    { path: "/use-cases/job-dispatch", priority: 0.9, changeFreq: "monthly" },
+
+    // ─── Platform & Integrations (embed + app sync pages) ───────────────
+    { path: "/platform", priority: 0.9, changeFreq: "monthly" },
+    { path: "/platform/wordpress", priority: 0.9, changeFreq: "monthly" },
+    { path: "/platform/shopify", priority: 0.9, changeFreq: "monthly" },
+    { path: "/platform/wix", priority: 0.9, changeFreq: "monthly" },
+    { path: "/platform/webflow", priority: 0.9, changeFreq: "monthly" },
+    { path: "/platform/squarespace", priority: 0.9, changeFreq: "monthly" },
+    { path: "/platform/html", priority: 0.9, changeFreq: "monthly" },
+    { path: "/integrations", priority: 0.9, changeFreq: "monthly" },
+    { path: "/integrations/google-calendar", priority: 0.8, changeFreq: "monthly" },
+    { path: "/integrations/stripe", priority: 0.8, changeFreq: "monthly" },
+    { path: "/integrations/zapier", priority: 0.8, changeFreq: "monthly" },
+    { path: "/integrations/quickbooks", priority: 0.8, changeFreq: "monthly" },
+
+    // ─── Comparison pages (forms/AI competitors + alternatives) ──────────
+    { path: "/fieseros-vs-typeform", priority: 0.9, changeFreq: "monthly" },
+    { path: "/fieseros-vs-chatbase", priority: 0.9, changeFreq: "monthly" },
+    { path: "/fieseros-vs-tidio", priority: 0.9, changeFreq: "monthly" },
+    { path: "/ai-chatbot-alternatives", priority: 0.9, changeFreq: "monthly" },
+    { path: "/conversational-forms-alternatives", priority: 0.9, changeFreq: "monthly" },
+
+    // ─── Company pages ──────────────────────────────────────────────────
+    { path: "/about", priority: 0.7, changeFreq: "monthly" },
+    { path: "/careers", priority: 0.7, changeFreq: "weekly" },
+    { path: "/partners", priority: 0.8, changeFreq: "monthly" },
+    { path: "/press", priority: 0.6, changeFreq: "monthly" },
+
+    // ─── Resources & Case Studies ───────────────────────────────────────
+    { path: "/resources", priority: 0.8, changeFreq: "weekly" },
+    { path: "/case-studies", priority: 0.8, changeFreq: "monthly" },
+
     // ─── Cornerstone: Feature pages ──────────────────────────────────────
     { path: "/scheduling-and-dispatch", priority: 0.8, changeFreq: "monthly" },
     { path: "/invoicing-and-payments", priority: 0.8, changeFreq: "monthly" },

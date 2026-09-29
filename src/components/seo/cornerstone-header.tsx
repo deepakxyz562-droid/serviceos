@@ -23,6 +23,15 @@ import {
   Store,
   FileText,
   Sparkles,
+  Target,
+  Route,
+  Star,
+  Mail,
+  MessageSquare,
+  Calendar,
+  Code,
+  BookOpen,
+  Building2,
   type LucideIcon,
 } from 'lucide-react';
 import { BrandMark } from '@/components/brand/brand-mark';
@@ -152,12 +161,55 @@ const serviceLinks: NavServiceItem[] = [
   },
 ];
 
+// ─── Use Cases Catalog ─────────────────────────────────────────────────────
+const useCaseNavLinks = [
+  { label: 'AI Lead Capture', desc: 'Capture & qualify leads 24/7', href: '/use-cases/lead-capture', icon: Target },
+  { label: 'Appointment Booking', desc: 'Let customers self-book jobs', href: '/use-cases/appointment-booking', icon: CalendarCheck },
+  { label: 'Quote Generation', desc: 'Turn requests into quotes fast', href: '/use-cases/quote-generation', icon: FileText },
+  { label: 'Payment Collection', desc: 'Get paid on-site, not 30 days later', href: '/use-cases/payment-collection', icon: CreditCard },
+  { label: 'Review Collection', desc: 'Auto-collect 5-star Google reviews', href: '/use-cases/review-collection', icon: Star },
+  { label: 'Lead Nurturing', desc: 'Nurture cold leads until they convert', href: '/use-cases/lead-nurturing', icon: Mail },
+  { label: 'AI Customer Support', desc: 'Answer FAQs instantly, 24/7', href: '/use-cases/customer-support', icon: MessageSquare },
+  { label: 'Job Dispatch', desc: 'Smart assignment & route optimization', href: '/use-cases/job-dispatch', icon: Route },
+];
+
+// ─── Platform & Integrations Catalog ────────────────────────────────────────
+const platformNavLinks = [
+  { label: 'WordPress', desc: 'No-plugin AI chat & forms embed', href: '/platform/wordpress', icon: Code },
+  { label: 'Shopify', desc: 'Turn store traffic into booked services', href: '/platform/shopify', icon: Store },
+  { label: 'Wix', desc: 'AI chat on every Wix page', href: '/platform/wix', icon: Globe },
+  { label: 'Webflow', desc: 'Project-wide custom code embed', href: '/platform/webflow', icon: Layers },
+  { label: 'Squarespace', desc: 'Code injection site-wide', href: '/platform/squarespace', icon: Briefcase },
+  { label: 'Custom HTML', desc: 'One script tag on any stack', href: '/platform/html', icon: Code },
+];
+
+const integrationNavLinks = [
+  { label: 'Google Calendar', desc: 'Two-way booking sync', href: '/integrations/google-calendar', icon: Calendar },
+  { label: 'Stripe', desc: 'Cards, Apple Pay, ACH, subscriptions', href: '/integrations/stripe', icon: CreditCard },
+  { label: 'Zapier', desc: 'Connect to 6,000+ apps', href: '/integrations/zapier', icon: Zap },
+  { label: 'QuickBooks', desc: 'Auto invoice & payment sync', href: '/integrations/quickbooks', icon: BookOpen },
+];
+
+// ─── Company Catalog ────────────────────────────────────────────────────────
+const companyNavLinks = [
+  { label: 'About Fieseros', desc: 'Our mission, story, and values', href: '/about', icon: Building2 },
+  { label: 'Careers', desc: 'Open roles across engineering & sales', href: '/careers', icon: Briefcase },
+  { label: 'Partners', desc: 'Agency, reseller, tech & affiliate programs', href: '/partners', icon: Users },
+  { label: 'Press & Media', desc: 'Brand assets, facts & media contact', href: '/press', icon: Megaphone },
+  { label: 'Resources', desc: 'Guides, case studies & contractor blog', href: '/resources', icon: FileText },
+  { label: 'Case Studies', desc: 'Real results from real businesses', href: '/case-studies', icon: Sparkles },
+];
+
 // ─── Compare Catalog ────────────────────────────────────────────────────────
 const compareList = [
   { label: 'Jobber Alternatives', desc: 'Modern features, zero per-seat fees', href: '/jobber-alternatives' },
   { label: 'Housecall Pro Alternatives', desc: 'Simpler dispatch & built-in AI', href: '/housecall-pro-alternatives' },
   { label: 'ServiceTitan Alternatives', desc: 'Enterprise power without lock-in', href: '/servicetitan-alternatives' },
   { label: '2026 Best Software Guide', desc: 'Full contractor software review', href: '/best-field-service-software' },
+  { label: 'Fieseros vs Jotform', desc: 'Smart forms + AI agent + CRM', href: '/fieseros-vs-jotform' },
+  { label: 'Fieseros vs Typeform', desc: 'Beyond pretty forms', href: '/fieseros-vs-typeform' },
+  { label: 'Fieseros vs Chatbase', desc: 'Chatbot → business action', href: '/fieseros-vs-chatbase' },
+  { label: 'AI Chatbot Alternatives', desc: 'Best AI chatbot in 2026', href: '/ai-chatbot-alternatives' },
 ];
 
 /**
@@ -265,6 +317,65 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
                       className="font-medium text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
                     >
                       Explore trade workflows <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Dropdown 1b: Use Cases */}
+          <div
+            className="relative"
+            onMouseEnter={() => handleMouseEnter('usecases')}
+            onMouseLeave={handleMouseLeave}
+          >
+            <button
+              type="button"
+              onClick={() => setOpenDropdown((v) => (v === 'usecases' ? null : 'usecases'))}
+              aria-expanded={openDropdown === 'usecases'}
+              className={cn(
+                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                useCaseNavLinks.some((u) => u.href === activePath) || openDropdown === 'usecases'
+                  ? 'text-foreground bg-accent'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
+              )}
+            >
+              Use Cases <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'usecases' && 'rotate-180')} />
+            </button>
+
+            {openDropdown === 'usecases' && (
+              <div className="absolute left-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="w-[560px] rounded-2xl border border-border/80 bg-background p-4 shadow-2xl grid grid-cols-2 gap-1.5">
+                  {useCaseNavLinks.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activePath === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpenDropdown(null)}
+                        className={cn(
+                          'flex items-start gap-2.5 p-2 rounded-xl transition-all',
+                          isActive
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                            : 'hover:bg-muted/70 text-foreground'
+                        )}
+                      >
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5">
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-semibold text-foreground block truncate">{item.label}</span>
+                          <p className="text-[10.5px] text-muted-foreground line-clamp-1 leading-tight mt-0.5">{item.desc}</p>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                  <div className="col-span-2 mt-1 pt-2 border-t border-border flex items-center justify-between text-xs px-2">
+                    <span className="text-muted-foreground">Explore every workflow</span>
+                    <Link href="/use-cases" onClick={() => setOpenDropdown(null)} className="font-medium text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1">
+                      All use cases <ArrowRight className="h-3 w-3" />
                     </Link>
                   </div>
                 </div>
@@ -389,6 +500,80 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
             )}
           </div>
 
+          {/* Dropdown 2b: Platform & Integrations */}
+          <div
+            className="relative"
+            onMouseEnter={() => handleMouseEnter('platform')}
+            onMouseLeave={handleMouseLeave}
+          >
+            <button
+              type="button"
+              onClick={() => setOpenDropdown((v) => (v === 'platform' ? null : 'platform'))}
+              aria-expanded={openDropdown === 'platform'}
+              className={cn(
+                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                platformNavLinks.some((p) => p.href === activePath) || integrationNavLinks.some((i) => i.href === activePath) || openDropdown === 'platform'
+                  ? 'text-foreground bg-accent'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
+              )}
+            >
+              Platform <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'platform' && 'rotate-180')} />
+            </button>
+
+            {openDropdown === 'platform' && (
+              <div className="absolute left-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="w-[620px] rounded-2xl border border-border/80 bg-background p-4 shadow-2xl grid grid-cols-12 gap-4">
+                  {/* Platforms (7/12) */}
+                  <div className="col-span-7 border-r border-border/60 pr-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Website Platforms</span>
+                      <Link href="/platform" onClick={() => setOpenDropdown(null)} className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 hover:underline">All →</Link>
+                    </div>
+                    <div className="space-y-1">
+                      {platformNavLinks.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <Link key={item.href} href={item.href} onClick={() => setOpenDropdown(null)} className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-muted/70 transition-colors group">
+                            <div className="p-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5">
+                              <Icon className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-xs font-semibold text-foreground group-hover:text-emerald-600 block truncate">{item.label}</span>
+                              <p className="text-[10.5px] text-muted-foreground line-clamp-1 leading-tight">{item.desc}</p>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {/* Integrations (5/12) */}
+                  <div className="col-span-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">App Integrations</span>
+                      <Link href="/integrations" onClick={() => setOpenDropdown(null)} className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 hover:underline">All →</Link>
+                    </div>
+                    <div className="space-y-1">
+                      {integrationNavLinks.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <Link key={item.href} href={item.href} onClick={() => setOpenDropdown(null)} className="flex items-start gap-2 p-1.5 rounded-lg hover:bg-muted/70 transition-colors group">
+                            <div className="p-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5">
+                              <Icon className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-xs font-semibold text-foreground group-hover:text-emerald-600 block truncate">{item.label}</span>
+                              <p className="text-[10.5px] text-muted-foreground line-clamp-1 leading-tight">{item.desc}</p>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Item 3: Marketplace (First-Class Top Nav Link) */}
           <Link
             href="/marketplace"
@@ -405,6 +590,59 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
               Pros
             </span>
           </Link>
+
+          {/* Dropdown 4b: Company */}
+          <div
+            className="relative"
+            onMouseEnter={() => handleMouseEnter('company')}
+            onMouseLeave={handleMouseLeave}
+          >
+            <button
+              type="button"
+              onClick={() => setOpenDropdown((v) => (v === 'company' ? null : 'company'))}
+              aria-expanded={openDropdown === 'company'}
+              className={cn(
+                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                companyNavLinks.some((c) => c.href === activePath) || openDropdown === 'company'
+                  ? 'text-foreground bg-accent'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
+              )}
+            >
+              Company <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'company' && 'rotate-180')} />
+            </button>
+
+            {openDropdown === 'company' && (
+              <div className="absolute right-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="w-[420px] rounded-2xl border border-border/80 bg-background p-4 shadow-2xl grid grid-cols-2 gap-1.5">
+                  {companyNavLinks.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activePath === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpenDropdown(null)}
+                        className={cn(
+                          'flex items-start gap-2.5 p-2 rounded-xl transition-all',
+                          isActive
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                            : 'hover:bg-muted/70 text-foreground'
+                        )}
+                      >
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5">
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-semibold text-foreground block truncate">{item.label}</span>
+                          <p className="text-[10.5px] text-muted-foreground line-clamp-1 leading-tight mt-0.5">{item.desc}</p>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Item 4: Pricing */}
           <Link
@@ -534,6 +772,92 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
                       </Link>
                     ))}
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Section: Use Cases */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleMobileSection('usecases')}
+                className="w-full flex items-center justify-between p-3.5 text-sm font-bold text-foreground text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-emerald-600" />
+                  <span>Use Cases</span>
+                </div>
+                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'usecases' && 'rotate-180')} />
+              </button>
+              {mobileSection === 'usecases' && (
+                <div className="p-3 pt-0 border-t border-border/60 space-y-1 bg-muted/20">
+                  <Link href="/use-cases" onClick={() => setMobileMenuOpen(false)} className="block p-1.5 rounded-md text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-muted transition-colors">All Use Cases →</Link>
+                  {useCaseNavLinks.map((item) => (
+                    <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block p-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted truncate transition-colors">
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Section: Platform & Integrations */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleMobileSection('platform')}
+                className="w-full flex items-center justify-between p-3.5 text-sm font-bold text-foreground text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Code className="h-4 w-4 text-emerald-600" />
+                  <span>Platform &amp; Integrations</span>
+                </div>
+                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'platform' && 'rotate-180')} />
+              </button>
+              {mobileSection === 'platform' && (
+                <div className="p-3 pt-0 border-t border-border/60 space-y-3 bg-muted/20">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground pt-2 mb-1">Website Platforms</p>
+                    <Link href="/platform" onClick={() => setMobileMenuOpen(false)} className="block p-1.5 rounded-md text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-muted transition-colors">All Platforms →</Link>
+                    {platformNavLinks.map((item) => (
+                      <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block p-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted truncate transition-colors">
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                  <div className="pt-2 border-t border-border/60">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">App Integrations</p>
+                    <Link href="/integrations" onClick={() => setMobileMenuOpen(false)} className="block p-1.5 rounded-md text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-muted transition-colors">All Integrations →</Link>
+                    {integrationNavLinks.map((item) => (
+                      <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block p-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted truncate transition-colors">
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Section: Company */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleMobileSection('company')}
+                className="w-full flex items-center justify-between p-3.5 text-sm font-bold text-foreground text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-emerald-600" />
+                  <span>Company &amp; Resources</span>
+                </div>
+                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'company' && 'rotate-180')} />
+              </button>
+              {mobileSection === 'company' && (
+                <div className="p-3 pt-0 border-t border-border/60 space-y-1 bg-muted/20">
+                  {companyNavLinks.map((item) => (
+                    <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block p-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted truncate transition-colors">
+                      {item.label}
+                    </Link>
+                  ))}
                 </div>
               )}
             </div>
