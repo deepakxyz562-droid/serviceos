@@ -33,6 +33,8 @@ import {
   Smartphone,
   Eye,
   CheckSquare,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -145,6 +147,72 @@ export function AgentSetupWizard({
   const [businessDescription, setBusinessDescription] = useState(
     'We are a home cleaning company serving London. We offer regular cleaning, deep cleaning and end-of-tenancy cleaning.'
   );
+  const [isListening, setIsListening] = useState(false);
+
+  const toggleVoiceInput = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('Voice dictation is not supported in this browser. Please use Chrome, Safari, or Edge.');
+      return;
+    }
+
+    if (isListening) {
+      if ((window as any).__wizardVoiceRecognizer) {
+        try {
+          (window as any).__wizardVoiceRecognizer.stop();
+        } catch {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        toast.info('🎙️ Listening... Describe your business.');
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript.trim()) {
+          setBusinessDescription((prev) => {
+            const trimmedPrev = prev.trim();
+            return trimmedPrev ? `${trimmedPrev} ${transcript.trim()}` : transcript.trim();
+          });
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          toast.error('Microphone access was denied. Please allow microphone permissions in browser.');
+        } else if (event.error !== 'no-speech') {
+          toast.error(`Voice error: ${event.error}`);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      (window as any).__wizardVoiceRecognizer = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error('Failed to start speech recognition', err);
+      setIsListening(false);
+      toast.error('Could not start microphone.');
+    }
+  };
 
   // Step 2: Capabilities & Goals
   const [capabilities, setCapabilities] = useState<string[]>([
@@ -424,6 +492,33 @@ export function AgentSetupWizard({
 
                 {/* Description Input */}
                 <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+                      Describe your services or dictate:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={toggleVoiceInput}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
+                        isListening
+                          ? "bg-red-500 hover:bg-red-600 text-white border-red-500 animate-pulse shadow-xs"
+                          : "bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-foreground border-border/80"
+                      )}
+                    >
+                      {isListening ? (
+                        <>
+                          <MicOff className="size-3.5" />
+                          <span>Listening...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mic className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <span>Voice Dictation</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                   <Textarea
                     value={businessDescription}
                     onChange={(e) => setBusinessDescription(e.target.value)}

@@ -794,6 +794,41 @@ export function FormRuntimeRenderer({
   });
 
   const partialSavedRef = useRef<boolean>(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaX = touchStartXRef.current - touchEndX;
+    const deltaY = touchStartYRef.current - touchEndY;
+
+    // Horizontal swipe must be > 45px and dominant over vertical scroll
+    if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
+      if (deltaX > 0) {
+        // Swiped Left -> Go to Next card
+        if (cardFieldIndex < currentStepFields.length - 1) {
+          setCardFieldIndex((i) => i + 1);
+        }
+      } else {
+        // Swiped Right -> Go to Previous card
+        if (cardFieldIndex > 0) {
+          setCardFieldIndex((i) => i - 1);
+        }
+      }
+    }
+
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+  };
 
   // Restore draft from localStorage on mount
   useEffect(() => {
@@ -1621,7 +1656,11 @@ export function FormRuntimeRenderer({
 
             {/* ─── Card-by-Card Mode: render ONE field at a time ─────────────── */}
             {activeMode === 'card' ? (
-              <div className="space-y-5">
+              <div
+                className="space-y-5 touch-pan-y"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+              >
                 {/* Card progress indicator */}
                 {currentStepFields.length > 0 && (
                   <div className="flex justify-between items-center text-[11px] text-muted-foreground mb-2">
@@ -1667,6 +1706,13 @@ export function FormRuntimeRenderer({
                       <ArrowLeft className="size-3.5" /> Back
                     </Button>
                   ) : <div />}
+
+                  {/* Touch swipe & keyboard hint */}
+                  <div className="text-[11px] text-muted-foreground/75 flex items-center gap-1 select-none">
+                    <span className="hidden sm:inline">Press Enter ↵ to continue</span>
+                    <span className="sm:hidden flex items-center gap-1">Swipe left or tap Next →</span>
+                  </div>
+
                   {cardFieldIndex < currentStepFields.length - 1 ? (
                     <Button
                       type="button"

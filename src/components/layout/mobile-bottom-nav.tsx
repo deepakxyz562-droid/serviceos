@@ -14,6 +14,9 @@ import {
   Settings,
   Calendar,
   Sparkles,
+  Bot,
+  FileInput,
+  CalendarCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { checkMenuAccess } from '@/components/layout/upgrade-modal';
@@ -32,6 +35,15 @@ const ownerNavCandidates: MobileNavItem[] = [
   { view: 'omnichannel', label: 'Inbox', icon: RadioTower },
   { view: 'contacts', label: 'People', icon: Users },
   { view: 'calendar', label: 'Calendar', icon: Calendar },
+  { view: 'leads', label: 'Leads', icon: Target },
+];
+
+const standaloneNavCandidates: MobileNavItem[] = [
+  { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { view: 'formBuilder', label: 'Forms', icon: FileInput },
+  { view: 'agentStudio', label: 'AI Agent', icon: Bot },
+  { view: 'booking', label: 'Bookings', icon: CalendarCheck },
+  { view: 'omnichannel', label: 'Inbox', icon: RadioTower },
   { view: 'leads', label: 'Leads', icon: Target },
 ];
 
@@ -89,17 +101,30 @@ export function MobileBottomNav() {
     auth.tenant?.planStatus || 'active'
   );
 
+  const isStandaloneTenant =
+    !isSuperAdmin &&
+    ((auth.tenant as any)?.signupMode === 'standalone' ||
+     (auth.tenant as any)?.plan === 'standalone_starter' ||
+     (auth.tenant as any)?.plan === 'standalone_business' ||
+     String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
+     (auth.user as any)?.role === 'standalone_user' ||
+     ['formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments', 'creatorProfile', 'creatorOffers'].includes(currentView));
+
   const navItems: MobileNavItem[] = isSuperAdmin
     ? superadminNavItems
-    : disabledMenus === null
-      ? []  // loading — render no items (just the More button) to prevent flash
-      : ownerNavCandidates
-          .filter((item) => !disabledMenus.includes(item.view))
-          .filter((item) => {
-            const access = checkMenuAccess(item.view, planTier, isSuperAdmin, auth.tenant?.planStatus);
-            return access.state !== 'hidden' && access.state !== 'locked';
-          })
-          .slice(0, 4);
+    : isStandaloneTenant
+      ? standaloneNavCandidates
+          .filter((item) => !(disabledMenus || []).includes(item.view))
+          .slice(0, 4)
+      : disabledMenus === null
+        ? []  // loading — render no items (just the More button) to prevent flash
+        : ownerNavCandidates
+            .filter((item) => !disabledMenus.includes(item.view))
+            .filter((item) => {
+              const access = checkMenuAccess(item.view, planTier, isSuperAdmin, auth.tenant?.planStatus);
+              return access.state !== 'hidden' && access.state !== 'locked';
+            })
+            .slice(0, 4);
 
   return (
     <nav

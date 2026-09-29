@@ -25,6 +25,8 @@ import {
   Wand2,
   Loader2,
   Send,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -114,6 +116,79 @@ export function FormsDashboardView() {
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+      setSpeechSupported(true);
+    }
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('Voice dictation is not supported in this browser. Please use Chrome, Safari, or Edge.');
+      return;
+    }
+
+    if (isListening) {
+      if ((window as any).__formVoiceRecognizer) {
+        try {
+          (window as any).__formVoiceRecognizer.stop();
+        } catch {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        toast.info('🎙️ Listening... Speak your prompt naturally.');
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript.trim()) {
+          setAiPrompt((prev) => {
+            const trimmedPrev = prev.trim();
+            return trimmedPrev ? `${trimmedPrev} ${transcript.trim()}` : transcript.trim();
+          });
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          toast.error('Microphone access was denied. Please allow microphone permissions in your browser settings.');
+        } else if (event.error !== 'no-speech') {
+          toast.error(`Voice error: ${event.error}`);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      (window as any).__formVoiceRecognizer = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error('Failed to start speech recognition', err);
+      setIsListening(false);
+      toast.error('Could not start microphone.');
+    }
+  };
 
   const handleGenerateWithAi = async (customPrompt?: string) => {
     const text = (customPrompt || aiPrompt).trim();
@@ -347,24 +422,52 @@ export function FormsDashboardView() {
               ))}
             </div>
 
-            <Button
-              type="button"
-              disabled={aiGenerating}
-              onClick={() => handleGenerateWithAi()}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-5 rounded-xl shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer shrink-0 ml-auto"
-            >
-              {aiGenerating ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Generating Project...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="size-3.5" />
-                  Build with AI
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={toggleVoiceInput}
+                title={isListening ? "Stop listening" : "Dictate prompt with voice"}
+                className={cn(
+                  "h-9 px-3 rounded-xl border text-xs font-semibold gap-1.5 transition-all cursor-pointer",
+                  isListening
+                    ? "bg-red-500 hover:bg-red-600 text-white border-red-500 animate-pulse shadow-md shadow-red-500/20"
+                    : "border-border/80 bg-background hover:bg-slate-100 dark:hover:bg-slate-800 text-foreground"
+                )}
+              >
+                {isListening ? (
+                  <>
+                    <MicOff className="size-3.5" />
+                    <span className="text-[11px] font-bold">Listening...</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-[11px] font-medium hidden sm:inline">Voice Dictation</span>
+                  </>
+                )}
+              </Button>
+
+              <Button
+                type="button"
+                disabled={aiGenerating}
+                onClick={() => handleGenerateWithAi()}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-5 rounded-xl shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer shrink-0"
+              >
+                {aiGenerating ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Generating Project...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-3.5" />
+                    Build with AI
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
 
