@@ -48,6 +48,7 @@ import {
   parseBusinessText,
   generateAgentAndFormFromWizard,
 } from '@/lib/forms/generators/ai-agent-wizard-service';
+import type { CrawledWebsiteResult } from '@/lib/forms/generators/website-crawler-service';
 
 export interface AgentSetupWizardProps {
   onComplete: (agent: FormAgentData, formId?: string) => void;
@@ -144,9 +145,10 @@ export function AgentSetupWizard({
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
   // Step 1: Business Profile
-  const [businessDescription, setBusinessDescription] = useState(
-    'We are a home cleaning company serving London. We offer regular cleaning, deep cleaning and end-of-tenancy cleaning.'
-  );
+  const [businessDescription, setBusinessDescription] = useState('');
+  const [websiteScanUrl, setWebsiteScanUrl] = useState('');
+  const [isScanningUrl, setIsScanningUrl] = useState(false);
+  const [crawledData, setCrawledData] = useState<CrawledWebsiteResult | null>(null);
   const [isListening, setIsListening] = useState(false);
 
   const toggleVoiceInput = () => {
@@ -240,32 +242,74 @@ export function AgentSetupWizard({
   // Real-time generated artifacts
   const [generatedResult, setGeneratedResult] = useState(() =>
     generateAgentAndFormFromWizard({
-      businessDescription: 'We are a home cleaning company serving London. We offer regular cleaning, deep cleaning and end-of-tenancy cleaning.',
+      businessDescription: 'Integrity Roofing and Repair: residential and commercial roof repair, storm damage restoration, full roof replacement, and gutter solutions.',
       capabilities: ['answer_questions', 'capture_leads', 'generate_quotes', 'book_appointments', 'collect_files'],
       tone: 'friendly',
     })
   );
 
-  // Real-time regeneration whenever businessDescription, capabilities, or tone changes
-  const updateGeneratedState = useCallback(() => {
+  // Real-time regeneration whenever businessDescription, capabilities, tone, or crawledData changes
+  const updateGeneratedState = useCallback((overrideCrawled?: CrawledWebsiteResult) => {
     try {
+      const activeCrawled = overrideCrawled !== undefined ? overrideCrawled : (crawledData || undefined);
       const res = generateAgentAndFormFromWizard({
-        businessDescription,
+        businessDescription: businessDescription.trim() || activeCrawled?.description || 'Integrity Roofing and Repair: residential and commercial roof repair, storm damage restoration, full roof replacement, and gutter solutions.',
         capabilities,
-        knowledgeUrl,
+        knowledgeUrl: knowledgeUrl || websiteScanUrl || activeCrawled?.url,
         tone,
+        crawledContext: activeCrawled,
       });
       setGeneratedResult(res);
       setActiveFields(res.form.fields);
     } catch (e) {
       console.error('Wizard generator error:', e);
     }
-  }, [businessDescription, capabilities, knowledgeUrl, tone]);
+  }, [businessDescription, capabilities, knowledgeUrl, websiteScanUrl, tone, crawledData]);
 
   // Initial populate
   useEffect(() => {
     updateGeneratedState();
   }, [updateGeneratedState]);
+
+  // Scan Website URL to automatically extract business name, industry, services, FAQs, hero image, and memory
+  const handleScanWebsite = async (urlToScan?: string) => {
+    const target = (urlToScan || websiteScanUrl || knowledgeUrl).trim();
+    if (!target) {
+      toast.error('Please enter a website URL to scan (e.g. https://integrityroofingandrepair.com)');
+      return;
+    }
+
+    setIsScanningUrl(true);
+    toast.info(`🔍 Scanning ${target}...`);
+    try {
+      const res = await fetch('/api/forms/ai-agent-wizard-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'crawl',
+          url: target,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.crawled) {
+        const crawled: CrawledWebsiteResult = data.crawled;
+        setCrawledData(crawled);
+        setWebsiteScanUrl(target);
+        setKnowledgeUrl(target);
+        const autoDesc = `${crawled.businessName} - ${crawled.description}`;
+        setBusinessDescription(autoDesc);
+        updateGeneratedState(crawled);
+        toast.success(`✨ Successfully scanned ${crawled.businessName}! Extracted ${crawled.services.length} services & 5 FAQs.`);
+      } else {
+        toast.error(data.error || 'Could not scan website. You can continue by entering business details manually.');
+      }
+    } catch (err: any) {
+      console.error('Failed to scan website:', err);
+      toast.error('Network error scanning website. Continuing with manual mode.');
+    } finally {
+      setIsScanningUrl(false);
+    }
+  };
 
   // Handle quick starter selection
   const handleSelectQuickStarter = (starterText: string) => {
@@ -313,13 +357,15 @@ export function AgentSetupWizard({
   const handleFinalLaunch = async (mode: 'direct' | 'studio') => {
     setIsSaving(true);
     try {
+      const targetKnowledgeUrl = knowledgeUrl || websiteScanUrl || crawledData?.url;
+
       // Build final agent and form payload
       const finalAgent = {
         ...generatedResult.agent,
         voiceTone: tone,
         knowledge: {
           ...generatedResult.agent.knowledge,
-          crawledUrls: knowledgeUrl ? [knowledgeUrl] : [],
+          crawledUrls: targetKnowledgeUrl ? [targetKnowledgeUrl] : [],
         },
       };
 
@@ -327,10 +373,12 @@ export function AgentSetupWizard({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          businessDescription,
+          businessDescription: businessDescription.trim() || crawledData?.description || 'Integrity Roofing and Repair',
+          businessName: crawledData?.businessName || undefined,
           capabilities,
-          knowledgeUrl,
+          knowledgeUrl: targetKnowledgeUrl || undefined,
           tone,
+          crawledContext: crawledData || undefined,
           save: true,
         }),
       });
@@ -346,8 +394,8 @@ export function AgentSetupWizard({
             ? [
                 {
                   id: data.savedFormId,
-                  name: generatedResult.form.name,
-                  description: generatedResult.form.description,
+                  name: data.form?.name || generatedResult.form.name,
+                  description: data.form?.description || generatedResult.form.description,
                   submissionCount: 0,
                 },
               ]
@@ -368,10 +416,18 @@ export function AgentSetupWizard({
     }
   };
 
-  const parsedBusiness = useMemo(
-    () => parseBusinessText(businessDescription),
-    [businessDescription]
-  );
+  const parsedBusiness = useMemo(() => {
+    if (crawledData) {
+      return {
+        businessName: crawledData.businessName,
+        industry: crawledData.industry,
+        location: crawledData.location,
+        services: crawledData.services,
+        summary: crawledData.description,
+      };
+    }
+    return parseBusinessText(businessDescription);
+  }, [businessDescription, crawledData]);
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans select-none">
@@ -469,6 +525,50 @@ export function AgentSetupWizard({
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     Describe your services and location in a sentence or two. Our AI will automatically infer your industry, customer inquiries, and required intake fields.
                   </p>
+                </div>
+
+                {/* Fast Track: Scan Website */}
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200/90 dark:border-blue-900/50 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Globe className="size-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-xs font-black text-blue-900 dark:text-blue-200 uppercase tracking-wide">
+                        Instant Setup · Extract From Website
+                      </span>
+                    </div>
+                    <Badge className="bg-blue-600/15 text-blue-700 dark:text-blue-300 border-0 text-[10px] font-bold">
+                      Recommended
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Paste your website URL (e.g. <code>https://integrityroofingandrepair.com/</code>). We'll automatically extract your services, logo, FAQs, and brand theme.
+                  </p>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <Input
+                      value={websiteScanUrl}
+                      onChange={(e) => setWebsiteScanUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleScanWebsite()}
+                      placeholder="https://integrityroofingandrepair.com"
+                      className="text-xs h-9 rounded-xl font-sans bg-white dark:bg-slate-900 border-border/80"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isScanningUrl}
+                      onClick={() => handleScanWebsite()}
+                      className="h-9 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shrink-0 cursor-pointer shadow-xs gap-1.5"
+                    >
+                      {isScanningUrl ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" /> Scanning...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="size-3.5" /> Scan &amp; Build
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Quick Starters */}
@@ -787,16 +887,40 @@ export function AgentSetupWizard({
 
                 {/* Website Knowledge URL */}
                 <div className="space-y-2">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wide text-foreground flex items-center gap-1.5">
-                    <Globe className="size-3.5 text-blue-500" />
-                    Website Knowledge Source (Optional)
-                  </label>
-                  <Input
-                    value={knowledgeUrl}
-                    onChange={(e) => setKnowledgeUrl(e.target.value)}
-                    placeholder="https://yourcompany.com"
-                    className="text-xs h-9 rounded-xl font-sans"
-                  />
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wide text-foreground flex items-center gap-1.5">
+                      <Globe className="size-3.5 text-blue-500" />
+                      Website Knowledge Source (Auto-crawl)
+                    </label>
+                    {crawledData && (
+                      <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0 text-[10px]">
+                        ✓ {crawledData.services.length} services indexed
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={knowledgeUrl}
+                      onChange={(e) => setKnowledgeUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleScanWebsite(knowledgeUrl)}
+                      placeholder="https://integrityroofingandrepair.com"
+                      className="text-xs h-9 rounded-xl font-sans"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isScanningUrl || !knowledgeUrl.trim()}
+                      onClick={() => handleScanWebsite(knowledgeUrl)}
+                      className="h-9 px-3 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shrink-0 cursor-pointer rounded-xl gap-1 shadow-xs"
+                    >
+                      {isScanningUrl ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-3.5" />
+                      )}
+                      Sync
+                    </Button>
+                  </div>
                   <p className="text-[11px] text-muted-foreground">
                     We will extract your services, pricing, and FAQ answers to train your agent automatically.
                   </p>

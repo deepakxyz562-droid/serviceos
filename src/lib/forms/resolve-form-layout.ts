@@ -58,8 +58,13 @@ export function resolveFormLayout(schema: {
     return 'split_media';
   }
 
-  // If user explicitly chose classic/paper, respect their choice 100%!
-  // Never let lingering mediaPanel data from templates force split_media on classic forms.
+  // Auto-detect split_media if mediaPanel is explicitly enabled
+  const rawPanel = schema.mediaPanel || schema.theme?.mediaPanel;
+  if (rawPanel && rawPanel.enabled === true) {
+    return 'split_media';
+  }
+
+  // If user explicitly chose classic/paper without mediaPanel, respect their choice 100%!
   if (
     normalized === 'classic' ||
     normalized === 'paper' ||
@@ -69,17 +74,11 @@ export function resolveFormLayout(schema: {
     return 'classic';
   }
 
-  // Auto-detect split_media only if unconfigured and schema has left/right columns
+  // Auto-detect split_media if schema has left/right columns
   const hasSplitColumns = Array.isArray(schema.fields) && schema.fields.some(
     (f) => f && (f.layoutColumn === 'left' || f.layoutColumn === 'right')
   );
   if (hasSplitColumns) {
-    return 'split_media';
-  }
-
-  // Auto-detect split_media only if mediaPanel is explicitly enabled
-  const rawPanel = schema.mediaPanel || schema.theme?.mediaPanel;
-  if (rawPanel && rawPanel.enabled === true) {
     return 'split_media';
   }
 

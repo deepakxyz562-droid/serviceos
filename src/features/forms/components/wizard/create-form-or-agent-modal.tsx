@@ -111,6 +111,40 @@ export function CreateFormOrAgentModal({
   // Method = AI State
   const [aiPrompt, setAiPrompt] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
+  const [isScanningUrl, setIsScanningUrl] = useState(false);
+  const [crawledData, setCrawledData] = useState<any | null>(null);
+
+  const handleScanWebsiteModal = async (targetUrl?: string) => {
+    const target = (targetUrl || websiteUrl).trim();
+    if (!target) {
+      toast.error('Please enter a website URL to scan (e.g. https://integrityroofingandrepair.com)');
+      return;
+    }
+    setIsScanningUrl(true);
+    toast.info(`🔍 Scanning ${target}...`);
+    try {
+      const res = await fetch('/api/forms/ai-agent-wizard-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'crawl', url: target }),
+      });
+      const data = await res.json();
+      if (res.ok && data.crawled) {
+        setCrawledData(data.crawled);
+        setName(data.crawled.businessName || '');
+        setDescription(data.crawled.description || '');
+        setAiPrompt(`${data.crawled.businessName} - ${data.crawled.description}`);
+        toast.success(`✨ Extracted ${data.crawled.businessName} details and services!`);
+      } else {
+        toast.error(data.error || 'Could not scan website.');
+      }
+    } catch (e) {
+      console.error('Scan error:', e);
+      toast.error('Network error during scan.');
+    } finally {
+      setIsScanningUrl(false);
+    }
+  };
 
   // Method = Template State
   const [templateSearch, setTemplateSearch] = useState('');
@@ -203,14 +237,16 @@ export function CreateFormOrAgentModal({
         setGenerationProgress(40);
         setGenerationStatus('Formulating questions, logic and persona...');
 
-        const promptText = aiPrompt.trim() || websiteUrl.trim() || `${name || 'Business Services'}: provide consultations, quote estimates, and appointments.`;
+        const promptText = aiPrompt.trim() || (crawledData ? `${crawledData.businessName} - ${crawledData.description}` : '') || websiteUrl.trim() || `${name || 'Business Services'}: provide consultations, quote estimates, and appointments.`;
         const res = await fetch('/api/forms/ai-agent-wizard-generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             businessDescription: promptText,
+            businessName: name.trim() || crawledData?.businessName || undefined,
             capabilities: selectedCapabilities,
             knowledgeUrl: websiteUrl.trim() || undefined,
+            crawledContext: crawledData || undefined,
             tone: agentTone,
             save: true,
           }),
@@ -628,18 +664,45 @@ export function CreateFormOrAgentModal({
               {method === 'ai' && (
                 <div className="space-y-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 animate-in fade-in duration-200">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <Globe className="size-3.5 text-emerald-600" />
-                      Website URL to Crawl (Optional)
-                    </label>
-                    <Input
-                      placeholder="https://yourcompany.com"
-                      value={websiteUrl}
-                      onChange={(e) => setWebsiteUrl(e.target.value)}
-                      className="bg-card text-xs h-10 rounded-xl"
-                    />
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <Globe className="size-3.5 text-emerald-600" />
+                        Website URL to Crawl (Optional)
+                      </label>
+                      {crawledData && (
+                        <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-0 text-[10px] font-bold">
+                          ✓ {crawledData.businessName} Indexed
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="https://integrityroofingandrepair.com"
+                        value={websiteUrl}
+                        onChange={(e) => setWebsiteUrl(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleScanWebsiteModal(websiteUrl)}
+                        className="bg-card text-xs h-10 rounded-xl"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isScanningUrl || !websiteUrl.trim()}
+                        onClick={() => handleScanWebsiteModal(websiteUrl)}
+                        className="h-10 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 cursor-pointer shadow-xs gap-1.5"
+                      >
+                        {isScanningUrl ? (
+                          <>
+                            <Loader2 className="size-3.5 animate-spin" /> Scanning...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="size-3.5" /> Scan &amp; Auto-Fill
+                          </>
+                        )}
+                      </Button>
+                    </div>
                     <p className="text-[11px] text-muted-foreground">
-                      Our crawler indexes your pages, services, FAQs, and pricing in 30 seconds.
+                      Our crawler indexes your pages, services, FAQs, and pricing automatically.
                     </p>
                   </div>
 
