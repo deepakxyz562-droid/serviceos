@@ -732,7 +732,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
         {/* ── Right Action CTAs ── */}
         <div className="flex items-center gap-2.5">
           <Link
-            href="/auth/login"
+            href="/login"
             className="hidden sm:inline-flex text-xs sm:text-sm font-medium text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg transition-colors"
           >
             Sign In
