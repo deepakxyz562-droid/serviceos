@@ -17,13 +17,12 @@ import { Card } from "@/components/ui/card";
 import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 
 export const metadata: Metadata = {
-  title: "Fieseros Features — Field Service Management Platform for Trades",
+  title: "Fieseros Features — CRM, Scheduling, Dispatch & More",
   description:
-    "Explore every feature of the Fieseros field service management platform: 24/7 AI receptionist, CRM, scheduling & dispatch, invoicing & payments, technician mobile app, and workflow automations.",
+    "Explore every Fieseros feature in one place: scheduling & dispatch, invoicing & payments, customer CRM, technician mobile app, and workflow automations. The all-in-one platform for service businesses.",
   keywords: [
-    "field service management",
     "field service features",
-    "field service management platform",
+    "service business software features",
     "scheduling and dispatch",
     "invoicing software",
     "customer crm",
@@ -32,9 +31,9 @@ export const metadata: Metadata = {
   ],
   alternates: { canonical: "https://fieseros.com/features" },
   openGraph: {
-    title: "Fieseros Features — Field Service Management Platform for Trades",
+    title: "Fieseros Features — CRM, Scheduling, Dispatch & More",
     description:
-      "Explore every Fieseros feature: 24/7 AI receptionist, CRM, scheduling, dispatch, invoicing, payments, technician app, and automations.",
+      "Explore every Fieseros feature: scheduling, dispatch, invoicing, CRM, technician app, and automations — all in one platform for service businesses.",
     url: "https://fieseros.com/features",
     siteName: "Fieseros",
     type: "website",

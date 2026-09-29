@@ -1236,6 +1236,13 @@ export function JobsView() {
             ]
           : [];
 
+    const scheduledAt = job.scheduledAt ? new Date(job.scheduledAt) : null;
+    const isValidDate = scheduledAt !== null && !isNaN(scheduledAt.getTime());
+    const scheduledDate = isValidDate ? scheduledAt.toISOString().slice(0, 10) : '';
+    const scheduledTime = isValidDate
+      ? scheduledAt.toTimeString().slice(0, 5)
+      : (job.scheduledTime || '');
+
     setJobForm({
       title: job.title || '',
       customerId: job.customerId || '',
@@ -1244,8 +1251,8 @@ export function JobsView() {
       customerEmail: job.customerEmail || '',
       address: job.address || '',
       jobType: 'one-off',
-      scheduledDate: scheduledAt ? scheduledAt.toISOString().slice(0, 10) : '',
-      scheduledTime: scheduledAt ? scheduledAt.toTimeString().slice(0, 5) : (job.scheduledTime || ''),
+      scheduledDate,
+      scheduledTime,
       endTime: '',
       assigneeId: job.assigneeId || 'none',
       visitInstructions: job.visitInstructions || '',

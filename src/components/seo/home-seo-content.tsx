@@ -174,9 +174,6 @@ const coreIndustryPairings: IndustryPairing[] = [
 // ── Comparison Links ────────────────────────────────────────────────────────
 
 const comparisons = [
-  { name: 'Field Service Management Guide', href: '/field-service-management' },
-  { name: 'Home Services Software', href: '/home-services-software' },
-  { name: 'Blue Collar CRM', href: '/blue-collar-crm' },
   { name: 'Best Field Service Software Guide', href: '/best-field-service-software' },
   { name: 'Jobber vs. Fieseros Comparison', href: '/jobber-alternatives' },
   { name: 'Housecall Pro vs. Fieseros Comparison', href: '/housecall-pro-alternatives' },

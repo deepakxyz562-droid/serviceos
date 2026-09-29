@@ -20,9 +20,6 @@ export function CornerstoneFooter() {
   ];
 
   const productLinks = [
-    { href: "/field-service-management", label: "Field Service Management" },
-    { href: "/home-services-software", label: "Home Services Software" },
-    { href: "/blue-collar-crm", label: "Blue Collar CRM" },
     { href: "/features", label: "Features Hub" },
     { href: "/field-service-software", label: "Field Service Software" },
     { href: "/scheduling-and-dispatch", label: "Scheduling & Dispatch" },

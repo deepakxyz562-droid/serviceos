@@ -1,12 +1,20 @@
 import {
   Target,
   CalendarCheck,
-  FileText,
+  Calculator,
   CreditCard,
   Star,
   Mail,
   MessageSquare,
   Route,
+  Bot,
+  Zap,
+  ShieldCheck,
+  Clock,
+  Sparkles,
+  Users,
+  Smartphone,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 import type { Feature } from "@/components/seo/feature-grid";
@@ -31,373 +39,375 @@ export interface UseCaseConfig {
 export const useCases: UseCaseConfig[] = [
   {
     slug: "lead-capture",
-    titleTag: "AI Lead Capture & Qualification Software | Fieseros",
-    h1: "Capture and qualify every lead — automatically",
-    eyebrow: "Use Case · Lead Capture",
+    titleTag: "AI Lead Capture & Qualification Agent | GPTForm by Fieseros",
+    h1: "Turn website visitors into qualified leads 24/7 with conversational AI",
+    eyebrow: "Use Case · Lead Capture & Qualification",
     metaDescription:
-      "Fieseros AI lead capture turns website visitors, phone calls, and form submissions into qualified leads 24/7. AI conversations collect job details, budget, and urgency so your team only talks to ready-to-book customers.",
+      "GPTForm AI Agent engages every website visitor 24/7, asks qualifying questions, and captures verified contact details. Deliver 3.4x higher conversion than static web forms.",
     heroSubtitle:
-      "Website chat, phone calls, SMS, and embedded forms all feed into one qualified lead pipeline. The AI agent asks the right questions, scores urgency, and routes hot leads instantly — so no opportunity slips through after hours.",
+      "Static contact forms cause visitors to bounce. GPTForm AI Agent greets visitors naturally, answers their questions from your website content, qualifies budget and urgency, and delivers sales-ready leads straight into your CRM.",
     icon: Target,
     metrics: [
-      { value: "24/7", label: "Lead capture, never sleeps" },
-      { value: "+38%", label: "More qualified leads captured" },
-      { value: "<60s", label: "Avg lead response time" },
+      { value: "3.4x", label: "Higher lead conversion vs static forms" },
+      { value: "<10s", label: "Instant response time 24/7" },
+      { value: "100%", label: "Verified & structured lead data" },
     ],
     features: [
       {
         icon: MessageSquare,
-        badge: "AI Chat",
-        title: "Conversational Lead Intake",
+        badge: "Conversational Intake",
+        title: "Dialogue-Driven Lead Capture",
         description:
-          "An AI agent greets every website visitor, asks qualifying questions about their job, and captures structured data — service type, urgency, location, budget — without a human on the other end.",
+          "Instead of intimidating visitors with a 12-field form, your AI agent has a natural dialogue. It asks questions one by one, adapts based on visitor answers, and captures structured contact data effortlessly.",
       },
       {
         icon: Target,
-        badge: "Scoring",
-        title: "Automatic Lead Scoring",
+        badge: "Smart Qualification",
+        title: "Intelligent Lead Scoring",
         description:
-          "Every lead is tagged Hot, Warm, or Cold based on urgency, budget, and job size. Hot leads trigger an instant SMS to the owner; cold leads enter a nurture sequence.",
+          "Every inquiry is scored against your ideal client criteria — budget, timeline, service requirement, and location. High-value leads trigger instant SMS alerts; exploratory visitors enter a nurture flow.",
       },
       {
-        icon: Route,
-        title: "Smart Routing to the Right Tech",
+        icon: Bot,
+        badge: "Dual-Brain RAG",
+        title: "Zero-Hallucination Answers",
         description:
-          "Leads auto-route by trade, territory, and availability so the right technician gets the lead in seconds — not the next morning's inbox shuffle.",
+          "Trained on your website URLs, PDFs, and documentation. The agent answers visitor questions with strict factual grounding before asking for contact info — earning trust before asking for the conversion.",
+      },
+      {
+        icon: Zap,
+        title: "Dual Embed Modes",
+        description:
+          "Deploy as a modern floating chat widget in the bottom corner of your site, or embed inline as an interactive full-page conversational form anywhere using a simple 1-line snippet.",
       },
       {
         icon: Mail,
-        title: "Multi-Channel Capture",
+        title: "Multi-Channel Alert Dispatch",
         description:
-          "Web chat, phone (answered by AI Voice Receptionist), SMS, email-inbound, and embedded forms all create leads in one unified inbox with full context.",
+          "The moment a high-intent lead finishes the conversation, instant notifications route to your sales team via SMS, email, WhatsApp, and Slack with the full qualification transcript.",
       },
       {
-        icon: CalendarCheck,
-        title: "Instant Booking Hand-off",
+        icon: ShieldCheck,
+        title: "Knowledge Gaps Discovery",
         description:
-          "Qualified leads can self-book an appointment slot directly in the conversation — converting interest to a scheduled job before the competitor calls back.",
-      },
-      {
-        icon: FileText,
-        title: "Structured Lead Records",
-        description:
-          "Every lead becomes a structured CRM record with job details, source attribution, conversation transcript, and qualification answers — no more scribbled notes.",
+          "Whenever a prospect asks a question outside your current knowledge base, it's flagged in your Knowledge Gaps queue. Answer it once, and the AI agent knows it permanently.",
       },
     ],
     workflow: [
       {
         step: "1",
-        title: "Visitor arrives",
+        title: "Visitor Arrives & Engages",
         description:
-          "A homeowner lands on your site from Google at 9pm. The AI chat agent opens instantly and greets them by name.",
+          "A prospective client lands on your website. Rather than hunting through menus, they ask a question in the chat or click your embedded smart form.",
       },
       {
         step: "2",
-        title: "AI qualifies",
+        title: "AI Answers & Qualifies",
         description:
-          "The agent asks: what's the issue, how urgent, your address, and a good time to come out. Answers are captured as structured fields.",
+          "The agent provides an accurate, branded answer from your knowledge base, then naturally transitions: 'I can get our specialist to prepare an exact proposal — what is your estimated timeline?'",
       },
       {
         step: "3",
-        title: "Lead is scored",
+        title: "Data Extracted & Scored",
         description:
-          "Fieseros scores the lead Hot (burst pipe, tonight) and fires an SMS + push notification to the on-call plumber.",
+          "Contact info, service needs, budget, and urgency are parsed into structured CRM fields with zero manual data entry.",
       },
       {
         step: "4",
-        title: "Booked & tracked",
+        title: "Instant Booking or Alert",
         description:
-          "The customer picks a slot, a job is created on the dispatch board, and the lead source is attributed for ROI reporting.",
+          "High-intent prospects are offered an immediate live calendar booking slot or routed to your on-duty sales rep within seconds.",
       },
     ],
     painPoints: [
       {
-        problem: "Leads email after hours and book with whoever calls back first — usually a competitor.",
+        problem: "Up to 80% of website visitors bounce because long static contact forms feel like tedious paperwork.",
         fieserosSolution:
-          "AI captures and responds to every inbound lead in under 60 seconds, 24/7, so you never lose a job to a faster competitor.",
+          "GPTForm turns form filling into a friendly, 30-second conversation. Visitors ask questions first and provide their details naturally, boosting conversions by up to 3.4x.",
       },
       {
-        problem: "Your team wastes hours calling tire-kickers with no budget or vague requests.",
+        problem: "Leads arriving after business hours wait 12+ hours for an email reply and book with the first competitor who responds.",
         fieserosSolution:
-          "AI qualification scores every lead and only routes the ready-to-book ones to humans — tire-kickers get an automated nurture sequence instead.",
+          "Your AI Agent responds in under 10 seconds 24/7/365, qualifying leads and locking in appointments while your competitors are asleep.",
       },
       {
-        problem: "Lead source ROI is a guess because leads land in a notebook, a spreadsheet, and three inboxes.",
+        problem: "Your sales team spends half their day calling unqualified tire-kickers with insufficient budget.",
         fieserosSolution:
-          "Every lead — chat, call, SMS, form — lands in one CRM record with source attribution, so you know exactly which channel drives revenue.",
+          "Automated qualification scores every prospect upfront. Your team only spends phone time with pre-qualified, ready-to-buy clients.",
       },
     ],
     faqs: [
       {
-        question: "How does the AI lead capture agent know what to ask?",
+        question: "How does the AI lead capture agent know what questions to ask?",
         answer:
-          "The agent is trained on your services, service area, and common job types. You can customize the qualifying questions (urgency, budget, property type, photos) per service line. It adapts its questions based on the visitor's answers.",
+          "You define your qualification criteria in plain English or select from 20,000+ pre-built industry templates. The AI agent asks about required services, timeline, budget, location, and specific project details, adapting follow-ups dynamically.",
       },
       {
-        question: "Can I use AI lead capture without replacing my existing website?",
+        question: "Can it crawl my existing website to learn about my business?",
         answer:
-          "Yes. The AI chat agent and embedded forms work on any site — WordPress, Shopify, Wix, Webflow, or custom HTML. You paste one snippet and the agent is live.",
+          "Yes! Simply enter your website URL, and GPTForm automatically crawls your pages, FAQs, blog articles, and service documentation. It indexes the content in minutes so the agent answers with complete accuracy from day one.",
       },
       {
-        question: "What happens to leads when my team is offline?",
+        question: "How do I embed the lead capture agent on my site?",
         answer:
-          "Hot leads trigger an SMS + push notification to the on-call owner instantly. If no one claims it in 5 minutes, the AI sends an automated reply acknowledging the request and offering the next available slot.",
+          "You paste a single line of JavaScript into your website header or CMS (WordPress, Shopify, Wix, Webflow, Squarespace, or custom HTML). It loads asynchronously with zero impact on page load speed or Core Web Vitals.",
       },
       {
-        question: "Does this replace my contact form?",
+        question: "What happens when a lead is captured?",
         answer:
-          "It can, but most customers keep their form and add the AI agent alongside it. The agent captures leads that would otherwise bounce from a long form, while traditional form submissions still flow into the same CRM.",
+          "The lead is instantly stored in your Fieseros CRM with a full conversation transcript and lead score. It can also sync immediately to your existing tools via Zapier, webhooks, or native integrations, while firing instant SMS/Slack alerts.",
       },
     ],
     relatedUseCases: [
       { label: "Appointment Booking", href: "/use-cases/appointment-booking" },
-      { label: "Lead Nurturing", href: "/use-cases/lead-nurturing" },
       { label: "Quote Generation", href: "/use-cases/quote-generation" },
+      { label: "Customer Support", href: "/use-cases/customer-support" },
     ],
   },
   {
     slug: "appointment-booking",
-    titleTag: "24/7 Automated Appointment Booking for Service Businesses | Fieseros",
-    h1: "Let customers self-book appointments — day or night",
-    eyebrow: "Use Case · Appointment Booking",
+    titleTag: "Autonomous AI Appointment Booking & Scheduling | GPTForm",
+    h1: "Let customers book appointments directly in chat or forms",
+    eyebrow: "Use Case · Appointment Booking & Scheduling",
     metaDescription:
-      "Fieseros appointment booking lets customers self-schedule jobs 24/7 through AI chat, embedded forms, or your website. Real-time availability, smart routing, automatic reminders — no more phone tag.",
+      "GPTForm AI Agent books appointments 24/7 with real-time 2-way Google Calendar and Outlook sync. Eliminates phone tag and slashes no-shows with automated reminders.",
     heroSubtitle:
-      "Customers book the moment they're ready — not when you call them back. AI chat and embedded scheduling show real-time availability, assign the right technician, and send reminders that slash no-shows.",
+      "Customers want to book the moment they make a decision. GPTForm AI Agent checks live availability, displays real-time calendar slots, collects deposits, and sends instant confirmations — right inside the conversation or on-page form.",
     icon: CalendarCheck,
     metrics: [
-      { value: "67%", label: "Of jobs booked after hours" },
-      { value: "-41%", label: "Fewer no-shows with reminders" },
-      { value: "Real-time", label: "Availability sync" },
+      { value: "68%", label: "Of appointments booked after hours" },
+      { value: "-45%", label: "Fewer no-shows with SMS reminders" },
+      { value: "Real-time", label: "2-way Google & Outlook sync" },
     ],
     features: [
       {
         icon: CalendarCheck,
-        badge: "Self-Serve",
-        title: "Customer Self-Booking",
+        badge: "Self-Service",
+        title: "In-Chat Interactive Calendar Picker",
         description:
-          "Customers pick a slot from your real-time availability — no phone tag, no back-and-forth. Works in the AI chat widget, embedded booking form, or your website.",
+          "Customers pick dates and times from a slick, interactive calendar card embedded right in the chat flow — no external redirects to Calendly or third-party booking pages.",
       },
       {
-        icon: Route,
-        title: "Technician-Aware Scheduling",
+        icon: Zap,
+        badge: "2-Way Sync",
+        title: "Bidirectional Calendar Availability",
         description:
-          "Availability reflects each technician's territory, skills, and existing route — so a booked slot is always assignable to the right person, not just 'someone'.",
-      },
-      {
-        icon: MessageSquare,
-        badge: "AI",
-        title: "Conversational Booking",
-        description:
-          "The AI agent handles the whole booking conversation: 'What day works? Morning or afternoon? Your address?' — then confirms and adds it to the calendar.",
-      },
-      {
-        icon: Mail,
-        title: "Automated Reminders",
-        description:
-          "SMS + email reminders fire 24 hours and 1 hour before the appointment. Customers can confirm, reschedule, or cancel by replying — reducing no-shows by up to 41%.",
+          "Syncs with Google Calendar and Microsoft Outlook in real time. Personal appointments and blocked hours automatically remove slots, completely preventing double-bookings.",
       },
       {
         icon: CreditCard,
-        title: "Deposit or Pre-Pay at Booking",
+        title: "Deposit & Pre-Payment Collection",
         description:
-          "Optional no-show protection: collect a deposit or full payment at booking time through Stripe, Razorpay, or PayPal. Refundable cancellation policies build trust.",
+          "Protect against no-shows by collecting a booking deposit or upfront fee via Stripe, Apple Pay, or credit card directly in the scheduling flow with 0% platform transaction fees.",
       },
       {
-        icon: Target,
-        title: "Google Meet & On-Site Modes",
+        icon: Mail,
+        title: "Automated SMS & Email Reminders",
         description:
-          "Bookings support virtual (Google Meet link auto-generated) or on-site appointments with address capture and travel-time-aware slot calculation.",
+          "Automated reminders fire 24 hours and 1 hour before the scheduled time with 1-tap calendar links and reschedule options, slashing no-shows by up to 45%.",
+      },
+      {
+        icon: Users,
+        title: "Team & Territory Assignment",
+        description:
+          "Route bookings across multiple specialists or service technicians based on skill requirements, geographical territories, or round-robin availability.",
+      },
+      {
+        icon: Clock,
+        title: "Buffer Times & Scheduling Rules",
+        description:
+          "Configure custom buffer windows between appointments, minimum notice requirements, daily booking limits, and localized timezone detection.",
       },
     ],
     workflow: [
       {
         step: "1",
-        title: "Customer requests",
+        title: "Visitor Requests Booking",
         description:
-          "Through chat, form, or phone — the customer says 'I need someone Thursday morning'.",
+          "During chat or form intake, the client indicates they want to schedule a consultation, estimate, or service appointment.",
       },
       {
         step: "2",
-        title: "AI checks availability",
+        title: "Live Slots Presented",
         description:
-          "Fieseros shows real-time slots based on technician availability, territory, and route.",
+          "The AI agent queries your live Google/Outlook calendar and displays open, real-time slots tailored to the client's timezone.",
       },
       {
         step: "3",
-        title: "Slot confirmed",
+        title: "Deposit & Details Captured",
         description:
-          "The customer picks 9am. A job is created, assigned, and the calendar updates for the whole team instantly.",
+          "The client chooses a slot, confirms contact information, and pays an optional booking deposit via Stripe or Apple Pay.",
       },
       {
         step: "4",
-        title: "Reminder + arrival",
+        title: "Calendar Locked & Synced",
         description:
-          "Automated SMS reminder fires 24h and 1h before. Tech gets turn-by-turn directions in the mobile app.",
+          "Both customer and your team receive instant calendar invites with Google Meet/Zoom links and automated confirmation reminders.",
       },
     ],
     painPoints: [
       {
-        problem: "You spend 2+ hours a day playing phone tag to confirm appointment times.",
+        problem: "Playing endless phone tag and trading 6 emails back and forth just to confirm a 30-minute consultation.",
         fieserosSolution:
-          "Self-booking lets customers pick a slot in 30 seconds. Reminders confirm automatically. Your phone time drops to actual sales calls.",
+          "Clients self-schedule in 30 seconds directly from your website, chat widget, or landing page with zero staff overhead.",
       },
       {
-        problem: "No-shows waste technician hours and kill route efficiency.",
+        problem: "Costly no-shows leave empty gaps in your team's calendar and waste valuable billable hours.",
         fieserosSolution:
-          "Automated SMS reminders with one-tap confirm/reschedule cut no-shows by up to 41%. Optional deposits protect revenue on high-value jobs.",
+          "Automated SMS/email reminders with 1-tap confirmation and optional booking deposits reduce no-shows by up to 45%.",
       },
       {
-        problem: "Bookings after hours go to voicemail and the customer books the competitor who answers.",
+        problem: "Double-bookings happen when staff forget to manually update external scheduling spreadsheets.",
         fieserosSolution:
-          "AI chat and embedded booking work 24/7. 67% of bookings happen outside business hours — Fieseros captures them while you sleep.",
+          "Instant bidirectional calendar sync guarantees that booked slots disappear immediately across Google Calendar and Outlook.",
       },
     ],
     faqs: [
       {
-        question: "Can customers reschedule or cancel on their own?",
+        question: "Does GPTForm integrate with Google Calendar and Microsoft Outlook?",
         answer:
-          "Yes. Reminders include a reschedule link. Customers can pick a new slot or cancel directly — the calendar updates instantly and the tech is notified. You can require approval for cancellations within 24h of the appointment.",
+          "Yes. GPTForm offers seamless two-way OAuth synchronization with Google Calendar and Microsoft Outlook. New bookings appear instantly on your calendar, and existing personal events block booking slots automatically.",
       },
       {
-        question: "How does booking sync with my existing calendar?",
+        question: "Can I collect a deposit when someone books an appointment?",
         answer:
-          "Fieseros has its own dispatch calendar, and supports Google Calendar two-way sync so personal appointments block availability. iCal export is available for any other calendar app.",
+          "Yes. You can require a fixed deposit, percentage, or full pre-payment at the time of booking via Stripe, Apple Pay, Google Pay, or PayPal. Fieseros charges 0% platform transaction fees on all payments.",
       },
       {
-        question: "Can I require a deposit to book?",
+        question: "Can clients reschedule or cancel on their own?",
         answer:
-          "Yes. You can require a deposit or full pre-payment at booking through Stripe, Razorpay, or PayPal. Deposits are refundable based on your cancellation policy, which you configure per service.",
+          "Yes. Confirmation and reminder messages include secure self-service links that allow clients to reschedule or cancel within the policy window you define.",
       },
       {
-        question: "Does booking account for travel time between jobs?",
+        question: "Can it distribute bookings among multiple team members?",
         answer:
-          "Yes. Slot availability factors in the technician's existing route and travel time between jobs, so you never overbook a tech who can't physically make the drive.",
+          "Yes. You can connect individual team calendars and route appointments based on staff specialization, territory coverage, or round-robin rotation.",
       },
     ],
     relatedUseCases: [
       { label: "Lead Capture", href: "/use-cases/lead-capture" },
+      { label: "Payment Collection", href: "/use-cases/payment-collection" },
       { label: "Job Dispatch", href: "/use-cases/job-dispatch" },
-      { label: "Review Collection", href: "/use-cases/review-collection" },
     ],
   },
   {
     slug: "quote-generation",
-    titleTag: "Automated Quote & Estimate Generation Software | Fieseros",
-    h1: "Turn job requests into quotes in minutes, not days",
-    eyebrow: "Use Case · Quote Generation",
+    titleTag: "Instant AI Quote Generation & Price Calculator | GPTForm",
+    h1: "Deliver instant, accurate estimates and dynamic quotes",
+    eyebrow: "Use Case · Instant Quote Generation",
     metaDescription:
-      "Fieseros AI quote generation builds line-item estimates from a conversation or photos in minutes. Email + SMS delivery, e-signature approval, and one-tap conversion to a job and invoice.",
+      "Generate instant estimates and quotes using GPTForm's conversational AI and visual formula engine. Deliver itemized pricing, collect e-signatures, and convert quotes to invoices.",
     heroSubtitle:
-      "Stop losing jobs to competitors who quote faster. AI builds line-item estimates from the customer's description and photos, delivers them by SMS + email, and collects an e-signature — all before you finish your coffee.",
-    icon: FileText,
+      "Stop losing deals to competitors who quote faster. GPTForm calculates dynamic price estimates in real time using your custom pricing formulas, displays interactive itemized breakdowns, and collects instant approvals with e-signatures.",
+    icon: Calculator,
     metrics: [
-      { value: "<5 min", label: "From request to sent quote" },
-      { value: "+27%", label: "Higher quote-to-job win rate" },
-      { value: "E-sign", label: "Approval built in" },
+      { value: "<2 min", label: "From customer request to sent quote" },
+      { value: "+32%", label: "Higher quote acceptance rate" },
+      { value: "100%", label: "Formula precision, zero hallucination" },
     ],
     features: [
       {
-        icon: FileText,
-        badge: "AI",
-        title: "AI-Drafted Estimates",
+        icon: Calculator,
+        badge: "Visual Formulas",
+        title: "Dynamic Formula Calculation Engine",
         description:
-          "Describe the job or upload photos — the AI drafts a line-item estimate with quantities, labor, and materials based on your pricebook. You review and send.",
+          "Build multi-variable pricing formulas — square footage, material tiers, service hours, quantity discounts — that calculate exact numbers in real time with mathematical precision.",
       },
       {
-        icon: Target,
-        title: "Tiered Quote Options",
+        icon: Sparkles,
+        badge: "AI Powered",
+        title: "Conversational Scope Discovery",
         description:
-          "Send Good / Better / Best options so customers can choose their budget. Tiered quotes win 27% more jobs than single-price estimates.",
-      },
-      {
-        icon: CreditCard,
-        title: "Deposit with Acceptance",
-        description:
-          "Customers accept the quote with an e-signature and pay the deposit in the same flow — converting an approved quote to a booked, paid job instantly.",
-      },
-      {
-        icon: Mail,
-        title: "SMS + Email Delivery",
-        description:
-          "Quotes go out by both SMS and email with a tracking pixel. You see when the customer opens it, so you know exactly when to follow up.",
-      },
-      {
-        icon: CalendarCheck,
-        title: "One-Tap Conversion to Job",
-        description:
-          "When a customer accepts, Fieseros auto-creates the job on the dispatch board, assigns the right tech, and queues the invoice — no double entry.",
+          "The AI agent asks the right discovery questions to understand the scope of work, extracts dimensions and requirements, and feeds values directly into the calculation formula.",
       },
       {
         icon: MessageSquare,
-        title: "Quote Negotiation in Chat",
+        title: "Interactive 2-Column Estimate Cards",
         description:
-          "Customers can reply to the quote in chat to ask for changes. The AI suggests adjusted line items and re-sends a revised quote without starting over.",
+          "Present quotes in beautiful, branded visual cards with line-item breakdowns, option toggles, and live price recalculation right inside the chat window.",
+      },
+      {
+        icon: Target,
+        title: "Good / Better / Best Tiered Options",
+        description:
+          "Empower prospects with multi-tier pricing choices. Presenting tiered options increases average deal size and boosts acceptance rates by over 30%.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Legally Binding E-Signatures",
+        description:
+          "Clients review the scope and sign directly on their smartphone or desktop. The signed contract is automatically stored in your CRM with full audit timestamps.",
+      },
+      {
+        icon: CreditCard,
+        title: "1-Tap Conversion to Invoice & Deposit",
+        description:
+          "Once a quote is signed, the system automatically creates the job record, generates the final invoice, and collects the initial project deposit via Stripe.",
       },
     ],
     workflow: [
       {
         step: "1",
-        title: "Request + photos",
+        title: "Prospect Defines Needs",
         description:
-          "Customer describes the job in chat or uploads photos of the issue (a leaking water heater, a fence to replace).",
+          "In chat or through an embedded calculator form, the customer specifies project scope, dimensions, selected materials, or service frequency.",
       },
       {
         step: "2",
-        title: "AI drafts estimate",
+        title: "Dynamic Calculation",
         description:
-          "Fieseros drafts a line-item estimate from your pricebook — labor, materials, quantities, tax — in seconds.",
+          "The formula engine instantly computes line items, labor, materials, and taxes using your strict pricebook logic — never guessing or hallucinating.",
       },
       {
         step: "3",
-        title: "You review + send",
+        title: "Visual Card Presentation",
         description:
-          "You tweak pricing or add tiers, then send by SMS + email. The customer gets a branded, trackable quote link.",
+          "The customer receives an interactive estimate card with options to adjust scope, add upgrades, or choose Good / Better / Best packages.",
       },
       {
         step: "4",
-        title: "Accept + deposit",
+        title: "E-Sign & Deposit Locked",
         description:
-          "Customer e-signs and pays the deposit. A job is created, the tech is assigned, and the invoice is queued — all from one acceptance.",
+          "The client signs on-screen and submits their deposit payment. An approved project record is instantly created in your workspace.",
       },
     ],
     painPoints: [
       {
-        problem: "You spend evenings building estimates in Word and lose jobs to faster competitors.",
+        problem: "Spending evenings manually creating Word or PDF estimates while hot leads buy from faster competitors.",
         fieserosSolution:
-          "AI drafts line-item estimates in under 5 minutes from a job description or photos. You review, send, and win the job before the competitor even replies.",
+          "Automated formula-driven quotes are generated in under 60 seconds while the prospect is still on your website and highly motivated.",
       },
       {
-        problem: "Approved quotes sit in your inbox for days because following up feels pushy.",
+        problem: "Sales reps make manual math errors or give unauthorized discounts when estimating custom projects.",
         fieserosSolution:
-          "Open-tracking tells you exactly when the customer viewed the quote. Automated follow-up SMS fires 24h later with a friendly nudge — no awkward calls.",
+          "Deterministic visual formulas enforce strict pricing rules, margins, and minimum charges without human calculation error.",
       },
       {
-        problem: "Quotes get accepted verbally and then nobody remembers the agreed scope.",
+        problem: "Quotes get lost in email inboxes with zero visibility into whether the client opened or reviewed them.",
         fieserosSolution:
-          "Every quote is e-signed and stored on the customer's record. When it's accepted, the job scope, price, and deposit are locked in — no scope creep, no he-said-she-said.",
+          "Real-time open tracking notifies your team when a client views the quote, triggering automated follow-up nudges at the ideal moment.",
       },
     ],
     faqs: [
       {
-        question: "Can the AI generate quotes for any trade?",
+        question: "How does GPTForm calculate prices accurately without hallucinating?",
         answer:
-          "The AI uses your pricebook — your labor rates, material costs, and common job templates — so quotes reflect your actual pricing. It works for plumbing, HVAC, electrical, landscaping, cleaning, handyman, and any service with line-item work.",
+          "GPTForm separates natural language conversation from numerical pricing. The AI gathers the project parameters, which are evaluated by a deterministic formula calculator engine according to your exact pricebook formulas.",
       },
       {
-        question: "What if the AI's estimate is wrong?",
+        question: "Can I create complex calculators with conditional rules?",
         answer:
-          "Every AI-drafted estimate is a starting point you review before sending. You can edit any line item, quantity, or price. Over time, the AI learns from your edits and your accepted/declined quotes to improve accuracy.",
+          "Yes. You can configure formulas with conditional branches, square-foot multipliers, minimum base charges, volume discounts, and variable labor rates matching Jotform and Elementor calculator standards.",
       },
       {
-        question: "Do I need a separate e-signature tool?",
+        question: "Do customers need to download an app to sign the quote?",
         answer:
-          "No. E-signatures are built into every quote. Customers sign on their phone or computer, the signed quote is stored on the customer record, and the deposit is collected in the same flow.",
+          "No. E-signatures work smoothly directly in the web browser on desktop, tablet, and mobile. Customers sign with their finger or mouse and receive a signed PDF confirmation immediately.",
       },
       {
-        question: "Can I send quotes from my phone in the field?",
+        question: "Can the quote turn into a booked job and invoice automatically?",
         answer:
-          "Yes. The mobile PWA lets you generate and send quotes from anywhere. Field techs can quote upsells on-site — 'want me to replace this while I'm here?' — and collect approval instantly.",
+          "Yes. Upon client acceptance, the quote converts into an active job, syncs to your calendar, generates an invoice, and prompts for deposit payment in one seamless sequence.",
       },
     ],
     relatedUseCases: [
@@ -408,121 +418,122 @@ export const useCases: UseCaseConfig[] = [
   },
   {
     slug: "payment-collection",
-    titleTag: "Online Payment Collection for Contractors | Fieseros",
-    h1: "Get paid on the job — not 30 days later",
+    titleTag: "In-Chat & On-Form Payment Collection (0% Platform Fees) | GPTForm",
+    h1: "Collect deposits and payments directly inside conversations",
     eyebrow: "Use Case · Payment Collection",
     metaDescription:
-      "Fieseros payment collection lets contractors accept cards, ACH, Apple Pay, and cash on-site through Stripe, Razorpay, and PayPal. Send invoices, take deposits, and reconcile — all in one platform.",
+      "Accept credit cards, Apple Pay, Google Pay, and ACH in-chat and on-form with 0% platform fees. Integrate Stripe, PayPal, Square, and 33+ global gateways with GPTForm.",
     heroSubtitle:
-      "Stop chasing unpaid invoices. Collect deposits at booking, take payment on-site with a tap, and send branded invoices that customers pay from their phone. 33 gateways, instant reconciliation.",
+      "Remove checkout friction. GPTForm lets your clients pay booking deposits, settle invoices, or purchase service packages right inside the AI chat or embedded form — with 0% platform transaction fees.",
     icon: CreditCard,
     metrics: [
-      { value: "33", label: "Payment gateways supported" },
-      { value: "-63%", label: "Days sales outstanding" },
-      { value: "On-site", label: "Tap-to-pay accepted" },
+      { value: "0%", label: "Platform fees — keep 100% of your earnings" },
+      { value: "33+", label: "Global payment gateways supported" },
+      { value: "-65%", label: "Faster invoice payment collection (DSO)" },
     ],
     features: [
       {
         icon: CreditCard,
-        badge: "33 Gateways",
-        title: "Stripe, Razorpay & PayPal",
+        badge: "0% Platform Fees",
+        title: "Keep 100% of What You Earn",
         description:
-          "Accept cards, ACH, Apple Pay, Google Pay, and buy-now-pay-later through 33 supported gateways. Customers pay however they want — no friction.",
+          "Unlike other software that skim 1%–3% on top of payment processor rates, Fieseros charges 0% platform transaction fees. You only pay your standard gateway fees.",
+      },
+      {
+        icon: Zap,
+        badge: "In-Chat Checkout",
+        title: "Frictionless In-Chat Payment Flow",
+        description:
+          "Customers complete payments without leaving the conversation. Apple Pay, Google Pay, credit cards, and ACH bank transfers render seamlessly in the chat stream.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "33+ Global Payment Gateways",
+        description:
+          "Connect your preferred provider — Stripe, PayPal, Square, Razorpay, Authorize.net, Mollie, and 27 more. Route payments by geography, currency, or service category.",
       },
       {
         icon: CalendarCheck,
-        title: "Deposits at Booking",
+        title: "Mandatory Booking Deposits",
         description:
-          "Require a deposit to lock in the appointment. Deposits protect you from no-shows and commit the customer — fully refundable per your cancellation policy.",
-      },
-      {
-        icon: FileText,
-        title: "Branded Invoice Delivery",
-        description:
-          "Send professional, branded invoices by SMS + email with a one-tap pay link. Customers pay from their phone in 30 seconds without logging in.",
-      },
-      {
-        icon: MessageSquare,
-        title: "On-Site Tap-to-Pay",
-        description:
-          "Techs collect payment on-site before they leave — tap-to-pay on phone, card, or cash. The job closes paid and the customer gets an instant receipt.",
-      },
-      {
-        icon: Target,
-        title: "Automated Payment Reminders",
-        description:
-          "Unpaid invoices trigger escalating SMS + email reminders on your schedule. Past-due accounts get a polite nudge, then a firmer follow-up — all automated.",
+          "Require upfront deposits or credit card pre-authorizations before confirming appointments. Cut cancellations to near zero while securing cash flow.",
       },
       {
         icon: Mail,
-        title: "Recurring Billing",
+        title: "Automated SMS Payment Reminders",
         description:
-          "Maintenance contracts and subscription plans auto-charge on schedule. Set it once and Fieseros generates invoices, charges the card, and reconciles — every month.",
+          "Unpaid balances trigger automated, polite SMS and email payment reminders with 1-tap mobile payment links. Average payment time drops from 28 days to under 48 hours.",
+      },
+      {
+        icon: Smartphone,
+        title: "On-Site & Mobile Tap-to-Pay",
+        description:
+          "Service technicians and field staff can collect payments on-site via smartphone tap-to-pay, card readers, or instant QR codes that update the CRM in real time.",
       },
     ],
     workflow: [
       {
         step: "1",
-        title: "Deposit at booking",
+        title: "Payment Requested",
         description:
-          "Customer books the appointment and pays a 25% deposit through Stripe — securing the slot.",
+          "During conversation, appointment booking, or upon quote acceptance, the AI triggers a secure payment card for the exact calculated balance or deposit.",
       },
       {
         step: "2",
-        title: "Job completed",
+        title: "1-Tap Checkout",
         description:
-          "Tech finishes the work, marks the job complete in the mobile app, and the final invoice auto-generates from the quote.",
+          "The customer taps Apple Pay, Google Pay, or enters their card details securely within the chat widget or embedded form.",
       },
       {
         step: "3",
-        title: "On-site collection",
+        title: "Instant Confirmation",
         description:
-          "Tech taps 'Collect Payment' on their phone, the customer taps their card or Apple Pay, and the balance is captured.",
+          "Funds are processed directly into your connected Stripe/gateway account. Both customer and merchant receive instant itemized receipts.",
       },
       {
         step: "4",
-        title: "Reconciled",
+        title: "Automatic Reconciliation",
         description:
-          "Payment hits your bank, the invoice is marked paid, the customer gets a receipt, and your books reconcile automatically.",
+          "The corresponding invoice and CRM deal are marked paid, and accounting data syncs automatically to QuickBooks or Xero.",
       },
     ],
     painPoints: [
       {
-        problem: "Invoices sit unpaid for 30-60 days because customers 'forgot' or can't find the link.",
+        problem: "Redirecting customers to clunky third-party payment portals leads to high cart and checkout abandonment.",
         fieserosSolution:
-          "Branded SMS invoices with one-tap pay links get paid in an average of 2 days. Automated reminders follow up on your schedule — no awkward collection calls.",
+          "In-chat checkout with Apple Pay and 1-tap card entry keeps customers engaged and finishes transactions in seconds.",
       },
       {
-        problem: "You do the work, then the customer disputes the scope or price.",
+        problem: "SaaS platforms charging 2%–5% extra transaction cuts eat into your gross profit margins.",
         fieserosSolution:
-          "Quotes are e-signed before the job starts and deposits are collected. When the job scope is locked in writing, disputes drop to near zero.",
+          "Fieseros charges 0% platform transaction fees. Your money goes directly from your gateway to your bank account.",
       },
       {
-        problem: "Reconciling payments across Stripe, cash, and checks is an end-of-month nightmare.",
+        problem: "Chasing late-paying clients with awkward phone calls and manual invoicing steals hours each week.",
         fieserosSolution:
-          "All payments — card, ACH, cash, check — reconcile automatically against invoices in Fieseros. Your books are always up to date; no more spreadsheet wrangling.",
+          "Automated SMS/email payment nudges with 1-tap mobile pay links collect 65% of outstanding invoices within 48 hours.",
       },
     ],
     faqs: [
       {
-        question: "Which payment gateways are supported?",
+        question: "Does Fieseros take a percentage fee on my transactions?",
         answer:
-          "Fieseros supports 33 gateways including Stripe, Razorpay, PayPal, Square, Authorize.net, and Braintree. Each supports cards, ACH/bank transfer, Apple Pay, and Google Pay. You connect one or many and route by currency, region, or service type.",
+          "No. Fieseros charges 0% platform transaction fees. You keep 100% of your revenue, paying only your standard merchant processing fees directly to Stripe, PayPal, or your chosen gateway.",
       },
       {
-        question: "How fast do I get my money?",
+        question: "Is in-chat payment collection secure and PCI compliant?",
         answer:
-          "Payout timing depends on the gateway — Stripe is typically 2 business days, PayPal is instant to your PayPal balance, ACH is 3-4 days. Fieseros tracks payment status but payout speed is set by your gateway.",
+          "Yes. All payment fields are rendered using secure PCI-DSS Level 1 compliant tokenized iframes provided directly by Stripe and supported gateways. Sensitive card data never touches your servers.",
       },
       {
-        question: "Can customers pay in installments?",
+        question: "Can I collect recurring subscriptions or retainers?",
         answer:
-          "Yes. You can split an invoice into multiple scheduled payments, set up recurring billing for maintenance contracts, or offer buy-now-pay-later through supported gateways like Affirm and Klarna.",
+          "Yes. You can configure recurring monthly or quarterly billing plans for maintenance contracts, memberships, or ongoing service retainers that auto-bill on schedule.",
       },
       {
-        question: "What about cash and check payments?",
+        question: "What happens if a customer wants to pay by cash or check?",
         answer:
-          "Techs can record cash or check payments on-site in the mobile app. The invoice is marked paid and reconciled just like a card payment — no separate tracking.",
+          "Field personnel can record offline payments (cash, check, bank transfer) directly on their mobile CRM app, immediately marking the invoice as paid and issuing a receipt.",
       },
     ],
     relatedUseCases: [
@@ -533,372 +544,374 @@ export const useCases: UseCaseConfig[] = [
   },
   {
     slug: "review-collection",
-    titleTag: "Automated Review Collection for Service Businesses | Fieseros",
-    h1: "Automatically collect 5-star Google reviews",
-    eyebrow: "Use Case · Review Collection",
+    titleTag: "Automated 5-Star Google Review Collection | GPTForm",
+    h1: "Turn satisfied clients into 5-star Google reviews on autopilot",
+    eyebrow: "Use Case · Review Collection & Reputation",
     metaDescription:
-      "Fieseros automated review collection sends Google review requests the moment a job is marked complete. AI filters negative feedback, follows up with happy customers, and boosts your local SEO ranking.",
+      "Automatically request 5-star Google, Trustpilot, and Facebook reviews after service delivery. Intelligent sentiment routing protects your public rating while boosting local SEO.",
     heroSubtitle:
-      "Your reputation is built in the 24 hours after a job is done. Fieseros sends a personalized review request the moment the tech marks the job complete — and routes unhappy customers to private feedback before they post publicly.",
+      "88% of prospective customers consult online reviews before booking. GPTForm triggers personalized review requests the moment an appointment or service finishes, routing happy clients directly to Google to leave 5-star praise.",
     icon: Star,
     metrics: [
-      { value: "+4.2x", label: "More Google reviews" },
-      { value: "92%", label: "Of requests sent within 1 hour" },
-      { value: "4.9★", label: "Avg rating after filtering" },
+      { value: "+4.2x", label: "More Google reviews captured" },
+      { value: "94%", label: "Sent within optimal 1-hour window" },
+      { value: "4.9★", label: "Average public rating after sentiment filtering" },
     ],
     features: [
       {
         icon: Star,
-        badge: "Automated",
-        title: "Instant Review Requests",
+        badge: "Automated Triggers",
+        title: "Instant Post-Service Review Requests",
         description:
-          "The moment a tech marks a job complete, the customer gets a branded SMS asking for a Google review — while the great service is fresh in their mind.",
+          "The moment an appointment is finished or a job is marked complete in your CRM, an automated SMS/email fires while the positive experience is fresh in the client's mind.",
       },
       {
-        icon: Target,
-        title: "Sentiment-Based Routing",
+        icon: ShieldCheck,
+        badge: "Sentiment Gate",
+        title: "Intelligent Sentiment Routing",
         description:
-          "Happy customers get a one-tap link to Google Reviews. Unhappy ones get routed to a private feedback form first — protecting your public rating from one-star rants.",
+          "Customers rate their experience 1 to 5 stars. Happy clients (4–5 stars) are directed with 1 tap to your Google Business Profile. Critical feedback (1–3 stars) routes to private management review.",
       },
       {
         icon: MessageSquare,
-        title: "AI Personalization",
+        title: "Personalized Job-Specific Context",
         description:
-          "Each request references the actual job — 'How was your water heater install today?' — which dramatically increases response rate versus a generic 'rate us' blast.",
+          "Review requests reference the exact service provided — 'How did our technician do on your installation today?' — drastically increasing response rates compared to generic blasts.",
+      },
+      {
+        icon: Zap,
+        title: "Direct Google 1-Tap Deep Link",
+        description:
+          "No searching or navigating menus. The client taps the link and their native Google review window opens immediately with 5 stars pre-selected.",
+      },
+      {
+        icon: Target,
+        title: "Multi-Platform Social Proof",
+        description:
+          "Direct reviews to Google, Trustpilot, Facebook, Yelp, or your website testimonials based on where you need social proof the most.",
       },
       {
         icon: Mail,
-        title: "Multi-Platform Collection",
+        title: "Smart Non-Intrusive Follow-Ups",
         description:
-          "Collect reviews on Google, Facebook, Trustpilot, or your own site. Route customers to the platform where you need the most social proof.",
-      },
-      {
-        icon: CalendarCheck,
-        title: "Smart Follow-Ups",
-        description:
-          "No response after 3 days? Fieseros sends a gentle nudge. Still nothing? It stops — no spammy repeat texts. Respect for your customers' inbox.",
-      },
-      {
-        icon: FileText,
-        title: "Review Dashboard",
-        description:
-          "See every review across every platform in one dashboard. Respond to Google reviews directly from Fieseros. Track your average rating and review velocity over time.",
+          "If a customer doesn't respond after 3 days, a single gentle follow-up sends. If still no answer, the sequence halts automatically to protect your relationship.",
       },
     ],
     workflow: [
       {
         step: "1",
-        title: "Job completes",
+        title: "Service Completed",
         description:
-          "Tech marks the job 'Complete' in the mobile app. The customer gets an SMS within 60 seconds asking how the service was.",
+          "A job is marked complete or consultation ends. The automated reputation engine triggers immediately.",
       },
       {
         step: "2",
-        title: "Sentiment check",
+        title: "Sentiment Check",
         description:
-          "Customer taps 1-5 stars. 4-5 stars route to Google Reviews. 1-3 stars route to a private feedback form that goes to your inbox.",
+          "The customer receives a friendly SMS: 'How was your experience today? Tap to rate 1-5 stars.'",
       },
       {
         step: "3",
-        title: "Review posted",
+        title: "Smart Routing",
         description:
-          "Happy customers land on your Google Business Profile and post their review. Your local SEO ranking climbs with each new 5-star review.",
+          "Ratings of 4 or 5 stars open Google Reviews directly. Ratings of 1 to 3 stars route to an internal private feedback form.",
       },
       {
         step: "4",
-        title: "Respond + monitor",
+        title: "SEO Rank Climbs",
         description:
-          "New reviews appear in your dashboard. You respond publicly to positive reviews and follow up privately with the unhappy ones — all from one screen.",
+          "New 5-star reviews post to Google Business Profile, accelerating local search rankings and attracting inbound organic leads.",
       },
     ],
     painPoints: [
       {
-        problem: "You do great work but have 6 Google reviews while competitors have 200.",
+        problem: "You deliver exceptional service, but satisfied clients forget to leave a review once they walk away.",
         fieserosSolution:
-          "Automated, job-specific review requests collect 4.2x more reviews than manual asks. Customers post when the great service is fresh — not a week later when they've forgotten.",
+          "Automated mobile SMS sent within 60 minutes captures customers when enthusiasm is at its absolute peak.",
       },
       {
-        problem: "One angry customer tanks your rating with a public 1-star review before you can fix it.",
+        problem: "A single disgruntled customer posts a public 1-star rant that damages your local SEO and credibility.",
         fieserosSolution:
-          "Sentiment-based routing sends unhappy customers to a private feedback form first. You get the chance to make it right before they ever reach Google Reviews.",
+          "Smart sentiment filtering catches unhappy customers first, giving you the opportunity to resolve issues privately before public posting.",
       },
       {
-        problem: "You ask for reviews in person but customers forget by the time they're home.",
+        problem: "Asking for reviews manually feels awkward, inconsistent, and often forgotten by busy staff.",
         fieserosSolution:
-          "The request fires automatically the moment the job is marked complete — in the customer's hand, while the great service is still top of mind.",
+          "100% automated triggers require zero manual effort from your team, consistently generating 4.2x more reviews.",
       },
     ],
     faqs: [
       {
-        question: "Does this work with my existing Google Business Profile?",
+        question: "Does this connect directly to my Google Business Profile?",
         answer:
-          "Yes. Fieseros links to your Google Business Profile review URL. Customers tap the link and land directly on the review form — no searching, no friction. It works the same for Facebook, Trustpilot, and other platforms.",
+          "Yes. Fieseros connects to your Google Business Profile review URL. When happy customers tap, it opens the Google review box instantly on their phone or desktop with zero friction.",
       },
       {
-        question: "Can customers opt out of review requests?",
+        question: "Can I collect reviews on other platforms like Trustpilot or Facebook?",
         answer:
-          "Yes. Customers can reply STOP to opt out of all SMS, and you can exclude specific customers from review requests (e.g., a particularly difficult one) from their CRM record.",
+          "Yes. You can route reviews to Google, Trustpilot, Facebook, or your own website testimonial widget, or alternate destinations to build social proof across multiple platforms.",
       },
       {
-        question: "What if a customer leaves a bad review anyway?",
+        question: "Can customers opt out of receiving review requests?",
         answer:
-          "Negative reviews appear in your dashboard immediately so you can respond fast. Fieseros suggests an AI-drafted public response and routes the customer's contact info to you for a private follow-up.",
+          "Yes. All SMS messages include standard opt-out commands (reply STOP to unsubscribe). You can also flag individual customer records in your CRM to exclude them from review campaigns.",
       },
       {
-        question: "How many review requests are too many?",
+        question: "How do automated Google reviews help my local SEO?",
         answer:
-          "Fieseros only sends one request per completed job and a single follow-up after 3 days — never spammy repeat texts. You can configure the timing and frequency per service type.",
+          "Google's local search algorithm heavily weighs review velocity, recency, and average rating. Businesses consistently earning fresh 5-star reviews rank higher in the Google Maps Local Pack.",
       },
     ],
     relatedUseCases: [
-      { label: "Lead Nurturing", href: "/use-cases/lead-nurturing" },
-      { label: "Appointment Booking", href: "/use-cases/appointment-booking" },
       { label: "Customer Support", href: "/use-cases/customer-support" },
+      { label: "Appointment Booking", href: "/use-cases/appointment-booking" },
+      { label: "Lead Nurturing", href: "/use-cases/lead-nurturing" },
     ],
   },
   {
     slug: "lead-nurturing",
-    titleTag: "Lead Nurturing & Automated Follow-Up Software | Fieseros",
-    h1: "Nurture cold leads until they're ready to buy",
-    eyebrow: "Use Case · Lead Nurturing",
+    titleTag: "Automated Lead Nurturing & Smart Follow-Up | GPTForm",
+    h1: "Re-engage warm prospects and turn undecided visitors into buyers",
+    eyebrow: "Use Case · Lead Nurturing & Follow-Ups",
     metaDescription:
-      "Fieseros lead nurturing sends automated SMS + email sequences to cold leads over weeks. AI personalizes timing and content, re-engaging tire-kickers until they convert — without manual chasing.",
+      "Don't let warm leads go cold. GPTForm automates multi-channel SMS and email follow-up sequences, reviving dropped-off visitors with timely, personalized messages.",
     heroSubtitle:
-      "Not every lead is ready today. Automated nurture sequences keep your business top-of-mind for weeks — sending the right message at the right time — so when they ARE ready, you're the one they call.",
+      "Up to 70% of inbound leads don't purchase immediately. GPTForm keeps your business top-of-mind with intelligent, behavior-triggered SMS and email sequences that guide warm prospects back to booking.",
     icon: Mail,
     metrics: [
-      { value: "+22%", label: "Of cold leads convert later" },
-      { value: "Auto", label: "Personalized timing" },
-      { value: "Multi-step", label: "SMS + email sequences" },
+      { value: "+26%", label: "Higher lead-to-booking conversion rate" },
+      { value: "98%", label: "SMS open rate vs 20% standard email" },
+      { value: "100%", label: "Automated behavior-based triggers" },
     ],
     features: [
       {
         icon: Mail,
-        badge: "Automated",
-        title: "Multi-Step Sequences",
+        badge: "Multi-Channel",
+        title: "Omnichannel SMS & Email Sequences",
         description:
-          "Build nurture sequences across SMS and email — a tip on day 1, a case study on day 3, a special offer on day 7. Each step fires automatically based on the lead's behavior.",
+          "Combine high-urgency SMS with informative email touches. Day 1: a quick check-in; Day 3: a relevant case study; Day 7: a limited-time incentive.",
       },
       {
         icon: Target,
+        badge: "Dynamic Logic",
         title: "Behavior-Based Branching",
         description:
-          "If a lead opens an email but doesn't book, they get a different next message than one who ignored it. Branching logic adapts to engagement, not a one-size-fits-all blast.",
+          "Sequences adapt dynamically based on lead actions. If a prospect clicks a quote link, they receive a targeted booking offer rather than a generic follow-up.",
       },
       {
-        icon: MessageSquare,
-        badge: "AI",
-        title: "AI-Drafted Content",
+        icon: Bot,
+        title: "AI-Drafted Personalized Copy",
         description:
-          "The AI drafts nurture messages in your brand voice — seasonal tips, limited-time offers, case studies — so you're not staring at a blank screen every week.",
+          "GPTForm writes contextual follow-ups that reference the prospect's exact stated requirements and project details — never sounding like a canned mass broadcast.",
       },
       {
-        icon: CalendarCheck,
-        title: "Smart Send Timing",
+        icon: Clock,
+        title: "Optimal Send-Time AI",
         description:
-          "Messages send at the lead's local optimal time — not 3am. Fieseros learns when each contact tends to engage and schedules accordingly.",
+          "Messages fire at optimal daytime hours in the recipient's local timezone. The system learns when each lead typically responds to maximize engagement.",
       },
       {
-        icon: CreditCard,
-        title: "Re-Engagement Offers",
+        icon: ShieldCheck,
+        title: "Instant Stop-on-Reply Protection",
         description:
-          "Trigger a 'we miss you' discount after 30 days of inactivity. Track which offers convert and double down on what works.",
+          "The moment a prospect replies, schedules an appointment, or requests an agent, the automated sequence pauses instantly so they never receive irrelevant follow-ups.",
       },
       {
-        icon: FileText,
-        title: "Full Conversation History",
+        icon: Zap,
+        title: "Abandoned Chat & Form Recovery",
         description:
-          "Every nurture touch — SMS, email, chat — is logged on the lead's record. When they finally call to book, you have full context, not a cold start.",
+          "If a visitor starts answering questions in the chat or smart form but drops off midway, GPTForm fires a friendly reminder to complete their request.",
       },
     ],
     workflow: [
       {
         step: "1",
-        title: "Lead enters nurture",
+        title: "Lead Enters Sequence",
         description:
-          "A cold lead (no urgency, no budget yet) is tagged 'Warm' and enrolled in your 14-day nurture sequence automatically.",
+          "A prospect receives a quote or completes intake but doesn't schedule immediately. They are tagged Warm and enrolled in the nurture campaign.",
       },
       {
         step: "2",
-        title: "Automated touches",
+        title: "Automated Value Touches",
         description:
-          "Day 1: a helpful tip. Day 3: a case study. Day 7: a limited-time offer. Day 14: a final nudge. Each fires on the lead's local time.",
+          "Helpful, non-pushy messages deliver relevant case studies, client testimonials, and seasonal advice directly via SMS and email.",
       },
       {
         step: "3",
-        title: "Behavior branching",
+        title: "Prospect Re-Engages",
         description:
-          "Lead opens the case study? They get a related how-to next. Lead ignores everything? They move to a slower monthly cadence. AI adapts.",
+          "The prospect replies to an SMS: 'Yes, we are ready to move forward. What days are open this week?'",
       },
       {
         step: "4",
-        title: "Conversion",
+        title: "Hot Lead Alert & Booking",
         description:
-          "Lead replies 'actually yes, can you come Thursday?' — Fieseros flags them Hot, alerts the owner, and creates the booking.",
+          "The sequence halts instantly. Fieseros alerts your team, marks the lead Hot, and provides a 1-tap booking confirmation.",
       },
     ],
     painPoints: [
       {
-        problem: "Cold leads die in your inbox because nobody has time to follow up 5 times.",
+        problem: "Warm leads slip through the cracks because sales reps don't have time to manually follow up 5 times.",
         fieserosSolution:
-          "Automated multi-step sequences follow up with every cold lead on your behalf — for days or weeks — so the 22% who would've converted eventually actually do.",
+          "Automated nurture sequences stay persistent for weeks without human effort, converting 26% of prospects who would have otherwise been lost.",
       },
       {
-        problem: "Generic 'just checking in' texts annoy leads more than they convert.",
+        problem: "Generic 'just checking in' emails feel spammy and get routinely ignored or deleted.",
         fieserosSolution:
-          "AI drafts helpful, content-rich messages — seasonal tips, case studies, real value — not nagging check-ins. Branching adapts to what each lead engages with.",
+          "AI personalizes every message around the prospect's actual project scope, delivering real value rather than empty check-ins.",
       },
       {
-        problem: "You can't tell which follow-up message actually drove the booking.",
+        problem: "Marketing sends promotional blasts to clients who have already booked or paid.",
         fieserosSolution:
-          "Every touch is tracked. Fieseros attributes the conversion to the specific message that triggered the reply, so you know what's working and what to double down on.",
+          "Tight CRM integration automatically terminates nurture sequences the exact second a prospect books or completes payment.",
       },
     ],
     faqs: [
       {
-        question: "How is this different from a regular email marketing tool?",
+        question: "How is GPTForm lead nurturing different from typical email marketing software?",
         answer:
-          "Fieseros nurture is built for service businesses — it ties directly to the lead's CRM record, job history, and booking flow. When a lead replies, it routes to your team instantly and creates a booking, not just an email open metric.",
+          "Unlike generic email newsletter tools, GPTForm is an action-driven CRM engine. It combines high-conversion SMS with email, tracks live quote views, and automatically transitions leads into booked jobs the moment they reply.",
       },
       {
-        question: "Can I customize the nurture sequence?",
+        question: "Can I customize the frequency and messaging of the sequences?",
         answer:
-          "Yes. You can build any multi-step sequence with branching logic, custom timing, and conditional offers. Start from a template (seasonal, re-engagement, new lead) and tailor the messages to your trade and brand voice.",
+          "Yes. You can customize the delays, trigger conditions, content templates, and delivery channels for every step. Use our battle-tested templates or build bespoke workflows.",
       },
       {
-        question: "Does it work over SMS as well as email?",
+        question: "What happens when a prospect texts back?",
         answer:
-          "Yes. SMS has a 98% open rate vs 20% for email — Fieseros uses both in sequence. SMS is great for short, high-urgency touches; email is better for longer content like case studies.",
+          "The automated sequence stops immediately. The AI agent can either handle the conversation autonomously or notify your team instantly for a live human operator takeover.",
       },
       {
-        question: "What happens when a nurtured lead finally converts?",
+        question: "Does it comply with SMS TCPA regulations?",
         answer:
-          "The moment a lead replies or books, Fieseros re-tags them Hot, alerts the owner via SMS + push, and creates the booking or job. The nurture sequence stops automatically so they don't get marketing messages after they're a customer.",
+          "Yes. GPTForm includes built-in consent capture checkboxes on forms, time-of-day sending safeguards, and automatic STOP opt-out processing.",
       },
     ],
     relatedUseCases: [
       { label: "Lead Capture", href: "/use-cases/lead-capture" },
-      { label: "Review Collection", href: "/use-cases/review-collection" },
+      { label: "Quote Generation", href: "/use-cases/quote-generation" },
       { label: "Customer Support", href: "/use-cases/customer-support" },
     ],
   },
   {
     slug: "customer-support",
-    titleTag: "AI Customer Support for Field Service | Fieseros",
-    h1: "Answer every customer question — instantly, 24/7",
-    eyebrow: "Use Case · Customer Support",
+    titleTag: "24/7 AI Customer Support & FAQ Agent | GPTForm",
+    h1: "Answer customer questions instantly with zero hallucinations",
+    eyebrow: "Use Case · Customer Support & FAQ Agent",
     metaDescription:
-      "Fieseros AI customer support answers FAQs, handles reschedules, and troubleshoots issues 24/7 via chat, SMS, and voice. Escalate to humans only when needed — slash response times, boost CSAT.",
+      "Resolve 75%+ of customer inquiries instantly 24/7 with GPTForm's website-grounded AI agent. Dual-brain architecture eliminates hallucinations with 1-click human escalation.",
     heroSubtitle:
-      "Customers hate waiting on hold. The AI support agent answers common questions, handles reschedules and cancellations, and troubleshoots basic issues — over chat, SMS, or voice — and escalates to a human only when it can't resolve it itself.",
+      "Stop losing clients to slow support response times. GPTForm AI Agent answers questions strictly from your website, documentation, and pricebooks — providing instant, accurate answers with citations and smooth human handoffs.",
     icon: MessageSquare,
     metrics: [
-      { value: "<10s", label: "Avg first response time" },
-      { value: "73%", label: "Resolved without a human" },
-      { value: "+18", label: "CSAT points" },
+      { value: "<5s", label: "Instant first response time 24/7" },
+      { value: "75%+", label: "Inquiries resolved without human intervention" },
+      { value: "0%", label: "Hallucinations with Dual-Brain RAG" },
     ],
     features: [
       {
-        icon: MessageSquare,
-        badge: "AI",
-        title: "Conversational Support Agent",
+        icon: Bot,
+        badge: "Zero Hallucination",
+        title: "Dual-Brain Grounded RAG Architecture",
         description:
-          "The AI agent handles FAQs, status checks ('where's my tech?'), reschedules, and basic troubleshooting — over chat, SMS, and voice — 24/7, in your brand voice.",
+          "Unlike generic chatbots that guess, GPTForm checks factual confidence gates before answering. It answers strictly from verified knowledge sources, preventing made-up policies or prices.",
       },
       {
-        icon: FileText,
-        title: "Knowledge Base Integration",
+        icon: Sparkles,
+        badge: "Auto Crawl",
+        title: "Instant Website & Document Ingestion",
         description:
-          "The agent answers from your uploaded knowledge base — service FAQs, warranty policies, how-to guides — so answers are always accurate and on-brand.",
+          "Paste your website URL, upload PDFs, policy documents, or paste FAQs. GPTForm automatically indexes all content and keeps your agent synchronized with your website updates.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Knowledge Gaps Review Queue",
+        description:
+          "Whenever a customer asks something where AI confidence is low, it is logged in your Knowledge Gaps inbox. Answer it once, and the AI agent learns it permanently for all future visitors.",
+      },
+      {
+        icon: Users,
+        title: "Seamless Live Operator Takeover",
+        description:
+          "When a query requires human touch, the agent transfers the visitor to your team with the full conversation transcript and CRM context. No customer ever has to repeat themselves.",
+      },
+      {
+        icon: Smartphone,
+        title: "Mobile Companion App Alerts",
+        description:
+          "Receive instant push notifications on iOS and Android when a customer requests a human agent or reports an urgent issue. Reply directly from your phone.",
       },
       {
         icon: Target,
-        title: "Smart Escalation",
+        title: "Self-Service Action Execution",
         description:
-          "When the AI can't resolve an issue — a billing dispute, a complex technical problem — it hands off to a human with full context, not a cold transfer.",
-      },
-      {
-        icon: CalendarCheck,
-        title: "Self-Service Reschedules",
-        description:
-          "Customers reschedule, cancel, or check appointment status without calling — the AI updates the calendar and notifies the tech in real time.",
-      },
-      {
-        icon: Mail,
-        title: "Multi-Channel Inbox",
-        description:
-          "Chat, SMS, email, and voice all land in one shared inbox. Your team sees the full conversation history regardless of which channel the customer used.",
-      },
-      {
-        icon: Star,
-        title: "Post-Resolution Surveys",
-        description:
-          "Every resolved ticket triggers a CSAT survey. The AI routes unhappy customers to a manager before they post a public review.",
+          "The support agent does more than answer questions — it can check appointment status, reschedule bookings, update contact details, or process invoice payments right inside the chat.",
       },
     ],
     workflow: [
       {
         step: "1",
-        title: "Customer reaches out",
+        title: "Customer Inquires",
         description:
-          "Via chat, SMS, email, or phone. The AI agent greets them and asks how it can help — in your brand voice, 24/7.",
+          "A customer asks: 'What is your cancellation policy, and can I reschedule my appointment for Friday?'",
       },
       {
         step: "2",
-        title: "AI resolves or escalates",
+        title: "Confidence Gate Check",
         description:
-          "73% of queries — FAQs, status, reschedules — are resolved by the AI in seconds. Complex issues escalate to a human with full context.",
+          "The Dual-Brain engine retrieves the verified cancellation policy and queries live calendar slots for Friday.",
       },
       {
         step: "3",
-        title: "Human takes over",
+        title: "Resolution in Seconds",
         description:
-          "If escalated, a team member gets a push notification with the full transcript and customer history. They pick up where the AI left off — no repeating.",
+          "The AI explains the policy, presents open Friday slots, and reschedules the appointment directly within the conversation.",
       },
       {
         step: "4",
-        title: "Survey + close",
+        title: "Knowledge Continuous Learning",
         description:
-          "Ticket resolved triggers a CSAT survey. Happy customers get a review request; unhappy ones get routed to a manager for a save call.",
+          "If any aspect of the question was new, it is added to your Knowledge Gaps queue so you can enrich the knowledge base in 1 click.",
       },
     ],
     painPoints: [
       {
-        problem: "Customers wait on hold for 15 minutes to ask 'where's my technician?'",
+        problem: "Support staff spend 4+ hours a day answering the exact same 15 routine questions over and over.",
         fieserosSolution:
-          "The AI agent answers status, reschedule, and FAQ queries in under 10 seconds, 24/7. Customers never wait on hold for a question the AI can answer.",
+          "The AI agent resolves over 75% of routine questions instantly, freeing your human team to focus on high-value client relationships.",
       },
       {
-        problem: "Your support team answers the same 5 questions all day long.",
+        problem: "Fear of AI chatbots hallucinating incorrect pricing, bogus discounts, or false company promises.",
         fieserosSolution:
-          "The AI handles the repetitive 73% — 'what are your hours?', 'how do I reset my thermostat?', 'reschedule my appointment' — freeing your team for the complex issues that actually need a human.",
+          "Dual-Brain RAG architecture strictly restricts the agent to verified documentation. If it doesn't know, it honestly escalates to a human.",
       },
       {
-        problem: "Support context lives in three inboxes and nobody has the full picture.",
+        problem: "Visitors get frustrated with robotic chatbots that trap them in dead-end loops without human help.",
         fieserosSolution:
-          "Chat, SMS, email, and voice all land in one inbox tied to the customer's CRM record. Anyone on your team can pick up any conversation with full history.",
+          "Visitors can request a human at any moment, immediately notifying your team on desktop and mobile with complete context.",
       },
     ],
     faqs: [
       {
-        question: "How does the AI know the answers to customer questions?",
+        question: "How does GPTForm prevent AI hallucinations?",
         answer:
-          "The agent is trained on your knowledge base — FAQs, service policies, warranty terms, how-to guides. You upload documents or paste URLs and the AI learns. It only answers from approved sources, so it never makes things up.",
+          "GPTForm uses a Dual-Brain architecture combining factual retrieval with semantic vector search. Every answer must pass strict confidence thresholds and cite indexed knowledge sources. If information is missing, the AI politely offers to escalate to your team.",
       },
       {
-        question: "What happens when the AI can't resolve an issue?",
+        question: "How long does it take to train the agent on my website?",
         answer:
-          "The AI escalates to a human teammate with the full conversation transcript, customer history, and a summary of what it tried. Your team picks up seamlessly — no customer ever has to repeat themselves.",
+          "Less than 60 seconds. You provide your website URL, and our crawler reads your pages, FAQs, and service descriptions automatically. You can also upload PDF manuals, pricebooks, or docx files anytime.",
       },
       {
-        question: "Can the AI handle angry customers appropriately?",
+        question: "What is the Knowledge Gaps queue?",
         answer:
-          "The AI detects frustration in language and tone, and escalates immediately to a human with a priority flag. It never argues or makes promises — it de-escalates and hands off. You approve the escalation routing.",
+          "The Knowledge Gaps queue is an automated learning inbox. Whenever a visitor asks a question the bot couldn't fully answer, it is recorded for you. You type or approve the answer once, and your agent knows it forever.",
       },
       {
-        question: "Does this work over phone calls too?",
+        question: "Can human operators jump in and take over live chats?",
         answer:
-          "Yes. The AI Voice Receptionist answers calls, handles FAQs, takes messages, books appointments, and escalates to a human when needed — all with natural-sounding speech. Chat, SMS, and voice share the same knowledge base.",
+          "Yes. Our desktop and mobile companion apps alert you immediately when a client needs human assistance. You can take over the chat with a single click, type your response, and hand it back to the AI when finished.",
       },
     ],
     relatedUseCases: [
@@ -909,121 +922,122 @@ export const useCases: UseCaseConfig[] = [
   },
   {
     slug: "job-dispatch",
-    titleTag: "Smart Job Dispatch & Route Optimization Software | Fieseros",
-    h1: "Dispatch the right tech, on the optimal route",
-    eyebrow: "Use Case · Job Dispatch",
+    titleTag: "Smart Team Scheduling & Job Dispatch | GPTForm",
+    h1: "Route qualified leads and dispatch jobs to the right team members",
+    eyebrow: "Use Case · Team Routing & Job Dispatch",
     metaDescription:
-      "Fieseros smart dispatch assigns jobs by technician skill, territory, and availability — then optimizes the route to minimize drive time. Live GPS tracking, ETAs, and real-time re-routing for emergencies.",
+      "Automatically assign qualified leads and bookings by territory, skill, and team availability. Eliminate dispatch friction and accelerate response times.",
     heroSubtitle:
-      "Stop dispatching on a whiteboard. Fieseros auto-assigns each job to the right tech based on skill, territory, and route, then optimizes the day's drive order — saving fuel, time, and your customers' patience.",
+      "Turn inbound leads into dispatched appointments without manual triage. GPTForm routes bookings to the right specialist or team member based on service type, location, and real-time calendar availability.",
     icon: Route,
     metrics: [
-      { value: "-28%", label: "Drive time per day" },
-      { value: "+5", label: "Jobs per tech per week" },
-      { value: "Live", label: "GPS + ETA tracking" },
+      { value: "<30s", label: "Average lead-to-dispatch assignment time" },
+      { value: "+25%", label: "Team operational efficiency lift" },
+      { value: "100%", label: "Automated rule-based lead distribution" },
     ],
     features: [
       {
         icon: Route,
-        badge: "AI",
-        title: "Smart Assignment",
+        badge: "Smart Dispatch",
+        title: "Territory & Skill-Based Auto-Assignment",
         description:
-          "Each job auto-assigns to the best-fit technician based on skill, territory, certifications, and current load — not just whoever's 'free'.",
-      },
-      {
-        icon: Target,
-        title: "Route Optimization",
-        description:
-          "Fieseros re-orders the day's stops to minimize drive time and fuel — the same 8 jobs done in 5 hours instead of 7, with turn-by-turn directions.",
+          "Automatically assign incoming jobs and consultations to the best-fit team member based on geographical service zones, technical skills, and current schedule capacity.",
       },
       {
         icon: CalendarCheck,
-        title: "Live ETA to Customer",
+        badge: "Calendar Sync",
+        title: "Per-Technician Real-Time Schedules",
         description:
-          "Customers get a live 'your tech is 12 minutes away' SMS with a map link — no more 'sometime between 8 and noon' windows.",
+          "Each team member maintains their own connected Google Calendar or Outlook. Bookings only route to staff who are on-duty and available at that specific time.",
       },
       {
-        icon: MessageSquare,
-        title: "Emergency Re-Routing",
+        icon: Smartphone,
+        title: "Mobile Push & SMS Staff Alerts",
         description:
-          "A burst pipe call comes in. Fieseros shows the closest qualified tech, reroutes their day, and notifies the customers whose appointments shifted.",
+          "Dispatched team members receive instant mobile alerts with complete customer background, service notes, address directions, and special instructions.",
       },
       {
-        icon: Mail,
-        title: "Mobile PWA for Techs",
+        icon: Target,
+        title: "Round-Robin & Priority Routing",
         description:
-          "Techs get their optimized route, job details, customer history, and turn-by-turn navigation in one mobile app — works offline, syncs when back online.",
+          "Distribute leads evenly across your sales team with round-robin rotation, or assign priority leads to your top-performing senior specialists first.",
       },
       {
-        icon: FileText,
-        title: "Dispatch Board Overview",
+        icon: Zap,
+        title: "Live Customer ETA & Status Updates",
         description:
-          "See every tech's live location, current job, and next stop on one map-based dispatch board. Drag-and-drop to reassign when plans change.",
+          "Keep clients informed with automated SMS notifications when a specialist is assigned, on route, or arriving — drastically improving customer satisfaction.",
+      },
+      {
+        icon: CheckCircle2,
+        title: "Drag-and-Drop Dispatch Board",
+        description:
+          "Administrators can view all scheduled jobs, reassign team members, and reschedule appointments on a clean, visual drag-and-drop dispatch calendar.",
       },
     ],
     workflow: [
       {
         step: "1",
-        title: "Job comes in",
+        title: "Customer Books or Requests",
         description:
-          "A booking, an emergency call, or a follow-up — every job lands on the dispatch board with the required skill and service area.",
+          "An inbound lead schedules an appointment or submits an urgent service request through chat or embedded form.",
       },
       {
         step: "2",
-        title: "Auto-assigned",
+        title: "Smart Routing Evaluation",
         description:
-          "Fieseros matches the job to the best tech — skill match, territory, current load — and slots it into their route at the optimal position.",
+          "The system checks service type, client location, staff skills, and real-time calendar availability in milliseconds.",
       },
       {
         step: "3",
-        title: "Route optimized",
+        title: "Job Dispatched & Staff Alerted",
         description:
-          "The day's stops are re-ordered to minimize drive time. The tech sees the optimized route with navigation in the mobile app.",
+          "The job is assigned to the ideal team member, who gets an instant push notification on their phone with all job specifications.",
       },
       {
         step: "4",
-        title: "Live + adaptable",
+        title: "Client Kept Informed",
         description:
-          "Customers get live ETAs. Emergencies trigger instant re-routing. The dispatch board shows it all in real time.",
+          "The customer receives an automated confirmation with their assigned specialist's profile and scheduled arrival window.",
       },
     ],
     painPoints: [
       {
-        problem: "You dispatch on a whiteboard and your techs drive 3 hours a day between jobs.",
+        problem: "Dispatchers spend hours juggling text messages, whiteboards, and spreadsheets to figure out who is available.",
         fieserosSolution:
-          "Route optimization re-orders stops to cut drive time by up to 28%. Techs fit 5 more jobs a week into the same hours — pure revenue lift.",
+          "Intelligent auto-routing matches jobs to available team members in seconds based on skills, territory, and live calendar sync.",
       },
       {
-        problem: "Customers rage when the tech is 2 hours late with no heads-up.",
+        problem: "Appointments get assigned to staff who are off-duty, double-booked, or in another quadrant of town.",
         fieserosSolution:
-          "Live ETA SMS with a map link sets expectations before the customer has to ask. When traffic delays the tech, the ETA updates automatically.",
+          "Real-time calendar verification checks each specialist's personal schedule and territory zones before any assignment is confirmed.",
       },
       {
-        problem: "Emergency calls blow up your whole day's schedule.",
+        problem: "Customers left waiting with vague 'sometime between 8am and 5pm' arrival windows complain and cancel.",
         fieserosSolution:
-          "Fieseros shows the closest qualified tech, reroutes their day in one click, and auto-notifies the customers whose appointments shifted — no phone tree, no chaos.",
+          "Specific appointment slots and automated SMS status notifications keep customers informed and delighted every step of the way.",
       },
     ],
     faqs: [
       {
-        question: "Does route optimization work for multi-tech teams?",
+        question: "How does the auto-routing system choose who gets assigned each job?",
         answer:
-          "Yes. Fieseros optimizes routes per technician and across the team — balancing load, minimizing total drive time, and respecting each tech's territory and skills. You can lock certain jobs to specific techs (e.g., a recurring customer) and let the optimizer handle the rest.",
+          "You can configure routing rules based on service expertise, geographic zip codes or territories, working hours, and round-robin lead distribution to ensure fair and optimal allocation.",
       },
       {
-        question: "What if a tech calls in sick or a job runs long?",
+        question: "Can team members connect their own Google Calendars?",
         answer:
-          "Drag-and-drop reassignment on the dispatch board, or let Fieseros auto-reassign affected jobs to available techs. Customers whose appointments shift get an automated SMS with the new ETA — no manual calls.",
+          "Yes. Each team member connects their personal Google Calendar or Microsoft Outlook via OAuth. Their personal appointments automatically block out their availability for new bookings.",
       },
       {
-        question: "Does the customer see the tech's live location?",
+        question: "Can an administrator manually override assignments?",
         answer:
-          "Yes — if you enable it. Customers get a secure map link showing the tech's live location and ETA, similar to Uber. You can disable live tracking for privacy-sensitive jobs and still send scheduled ETA windows.",
+          "Yes. The visual dispatch calendar gives managers full drag-and-drop control to reassign jobs, reschedule appointments, or adjust staff territories at any time.",
       },
       {
-        question: "Can techs work offline in the field?",
+        question: "Does the system work for remote consultation teams as well as field staff?",
         answer:
-          "Yes. The mobile PWA caches job details, customer history, and forms for offline use. Photos, signatures, and job updates sync automatically when the tech reconnects — no lost data in dead zones.",
+          "Yes. It works equally well for virtual teams (auto-generating Google Meet/Zoom links for consults) and field service teams requiring physical travel and on-site scheduling.",
       },
     ],
     relatedUseCases: [
