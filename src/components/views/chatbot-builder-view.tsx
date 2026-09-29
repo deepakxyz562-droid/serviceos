@@ -77,11 +77,17 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
       setSiteOrigin(window.location.origin);
       const params = new URLSearchParams(window.location.search);
       const promptParam = params.get('prompt');
+      const urlParam = params.get('url');
       if (promptParam) {
         setPromptInput(promptParam);
         setCreationTab('ai');
         setPresetDialogOpen(true);
+      } else if (urlParam) {
+        setPromptInput(`Generate autonomous booking and quote assistant for website: ${urlParam}`);
+        setCreationTab('ai');
+        setPresetDialogOpen(true);
       }
+
     }
     fetchAgents();
   }, [fetchAgents]);
@@ -344,7 +350,44 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
         })}
       </div>
 
+      {/* ─── AI Learning & Knowledge Gaps Banner ────────────────────────────── */}
+      <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="size-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-600 dark:text-amber-400 mt-0.5">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-foreground">Zero-Risk AI: Knowledge Gaps &amp; Learning Inbox</h3>
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
+                Safe Deployment
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5 max-w-2xl leading-relaxed">
+              When visitors ask questions outside your agent&apos;s Knowledge Base, queries are logged into your Review Queue. Answer them once to teach your AI agent permanently.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-8 border-amber-500/30 text-amber-800 dark:text-amber-300 hover:bg-amber-500/10"
+            onClick={() => {
+              if (agents.length > 0) {
+                setActiveStudioAgent(agents[0]);
+              } else {
+                setPresetDialogOpen(true);
+              }
+            }}
+          >
+            Review Knowledge Gaps
+          </Button>
+        </div>
+      </div>
+
       {/* ─── Industry Presets Showcase Bar ──────────────────────────────────── */}
+
       <div className="p-4 rounded-2xl border border-border/80 bg-muted/20 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

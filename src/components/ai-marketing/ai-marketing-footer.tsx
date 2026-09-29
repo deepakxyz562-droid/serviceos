@@ -47,12 +47,14 @@ export function AiMarketingFooter() {
     { href: '/fieseros-vs-chatbase', label: 'Fieseros vs Chatbase' },
     { href: '/fieseros-vs-tidio', label: 'Fieseros vs Tidio' },
     { href: '/fieseros-vs-jotform', label: 'Fieseros vs Jotform' },
+    { href: '/fieseros-vs-elfchatbot', label: 'Fieseros vs ElfChatbot' },
     { href: '/ai-chatbot-alternatives', label: 'AI Chatbot Alternatives' },
     { href: '/conversational-forms-alternatives', label: 'Conversational Form Guide' },
     { href: '/jobber-alternatives', label: 'Jobber Alternatives' },
     { href: '/housecall-pro-alternatives', label: 'Housecall Pro Alternative' },
     { href: '/servicetitan-alternatives', label: 'ServiceTitan Alternative' },
   ];
+
 
   const companyLinks = [
     { href: '/about', label: 'About & Mission' },

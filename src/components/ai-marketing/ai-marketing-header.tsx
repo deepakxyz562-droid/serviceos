@@ -238,7 +238,14 @@ export const comparisonNavLinks: NavItem[] = [
     icon: Scale,
   },
   {
+    label: 'Fieseros vs ElfChatbot',
+    desc: 'Autonomous AI vs basic FAQ widget (Bookings & 0% Payments)',
+    href: '/fieseros-vs-elfchatbot',
+    icon: Scale,
+  },
+  {
     label: '2026 AI Chatbot Alternatives Guide',
+
     desc: 'In-depth comparison of top AI chatbots for businesses',
     href: '/ai-chatbot-alternatives',
     icon: Scale,

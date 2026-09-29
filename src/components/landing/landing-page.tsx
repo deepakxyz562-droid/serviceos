@@ -496,12 +496,14 @@ const seoCompare = [
   { label: 'Fieseros vs Chatbase', href: '/fieseros-vs-chatbase' },
   { label: 'Fieseros vs Tidio', href: '/fieseros-vs-tidio' },
   { label: 'Fieseros vs Jotform', href: '/fieseros-vs-jotform' },
+  { label: 'Fieseros vs ElfChatbot', href: '/fieseros-vs-elfchatbot' },
   { label: 'AI Chatbot Alternatives', href: '/ai-chatbot-alternatives' },
   { label: 'Conversational Forms Guide', href: '/conversational-forms-alternatives' },
   { label: 'Jobber Alternatives', href: '/jobber-alternatives' },
   { label: 'Housecall Pro Alternatives', href: '/housecall-pro-alternatives' },
   { label: 'ServiceTitan Alternatives', href: '/servicetitan-alternatives' },
 ];
+
 
 const seoUseCases = [
   { label: 'All Use Cases Hub', href: '/use-cases' },

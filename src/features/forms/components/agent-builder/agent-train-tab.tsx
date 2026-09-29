@@ -35,6 +35,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+
 
 interface UnansweredQuestion {
   id: string;
@@ -43,6 +45,47 @@ interface UnansweredQuestion {
   lastAskedAt: string;
   source: string;
 }
+
+export interface PresetGuardrail {
+  id: string;
+  label: string;
+  rule: string;
+  category: string;
+}
+
+export const PRESET_GUARDRAIL_RULES: PresetGuardrail[] = [
+  {
+    id: 'no_bespoke_pricing',
+    label: 'Never quote fixed prices on bespoke work',
+    rule: 'Never quote fixed prices for custom, bespoke, or variable work — explain that scope varies and collect contact details for an exact estimate.',
+    category: 'Sales',
+  },
+  {
+    id: 'human_escalation',
+    label: 'Escalate to human if customer is frustrated',
+    rule: 'If the customer shows frustration, dissatisfaction, or repeatedly asks for a human, apologize immediately and offer to connect them with a human operator.',
+    category: 'Support',
+  },
+  {
+    id: 'verify_contact_info',
+    label: 'Require Name, Phone & Email for bookings',
+    rule: 'Always verify and collect the customer\'s full name, valid telephone number, and email address before confirming an appointment or dispatch.',
+    category: 'Booking',
+  },
+  {
+    id: 'strict_knowledge_only',
+    label: 'Strict Zero-Hallucination mode',
+    rule: 'If an answer is not present in the verified knowledge base, explicitly state that you don\'t have that information and log the question for staff follow-up.',
+    category: 'Compliance',
+  },
+  {
+    id: 'competitor_filter',
+    label: 'Block competitor recommendations',
+    rule: 'Do not recommend, promote, or compare competitor businesses unless quoting official comparison matrices from the knowledge base.',
+    category: 'Brand',
+  },
+];
+
 
 interface AgentTrainTabProps {
   agent: FormAgentData;
@@ -324,6 +367,36 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
     });
   };
 
+  const isPresetActive = (preset: PresetGuardrail) => {
+    const current = agent.knowledge?.guardrails || [];
+    return current.some((r) => r === preset.rule || r.toLowerCase().includes(preset.rule.slice(0, 30).toLowerCase()));
+  };
+
+  const togglePresetGuardrail = (preset: PresetGuardrail) => {
+    const current = agent.knowledge?.guardrails || [];
+    const active = isPresetActive(preset);
+    if (active) {
+      onChange({
+        ...agent,
+        knowledge: {
+          ...agent.knowledge,
+          guardrails: current.filter((r) => r !== preset.rule && !r.toLowerCase().includes(preset.rule.slice(0, 30).toLowerCase())),
+        },
+      });
+      toast.info(`Removed guardrail: "${preset.label}"`);
+    } else {
+      onChange({
+        ...agent,
+        knowledge: {
+          ...agent.knowledge,
+          guardrails: [...current, preset.rule],
+        },
+      });
+      toast.success(`Enabled guardrail: "${preset.label}"`);
+    }
+  };
+
+
   return (
     <div className="space-y-4">
       {/* ── 1. AUTOMATED SITEMAP & WEBPAGE CRAWLER ── */}
@@ -441,10 +514,38 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
         </CardHeader>
         <CardContent className="p-4 pt-0 space-y-2">
           {unansweredList.length === 0 ? (
-            <div className="p-3 text-center text-xs text-muted-foreground bg-muted/20 border border-dashed rounded-lg">
-              ✨ All customer queries are currently answered by your Knowledge Base!
+            <div className="p-3 text-center text-xs text-muted-foreground bg-muted/20 border border-dashed rounded-lg space-y-2">
+              <p>✨ All customer queries are currently answered by your Knowledge Base!</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setUnansweredList([
+                    {
+                      id: `gap_demo_1_${Date.now()}`,
+                      question: "Do you offer emergency after-hours dispatch on Sunday mornings?",
+                      count: 3,
+                      lastAskedAt: new Date().toISOString(),
+                      source: "Website Chat Widget",
+                    },
+                    {
+                      id: `gap_demo_2_${Date.now()}`,
+                      question: "Can I split a $1,200 quote into 3 monthly payments?",
+                      count: 2,
+                      lastAskedAt: new Date().toISOString(),
+                      source: "Website Chat Widget",
+                    },
+                  ]);
+                  toast.info("Loaded sample visitor queries for review & training");
+                }}
+                className="h-6 text-[11px] gap-1 text-amber-700 dark:text-amber-300 border-amber-300/50"
+              >
+                <Sparkles className="size-2.5 text-amber-500" /> Simulate Visitor Query Gaps
+              </Button>
             </div>
           ) : (
+
             <div className="space-y-2">
               {unansweredList.slice(0, 5).map((q) => (
                 <div
@@ -634,7 +735,43 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
           </div>
 
           <div className="space-y-2 pt-1">
-            <Label className="text-[11px] font-semibold">Guardrail Rules</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-semibold">1-Click Executive Guardrail Presets</Label>
+              <span className="text-[10px] text-muted-foreground">Click chip to toggle on/off</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {PRESET_GUARDRAIL_RULES.map((preset) => {
+                const active = isPresetActive(preset);
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => togglePresetGuardrail(preset)}
+                    className={cn(
+                      'p-2 rounded-lg border text-left transition-all flex items-start gap-2',
+                      active
+                        ? 'bg-blue-500/10 border-blue-500/40 text-blue-900 dark:text-blue-200 shadow-xs'
+                        : 'bg-muted/30 border-border/60 hover:bg-muted/60 text-muted-foreground'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'size-3.5 rounded mt-0.5 flex items-center justify-center text-[10px] font-bold shrink-0',
+                        active ? 'bg-blue-600 text-white' : 'border border-muted-foreground/40'
+                      )}
+                    >
+                      {active ? '✓' : ''}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold leading-tight">{preset.label}</p>
+                      <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{preset.rule}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <Label className="text-[11px] font-semibold pt-2 block">Custom Guardrail Rule</Label>
             <div className="flex gap-2">
               <Input
                 value={guardrailInput}
@@ -652,6 +789,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
                 Add Rule
               </Button>
             </div>
+
 
             <div className="space-y-1.5 pt-1">
               {agent.knowledge?.guardrails?.map((rule, idx) => (

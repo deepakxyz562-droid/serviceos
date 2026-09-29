@@ -38,12 +38,23 @@ import { cn } from '@/lib/utils';
 
 export function ChatbotLandingClient() {
   const router = useRouter();
+  const [inputMode, setInputMode] = useState<'prompt' | 'url'>('prompt');
   const [promptInput, setPromptInput] = useState('');
+  const [urlInput, setUrlInput] = useState('');
   const [activeTab, setActiveTab] = useState<'booking' | 'quote' | 'support'>('booking');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(0);
 
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
+    if (inputMode === 'url') {
+      const url = urlInput.trim();
+      if (url) {
+        router.push(`/dashboard/chatbot-builder?url=${encodeURIComponent(url)}`);
+      } else {
+        router.push('/dashboard/chatbot-builder');
+      }
+      return;
+    }
     const query = promptInput.trim();
     if (query) {
       router.push(`/dashboard/chatbot-builder?prompt=${encodeURIComponent(query)}`);
@@ -57,6 +68,12 @@ export function ChatbotLandingClient() {
     'Dental clinic receptionist that books cleanings & answers insurance FAQs',
     'Plumber quote bot that estimates pipe repairs & takes deposits',
     'E-commerce order assistant with refund & tracking actions',
+  ];
+
+  const sampleUrls = [
+    'https://apexclimate.com',
+    'https://pureglowdental.com',
+    'https://swiftplumbing.io',
   ];
 
   return (
@@ -80,44 +97,108 @@ export function ChatbotLandingClient() {
             Most chatbots just regurgitate canned text. Fieseros AI Chatbots qualify leads, book appointments into your live calendar, calculate exact price quotes, and collect payments directly in conversation.
           </p>
 
-          {/* Interactive AI Prompt Box */}
+          {/* Interactive AI Generator Box (Prompt OR Website URL) */}
           <form onSubmit={handleGenerate} className="mt-8 max-w-2xl mx-auto">
+            {/* Input Mode Toggle */}
+            <div className="inline-flex items-center gap-1 p-1 bg-muted/60 border border-border/60 rounded-xl mb-3 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setInputMode('prompt')}
+                className={cn(
+                  'px-3 py-1 text-xs font-semibold rounded-lg transition-all',
+                  inputMode === 'prompt'
+                    ? 'bg-background text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                ✨ Describe in English
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('url')}
+                className={cn(
+                  'px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5',
+                  inputMode === 'url'
+                    ? 'bg-background text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Globe className="size-3 text-emerald-600" /> Crawl Website URL
+              </button>
+            </div>
+
             <div className="flex flex-col sm:flex-row items-center gap-2 p-2 bg-background rounded-2xl border-2 border-emerald-500/30 shadow-xl shadow-emerald-500/10 hover:border-emerald-500/60 transition-all">
               <div className="flex items-center gap-2.5 px-3 w-full">
-                <Bot className="size-5 text-emerald-600 shrink-0" />
-                <Input
-                  type="text"
-                  value={promptInput}
-                  onChange={(e) => setPromptInput(e.target.value)}
-                  placeholder="Describe your chatbot: e.g. 24/7 HVAC booking bot with pricing..."
-                  className="border-none shadow-none focus-visible:ring-0 text-sm md:text-base px-0 h-10 placeholder:text-muted-foreground/70"
-                />
+                {inputMode === 'prompt' ? (
+                  <>
+                    <Bot className="size-5 text-emerald-600 shrink-0" />
+                    <Input
+                      type="text"
+                      value={promptInput}
+                      onChange={(e) => setPromptInput(e.target.value)}
+                      placeholder="Describe your chatbot: e.g. 24/7 HVAC booking bot with pricing..."
+                      className="border-none shadow-none focus-visible:ring-0 text-sm md:text-base px-0 h-10 placeholder:text-muted-foreground/70"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Globe className="size-5 text-emerald-600 shrink-0" />
+                    <Input
+                      type="url"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      placeholder="Enter website URL: e.g. https://apexclimate.com"
+                      className="border-none shadow-none focus-visible:ring-0 text-sm md:text-base px-0 h-10 placeholder:text-muted-foreground/70"
+                    />
+                  </>
+                )}
               </div>
               <Button
                 type="submit"
                 size="lg"
                 className="w-full sm:w-auto h-11 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl shrink-0 cursor-pointer shadow-md shadow-emerald-600/30"
               >
-                <Sparkles className="size-4 mr-2" />
-                Build Free
+                {inputMode === 'prompt' ? (
+                  <>
+                    <Sparkles className="size-4 mr-2" />
+                    Build Free
+                  </>
+                ) : (
+                  <>
+                    <Globe className="size-4 mr-2" />
+                    Crawl &amp; Build
+                  </>
+                )}
               </Button>
             </div>
 
             {/* Quick chips */}
             <div className="flex flex-wrap items-center justify-center gap-2 mt-3 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Try:</span>
-              {samplePrompts.slice(0, 3).map((prompt, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setPromptInput(prompt)}
-                  className="px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 transition text-left cursor-pointer border border-border/50 text-[11px]"
-                >
-                  &ldquo;{prompt}&rdquo;
-                </button>
-              ))}
+              {inputMode === 'prompt'
+                ? samplePrompts.slice(0, 3).map((prompt, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setPromptInput(prompt)}
+                      className="px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 transition text-left cursor-pointer border border-border/50 text-[11px]"
+                    >
+                      &ldquo;{prompt}&rdquo;
+                    </button>
+                  ))
+                : sampleUrls.map((url, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setUrlInput(url)}
+                      className="px-2.5 py-1 rounded-lg bg-muted/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 transition text-left cursor-pointer border border-border/50 text-[11px] font-mono"
+                    >
+                      {url}
+                    </button>
+                  ))}
             </div>
           </form>
+
 
           {/* Metrics Social Proof */}
           <div className="mt-12 pt-8 border-t border-border/60 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
@@ -372,17 +453,17 @@ export function ChatbotLandingClient() {
               Direct Comparison
             </Badge>
             <h2 className="text-3xl md:text-4xl font-extrabold text-foreground">
-              Why Ordinary Chatbots Fail Businesses
+              Why Businesses Upgrade from Basic FAQ Widgets to Autonomous AI
             </h2>
             <p className="text-muted-foreground mt-3 text-base">
-              Traditional chatbots hit a brick wall the moment a customer wants to buy, book, or schedule. Fieseros connects directly to your operations.
+              Basic website chat widgets (like ElfChatbot / Elfsight) stop at answering simple questions. Fieseros AI Chatbots execute real business transactions: scheduling, pricing formulas, and payment processing.
             </p>
           </div>
 
           <div className="max-w-4xl mx-auto bg-background rounded-3xl border border-border shadow-xl overflow-hidden">
             <div className="grid grid-cols-3 bg-muted/60 p-4 border-b border-border font-bold text-xs sm:text-sm">
               <div className="text-muted-foreground">Capabilities</div>
-              <div className="text-muted-foreground text-center">Ordinary Chatbots</div>
+              <div className="text-muted-foreground text-center">Basic FAQ Widgets (ElfChatbot)</div>
               <div className="text-emerald-600 text-center font-extrabold flex items-center justify-center gap-1.5">
                 <Sparkles className="size-4" /> Fieseros AI Studio
               </div>
@@ -400,22 +481,42 @@ export function ChatbotLandingClient() {
               </div>
 
               <div className="grid grid-cols-3 p-4 items-center bg-muted/20">
+                <span className="font-semibold text-foreground">Live Calendar Booking</span>
+                <span className="text-center text-muted-foreground flex items-center justify-center gap-1">
+                  <X className="size-4 text-red-500" /> 3rd-party link or none
+                </span>
+                <span className="text-center text-emerald-600 font-semibold flex items-center justify-center gap-1">
+                  <Check className="size-4 text-emerald-600" /> Direct in-chat calendar slots
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 p-4 items-center">
                 <span className="font-semibold text-foreground">Forms Integration</span>
                 <span className="text-center text-muted-foreground flex items-center justify-center gap-1">
-                  <X className="size-4 text-red-500" /> Disconnected 3rd-party
+                  <X className="size-4 text-red-500" /> Basic 3-field contact box
                 </span>
                 <span className="text-center text-emerald-600 font-semibold flex items-center justify-center gap-1">
                   <Check className="size-4 text-emerald-600" /> 1-Click Form to Chatbot
                 </span>
               </div>
 
-              <div className="grid grid-cols-3 p-4 items-center">
+              <div className="grid grid-cols-3 p-4 items-center bg-muted/20">
                 <span className="font-semibold text-foreground">Payment Collection</span>
                 <span className="text-center text-muted-foreground flex items-center justify-center gap-1">
                   <X className="size-4 text-red-500" /> External links or 2% fee
                 </span>
                 <span className="text-center text-emerald-600 font-semibold flex items-center justify-center gap-1">
                   <Check className="size-4 text-emerald-600" /> Native in-chat (0% fee)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 p-4 items-center">
+                <span className="font-semibold text-foreground">Knowledge Gaps Learning</span>
+                <span className="text-center text-muted-foreground flex items-center justify-center gap-1">
+                  <Check className="size-4 text-amber-500" /> Basic gap list
+                </span>
+                <span className="text-center text-emerald-600 font-semibold flex items-center justify-center gap-1">
+                  <Check className="size-4 text-emerald-600" /> Unanswered Queue + 1-Click Vector Sync
                 </span>
               </div>
 
@@ -432,7 +533,7 @@ export function ChatbotLandingClient() {
               <div className="grid grid-cols-3 p-4 items-center">
                 <span className="font-semibold text-foreground">Knowledge Training</span>
                 <span className="text-center text-muted-foreground flex items-center justify-center gap-1">
-                  Manual FAQ entry
+                  Website crawl only
                 </span>
                 <span className="text-center text-emerald-600 font-semibold flex items-center justify-center gap-1">
                   <Check className="size-4 text-emerald-600" /> Instant URL crawl + PDFs in 60s
@@ -450,6 +551,7 @@ export function ChatbotLandingClient() {
               </div>
             </div>
           </div>
+
         </div>
       </section>
 

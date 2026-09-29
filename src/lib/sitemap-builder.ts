@@ -346,8 +346,10 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     { path: "/fieseros-vs-typeform", priority: 0.9, changeFreq: "monthly" },
     { path: "/fieseros-vs-chatbase", priority: 0.9, changeFreq: "monthly" },
     { path: "/fieseros-vs-tidio", priority: 0.9, changeFreq: "monthly" },
+    { path: "/fieseros-vs-elfchatbot", priority: 0.9, changeFreq: "monthly" },
     { path: "/ai-chatbot-alternatives", priority: 0.9, changeFreq: "monthly" },
     { path: "/conversational-forms-alternatives", priority: 0.9, changeFreq: "monthly" },
+
 
     // ─── Company pages ──────────────────────────────────────────────────
     { path: "/about", priority: 0.7, changeFreq: "monthly" },

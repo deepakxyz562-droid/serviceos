@@ -264,12 +264,14 @@ const compareList = [
   { label: 'Fieseros vs Chatbase', desc: 'Chatbot → business action', href: '/fieseros-vs-chatbase' },
   { label: 'Fieseros vs Tidio', desc: 'Contractor-grade live chat', href: '/fieseros-vs-tidio' },
   { label: 'Fieseros vs Jotform', desc: 'Full CRM vs form builder', href: '/fieseros-vs-jotform' },
+  { label: 'Fieseros vs ElfChatbot', desc: 'Autonomous AI vs basic FAQ widget', href: '/fieseros-vs-elfchatbot' },
   { label: 'AI Chatbot Alternatives', desc: '2026 AI chatbot guide', href: '/ai-chatbot-alternatives' },
   { label: 'Conversational Forms', desc: 'Interactive form guide', href: '/conversational-forms-alternatives' },
   { label: 'Jobber Alternatives', desc: 'Modern features, zero seat fees', href: '/jobber-alternatives' },
   { label: 'Housecall Pro Alternatives', desc: 'Simpler dispatch & built-in AI', href: '/housecall-pro-alternatives' },
   { label: 'ServiceTitan Alternatives', desc: 'Enterprise power without lock-in', href: '/servicetitan-alternatives' },
 ];
+
 
 /**
  * Shared, mobile-responsive global navigation header for all SEO, cornerstone,
