@@ -26,21 +26,23 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Customer CRM for Service Businesses — 360° Customer View | Fieseros",
+  title: "Customer CRM for Service Businesses — Blue Collar CRM | Fieseros",
   description:
-    "A customer CRM built for service businesses, not sales teams. Contact info, job history, assets, service records, Email & SMS conversations, and payment status — all in one customer profile.",
+    "A customer CRM built for trade & service businesses, not sales teams. Contact info, job history, assets, service records, and payment status in one profile. 24/7 AI receptionist included. Start free.",
   keywords: [
     "customer crm",
+    "blue collar crm",
     "service business crm",
     "customer management software",
     "field service crm",
+    "trade crm",
     "customer 360",
   ],
   alternates: { canonical: "https://fieseros.com/customer-crm" },
   openGraph: {
-    title: "Customer CRM for Service Businesses — 360° Customer View | Fieseros",
+    title: "Customer CRM for Service Businesses — Blue Collar CRM | Fieseros",
     description:
-      "Every customer's contact info, job history, assets, service records, Email & SMS conversations, and outstanding balances in one place. Built for service businesses, not sales pipelines.",
+      "A blue collar CRM with every customer's job history, assets, service records, and payments in one profile. 24/7 AI receptionist included. Start free.",
     url: "https://fieseros.com/customer-crm",
     siteName: "Fieseros",
     type: "website",
