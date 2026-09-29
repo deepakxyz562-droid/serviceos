@@ -733,23 +733,6 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
             )}
           </div>
 
-          {/* Item 3: Marketplace (First-Class Top Nav Link) */}
-          <Link
-            href="/marketplace"
-            className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-              activePath === '/marketplace' || activePath?.startsWith('/marketplace/')
-                ? 'text-foreground bg-accent'
-                : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
-            )}
-          >
-            <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            <span>Marketplace</span>
-            <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 px-1.5 py-0.2 rounded-full">
-              Pros
-            </span>
-          </Link>
-
           {/* Dropdown 4b: Company */}
           <div
             className="relative"
