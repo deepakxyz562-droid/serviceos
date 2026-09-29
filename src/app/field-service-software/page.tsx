@@ -20,24 +20,23 @@ import { getSoftwareApplicationSchema } from "@/lib/seo/schemas";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Field Service Management Software — Free for 100 Jobs | Fieseros",
+  title: "Field Service Management Software with AI | Fieseros",
   description:
-    "Run your service business on one FSM platform: 24/7 AI receptionist, smart dispatch, route optimization, invoicing & 33 payment gateways. 0% platform fees. Start free — no credit card.",
+    "Run your trades on Fieseros field service management software: 24/7 AI receptionist, smart dispatch, customer CRM & invoicing. Start free with 0% platform fees.",
   keywords: [
     "field service management software",
     "field service software",
-    "field service management",
+    "service business software",
     "field service CRM",
-    "dispatch software",
     "job management software",
-    "home services software",
-    "blue collar CRM",
+    "dispatch software",
+    "contractor software",
   ],
   alternates: { canonical: "https://fieseros.com/field-service-software" },
   openGraph: {
-    title: "Field Service Management Software — Free for 100 Jobs | Fieseros",
+    title: "Field Service Management Software with AI | Fieseros",
     description:
-      "24/7 AI receptionist, smart dispatch, route optimization, invoicing & 33 payment gateways. 0% platform fees. Start free — no credit card.",
+      "Run your trades on Fieseros field service management software: 24/7 AI receptionist, smart dispatch, customer CRM & invoicing. Start free with 0% platform fees.",
     url: "https://fieseros.com/field-service-software",
     siteName: "Fieseros",
     type: "website",

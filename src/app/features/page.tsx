@@ -10,6 +10,10 @@ import {
   ArrowRight,
   Store,
   Layers,
+  PhoneCall,
+  Route,
+  ClipboardCheck,
+  Scale,
 } from "lucide-react";
 import { CornerstoneLayout, CornerstoneHero } from "@/components/seo/cornerstone-layout";
 import { CtaSection } from "@/components/seo/cta-section";
@@ -42,7 +46,7 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-// ─── Feature pages (matches the 5 cornerstone feature routes) ────────────────
+// ─── Feature pages (matches the cornerstone feature routes) ────────────────
 const features: {
   href: string;
   title: string;
@@ -50,17 +54,38 @@ const features: {
   icon: typeof CalendarClock;
 }[] = [
   {
-    href: "/scheduling-and-dispatch",
-    title: "Scheduling & Dispatch",
+    href: "/ai-receptionist",
+    title: "24/7 AI Voice Receptionist",
     description:
-      "Drag-and-drop calendar, smart dispatch that matches the right technician to each job by skills and location, recurring job automation, and real-time GPS tracking.",
+      "Never miss another customer call. Answers on the first ring, qualifies leads, quotes prices, and books confirmed jobs live into your calendar.",
+    icon: PhoneCall,
+  },
+  {
+    href: "/features/scheduling",
+    title: "Service Scheduling Software",
+    description:
+      "Drag-and-drop calendar, conflict prevention, automated customer SMS reminders, and multi-technician timeline scheduling.",
     icon: CalendarClock,
   },
   {
-    href: "/invoicing-and-payments",
-    title: "Invoicing & Payments",
+    href: "/features/dispatch",
+    title: "Smart Dispatch Software",
     description:
-      "Generate professional invoices from completed jobs in one click, accept online payments, track outstanding balances, and send automatic payment reminders.",
+      "Live GPS fleet map, smart skill matching, and route optimization that saves windshield time and cuts fuel costs.",
+    icon: Route,
+  },
+  {
+    href: "/features/work-orders",
+    title: "Paperless Work Orders",
+    description:
+      "Custom inspection checklists, before & after photo documentation with geotags, digital signatures, and instant invoice conversion.",
+    icon: ClipboardCheck,
+  },
+  {
+    href: "/invoicing-and-payments",
+    title: "Invoicing & Payments (0% Fees)",
+    description:
+      "Generate professional invoices from completed jobs in one click, accept online payments via 33+ gateways, and eliminate platform transaction fees.",
     icon: Receipt,
   },
   {
@@ -89,18 +114,18 @@ const features: {
 // ─── Comparison pages (matches cornerstone comparison routes) ──────────
 const comparisons: { href: string; title: string; description: string }[] = [
   {
-    href: "/why-fieseros",
-    title: "Why Fieseros (4-Way Comparison)",
-    description: "In-depth operational audit: Dynamics 365 vs Jobber vs Housecall Pro vs Fieseros.",
+    href: "/fieseros-vs-jobber",
+    title: "Fieseros vs Jobber",
+    description: "Compare 24/7 AI voice phone answering, 0% platform payment fees, and scheduling side by side.",
   },
   {
-    href: "/best-field-service-software",
-    title: "Best Field Service Software",
-    description: "Compare the top 10 field service management platforms side by side.",
+    href: "/fieseros-vs-housecall-pro",
+    title: "Fieseros vs Housecall Pro",
+    description: "Discover why contractors are upgrading to Fieseros for built-in AI receptionists and transparent pricing.",
   },
   {
     href: "/jobber-alternatives",
-    title: "Jobber Alternatives",
+    title: "Jobber Alternatives (Top 10)",
     description: "See how Fieseros stacks up against Jobber — features, pricing, and markets.",
   },
   {
@@ -112,6 +137,11 @@ const comparisons: { href: string; title: string; description: string }[] = [
     href: "/servicetitan-alternatives",
     title: "ServiceTitan Alternatives",
     description: "Find a ServiceTitan alternative that fits growing and mid-market service businesses.",
+  },
+  {
+    href: "/why-fieseros",
+    title: "Why Fieseros (4-Way Comparison)",
+    description: "In-depth operational audit: Dynamics 365 vs Jobber vs Housecall Pro vs Fieseros.",
   },
 ];
 

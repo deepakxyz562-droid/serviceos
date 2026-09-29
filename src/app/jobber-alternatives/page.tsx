@@ -529,9 +529,19 @@ export default function JobberAlternativesPage() {
           <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
             Explore Fieseros features built for other service industries.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link href="/housecall-pro-alternatives" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Link href="/fieseros-vs-jobber" className="group rounded-xl border border-emerald-500/30 bg-card p-5 shadow-sm transition-all hover:border-emerald-500 hover:shadow-md">
               <Star className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Fieseros vs Jobber (2026)</h3>
+              <p className="text-sm text-muted-foreground">Direct head-to-head comparison on AI voice, fees, and dispatch.</p>
+            </Link>
+            <Link href="/fieseros-vs-housecall-pro" className="group rounded-xl border border-emerald-500/30 bg-card p-5 shadow-sm transition-all hover:border-emerald-500 hover:shadow-md">
+              <Star className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Fieseros vs Housecall Pro</h3>
+              <p className="text-sm text-muted-foreground">Why contractors are switching for 24/7 AI answering.</p>
+            </Link>
+            <Link href="/housecall-pro-alternatives" className="group rounded-xl border border-border bg-card p-5 shadow-sm transition-all hover:border-emerald-500/40 hover:shadow-md">
+              <Building2 className="h-6 w-6 text-emerald-600 mb-3" />
               <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">Housecall Pro Alternatives</h3>
               <p className="text-sm text-muted-foreground">Best Housecall Pro alternatives for service teams.</p>
             </Link>

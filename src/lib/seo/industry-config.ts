@@ -50,14 +50,15 @@ function makeConfig(args: {
   const { industryId, name, softwareSlug, contractorNoun, emergencyExample, demandLabel, audiences, relatedIndustries } = args;
   const nameLower = name.toLowerCase();
   const contractorsBasePath = `/${industryId.replace(/-/g, '-')}-contractors`;
-  // CTR-optimized title (≤60 chars): primary keyword + value prop + brand.
-  // Previous template used "${name} Service Software" which caused a duplicate
-  // "Service" bug for "Pool Service" → "Pool Service Service Software" and
-  // produced 67-78 char titles that Google truncated.
-  const titleTag = `${name} Software — Free for 100 Jobs | Fieseros`;
+  // CTR-optimized title (≤60 chars): targets exact commercial "[Trade] Business Software" query.
+  const titleTag = name.toLowerCase().includes("contractor")
+    ? `${name} Software & Field CRM | Fieseros`
+    : `${name} Business Software & Dispatch | Fieseros`;
   // Trimmed from ~170 → ~150 chars so the CTA tail isn't truncated in SERPs.
-  const metaDescription = `${name} software for ${contractorNoun}: scheduling, dispatch, invoicing, and equipment history. Free trial, 0% platform fees. Start today.`;
-  const h1 = `${name} Software for Scheduling, Dispatch & Invoicing`;
+  const metaDescription = `${name} business software for ${contractorNoun}: scheduling, dispatch, invoicing, and equipment tracking. Free trial, 0% fees. Start today.`;
+  const h1 = name.toLowerCase().includes("contractor")
+    ? `${name} Software for Scheduling, Dispatch & Invoicing`
+    : `${name} Business Software for Scheduling, Dispatch & Invoicing`;
   const subtitle = `Run your ${nameLower} business from one place. Schedule technicians, dispatch jobs, track equipment and service history, automate customer reminders, and send invoices with Fieseros.`;
   const primaryCta = `Start Your Free ${name} Trial`;
   return {

@@ -39,9 +39,9 @@ import {
 import type { BreadcrumbItem } from "@/components/seo/breadcrumbs";
 
 export const metadata: Metadata = {
-  title: "Field Service Management (FSM) — Complete 2026 Guide & Software | Fieseros",
+  title: "Field Service Management (FSM) Guide & Tools | Fieseros",
   description:
-    "What is field service management? The complete 2026 guide: definition, components, benefits, software features, and how to choose an FSM platform. Includes scheduling, dispatch, CRM, invoicing, and 24/7 AI receptionist. Start free.",
+    "What is field service management? Complete guide to FSM software, scheduling, dispatch, mobile field workflows, and 24/7 AI phone answering. Start free.",
   keywords: [
     "field service management",
     "FSM software",
@@ -53,9 +53,9 @@ export const metadata: Metadata = {
   ],
   alternates: { canonical: "https://fieseros.com/field-service-management" },
   openGraph: {
-    title: "Field Service Management (FSM) — Complete 2026 Guide & Software | Fieseros",
+    title: "Field Service Management (FSM) Guide & Tools | Fieseros",
     description:
-      "What is field service management? The complete 2026 guide: definition, components, benefits, and how to choose FSM software. Start free.",
+      "What is field service management? Complete guide to FSM software, scheduling, dispatch, mobile field workflows, and 24/7 AI phone answering. Start free.",
     url: "https://fieseros.com/field-service-management",
     siteName: "Fieseros",
     type: "article",

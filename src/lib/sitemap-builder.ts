@@ -252,6 +252,7 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
   }[] = [
     // ─── Core AI & Forms Flagship ─────────────────────────────────────────
     { path: "", priority: 1.0, changeFreq: "weekly" },
+    { path: "/ai-receptionist", priority: 1.0, changeFreq: "weekly" },
     { path: "/ai-employee", priority: 1.0, changeFreq: "weekly" },
     { path: "/chatbot", priority: 1.0, changeFreq: "weekly" },
     { path: "/gptform", priority: 1.0, changeFreq: "weekly" },
@@ -261,6 +262,8 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
     { path: "/conversational-forms", priority: 0.9, changeFreq: "weekly" },
     { path: "/ai-chatbot-for-hvac", priority: 0.9, changeFreq: "weekly" },
     { path: "/ai-chatbot-for-plumbers", priority: 0.9, changeFreq: "weekly" },
+    { path: "/fieseros-vs-jobber", priority: 0.9, changeFreq: "weekly" },
+    { path: "/fieseros-vs-housecall-pro", priority: 0.9, changeFreq: "weekly" },
     { path: "/fieseros-vs-jotform", priority: 0.9, changeFreq: "weekly" },
     { path: "/fieseros-vs-chatbot-com", priority: 0.9, changeFreq: "weekly" },
 
@@ -368,6 +371,9 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
 
     // ─── Cornerstone: Feature pages ──────────────────────────────────────
     { path: "/scheduling-and-dispatch", priority: 0.8, changeFreq: "monthly" },
+    { path: "/features/scheduling", priority: 0.8, changeFreq: "monthly" },
+    { path: "/features/dispatch", priority: 0.8, changeFreq: "monthly" },
+    { path: "/features/work-orders", priority: 0.8, changeFreq: "monthly" },
     { path: "/invoicing-and-payments", priority: 0.8, changeFreq: "monthly" },
     { path: "/customer-crm", priority: 0.8, changeFreq: "monthly" },
     { path: "/technician-app", priority: 0.8, changeFreq: "monthly" },
