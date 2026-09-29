@@ -1098,7 +1098,7 @@ export function TemplatesGalleryClient({
           <DialogContent
             showCloseButton={false}
             style={{ paddingTop: 0 }}
-            className="!max-w-none sm:!max-w-[1280px] lg:!max-w-[1320px] w-full sm:w-[96vw] h-full sm:h-auto max-h-none sm:max-h-[94vh] inset-0 sm:inset-auto flex flex-col !p-0 rounded-none sm:rounded-2xl overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900"
+            className="!max-w-[1280px] lg:!max-w-[1320px] w-[95vw] sm:w-[94vw] h-[92vh] sm:h-[94vh] max-h-[92vh] sm:max-h-[94vh] flex flex-col !p-0 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900"
           >
             {/* Modal Header */}
             <DialogHeader className="px-4 py-3 sm:px-6 sm:py-4 border-b border-border bg-slate-50/50 dark:bg-slate-950/40 flex flex-row items-center justify-between space-y-0 shrink-0">
