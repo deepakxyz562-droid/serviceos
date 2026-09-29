@@ -151,7 +151,7 @@ export default function HandymanSoftwarePage() {
     >
       <IndustryHero
         eyebrow="Handyman Business Software"
-        title="The All-In-One Handyman Software for Scheduling & Fast Payments"
+        title={cfg.h1}
         subtitle="Manage same-day repairs, punch lists, and home maintenance subscriptions from your phone. Eliminate unpaid scope creep, capture photo proof, and get paid 4x faster."
         primaryCtaText={cfg.primaryCta}
         industryName="Handyman"

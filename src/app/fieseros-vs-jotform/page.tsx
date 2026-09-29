@@ -1,25 +1,20 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-  Sparkles,
-  CheckCircle2,
-  X,
+  Scale,
   Check,
+  X,
   ArrowRight,
-  ShieldCheck,
-  Zap,
-  Globe,
-  Bot,
-  CreditCard,
   DollarSign,
   Phone,
   Layers,
-  Scale,
-  ChevronDown,
 } from 'lucide-react';
-import { AiMarketingLayout } from '@/components/ai-marketing/ai-marketing-layout';
+import { CornerstoneLayout, CornerstoneHero } from '@/components/seo/cornerstone-layout';
+import { FaqSection } from '@/components/seo/faq-section';
+import { CtaSection } from '@/components/seo/cta-section';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { getSoftwareApplicationSchema, getFaqSchema, type FaqItem } from '@/lib/seo/schemas';
+import type { BreadcrumbItem } from '@/components/seo/breadcrumbs';
 
 export const metadata: Metadata = {
   title: 'Fieseros vs Jotform (2026 Comparison) — Why Businesses Are Switching',
@@ -59,71 +54,78 @@ const comparisonMatrix = [
   { feature: 'Calculations & Live Math Formulas', fieseros: true, jotform: true, note: 'Dynamic pricing calculators' },
 ];
 
+const faqs: FaqItem[] = [
+  {
+    question: 'Is Fieseros a good Jotform alternative?',
+    answer:
+      'Yes. Fieseros matches Jotform on form building (drag-and-drop, AI generation, 200+ widgets, 33+ payment gateways) and adds a 24/7 AI Voice Receptionist, native field-service CRM, technician dispatch, and 0% platform transaction fees. Jotform is form-only; Fieseros is a complete AI service operating system.',
+  },
+  {
+    question: 'Can I migrate my Jotform forms to Fieseros?',
+    answer:
+      'Yes. Fieseros has an AI form generator that rebuilds any form from a URL or description. Your conditional logic, question types, and branding are preserved. Most customers migrate in under an hour.',
+  },
+  {
+    question: 'Does Fieseros charge payment transaction fees?',
+    answer:
+      'No. Fieseros charges 0% platform transaction fees on payments — you only pay the gateway fee (Stripe, PayPal, Razorpay, etc.). Jotform caps payment submissions on free and starter plans (10/month on free), which limits revenue collection.',
+  },
+  {
+    question: 'Does Jotform have an AI voice receptionist?',
+    answer:
+      'No. Jotform is a form and chatbot tool — it cannot answer phone calls. Fieseros includes a 24/7 AI Voice Receptionist that answers every call, captures leads, books appointments, and pages on-call technicians for emergencies.',
+  },
+];
+
+const breadcrumbs: BreadcrumbItem[] = [
+  { label: 'Home', href: '/' },
+  { label: 'Compare', href: '/jobber-alternatives' },
+  { label: 'Fieseros vs Jotform', href: '/fieseros-vs-jotform' },
+];
+
 export default function FieserosVsJotformPage() {
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: 'Fieseros vs Jotform: 2026 Detailed Comparison',
-    description: 'Comprehensive comparison of Fieseros AI Studio vs Jotform covering form building, AI chatbots, payment fees, and CRM integrations.',
-    author: { '@type': 'Organization', name: 'Fieseros' },
-    publisher: { '@type': 'Organization', name: 'Fieseros', url: 'https://fieseros.com' },
-  };
+  const appSchema = getSoftwareApplicationSchema({
+    name: 'Fieseros vs Jotform — 2026 Comparison',
+    description:
+      'Detailed feature-by-feature comparison between Fieseros AI Studio and Jotform.',
+    applicationCategory: 'BusinessApplication',
+  });
+  const faqSchema = getFaqSchema(faqs);
 
   return (
-    <AiMarketingLayout>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-
+    <CornerstoneLayout
+      breadcrumbs={breadcrumbs}
+      activePath="/fieseros-vs-jotform"
+      additionalSchema={[appSchema, faqSchema]}
+    >
       {/* Hero */}
-      <section className="relative pt-12 pb-20 md:pt-20 md:pb-28 border-b border-border bg-gradient-to-b from-emerald-500/5 via-background to-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center max-w-4xl">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-6">
-            <Scale className="size-3.5" />
-            2026 Head-to-Head Comparison
-          </div>
-
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight text-foreground leading-[1.12]">
-            Fieseros vs Jotform:{' '}
-            <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent">
-              Which is Right for You?
-            </span>
-          </h1>
-
-          <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-            Jotform is a veteran online form builder with an AI chatbot addon. Fieseros was engineered from the ground up as a complete AI Service OS — seamlessly unifying smart forms, autonomous chatbots, 24/7 AI voice phone receptionists, and live field CRM with 0% platform transaction fees.
-          </p>
-
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button
-              size="lg"
-              className="h-12 px-8 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base shadow-xl shadow-emerald-600/25 rounded-xl cursor-pointer"
-              asChild
-            >
-              <Link href="/forms/new">
-                Try Fieseros Free <ArrowRight className="size-4 ml-2" />
-              </Link>
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-12 px-8 font-semibold text-base rounded-xl cursor-pointer"
-              asChild
-            >
-              <Link href="/chatbot">
-                Explore AI Chatbots
-              </Link>
-            </Button>
-          </div>
+      <CornerstoneHero
+        eyebrow="2026 Head-to-Head Comparison"
+        title="Fieseros vs Jotform: Which is Right for You?"
+        subtitle="Jotform is a veteran online form builder with an AI chatbot addon. Fieseros was engineered from the ground up as a complete AI Service OS — seamlessly unifying smart forms, autonomous chatbots, 24/7 AI voice phone receptionists, and live field CRM with 0% platform transaction fees."
+      >
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/#signup"
+            className="inline-flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-6 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800"
+          >
+            Try Fieseros Free
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+          <Link
+            href="/chatbot"
+            className="inline-flex w-full sm:w-auto items-center justify-center rounded-lg border border-border px-6 py-3 text-base font-medium text-foreground transition-colors hover:bg-accent"
+          >
+            Explore AI Chatbots
+          </Link>
         </div>
-      </section>
+      </CornerstoneHero>
 
       {/* Comparison Table */}
-      <section className="py-20 border-b border-border bg-muted/15">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="border-t bg-muted/15 py-16 lg:py-24">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-extrabold text-foreground">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground">
               Feature Matrix: Fieseros vs Jotform
             </h2>
             <p className="text-sm text-muted-foreground mt-2">
@@ -131,10 +133,10 @@ export default function FieserosVsJotformPage() {
             </p>
           </div>
 
-          <div className="bg-background rounded-3xl border border-border shadow-2xl overflow-hidden">
+          <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-lg">
             <div className="grid grid-cols-12 bg-muted/60 p-4 border-b border-border text-xs sm:text-sm font-bold">
               <div className="col-span-6 text-muted-foreground">Key Capabilities</div>
-              <div className="col-span-3 text-center text-emerald-600 font-extrabold">Fieseros AI Studio</div>
+              <div className="col-span-3 text-center text-emerald-600 font-extrabold">Fieseros</div>
               <div className="col-span-3 text-center text-muted-foreground">Jotform</div>
             </div>
 
@@ -171,15 +173,15 @@ export default function FieserosVsJotformPage() {
       </section>
 
       {/* 3 Reasons Why Users Choose Fieseros */}
-      <section className="py-20 border-b border-border bg-background">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl font-extrabold text-foreground">
+      <section className="border-t bg-background py-16 lg:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-12">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-foreground">
               3 Reasons Businesses Choose Fieseros Over Jotform
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="p-6 rounded-2xl border border-border bg-background shadow-sm space-y-3">
               <div className="size-11 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
                 <DollarSign className="size-5" />
@@ -213,29 +215,21 @@ export default function FieserosVsJotformPage() {
         </div>
       </section>
 
-      {/* Bottom CTA */}
-      <section className="py-20 text-center bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 text-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            Ready to Upgrade From Jotform?
-          </h2>
-          <p className="text-emerald-100 text-base max-w-xl mx-auto">
-            Import your forms or build new smart forms and autonomous AI chatbots in seconds. 0% platform fees.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
-            <Button size="lg" className="h-12 px-8 bg-white text-emerald-900 hover:bg-slate-100 font-bold shadow-lg rounded-xl cursor-pointer" asChild>
-              <Link href="/forms/new">
-                Start Free with Fieseros <ArrowRight className="size-4 ml-2" />
-              </Link>
-            </Button>
-            <Button size="lg" variant="outline" className="h-12 px-8 border-white/40 text-white hover:bg-white/10 font-bold rounded-xl cursor-pointer" asChild>
-              <Link href="/gptform">
-                Explore GPTForm Builder
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-    </AiMarketingLayout>
+      {/* FAQ */}
+      <FaqSection
+        title="Fieseros vs Jotform — frequently asked"
+        subtitle="Everything you need to know. Still have questions? Talk to our team."
+        faqs={faqs}
+      />
+
+      {/* CTA */}
+      <CtaSection
+        title="Ready to Upgrade From Jotform?"
+        subtitle="Import your forms or build new smart forms and autonomous AI chatbots in seconds. 0% platform fees."
+        primaryCta={{ label: 'Start Free with Fieseros', href: '/#signup' }}
+        secondaryCta={{ label: 'Explore GPTForm Builder', href: '/gptform' }}
+        bullets={['0% platform fees', 'No credit card required', 'Migrate in under an hour']}
+      />
+    </CornerstoneLayout>
   );
 }

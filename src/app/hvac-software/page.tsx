@@ -151,7 +151,7 @@ export default function HvacSoftwarePage() {
     >
       <IndustryHero
         eyebrow="HVAC Contractor Software"
-        title="The HVAC Software Built for Seasonal Demand & Maintenance Contracts"
+        title={cfg.h1}
         subtitle="Manage summer heatwaves and winter surges without the chaos. Track furnace & AC asset history, automate maintenance tune-ups, and get paid 4x faster with Fieseros."
         primaryCtaText={cfg.primaryCta}
         industryName="HVAC"

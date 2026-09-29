@@ -40,7 +40,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const companyFacts = [
   { label: "Company", value: BRAND.legalEntity },
-  { label: "Founded", value: "2023" },
+  { label: "Founded", value: "2024" },
   { label: "Headquarters", value: "Remote-first (Americas)" },
   { label: "Product", value: "AI Operating System for Service Businesses" },
   { label: "Industries served", value: "18+ trade & service industries" },

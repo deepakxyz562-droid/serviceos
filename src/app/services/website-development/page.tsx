@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { getServiceSchema } from '@/lib/seo/schemas'
 
-export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Website Development for Service Businesses | Fieseros',
@@ -130,7 +129,8 @@ export default function WebsiteDevelopmentPage() {
     name: 'Website Development for Service Businesses',
     description: 'Lead-generating websites for service businesses. Mobile-first, SEO-ready, with booking and quote forms integrated into Fieseros CRM. Starting at $999.',
     url: 'https://fieseros.com/services/website-development',
-    category: 'Website Development',
+    serviceType: 'Website Development',
+    offers: { price: '999', priceCurrency: 'USD', description: 'Starter Website — one-time' },
   })
 
   const faqSchema = {

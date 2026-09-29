@@ -6,6 +6,7 @@ import {
   CornerstoneHero,
 } from "@/components/seo/cornerstone-layout";
 import { CtaSection } from "@/components/seo/cta-section";
+import { StructuredData } from "@/components/seo/structured-data";
 import type { BreadcrumbItem } from "@/components/seo/breadcrumbs";
 
 export const metadata: Metadata = {
@@ -162,8 +163,33 @@ const caseStudies: CaseStudy[] = [
 ];
 
 export default function CaseStudiesPage() {
+  // ItemList schema — helps Google understand these are a curated collection.
+  const itemListSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Fieseros Customer Case Studies",
+    description: "Real results from service businesses using Fieseros.",
+    itemListElement: caseStudies.map((cs, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      item: {
+        "@type": "Article",
+        headline: `${cs.company}: ${cs.headline}`,
+        description: cs.summary,
+        author: { "@type": "Organization", name: "Fieseros" },
+        publisher: { "@type": "Organization", name: "Fieseros", url: "https://fieseros.com" },
+        about: {
+          "@type": "Organization",
+          name: cs.company,
+        },
+        mentions: cs.tags.map((t) => ({ "@type": "Thing", name: t })),
+      },
+    })),
+  };
+
   return (
     <CornerstoneLayout breadcrumbs={breadcrumbs} activePath="/case-studies" showAiReceptionist={false}>
+      <StructuredData data={[itemListSchema]} />
       <CornerstoneHero
         eyebrow="Case Studies"
         title="Real results from real service businesses"

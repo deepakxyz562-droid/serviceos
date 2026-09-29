@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { CornerstoneHeader } from "./cornerstone-header";
+import { HeaderSeoLinks } from "./header-seo-links";
 import { CornerstoneFooter } from "./cornerstone-footer";
 import { Breadcrumbs, type BreadcrumbItem } from "./breadcrumbs";
 import { StructuredData } from "./structured-data";
@@ -42,6 +43,10 @@ export function CornerstoneLayout({
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <CornerstoneHeader activePath={activePath} />
+      {/* Server-rendered SEO nav links — visible to Googlebot's first HTML
+          parse even though the interactive CornerstoneHeader is client-only.
+          Uses the same exported link arrays — no data duplication. */}
+      <HeaderSeoLinks />
 
       {/* Page-specific structured data only */}
       {additionalSchema.length > 0 && <StructuredData data={additionalSchema} />}

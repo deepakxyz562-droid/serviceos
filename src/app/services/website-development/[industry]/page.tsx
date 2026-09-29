@@ -4,12 +4,19 @@ import { notFound } from 'next/navigation'
 import { ArrowRight, CheckCircle2, XCircle } from 'lucide-react'
 import { CornerstoneLayout, CornerstoneHero } from '@/components/seo/cornerstone-layout'
 import { CtaSection } from '@/components/seo/cta-section'
+import { FaqSection } from '@/components/seo/faq-section'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getServiceSchema } from '@/lib/seo/schemas'
+import type { FaqItem } from '@/lib/seo/schemas'
 import { INDUSTRY_SERVICES, getIndustryBySlug, getAllIndustrySlugs } from '@/lib/services/industry-data'
+import type { BreadcrumbItem } from '@/components/seo/breadcrumbs'
 
-export const dynamic = 'force-dynamic'
+
+// Static-generate all 18 industry pages at build time (no per-request DB hit).
+export function generateStaticParams() {
+  return getAllIndustrySlugs().map((slug) => ({ industry: slug }))
+}
 
 export async function generateMetadata({
   params,
@@ -48,11 +55,40 @@ export default async function IndustryServicePage({
     name: `Website Development for ${industry.name} Businesses`,
     description: industry.metaDescription,
     url: `https://fieseros.com/services/website-development/${slug}`,
-    category: `Website Development for ${industry.name}`,
+    serviceType: `Website Development for ${industry.name}`,
+    offers: { price: '999', priceCurrency: 'USD', description: 'Starter Website — one-time' },
   })
 
+  // Industry-specific FAQs generated from config data (name, singularNoun, keywords).
+  // Each FAQ targets a high-intent long-tail query + injects FAQPage schema.
+  const industryFaqs: FaqItem[] = [
+    {
+      question: `How much does a ${industry.name.toLowerCase()} website cost?`,
+      answer: `A professional ${industry.name.toLowerCase()} website from Fieseros starts at $999 (Starter tier) which includes a mobile-first design, SEO-optimized service pages, a booking form integrated with Fieseros CRM, and Google Business Profile optimization. The Growth tier ($2,499) adds full CRM integration, additional service pages, and advanced lead-capture forms.`,
+    },
+    {
+      question: `Will my ${industry.name.toLowerCase()} website rank on Google?`,
+      answer: `Yes. Every Fieseros website is built with clean code, structured data (Service + LocalBusiness schema), and SEO-optimized content targeting ${industry.keywords.slice(0, 3).join(', ')}. Combined with Google Business Profile optimization, your site is designed to rank for the searches your customers actually type — like "${industry.singularNoun} near me".`,
+    },
+    {
+      question: `Can customers book ${industry.name.toLowerCase()} services online?`,
+      answer: `Yes. Your website includes an online booking form that flows directly into the Fieseros CRM. When a customer submits a booking request, it creates a lead in your CRM — you can convert it to a job, schedule a ${industry.singularNoun}, send a quote, and collect payment, all in one platform. No leads fall through the cracks.`,
+    },
+    {
+      question: `How long does it take to build a ${industry.name.toLowerCase()} website?`,
+      answer: `Most ${industry.name.toLowerCase()} websites launch in 2-3 weeks. The Starter tier ($999) includes a homepage, service pages, about/contact, and a booking form. The Growth tier ($2,499) adds more service pages, a blog, photo gallery, and full CRM integration. We handle design, development, SEO setup, and Google Business Profile optimization.`,
+    },
+  ]
+
+  const breadcrumbs: BreadcrumbItem[] = [
+    { label: 'Home', href: '/' },
+    { label: 'Services', href: '/services' },
+    { label: 'Website Development', href: '/services/website-development' },
+    { label: industry.name, href: `/services/website-development/${slug}` },
+  ]
+
   return (
-    <CornerstoneLayout>
+    <CornerstoneLayout breadcrumbs={breadcrumbs}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
@@ -208,6 +244,12 @@ export default async function IndustryServicePage({
           </div>
         </div>
       </section>
+
+      <FaqSection
+        title={`${industry.name} Website — Frequently Asked`}
+        subtitle="Everything you need to know. Still have questions? Get a free quote."
+        faqs={industryFaqs}
+      />
 
       <CtaSection
         title={`Ready for a website that grows your ${industry.name.toLowerCase()} business?`}

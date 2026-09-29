@@ -7,7 +7,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getServiceSchema } from '@/lib/seo/schemas'
 
-export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Google Ads Management for Service Businesses | Fieseros',
@@ -95,7 +94,7 @@ export default function GoogleAdsPage() {
     name: 'Google Ads Management for Service Businesses',
     description: 'Campaign setup, keyword targeting, ad copy, landing pages, and ROI tracking for Google Ads. Built for service businesses.',
     url: 'https://fieseros.com/services/google-ads',
-    category: 'Pay-Per-Click Advertising',
+    serviceType: 'Pay-Per-Click Advertising',
   })
 
   const faqSchema = {

@@ -151,7 +151,7 @@ export default function PlumbingSoftwarePage() {
     >
       <IndustryHero
         eyebrow="Plumbing Contractor Software"
-        title="The All-In-One Plumbing Software to Schedule, Dispatch & Get Paid"
+        title={cfg.h1}
         subtitle="Eliminate paper work orders, dispatch emergency calls in seconds, track water heater asset histories, and collect payments 4x faster with Fieseros."
         primaryCtaText={cfg.primaryCta}
         industryName="Plumbing"

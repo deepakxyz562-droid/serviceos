@@ -450,13 +450,14 @@ export function getLocalBusinessSchema(opts: {
 export function getServiceSchema(opts: {
   name: string;
   description: string;
-  url: string;             // URL of the business hub
-  providerName: string;    // business name
+  url: string;             // URL of the service page
+  providerName?: string;   // defaults to "Fieseros"
   providerUrl?: string;
-  serviceType?: string;    // e.g. "Plumbing repair"
+  serviceType?: string;    // e.g. "Website Development"
   areaServed?: string[];   // list of cities/areas
   offers?: { price: string; priceCurrency: string; description?: string };
 }) {
+  const providerName = opts.providerName ?? "Fieseros";
   const schema: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "Service",
@@ -466,8 +467,8 @@ export function getServiceSchema(opts: {
     serviceType: opts.serviceType ?? opts.name,
     provider: {
       "@type": "LocalBusiness",
-      name: opts.providerName,
-      ...(opts.providerUrl ? { url: opts.providerUrl } : {}),
+      name: providerName,
+      url: opts.providerUrl ?? "https://fieseros.com",
     },
   };
 

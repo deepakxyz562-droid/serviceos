@@ -7,7 +7,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getServiceSchema } from '@/lib/seo/schemas'
 
-export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'SEO & Local Search for Service Businesses | Fieseros',
@@ -91,7 +90,7 @@ export default function SeoPage() {
     name: 'SEO & Local Search for Service Businesses',
     description: 'Local SEO, Google Business Profile optimization, review management, and content marketing for service businesses.',
     url: 'https://fieseros.com/services/seo',
-    category: 'Search Engine Optimization',
+    serviceType: 'Search Engine Optimization',
   })
 
   const faqSchema = {
