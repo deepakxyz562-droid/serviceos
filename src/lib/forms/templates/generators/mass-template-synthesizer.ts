@@ -7,8 +7,6 @@
 
 import { TEMPLATE_CATEGORIES } from '../taxonomy/categories';
 import { TEMPLATE_INDUSTRIES } from '../taxonomy/industries';
-import { TEMPLATE_USE_CASES } from '../taxonomy/use-cases';
-import { TEMPLATE_AUDIENCES } from '../taxonomy/audiences';
 import type { FormTemplate, TemplateCategoryId, TemplateIndustryId } from '../types';
 import type { FormField } from '../../form-schema-types';
 
@@ -27,11 +25,521 @@ export interface GeneratedTemplateConfig {
   iconName: string;
 }
 
-// Industry-specific field injectors
+// ─── Human Copywriting Generators ──────────────────────────────────────────
+
+export function getTemplateShortDescription(catId: string, indLabel: string, subLabel: string): string {
+  switch (catId) {
+    case 'application':
+      return `Professional ${subLabel.toLowerCase()} form for ${indLabel.toLowerCase()} roles with position preference, shift availability, and qualification tracking.`;
+    case 'booking':
+    case 'appointment':
+      return `Self-service ${subLabel.toLowerCase()} form for ${indLabel.toLowerCase()} clients with instant calendar synchronization and slot selection.`;
+    case 'quote':
+    case 'estimate':
+      return `Accurate ${subLabel.toLowerCase()} request form for ${indLabel.toLowerCase()} services with itemized scope, address verification, and urgency options.`;
+    case 'registration':
+      return `Streamlined ${subLabel.toLowerCase()} form for ${indLabel.toLowerCase()} programs, events, and memberships with automated confirmation.`;
+    case 'order':
+      return `Online ${subLabel.toLowerCase()} form for ${indLabel.toLowerCase()} offerings with quantity selection, custom instructions, and delivery details.`;
+    case 'feedback':
+    case 'survey':
+      return `Comprehensive ${subLabel.toLowerCase()} form to collect client reviews, Net Promoter Score (NPS), and service feedback for ${indLabel.toLowerCase()} businesses.`;
+    case 'intake':
+      return `Thorough client intake and onboarding form for ${indLabel.toLowerCase()} practices to gather background details and project goals.`;
+    case 'waiver':
+    case 'consent':
+      return `Digital legal liability waiver and consent form for ${indLabel.toLowerCase()} activities with binding electronic signature capture.`;
+    default:
+      return `High-converting interactive smart form designed specifically for ${indLabel.toLowerCase()} businesses, practices, and client workflows.`;
+  }
+}
+
+export function getTemplateLongDescription(catId: string, indLabel: string, subLabel: string): string {
+  switch (catId) {
+    case 'application':
+      return `Streamline your candidate recruitment and hiring process with our specialized ${indLabel} ${subLabel}. Collect candidate contact info, employment history, role preferences, shift availability, and qualifications with instant CRM pipeline capture.`;
+    case 'booking':
+    case 'appointment':
+      return `Allow clients to schedule appointments directly with your ${indLabel.toLowerCase()} team. Features real-time date selection, preferred time slots, special requirements, and automatic notifications.`;
+    case 'quote':
+    case 'estimate':
+      return `Accelerate project estimations and win more ${indLabel.toLowerCase()} jobs with a structured quote request form. Captures project scope, property/equipment details, budget expectations, and urgency.`;
+    case 'registration':
+      return `Manage attendee registrations effortlessly for your ${indLabel.toLowerCase()} events, workshops, or training courses with automated email confirmations and attendee tracking.`;
+    case 'order':
+      return `Accept customer orders, product requests, and catering packages seamlessly with integrated quantity selectors, special instructions, and fulfillment preferences.`;
+    default:
+      return `Streamline customer workflows, intake, and requests with our professional ${indLabel} ${subLabel}. Features fully customizable fields, automated CRM integration, mobile-responsive layout, and instant notifications.`;
+  }
+}
+
+export function getTemplateHeroSubtitle(catId: string, indLabel: string, subLabel: string): string {
+  switch (catId) {
+    case 'application':
+      return `Join our team of ${indLabel.toLowerCase()} professionals. Complete your application in under 2 minutes.`;
+    case 'booking':
+    case 'appointment':
+      return `Book your ${indLabel.toLowerCase()} appointment with instant confirmation and dedicated professional support.`;
+    case 'quote':
+    case 'estimate':
+      return `Get a transparent, upfront estimate for ${indLabel.toLowerCase()} services with zero hidden fees.`;
+    case 'registration':
+      return `Reserve your spot today for ${indLabel.toLowerCase()} programs with automated confirmation.`;
+    case 'order':
+      return `Place your ${indLabel.toLowerCase()} order online with flexible fulfillment and fast turnaround.`;
+    case 'feedback':
+    case 'survey':
+      return `Share your thoughts in 60 seconds to help us continually elevate our ${indLabel.toLowerCase()} service quality.`;
+    default:
+      return `Upfront flat-rate pricing and instant confirmation for ${indLabel.toLowerCase()} services.`;
+  }
+}
+
+export function getTemplateBadgeText(catId: string, indLabel: string): string {
+  switch (catId) {
+    case 'application':
+      return `⭐ Verified Employer • Fast Response Hiring`;
+    case 'booking':
+    case 'appointment':
+      return `📅 Instant Confirmation • Top-Rated ${indLabel}`;
+    case 'quote':
+    case 'estimate':
+      return `⚡ Upfront Pricing • Verified ${indLabel} Specialist`;
+    case 'registration':
+      return `🛡️ Official Registration • 2026 Verified`;
+    case 'order':
+      return `🛒 Verified Store • Fast Fulfillment`;
+    case 'feedback':
+    case 'survey':
+      return `💬 Client Feedback • 60-Second Review`;
+    default:
+      return `⭐ Verified ${indLabel} Specialist • 2026 Pro`;
+  }
+}
+
+export function getTemplateBenefits(catId: string, indLabel: string): string[] {
+  switch (catId) {
+    case 'application':
+      return [
+        'Direct review by hiring managers within 24–48 hours',
+        'Flexible shift schedules (Full-time, Part-time & Seasonal)',
+        '100% Confidential and secure applicant data processing',
+      ];
+    case 'booking':
+    case 'appointment':
+      return [
+        'Instant appointment confirmation & calendar invite',
+        'Direct assignment to verified experienced specialists',
+        'Free cancellation or rescheduling up to 24 hours prior',
+      ];
+    case 'quote':
+    case 'estimate':
+      return [
+        '100% Upfront transparent quote & zero hidden fees',
+        'Direct assignment to top-rated verified professionals',
+        'Confidential 256-bit encrypted data protection',
+      ];
+    case 'order':
+      return [
+        'Real-time order tracking & automated email receipts',
+        'Fresh quality assurance & customized fulfillment',
+        'Secure 256-bit encrypted checkout & client protection',
+      ];
+    case 'feedback':
+    case 'survey':
+      return [
+        'Takes less than 90 seconds to complete',
+        'Helps us continually improve service quality',
+        'Option for anonymous feedback submission',
+      ];
+    case 'registration':
+      return [
+        'Immediate seat confirmation & ticket barcode',
+        'Access to exclusive event resources and updates',
+        'Easy transfer or cancellation options available',
+      ];
+    default:
+      return [
+        `Direct assignment to top-rated verified ${indLabel.toLowerCase()} professionals`,
+        '100% Upfront transparent quote & zero hidden fees',
+        'Confidential 256-bit encrypted data protection',
+      ];
+  }
+}
+
+// ─── Industry-Specific Field Injectors ──────────────────────────────────────
+
 export function getIndustrySpecificFields(industryId: string, categoryId: string): FormField[] {
   const fields: FormField[] = [];
 
   switch (industryId) {
+    case 'restaurant':
+      if (categoryId === 'application' || categoryId === 'job') {
+        fields.push(
+          {
+            id: 'restaurant_role_type',
+            type: 'select',
+            label: 'Restaurant Position Applied For',
+            options: [
+              { label: 'Server / Waitstaff', value: 'server' },
+              { label: 'Bartender / Mixologist', value: 'bartender' },
+              { label: 'Host / Hostess', value: 'host' },
+              { label: 'Line Cook / Prep Cook', value: 'cook' },
+              { label: 'Sous Chef / Executive Chef', value: 'chef' },
+              { label: 'Barista / Cafe Associate', value: 'barista' },
+              { label: 'Dishwasher / Kitchen Porter', value: 'dishwasher' },
+              { label: 'Shift Supervisor / Assistant Manager', value: 'manager' },
+              { label: 'General / Multiple Roles', value: 'general' },
+            ],
+            required: true,
+          },
+          {
+            id: 'food_certifications',
+            type: 'checkbox',
+            label: 'Food Safety & Alcohol Service Certifications',
+            options: [
+              { label: 'Food Handler Card / ServSafe Food Handler', value: 'food_handler' },
+              { label: 'ServSafe Manager Certification', value: 'servsafe_manager' },
+              { label: 'TIPS / LEAD / Alcohol Server Certified', value: 'alcohol_certified' },
+              { label: 'Allergen Awareness Certified', value: 'allergen_certified' },
+              { label: 'None yet (Willing to obtain upon hire)', value: 'none' },
+            ],
+          },
+          {
+            id: 'kitchen_experience_types',
+            type: 'checkbox',
+            label: 'Experience with Service Environments',
+            options: [
+              { label: 'High-Volume Fast Casual (200+ covers/shift)', value: 'high_volume' },
+              { label: 'Fine Dining & Table Service', value: 'fine_dining' },
+              { label: 'Bar & Cocktail Lounge', value: 'cocktail_bar' },
+              { label: 'POS Systems (Toast, Square, Clover, Aloha)', value: 'pos_systems' },
+              { label: 'Banquet & Catering Operations', value: 'banquet' },
+            ],
+          }
+        );
+      } else {
+        fields.push(
+          {
+            id: 'reservation_type',
+            type: 'select',
+            label: 'Dining / Reservation Type',
+            options: [
+              { label: 'Standard Dining Table (1-4 Guests)', value: 'standard' },
+              { label: 'Large Group (5-10 Guests)', value: 'large_group' },
+              { label: 'Private Dining Room (10-30 Guests)', value: 'private_room' },
+              { label: 'Catering / Banquet Event', value: 'catering' },
+            ],
+            required: true,
+          },
+          {
+            id: 'guest_count',
+            type: 'number',
+            label: 'Number of Guests',
+            placeholder: 'e.g. 4',
+            required: true,
+          },
+          {
+            id: 'seating_preference',
+            type: 'select',
+            label: 'Seating Area Preference',
+            options: [
+              { label: 'Main Dining Room', value: 'main_dining' },
+              { label: 'Outdoor Patio / Garden', value: 'patio' },
+              { label: 'Bar Counter / High Tops', value: 'bar' },
+              { label: 'No Preference / First Available', value: 'any' },
+            ],
+          },
+          {
+            id: 'dietary_restrictions',
+            type: 'checkbox',
+            label: 'Dietary Restrictions & Allergies',
+            options: [
+              { label: 'Gluten-Free', value: 'gluten_free' },
+              { label: 'Vegetarian / Vegan', value: 'vegetarian' },
+              { label: 'Nut Allergy (Severe)', value: 'nut_allergy' },
+              { label: 'Dairy-Free / Lactose Intolerant', value: 'dairy_free' },
+              { label: 'Halal / Kosher', value: 'halal_kosher' },
+            ],
+          }
+        );
+      }
+      break;
+
+    case 'hospitality':
+      fields.push(
+        {
+          id: 'accommodation_or_event_type',
+          type: 'select',
+          label: 'Service / Event Space Type',
+          options: [
+            { label: 'Deluxe King Guestroom', value: 'deluxe_king' },
+            { label: 'Double Queen Executive Room', value: 'double_queen' },
+            { label: 'Penthouse Hospitality Suite', value: 'penthouse' },
+            { label: 'Grand Conference Ballroom', value: 'ballroom' },
+            { label: 'Private Meeting Room', value: 'boardroom' },
+          ],
+          required: true,
+        },
+        {
+          id: 'hospitality_guests_count',
+          type: 'number',
+          label: 'Total Number of Attendees / Guests',
+          placeholder: 'e.g. 2',
+          required: true,
+        },
+        {
+          id: 'amenities_requested',
+          type: 'checkbox',
+          label: 'Special Amenities & Concierge Services',
+          options: [
+            { label: 'Airport Shuttle Transfer', value: 'airport_shuttle' },
+            { label: 'Early Check-In / Late Check-Out', value: 'flexible_hours' },
+            { label: 'Valet Parking Access', value: 'valet_parking' },
+            { label: 'Audiovisual (AV) & Projector Setup', value: 'av_setup' },
+            { label: 'Catering & Coffee Break Service', value: 'coffee_catering' },
+          ],
+        }
+      );
+      break;
+
+    case 'fitness':
+      fields.push(
+        {
+          id: 'fitness_goals',
+          type: 'select',
+          label: 'Primary Fitness & Health Goal',
+          options: [
+            { label: 'Fat Loss & Body Toning', value: 'fat_loss' },
+            { label: 'Muscle Building & Hypertrophy', value: 'muscle_building' },
+            { label: 'Athletic Conditioning & Endurance', value: 'endurance' },
+            { label: 'Injury Rehabilitation & Mobility', value: 'rehab' },
+            { label: 'General Health & Longevity', value: 'general_health' },
+          ],
+          required: true,
+        },
+        {
+          id: 'training_format',
+          type: 'radio',
+          label: 'Preferred Training Program',
+          options: [
+            { label: '1-on-1 Personal Training', value: 'personal_training' },
+            { label: 'Small Group Functional Training', value: 'small_group' },
+            { label: 'Open Gym Membership', value: 'open_gym' },
+            { label: 'Online / App-Based Coaching', value: 'online_coaching' },
+          ],
+          required: true,
+        },
+        {
+          id: 'activity_level',
+          type: 'select',
+          label: 'Current Activity Level',
+          options: [
+            { label: 'Sedentary (Little to no regular exercise)', value: 'sedentary' },
+            { label: 'Light (1-2 days/week)', value: 'light' },
+            { label: 'Moderate (3-4 days/week)', value: 'moderate' },
+            { label: 'Advanced Athlete (5+ days/week)', value: 'athlete' },
+          ],
+        }
+      );
+      break;
+
+    case 'beauty':
+      fields.push(
+        {
+          id: 'beauty_service_requested',
+          type: 'select',
+          label: 'Treatment or Service Requested',
+          options: [
+            { label: 'Signature Haircut, Styling & Blowout', value: 'haircut' },
+            { label: 'Balayage, Color & Highlights', value: 'hair_color' },
+            { label: 'HydraFacial & Skincare Rejuvenation', value: 'facial' },
+            { label: 'Gel / Acrylic Manicure & Pedicure', value: 'nails' },
+            { label: 'Bridal & Special Occasion Makeup', value: 'makeup' },
+          ],
+          required: true,
+        },
+        {
+          id: 'allergies_sensitivities',
+          type: 'text',
+          label: 'Skin Sensitivities or Product Allergies',
+          placeholder: 'e.g. Sensitive to ammonia, latex, fragrances',
+        }
+      );
+      break;
+
+    case 'education':
+      fields.push(
+        {
+          id: 'student_academic_level',
+          type: 'select',
+          label: 'Student Academic / Grade Level',
+          options: [
+            { label: 'Elementary School (K–5)', value: 'elementary' },
+            { label: 'Middle School (6–8)', value: 'middle' },
+            { label: 'High School (9–12)', value: 'high_school' },
+            { label: 'College / University Undergraduate', value: 'college' },
+            { label: 'Adult Continuing Education & Professional', value: 'adult' },
+          ],
+          required: true,
+        },
+        {
+          id: 'subject_focus',
+          type: 'select',
+          label: 'Subject / Focus Area',
+          options: [
+            { label: 'Mathematics, Algebra & Calculus', value: 'math' },
+            { label: 'Physics, Chemistry & Biology', value: 'science' },
+            { label: 'SAT / ACT / GRE Standardized Test Prep', value: 'test_prep' },
+            { label: 'Coding, Python & Computer Science', value: 'coding' },
+            { label: 'English Literature, ESL & Writing', value: 'languages' },
+          ],
+          required: true,
+        },
+        {
+          id: 'learning_format_preference',
+          type: 'radio',
+          label: 'Learning Format Preference',
+          options: [
+            { label: '1-on-1 In-Person Tutoring', value: 'in_person' },
+            { label: 'Live Interactive Online Video Session', value: 'online' },
+            { label: 'Small Cohort Study Group', value: 'group' },
+          ],
+        }
+      );
+      break;
+
+    case 'retail':
+    case 'ecommerce':
+      fields.push(
+        {
+          id: 'product_category',
+          type: 'select',
+          label: 'Product Category of Interest',
+          options: [
+            { label: 'Apparel & Fashion Accessories', value: 'apparel' },
+            { label: 'Home Goods, Furniture & Decor', value: 'home_goods' },
+            { label: 'Electronics & Audio Equipment', value: 'electronics' },
+            { label: 'Beauty, Skincare & Wellness', value: 'beauty_retail' },
+            { label: 'Specialty Gifts & Artisanal Products', value: 'gifts' },
+          ],
+          required: true,
+        },
+        {
+          id: 'fulfillment_channel',
+          type: 'radio',
+          label: 'Preferred Fulfillment Method',
+          options: [
+            { label: 'Standard Home Delivery (3-5 Business Days)', value: 'delivery' },
+            { label: 'Express Next-Day Shipping', value: 'express' },
+            { label: 'In-Store Pickup (Free)', value: 'pickup' },
+          ],
+        }
+      );
+      break;
+
+    case 'technology':
+    case 'saas':
+      fields.push(
+        {
+          id: 'team_size',
+          type: 'select',
+          label: 'Company / Team Size',
+          options: [
+            { label: '1 – 10 Team Members (Startup)', value: '1_10' },
+            { label: '11 – 50 Team Members (Growing Business)', value: '11_50' },
+            { label: '51 – 250 Team Members (Mid-Market)', value: '51_250' },
+            { label: '250+ Team Members (Enterprise)', value: '250_plus' },
+          ],
+          required: true,
+        },
+        {
+          id: 'deployment_type',
+          type: 'select',
+          label: 'Deployment & Security Requirement',
+          options: [
+            { label: 'Multi-Tenant Cloud (Fastest Setup)', value: 'cloud' },
+            { label: 'Dedicated Cloud Instance (HIPAA / SOC2)', value: 'dedicated' },
+            { label: 'On-Premises / Hybrid Air-Gapped', value: 'on_prem' },
+          ],
+        },
+        {
+          id: 'primary_use_case_notes',
+          type: 'textarea',
+          label: 'Core Workflows or Systems to Integrate With',
+          placeholder: 'e.g. Need CRM sync, Zapier webhooks, Stripe billing...',
+        }
+      );
+      break;
+
+    case 'cleaning':
+      fields.push(
+        {
+          id: 'property_type',
+          type: 'select',
+          label: 'Property Type',
+          options: [
+            { label: 'Single-Family Home', value: 'single_family' },
+            { label: 'Apartment / Condominium', value: 'condo' },
+            { label: 'Commercial Office / Retail Space', value: 'office' },
+            { label: 'Post-Construction / Move-Out Deep Clean', value: 'post_construction' },
+          ],
+          required: true,
+        },
+        {
+          id: 'square_footage',
+          type: 'select',
+          label: 'Approximate Square Footage',
+          options: [
+            { label: 'Under 1,000 sq ft', value: 'under_1000' },
+            { label: '1,000 – 2,000 sq ft', value: '1000_2000' },
+            { label: '2,001 – 3,500 sq ft', value: '2001_3500' },
+            { label: '3,500+ sq ft', value: '3500_plus' },
+          ],
+          required: true,
+        },
+        {
+          id: 'cleaning_frequency',
+          type: 'radio',
+          label: 'Desired Cleaning Frequency',
+          options: [
+            { label: 'One-Time Deep Clean', value: 'one_time' },
+            { label: 'Weekly Recurring (Best Rate)', value: 'weekly' },
+            { label: 'Bi-Weekly (Every 2 Weeks)', value: 'bi_weekly' },
+            { label: 'Monthly Routine', value: 'monthly' },
+          ],
+        }
+      );
+      break;
+
+    case 'construction':
+      fields.push(
+        {
+          id: 'construction_project_type',
+          type: 'select',
+          label: 'Construction / Remodeling Project',
+          options: [
+            { label: 'Kitchen or Bathroom Full Remodel', value: 'kitchen_bath' },
+            { label: 'Room Addition & Structural Expansion', value: 'addition' },
+            { label: 'Commercial Tenant Buildout', value: 'commercial_buildout' },
+            { label: 'New Custom Home Construction', value: 'new_construction' },
+            { label: 'Deck, Patio & Outdoor Hardscaping', value: 'outdoor' },
+          ],
+          required: true,
+        },
+        {
+          id: 'permit_status',
+          type: 'select',
+          label: 'Permit & Architectural Plans Status',
+          options: [
+            { label: 'Full Architectural Plans & Permits Approved', value: 'approved' },
+            { label: 'Plans Drawn, Need Contractor to Pull Permits', value: 'need_permits' },
+            { label: 'Concept Stage / Need Design-Build Consultation', value: 'concept' },
+          ],
+        }
+      );
+      break;
+
     case 'dental':
     case 'healthcare':
       fields.push(
@@ -233,7 +741,6 @@ export function getIndustrySpecificFields(industryId: string, categoryId: string
       break;
 
     default:
-      // General service fields
       fields.push({
         id: 'service_details',
         type: 'textarea',
@@ -246,13 +753,14 @@ export function getIndustrySpecificFields(industryId: string, categoryId: string
   return fields;
 }
 
-// Category-specific base fields (Contact, Booking, Order, Inspection, Waiver, etc.)
+// ─── Category-Specific Base Fields ──────────────────────────────────────────
+
 export function getCategoryBaseFields(categoryId: string): FormField[] {
   const baseContact: FormField[] = [
     {
       id: 'full_name',
       type: 'text',
-      label: 'Full Name',
+      label: 'Full Legal Name',
       placeholder: 'John Doe',
       required: true,
     },
@@ -273,6 +781,143 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
   ];
 
   switch (categoryId) {
+    case 'application':
+    case 'job':
+    case 'employment':
+      return [
+        ...baseContact,
+        {
+          id: 'candidate_address',
+          type: 'text',
+          label: 'Current Address (City, State, Zip)',
+          placeholder: 'e.g. Austin, TX 78701',
+          required: true,
+        },
+        {
+          id: 'employment_type_desired',
+          type: 'radio',
+          label: 'Desired Employment Type',
+          options: [
+            { label: 'Full-Time (35-40 hrs/wk)', value: 'full_time' },
+            { label: 'Part-Time (15-30 hrs/wk)', value: 'part_time' },
+            { label: 'Seasonal / Temporary', value: 'seasonal' },
+            { label: 'Weekend Shifts Only', value: 'weekend' },
+          ],
+          required: true,
+        },
+        {
+          id: 'shift_availability',
+          type: 'checkbox',
+          label: 'Shift Availability (Select All That Apply)',
+          options: [
+            { label: 'Morning Prep & Breakfast (6:00 AM – 12:00 PM)', value: 'morning' },
+            { label: 'Lunch Service (11:00 AM – 4:00 PM)', value: 'lunch' },
+            { label: 'Dinner Service & Closing (4:00 PM – Close)', value: 'dinner' },
+            { label: 'Weekends (Saturday & Sunday)', value: 'weekends' },
+            { label: 'Holidays & Peak Seasons', value: 'holidays' },
+          ],
+          required: true,
+        },
+        {
+          id: 'years_experience',
+          type: 'select',
+          label: 'Years of Relevant Experience',
+          options: [
+            { label: 'Entry Level (No prior experience / Willing to train)', value: 'entry' },
+            { label: '1 – 2 Years', value: '1_2' },
+            { label: '3 – 5 Years', value: '3_5' },
+            { label: '5+ Years (Experienced Professional)', value: '5_plus' },
+          ],
+          required: true,
+        },
+        {
+          id: 'earliest_start_date',
+          type: 'date',
+          label: 'Earliest Available Start Date',
+          required: true,
+        },
+        {
+          id: 'desired_pay_rate',
+          type: 'text',
+          label: 'Desired Pay / Hourly Rate ($)',
+          placeholder: 'e.g. $18 - $24 / hr or Negotiable',
+        },
+        {
+          id: 'skills_and_summary',
+          type: 'textarea',
+          label: 'Key Skills, Past Work Experience & Why You Want to Join',
+          placeholder: 'Briefly summarize your background, key strengths, and why you are interested in this role...',
+          required: true,
+        },
+      ];
+
+    case 'registration':
+    case 'event':
+      return [
+        ...baseContact,
+        {
+          id: 'organization_name',
+          type: 'text',
+          label: 'Organization / Company Name',
+          placeholder: 'e.g. Acme Corporation',
+        },
+        {
+          id: 'registration_tier',
+          type: 'select',
+          label: 'Registration Type',
+          options: [
+            { label: 'Standard General Admission', value: 'general' },
+            { label: 'VIP All-Access Pass', value: 'vip' },
+            { label: 'Student / Early Career Pass', value: 'student' },
+            { label: 'Corporate Group Delegation (3+ members)', value: 'corporate' },
+          ],
+          required: true,
+        },
+        {
+          id: 'dietary_accommodations',
+          type: 'select',
+          label: 'Dietary or Accessibility Needs',
+          options: [
+            { label: 'No Special Requirements', value: 'none' },
+            { label: 'Vegetarian / Vegan Menu', value: 'vegetarian' },
+            { label: 'Gluten-Free / Celiac Safe', value: 'gluten_free' },
+            { label: 'Wheelchair / Physical Accessibility Assistance', value: 'accessibility' },
+          ],
+        },
+      ];
+
+    case 'order':
+    case 'product':
+      return [
+        ...baseContact,
+        {
+          id: 'delivery_address',
+          type: 'text',
+          label: 'Delivery / Service Address',
+          placeholder: 'Street, City, State, ZIP',
+          required: true,
+        },
+        {
+          id: 'order_quantity',
+          type: 'number',
+          label: 'Quantity / Units Required',
+          placeholder: 'e.g. 1',
+          required: true,
+        },
+        {
+          id: 'fulfillment_date',
+          type: 'date',
+          label: 'Requested Delivery / Fulfillment Date',
+          required: true,
+        },
+        {
+          id: 'special_instructions',
+          type: 'textarea',
+          label: 'Special Preparation / Delivery Instructions',
+          placeholder: 'Add gate code, custom specifications, or packaging requests...',
+        },
+      ];
+
     case 'booking':
     case 'appointment':
       return [
@@ -333,6 +978,30 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         },
       ];
 
+    case 'intake':
+      return [
+        ...baseContact,
+        {
+          id: 'timeline_goal',
+          type: 'select',
+          label: 'Desired Implementation Timeline',
+          options: [
+            { label: 'Immediately (Within 1-2 weeks)', value: 'immediate' },
+            { label: 'Within 30 Days', value: '30_days' },
+            { label: 'Next Quarter (1-3 months)', value: 'next_quarter' },
+            { label: 'Exploratory / Research Phase', value: 'exploratory' },
+          ],
+          required: true,
+        },
+        {
+          id: 'prior_experience_notes',
+          type: 'textarea',
+          label: 'Current Setup & Key Pain Points',
+          placeholder: 'Describe your current process, systems, and primary objectives...',
+          required: true,
+        },
+      ];
+
     case 'waiver':
     case 'consent':
       return [
@@ -340,7 +1009,7 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         {
           id: 'terms_agreement',
           type: 'checkbox',
-          label: 'I have read, understood, and voluntarily agree to all the terms, safety guidelines, and waiver conditions outlined above.',
+          label: 'I have read, understood, and voluntarily agree to all terms, safety guidelines, and waiver conditions.',
           required: true,
         },
         {
@@ -395,9 +1064,19 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
       ];
 
     default:
-      return baseContact;
+      return [
+        ...baseContact,
+        {
+          id: 'subject_line',
+          type: 'text',
+          label: 'Subject / Topic',
+          placeholder: 'What is this regarding?',
+        },
+      ];
   }
 }
+
+// ─── Synthesizer Core ───────────────────────────────────────────────────────
 
 /**
  * Synthesizes a single complete FormTemplate object with deep field intelligence and rich SEO.
@@ -451,25 +1130,36 @@ export function synthesizeTemplate(
     construction: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=1200&q=80',
     cleaning: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
     landscaping: 'https://images.unsplash.com/photo-1558904541-efa8c4a08931?auto=format&fit=crop&w=1200&q=80',
+    education: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1200&q=80',
+    retail: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=80',
+    ecommerce: 'https://images.unsplash.com/photo-1556742049-0a67c5574f73?auto=format&fit=crop&w=1200&q=80',
+    pest_control: 'https://images.unsplash.com/photo-1584467735871-8e85353a8413?auto=format&fit=crop&w=1200&q=80',
+    home_services: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
+    marketing: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80',
+    agency: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80',
+    consulting: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80',
+    nonprofit: 'https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&w=1200&q=80',
   };
 
   const primaryPhoto =
     INDUSTRY_PHOTO_MAP[indId] ||
     'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80';
 
-  // Intelligent 2026 Layout Mapping
-  const chosenLayout =
-    catId === 'quote' || catId === 'estimate' || catId === 'booking' || catId === 'lead_generation'
-      ? 'split_media'
-      : allFields.length > 6
-      ? 'multi_step'
-      : 'card';
+  // Intelligent 2026 Layout: Default to split_media for rich visual presentation.
+  // Never default general business templates to single-question 'card' sliders.
+  const chosenLayout = 'split_media';
+
+  const shortDesc = getTemplateShortDescription(catId, indLabel, subLabel);
+  const longDesc = getTemplateLongDescription(catId, indLabel, subLabel);
+  const heroSubtitle = getTemplateHeroSubtitle(catId, indLabel, subLabel);
+  const badgeText = getTemplateBadgeText(catId, indLabel);
+  const benefitsList = getTemplateBenefits(catId, indLabel);
 
   const template: FormTemplate = {
     id: slug,
     name: cycle > 0 ? `${indLabel} ${subLabel} (Variant ${cycle + 1})` : `${indLabel} ${subLabel}`,
-    shortDescription: `Customizable, mobile-ready ${subLabel.toLowerCase()} designed specifically for ${indLabel.toLowerCase()} businesses and practices.`,
-    description: `Streamline client intake, quote generation, and service scheduling with our professional ${indLabel} ${subLabel}. Fully customizable fields, electronic signature support, automatic CRM lead capture, and instant notifications.`,
+    shortDescription: shortDesc,
+    description: longDesc,
     schema: {
       id: slug,
       title: `${indLabel} ${subLabel}`,
@@ -492,19 +1182,15 @@ export function synthesizeTemplate(
           splitRatio: '40-60',
           mediaType: 'image',
           mediaUrl: primaryPhoto,
-          badgeText: `⭐ Verified ${indLabel} Specialist • 2026 Pro`,
+          badgeText: badgeText,
           headline: `${indLabel} ${subLabel}`,
-          subtitle: `Upfront flat-rate pricing and instant confirmation for ${indLabel.toLowerCase()} services.`,
-          benefitsList: [
-            'Direct assignment to top-rated verified professionals',
-            '100% Upfront transparent quote & zero hidden fees',
-            'Confidential 256-bit encrypted data protection',
-          ],
+          subtitle: heroSubtitle,
+          benefitsList: benefitsList,
           mobileBehavior: 'stack_top',
         },
       },
       settings: {
-        submitButtonText: 'Submit Request ⚡',
+        submitButtonText: catId === 'application' ? 'Submit Application 🚀' : 'Submit Request ⚡',
         successTitle: 'Submission Received!',
         successMessage: `Thank you for contacting our ${indLabel.toLowerCase()} team. We will review your details and respond shortly.`,
         actions: {

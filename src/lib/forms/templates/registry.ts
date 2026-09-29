@@ -65,7 +65,7 @@ export function registerTemplates(templates: FormTemplate[]): void {
   for (const t of templates) registerTemplate(t);
 }
 
-import { synthesizeTemplate } from './generators/mass-template-synthesizer';
+import { synthesizeTemplate, getTemplateShortDescription } from './generators/mass-template-synthesizer';
 import { TEMPLATE_INDUSTRIES } from './taxonomy/industries';
 import { TEMPLATE_CATEGORIES } from './taxonomy/categories';
 
@@ -137,7 +137,7 @@ export function getCatalogIndex(): TemplateIndexEntry[] {
           entries.push({
             id: slug,
             name,
-            shortDescription: `Customizable, mobile-ready ${sub.label.toLowerCase()} for ${ind.label.toLowerCase()} businesses.`,
+            shortDescription: getTemplateShortDescription(cat.id, ind.label, sub.label),
             categoryId: cat.id as any,
             industryId: ind.id as any,
             variantIndex: cycle,
