@@ -6,6 +6,7 @@ import {
   TEMPLATE_INDUSTRIES,
 } from '@/lib/forms/templates';
 import { Sparkles, Zap, ShieldCheck, Layers } from 'lucide-react';
+import { AiMarketingLayout } from '@/components/ai-marketing/ai-marketing-layout';
 
 /**
  * /templates — Form Template Library & Customer Journey Hub.
@@ -167,7 +168,8 @@ export default function TemplatesGalleryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-emerald-500/20 selection:text-emerald-900 dark:selection:text-emerald-300">
+    <AiMarketingLayout activePath="/templates">
+      <div className="min-h-screen bg-background text-foreground selection:bg-emerald-500/20 selection:text-emerald-900 dark:selection:text-emerald-300">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdData) }}
@@ -259,6 +261,7 @@ export default function TemplatesGalleryPage() {
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </AiMarketingLayout>
   );
 }

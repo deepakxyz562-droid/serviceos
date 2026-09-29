@@ -260,14 +260,15 @@ const companyNavLinks = [
 
 // ─── Compare Catalog ────────────────────────────────────────────────────────
 const compareList = [
-  { label: 'Jobber Alternatives', desc: 'Modern features, zero per-seat fees', href: '/jobber-alternatives' },
+  { label: 'Fieseros vs Typeform', desc: 'Forms + CRM + AI automation', href: '/fieseros-vs-typeform' },
+  { label: 'Fieseros vs Chatbase', desc: 'Chatbot → business action', href: '/fieseros-vs-chatbase' },
+  { label: 'Fieseros vs Tidio', desc: 'Contractor-grade live chat', href: '/fieseros-vs-tidio' },
+  { label: 'Fieseros vs Jotform', desc: 'Full CRM vs form builder', href: '/fieseros-vs-jotform' },
+  { label: 'AI Chatbot Alternatives', desc: '2026 AI chatbot guide', href: '/ai-chatbot-alternatives' },
+  { label: 'Conversational Forms', desc: 'Interactive form guide', href: '/conversational-forms-alternatives' },
+  { label: 'Jobber Alternatives', desc: 'Modern features, zero seat fees', href: '/jobber-alternatives' },
   { label: 'Housecall Pro Alternatives', desc: 'Simpler dispatch & built-in AI', href: '/housecall-pro-alternatives' },
   { label: 'ServiceTitan Alternatives', desc: 'Enterprise power without lock-in', href: '/servicetitan-alternatives' },
-  { label: '2026 Best Software Guide', desc: 'Full contractor software review', href: '/best-field-service-software' },
-  { label: 'Fieseros vs Jotform', desc: 'Smart forms + AI agent + CRM', href: '/fieseros-vs-jotform' },
-  { label: 'Fieseros vs Typeform', desc: 'Beyond pretty forms', href: '/fieseros-vs-typeform' },
-  { label: 'Fieseros vs Chatbase', desc: 'Chatbot → business action', href: '/fieseros-vs-chatbase' },
-  { label: 'AI Chatbot Alternatives', desc: 'Best AI chatbot in 2026', href: '/ai-chatbot-alternatives' },
 ];
 
 /**
@@ -1032,6 +1033,30 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
               {mobileSection === 'company' && (
                 <div className="p-3 pt-0 border-t border-border/60 space-y-1 bg-muted/20">
                   {companyNavLinks.map((item) => (
+                    <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block p-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted truncate transition-colors">
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Section: Compare */}
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleMobileSection('compare')}
+                className="w-full flex items-center justify-between p-3.5 text-sm font-bold text-foreground text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Scale className="h-4 w-4 text-emerald-600" />
+                  <span>Competitor Comparisons</span>
+                </div>
+                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'compare' && 'rotate-180')} />
+              </button>
+              {mobileSection === 'compare' && (
+                <div className="p-3 pt-0 border-t border-border/60 space-y-1 bg-muted/20">
+                  {compareList.map((item) => (
                     <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)} className="block p-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted truncate transition-colors">
                       {item.label}
                     </Link>

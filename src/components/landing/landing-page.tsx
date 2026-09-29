@@ -492,10 +492,27 @@ const seoIndustries = [
 ];
 
 const seoCompare = [
+  { label: 'Fieseros vs Typeform', href: '/fieseros-vs-typeform' },
+  { label: 'Fieseros vs Chatbase', href: '/fieseros-vs-chatbase' },
+  { label: 'Fieseros vs Tidio', href: '/fieseros-vs-tidio' },
+  { label: 'Fieseros vs Jotform', href: '/fieseros-vs-jotform' },
+  { label: 'AI Chatbot Alternatives', href: '/ai-chatbot-alternatives' },
+  { label: 'Conversational Forms Guide', href: '/conversational-forms-alternatives' },
   { label: 'Jobber Alternatives', href: '/jobber-alternatives' },
   { label: 'Housecall Pro Alternatives', href: '/housecall-pro-alternatives' },
   { label: 'ServiceTitan Alternatives', href: '/servicetitan-alternatives' },
-  { label: 'Best Field Service Software', href: '/best-field-service-software' },
+];
+
+const seoUseCases = [
+  { label: 'All Use Cases Hub', href: '/use-cases' },
+  { label: 'AI Lead Capture', href: '/use-cases/lead-capture' },
+  { label: 'Appointment Booking', href: '/use-cases/appointment-booking' },
+  { label: 'Quote Generation', href: '/use-cases/quote-generation' },
+  { label: 'Payment Collection', href: '/use-cases/payment-collection' },
+  { label: 'Review Collection', href: '/use-cases/review-collection' },
+  { label: 'Lead Nurturing', href: '/use-cases/lead-nurturing' },
+  { label: 'AI Customer Support', href: '/use-cases/customer-support' },
+  { label: 'Job Dispatch', href: '/use-cases/job-dispatch' },
 ];
 
 const seoFeatures = [
@@ -525,6 +542,7 @@ const footerLinks = {
     { label: 'Pricing Plans', href: '/pricing' },
   ],
   industries: seoIndustries,
+  useCases: seoUseCases,
   compare: seoCompare,
   resources: [
     { label: 'GPTForm™ Smart Forms', href: '/gptform' },
@@ -630,6 +648,19 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
             <a href="/features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Features</a>
             <a href="/templates" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Templates</a>
             <a href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Marketplace</a>
+
+            <div className="relative group">
+              <a href="/use-cases" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">
+                Use Cases <ChevronDown className="w-3.5 h-3.5" />
+              </a>
+              <div className="absolute left-0 top-full pt-3 invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 z-50">
+                <div className="w-64 rounded-xl border border-border bg-white shadow-lg p-2 grid grid-cols-1 gap-0.5 max-h-[70vh] overflow-y-auto">
+                  {seoUseCases.map((u) => (
+                    <a key={u.href} href={u.href} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors">{u.label}</a>
+                  ))}
+                </div>
+              </div>
+            </div>
             
             <div className="relative group">
               <a href="/industries" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">
@@ -698,6 +729,14 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
               <a href="/pricing" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Pricing Plans</a>
               <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
               <div className="pt-2">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground/70 mb-1">Use Cases</p>
+                <a href="/use-cases" className="block text-sm font-medium text-emerald-700 hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>All Use Cases Hub →</a>
+                <a href="/use-cases/lead-capture" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>AI Lead Capture</a>
+                <a href="/use-cases/appointment-booking" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>Appointment Booking</a>
+                <a href="/use-cases/quote-generation" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>Quote Generation</a>
+                <a href="/use-cases/payment-collection" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>Payment Collection</a>
+              </div>
+              <div className="pt-2">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground/70 mb-1">Industries</p>
                 <a href="/plumbing-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Plumbing</a>
                 <a href="/hvac-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>HVAC</a>
@@ -709,8 +748,14 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
               </div>
               <div className="pt-2">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground/70 mb-1">Compare</p>
-                <a href="/jobber-alternatives" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Jobber Alternatives</a>
-                <a href="/best-field-service-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Best Field Service Software</a>
+                <a href="/fieseros-vs-typeform" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>Fieseros vs Typeform</a>
+                <a href="/fieseros-vs-chatbase" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>Fieseros vs Chatbase</a>
+                <a href="/fieseros-vs-tidio" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>Fieseros vs Tidio</a>
+                <a href="/fieseros-vs-jotform" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>Fieseros vs Jotform</a>
+                <a href="/ai-chatbot-alternatives" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>AI Chatbot Alternatives</a>
+                <a href="/jobber-alternatives" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>Jobber Alternatives</a>
+                <a href="/housecall-pro-alternatives" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>Housecall Pro Alternatives</a>
+                <a href="/servicetitan-alternatives" className="block text-sm text-muted-foreground hover:text-foreground py-1" onClick={() => setMobileMenuOpen(false)}>ServiceTitan Alternatives</a>
               </div>
               <Separator className="bg-border" />
               <Button variant="ghost" size="sm" onClick={onSignIn} className="w-full text-muted-foreground hover:text-foreground justify-start">Sign In</Button>
@@ -1943,7 +1988,7 @@ function Footer() {
   return (
     <footer className="bg-foreground text-background mt-auto pb-[env(safe-area-inset-bottom,0px)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-8">
           <div className="col-span-2">
             <div className="flex items-center gap-2.5 mb-4">
               <BrandMark size={32} className="shadow-black/20" />
@@ -1987,6 +2032,24 @@ function Footer() {
                   </a>
                 </li>
               ))}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-background font-semibold text-sm mb-4">Use Cases</h4>
+            <ul className="space-y-2.5">
+              {footerLinks.useCases.slice(1, 7).map((link) => (
+                <li key={link.href}>
+                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+              <li>
+                <a href="/use-cases" className="text-emerald-400 text-sm hover:underline font-medium">
+                  All Use Cases Hub →
+                </a>
+              </li>
             </ul>
           </div>
 

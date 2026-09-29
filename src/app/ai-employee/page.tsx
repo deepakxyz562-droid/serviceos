@@ -21,7 +21,8 @@ import {
   AlertCircle,
   TrendingUp,
 } from 'lucide-react';
-import { CornerstoneLayout, CornerstoneHero } from '@/components/seo/cornerstone-layout';
+import { CornerstoneHero } from '@/components/seo/cornerstone-layout';
+import { AiMarketingLayout } from '@/components/ai-marketing/ai-marketing-layout';
 import { CtaSection } from '@/components/seo/cta-section';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
@@ -152,15 +153,15 @@ export default function AiEmployeePillarPage() {
   const faqSchema = getFaqSchema(faqs);
 
   return (
-    <CornerstoneLayout
-      activePath="/ai-employee"
-      breadcrumbs={[
-        { name: 'Home', url: 'https://fieseros.com' },
-        { name: 'AI Voice Receptionist', url: 'https://fieseros.com/ai-employee' },
-      ]}
-      additionalSchema={[appSchema, faqSchema]}
-      showAiReceptionist={false}
-    >
+    <AiMarketingLayout activePath="/ai-employee">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(appSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
       {/* Hero Section */}
       <CornerstoneHero
         eyebrow="24/7 Autonomous AI Voice Agent"
@@ -396,6 +397,6 @@ export default function AiEmployeePillarPage() {
         secondaryCtaText="Explore All Features"
         secondaryCtaHref="/features"
       />
-    </CornerstoneLayout>
+    </AiMarketingLayout>
   );
 }

@@ -130,7 +130,7 @@ export default function ChatbotPage() {
   };
 
   return (
-    <AiMarketingLayout>
+    <AiMarketingLayout activePath="/chatbot">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
