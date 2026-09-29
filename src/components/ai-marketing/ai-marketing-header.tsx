@@ -715,7 +715,7 @@ export function AiMarketingHeader({ activePath }: { activePath?: string }) {
         {/* ── Right Action CTAs ── */}
         <div className="flex items-center gap-2.5">
           <Link
-            href="/auth/login"
+            href="/login"
             className="hidden sm:inline-flex text-xs font-medium text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg transition-colors"
           >
             Sign In
@@ -975,7 +975,7 @@ export function AiMarketingHeader({ activePath }: { activePath?: string }) {
               </Link>
 
               <Link
-                href="/auth/login"
+                href="/login"
                 onClick={() => setMobileMenuOpen(false)}
                 className="w-full flex items-center justify-center rounded-xl border border-border bg-card py-2.5 text-sm font-medium text-foreground hover:bg-muted"
               >
