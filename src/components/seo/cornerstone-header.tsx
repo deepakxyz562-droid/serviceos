@@ -411,77 +411,6 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
             )}
           </div>
 
-          {/* Dropdown 1: Product */}
-          <div
-            className="relative"
-            onMouseEnter={() => handleMouseEnter('product')}
-            onMouseLeave={handleMouseLeave}
-          >
-            <button
-              type="button"
-              onClick={() => setOpenDropdown((v) => (v === 'product' ? null : 'product'))}
-              aria-expanded={openDropdown === 'product'}
-              className={cn(
-                'flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                productLinks.some((p) => p.href === activePath) || openDropdown === 'product'
-                  ? 'text-foreground bg-accent'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/70'
-              )}
-            >
-              Product <ChevronDown className={cn('h-3.5 w-3.5 transition-transform duration-200', openDropdown === 'product' && 'rotate-180')} />
-            </button>
-
-            {openDropdown === 'product' && (
-              <div className="absolute left-0 top-full pt-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                <div className="w-[560px] rounded-2xl border border-border/80 bg-background p-4 shadow-2xl grid grid-cols-2 gap-2">
-                  {productLinks.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = activePath === item.href;
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setOpenDropdown(null)}
-                        className={cn(
-                          'flex items-start gap-3 p-2.5 rounded-xl transition-all',
-                          isActive
-                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                            : 'hover:bg-muted/70 text-foreground'
-                        )}
-                      >
-                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5">
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-foreground truncate">{item.label}</span>
-                            {item.badge && (
-                              <span className="text-[9px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded-full">
-                                {item.badge}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-muted-foreground line-clamp-2 leading-tight mt-0.5">
-                            {item.desc}
-                          </p>
-                        </div>
-                      </Link>
-                    );
-                  })}
-                  <div className="col-span-2 mt-1 pt-2 border-t border-border flex items-center justify-between text-xs px-2">
-                    <span className="text-muted-foreground">Looking for industry setups?</span>
-                    <Link
-                      href="/field-service-software"
-                      onClick={() => setOpenDropdown(null)}
-                      className="font-medium text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1"
-                    >
-                      Explore trade workflows <ArrowRight className="h-3 w-3" />
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Dropdown 1b: Use Cases */}
           <div
@@ -872,40 +801,6 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
                       </Link>
                     );
                   })}
-                </div>
-              )}
-            </div>
-
-            {/* Mobile Section 1: Products */}
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <button
-                type="button"
-                onClick={() => toggleMobileSection('products')}
-                className="w-full flex items-center justify-between p-3.5 text-sm font-bold text-foreground text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-emerald-600" />
-                  <span>Platform &amp; Features</span>
-                </div>
-                <ChevronDown className={cn('h-4 w-4 transition-transform', mobileSection === 'products' && 'rotate-180')} />
-              </button>
-              {mobileSection === 'products' && (
-                <div className="p-3 pt-0 border-t border-border/60 space-y-1 bg-muted/20">
-                  {productLinks.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center justify-between p-2 rounded-lg text-xs font-medium text-foreground hover:bg-muted transition-colors"
-                    >
-                      <span>{item.label}</span>
-                      {item.badge && (
-                        <span className="text-[10px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">
-                          {item.badge}
-                        </span>
-                      )}
-                    </Link>
-                  ))}
                 </div>
               )}
             </div>
