@@ -401,7 +401,7 @@ export function GptFormClientView() {
 
 
       {/* ── SECTION 5: 33+ PAYMENT GATEWAYS SHOWCASE ── */}
-      <section className="section-pad bg-background">
+      <section className="border-y border-border bg-emerald-500/5 py-16">
         <div className="page-shell text-center max-w-4xl mx-auto space-y-8">
           <div className="space-y-3">
             <Badge className="bg-emerald-600 text-white text-xs px-3 py-1 font-semibold">
