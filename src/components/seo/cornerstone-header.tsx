@@ -107,6 +107,27 @@ interface NavProductItem {
 
 const productLinks: NavProductItem[] = [
   {
+    label: 'Field Service Management',
+    desc: 'The complete FSM platform — definition, components & software',
+    href: '/field-service-management',
+    icon: Wrench,
+    badge: 'Keyword',
+  },
+  {
+    label: 'Home Services Software',
+    desc: 'All-in-one platform for residential home service businesses',
+    href: '/home-services-software',
+    icon: Wrench,
+    badge: 'Keyword',
+  },
+  {
+    label: 'Blue Collar CRM',
+    desc: 'Customer management CRM built for trade businesses',
+    href: '/blue-collar-crm',
+    icon: Users,
+    badge: 'Keyword',
+  },
+  {
     label: 'Field Service Software',
     desc: 'All-in-one operating system for trade contractors',
     href: '/field-service-software',

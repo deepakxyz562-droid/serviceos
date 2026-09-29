@@ -7,26 +7,24 @@ import { useCases } from "@/lib/seo/use-case-config";
 import type { BreadcrumbItem } from "@/components/seo/breadcrumbs";
 
 export const metadata: Metadata = {
-  title: "AI Agent & Smart Form Use Cases | GPTForm by Fieseros",
+  title: "Use Cases — How Service Businesses Grow with Fieseros",
   description:
-    "Discover how growing businesses use GPTForm and AI Agents to capture 24/7 leads, book calendar slots, generate formula quotes, collect payments, and support customers with zero hallucinations.",
+    "Explore how contractors use Fieseros to capture leads, book jobs, generate quotes, collect payments, gather reviews, nurture leads, support customers, and dispatch technicians — all in one AI-powered platform.",
   keywords: [
-    "AI agent use cases",
-    "GPTForm use cases",
-    "ai lead capture",
-    "conversational appointment booking",
-    "instant quote calculator",
-    "in-chat payment collection",
-    "automated google reviews",
-    "lead nurturing sequences",
-    "24/7 AI customer support",
-    "smart job dispatch",
+    "field service use cases",
+    "contractor lead capture",
+    "appointment booking software",
+    "quote generation",
+    "payment collection",
+    "review collection",
+    "lead nurturing",
+    "job dispatch software",
   ],
   alternates: { canonical: "https://fieseros.com/use-cases" },
   openGraph: {
-    title: "AI Agent & Smart Form Use Cases | GPTForm by Fieseros",
+    title: "Use Cases — How Service Businesses Grow with Fieseros",
     description:
-      "Explore how businesses use GPTForm AI Agents to qualify leads, book appointments, compute quotes, and process payments 24/7.",
+      "Explore how contractors use Fieseros to capture leads, book jobs, generate quotes, collect payments, and more — all in one AI-powered platform.",
     url: "https://fieseros.com/use-cases",
     siteName: "Fieseros",
     type: "website",
@@ -47,13 +45,15 @@ export default function UseCasesHubPage() {
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-4">
             <Sparkles className="h-3.5 w-3.5" />
-            GPTForm + AI Agent Use Cases
+            Use Cases
           </span>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground mb-4">
-            Every way GPTForm & AI Agents grow your revenue
+            Every way Fieseros grows your service business
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            From the first visitor question to real calendar booking, formula quote calculations, and 0% fee payment collection. Select a workflow below to see how our autonomous agents drive real business actions 24/7.
+            From the first website visit to the final payment — and every
+            conversation in between. Pick the workflow you want to improve and
+            see exactly how Fieseros handles it end-to-end.
           </p>
         </div>
       </section>
@@ -96,11 +96,11 @@ export default function UseCasesHubPage() {
       </section>
 
       <CtaSection
-        title="Experience autonomous AI workflows in action"
-        subtitle="Every use case connects seamlessly into one unified platform. Start your 14-day free trial and launch your first AI agent in under 60 seconds."
+        title="See it all working together"
+        subtitle="Every use case above is one piece of a single connected platform. Start your free trial and try them all."
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
         secondaryCta={{ label: "View Pricing", href: "/pricing" }}
-        bullets={["60-second setup", "No credit card required", "0% platform fees"]}
+        bullets={["14-day free trial", "No credit card required", "Cancel anytime"]}
       />
     </CornerstoneLayout>
   );

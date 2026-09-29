@@ -7,22 +7,22 @@ import { integrations } from "@/lib/seo/platform-config";
 import type { BreadcrumbItem } from "@/components/seo/breadcrumbs";
 
 export const metadata: Metadata = {
-  title: "Integrations — Connect Calendars, Payments & 6,000+ Apps | GPTForm",
+  title: "Integrations — Connect Fieseros to Your Stack | Fieseros",
   description:
-    "Connect GPTForm to Google Calendar, Stripe, QuickBooks Online, Zapier, and 6,000+ business apps. Real-time 2-way sync, OAuth authentication, and 0% platform transaction fees.",
+    "Connect Fieseros to Google Calendar, Stripe, QuickBooks, Zapier, and 6,000+ apps. OAuth-based, real-time sync, no API keys to manage. Automate your whole workflow.",
   keywords: [
-    "GPTForm integrations",
-    "google calendar 2-way sync",
-    "stripe in-chat payments",
-    "quickbooks invoice sync",
-    "zapier webhook automation",
-    "calendar appointment booking",
+    "fieseros integrations",
+    "google calendar integration",
+    "stripe integration",
+    "quickbooks integration",
+    "zapier integration",
+    "field service integrations",
   ],
   alternates: { canonical: "https://fieseros.com/integrations" },
   openGraph: {
-    title: "Integrations — Connect Calendars, Payments & 6,000+ Apps | GPTForm",
+    title: "Integrations — Connect Fieseros to Your Stack | Fieseros",
     description:
-      "Connect GPTForm to Google Calendar, Stripe, QuickBooks, and 6,000+ tools via Zapier. Real-time OAuth sync.",
+      "Connect Fieseros to Google Calendar, Stripe, QuickBooks, Zapier, and 6,000+ apps. OAuth-based, real-time sync, no API keys to manage.",
     url: "https://fieseros.com/integrations",
     siteName: "Fieseros",
     type: "website",
@@ -43,13 +43,15 @@ export default function IntegrationsHubPage() {
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20 text-center">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 mb-4">
             <Sparkles className="h-3.5 w-3.5" />
-            Integrations & Workflows
+            Integrations
           </span>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground mb-4">
-            Connect GPTForm to your entire software stack
+            Connect Fieseros to your whole stack
           </h1>
           <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Google Calendar, Stripe, QuickBooks Online, and Zapier — connect in minutes via secure OAuth. Real-time 2-way calendar sync, automated invoice reconciliation, and 6,000+ business applications within reach.
+            Google Calendar, Stripe, QuickBooks, and Zapier — connected in
+            minutes via OAuth. Real-time sync, automatic reconciliation, and
+            6,000+ apps within reach.
           </p>
         </div>
       </section>
@@ -57,7 +59,7 @@ export default function IntegrationsHubPage() {
       {/* Integration cards grid */}
       <section className="bg-background py-16 lg:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {integrations.map((i) => {
               const Icon = i.icon;
               return (
@@ -71,7 +73,7 @@ export default function IntegrationsHubPage() {
                       <Icon className="h-6 w-6" />
                     </div>
                     <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                      Integration
+                      Sync
                     </span>
                   </div>
                   <h2 className="text-lg font-bold text-foreground mb-2 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
@@ -81,7 +83,7 @@ export default function IntegrationsHubPage() {
                     {i.heroSubtitle}
                   </p>
                   <div className="mt-5 pt-3 border-t border-border/40 flex items-center justify-between text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                    <span>Setup integration</span>
+                    <span>Connect guide</span>
                     <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </Link>
@@ -92,11 +94,11 @@ export default function IntegrationsHubPage() {
       </section>
 
       <CtaSection
-        title="Unify your business operations"
-        subtitle="Eliminate manual data entry and disjointed apps. Start your 14-day free trial and connect your tools in minutes."
+        title="Connect your stack in minutes"
+        subtitle="OAuth-based connections — no API keys to manage. Real-time sync, automatic reconciliation."
         primaryCta={{ label: "Start Free Trial", href: "/#signup" }}
-        secondaryCta={{ label: "View Pricing", href: "/pricing" }}
-        bullets={["1-click OAuth setup", "0% platform payment fees", "Real-time 2-way sync"]}
+        secondaryCta={{ label: "View Platforms", href: "/platform" }}
+        bullets={["14-day free trial", "No credit card required", "Cancel anytime"]}
       />
     </CornerstoneLayout>
   );

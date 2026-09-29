@@ -7,9 +7,6 @@ import {
   CreditCard,
   Zap,
   BookOpen,
-  Sparkles,
-  Bot,
-  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import type { Feature } from "@/components/seo/feature-grid";
@@ -36,57 +33,57 @@ export const platforms: PlatformConfig[] = [
   {
     kind: "platform",
     slug: "wordpress",
-    titleTag: "GPTForm for WordPress — AI Chatbot & Smart Forms Plugin Alternative",
-    h1: "Add 24/7 AI chat & smart forms to WordPress in 60 seconds",
-    eyebrow: "Platform · WordPress AI Chat & Forms",
+    titleTag: "Fieseros for WordPress — AI Chat & Forms Plugin Alternative",
+    h1: "Add AI chat & smart forms to your WordPress site",
+    eyebrow: "Platform · WordPress",
     metaDescription:
-      "Embed GPTForm AI Chatbot and smart forms on any WordPress site with 1 line of code. No plugin conflicts, zero database bloat, 100% Core Web Vitals friendly.",
+      "Embed Fieseros AI chat agent and smart forms on any WordPress site in 60 seconds — no plugin, no bloat. Capture leads, book appointments, and collect payments with one snippet.",
     heroSubtitle:
-      "Zero plugins to install, zero database bloat, zero security vulnerabilities. Paste 1 snippet into your WordPress header or use a shortcode to deploy an autonomous AI agent and smart intake forms that capture leads, book appointments, and collect payments 24/7.",
+      "No plugin conflicts, no PHP, no bloat. Paste one snippet into your WordPress header and the AI chat agent + smart forms are live — capturing leads and booking jobs 24/7.",
     icon: LayoutTemplate,
     metrics: [
-      { value: "60s", label: "From 1-line snippet to live agent" },
-      { value: "0", label: "Heavy plugins to install or update" },
-      { value: "100%", label: "Compatible with Elementor, Divi & Gutenberg" },
+      { value: "60s", label: "From snippet to live agent" },
+      { value: "0", label: "Plugins to install" },
+      { value: "All", label: "WP themes supported" },
     ],
     features: [
       {
         icon: Globe,
-        badge: "Zero Bloat",
-        title: "1-Line Universal Header Embed",
+        badge: "Snippet",
+        title: "One-Line Header Embed",
         description:
-          "Drop the lightweight GPTForm script into your theme header or header-injection tool. The AI chat widget loads asynchronously on every page with zero drag on Core Web Vitals.",
+          "Drop the Fieseros embed script into your theme's <head> or a header-injection plugin. The AI chat widget loads on every page with zero impact on PageSpeed.",
       },
       {
         icon: Code,
-        title: "Shortcode & Block for Inline Forms",
+        title: "Shortcode for Inline Forms",
         description:
-          "Embed dynamic smart forms, multi-step intake, or price calculators anywhere in posts, pages, or Elementor templates using the [gptform id=\"...\"] shortcode.",
+          "Use [fieseros form=\"contact\"] shortcodes to embed smart forms inline in posts and pages — perfect for service request pages and quote forms.",
       },
       {
         icon: Calendar,
-        title: "In-Chat & On-Page Booking",
+        title: "Booking Page Integration",
         description:
-          "Let clients book appointments directly through your WordPress site with real-time 2-way Google Calendar and Microsoft Outlook availability sync.",
+          "Embed a full booking page on /book or /schedule that shows real-time availability and lets customers self-book appointments directly from your WordPress site.",
       },
       {
         icon: CreditCard,
-        title: "WooCommerce-Safe Payments (0% Fee)",
+        title: "WooCommerce-Safe Payments",
         description:
-          "GPTForm runs independently of WooCommerce with zero conflict. Collect service deposits, booking fees, and retainers via Stripe or Apple Pay with 0% platform fees.",
+          "Fieseros payment collection runs independently of WooCommerce — no conflict. Collect deposits and invoices via Stripe, Razorpay, or PayPal alongside your store.",
       },
       {
         icon: Zap,
-        badge: "AI Powered",
-        title: "Automatic Site Content Crawling",
+        badge: "AI",
+        title: "AI Chat on Every Page",
         description:
-          "Just enter your WordPress site URL. GPTForm crawls your blog posts, service pages, and FAQs in 60 seconds so your agent answers questions accurately from day one.",
+          "The AI agent greets visitors, qualifies leads, and books appointments on every WordPress page — blog posts, service pages, and the homepage alike.",
       },
       {
-        icon: ShieldCheck,
-        title: "Knowledge Gaps Discovery",
+        icon: BookOpen,
+        title: "Blog-Led SEO Capture",
         description:
-          "Whenever a WordPress visitor asks a question your site doesn't cover, it is logged in your Knowledge Gaps inbox. Answer it once, and the agent knows it permanently.",
+          "Visitors reading your WordPress blog get the AI agent in the corner — turning SEO traffic into qualified leads instead of bounces.",
       },
     ],
     installSteps: [
@@ -94,209 +91,209 @@ export const platforms: PlatformConfig[] = [
         step: "1",
         title: "Copy your embed snippet",
         description:
-          "In your GPTForm dashboard, navigate to Embed & Share and copy your unique 1-line JavaScript snippet.",
+          "From your Fieseros dashboard, click 'Embed' and copy the one-line <script> tag with your workspace ID.",
       },
       {
         step: "2",
         title: "Paste into WordPress header",
         description:
-          "Add the snippet to your theme header via Appearance → Theme File Editor (before </head>), or use a free plugin like 'WPCode / Insert Headers and Footers'.",
+          "Add the snippet to Appearance → Theme Editor → header.php (before </head>), or use a header-injection plugin like 'Insert Headers and Footers'.",
       },
       {
         step: "3",
-        title: "Publish & test live",
+        title: "Publish & verify",
         description:
-          "Save your settings and visit your website. Your AI chat agent appears in the bottom corner, fully trained on your website content.",
+          "Save and visit any page. The AI chat widget appears in the bottom-right. Test it by sending a message.",
       },
       {
         step: "4",
-        title: "Embed inline forms (optional)",
+        title: "Add inline forms (optional)",
         description:
-          "Copy the iframe or shortcode snippet to place interactive multi-step forms or quote calculators directly inside any Elementor or Gutenberg page.",
+          "Use the [fieseros] shortcode on any page or post to embed a smart form inline — contact, quote, or booking.",
       },
     ],
     faqs: [
       {
-        question: "Do I need to install a heavy WordPress plugin?",
+        question: "Do I need to install a WordPress plugin?",
         answer:
-          "No. GPTForm uses a lightweight 1-line script tag. This completely avoids plugin bloat, database clutter, theme conflicts, and security vulnerabilities associated with running heavy PHP plugins.",
+          "No. Fieseros uses a single embed script in your theme header — no plugin required. This avoids plugin conflicts, bloat, and the security risks of giving a third-party plugin access to your WordPress admin. You can also use a header-injection plugin if you'd rather not edit theme files.",
       },
       {
-        question: "Will the chat widget slow down my WordPress site or hurt SEO?",
+        question: "Will the chat widget slow down my WordPress site?",
         answer:
-          "Not at all. The script is less than 15KB, loads asynchronously after first paint, and the full widget is lazy-loaded only when engaged. It has zero measurable impact on PageSpeed Insights or Core Web Vitals.",
+          "No. The Fieseros script is <15KB, loads asynchronously after first paint, and the chat widget is lazy-loaded when a visitor engages. It has no measurable impact on Core Web Vitals or PageSpeed scores.",
       },
       {
-        question: "Does it work with page builders like Elementor, Divi, and Bricks?",
+        question: "Does it work with page builders like Elementor and Divi?",
         answer:
-          "Yes. The header embed works across all page builders automatically. For inline forms and price calculators, you can paste the embed code into Elementor's HTML or Shortcode widget, Divi's Code module, or Gutenberg's Custom HTML block.",
+          "Yes. The header embed works universally. For inline forms, you can use the shortcode in Elementor's Shortcode widget or Divi's Code module. The booking page can be embedded in an iframe on any page builder.",
       },
       {
-        question: "Can I use GPTForm alongside WooCommerce?",
+        question: "Can I use Fieseros with WooCommerce?",
         answer:
-          "Yes. GPTForm operates harmoniously alongside WooCommerce. The AI agent can answer customer inquiries and book service consultations, while WooCommerce processes product orders — without any payment gateway collisions.",
+          "Yes. Fieseros runs alongside WooCommerce without conflict. The AI chat captures leads and books services, while WooCommerce handles product sales. Payment collection is independent so there's no double-charging or gateway conflict.",
       },
     ],
   },
   {
     kind: "platform",
     slug: "shopify",
-    titleTag: "GPTForm for Shopify — AI Sales Assistant & Service Booking Embed",
-    h1: "Turn Shopify visitors into buyers and booked appointments",
-    eyebrow: "Platform · Shopify AI Assistant & Booking",
+    titleTag: "Fieseros for Shopify — AI Chat & Booking for Online Stores",
+    h1: "Turn Shopify traffic into booked services",
+    eyebrow: "Platform · Shopify",
     metaDescription:
-      "Embed GPTForm on your Shopify store to answer product questions, book installations, and capture high-intent leads. 1-click theme app embed, no coding required.",
+      "Embed Fieseros AI chat and appointment booking on your Shopify store. Capture service leads, book installations, and collect deposits — no app install required.",
     heroSubtitle:
-      "Your Shopify store sells products; GPTForm provides the expert AI sales assistant and service booking engine. Answer product questions directly from your catalog, book installation appointments, and capture high-intent leads 24/7.",
+      "Your Shopify store sells products; Fieseros captures the service inquiries that products generate. The AI agent answers product questions, books installations, and collects deposits — all in one chat.",
     icon: ShoppingCart,
     metrics: [
-      { value: "1-Click", label: "Theme App Embed, zero code edits" },
-      { value: "+34%", label: "More service & installation bookings" },
-      { value: "0", label: "Apps slowing down your Liquid code" },
+      { value: "1-click", label: "Theme app embed" },
+      { value: "+34%", label: "Service inquiry capture" },
+      { value: "0", label: "Apps to install" },
     ],
     features: [
       {
         icon: ShoppingCart,
-        badge: "Native Embed",
-        title: "Native Shopify Theme App Embed",
+        badge: "Native",
+        title: "Theme App Embed",
         description:
-          "Enable GPTForm directly in Shopify Theme Customize → App Embeds with a single toggle. No Liquid code modifications and zero theme corruption risks.",
+          "Enable Fieseros via Shopify's theme app embed — no code edits. Toggle on in your theme settings and the AI chat appears across your store.",
       },
       {
         icon: Calendar,
-        title: "In-Store Service & Install Booking",
+        title: "Installation Booking",
         description:
-          "Shoppers purchasing items that require assembly, installation, or consultation can book an appointment slot right in the chat before or after checkout.",
-      },
-      {
-        icon: Zap,
-        badge: "Catalog AI",
-        title: "Product Catalog Q&A Engine",
-        description:
-          "The AI agent learns your Shopify product catalog, sizing specifications, and return policies, answering customer questions instantly to eliminate purchase hesitation.",
+          "Customers buying a product that needs installation (appliances, HVAC units, smart home gear) can book the install in the same chat — no separate call.",
       },
       {
         icon: CreditCard,
-        title: "In-Chat Checkout & Deposit Collection",
+        title: "Deposit Collection",
         description:
-          "Collect service fees, custom project retainers, or installation deposits directly through Stripe or PayPal with 0% platform fees without touching Shopify cart limits.",
+          "Collect installation deposits through Stripe or PayPal directly in the chat — separate from the Shopify checkout, no gateway conflict.",
+      },
+      {
+        icon: Zap,
+        badge: "AI",
+        title: "Product Q&A Agent",
+        description:
+          "The AI answers product questions from your store catalog and knowledge base — 'does this fit my furnace?' — and routes complex questions to your team.",
       },
       {
         icon: Globe,
-        title: "Dedicated Service Landing Pages",
+        title: "Service Landing Pages",
         description:
-          "Embed full-width smart intake forms or custom price calculators on dedicated Shopify service pages using custom Liquid sections.",
+          "Create dedicated service pages on your Shopify store with embedded Fieseros booking forms — capturing both product buyers and service seekers.",
       },
       {
         icon: BookOpen,
-        title: "Abandoned Chat & Form Recovery",
+        title: "Abandoned Cart Recovery",
         description:
-          "When an interested shopper drops off midway through an intake flow, automated SMS and email follow-ups re-engage them with a direct link to complete their booking.",
+          "When a customer abandons a cart, Fieseros can trigger an SMS follow-up offering help or a discount — recovering sales the standard email reminder misses.",
       },
     ],
     installSteps: [
       {
         step: "1",
-        title: "Enter your Shopify store URL",
+        title: "Connect your store",
         description:
-          "In the GPTForm dashboard, enter your Shopify store URL to automatically ingest your product pages, FAQs, and store policies.",
+          "From the Fieseros dashboard, select Shopify and paste your store URL. We'll guide you through the OAuth connection.",
       },
       {
         step: "2",
-        title: "Toggle Theme App Embed",
+        title: "Enable theme app embed",
         description:
-          "Open Shopify Admin → Online Store → Themes → Customize → App Embeds, and switch on the GPTForm toggle.",
+          "In Shopify admin → Themes → Customize → App embeds, toggle Fieseros on. The AI chat widget appears across your store instantly.",
       },
       {
         step: "3",
-        title: "Configure agent knowledge & actions",
+        title: "Configure the agent",
         description:
-          "Set up your calendar availability, booking services, and custom qualification questions in your GPTForm dashboard.",
+          "Upload your product catalog and service knowledge base so the AI can answer product and service questions accurately.",
       },
       {
         step: "4",
-        title: "Live 24/7 shopper assistance",
+        title: "Add booking forms (optional)",
         description:
-          "Your AI assistant is live across your store, assisting shoppers, answering specs, and capturing high-value consultation leads.",
+          "Embed Fieseros booking forms on service landing pages using the Shopify page editor and a custom Liquid block.",
       },
     ],
     faqs: [
       {
-        question: "Do I need to edit Liquid code or hire a developer?",
+        question: "Do I need to install a Shopify app?",
         answer:
-          "No developer needed. GPTForm uses Shopify's official Theme App Embed framework. You simply toggle it on inside your Shopify Theme Customizer, and it appears automatically without touching any Liquid code.",
+          "No app install required. Fieseros uses Shopify's theme app embed system — you connect via OAuth and toggle the embed on in your theme settings. No Liquid edits, no app bloat, no monthly Shopify app fees.",
       },
       {
-        question: "Does GPTForm conflict with standard Shopify checkout?",
+        question: "Does Fieseros conflict with Shopify checkout or payments?",
         answer:
-          "No. Physical product purchases flow through your normal Shopify checkout. Any service appointments, installation deposits, or consulting retainers can be collected either through Stripe in-chat (0% fee) or linked to Shopify draft orders.",
+          "No. Fieseros payment collection runs entirely separately from Shopify checkout. Product sales go through Shopify's gateway; service deposits and invoices go through Fieseros' connected gateways (Stripe, PayPal, Razorpay). They never interfere.",
       },
       {
-        question: "Can the AI agent answer questions about product specs and availability?",
+        question: "Can the AI agent answer questions about my products?",
         answer:
-          "Yes. GPTForm crawls your product descriptions, size guides, materials, and policies. It answers customer queries in real time with high accuracy, reducing pre-purchase hesitation.",
+          "Yes. Connect your product catalog and the AI answers product questions — specs, compatibility, availability — from your live data. For questions it can't answer, it escalates to your team with full context.",
       },
       {
-        question: "Can human agents take over live conversations with Shopify shoppers?",
+        question: "Will this replace my customer support app?",
         answer:
-          "Yes. If a shopper asks for a human or has a complex request, your team receives an instant notification on mobile and desktop, allowing 1-click live operator takeover.",
+          "It can. Fieseros handles 70%+ of common support questions (order status, returns, product info) via AI chat, and escalates the rest to your team in a shared inbox. Many stores replace Gorgias or Reamaze with Fieseros.",
       },
     ],
   },
   {
     kind: "platform",
     slug: "wix",
-    titleTag: "GPTForm for Wix — AI Chatbot & Smart Intake Forms",
-    h1: "Supercharge your Wix website with an autonomous AI agent",
-    eyebrow: "Platform · Wix AI Chat & Smart Forms",
+    titleTag: "Fieseros for Wix — AI Chat & Smart Forms Embed",
+    h1: "Add AI lead capture to your Wix website",
+    eyebrow: "Platform · Wix",
     metaDescription:
-      "Embed GPTForm AI Chatbot and dynamic forms on any Wix site in minutes. Capture leads, book appointments, and answer customer FAQs 24/7 with zero Velo coding.",
+      "Embed Fieseros AI chat agent and smart forms on any Wix website using the Velo code injection or custom HTML widget. Capture leads and book appointments in minutes.",
     heroSubtitle:
-      "No Velo coding required. Paste your GPTForm snippet into Wix Custom Code settings or drop our responsive iframe widget into any page. Deploy an AI agent that crawls your Wix pages and turns visitors into booked clients 24/7.",
+      "No Velo coding required. Paste the Fieseros snippet into Wix's custom code settings and the AI chat agent + smart forms are live — capturing leads from every page of your Wix site.",
     icon: Globe,
     metrics: [
-      { value: "5 min", label: "Quick setup on any Wix site" },
-      { value: "All", label: "Wix templates & Studio supported" },
-      { value: "24/7", label: "Autonomous lead capture & booking" },
+      { value: "5 min", label: "Setup time on Wix" },
+      { value: "All", label: "Wix templates supported" },
+      { value: "24/7", label: "AI lead capture" },
     ],
     features: [
       {
         icon: Globe,
-        badge: "Wix Code",
-        title: "Site-Wide Custom Code Injection",
+        badge: "Custom Code",
+        title: "Header Code Injection",
         description:
-          "Paste the GPTForm snippet into Wix Settings → Custom Code to launch the floating AI chat assistant across all pages of your site simultaneously.",
+          "Wix's Custom Code settings let you paste the Fieseros embed script into the site header — the AI chat widget loads on every page site-wide.",
       },
       {
         icon: Code,
-        title: "Responsive HTML Widget for Inline Forms",
+        title: "HTML Widget for Inline Forms",
         description:
-          "Use Wix's native Embed HTML / iframe widget to drop interactive multi-step forms, price calculators, or booking widgets into any section.",
+          "Embed smart forms inline using Wix's HTML iframe widget — perfect for contact pages, quote request forms, and booking widgets.",
       },
       {
         icon: Calendar,
-        title: "Real-Time Calendar Scheduling",
+        title: "Booking Page Integration",
         description:
-          "Allow clients to self-schedule consultations and service appointments directly on your Wix site with live two-way Google Calendar synchronization.",
+          "Create a /book page on Wix with an embedded Fieseros booking form that shows real-time availability and lets customers self-schedule.",
       },
       {
         icon: Zap,
-        badge: "AI Grounded",
-        title: "Automatic Wix Site Ingestion",
+        badge: "AI",
+        title: "AI Chat on Every Wix Page",
         description:
-          "GPTForm crawls all pages, blog posts, and FAQs on your Wix site in under 60 seconds, enabling the AI agent to answer client inquiries with complete factual accuracy.",
+          "The AI agent greets visitors, qualifies leads, and books appointments on every Wix page — homepage, services, blog, and contact.",
       },
       {
         icon: CreditCard,
-        title: "Wix Payments Independent (0% Fee)",
+        title: "Wix Payments-Safe",
         description:
-          "Collect deposits and service payments in chat via Stripe with 0% platform transaction fees — completely independent of Wix Payments limitations.",
+          "Fieseros payment collection runs independently of Wix Payments — collect deposits and invoices via Stripe or PayPal without conflict.",
       },
       {
-        icon: ShieldCheck,
-        title: "Mobile Optimized for Wix Mobile Views",
+        icon: BookOpen,
+        title: "Wix Blog Lead Capture",
         description:
-          "Designed to adapt seamlessly to Wix's separate mobile layout with smart bottom-sheet UI and safe-area padding for mobile browsers.",
+          "Visitors reading your Wix blog get the AI agent in the corner — converting content traffic into qualified leads instead of bounces.",
       },
     ],
     installSteps: [
@@ -304,104 +301,104 @@ export const platforms: PlatformConfig[] = [
         step: "1",
         title: "Copy your embed snippet",
         description:
-          "In your GPTForm dashboard, copy your one-line JavaScript embed snippet.",
+          "From the Fieseros dashboard, copy the one-line embed <script> tag with your workspace ID.",
       },
       {
         step: "2",
-        title: "Open Wix Custom Code",
+        title: "Add to Wix Custom Code",
         description:
-          "In your Wix Dashboard, go to Settings → Custom Code (under Advanced) and click '+ Add Custom Code'.",
+          "In Wix dashboard → Settings → Custom Code → Add new code, paste the snippet, set to load on all pages, place in header.",
       },
       {
         step: "3",
-        title: "Paste & set to Header",
+        title: "Publish & verify",
         description:
-          "Paste your snippet, select 'All Pages', place code in 'Head', and click Apply.",
+          "Save and publish your Wix site. The AI chat widget appears in the bottom-right corner. Test it by sending a message.",
       },
       {
         step: "4",
-        title: "Publish & test",
+        title: "Add inline forms (optional)",
         description:
-          "Publish your Wix site. The AI chat widget appears immediately in the bottom-right corner, ready to engage visitors.",
+          "Use the HTML iframe widget on any Wix page to embed a smart form inline — contact, quote, or booking.",
       },
     ],
     faqs: [
       {
-        question: "Do I need a Wix Velo (Corvid) developer subscription?",
+        question: "Do I need a Wix Velo subscription?",
         answer:
-          "No. GPTForm works on all standard paid Wix plans using the built-in Custom Code feature in Wix Settings. You do not need developer mode or Velo coding knowledge.",
+          "No. Fieseros uses Wix's Custom Code feature available on all paid Wix plans. You don't need Velo (Corvid) or developer mode — just paste the snippet into Settings → Custom Code.",
       },
       {
-        question: "Does the AI chat widget work on Wix mobile sites?",
+        question: "Will the chat widget work on the Wix mobile site?",
         answer:
-          "Yes. GPTForm is fully mobile responsive. On mobile screens, it renders an ergonomic floating button and a clean full-screen sheet that doesn't obstruct navigation.",
+          "Yes. The Fieseros widget is fully responsive and works on both desktop and mobile Wix sites. The chat button adapts to mobile screens and respects safe-area insets.",
       },
       {
-        question: "Can I embed intake forms and calculators inline on Wix pages?",
+        question: "Can I embed forms inline on Wix pages?",
         answer:
-          "Yes. You can add an 'Embed HTML' element in the Wix Editor, paste your GPTForm iframe snippet, and place the interactive form directly inside any page section.",
+          "Yes. Use Wix's HTML iframe widget and paste the Fieseros form embed code. The form renders natively inside the widget with full styling and validation.",
       },
       {
-        question: "Can I use GPTForm alongside Wix Bookings or Wix Chat?",
+        question: "Does this work with Wix Bookings?",
         answer:
-          "Yes. You can run both, or replace Wix Chat with GPTForm to upgrade from simple manual live chat to an autonomous AI agent that answers FAQs and books calendar slots 24/7.",
+          "Yes. Fieseros runs alongside Wix Bookings without conflict. Many customers use Fieseros for AI lead capture and replace Wix Bookings with Fieseros booking for the richer AI-powered experience and CRM integration.",
       },
     ],
   },
   {
     kind: "platform",
     slug: "webflow",
-    titleTag: "GPTForm for Webflow — AI Agent & Interactive Forms Embed",
-    h1: "Pair Webflow's pristine design with an intelligent AI agent",
-    eyebrow: "Platform · Webflow AI Agent & Forms",
+    titleTag: "Fieseros for Webflow — AI Chat & Forms Embed",
+    h1: "Supercharge your Webflow site with AI",
+    eyebrow: "Platform · Webflow",
     metaDescription:
-      "Embed GPTForm AI Chatbot and dynamic calculation forms on any Webflow site. Clean script injection, zero styling clashes, 100% Core Web Vitals friendly.",
+      "Embed Fieseros AI chat agent and smart forms on any Webflow site. Custom code in the project settings, embed widgets on any page — no CMS plan needed.",
     heroSubtitle:
-      "Webflow's clean code deserves an equally elegant AI agent. Paste the GPTForm snippet into Webflow Project Settings → Custom Code to launch a website-grounded AI assistant that books calendar slots, calculates quotes, and captures leads across every published page.",
+      "Webflow's clean design deserves clean code. Paste the Fieseros snippet into Project Settings → Custom Code and the AI agent is live across your entire Webflow site — no embed bloat.",
     icon: Code,
     metrics: [
-      { value: "Project-wide", label: "Single custom code snippet" },
-      { value: "<15KB", label: "Lightweight, async loaded script" },
-      { value: "100%", label: "Compatible with Webflow CMS items" },
+      { value: "Project-wide", label: "Custom code install" },
+      { value: "0", label: "CMS plan required" },
+      { value: "Embed", label: "Widgets on any page" },
     ],
     features: [
       {
         icon: Code,
-        badge: "Clean Code",
-        title: "Global Project-Wide Custom Code Embed",
+        badge: "Custom Code",
+        title: "Project-Wide Header Embed",
         description:
-          "Paste the GPTForm script into Webflow Project Settings → Custom Code → Head Code. The AI agent activates across your entire domain with zero per-page maintenance.",
+          "Paste the Fieseros script into Webflow Project Settings → Custom Code → <head>. The AI chat loads on every published page with no per-page setup.",
       },
       {
         icon: Globe,
-        title: "Webflow Embed Element for Inline Intake",
+        title: "Embed Widget for Inline Forms",
         description:
-          "Drag Webflow's native Embed element anywhere onto a page or CMS template to insert conversational forms, interactive calculators, or calendar pickers.",
-      },
-      {
-        icon: Sparkles,
-        title: "Zero CSS Bleed (Scoped Shadow DOM)",
-        description:
-          "The chat widget and embed components render inside an isolated Shadow DOM, guaranteeing that your carefully crafted Webflow styles are never overridden.",
+          "Use Webflow's Embed component to drop smart forms inline anywhere on a page — contact sections, service pages, footer CTAs.",
       },
       {
         icon: Calendar,
-        title: "CMS-Driven Dynamic Booking Pages",
+        title: "CMS-Driven Booking Pages",
         description:
-          "Connect Webflow CMS collection items to distinct GPTForm booking flows — each service line can have its own tailored qualification questions and calendar rules.",
-      },
-      {
-        icon: CreditCard,
-        title: "Webflow Ecommerce Independent",
-        description:
-          "Collect service deposits, consultation retainers, and milestone payments directly in chat via Stripe with 0% platform transaction fees.",
+          "Generate booking pages from Webflow CMS collection items — each service has its own page with an embedded Fieseros booking form.",
       },
       {
         icon: Zap,
-        badge: "Fast",
-        title: "Lighthouse 100 & Core Web Vitals Safe",
+        badge: "AI",
+        title: "AI Chat on Every Page",
         description:
-          "Engineered to load asynchronously after first paint with zero render-blocking resources, preserving your Webflow site's top-tier speed scores.",
+          "The AI agent greets visitors, answers questions, and books appointments on every Webflow page — homepage, CMS pages, and blog posts alike.",
+      },
+      {
+        icon: CreditCard,
+        title: "Webflow Ecommerce-Safe",
+        description:
+          "Fieseros payment collection runs independently of Webflow Ecommerce — collect service deposits via Stripe alongside product sales, no conflict.",
+      },
+      {
+        icon: BookOpen,
+        title: "Blog Lead Capture",
+        description:
+          "Webflow blog readers get the AI agent in the corner — converting content traffic into qualified leads instead of passive reads.",
       },
     ],
     installSteps: [
@@ -409,104 +406,104 @@ export const platforms: PlatformConfig[] = [
         step: "1",
         title: "Copy your embed snippet",
         description:
-          "In the GPTForm dashboard, copy your one-line script snippet.",
+          "From the Fieseros dashboard, copy the one-line embed <script> tag with your workspace ID.",
       },
       {
         step: "2",
-        title: "Paste into Webflow Custom Code",
+        title: "Add to Webflow Custom Code",
         description:
-          "In Webflow Designer, go to Project Settings → Custom Code → Head Code and paste the snippet.",
+          "In Webflow Designer → Project Settings → Custom Code → <head>, paste the snippet. Save and publish your site.",
       },
       {
         step: "3",
-        title: "Publish site",
+        title: "Verify the chat widget",
         description:
-          "Publish your Webflow site to both your webflow.io staging subdomain and custom production domain.",
+          "Visit your published site. The AI chat button appears in the bottom-right corner. Test it by sending a message.",
       },
       {
         step: "4",
         title: "Add inline forms (optional)",
         description:
-          "Drag a Webflow Embed element onto any page and paste the GPTForm iframe code to place a smart form inline.",
+          "Drag an Embed component onto any page and paste the Fieseros form embed code for inline smart forms.",
       },
     ],
     faqs: [
       {
         question: "Do I need a Webflow CMS or Ecommerce plan?",
         answer:
-          "No. GPTForm works on any paid Webflow site plan that includes Custom Code. You do not need an Ecommerce or high-tier plan.",
+          "No. Fieseros works on any Webflow plan including the basic site plan. Custom Code in Project Settings is available on all paid plans. CMS-driven booking pages require a CMS plan only if you want collection-driven booking pages.",
+      },
+      {
+        question: "Does the embed work with Webflow's staging subdomain?",
+        answer:
+          "Yes. The Fieseros script loads on both your staging subdomain (webflow.io) and production custom domain. You can test the chat on staging before publishing to production.",
+      },
+      {
+        question: "Can I use Fieseros forms instead of Webflow's native forms?",
+        answer:
+          "Yes. Fieseros smart forms have 200+ widgets, conditional logic, AI pre-fill, and CRM integration — far beyond Webflow's native forms. Use the Embed component to place them anywhere.",
       },
       {
         question: "Will the script affect my Webflow site's performance score?",
         answer:
-          "No. The script is less than 15KB, loads asynchronously, and the widget bundle lazy-loads only when a user interacts. It will not hurt your Lighthouse or Core Web Vitals metrics.",
-      },
-      {
-        question: "Can I use GPTForm instead of native Webflow Forms?",
-        answer:
-          "Yes. Webflow native forms are static and lack multi-step conversational logic, formula calculations, live calendar booking, and in-chat payments. GPTForm replaces them with dynamic conversational experiences.",
-      },
-      {
-        question: "Does it work on Webflow staging subdomains?",
-        answer:
-          "Yes. The script functions seamlessly on your your-site.webflow.io staging link, allowing you to test and fine-tune your agent before pushing changes to production.",
+          "No. The script is <15KB, loads asynchronously, and the chat widget is lazy-loaded. It has no measurable impact on Lighthouse performance or Core Web Vitals scores.",
       },
     ],
   },
   {
     kind: "platform",
     slug: "squarespace",
-    titleTag: "GPTForm for Squarespace — AI Chatbot & Smart Booking Forms",
-    h1: "Add 24/7 AI chat and intelligent forms to your Squarespace site",
-    eyebrow: "Platform · Squarespace AI Agent & Forms",
+    titleTag: "Fieseros for Squarespace — AI Chat & Forms Embed",
+    h1: "Add AI lead capture to your Squarespace site",
+    eyebrow: "Platform · Squarespace",
     metaDescription:
-      "Embed GPTForm AI Chatbot and smart booking forms on Squarespace using Code Injection. Capture leads, book appointments, and answer questions 24/7 with zero coding.",
+      "Embed Fieseros AI chat agent and smart forms on any Squarespace website using Code Injection. Capture leads, book appointments, and collect payments — no developer needed.",
     heroSubtitle:
-      "Elevate your Squarespace site with an intelligent conversational assistant. Paste the GPTForm snippet into Squarespace Code Injection to provide 24/7 visitor support, live appointment scheduling, and automated lead qualification that matches your brand aesthetics.",
+      "Squarespace's Code Injection makes it easy. Paste the Fieseros snippet once and the AI chat agent is live across every page — capturing leads from your beautiful Squarespace design.",
     icon: Globe,
     metrics: [
-      { value: "Code Injection", label: "Site-wide 1-step install" },
-      { value: "All", label: "Squarespace 7.0 & 7.1 templates" },
-      { value: "24/7", label: "Autonomous client capture & booking" },
+      { value: "Code Injection", label: "Site-wide install" },
+      { value: "All", label: "Squarespace templates" },
+      { value: "24/7", label: "AI lead capture" },
     ],
     features: [
       {
         icon: Code,
         badge: "Code Injection",
-        title: "Site-Wide Header Code Injection",
+        title: "Site-Wide Header Embed",
         description:
-          "Squarespace's built-in Code Injection (Settings → Advanced → Code Injection) lets you add the script once to activate the AI agent across your entire website.",
+          "Squarespace's Code Injection (Settings → Advanced → Code Injection → Header) lets you paste the Fieseros script once — it loads on every page.",
       },
       {
         icon: Globe,
-        title: "Code Block for Inline Intake & Calculators",
+        title: "Code Block for Inline Forms",
         description:
-          "Add a Squarespace Code Block to any page section to embed interactive calculation forms, multi-step intake, or real-time appointment booking widgets.",
+          "Use Squarespace's Code Block on any page or post to embed Fieseros smart forms inline — contact, quote, and booking widgets.",
       },
       {
         icon: Calendar,
-        title: "2-Way Google & Outlook Calendar Booking",
+        title: "Booking Page Integration",
         description:
-          "Let clients book appointments directly on your Squarespace site with real-time bidirectional synchronization, avoiding double-bookings.",
+          "Create a /book page on Squarespace with an embedded Fieseros booking form showing real-time availability and self-scheduling.",
       },
       {
         icon: Zap,
         badge: "AI",
-        title: "Automatic Site Content Ingestion",
+        title: "AI Chat on Every Page",
         description:
-          "GPTForm crawls your Squarespace service pages, blog articles, and FAQs automatically, grounding the AI agent with strict factual accuracy.",
+          "The AI agent greets visitors, qualifies leads, and books appointments across your entire Squarespace site — homepage, services, and blog.",
       },
       {
         icon: CreditCard,
-        title: "Squarespace Commerce Independent (0% Fee)",
+        title: "Squarespace Commerce-Safe",
         description:
-          "Collect consultation fees and project deposits via Stripe or Apple Pay with 0% platform fees, completely independent of Squarespace Commerce transaction costs.",
+          "Fieseros payment collection runs independently of Squarespace Commerce — collect service deposits via Stripe alongside product sales, no conflict.",
       },
       {
-        icon: ShieldCheck,
-        title: "Mobile Responsive & Safe-Area Aware",
+        icon: BookOpen,
+        title: "Blog Lead Capture",
         description:
-          "Adapts smoothly to mobile screens on Squarespace 7.0 and 7.1, respecting browser safe-area insets and bottom navigation bars.",
+          "Squarespace blog readers get the AI agent in the corner — converting content traffic into qualified leads instead of passive reads.",
       },
     ],
     installSteps: [
@@ -514,151 +511,152 @@ export const platforms: PlatformConfig[] = [
         step: "1",
         title: "Copy your embed snippet",
         description:
-          "In your GPTForm dashboard, copy your one-line JavaScript embed snippet.",
+          "From the Fieseros dashboard, copy the one-line embed <script> tag with your workspace ID.",
       },
       {
         step: "2",
-        title: "Open Squarespace Code Injection",
+        title: "Paste in Code Injection",
         description:
-          "In Squarespace, navigate to Settings → Advanced → Code Injection (or Developer Tools → Code Injection in 7.1).",
+          "In Squarespace → Settings → Advanced → Code Injection → Header, paste the snippet and save. Requires a Business plan or higher.",
       },
       {
         step: "3",
-        title: "Paste into Header & save",
+        title: "Publish & verify",
         description:
-          "Paste the snippet into the Header textarea and click Save in the top-left corner.",
+          "Visit your live Squarespace site. The AI chat button appears in the bottom-right corner. Test it by sending a message.",
       },
       {
         step: "4",
-        title: "Verify your live assistant",
+        title: "Add inline forms (optional)",
         description:
-          "Visit your live Squarespace site to test your new AI assistant. Customize its appearance and behavior anytime from your GPTForm dashboard.",
+          "Add a Code Block to any page and paste the Fieseros form embed code for inline smart forms.",
       },
     ],
     faqs: [
       {
-        question: "Which Squarespace plan is required for Code Injection?",
+        question: "Which Squarespace plan do I need for Code Injection?",
         answer:
-          "Code Injection requires a Squarespace Business plan or higher (including all Commerce plans). If you are on a Personal plan, upgrading to Business enables Code Injection immediately without rebuilding your site.",
+          "Code Injection requires a Business plan or higher (Commerce plans included). The Personal plan does not support Code Injection. If you're on Personal, upgrade to Business to use Fieseros — it's a one-time plan change with no site rebuild.",
       },
       {
-        question: "Does the chat widget work on Squarespace mobile view?",
+        question: "Will the chat widget work on Squarespace's mobile view?",
         answer:
-          "Yes. The widget is fully responsive and automatically optimizes its layout for mobile screens, ensuring a seamless user experience across iPhone, Android, and tablets.",
+          "Yes. The Fieseros widget is fully responsive and works on desktop and mobile Squarespace sites. The chat button adapts to mobile screens and respects safe-area insets.",
       },
       {
-        question: "Can I embed forms inline using Squarespace Code Blocks?",
+        question: "Can I embed forms inline using Code Blocks?",
         answer:
-          "Yes. You can add a standard Code Block anywhere on a page, paste your GPTForm iframe code, and render an interactive intake form or price calculator directly in the page layout.",
+          "Yes. Add a Code Block to any page or blog post and paste the Fieseros form embed code. The form renders natively with full styling, validation, and CRM integration.",
       },
       {
-        question: "Does this conflict with Acuity / Squarespace Scheduling?",
+        question: "Does this conflict with Squarespace Scheduling (Acuity)?",
         answer:
-          "No. GPTForm runs alongside Acuity without conflict. Many businesses choose to replace Acuity with GPTForm to unify AI chat, appointment scheduling, and CRM intake in one platform.",
+          "No. Fieseros runs alongside Squarespace Scheduling without conflict. Many customers replace Scheduling with Fieseros booking for the AI-powered experience and unified CRM, but you can run both if you prefer.",
       },
     ],
   },
   {
     kind: "platform",
     slug: "html",
-    titleTag: "Universal Embed — AI Chatbot & Forms for Any HTML / JS Website | GPTForm",
-    h1: "Embed AI chat & smart forms on any custom website or web app",
-    eyebrow: "Platform · Universal HTML / React / Vue / PHP",
+    titleTag: "Embed Fieseros AI Chat & Forms on Any HTML Website",
+    h1: "Add AI chat & forms to any custom HTML site",
+    eyebrow: "Platform · Custom HTML",
     metaDescription:
-      "Add GPTForm AI Chatbot and dynamic forms to any website — Next.js, React, Vue, Angular, PHP, Astro, or plain HTML. Single <script> tag, <15KB footprint.",
+      "Embed Fieseros AI chat agent and smart forms on any custom HTML, PHP, or static website with one script tag. Works on any framework — React, Vue, Angular, plain HTML.",
     heroSubtitle:
-      "Built with React, Next.js, Vue, Laravel, or plain HTML? GPTForm is framework-agnostic. Drop a single asynchronous script tag into your template to equip your site with an autonomous AI agent, interactive quote calculators, and real-time appointment booking.",
+      "Built your own site? No problem. One script tag in your <head> and the AI chat agent + smart forms are live — on any framework, any host, any stack. Framework-agnostic by design.",
     icon: Code,
     metrics: [
-      { value: "1 Tag", label: "Single universal script embed" },
-      { value: "Any", label: "Framework, CMS, or static generator" },
-      { value: "<15KB", label: "Async, non-blocking bundle" },
+      { value: "1 tag", label: "Single script embed" },
+      { value: "Any", label: "Framework or stack" },
+      { value: "<15KB", label: "Async, lazy-loaded" },
     ],
     features: [
       {
         icon: Code,
         badge: "Universal",
-        title: "Single Universal Script Tag",
+        title: "One Script Tag in <head>",
         description:
-          "Add one <script> tag before </head> in your HTML. Works flawlessly with plain HTML, PHP, Laravel, Ruby on Rails, Django, ASP.NET, and modern JS frameworks.",
+          "Paste a single <script> tag into your HTML <head> and the AI chat widget loads on every page. Works on static HTML, PHP, React, Vue, Angular, Svelte — any stack.",
       },
       {
         icon: Globe,
-        title: "SPA & Hydration Resilient",
+        title: "iframe Forms Anywhere",
         description:
-          "Engineered for client-side routing. The widget persists smoothly across route transitions in Next.js, Nuxt, SvelteKit, React Router, and Vue Router without reloading.",
-      },
-      {
-        icon: Sparkles,
-        title: "Isolated Shadow DOM Styling",
-        description:
-          "Rendered in an isolated Shadow DOM boundary, preventing your site's Tailwind, Bootstrap, or custom CSS rules from distorting the widget UI.",
+          "Embed smart forms inline using a one-line iframe snippet — drop it into any HTML page, post, or template where you need a form.",
       },
       {
         icon: Calendar,
-        title: "Hosted Standalone Booking Pages",
+        title: "Hosted Booking Page",
         description:
-          "Prefer not to embed? Direct visitors to your branded, hosted booking link at gptform.ai/book/[your-slug] — complete with live Google Calendar sync.",
+          "Don't want to build a booking page? Use Fieseros' hosted booking page at /book/[your-slug] — link to it from any site, no embed needed.",
+      },
+      {
+        icon: Zap,
+        badge: "AI",
+        title: "AI Chat on Every Page",
+        description:
+          "The AI agent greets visitors, answers questions, and books appointments on every page of your custom site — regardless of how it's built.",
       },
       {
         icon: CreditCard,
-        title: "Secure Tokenized Checkout (0% Fee)",
+        title: "Framework-Safe Payments",
         description:
-          "In-chat payments utilize tokenized iframes through Stripe, Apple Pay, and Google Pay, ensuring strict PCI-DSS compliance and 0% platform fees.",
+          "Fieseros payment collection runs in an isolated iframe — no conflict with your site's framework, payment system, or checkout. Stripe, PayPal, Razorpay supported.",
       },
       {
         icon: BookOpen,
-        title: "JavaScript SDK & Event Hooks",
+        title: "SPA & SSR Compatible",
         description:
-          "Trigger the chat widget programmatically with window.GPTForm.open(), listen for booking completion events, or pre-populate user context via JavaScript.",
+          "The embed works on client-side rendered SPAs (React, Vue) and server-rendered sites (Next.js, Nuxt) alike — the widget attaches after hydration without route-change issues.",
       },
     ],
     installSteps: [
       {
         step: "1",
-        title: "Copy your universal snippet",
+        title: "Copy your embed snippet",
         description:
-          "In your GPTForm dashboard, copy your one-line universal <script> tag containing your unique workspace identifier.",
+          "From the Fieseros dashboard, copy the one-line <script> tag with your workspace ID and the chat widget config.",
       },
       {
         step: "2",
-        title: "Add to your HTML <head>",
+        title: "Paste into your HTML <head>",
         description:
-          "Paste the snippet into your root HTML template (e.g. index.html, layout.tsx, or base.html) before the closing </head> tag.",
+          "Add the <script> tag to your HTML <head> before </head>. For SPAs, add it to your root layout or index.html template.",
       },
       {
         step: "3",
-        title: "Deploy your site",
+        title: "Deploy & verify",
         description:
-          "Deploy your site to Vercel, Netlify, AWS, or any web host. The AI chat widget appears automatically.",
+          "Deploy your site. Visit any page — the AI chat button appears in the bottom-right corner. Test it by sending a message.",
       },
       {
         step: "4",
-        title: "Embed inline iframes (optional)",
+        title: "Add inline forms (optional)",
         description:
-          "To embed forms or calculators inline, paste the responsive iframe snippet anywhere within your markup.",
+          "Embed smart forms inline using the one-line iframe snippet anywhere in your HTML where you need a form.",
       },
     ],
     faqs: [
       {
-        question: "Does the embed work with Single Page Apps (React, Next.js, Vue, Angular)?",
+        question: "Does the embed work on React, Vue, and Angular SPAs?",
         answer:
-          "Yes. GPTForm is specifically engineered for single-page applications. It attaches cleanly to the DOM and persists across client-side route transitions without flickering or re-initializing.",
+          "Yes. The Fieseros script attaches to the DOM after load and survives client-side route changes in React, Vue, Angular, and Svelte SPAs. For server-rendered frameworks (Next.js, Nuxt, SvelteKit), add the script to your root layout.",
       },
       {
-        question: "Will the script hurt my site's Core Web Vitals or PageSpeed scores?",
+        question: "Will the script slow down my custom-built site?",
         answer:
-          "No. The script is under 15KB and loads asynchronously after main-thread tasks are complete. It causes zero layout shifts (CLS) and will not degrade your Lighthouse performance rating.",
+          "No. The script is <15KB, loads asynchronously after first paint, and the chat widget is lazy-loaded when a visitor engages. It has no measurable impact on Core Web Vitals or Lighthouse performance scores.",
       },
       {
-        question: "Can I open the chat programmatically with my own button?",
+        question: "Can I customize the chat widget's appearance?",
         answer:
-          "Yes. GPTForm exposes a global JavaScript API. You can wire custom buttons, navbar links, or CTAs to execute window.GPTForm.open() or trigger specific conversation intents.",
+          "Yes. Configure the widget position, color, greeting text, button style, and branded avatar from the Fieseros dashboard — no code changes. Advanced users can override via data attributes on the script tag.",
       },
       {
-        question: "Can I customize the widget colors and avatar?",
+        question: "Does it work on static site generators like Hugo or Astro?",
         answer:
-          "Yes. You can customize the widget color palette, dark/light theme, launcher icon, agent avatar, greeting messages, and brand logo directly from your GPTForm dashboard without changing any code.",
+          "Yes. Add the script tag to your base template (Hugo's baseof.html, Astro's Layout.astro, Eleventy's base layout). The widget renders on every generated static page.",
       },
     ],
   },
@@ -668,369 +666,368 @@ export const integrations: PlatformConfig[] = [
   {
     kind: "integration",
     slug: "google-calendar",
-    titleTag: "Google Calendar 2-Way Sync Integration | GPTForm",
-    h1: "Real-time two-way sync with Google Calendar",
+    titleTag: "Google Calendar Integration — Two-Way Sync | Fieseros",
+    h1: "Sync Fieseros bookings with Google Calendar",
     eyebrow: "Integration · Google Calendar",
     metaDescription:
-      "Connect Google Calendar to GPTForm for bidirectional synchronization. Block personal events automatically, book real appointments in chat, and eliminate double-booking.",
+      "Connect Google Calendar to Fieseros for two-way sync. Personal appointments block availability, Fieseros bookings appear in Google Calendar, and customers see real-time free slots.",
     heroSubtitle:
-      "Never play calendar phone tag again. GPTForm connects directly to Google Calendar via OAuth: personal commitments block availability in real time, and client bookings land on your calendar with automated Google Meet video links.",
+      "Stop double-booking yourself. Fieseros syncs two ways with Google Calendar — your personal appointments block availability automatically, and every Fieseros booking lands on your Google Calendar instantly.",
     icon: Calendar,
     metrics: [
-      { value: "2-Way", label: "Real-time bidirectional calendar sync" },
-      { value: "0", label: "Double-bookings or scheduling conflicts" },
-      { value: "Per-User", label: "Individual team calendar connections" },
+      { value: "2-way", label: "Calendar sync" },
+      { value: "Real-time", label: "Availability updates" },
+      { value: "Multi-cal", label: "Sync per technician" },
     ],
     features: [
       {
         icon: Calendar,
-        badge: "2-Way Sync",
-        title: "Bidirectional Synchronization",
+        badge: "2-Way",
+        title: "Bidirectional Sync",
         description:
-          "Appointments booked in chat appear on your Google Calendar within seconds, and personal Google Calendar events instantly block booking slots on your website.",
+          "Fieseros bookings appear on Google Calendar instantly, and Google Calendar events block Fieseros availability — no double-booking, ever.",
       },
       {
         icon: Globe,
-        title: "Per-Team Member Calendar Linking",
+        title: "Per-Technician Calendar Sync",
         description:
-          "Each specialist or technician connects their personal Google account. Dentist appointments and personal errands automatically blackout their booking availability.",
+          "Each technician connects their own Google Calendar. Personal appointments, dentist visits, and kid pickups automatically block their Fieseros availability.",
       },
       {
         icon: Zap,
-        title: "Auto-Generated Google Meet Links",
+        title: "Real-Time Availability",
         description:
-          "For virtual consultations and remote meetings, GPTForm automatically creates a unique Google Meet video conference link and inserts it into the calendar invite.",
+          "Customers see real-time free slots on the booking page — updated the moment a Google Calendar event is added, edited, or removed.",
       },
       {
         icon: CreditCard,
-        title: "Buffer Times & Daily Booking Limits",
+        title: "Google Meet Auto-Generated",
         description:
-          "Prevent meeting fatigue. Configure automated buffer minutes before and after appointments and set daily maximum booking caps per team member.",
+          "Virtual appointments get a Google Meet link auto-generated and included in the booking confirmation — no manual link sharing.",
       },
       {
         icon: Code,
-        title: "Color-Coded Event Categorization",
+        title: "Event Color Coding",
         description:
-          "Bookings display in distinct Google Calendar event colors based on service type — consultations, repairs, assessments, or VIP accounts.",
+          "Fieseros bookings use distinct Google Calendar event colors per service type — so you can see at a glance whether today is installs, repairs, or consults.",
       },
       {
         icon: BookOpen,
-        title: "Shared Team Calendar Support",
+        title: "Shared Team Calendars",
         description:
-          "Connect company-wide shared Google Calendars alongside individual staff calendars to coordinate resource rooms, company holidays, and dispatch shifts.",
+          "Connect a shared Google Calendar (e.g., 'Company Dispatch') and Fieseros reads company-wide events alongside each tech's personal calendar.",
       },
     ],
     installSteps: [
       {
         step: "1",
-        title: "Connect Google account",
+        title: "Connect Google Calendar",
         description:
-          "In GPTForm Settings → Integrations → Google Calendar, click 'Connect with Google' and authorize via secure OAuth.",
+          "In Fieseros → Settings → Integrations → Google Calendar, click Connect and authorize with your Google account via OAuth.",
       },
       {
         step: "2",
         title: "Select calendars to sync",
         description:
-          "Choose which Google Calendars to read for busy time slots and which calendar new bookings should be written to.",
+          "Choose which Google Calendars to read (primary, shared, per-technician) and which to write Fieseros bookings to.",
       },
       {
         step: "3",
-        title: "Set buffer & scheduling rules",
+        title: "Set sync direction",
         description:
-          "Define your working hours, timezone, advance notice requirements, and buffer minutes between appointments.",
+          "Configure two-way sync (recommended) or one-way. Set which event types block availability and how far in advance to sync.",
       },
       {
         step: "4",
-        title: "Test live scheduling",
+        title: "Book & verify",
         description:
-          "Book a test appointment through your AI chat agent or form — verify that it appears instantly on your Google Calendar.",
+          "Book a test appointment in Fieseros — it appears on Google Calendar within seconds. Add a Google Calendar event and confirm it blocks the slot.",
       },
     ],
     faqs: [
       {
-        question: "How fast do bookings sync with Google Calendar?",
+        question: "How fast does Google Calendar sync with Fieseros?",
         answer:
-          "Sync occurs in real time via Google Calendar webhooks. Bookings made on your site appear in Google Calendar within 5 seconds, and new personal events block website slots almost instantaneously.",
+          "Fieseros bookings appear on Google Calendar within 5-10 seconds via the Google Calendar API push notifications. Google Calendar events block Fieseros availability in near real-time — typically under 30 seconds.",
       },
       {
-        question: "Can multiple team members connect their own Google accounts?",
+        question: "Can each technician sync their own Google Calendar?",
         answer:
-          "Yes. Each team member connects their own personal Google Calendar via OAuth. GPTForm combines individual availability with round-robin or territory assignment rules.",
+          "Yes. Each technician connects their personal Google Calendar via OAuth. Their personal appointments (dentist, kid pickups, etc.) automatically block their Fieseros availability — no manual blackout entry.",
       },
       {
-        question: "Does it automatically generate Google Meet video call links?",
+        question: "Does this work with shared team Google Calendars?",
         answer:
-          "Yes. If a service is designated as a virtual meeting, GPTForm generates a unique Google Meet link and includes it in both the client confirmation and the calendar invite.",
+          "Yes. You can connect a shared Google Calendar (e.g., 'Dispatch' or 'Company Events') alongside each technician's personal calendar. Fieseros reads both and combines them into each tech's availability.",
       },
       {
-        question: "Will my past Google Calendar events be imported?",
+        question: "Will past Google Calendar events be imported?",
         answer:
-          "No. GPTForm only queries future event time blocks to calculate open availability, ensuring your private historical events remain untouched and confidential.",
+          "No. Fieseros only syncs future events to avoid polluting your CRM with historical data. You can manually import past appointments as customer history if needed via CSV import.",
       },
     ],
   },
   {
     kind: "integration",
     slug: "stripe",
-    titleTag: "Stripe Integration — In-Chat Checkout & 0% Platform Fees | GPTForm",
-    h1: "Accept payments and booking deposits with Stripe",
-    eyebrow: "Integration · Stripe Payments",
+    titleTag: "Stripe Integration — Accept Payments & Subscriptions | Fieseros",
+    h1: "Collect payments with Stripe",
+    eyebrow: "Integration · Stripe",
     metaDescription:
-      "Connect Stripe to GPTForm to accept credit cards, Apple Pay, Google Pay, and ACH in-chat and on-form with 0% platform fees. Instant reconciliation and automated invoices.",
+      "Connect Stripe to Fieseros to accept cards, Apple Pay, Google Pay, and ACH. Collect deposits, send invoices, set up subscriptions, and reconcile automatically — in one platform.",
     heroSubtitle:
-      "The world's most powerful payment platform meets conversational AI. Connect Stripe in 1 click to collect booking deposits, sell service packages, and settle invoices directly inside the chat flow — with 0% platform transaction fees.",
+      "Stripe is the gold standard for online payments. Connect it to Fieseros in one click and accept cards, Apple Pay, Google Pay, and ACH — for deposits, invoices, and recurring billing, all reconciled automatically.",
     icon: CreditCard,
     metrics: [
-      { value: "0%", label: "Platform fees — keep 100% of your earnings" },
-      { value: "1-Click", label: "Secure Stripe OAuth connection" },
-      { value: "All", label: "Cards, Apple Pay, Google Pay & ACH" },
+      { value: "1-click", label: "OAuth connection" },
+      { value: "All", label: "Payment methods" },
+      { value: "Auto", label: "Invoice reconciliation" },
     ],
     features: [
       {
         icon: CreditCard,
-        badge: "0% Fees",
-        title: "0% Platform Transaction Surcharge",
+        badge: "Stripe",
+        title: "Cards, Apple Pay, Google Pay",
         description:
-          "Unlike competitors that charge an extra 1% to 3% platform fee, GPTForm charges 0%. You only pay standard Stripe processing rates, maximizing your gross margins.",
+          "Accept Visa, Mastercard, Amex, Discover, Apple Pay, Google Pay, and ACH bank transfers through Stripe — customers pay however they want.",
       },
       {
         icon: Calendar,
-        title: "Booking Deposits & Retainers",
+        title: "Deposits at Booking",
         description:
-          "Require upfront deposits or credit card pre-authorizations before appointment confirmation, virtually eliminating costly customer no-shows.",
+          "Require a Stripe deposit to lock in appointments. Refundable per your cancellation policy — protecting revenue and committing the customer.",
       },
       {
         icon: Zap,
-        badge: "In-Chat",
-        title: "Native In-Chat Tokenized Checkout",
+        title: "Instant Invoice Links",
         description:
-          "Customers complete payments without leaving the chat window. Apple Pay, Google Pay, credit cards, and ACH render seamlessly inside the conversation stream.",
+          "Send branded Stripe-backed invoice links by SMS + email. Customers pay from their phone in 30 seconds — no login, no app, no friction.",
       },
       {
         icon: Globe,
-        title: "Recurring Subscriptions & Retainers",
+        title: "Recurring Subscriptions",
         description:
-          "Set up automated recurring Stripe subscriptions for monthly maintenance agreements, retainers, and ongoing service plans.",
+          "Set up Stripe subscriptions for maintenance contracts, monthly service plans, and membership tiers. Auto-charge on schedule, auto-reconcile in Fieseros.",
       },
       {
         icon: Code,
-        title: "Instant Webhook Reconciliation",
+        title: "Auto-Reconciliation",
         description:
-          "Every payment, dispute, or refund syncs automatically with your CRM records and invoices via real-time Stripe webhooks — zero manual bookkeeping.",
+          "Every Stripe payment — card, ACH, refund — auto-reconciles against the matching Fieseros invoice. No end-of-month spreadsheet wrangling.",
       },
       {
         icon: BookOpen,
-        title: "Stripe Connect Marketplace Support",
+        title: "Stripe Connect for Marketplaces",
         description:
-          "Marketplace and franchise operators can split payments between platform fees and service providers with built-in Stripe Connect routing.",
+          "Marketplace operators use Stripe Connect to split payments between the platform and service providers — with built-in KYC and 1099 generation.",
       },
     ],
     installSteps: [
       {
         step: "1",
-        title: "Connect Stripe account",
+        title: "Connect Stripe",
         description:
-          "In GPTForm Settings → Payments → Stripe, click 'Connect with Stripe' and authorize your account via secure OAuth. No API keys to copy.",
+          "In Fieseros → Settings → Payments → Stripe, click Connect and authorize via Stripe OAuth. No API keys to copy — fully secure.",
       },
       {
         step: "2",
-        title: "Configure payment methods",
+        title: "Configure payment options",
         description:
-          "Enable credit cards, Apple Pay, Google Pay, or ACH transfers, and set up your deposit and cancellation policy rules.",
+          "Choose which payment methods to accept (cards, Apple Pay, ACH), set deposit requirements, and configure cancellation/refund policies.",
       },
       {
         step: "3",
-        title: "Attach payments to forms or chat",
+        title: "Send your first invoice",
         description:
-          "Set required deposit amounts on appointment types or add payment checkout blocks to your intake forms.",
+          "Create an invoice in Fieseros and send it by SMS + email. The customer gets a Stripe-backed pay link and pays in 30 seconds.",
       },
       {
         step: "4",
-        title: "Receive payouts",
+        title: "Verify reconciliation",
         description:
-          "Collected funds flow directly into your Stripe account and transfer to your bank on Stripe's standard rolling schedule.",
+          "Check that the payment auto-marks the invoice paid and reconciles in your Fieseros reports. Payouts hit your bank on Stripe's standard 2-day schedule.",
       },
     ],
     faqs: [
       {
-        question: "Does GPTForm charge additional transaction fees on top of Stripe?",
+        question: "Do I need a separate Stripe account?",
         answer:
-          "No. GPTForm charges 0% platform transaction fees. You keep 100% of what you earn, paying only standard Stripe processing fees (e.g. 2.9% + 30¢ in the US).",
+          "Yes, you need a Stripe account (free to create at stripe.com). Fieseros connects via OAuth so your Stripe dashboard, payouts, and statements remain in Stripe. Fieseros never sees or stores your card details — Stripe handles all PCI compliance.",
       },
       {
-        question: "Is in-chat Stripe payment processing PCI compliant?",
+        question: "What are the Stripe transaction fees?",
         answer:
-          "Yes. GPTForm utilizes Stripe's secure tokenized iframes (Stripe Elements). Credit card information never touches our servers, ensuring Level 1 PCI-DSS compliance.",
+          "Stripe's standard fees apply (2.9% + 30¢ per card transaction in the US, varies by country). Fieseros charges no additional payment processing fees on top of Stripe — you only pay Stripe's fees plus your Fieseros subscription.",
       },
       {
-        question: "How fast do payouts reach my bank account?",
+        question: "How fast do I get my money with Stripe?",
         answer:
-          "Payouts are handled directly by Stripe according to your Stripe account settings (typically a 2-day rolling payout in the US and Europe).",
+          "Stripe payouts typically arrive in your bank account within 2 business days (US), or instantly to your Stripe card. Payout timing is controlled by your Stripe account settings, not Fieseros.",
       },
       {
-        question: "Can I accept payments from international customers in multiple currencies?",
+        question: "Can I use Stripe alongside other payment gateways?",
         answer:
-          "Yes. Stripe supports 135+ currencies and local payment methods worldwide. GPTForm automatically handles currency presentation based on your pricing settings.",
+          "Yes. Fieseros supports 33 gateways. You can connect Stripe, PayPal, and Razorpay simultaneously and route payments by currency, region, or service type — for example, Stripe for USD and Razorpay for INR.",
       },
     ],
   },
   {
     kind: "integration",
     slug: "zapier",
-    titleTag: "Zapier Integration — Connect GPTForm to 6,000+ Apps",
-    h1: "Connect GPTForm to 6,000+ business applications via Zapier",
-    eyebrow: "Integration · Zapier Webhooks & Automation",
+    titleTag: "Zapier Integration — Connect Fieseros to 6,000+ Apps",
+    h1: "Connect Fieseros to 6,000+ apps via Zapier",
+    eyebrow: "Integration · Zapier",
     metaDescription:
-      "Connect GPTForm to HubSpot, Salesforce, Slack, Mailchimp, Airtable, and 6,000+ tools via Zapier. Trigger workflows on new leads, confirmed bookings, and paid invoices.",
+      "Use Zapier to connect Fieseros to 6,000+ apps — QuickBooks, HubSpot, Slack, Airtable, and more. Trigger Zaps on new leads, bookings, payments, and completed jobs.",
     heroSubtitle:
-      "Automate your entire business ecosystem. Connect GPTForm to your CRM, email marketing, team chat, and operational tools via Zapier. Trigger instant multi-step automations the second a lead qualifies or an appointment is booked.",
+      "Don't see a native integration? Zapier fills the gap. Connect Fieseros to QuickBooks, HubSpot, Slack, Airtable, Mailchimp, and 6,000+ other apps — trigger Zaps on leads, bookings, payments, and job completions.",
     icon: Zap,
     metrics: [
-      { value: "6,000+", label: "Business applications connectable" },
-      { value: "14", label: "Real-time native triggers & actions" },
-      { value: "No-Code", label: "Visual automated workflow builder" },
+      { value: "6,000+", label: "Apps connectable" },
+      { value: "12", label: "Native Fieseros triggers" },
+      { value: "No-code", label: "Visual Zap builder" },
     ],
     features: [
       {
         icon: Zap,
         badge: "Triggers",
-        title: "14 Real-Time Native Triggers",
+        title: "12 Native Triggers",
         description:
-          "Fire Zaps instantly on New Lead Captured, Lead Qualified, Booking Created, Booking Rescheduled, Payment Collected, Invoice Paid, and Review Submitted.",
+          "Fire Zaps on new lead, lead qualified, booking created, job completed, payment received, invoice paid, review collected, and 5 more — no polling.",
       },
       {
         icon: Code,
-        title: "Create & Update GPTForm Records",
+        title: "Actions to Create Records",
         description:
-          "Actions allow external apps to create leads, register appointments, or update customer records inside GPTForm automatically.",
+          "Create leads, bookings, and customers in Fieseros from other apps — add a lead from a Typeform submission or a HubSpot form fill.",
       },
       {
         icon: Globe,
-        title: "Instant Slack & Teams Notifications",
+        title: "QuickBooks Accounting Sync",
         description:
-          "Send instant alerts into specific Slack channels or Microsoft Teams when a hot lead qualifies or a high-value quote is accepted.",
+          "Send paid Fieseros invoices to QuickBooks automatically via Zapier — no manual double entry, no end-of-month reconciliation headaches.",
       },
       {
         icon: Calendar,
-        title: "HubSpot & Salesforce Bi-Directional Sync",
+        title: "Slack & Teams Notifications",
         description:
-          "Sync qualified conversational leads, chat transcripts, and deal stages directly into your enterprise CRM without manual data entry.",
+          "Get instant Slack or Microsoft Teams pings when a hot lead comes in, a job is completed, or a payment fails — keep the whole team in the loop.",
       },
       {
         icon: CreditCard,
-        title: "Email Marketing List Enrollment",
+        title: "HubSpot & Salesforce CRM Sync",
         description:
-          "Automatically add new contacts to targeted Mailchimp, ActiveCampaign, or Klaviyo marketing sequences based on their qualification tags.",
+          "Sync Fieseros leads and customers to HubSpot or Salesforce for marketing automation, while Fieseros handles the operational CRM and dispatch.",
       },
       {
         icon: BookOpen,
-        title: "Webhook Payloads with Full Transcripts",
+        title: "Mailchimp & ActiveCampaign",
         description:
-          "Every Zapier event includes complete structured data fields and full conversation transcripts for comprehensive auditing and analytics.",
+          "Add new Fieseros leads to Mailchimp or ActiveCampaign lists automatically for email marketing campaigns and newsletter sequences.",
       },
     ],
     installSteps: [
       {
         step: "1",
-        title: "Search for GPTForm on Zapier",
+        title: "Connect Fieseros to Zapier",
         description:
-          "In your Zapier dashboard, click 'Create Zap' and search for the GPTForm integration.",
+          "In Zapier, search for 'Fieseros' and connect using your API key (available in Fieseros → Settings → API). OAuth-style connection.",
       },
       {
         step: "2",
-        title: "Connect via API Key",
+        title: "Pick a trigger",
         description:
-          "In GPTForm Settings → API, copy your private API key and paste it into the Zapier connection popup.",
+          "Choose a Fieseros trigger — 'New Lead', 'Lead Qualified', 'Booking Created', 'Payment Received' — based on what should start your Zap.",
       },
       {
         step: "3",
-        title: "Select your trigger event",
+        title: "Pick an action app",
         description:
-          "Choose your trigger (e.g. 'New Lead Qualified' or 'Booking Created') and run a test to pull sample data.",
+          "Choose the destination app — QuickBooks, HubSpot, Slack, Airtable — and configure the action (create record, send message, etc.).",
       },
       {
         step: "4",
-        title: "Configure actions & publish",
+        title: "Test & turn on",
         description:
-          "Map data fields to your destination app (Slack, HubSpot, Airtable) and turn your Zap on.",
+          "Test the Zap with a sample Fieseros event, confirm the action fires in the destination app, then turn the Zap on. It runs automatically from now on.",
       },
     ],
     faqs: [
       {
-        question: "Do I need a paid Zapier plan to connect with GPTForm?",
+        question: "Do I need a Zapier account to use this integration?",
         answer:
-          "You can get started on Zapier's free tier (which includes 100 tasks/month). For higher volumes or multi-step Zaps, Zapier offers affordable paid tiers.",
+          "Yes, you need a Zapier account (free tier supports 100 tasks/month). For higher volume, Zapier's paid tiers scale to thousands of tasks. Many customers find Fieseros' native integrations (Stripe, Google Calendar, QuickBooks) cover most needs without Zapier.",
       },
       {
-        question: "Which GPTForm events can trigger a Zapier workflow?",
+        question: "Which Fieseros events can trigger a Zap?",
         answer:
-          "Native triggers include: New Lead Captured, Lead Qualified, Lead Disqualified, Booking Created, Booking Rescheduled, Booking Cancelled, Payment Received, Invoice Paid, Quote Accepted, and Review Collected.",
+          "12 triggers: New Lead, Lead Qualified, Lead Disqualified, Booking Created, Booking Rescheduled, Job Completed, Payment Received, Invoice Paid, Review Collected, Customer Created, Deal Won, and Deal Lost. More triggers are added regularly.",
       },
       {
-        question: "Can external apps create leads or bookings inside GPTForm?",
+        question: "Is there a delay in Zapier triggers firing?",
         answer:
-          "Yes. GPTForm exposes actions in Zapier to Create Lead, Update Customer, and Create Booking from external forms or webhook sources.",
+          "Zapier polls Fieseros for new events every 1-5 minutes on the free tier (instant on paid tiers via webhooks). For time-critical workflows (hot lead alerts), use Fieseros' native Slack/Teams SMS notifications instead of Zapier.",
       },
       {
-        question: "Is there any delay before Zapier workflows fire?",
+        question: "Can I create records in Fieseros from other apps via Zapier?",
         answer:
-          "GPTForm triggers are webhook-based and execute instantaneously within seconds of an event completing.",
+          "Yes. Fieseros exposes 'Create Lead', 'Create Booking', and 'Create Customer' actions in Zapier. Submit a Typeform, Calendly, or HubSpot form and create the lead in Fieseros automatically.",
       },
     ],
   },
   {
     kind: "integration",
     slug: "quickbooks",
-    titleTag: "QuickBooks Online Integration — Auto-Sync Invoices & Payments | GPTForm",
-    h1: "Automatically sync GPTForm invoices and payments to QuickBooks",
-    eyebrow: "Integration · QuickBooks Online",
+    titleTag: "QuickBooks Integration — Sync Invoices & Payments | Fieseros",
+    h1: "Sync Fieseros invoices with QuickBooks",
+    eyebrow: "Integration · QuickBooks",
     metaDescription:
-      "Connect QuickBooks Online to GPTForm for automated invoice, customer, and payment synchronization. Eliminate manual double-entry and keep books audit-ready.",
+      "Connect QuickBooks Online to Fieseros for automatic invoice and payment sync. Every paid Fieseros invoice posts to QuickBooks — no double entry, no reconciliation headaches.",
     heroSubtitle:
-      "Stop wasting hours manually entering invoices at month-end. GPTForm syncs every paid invoice, client record, and transaction fee to QuickBooks Online in real time — keeping your accounting flawless and audit-ready with zero manual effort.",
+      "Stop re-typing invoices into QuickBooks at month-end. Fieseros syncs every paid invoice and payment to QuickBooks Online automatically — your books are always up to date, zero double entry.",
     icon: BookOpen,
     metrics: [
-      { value: "100%", label: "Automated invoice & payment sync" },
-      { value: "0", label: "Hours spent on manual double-entry" },
-      { value: "QBO", label: "QuickBooks Online native OAuth" },
+      { value: "Auto", label: "Invoice & payment sync" },
+      { value: "0", label: "Double entry required" },
+      { value: "QBO", label: "QuickBooks Online" },
     ],
     features: [
       {
         icon: BookOpen,
         badge: "Auto-Sync",
-        title: "Real-Time Paid Invoice Synchronization",
+        title: "Paid Invoices to QuickBooks",
         description:
-          "Every paid invoice generated through GPTForm chat, smart forms, or field apps automatically syncs into QuickBooks Online with itemized lines, taxes, and discounts.",
+          "Every Fieseros invoice marked paid posts to QuickBooks Online automatically — with line items, tax, and customer info — no manual entry.",
       },
       {
         icon: CreditCard,
-        title: "Payment Method & Deposit Account Matching",
+        title: "Payment Method Mapping",
         description:
-          "Card payments, Apple Pay, and deposits map cleanly to your designated QuickBooks bank and undeposited funds accounts for effortless 1-click reconciliation.",
+          "Fieseros payment methods (Stripe card, cash, check, ACH) map to the correct QuickBooks payment accounts — so deposits reconcile cleanly.",
       },
       {
         icon: Calendar,
-        title: "Customer Record Auto-Creation & Deduplication",
+        title: "Customer Auto-Creation",
         description:
-          "Client profiles match against existing QuickBooks customers by email and phone number, updating records without generating confusing duplicates.",
+          "New Fieseros customers auto-create as QuickBooks customers — matched by email or phone to avoid duplicates.",
       },
       {
         icon: Zap,
-        title: "Sales Tax Code & Chart of Accounts Mapping",
+        title: "Tax & Category Mapping",
         description:
-          "Map individual service types and materials to your exact QuickBooks Chart of Accounts and local sales tax jurisdictions.",
+          "Map Fieseros service types to QuickBooks income accounts and tax codes. Every invoice hits the right books category automatically.",
       },
       {
         icon: Code,
-        title: "Refunds & Credit Note Sync",
+        title: "Refund & Credit Sync",
         description:
-          "Customer refunds and partial credits processed in GPTForm automatically create matching Credit Memos in QuickBooks, maintaining perfect book balance.",
+          "Refunds and credit notes in Fieseros post to QuickBooks as credit memos — keeping your books and your operational system in perfect sync.",
       },
       {
         icon: Globe,
-        title: "Multi-Currency Exchange Rate Sync",
+        title: "Multi-Currency Support",
         description:
-          "Honors your QuickBooks home currency settings and automatically records international transactions with appropriate exchange rates.",
+          "Fieseros honors QuickBooks' home currency and posts invoices in the correct currency with exchange rates — for international service businesses.",
       },
     ],
     installSteps: [
@@ -1038,47 +1035,47 @@ export const integrations: PlatformConfig[] = [
         step: "1",
         title: "Connect QuickBooks Online",
         description:
-          "In GPTForm Settings → Integrations → QuickBooks, click 'Connect to QuickBooks' and log in via secure Intuit OAuth.",
+          "In Fieseros → Settings → Integrations → QuickBooks, click Connect and authorize via Intuit OAuth. No API keys to manage.",
       },
       {
         step: "2",
-        title: "Map accounts & tax codes",
+        title: "Map accounts & taxes",
         description:
-          "Map your income accounts, default bank deposit accounts, and sales tax codes between GPTForm and QuickBooks.",
+          "Map Fieseros service types to QuickBooks income accounts, and Fieseros payment methods to QuickBooks payment accounts.",
       },
       {
         step: "3",
-        title: "Select sync rules",
+        title: "Sync historical (optional)",
         description:
-          "Choose whether to sync all paid invoices or filter by minimum amounts, service lines, or customer tags.",
+          "Choose to back-sync the last 30/90 days of paid Fieseros invoices to QuickBooks, or start fresh from today.",
       },
       {
         step: "4",
-        title: "Verify automatic posting",
+        title: "Verify in QuickBooks",
         description:
-          "Process a test transaction in GPTForm — it will appear inside QuickBooks Online within minutes.",
+          "Mark a test invoice paid in Fieseros and confirm it appears in QuickBooks Online within minutes with correct accounts and tax mapping.",
       },
     ],
     faqs: [
       {
-        question: "Does this integration support QuickBooks Desktop or only QuickBooks Online?",
+        question: "Does this work with QuickBooks Desktop or only QuickBooks Online?",
         answer:
-          "GPTForm integrates natively with QuickBooks Online (QBO) via Intuit's cloud API. For QuickBooks Desktop, we recommend syncing via our Zapier integration.",
+          "Fieseros integrates with QuickBooks Online (QBO) natively. QuickBooks Desktop requires the QuickBooks Web Connector or a Zapier-based sync. Most service businesses have migrated to QBO for cloud access — if you're on Desktop, we recommend migrating or using Zapier.",
       },
       {
-        question: "How quickly do paid invoices sync into QuickBooks Online?",
+        question: "How fast do invoices sync to QuickBooks?",
         answer:
-          "Invoices sync in near real time, usually appearing in QuickBooks Online within 1 to 3 minutes of payment completion.",
+          "Paid Fieseros invoices post to QuickBooks Online within 1-5 minutes via the QBO API. The sync is near real-time — you'll see invoices in QuickBooks before your bookkeeper asks for them.",
       },
       {
-        question: "What happens if a customer already exists in QuickBooks?",
+        question: "Can I choose which invoices sync to QuickBooks?",
         answer:
-          "GPTForm checks existing customer records by email and phone number. If a match is found, the invoice is attached to the existing customer profile without creating duplicates.",
+          "Yes. You can sync all paid invoices, or filter by service type, amount, or customer tag. For example, sync only invoices over $500, or exclude internal/test customers.",
       },
       {
-        question: "What if an invoice fails to sync due to a mapping error?",
+        question: "What happens if an invoice fails to sync?",
         answer:
-          "Any sync exceptions are logged in your Sync History dashboard with plain-English error descriptions. You can update the mapping and retry the sync with 1 click.",
+          "Failed syncs (e.g., a deleted QuickBooks customer) appear in the Sync Log with the error. You can retry the sync after fixing the issue in QuickBooks. No data is lost — the invoice remains in Fieseros until successfully synced.",
       },
     ],
   },

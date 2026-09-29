@@ -317,6 +317,11 @@ async function buildStaticSitemapUncached(): Promise<MetadataRoute.Sitemap> {
       changeFreq: "monthly",
     },
 
+    // ─── Primary keyword pages (top-10 ranking targets) ─────────────────
+    { path: "/field-service-management", priority: 1.0, changeFreq: "weekly" },
+    { path: "/home-services-software", priority: 1.0, changeFreq: "weekly" },
+    { path: "/blue-collar-crm", priority: 1.0, changeFreq: "weekly" },
+
     // ─── Use Cases (workflow-focused SEO pages) ─────────────────────────
     { path: "/use-cases", priority: 0.9, changeFreq: "monthly" },
     { path: "/use-cases/lead-capture", priority: 0.9, changeFreq: "monthly" },

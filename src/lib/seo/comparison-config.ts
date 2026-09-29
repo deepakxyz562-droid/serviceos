@@ -6,11 +6,6 @@ import {
   Zap,
   ShieldCheck,
   CreditCard,
-  Calendar,
-  Calculator,
-  Target,
-  Sparkles,
-  type LucideIcon,
 } from "lucide-react";
 import type { Feature } from "@/components/seo/feature-grid";
 import type { FaqItem } from "@/lib/seo/schemas";
@@ -48,91 +43,90 @@ export const comparisons: ComparisonConfig[] = [
     slug: "fieseros-vs-typeform",
     competitorName: "Typeform",
     competitorLabel: "Typeform",
-    titleTag: "GPTForm vs Typeform (2026) — Conversational AI Agent vs Static Slide Forms",
-    h1: "GPTForm vs Typeform: the 2026 comparison",
+    titleTag: "Fieseros vs Typeform (2026) — Why Service Businesses Switch",
+    h1: "Fieseros vs Typeform: the 2026 comparison",
     eyebrow: "Compare · Typeform",
     metaDescription:
-      "Detailed GPTForm vs Typeform comparison. See why modern businesses choose GPTForm for autonomous AI agents, live 2-way Google Calendar booking, dynamic formula quotes, and 0% payment fees.",
+      "Detailed Fieseros vs Typeform comparison. See why service businesses choose Fieseros for AI chat agents, 24/7 voice receptionist, native CRM, dispatch, and 0% platform payment fees — not just pretty forms.",
     heroSubtitle:
-      "Typeform popularized one-question-at-a-time forms. GPTForm transforms forms into autonomous AI agents that converse naturally, answer visitor questions from your website, calculate dynamic quotes, book calendar slots, and collect payments with 0% platform fees.",
+      "Typeform makes beautiful one-question-at-a-time forms. Fieseros turns those forms into AI conversations that capture leads, book jobs, collect payments, and dispatch technicians — all in one platform. Here's the head-to-head.",
     matrix: [
-      { feature: "Conversational intake UI", fieseros: true, competitor: true, note: "Both offer modern, user-friendly intake experiences" },
-      { feature: "Autonomous 24/7 AI chat agent", fieseros: true, competitor: false, note: "Typeform has no autonomous AI conversational agent" },
-      { feature: "Answers questions from your website content (RAG)", fieseros: true, competitor: false, note: "Typeform cannot answer visitor FAQs; it only collects answers" },
-      { feature: "Live 2-way Google & Outlook calendar booking", fieseros: true, competitor: false, note: "Typeform requires external Calendly embed links" },
-      { feature: "Dynamic math & formula quote calculator", fieseros: true, competitor: false, note: "GPTForm includes Jotform-grade visual formula engine" },
-      { feature: "In-chat & on-form payment collection (Stripe, Apple Pay)", fieseros: true, competitor: true, note: "Typeform caps paid submissions; GPTForm charges 0% platform fees" },
-      { feature: "0% platform payment transaction fees", fieseros: true, competitor: false, note: "GPTForm charges 0% on top of standard gateway rates" },
-      { feature: "Dual embed modes (Floating Chatbot + Inline Smart Form)", fieseros: true, competitor: false, note: "Typeform only embeds as a form container" },
-      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "GPTForm answers inbound phone calls and books jobs via voice" },
-      { feature: "Knowledge Gaps & Unanswered Questions Queue", fieseros: true, competitor: false, note: "GPTForm records low-confidence questions for 1-click learning" },
-      { feature: "20,000+ industry intake templates", fieseros: true, competitor: true, note: "Both offer extensive template libraries" },
-      { feature: "Native CRM & Team Dispatch Board", fieseros: true, competitor: false, note: "Typeform requires Zapier to send data to third-party CRMs" },
+      { feature: "Beautiful conversational forms", fieseros: true, competitor: true, note: "Both offer one-question-at-a-time conversational UI" },
+      { feature: "AI chat agent on your website (24/7)", fieseros: true, competitor: false, note: "Typeform has no standalone AI chatbot agent" },
+      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "Fieseros answers phone calls and books jobs via voice" },
+      { feature: "Native CRM + technician dispatch", fieseros: true, competitor: false, note: "Typeform requires Zapier + 3rd-party CRM" },
+      { feature: "0% platform payment transaction fees", fieseros: true, competitor: false, note: "Typeform caps paid submissions; Fieseros charges 0% on top of gateway" },
+      { feature: "33+ payment gateways", fieseros: true, competitor: true, note: "Stripe, PayPal, Square, Razorpay, Mollie, Authorize.net" },
+      { feature: "1-click form → AI chatbot conversion", fieseros: true, competitor: false, note: "Fieseros converts any form into a slot-filling chat agent" },
+      { feature: "Autonomous business actions (jobs, quotes, invoices)", fieseros: true, competitor: false, note: "Fieseros executes real operational actions, not just data collection" },
+      { feature: "Lead scoring & smart routing", fieseros: true, competitor: false, note: "Fieseros scores leads and routes to the right technician" },
+      { feature: "On-site payment + deposit collection", fieseros: true, competitor: false, note: "Tap-to-pay, deposits at booking, automated reminders" },
+      { feature: "Mobile field app (PWA, offline)", fieseros: true, competitor: false, note: "Typeform is form-only; Fieseros includes a tech mobile app" },
+      { feature: "Free tier with no platform payment fees", fieseros: true, competitor: false, note: "Fieseros free tier: 100 jobs, 0% platform fee" },
     ],
     whySwitch: [
       {
         icon: Bot,
-        title: "Dialogue, not just data collection",
+        title: "AI agent, not just a form",
         description:
-          "Typeform makes visitors fill in fields sequentially. GPTForm AI Agent has an interactive dialogue: it answers visitor questions about your services first, builds confidence, and qualifies them naturally.",
-      },
-      {
-        icon: Calendar,
-        title: "Live calendar booking built in",
-        description:
-          "Typeform requires you to duct-tape Calendly or redirect users away. GPTForm includes real-time two-way Google Calendar and Outlook booking natively inside the chat or form flow.",
-      },
-      {
-        icon: Calculator,
-        title: "Dynamic formula price calculation",
-        description:
-          "Need to calculate square-footage pricing, tiered volume rates, or service packages? GPTForm evaluates mathematical formulas live on screen with zero hallucination.",
-      },
-      {
-        icon: DollarSign,
-        title: "0% platform transaction fees",
-        description:
-          "Typeform restricts paid submissions to expensive tiers and charges transaction surcharges. GPTForm charges 0% platform fees forever on all Stripe payments.",
+          "Typeform collects responses. Fieseros AI agent has a real conversation, qualifies leads, scores urgency, and books the appointment — turning a form into a sales rep that never sleeps.",
       },
       {
         icon: Phone,
         title: "Voice receptionist included",
         description:
-          "Typeform can never answer an inbound telephone call. GPTForm includes a 24/7 AI Voice Receptionist that answers phone calls, triages emergencies, and books appointments.",
+          "Typeform can't answer your phone. Fieseros AI Voice Receptionist answers every call 24/7, triages emergencies, and books jobs — capturing the leads that call instead of clicking.",
       },
       {
         icon: Layers,
-        title: "Full CRM & workflow operating system",
+        title: "CRM + dispatch built in",
         description:
-          "Stop paying for Typeform + Calendly + HubSpot + Zapier. GPTForm provides the conversational agent, smart forms, appointment booking, CRM, and invoicing in one unified platform.",
+          "Stop paying for Typeform + HubSpot + Calendly + Zapier. Fieseros includes the CRM, scheduling, dispatch, and invoicing — one platform, one price, no integration glue.",
+      },
+      {
+        icon: DollarSign,
+        title: "0% platform payment fees",
+        description:
+          "Typeform caps paid submissions and charges platform fees. Fieseros charges 0% on top of the gateway fee — you keep more of every payment you collect.",
+      },
+      {
+        icon: Zap,
+        title: "Form → chatbot in one click",
+        description:
+          "Convert any Fieseros form into an AI chatbot that fills the same fields through conversation — no rebuilding. Typeform has no equivalent.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Built for field service",
+        description:
+          "Typeform is a general-purpose form tool. Fieseros is purpose-built for plumbers, HVAC, electricians, and trades — with job workflows, assets, and route optimization.",
       },
     ],
     faqs: [
       {
-        question: "Can I migrate my existing Typeform forms to GPTForm?",
+        question: "Can I migrate my Typeform forms to Fieseros?",
         answer:
-          "Yes. GPTForm includes an AI Form Generator that can rebuild any Typeform from a URL or prompt in under 60 seconds, preserving your questions, branding, and logic.",
+          "Yes. Fieseros has an AI form generator that rebuilds any Typeform from a URL or description. Your conditional logic, question types, and branding are preserved. Most customers migrate in under an hour.",
       },
       {
-        question: "How does GPTForm conversion rate compare to Typeform?",
+        question: "Is Fieseros more expensive than Typeform?",
         answer:
-          "Because GPTForm allows visitors to ask questions and get instant factual answers before providing their contact details, businesses typically experience a 3.4x higher lead completion rate compared to static forms.",
+          "It depends on your usage. Typeform charges per response and caps paid submissions. Fieseros charges a flat subscription with 0% platform payment fees. For businesses collecting payments through forms, Fieseros is typically cheaper once you factor in the saved transaction fees.",
       },
       {
-        question: "Does GPTForm support complex conditional logic?",
+        question: "Does Fieseros have conditional logic like Typeform?",
         answer:
-          "Yes. GPTForm supports advanced conditional branching, show/hide rules, custom calculation formulas, and dynamic AI-adapted question paths.",
+          "Yes. Fieseros smart forms support full conditional logic — show/hide fields, branching, calculations, and skip rules. Plus the AI agent can adapt its questions based on answers dynamically, which Typeform cannot.",
       },
       {
-        question: "Can I collect payments directly in Typeform vs GPTForm?",
+        question: "What if I only need forms, not the full platform?",
         answer:
-          "Typeform requires higher-tier subscriptions and limits responses. GPTForm lets you collect deposits and payments in-chat or on-form via Stripe, Apple Pay, and 33+ gateways with 0% platform transaction fees.",
+          "Fieseros has a standalone Forms product (Fieseros AI Forms) for businesses that just want AI forms + chatbot without the field-service CRM. You can start with Forms and upgrade to the full platform anytime.",
       },
     ],
     related: [
-      { label: "GPTForm vs Chatbase", href: "/fieseros-vs-chatbase" },
-      { label: "GPTForm vs ElfChatbot", href: "/fieseros-vs-elfchatbot" },
-      { label: "GPTForm vs Tidio", href: "/fieseros-vs-tidio" },
+      { label: "Fieseros vs Chatbase", href: "/fieseros-vs-chatbase" },
+      { label: "Fieseros vs Tidio", href: "/fieseros-vs-tidio" },
       { label: "AI Chatbot Alternatives", href: "/ai-chatbot-alternatives" },
     ],
   },
@@ -140,183 +134,363 @@ export const comparisons: ComparisonConfig[] = [
     slug: "fieseros-vs-chatbase",
     competitorName: "Chatbase",
     competitorLabel: "Chatbase",
-    titleTag: "GPTForm vs Chatbase (2026) — Autonomous Action Agent vs Isolated Chatbot",
-    h1: "GPTForm vs Chatbase: beyond the chatbot",
+    titleTag: "Fieseros vs Chatbase (2026) — Beyond Chatbot Builders",
+    h1: "Fieseros vs Chatbase: beyond the chatbot",
     eyebrow: "Compare · Chatbase",
     metaDescription:
-      "Detailed GPTForm vs Chatbase comparison. Chatbase answers text questions; GPTForm books live calendar appointments, calculates custom quotes, and collects payments.",
+      "Detailed Fieseros vs Chatbase comparison. Chatbase builds chatbots; Fieseros turns conversations into booked jobs, paid invoices, and dispatched technicians — with native CRM and 24/7 voice.",
     heroSubtitle:
-      "Chatbase is a great chatbot builder for simple text answers. GPTForm is an autonomous business action platform: conversations become real booked calendar appointments, dynamic formula quotes, and paid Stripe invoices — with zero Zapier glue required.",
+      "Chatbase is a great chatbot builder. Fieseros is the operating system those chatbots feed. Conversations become booked jobs, paid invoices, and dispatched technicians — all in one platform, no Zapier glue.",
     matrix: [
-      { feature: "AI chatbot trained on URLs & docs", fieseros: true, competitor: true, note: "Both train on websites, PDFs, and knowledge bases" },
-      { feature: "Zero-hallucination Dual-Brain architecture", fieseros: true, competitor: false, note: "GPTForm enforces confidence gates and factual source grounding" },
-      { feature: "Live 2-way Google & Outlook calendar booking", fieseros: true, competitor: false, note: "Chatbase cannot check calendar availability or book real slots" },
-      { feature: "Dynamic formula price calculation", fieseros: true, competitor: false, note: "Chatbase cannot calculate custom square-foot or tiered math" },
-      { feature: "In-chat payment collection (0% platform fee)", fieseros: true, competitor: false, note: "Chatbase has no payment processing capabilities" },
-      { feature: "Multi-step smart forms with 200+ widgets", fieseros: true, competitor: false, note: "Chatbase is chat-only; GPTForm includes full form builder" },
-      { feature: "Knowledge Gaps & Unanswered Review Queue", fieseros: true, competitor: true, note: "Both track unanswered inquiries for 1-click training" },
-      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "GPTForm answers inbound voice phone calls" },
-      { feature: "Live human takeover with mobile app alerts", fieseros: true, competitor: true, note: "GPTForm includes dedicated iOS & Android operator companion app" },
-      { feature: "Native CRM with deal stages & lead scoring", fieseros: true, competitor: false, note: "Chatbase conversations live in isolation without a native CRM" },
-      { feature: "Automated SMS/Email follow-up sequences", fieseros: true, competitor: false, note: "GPTForm nurtures dropped-off leads automatically" },
-      { feature: "33+ payment gateways supported", fieseros: true, competitor: false, note: "Chatbase does not support payment gateways" },
+      { feature: "AI chatbot trained on your data", fieseros: true, competitor: true, note: "Both train on URLs, docs, and knowledge bases" },
+      { feature: "Smart forms with 200+ widgets", fieseros: true, competitor: false, note: "Chatbase is chat-only; Fieseros includes a full form builder" },
+      { feature: "Native CRM + customer history", fieseros: true, competitor: false, note: "Chatbase has no CRM; conversations live in isolation" },
+      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "Fieseros answers phone calls, not just chat" },
+      { feature: "Job scheduling + technician dispatch", fieseros: true, competitor: false, note: "Chatbase can't book or dispatch a job" },
+      { feature: "Invoicing + payment collection (33 gateways)", fieseros: true, competitor: false, note: "Chatbase can't collect payments or send invoices" },
+      { feature: "0% platform payment transaction fees", fieseros: true, competitor: false, note: "Fieseros charges 0% on top of gateway fees" },
+      { feature: "Lead scoring + smart routing", fieseros: true, competitor: false, note: "Fieseros scores and routes leads; Chatbase just answers" },
+      { feature: "Conversational booking (self-schedule)", fieseros: true, competitor: false, note: "Fieseros agent books appointments in-chat; Chatbase cannot" },
+      { feature: "Mobile field PWA (offline)", fieseros: true, competitor: false, note: "Chatbase has no field technician app" },
+      { feature: "Autonomous business actions", fieseros: true, competitor: false, note: "Fieseros creates jobs, quotes, invoices — not just chat replies" },
+      { feature: "Embed on any site (WordPress, Shopify, Wix)", fieseros: true, competitor: true, note: "Both offer embeddable chat widgets" },
     ],
     whySwitch: [
       {
         icon: Bot,
-        title: "Real business actions, not just replies",
+        title: "Chatbot → business action",
         description:
-          "Chatbase answers 'what are your hours?' GPTForm answers, checks live calendar availability, books the consultation slot, calculates the estimate, and collects the deposit right in the chat stream.",
-      },
-      {
-        icon: Calendar,
-        title: "Live calendar booking engine",
-        description:
-          "Chatbase cannot check whether you are free on Thursday at 2pm. GPTForm links directly with Google Calendar and Outlook to present verified, open slots without double-booking.",
-      },
-      {
-        icon: CreditCard,
-        title: "Collect revenue directly in chat",
-        description:
-          "Chatbase cannot process a single dollar. GPTForm lets customers pay booking deposits, purchase service packages, or settle invoices via Stripe with 0% platform fees.",
+          "Chatbase answers questions. Fieseros AI agent captures the lead, books the appointment, collects the deposit, and dispatches the technician — turning chat into revenue, not just replies.",
       },
       {
         icon: Layers,
-        title: "Connected CRM & lead scoring",
+        title: "CRM that knows the customer",
         description:
-          "In Chatbase, chat logs sit isolated in an inbox. GPTForm turns every interaction into a structured CRM record with deal stages, lead scoring, and automated alerts.",
+          "Chatbase conversations live in isolation. Fieseros ties every chat to a CRM record with full history — past jobs, invoices, assets — so the agent (and your team) always has context.",
       },
       {
         icon: Phone,
-        title: "Voice receptionist included",
+        title: "Voice, not just chat",
         description:
-          "Chatbase is text-only. GPTForm includes a 24/7 AI Voice Phone Receptionist that answers telephone calls, triages emergencies, and books appointments on the fly.",
+          "Chatbase is chat-only. Fieseros includes a 24/7 AI Voice Receptionist that answers phone calls, triages emergencies, and books jobs — capturing the leads that call instead of chat.",
       },
       {
-        icon: Calculator,
-        title: "Formula quote calculation",
+        icon: CreditCard,
+        title: "Payments built in",
         description:
-          "When a customer asks for pricing, Chatbase can only spit out canned text. GPTForm calculates dynamic estimates using strict mathematical formulas and displays interactive cards.",
+          "Chatbase can't collect a dollar. Fieseros collects deposits, sends invoices, and reconciles payments across 33 gateways — the full revenue loop in one platform.",
+      },
+      {
+        icon: DollarSign,
+        title: "One platform, one price",
+        description:
+          "Chatbase + Calendly + Stripe + HubSpot + Zapier = 5 bills. Fieseros replaces them all for less than you'd pay for Chatbase alone at scale.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Built for service businesses",
+        description:
+          "Chatbase is a horizontal chatbot tool. Fieseros is purpose-built for field service — with job workflows, technician dispatch, route optimization, and asset tracking.",
       },
     ],
     faqs: [
       {
-        question: "How does GPTForm AI training compare to Chatbase?",
+        question: "Can I keep my Chatbase chatbot and add Fieseros?",
         answer:
-          "Both train by crawling your website URLs and uploaded documents. GPTForm takes this further with a Dual-Brain architecture that extracts structured pricebooks, calendar availability, and service rules, allowing the agent to execute real actions rather than just generating text.",
+          "You can, but most customers replace Chatbase entirely. Fieseros AI agent does everything Chatbase does — train on your data, answer questions, escalate to humans — plus captures leads, books jobs, and collects payments. Running both duplicates cost and splits your data.",
       },
       {
-        question: "Can I replace Chatbase with GPTForm easily?",
+        question: "How does Fieseros AI training compare to Chatbase?",
         answer:
-          "Yes. Just paste your website URL into GPTForm. Our crawler indexes your content in 60 seconds, and you paste one JavaScript snippet into your site header to replace Chatbase.",
+          "Both train on URLs, PDFs, and knowledge bases. Fieseros additionally trains on your services, pricebook, and job history — so the agent can quote prices, check availability, and book real jobs, not just answer FAQs.",
       },
       {
-        question: "Does GPTForm cost more than Chatbase?",
+        question: "Is Fieseros harder to set up than Chatbase?",
         answer:
-          "Chatbase charges per message and caps plan usage quickly. GPTForm provides generous conversation limits and replaces multiple separate subscriptions (Chatbase + Calendly + Typeform + Zapier), delivering massive cost savings.",
+          "No. The AI chat agent embeds with one snippet, just like Chatbase. The difference is Fieseros also includes the CRM, scheduling, and payments — which you can adopt gradually. Start with chat, add booking, then payments, as you grow.",
       },
       {
-        question: "Can a human agent take over live chats like in Chatbase?",
+        question: "What does Fieseros cost vs Chatbase?",
         answer:
-          "Yes. GPTForm provides instant push notifications on desktop and mobile companion apps whenever a user requests an agent or confidence is low, allowing seamless 1-click human takeover.",
+          "Chatbase charges per message and caps plan usage. Fieseros charges a flat subscription that includes chat, forms, CRM, scheduling, and 0% platform payment fees. For businesses that book jobs or collect payments through chat, Fieseros is typically cheaper at scale.",
       },
     ],
     related: [
-      { label: "GPTForm vs ElfChatbot", href: "/fieseros-vs-elfchatbot" },
-      { label: "GPTForm vs Typeform", href: "/fieseros-vs-typeform" },
-      { label: "GPTForm vs Tidio", href: "/fieseros-vs-tidio" },
-      { label: "AI Chatbot Alternatives", href: "/ai-chatbot-alternatives" },
+      { label: "Fieseros vs Typeform", href: "/fieseros-vs-typeform" },
+      { label: "Fieseros vs Tidio", href: "/fieseros-vs-tidio" },
+      { label: "Conversational Forms Alternatives", href: "/conversational-forms-alternatives" },
     ],
   },
   {
     slug: "fieseros-vs-tidio",
     competitorName: "Tidio",
     competitorLabel: "Tidio",
-    titleTag: "GPTForm vs Tidio (2026) — Autonomous AI Agent vs Basic Live Chat",
-    h1: "GPTForm vs Tidio: autonomous agent vs live chat",
+    titleTag: "Fieseros vs Tidio (2026) — Live Chat + AI vs Full Operating System",
+    h1: "Fieseros vs Tidio: live chat vs operating system",
     eyebrow: "Compare · Tidio",
     metaDescription:
-      "Detailed GPTForm vs Tidio comparison. Tidio is manual live chat with basic decision trees; GPTForm is an autonomous AI agent with 2-way calendar booking, dynamic quotes, and 0% payment fees.",
+      "Detailed Fieseros vs Tidio comparison. Tidio is live chat + AI bot; Fieseros is the full operating system — CRM, dispatch, invoicing, payments, and 24/7 voice. See the head-to-head.",
     heroSubtitle:
-      "Tidio is well-known for manual live chat on Shopify stores. GPTForm is an autonomous AI agent and smart intake platform: it answers customer inquiries with zero hallucination, books calendar slots, computes formula quotes, and collects payments 24/7 without needing full-time human operators.",
+      "Tidio is excellent live chat with an AI bot for ecommerce stores. Fieseros is the operating system for service businesses — chat, forms, CRM, dispatch, invoicing, payments, and voice in one platform.",
     matrix: [
-      { feature: "Autonomous AI chatbot with RAG knowledge", fieseros: true, competitor: true, note: "Tidio charges heavily for Lyro AI credits; GPTForm includes Dual-Brain RAG" },
-      { feature: "Live 2-way Google & Outlook calendar booking", fieseros: true, competitor: false, note: "Tidio cannot check live availability or book calendar slots" },
-      { feature: "Dynamic formula price calculation", fieseros: true, competitor: false, note: "Tidio has no formula calculator engine" },
-      { feature: "Multi-step smart forms with 20,000+ templates", fieseros: true, competitor: false, note: "Tidio is focused on chat; GPTForm includes full form builder" },
-      { feature: "In-chat payment collection (0% platform fee)", fieseros: true, competitor: false, note: "Tidio does not process in-chat checkout with 0% platform fee" },
-      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "Tidio is web text only; GPTForm answers inbound phone calls" },
-      { feature: "Automated Google 5-star review collection", fieseros: true, competitor: false, note: "GPTForm includes post-service reputation engine" },
-      { feature: "Knowledge Gaps & Unanswered Queue", fieseros: true, competitor: true, note: "Both identify unanswered questions for one-click learning" },
-      { feature: "Native CRM with automated lead scoring", fieseros: true, competitor: false, note: "Tidio has simple contact lists; GPTForm includes full CRM" },
-      { feature: "Dedicated mobile companion app with 1-click takeover", fieseros: true, competitor: true, note: "Both support mobile operator apps" },
-      { feature: "Universal 1-line embed (WordPress, Shopify, Wix, Webflow)", fieseros: true, competitor: true, note: "Both embed on major CMS platforms" },
-      { feature: "No per-operator seat penalty pricing", fieseros: true, competitor: false, note: "Tidio charges expensive per-seat fees as your team grows" },
+      { feature: "Live chat + AI chatbot", fieseros: true, competitor: true, note: "Both offer live chat with AI augmentation" },
+      { feature: "Smart forms with 200+ widgets", fieseros: true, competitor: false, note: "Tidio is chat-focused; Fieseros includes a full form builder" },
+      { feature: "Native CRM + customer history", fieseros: true, competitor: false, note: "Tidio has a basic visitor profile; Fieseros has a full service CRM" },
+      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "Tidio is text-only; Fieseros answers phone calls" },
+      { feature: "Job scheduling + technician dispatch", fieseros: true, competitor: false, note: "Tidio can't book or dispatch field jobs" },
+      { feature: "Invoicing + 33 payment gateways", fieseros: true, competitor: false, note: "Tidio has no invoicing or payment collection" },
+      { feature: "0% platform payment fees", fieseros: true, competitor: false, note: "Fieseros charges 0% on top of gateway fees" },
+      { feature: "Lead scoring + smart routing", fieseros: true, competitor: false, note: "Fieseros scores and routes leads to technicians" },
+      { feature: "Mobile field PWA (offline)", fieseros: true, competitor: false, note: "Tidio has no field technician mobile app" },
+      { feature: "Ecommerce-focused (Shopify, product FAQ)", fieseros: true, competitor: true, note: "Both support ecommerce; Tidio is more ecommerce-native" },
+      { feature: "Field-service workflows (jobs, assets, routes)", fieseros: true, competitor: false, note: "Fieseros is purpose-built for trades and service" },
+      { feature: "Autonomous business actions (jobs, invoices)", fieseros: true, competitor: false, note: "Fieseros executes operational actions, not just chat" },
     ],
     whySwitch: [
       {
-        icon: Bot,
-        title: "Autonomous actions vs human-dependent live chat",
+        icon: Layers,
+        title: "Chat → CRM → dispatch → invoice",
         description:
-          "Tidio requires human operators sitting at their keyboards or charges extra for Lyro. GPTForm resolves 75%+ of inquiries autonomously, booking slots and calculating quotes without human intervention.",
-      },
-      {
-        icon: Calendar,
-        title: "Real calendar booking, not phone tag",
-        description:
-          "Tidio collects an email address so your staff can follow up later. GPTForm queries live Google/Outlook calendars and lets the customer lock in their appointment slot immediately.",
-      },
-      {
-        icon: Calculator,
-        title: "Instant formula quote generation",
-        description:
-          "Tidio cannot calculate custom estimates. GPTForm evaluates your exact pricebook formulas in real time and presents interactive Good / Better / Best quote cards in chat.",
-      },
-      {
-        icon: CreditCard,
-        title: "In-chat payments with 0% platform fee",
-        description:
-          "Collect deposits, consultation fees, and invoice payments directly inside the chat through Stripe, Apple Pay, and 33+ gateways with 0% platform transaction fees.",
+          "Tidio stops at the chat. Fieseros carries the conversation into a CRM record, a scheduled job, a dispatched technician, and a paid invoice — the full revenue loop.",
       },
       {
         icon: Phone,
-        title: "Voice phone receptionist included",
+        title: "Voice receptionist included",
         description:
-          "Tidio cannot answer telephone calls. GPTForm includes an AI Voice Receptionist that answers inbound calls, triages emergencies, and books jobs 24/7.",
+          "Tidio is text-only. Fieseros answers your phone 24/7 with a natural-sounding AI voice agent — capturing the customers who call instead of chat.",
+      },
+      {
+        icon: CreditCard,
+        title: "Collect payments, not just chats",
+        description:
+          "Tidio can't collect a payment. Fieseros collects deposits at booking, sends branded invoices, and reconciles across 33 gateways — closing the revenue loop.",
+      },
+      {
+        icon: Bot,
+        title: "AI that takes action",
+        description:
+          "Tidio's AI answers questions. Fieseros AI takes action — creates a job, assigns a tech, generates a quote, charges a card. Real operational outcomes, not just replies.",
       },
       {
         icon: DollarSign,
-        title: "No painful per-operator seat pricing",
+        title: "Replace your whole stack",
         description:
-          "Tidio charges per operator seat, penalizing you as your company grows. GPTForm offers transparent team pricing without gouging you for adding staff.",
+          "Tidio + HubSpot + Calendly + Stripe + Zapier = 5 subscriptions. Fieseros replaces them all in one platform — typically for less than you'd pay Tidio alone at scale.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Built for service, not just ecommerce",
+        description:
+          "Tidio is optimized for ecommerce stores. Fieseros is purpose-built for field service and trade businesses — with job workflows, assets, technician dispatch, and route optimization.",
       },
     ],
     faqs: [
       {
-        question: "Is Tidio better for Shopify ecommerce stores?",
+        question: "I'm an ecommerce store — is Tidio better for me?",
         answer:
-          "If you ONLY need basic live chat and order tracking for a dropshipping store, Tidio is adequate. But if you offer consultations, custom installations, services, or want an autonomous AI agent that books calendar slots and calculates custom quotes, GPTForm is vastly superior.",
+          "If you ONLY need live chat + product FAQ bot for an ecommerce store, Tidio is a solid choice. If you also offer services, installations, or appointments (which most stores do), Fieseros handles both product sales (via Shopify) and service bookings — in one platform.",
       },
       {
-        question: "Can human operators still chat live with visitors in GPTForm?",
+        question: "Can I keep Tidio for live chat and add Fieseros?",
         answer:
-          "Yes. GPTForm provides a full multi-channel shared inbox and mobile apps. When a customer asks for a human, your team is alerted instantly and can take over with a single click.",
+          "You can run both, but most service businesses replace Tidio with Fieseros to consolidate. Fieseros AI handles live chat, plus booking, payments, and CRM — so keeping Tidio duplicates cost and splits your customer data.",
       },
       {
-        question: "How does Tidio's Lyro AI compare to GPTForm?",
+        question: "Does Fieseros have a live chat (human) inbox like Tidio?",
         answer:
-          "Tidio charges expensive extra monthly fees for Lyro AI credits, which only provide text answers. GPTForm includes Dual-Brain RAG knowledge retrieval and autonomous actions (calendar booking, formula calculations, Stripe payments) out of the box.",
+          "Yes. Fieseros has a shared multi-channel inbox for chat, SMS, email, and voice — with AI handling the first response and escalating to humans with full context. It's a superset of Tidio's live chat.",
       },
       {
-        question: "Can I replace my contact forms with GPTForm?",
+        question: "How does Fieseros pricing compare to Tidio?",
         answer:
-          "Yes. GPTForm includes both a floating chat agent and an advanced form builder with 20,000+ templates, allowing you to replace both Tidio and your form software with one platform.",
+          "Tidio charges per seat and per conversation. Fieseros charges a flat subscription that includes chat, forms, CRM, dispatch, invoicing, and 0% platform payment fees. For service businesses that book jobs or collect payments, Fieseros is typically cheaper at scale.",
       },
     ],
     related: [
-      { label: "GPTForm vs Chatbase", href: "/fieseros-vs-chatbase" },
-      { label: "GPTForm vs ElfChatbot", href: "/fieseros-vs-elfchatbot" },
-      { label: "GPTForm vs Typeform", href: "/fieseros-vs-typeform" },
+      { label: "Fieseros vs Chatbase", href: "/fieseros-vs-chatbase" },
+      { label: "Fieseros vs Typeform", href: "/fieseros-vs-typeform" },
+      { label: "AI Chatbot Alternatives", href: "/ai-chatbot-alternatives" },
+    ],
+  },
+  {
+    slug: "ai-chatbot-alternatives",
+    competitorName: null,
+    competitorLabel: "Other tools",
+    titleTag: "Best AI Chatbot Alternatives in 2026 — Why Fieseros Wins",
+    h1: "The best AI chatbot alternatives in 2026",
+    eyebrow: "Compare · Alternatives",
+    metaDescription:
+      "Comparing the top AI chatbot alternatives — Chatbase, Tidio, Intercom, Drift, Fieseros. See which platform turns chat into booked jobs, paid invoices, and dispatched technicians.",
+    heroSubtitle:
+      "Most AI chatbot tools answer questions. Fieseros takes action — booking jobs, collecting payments, and dispatching technicians. Here's how it stacks up against Chatbase, Tidio, Intercom, and Drift.",
+    matrix: [
+      { feature: "AI chat trained on your data", fieseros: true, competitor: true, note: "All major chatbot platforms train on URLs/docs" },
+      { feature: "Takes real business actions (book, pay, dispatch)", fieseros: true, competitor: false, note: "Most chatbots answer; Fieseros books and bills" },
+      { feature: "Native CRM + customer history", fieseros: true, competitor: false, note: "Chatbase/Tidio/Intercom have basic or no CRM" },
+      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "Fieseros answers phone calls, not just chat" },
+      { feature: "Field-service workflows (jobs, assets, routes)", fieseros: true, competitor: false, note: "No other chatbot platform is built for trades" },
+      { feature: "Invoicing + 33 payment gateways", fieseros: true, competitor: false, note: "Chatbots don't collect payments or send invoices" },
+      { feature: "0% platform payment fees", fieseros: true, competitor: false, note: "Fieseros charges 0% on top of gateway fees" },
+      { feature: "Lead scoring + smart routing to techs", fieseros: true, competitor: false, note: "Fieseros scores and routes; others just hand off" },
+      { feature: "Smart forms with 200+ widgets", fieseros: true, competitor: false, note: "Fieseros includes a full form builder alongside chat" },
+      { feature: "Mobile field PWA (offline)", fieseros: true, competitor: false, note: "No chatbot platform includes a field technician app" },
+      { feature: "Embed on any site", fieseros: true, competitor: true, note: "All major chatbot platforms offer embeddable widgets" },
+      { feature: "Affordable for small service businesses", fieseros: true, competitor: false, note: "Intercom/Drift are enterprise-priced; Fieseros starts free" },
+    ],
+    whySwitch: [
+      {
+        icon: Bot,
+        title: "Action, not just answers",
+        description:
+          "Other chatbots answer 'what are your hours?' Fieseros answers, then books the appointment, collects the deposit, and dispatches the technician — turning chat into revenue.",
+      },
+      {
+        icon: Phone,
+        title: "Voice + chat + forms",
+        description:
+          "Most alternatives are chat-only. Fieseros unifies AI chat, AI voice receptionist, and smart forms — one knowledge base, every channel, one platform.",
+      },
+      {
+        icon: Layers,
+        title: "The operating system, not a widget",
+        description:
+          "Chatbots are a feature in Fieseros, not the whole product. CRM, dispatch, invoicing, payments, and analytics come built in — no Zapier glue.",
+      },
+      {
+        icon: DollarSign,
+        title: "Priced for service businesses",
+        description:
+          "Intercom starts at $74/seat. Drift is enterprise-only. Fieseros starts free and scales with your job volume — built for plumbers, not just SaaS companies.",
+      },
+      {
+        icon: CreditCard,
+        title: "Collects money, end-to-end",
+        description:
+          "No chatbot alternative collects payments or sends invoices. Fieseros closes the loop — chat → quote → deposit → job → invoice → paid.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Built for the field",
+        description:
+          "Fieseros is purpose-built for trades and service businesses. Job workflows, asset tracking, route optimization, technician mobile app — no chatbot-only platform has these.",
+      },
+    ],
+    faqs: [
+      {
+        question: "Which AI chatbot is best for small businesses?",
+        answer:
+          "For small service businesses, Fieseros offers the best value — free tier with 100 jobs, AI chat, voice receptionist, CRM, and 0% platform payment fees. Chatbase and Tidio are good for chat-only use; Intercom and Drift are priced for enterprise.",
+      },
+      {
+        question: "What's the best Chatbase alternative?",
+        answer:
+          "Fieseros is the top Chatbase alternative for service businesses. It does everything Chatbase does (AI chat trained on your data) plus captures leads, books jobs, collects payments, and dispatches technicians — all natively, no Zapier.",
+      },
+      {
+        question: "Is there a free AI chatbot for my website?",
+        answer:
+          "Yes. Fieseros offers a free tier that includes the AI chat agent, smart forms, CRM, and 100 jobs with 0% platform payment fees. It's the most generous free tier among AI chatbot platforms. Chatbase and Tidio also have free tiers but with stricter limits.",
+      },
+      {
+        question: "Can I use Fieseros just for chat, without the CRM?",
+        answer:
+          "Yes. Fieseros AI Forms is a standalone product for businesses that want AI chat + smart forms without the field-service CRM. You can start with chat and upgrade to the full platform anytime — your data carries over.",
+      },
+    ],
+    related: [
+      { label: "Fieseros vs Chatbase", href: "/fieseros-vs-chatbase" },
+      { label: "Fieseros vs Tidio", href: "/fieseros-vs-tidio" },
+      { label: "Fieseros vs Typeform", href: "/fieseros-vs-typeform" },
+    ],
+  },
+  {
+    slug: "conversational-forms-alternatives",
+    competitorName: null,
+    competitorLabel: "Other tools",
+    titleTag: "Best Conversational Form Alternatives in 2026 | Fieseros",
+    h1: "The best conversational form alternatives in 2026",
+    eyebrow: "Compare · Alternatives",
+    metaDescription:
+      "Comparing conversational form platforms — Typeform, Tally, Fillout, Formaloo, Fieseros. See which turns conversations into booked jobs, paid invoices, and dispatched technicians.",
+    heroSubtitle:
+      "Typeform, Tally, and Fillout make beautiful conversational forms. Fieseros turns those forms into AI chat agents that book jobs, collect payments, and dispatch technicians — the full operating system.",
+    matrix: [
+      { feature: "Conversational one-question-at-a-time UI", fieseros: true, competitor: true, note: "All major conversational form tools support this" },
+      { feature: "AI chat agent (autonomous, 24/7)", fieseros: true, competitor: false, note: "Fieseros converts forms into AI chatbots" },
+      { feature: "1-click form → chatbot conversion", fieseros: true, competitor: false, note: "No conversational form tool does this" },
+      { feature: "Native CRM + customer history", fieseros: true, competitor: false, note: "Form tools have response storage; Fieseros has a CRM" },
+      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "Fieseros answers phone calls, not just forms" },
+      { feature: "Job scheduling + technician dispatch", fieseros: true, competitor: false, note: "Form tools can't book or dispatch field jobs" },
+      { feature: "Invoicing + 33 payment gateways", fieseros: true, competitor: false, note: "Form tools can't collect deposits or send invoices" },
+      { feature: "0% platform payment fees", fieseros: true, competitor: false, note: "Fieseros charges 0% on top of gateway fees" },
+      { feature: "Lead scoring + smart routing", fieseros: true, competitor: false, note: "Fieseros scores and routes; form tools just store responses" },
+      { feature: "Autonomous business actions", fieseros: true, competitor: false, note: "Fieseros creates jobs, quotes, invoices from form data" },
+      { feature: "Mobile field PWA (offline)", fieseros: true, competitor: false, note: "No form tool includes a field technician app" },
+      { feature: "200+ form widgets + photo drawing", fieseros: true, competitor: true, note: "Fieseros matches Typeform/Tally widget variety" },
+    ],
+    whySwitch: [
+      {
+        icon: Bot,
+        title: "Form → AI chatbot, instantly",
+        description:
+          "Typeform and Tally collect responses. Fieseros converts any form into an AI chat agent that fills the same fields through conversation — adapting questions to each visitor in real time.",
+      },
+      {
+        icon: Layers,
+        title: "Responses → revenue",
+        description:
+          "Form tools store submissions. Fieseros turns each submission into a CRM record, a booked job, a paid invoice — closing the loop from form fill to revenue.",
+      },
+      {
+        icon: Phone,
+        title: "Voice + chat + forms",
+        description:
+          "Form tools are form-only. Fieseros unifies AI chat, AI voice receptionist, and smart forms — one knowledge base, every channel, one platform.",
+      },
+      {
+        icon: CreditCard,
+        title: "Collect payments natively",
+        description:
+          "Form tools cap paid submissions or charge platform fees. Fieseros collects deposits, sends invoices, and reconciles across 33 gateways — with 0% platform fees.",
+      },
+      {
+        icon: DollarSign,
+        title: "One platform, one price",
+        description:
+          "Typeform + Calendly + Stripe + HubSpot + Zapier = 5 bills. Fieseros replaces them all — typically for less than you'd pay Typeform alone at scale.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Built for service businesses",
+        description:
+          "Form tools are horizontal. Fieseros is purpose-built for trades and service businesses — with job workflows, asset tracking, and technician dispatch.",
+      },
+    ],
+    faqs: [
+      {
+        question: "What's the best Typeform alternative for service businesses?",
+        answer:
+          "Fieseros is the top Typeform alternative for service businesses. It matches Typeform's conversational form UX and widget variety, plus adds AI chat, CRM, dispatch, invoicing, and 0% platform payment fees — all in one platform.",
+      },
+      {
+        question: "Is Fieseros free like Tally?",
+        answer:
+          "Fieseros has a free tier that includes 100 jobs, AI chat, smart forms, CRM, and 0% platform payment fees — more generous than Tally's free tier for businesses that collect payments or book jobs.",
+      },
+      {
+        question: "Can I migrate my Typeform or Tally forms to Fieseros?",
+        answer:
+          "Yes. Fieseros AI form generator rebuilds any form from a URL or description, preserving conditional logic, question types, and branding. Most customers migrate in under an hour.",
+      },
+      {
+        question: "Does Fieseros support conditional logic and calculations?",
+        answer:
+          "Yes. Fieseros smart forms support full conditional logic (show/hide, branching), live calculations, dynamic pricing, and skip rules — matching Typeform and Fillout feature-for-feature.",
+      },
+    ],
+    related: [
+      { label: "Fieseros vs Typeform", href: "/fieseros-vs-typeform" },
+      { label: "Fieseros vs Tidio", href: "/fieseros-vs-tidio" },
       { label: "AI Chatbot Alternatives", href: "/ai-chatbot-alternatives" },
     ],
   },
@@ -324,279 +498,96 @@ export const comparisons: ComparisonConfig[] = [
     slug: "fieseros-vs-elfchatbot",
     competitorName: "ElfChatbot",
     competitorLabel: "ElfChatbot",
-    titleTag: "GPTForm vs ElfChatbot (2026) — Autonomous Action Agent vs Basic FAQ Widget",
-    h1: "GPTForm vs ElfChatbot: the 2026 comparison",
+    titleTag: "Fieseros vs ElfChatbot (2026) — Autonomous AI vs Basic FAQ Widget",
+    h1: "Fieseros vs ElfChatbot: the 2026 comparison",
     eyebrow: "Compare · ElfChatbot (Elfsight)",
     metaDescription:
-      "Comparing GPTForm vs ElfChatbot (by Elfsight). See why growing businesses upgrade from a simple FAQ website widget to an autonomous AI agent that books calendar slots, calculates quotes, and collects payments.",
+      "Comparing Fieseros vs ElfChatbot (by Elfsight). See why growing businesses upgrade from a simple FAQ website widget to an autonomous AI agent that books calendar slots, calculates quotes, and collects payments.",
     heroSubtitle:
-      "ElfChatbot (by Elfsight) provides a quick zero-setup FAQ widget that crawls your site. GPTForm delivers zero-setup crawling AND autonomous business actions: multi-step intake with 20,000+ templates, real-time 2-way Google Calendar booking, dynamic formula quote calculation, in-chat Stripe checkout with 0% platform fees, and 24/7 AI Voice Phone Receptionist.",
+      "ElfChatbot (by Elfsight) provides a quick zero-setup FAQ widget that crawls your site. Fieseros goes far beyond canned answers — autonomously qualifying leads, checking real-time calendar availability, calculating dynamic quotes, and collecting payments with 0% platform fees.",
     matrix: [
-      { feature: "Website AI Chatbot Widget", fieseros: true, competitor: true, note: "Both embed on any website (WordPress, Shopify, Webflow, Wix, HTML)" },
-      { feature: "Zero-Setup URL Web Crawler", fieseros: true, competitor: true, note: "Both crawl and index pages automatically from your website URL" },
+      { feature: "Website AI Chatbot Widget", fieseros: true, competitor: true, note: "Both embed on any website (WordPress, Shopify, Webflow, Wix)" },
+      { feature: "Zero-Setup URL Web Crawler", fieseros: true, competitor: true, note: "Both crawl and index pages automatically from your URL" },
       { feature: "Knowledge Gaps & Unanswered Queue", fieseros: true, competitor: true, note: "Both log unanswered questions so you can answer them once" },
       { feature: "Plain-English Guardrail Rules", fieseros: true, competitor: true, note: "Both support behavioral instructions and prohibited topics" },
-      { feature: "Live 2-Way Google & Outlook Calendar Booking", fieseros: true, competitor: false, note: "ElfChatbot has no live calendar booking; GPTForm schedules real slots" },
+      { feature: "Live Google/Outlook Calendar Booking", fieseros: true, competitor: false, note: "ElfChatbot has no live calendar booking; Fieseros schedules real slots" },
       { feature: "Dynamic Formula Quote Calculator", fieseros: true, competitor: false, note: "ElfChatbot cannot calculate custom price estimates or square-foot math" },
-      { feature: "Native In-Chat Payment Collection (0% Fee)", fieseros: true, competitor: false, note: "ElfChatbot has no payment engine; GPTForm charges 0% platform fees" },
+      { feature: "Native In-Chat Payment Collection", fieseros: true, competitor: false, note: "ElfChatbot has no payment engine; Fieseros charges 0% platform fees" },
+      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "ElfChatbot is web-only; Fieseros answers actual phone calls" },
       { feature: "Multi-Step Form Intake (20,000+ Templates)", fieseros: true, competitor: false, note: "ElfChatbot only collects 3 fields (Name, Phone, Email)" },
-      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "ElfChatbot is web-only; GPTForm answers actual inbound phone calls" },
-      { feature: "Automated 5-Star Google Review Collection", fieseros: true, competitor: false, note: "GPTForm includes automated post-service reputation engine" },
-      { feature: "Mobile Companion App with Operator Takeover", fieseros: true, competitor: false, note: "GPTForm includes iOS/Android app with instant 1-tap takeover" },
-      { feature: "Native CRM & Team Dispatch Board", fieseros: true, competitor: false, note: "GPTForm dispatches specialists and manages deals directly from chat" },
+      { feature: "Multichannel (WhatsApp, SMS, Instagram)", fieseros: true, competitor: false, note: "ElfChatbot is web-only; Fieseros supports 16 omnichannel touchpoints" },
+      { feature: "Mobile Companion App with Operator Takeover", fieseros: true, competitor: false, note: "Fieseros includes iOS/Android app with instant 1-tap takeover" },
+      { feature: "Native Field Service CRM & Dispatch", fieseros: true, competitor: false, note: "Fieseros dispatches technicians directly from conversations" },
     ],
     whySwitch: [
       {
         icon: Bot,
-        title: "Autonomous actions, not just answers",
+        title: "Autonomous Actions, Not Just Answers",
         description:
-          "ElfChatbot stops at answering questions. GPTForm AI Agents execute real business transactions: checking live calendar availability, booking appointments, calculating dynamic quotes, and collecting deposits right inside the chat.",
+          "ElfChatbot stops at answering questions. Fieseros AI Chatbots execute real business transactions: checking live calendar slots, calculating dynamic quotes, and collecting deposits right inside the chat.",
       },
       {
-        icon: Calendar,
-        title: "Real 2-way Google Calendar booking",
+        icon: Phone,
+        title: "24/7 Voice Phone Receptionist",
         description:
-          "ElfChatbot can only paste an external link. GPTForm renders an interactive calendar card directly in the conversation, locking in slots and sending Google Meet invites in real time.",
-      },
-      {
-        icon: Calculator,
-        title: "Jotform-grade dynamic formulas",
-        description:
-          "ElfChatbot cannot compute prices. GPTForm evaluates multi-variable formulas (square footage, materials, volume discounts) with zero hallucination and presents itemized cards.",
+          "Website visitors are only half your leads. Fieseros includes a 24/7 AI Voice Phone Receptionist that answers inbound phone calls, triages emergencies, and books appointments on the fly.",
       },
       {
         icon: CreditCard,
-        title: "In-chat checkout with 0% platform fees",
+        title: "In-Chat Payments (0% Platform Fees)",
         description:
-          "Accept credit cards, Apple Pay, Google Pay, and deposits directly in chat via Stripe with 0% platform transaction fees. ElfChatbot has zero payment capabilities.",
+          "Accept credit cards, deposits, and retainers directly in chat via Stripe with 0% platform transaction fees. ElfChatbot has no payment capabilities.",
       },
       {
-        icon: Phone,
-        title: "24/7 AI Voice Phone Receptionist",
+        icon: Zap,
+        title: "16 Omnichannel Touchpoints",
         description:
-          "Website visitors are only half your leads. GPTForm includes an AI Voice Phone Receptionist that answers inbound phone calls, triages emergencies, and books appointments 24/7.",
+          "Deploy your AI assistant across Web, WhatsApp, SMS, Instagram, Gmail, and phone. ElfChatbot only operates as a web chat bubble.",
       },
       {
         icon: Layers,
-        title: "20,000+ multi-step smart intake templates",
+        title: "Full CRM, Scheduling & Dispatch Built In",
         description:
-          "ElfChatbot only collects 3 basic fields (Name, Phone, Email). GPTForm provides full multi-step conversational intake with file uploads, e-signatures, and conditional logic.",
+          "Stop stitching together chatbot widgets, calendars, and spreadsheets. Fieseros unifies your conversational intake with automated CRM, job dispatch, and invoicing.",
+      },
+      {
+        icon: ShieldCheck,
+        title: "Dedicated Mobile Operator App",
+        description:
+          "Receive instant push notifications for hot leads and take over live chats from anywhere with our iOS/Android companion app.",
       },
     ],
     faqs: [
       {
-        question: "How is GPTForm different from ElfChatbot by Elfsight?",
+        question: "How is Fieseros different from ElfChatbot by Elfsight?",
         answer:
-          "ElfChatbot is a lightweight FAQ widget designed to crawl website text and answer simple visitor questions with a 3-field contact collector. GPTForm is an autonomous action agent and smart intake platform that answers FAQs, books live calendar appointments, calculates custom price quotes, collects credit card payments with 0% fees, and answers phone calls via AI Voice Receptionist.",
+          "ElfChatbot is a lightweight FAQ widget designed to crawl website text and answer simple visitor questions. Fieseros is a complete autonomous agent and smart intake platform that answers questions, books live calendar appointments, calculates custom price quotes, collects credit card payments, and dispatches field technicians.",
       },
       {
-        question: "Does GPTForm have a 'Knowledge Gaps' feature like ElfChatbot?",
+        question: "Does Fieseros have a 'Knowledge Gaps' feature like ElfChatbot?",
         answer:
-          "Yes! GPTForm includes an automated Knowledge Gaps Review Queue. Whenever a customer asks something where AI confidence is low, it is logged to your dashboard. You can answer it with one click, and the answer is instantly indexed into vector embeddings for all future chats.",
+          "Yes. Fieseros features an automated Unanswered Questions Review Queue. Whenever a customer asks something where AI confidence is low, it is logged to your dashboard. You can answer it with one click, and the answer is instantly indexed into vector embeddings.",
       },
       {
-        question: "Can GPTForm replace our scheduling and quoting software?",
+        question: "Can Fieseros replace our scheduling and quoting software?",
         answer:
-          "Yes. Unlike ElfChatbot which requires third-party links, GPTForm has native two-way calendar sync (Google Calendar, Outlook) and formula quote calculators, turning customer conversations directly into confirmed appointments and invoices.",
+          "Yes. Unlike ElfChatbot which requires third-party links, Fieseros has native two-way calendar sync (Google Calendar, Outlook) and formula quote calculators, turning customer conversations directly into confirmed appointments and invoices.",
       },
       {
-        question: "Does GPTForm charge transaction fees on payments collected?",
+        question: "Does Fieseros charge transaction fees on payments collected?",
         answer:
-          "No. GPTForm charges 0% platform transaction fees on all payments and deposits processed through the chatbot or smart intake forms.",
+          "No. Fieseros charges 0% platform transaction fees on all payments and deposits processed through the chatbot or smart intake forms.",
       },
     ],
     related: [
-      { label: "GPTForm vs Chatbase", href: "/fieseros-vs-chatbase" },
-      { label: "GPTForm vs Tidio", href: "/fieseros-vs-tidio" },
-      { label: "GPTForm vs Typeform", href: "/fieseros-vs-typeform" },
-      { label: "AI Chatbot Alternatives", href: "/ai-chatbot-alternatives" },
-    ],
-  },
-  {
-    slug: "ai-chatbot-alternatives",
-    competitorName: null,
-    competitorLabel: "Other Chatbots",
-    titleTag: "Best AI Chatbot Alternatives in 2026 — Why GPTForm Wins",
-    h1: "The best AI chatbot alternatives in 2026",
-    eyebrow: "Compare · AI Chatbot Roundup",
-    metaDescription:
-      "Comparing the top AI chatbot platforms in 2026 — Chatbase, Tidio, ElfChatbot, Intercom, Drift, GPTForm. See which platform executes real actions: booking, quoting, and payments.",
-    heroSubtitle:
-      "Most AI chatbot tools answer questions. GPTForm takes autonomous business action — checking real-time calendar availability, calculating dynamic formula quotes, and collecting payments with 0% platform fees. Here is how it compares to Chatbase, Tidio, ElfChatbot, Intercom, and Drift.",
-    matrix: [
-      { feature: "AI chat grounded in website content (RAG)", fieseros: true, competitor: true, note: "All major modern chatbot platforms train on URLs/docs" },
-      { feature: "Executes real business actions (book, quote, pay)", fieseros: true, competitor: false, note: "Most chatbots only output text; GPTForm executes workflows" },
-      { feature: "Live 2-way Google & Outlook calendar booking", fieseros: true, competitor: false, note: "Competitors require external Calendly links" },
-      { feature: "Dynamic math & formula quote calculator", fieseros: true, competitor: false, note: "Only GPTForm includes visual formula calculation engine" },
-      { feature: "In-chat payment collection (0% platform fee)", fieseros: true, competitor: false, note: "Competitors cannot process tokenized checkout in-chat" },
-      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "GPTForm answers actual telephone calls, not just web chat" },
-      { feature: "Knowledge Gaps & Unanswered Queue", fieseros: true, competitor: true, note: "Logs low-confidence inquiries for 1-click learning" },
-      { feature: "Multi-step smart forms with 20,000+ templates", fieseros: true, competitor: false, note: "Competitors are chat-only widgets" },
-      { feature: "Automated 5-star Google review collection", fieseros: true, competitor: false, note: "GPTForm includes post-service reputation engine" },
-      { feature: "Native CRM with deal stages & lead scoring", fieseros: true, competitor: false, note: "Competitors require Zapier + third-party CRM" },
-      { feature: "Universal 1-line embed (WordPress, Shopify, Wix, Webflow)", fieseros: true, competitor: true, note: "All embed via script snippets" },
-      { feature: "Affordable for growing businesses (No per-seat fees)", fieseros: true, competitor: false, note: "Intercom/Drift cost thousands; GPTForm offers predictable pricing" },
-    ],
-    whySwitch: [
-      {
-        icon: Bot,
-        title: "Actions, not just answers",
-        description:
-          "Traditional chatbots answer 'what are your hours?' GPTForm answers, then books the consultation slot on your Google Calendar, calculates the quote, and collects the deposit.",
-      },
-      {
-        icon: Calendar,
-        title: "2-way calendar slot booking",
-        description:
-          "Eliminate phone tag entirely. GPTForm syncs bidirectional availability with Google Calendar and Outlook so clients can self-schedule in 30 seconds.",
-      },
-      {
-        icon: Calculator,
-        title: "Jotform-grade dynamic formulas",
-        description:
-          "Generate instant estimates using custom square-footage formulas and tiered pricing logic with complete mathematical accuracy and zero hallucination.",
-      },
-      {
-        icon: CreditCard,
-        title: "Collect payments with 0% platform fees",
-        description:
-          "Process deposits, service fees, and invoices right inside the conversation stream via Stripe, Apple Pay, and 33+ gateways with 0% platform surcharges.",
-      },
-      {
-        icon: Phone,
-        title: "AI Voice phone receptionist",
-        description:
-          "Combine your website chat with a 24/7 AI Voice Receptionist that answers inbound phone calls and books appointments with natural conversational voice.",
-      },
-      {
-        icon: Layers,
-        title: "Replaces your whole disconnected stack",
-        description:
-          "Stop paying for Chatbase + Calendly + Typeform + HubSpot + Zapier. GPTForm provides the AI agent, smart forms, calendar booking, and CRM in one platform.",
-      },
-    ],
-    faqs: [
-      {
-        question: "Which AI chatbot is best for service and booking businesses in 2026?",
-        answer:
-          "GPTForm is the top recommendation for businesses that need to do more than answer basic FAQs. It combines zero-hallucination Dual-Brain knowledge retrieval with live calendar booking, dynamic formula quote generation, and 0% payment collection.",
-      },
-      {
-        question: "How does GPTForm compare to Intercom and Drift?",
-        answer:
-          "Intercom and Drift are geared toward enterprise SaaS and charge steep per-seat fees (often $500–$2,000+/month). GPTForm delivers superior conversational actions (calendar booking, formula calculations, Stripe checkout) at a fraction of the cost with zero seat penalties.",
-      },
-      {
-        question: "How fast is the setup for GPTForm?",
-        answer:
-          "Under 60 seconds. You enter your website URL to crawl your knowledge base, customize your booking rules, and paste a 1-line script tag into your website.",
-      },
-      {
-        question: "What happens when the AI doesn't know the answer?",
-        answer:
-          "GPTForm avoids hallucinating by checking strict confidence gates. If it doesn't know, it offers to connect the visitor to a human and logs the query into your Knowledge Gaps queue so you can answer it once for all future visitors.",
-      },
-    ],
-    related: [
-      { label: "GPTForm vs ElfChatbot", href: "/fieseros-vs-elfchatbot" },
-      { label: "GPTForm vs Chatbase", href: "/fieseros-vs-chatbase" },
-      { label: "GPTForm vs Tidio", href: "/fieseros-vs-tidio" },
-      { label: "GPTForm vs Typeform", href: "/fieseros-vs-typeform" },
-    ],
-  },
-  {
-    slug: "conversational-forms-alternatives",
-    competitorName: null,
-    competitorLabel: "Other Form Tools",
-    titleTag: "Best Conversational Form Alternatives in 2026 | GPTForm",
-    h1: "The best conversational form alternatives in 2026",
-    eyebrow: "Compare · Conversational Forms Roundup",
-    metaDescription:
-      "Comparing top conversational form builders — Typeform, Tally, Fillout, Jotform, GPTForm. See which platform combines AI chat, live calendar booking, dynamic formulas, and 0% payment fees.",
-    heroSubtitle:
-      "Typeform, Tally, and Fillout popularized one-question-at-a-time forms. GPTForm takes the next leap by combining conversational intake with autonomous AI agents that answer questions, book calendar slots, calculate complex formulas, and collect payments with 0% platform fees.",
-    matrix: [
-      { feature: "One-question-at-a-time conversational UI", fieseros: true, competitor: true, note: "All major conversational form tools offer step-by-step UX" },
-      { feature: "Autonomous 24/7 AI chat agent (Dual-Brain RAG)", fieseros: true, competitor: false, note: "Form tools collect answers; GPTForm also answers visitor questions" },
-      { feature: "Live 2-way Google & Outlook calendar booking", fieseros: true, competitor: false, note: "Most form tools require external Calendly redirect links" },
-      { feature: "Dynamic math & formula calculation engine", fieseros: true, competitor: true, note: "GPTForm and Fillout support dynamic mathematical formulas" },
-      { feature: "In-chat & on-form payment collection (0% fee)", fieseros: true, competitor: false, note: "Competitors cap paid submissions or charge platform fees" },
-      { feature: "24/7 AI Voice Phone Receptionist", fieseros: true, competitor: false, note: "Form tools have no phone capabilities; GPTForm answers calls" },
-      { feature: "Dual embed modes (Floating Chatbot + Inline Form)", fieseros: true, competitor: false, note: "Traditional form tools only embed as inline or popup containers" },
-      { feature: "Knowledge Gaps & Unanswered Queue", fieseros: true, competitor: false, note: "Traditional form tools have no AI learning queue" },
-      { feature: "Automated 5-star Google review collection", fieseros: true, competitor: false, note: "GPTForm includes post-service reputation engine" },
-      { feature: "Native CRM with deal stages & lead scoring", fieseros: true, competitor: false, note: "Form tools store responses in spreadsheets; GPTForm has a CRM" },
-      { feature: "20,000+ industry intake templates", fieseros: true, competitor: true, note: "Both offer extensive template libraries" },
-      { feature: "Legally binding e-signatures built in", fieseros: true, competitor: true, note: "Both support digital signatures" },
-    ],
-    whySwitch: [
-      {
-        icon: Bot,
-        title: "Two-way conversation, not a one-way survey",
-        description:
-          "Traditional forms interrogate visitors with a one-way barrage of questions. GPTForm AI Agent has a genuine two-way conversation: it answers prospect questions from your website, builds trust, and captures qualified leads.",
-      },
-      {
-        icon: Calendar,
-        title: "Native 2-way calendar appointment booking",
-        description:
-          "Skip the clunky Zapier-to-Calendly handoff. Clients can book directly from open Google Calendar and Outlook slots right inside the intake flow.",
-      },
-      {
-        icon: Calculator,
-        title: "Visual mathematical formula calculations",
-        description:
-          "Evaluate dynamic prices, estimates, and discounts on screen using custom mathematical formulas — perfect for square-foot math and tiered service quotes.",
-      },
-      {
-        icon: DollarSign,
-        title: "0% platform payment transaction fees",
-        description:
-          "Collect deposits, invoices, and product purchases via Stripe with 0% platform transaction fees, keeping 100% of your earnings.",
-      },
-      {
-        icon: Phone,
-        title: "Voice phone receptionist included",
-        description:
-          "Convert phone callers as well as website visitors. GPTForm AI Voice Receptionist answers inbound calls 24/7 and books appointments into the same calendar.",
-      },
-      {
-        icon: Layers,
-        title: "Form responses turn into active CRM deals",
-        description:
-          "Stop letting form submissions rot in a spreadsheet. Every submission automatically creates a CRM deal with lead scoring, pipeline stages, and automated follow-ups.",
-      },
-    ],
-    faqs: [
-      {
-        question: "What is the best Typeform alternative in 2026?",
-        answer:
-          "GPTForm is the most powerful Typeform alternative. It matches Typeform's clean conversational UI while adding an autonomous AI agent, real-time Google Calendar booking, dynamic formula quotes, and 0% payment transaction fees.",
-      },
-      {
-        question: "Can I use GPTForm just as a form builder without the chatbot?",
-        answer:
-          "Yes. GPTForm supports dual embed modes. You can deploy it purely as an inline multi-step form or quote calculator on any page, or enable the floating AI chat assistant — or use both together.",
-      },
-      {
-        question: "How do formula calculations work in GPTForm?",
-        answer:
-          "You can define custom formulas using visual field variables, mathematical operators (+, -, *, /), conditional logic, and minimum base charges — matching the capabilities of Jotform and Fillout.",
-      },
-      {
-        question: "Can I migrate my existing forms from Tally or Typeform?",
-        answer:
-          "Yes. Use our AI Form Generator to clone any existing form URL or prompt in under 60 seconds, instantly transferring your questions, fields, and options.",
-      },
-    ],
-    related: [
-      { label: "GPTForm vs Typeform", href: "/fieseros-vs-typeform" },
-      { label: "GPTForm vs Chatbase", href: "/fieseros-vs-chatbase" },
-      { label: "GPTForm vs ElfChatbot", href: "/fieseros-vs-elfchatbot" },
+      { label: "Fieseros vs Chatbase", href: "/fieseros-vs-chatbase" },
+      { label: "Fieseros vs Tidio", href: "/fieseros-vs-tidio" },
+      { label: "Fieseros vs Typeform", href: "/fieseros-vs-typeform" },
       { label: "AI Chatbot Alternatives", href: "/ai-chatbot-alternatives" },
     ],
   },
 ];
+
 
 export function getComparisonBySlug(slug: string): ComparisonConfig | undefined {
   return comparisons.find((c) => c.slug === slug);
