@@ -146,35 +146,52 @@ export default function PublicChatPage() {
   // Embedded Headless Mode (inside third-party website via embed.js)
   if (isEmbed) {
     return (
-      <div className={cn("w-full h-full bg-transparent flex flex-col justify-end overflow-hidden select-none", theme.isDark && "dark")}>
-        {previewPage === 'greeting' ? (
-          <div className="w-full h-full flex items-center justify-center">
-            <button
-              type="button"
-              onClick={() => handleSwitchPage('conversation')}
-              className="relative size-16 rounded-full shadow-2xl p-0.5 border-2 border-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
-              style={{ background: theme.primaryColor || '#2563eb' }}
-              title={`Chat with ${agent.name}`}
-            >
-              <img
-                src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
-                alt={agent.name}
-                className="size-full rounded-full object-cover"
+      <>
+        {/* Force iframe document to stay 100% viewport locked with no root scrollbars */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              html, body {
+                height: 100% !important;
+                max-height: 100% !important;
+                overflow: hidden !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: transparent !important;
+              }
+            `,
+          }}
+        />
+        <div className={cn("fixed inset-0 w-full h-full bg-transparent flex flex-col justify-end overflow-hidden select-none", theme.isDark && "dark")}>
+          {previewPage === 'greeting' ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <button
+                type="button"
+                onClick={() => handleSwitchPage('conversation')}
+                className="relative size-16 rounded-full shadow-2xl p-0.5 border-2 border-white hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                style={{ background: theme.primaryColor || '#2563eb' }}
+                title={`Chat with ${agent.name}`}
+              >
+                <img
+                  src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
+                  alt={agent.name}
+                  className="size-full rounded-full object-cover"
+                />
+                <span className="absolute bottom-0 right-0 size-4 rounded-full bg-emerald-500 border-2 border-white animate-pulse" />
+              </button>
+            </div>
+          ) : (
+            <div className="w-full h-full flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-border/80 bg-background">
+              <AgentDeviceSimulator
+                agent={agent}
+                isTestMode={false}
+                previewPage="conversation"
+                onSwitchPage={handleSwitchPage}
               />
-              <span className="absolute bottom-0 right-0 size-4 rounded-full bg-emerald-500 border-2 border-white animate-pulse" />
-            </button>
-          </div>
-        ) : (
-          <div className="w-full h-full flex flex-col rounded-3xl overflow-hidden shadow-2xl border border-border/80 bg-background">
-            <AgentDeviceSimulator
-              agent={agent}
-              isTestMode={false}
-              previewPage="conversation"
-              onSwitchPage={handleSwitchPage}
-            />
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      </>
     );
   }
 

@@ -875,154 +875,157 @@ export function AgentDeviceSimulator({
         backgroundColor: chatBg,
       }}
     >
-      {/* ── TOP AGENT BAR ── */}
-      <div
-        className={cn(
-          "px-4 py-3 flex items-center justify-between shrink-0 shadow-xs z-10 transition-all",
-          isHeaderDark ? "text-white" : "text-slate-900"
-        )}
-        style={{
-          background: headerGradient,
-        }}
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <img
-              src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
-              alt={agent.name}
-              className="size-9 rounded-full object-cover border-2 border-white/80 shadow-xs"
-            />
-            <span className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h2 className="text-xs font-bold leading-none tracking-tight" style={{ color: titleColor }}>
-                {agent.name}
-              </h2>
-              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none", isHeaderDark ? "bg-white/20 text-white" : "bg-black/10 text-slate-900")}>
-                AI
-              </span>
-              {memoryActive && (
-                <span className={cn("text-[8px] font-semibold px-1 rounded flex items-center gap-0.5", isHeaderDark ? "bg-black/20 text-white/90" : "bg-white/60 text-slate-800")} title="Agent remembers context">
-                  <Brain className="size-2.5" /> Memory
-                </span>
-              )}
-            </div>
-            <p className={cn("text-[10px] mt-0.5 leading-none", isHeaderDark ? "text-white/85" : "text-slate-700")}>{agent.roleTitle}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1">
-          {((agent.navigation?.formsEnabled ?? true) && (agent.connectedForms?.length ?? 0) > 0) && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => setActiveTab('forms')}
-              title="Connected Forms"
-              className={cn("size-7 rounded-full relative", isHeaderDark ? "text-white/80 hover:text-white hover:bg-white/10" : "text-slate-700 hover:text-slate-900 hover:bg-black/10")}
-            >
-              <FileText className="size-3.5" />
-              <span className="absolute -top-0.5 -right-0.5 size-3.5 bg-blue-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
-                {agent.connectedForms?.length}
-              </span>
-            </Button>
-          )}
-
-          {allowScreenShare && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setScreenSharingActive(!screenSharingActive);
-                toast(screenSharingActive ? 'Screen sharing stopped' : 'Screen sharing active for visual guidance');
-              }}
-              title="Screen Sharing Visual Guidance"
-              className={cn(
-                'size-7 rounded-full text-white/80 hover:text-white',
-                screenSharingActive ? 'bg-emerald-500 text-white' : 'hover:bg-white/10'
-              )}
-            >
-              <MonitorPlay className="size-3.5" />
-            </Button>
-          )}
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={resetChat}
-            title="Restart Session"
-            className="size-7 rounded-full text-white/80 hover:text-white hover:bg-white/10"
-          >
-            <RotateCcw className="size-3.5" />
-          </Button>
-
-          {onSwitchPage && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onSwitchPage('greeting')}
-              title="Minimize Chat"
-              className="size-7 rounded-full text-white/80 hover:text-white hover:bg-white/10"
-            >
-              <ChevronDown className="size-4" />
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* ── HUMAN OPERATOR ESCALATION ALERT BANNER ── */}
-      {escalatedToHuman && (
+      {/* ── FIXED / PINNED TOP AGENT HEADER ── */}
+      <header className="sticky top-0 z-30 shrink-0 w-full shadow-xs">
+        {/* ── TOP AGENT BAR ── */}
         <div
           className={cn(
-            'px-3.5 py-2.5 flex items-center justify-between gap-2 text-[11px] font-medium animate-in fade-in shrink-0 border-b',
-            operatorConnected
-              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
-              : agentAvailable === false
-              ? 'bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-300'
-              : 'bg-blue-500/15 border-blue-500/30 text-blue-800 dark:text-blue-300'
+            "px-4 py-3 flex items-center justify-between transition-all",
+            isHeaderDark ? "text-white" : "text-slate-900"
           )}
+          style={{
+            background: headerGradient,
+          }}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              className={cn(
-                'size-2 rounded-full shrink-0',
-                operatorConnected
-                  ? 'bg-emerald-500'
-                  : agentAvailable === false
-                  ? 'bg-amber-500'
-                  : 'bg-blue-500 animate-ping'
-              )}
-            />
-            <span className="truncate">
-              {operatorConnected
-                ? `Live Specialist ${operatorName ? `(${operatorName})` : ''} connected! You are chatting live.`
-                : agentAvailable === false
-                ? 'Specialists offline right now (Mon–Fri 8am–6pm). Leave a message or book below.'
-                : 'Connecting with a live specialist... An operator has been notified.'}
-            </span>
+          <div className="flex items-center gap-2.5">
+            <div className="relative">
+              <img
+                src={agent.avatarUrl || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&auto=format&fit=crop&q=80'}
+                alt={agent.name}
+                className="size-9 rounded-full object-cover border-2 border-white/80 shadow-xs"
+              />
+              <span className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-xs font-bold leading-none tracking-tight" style={{ color: titleColor }}>
+                  {agent.name}
+                </h2>
+                <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none", isHeaderDark ? "bg-white/20 text-white" : "bg-black/10 text-slate-900")}>
+                  AI
+                </span>
+                {memoryActive && (
+                  <span className={cn("text-[8px] font-semibold px-1 rounded flex items-center gap-0.5", isHeaderDark ? "bg-black/20 text-white/90" : "bg-white/60 text-slate-800")} title="Agent remembers context">
+                    <Brain className="size-2.5" /> Memory
+                  </span>
+                )}
+              </div>
+              <p className={cn("text-[10px] mt-0.5 leading-none", isHeaderDark ? "text-white/85" : "text-slate-700")}>{agent.roleTitle}</p>
+            </div>
           </div>
-          {agentAvailable === false && (
-            <button
+
+          <div className="flex items-center gap-1">
+            {((agent.navigation?.formsEnabled ?? true) && (agent.connectedForms?.length ?? 0) > 0) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setActiveTab('forms')}
+                title="Connected Forms"
+                className={cn("size-7 rounded-full relative", isHeaderDark ? "text-white/80 hover:text-white hover:bg-white/10" : "text-slate-700 hover:text-slate-900 hover:bg-black/10")}
+              >
+                <FileText className="size-3.5" />
+                <span className="absolute -top-0.5 -right-0.5 size-3.5 bg-blue-600 text-white rounded-full text-[9px] font-bold flex items-center justify-center">
+                  {agent.connectedForms?.length}
+                </span>
+              </Button>
+            )}
+
+            {allowScreenShare && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setScreenSharingActive(!screenSharingActive);
+                  toast(screenSharingActive ? 'Screen sharing stopped' : 'Screen sharing active for visual guidance');
+                }}
+                title="Screen Sharing Visual Guidance"
+                className={cn(
+                  'size-7 rounded-full text-white/80 hover:text-white',
+                  screenSharingActive ? 'bg-emerald-500 text-white' : 'hover:bg-white/10'
+                )}
+              >
+                <MonitorPlay className="size-3.5" />
+              </Button>
+            )}
+
+            <Button
               type="button"
-              onClick={() => {
-                const matchedForm = agent.connectedForms?.[0];
-                if (matchedForm) {
-                  setActiveFormModal(matchedForm);
-                  onOpenFormInModal?.(matchedForm);
-                }
-              }}
-              className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+              variant="ghost"
+              size="icon"
+              onClick={resetChat}
+              title="Restart Session"
+              className="size-7 rounded-full text-white/80 hover:text-white hover:bg-white/10"
             >
-              <Calendar className="size-3" />
-              Book on Calendar
-            </button>
-          )}
+              <RotateCcw className="size-3.5" />
+            </Button>
+
+            {onSwitchPage && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onSwitchPage('greeting')}
+                title="Minimize Chat"
+                className="size-7 rounded-full text-white/80 hover:text-white hover:bg-white/10"
+              >
+                <ChevronDown className="size-4" />
+              </Button>
+            )}
+          </div>
         </div>
-      )}
+
+        {/* ── HUMAN OPERATOR ESCALATION ALERT BANNER ── */}
+        {escalatedToHuman && (
+          <div
+            className={cn(
+              'px-3.5 py-2.5 flex items-center justify-between gap-2 text-[11px] font-medium animate-in fade-in shrink-0 border-b',
+              operatorConnected
+                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+                : agentAvailable === false
+                ? 'bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-300'
+                : 'bg-blue-500/15 border-blue-500/30 text-blue-800 dark:text-blue-300'
+            )}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className={cn(
+                  'size-2 rounded-full shrink-0',
+                  operatorConnected
+                    ? 'bg-emerald-500'
+                    : agentAvailable === false
+                    ? 'bg-amber-500'
+                    : 'bg-blue-500 animate-ping'
+                )}
+              />
+              <span className="truncate">
+                {operatorConnected
+                  ? `Live Specialist ${operatorName ? `(${operatorName})` : ''} connected! You are chatting live.`
+                  : agentAvailable === false
+                  ? 'Specialists offline right now (Mon–Fri 8am–6pm). Leave a message or book below.'
+                  : 'Connecting with a live specialist... An operator has been notified.'}
+              </span>
+            </div>
+            {agentAvailable === false && (
+              <button
+                type="button"
+                onClick={() => {
+                  const matchedForm = agent.connectedForms?.[0];
+                  if (matchedForm) {
+                    setActiveFormModal(matchedForm);
+                    onOpenFormInModal?.(matchedForm);
+                  }
+                }}
+                className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+              >
+                <Calendar className="size-3" />
+                Book on Calendar
+              </button>
+            )}
+          </div>
+        )}
+      </header>
 
       {/* ── TAB 1: CHAT TAB CONTENT ── */}
       {activeTab === 'chat' && (
@@ -1258,7 +1261,7 @@ export function AgentDeviceSimulator({
           {/* ── BOTTOM INPUT BAR ── */}
           <div
             className={cn(
-              'p-3 border-t shrink-0',
+              'p-3 border-t shrink-0 sticky bottom-0 z-20',
               isDark ? 'bg-slate-900/95 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
             )}
           >
