@@ -10,7 +10,6 @@ import {
   getIndustryLabel,
 } from '@/lib/forms/templates';
 import { ChevronRight, ArrowLeft } from 'lucide-react';
-import { AiMarketingLayout } from '@/components/ai-marketing/ai-marketing-layout';
 
 /**
  * /templates/[category] — public category listing page.
@@ -87,8 +86,7 @@ export default async function CategoryPage({
     .slice(0, 10);
 
   return (
-    <AiMarketingLayout activePath={category === 'quote' ? '/templates/quote' : '/templates'}>
-      <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background">
       {/* Breadcrumbs */}
       <nav className="border-b border-border bg-muted/30">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4 text-xs text-muted-foreground">
@@ -169,7 +167,6 @@ export default async function CategoryPage({
           initialCategory={category}
         />
       </main>
-      </div>
-    </AiMarketingLayout>
+    </div>
   );
 }

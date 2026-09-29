@@ -94,10 +94,7 @@ export function GptFormClientView() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans antialiased selection:bg-emerald-500/20 selection:text-emerald-700">
-      {/* ── Standalone AI & Forms Navigation Header ── */}
-      <AiMarketingHeader activePath="/gptform" />
-
+    <>
       {/* ── SECTION 1: HERO (hero-grid) ── */}
       <section id="top" className="hero-grid relative pt-10 sm:pt-16 pb-12 sm:pb-20">
         <div className="page-shell grid items-center gap-12 lg:grid-cols-[0.85fr_1.15fr]">
@@ -576,9 +573,6 @@ export function GptFormClientView() {
           </div>
         </div>
       </section>
-
-      {/* ── Standalone AI & Forms Navigation Footer ── */}
-      <AiMarketingFooter />
-    </div>
+    </>
   );
 }
