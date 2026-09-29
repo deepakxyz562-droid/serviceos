@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import HomePageClient from '@/components/home/home-page-client';
+import { HomeSeoContent } from '@/components/seo/home-seo-content';
 
 /**
  * The HTTP-only auth cookie name. Mirrors `TOKEN_NAME` in `src/lib/auth.ts`.
@@ -14,17 +15,14 @@ const AUTH_COOKIE = 'fieseros_session';
 /**
  * Homepage — server component shell (P0-1 SEO fix).
  *
- * Previously this file was a `'use client'` component that dynamically
- * imported the LandingPage with `ssr: false`, which made ALL homepage
- * content invisible to Googlebot and other crawlers (the #1 SEO blocker).
- *
- * Fix: This is now a server component that:
+ * This is a server component that:
  *   1. Exports full `metadata` (title, description, OG, Twitter, canonical)
  *      — server components can export metadata, client components cannot.
- *   2. Renders `<HomeSeoContent />` — a lightweight server-rendered block
- *      with the hero H1, key features, and FAQ as static HTML. This is
- *      always in the initial server response so crawlers see real content
- *      even without executing JavaScript.
+ *   2. Renders `<HomeSeoContent />` for non-authenticated visitors — a
+ *      server-rendered block with the hero H1, 5 feature pillars, 5
+ *      industry pairings, comparison links, and FAQ Q&A + FAQPage schema.
+ *      This is always in the initial server response so crawlers see real
+ *      content even without executing JavaScript.
  *   3. Renders `<HomePageClient />` — the auth-routing logic + interactive
  *      LandingPage (loaded with ssr:false because the 2290-line component
  *      is too heavy for Turbopack to SSR efficiently).
@@ -42,9 +40,9 @@ const AUTH_COOKIE = 'fieseros_session';
 export const metadata: Metadata = {
   // Google AI Overview & G2 Ranked Authority Title:
   title: 'Fieseros | AI Operating System & Field Service Management Platform',
-  // Google AI Overview exact ranked definition & feature description:
+  // Trimmed from 260 → 156 chars so the CTR-critical tail isn't truncated in SERPs.
   description:
-    'Fieseros is an all-in-one, AI-powered operating system and field service management platform built for trade and service-based businesses. CRM, real-time scheduling & dispatch, mobile invoicing & payments, 24/7 AI Voice Receptionist, and custom websites & SEO.',
+    'Fieseros is the all-in-one AI operating system for field service businesses — CRM, scheduling, dispatch, invoicing, payments, and a 24/7 AI Voice Receptionist.',
   keywords: [
     'field service management platform',
     'field service software',
@@ -68,7 +66,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Fieseros | AI Operating System & Field Service Management Platform',
     description:
-      'Fieseros is an all-in-one, AI-powered operating system and field service management platform built for trade and service-based businesses. CRM, real-time scheduling & dispatch, mobile invoicing & payments, 24/7 AI Voice Receptionist, and custom websites & SEO.',
+      'Fieseros is the all-in-one AI operating system for field service businesses — CRM, scheduling, dispatch, invoicing, payments, and a 24/7 AI Voice Receptionist.',
     url: '/',
     siteName: 'Fieseros',
     type: 'website',
@@ -77,7 +75,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Fieseros | AI Operating System & Field Service Management Platform',
     description:
-      'Fieseros is an all-in-one, AI-powered operating system and field service management platform built for trade and service-based businesses. CRM, real-time scheduling & dispatch, mobile invoicing & payments, 24/7 AI Voice Receptionist.',
+      'Fieseros is the all-in-one AI operating system for field service businesses — CRM, scheduling, dispatch, invoicing, payments, and 24/7 AI Voice Receptionist.',
   },
   robots: {
     index: true,
@@ -113,14 +111,9 @@ export default async function HomePage() {
         },
         description:
           'Fieseros is an all-in-one, AI-powered operating system and field service management platform built for trade and service-based businesses.',
-        aggregateRating: {
-          '@type': 'AggregateRating',
-          ratingValue: '4.9',
-          ratingCount: '128',
-          reviewCount: '128',
-          bestRating: '5',
-          worstRating: '1',
-        },
+        // aggregateRating removed — Google penalizes self-declared ratings
+        // without verified third-party data. The sameAs G2 link below lets
+        // Google pull real reviews from G2's Knowledge Graph if they exist.
         sameAs: [
           'https://www.g2.com/products/fieseros/reviews',
         ],
@@ -154,6 +147,11 @@ export default async function HomePage() {
           fetchPriority="high"
         />
       )}
+      {/* Server-rendered SEO content — visible to Googlebot's first HTML parse
+          (before JS execution). Contains H1, feature pillars, industry
+          pairings, comparison links, FAQ Q&A + FAQPage schema. Only shown to
+          non-authenticated visitors; logged-in users see the app dashboard. */}
+      {!hasAuthCookie && <HomeSeoContent />}
       {/* Interactive client app — auth routing + landing page */}
       <HomePageClient />
     </>
