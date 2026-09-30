@@ -66,9 +66,26 @@ export async function requireCrmTenant(
       return null;
     }
 
-    // Standalone AI Forms accounts are unified with CRM capabilities
-    // (Forms + AI + Scheduling + CRM Leads/Customers/Bookings/Pipeline).
-    // They are fully authorized to access these endpoints.
+    // ── Standalone AI Forms users must NOT access CRM endpoints ──
+    // Strategy: GPTForm+Agent is a separate SaaS from Fieseros CRM.
+    // A user who subscribes to GPTForm+AI Agent should NOT get CRM access.
+    // The UI sidebar already hides CRM views for standalone users; this
+    // guard enforces the same separation at the API layer.
+    const isStandalone =
+      tenant.signupMode === 'standalone' ||
+      String(tenant.plan || '').startsWith('standalone');
+
+    if (isStandalone) {
+      return NextResponse.json(
+        {
+          error:
+            'This CRM feature is not available on your GPTForm plan. Upgrade to Fieseros CRM to access pipeline, leads, jobs, invoicing, and dispatch.',
+          code: 'STANDALONE_FORMS_NO_CRM',
+          upgradeUrl: '/?view=billing',
+        },
+        { status: 403 }
+      );
+    }
 
     if (!authUser.tenantId) {
       // No tenant — allow (let downstream checks handle 401/404 if needed).

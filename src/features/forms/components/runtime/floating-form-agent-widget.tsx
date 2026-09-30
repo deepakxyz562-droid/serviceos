@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   ArrowRight,
   Video,
+  ImageIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -703,6 +704,36 @@ export function FloatingFormAgentWidget({
                                 </a>
                               </div>
                             )}
+                          </div>
+                        )}
+
+                        {/* Media Upload Request Card — AI prompts visitor to upload a photo */}
+                        {m.card?.type === 'media_upload' && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-500/30 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <div className="size-7 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+                                <ImageIcon className="size-4" />
+                              </div>
+                              <p className="text-xs font-bold text-amber-950 dark:text-amber-100">{m.card.prompt || 'Please upload a photo'}</p>
+                            </div>
+                            {m.card.hint && (
+                              <p className="text-[10px] text-muted-foreground">{m.card.hint}</p>
+                            )}
+                            <label className="flex flex-col items-center justify-center gap-1 h-16 rounded-lg border-2 border-dashed border-amber-400/50 bg-amber-50/50 dark:bg-amber-950/20 cursor-pointer hover:bg-amber-100/50 transition-colors">
+                              <ImageIcon className="size-5 text-amber-500" />
+                              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">Tap to upload photo</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    handleSendMessage(`I've uploaded a photo of: ${m.card?.prompt || 'the issue'}`);
+                                  }
+                                }}
+                              />
+                            </label>
                           </div>
                         )}
 

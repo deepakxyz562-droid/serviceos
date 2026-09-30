@@ -101,13 +101,13 @@ export function GptFormClientView() {
           <div className="max-w-xl animate-fade-in">
             <p className="eyebrow text-emerald-600">
               <span className="size-2 rounded-full bg-emerald-600 animate-pulse" />
-              GPTFORM · AI FORM BUILDER &amp; CONVERSATIONAL INTAKE
+              GPTFORM · AI INTAKE EMPLOYEE FOR YOUR WEBSITE
             </p>
             <h1 className="mt-4 font-display text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.05] tracking-tight text-foreground">
-              Free AI Form Builder &amp; <span className="text-emerald-600">Smart Intake Engine</span>
+              Turn Your Website Into an <span className="text-emerald-600">AI Employee</span>
             </h1>
             <p className="mt-5 text-base sm:text-lg leading-relaxed text-muted-foreground">
-              Build high-converting online forms, live price calculators, and conversational AI booking agents in seconds. Connect 33+ payment gateways with <strong>0% platform fees</strong> and sync leads directly to your CRM.
+              GPTForm is an AI intake employee that talks to your website visitors, collects the right information, qualifies requests, books appointments, and takes payments — 24/7, in any industry. The form builder is underneath; the <strong>AI employee is the product</strong>.
             </p>
 
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
@@ -117,7 +117,7 @@ export function GptFormClientView() {
                 className="h-12 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm cursor-pointer shadow-md rounded-xl"
               >
                 <a href="#studio">
-                  Build a Form with AI <ArrowRight className="size-4 ml-1.5" />
+                  Create Your AI Employee <ArrowRight className="size-4 ml-1.5" />
                 </a>
               </Button>
               <Button
@@ -132,7 +132,7 @@ export function GptFormClientView() {
 
             {/* Micro value props */}
             <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-xs font-semibold text-muted-foreground">
-              {['Free forever tier ($0)', '100 submissions / month', 'No credit card required', '0% payment fees', '33+ Gateways'].map(
+              {['24/7 AI customer intake', 'Books appointments live', 'Collects photos & documents', 'Qualifies leads (Hot/Warm/Cold)', '0% platform fees'].map(
                 (item) => (
                   <span key={item} className="flex items-center gap-1.5">
                     <Check className="size-3.5 text-emerald-600 font-bold" />
@@ -151,9 +151,9 @@ export function GptFormClientView() {
         <div className="mt-14 border-y border-border bg-muted/40 py-4">
           <div className="page-shell grid gap-4 sm:grid-cols-3">
             {[
-              { icon: Code2, text: 'Embeds in 1 click on WordPress, Webflow, Shopify & HTML' },
-              { icon: Calculator, text: 'JotForm-grade live calculations & date math engines' },
-              { icon: CreditCard, text: '33+ Payment Gateways with 0% platform transaction fees' },
+              { icon: Bot, text: 'AI employee interviews customers & qualifies requests 24/7' },
+              { icon: CalendarCheck, text: 'Books confirmed appointments with live calendar availability' },
+              { icon: CreditCard, text: 'Accepts payments via 33+ gateways with 0% platform fees' },
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-center justify-center gap-3 text-center text-xs sm:text-sm font-semibold text-foreground">
                 <Icon className="size-4 text-emerald-600 shrink-0" />

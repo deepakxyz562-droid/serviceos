@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       date: rawDate,
       time: rawTime,
       scheduledAt: rawScheduledAt,
-      timezone = 'Asia/Kolkata',
+      timezone = 'America/New_York',
       customer: rawCustomer,
       name: rawName,
       email: rawEmail,
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       notes: rawNotes,
       serviceName: rawServiceName,
       price = 0,
-      currency = 'INR',
+      currency = 'USD',
     } = body;
 
     // 1. Resolve Tenant by ID or Slug
@@ -58,8 +58,14 @@ export async function POST(request: NextRequest) {
         },
       });
     }
+    // SECURITY: No silent tenant fallback.
+    // Previously fell back to db.tenant.findFirst() — allowing anonymous
+    // bookings to attach to a random tenant. Now return 400 if unresolved.
     if (!tenant) {
-      tenant = await db.tenant.findFirst();
+      return NextResponse.json(
+        { error: 'Unable to resolve tenant. Provide a valid tenantId or tenantSlug.' },
+        { status: 400, headers: CORS_HEADERS }
+      );
     }
 
     const tenantId = tenant?.id || null;
@@ -204,7 +210,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || 'Booking execution failed' },
+      { error: 'Booking execution failed. Please try again or contact support.' },
       { status: 500, headers: CORS_HEADERS }
     );
   }

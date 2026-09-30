@@ -149,8 +149,9 @@ const PLANS = [
 type StandalonePlanId = (typeof PLANS)[number]['id'];
 
 const STEPS = [
-  { id: 1, label: 'Website Details' },
-  { id: 2, label: 'Choose Your Plan' },
+  { id: 1, label: 'Your Business' },
+  { id: 2, label: 'Choose Plan' },
+  { id: 3, label: 'Create AI Employee' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -268,9 +269,18 @@ export function StandaloneOnboarding({
         }
       }
 
-      toast.success('You\'re all set! Let\'s build your first form 🎉');
+      toast.success('Your AI Employee workspace is ready! Let\'s set up your first AI intake agent 🎉');
       // Small delay so the toast is visible before the app view switches.
+      // Route to the AI Employee Setup Wizard (agentStudio) instead of the
+      // generic formBuilder — new standalone users should create their AI
+      // intake employee first, which auto-generates a connected form.
       setTimeout(() => {
+        // Set sessionStorage flag so the agent studio auto-opens the wizard
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('open_agent_setup_wizard', 'true');
+        }
+        const authStore = useAppStore.getState();
+        authStore.setCurrentView('agentStudio');
         onComplete();
       }, 700);
     } catch {

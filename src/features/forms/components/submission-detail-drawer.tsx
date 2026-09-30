@@ -28,6 +28,9 @@ import {
   Sparkles,
   Copy,
   MessageSquare,
+  CalendarCheck,
+  FileText,
+  DollarSign,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -344,6 +347,40 @@ Received: ${new Date(submission.createdAt).toLocaleString()}`;
                       <MessageSquare className="size-3.5 text-emerald-600" />
                       WhatsApp Follow-up
                     </a>
+                  </Button>
+                )}
+
+                {/* One-click: Confirm Appointment — sends a confirmation email/SMS */}
+                {email && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300 text-xs gap-1.5"
+                    onClick={() => {
+                      const subject = encodeURIComponent('Appointment Confirmation');
+                      const body = encodeURIComponent(`Hi ${submission.respondentName || 'there'},\n\nYour appointment has been confirmed. We'll see you soon!\n\nBest regards,\nThe Team`);
+                      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+                    }}
+                  >
+                    <CalendarCheck className="size-3.5" />
+                    Confirm Appointment
+                  </Button>
+                )}
+
+                {/* One-click: Send Quote — opens email with pre-filled quote template */}
+                {email && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 text-xs gap-1.5"
+                    onClick={() => {
+                      const subject = encodeURIComponent(`Quote for: ${submission.form?.name || 'Your Service Request'}`);
+                      const body = encodeURIComponent(`Hi ${submission.respondentName || 'there'},\n\nThank you for your interest. Here's a preliminary quote for your request:\n\nService: ${submission.form?.name || 'Service Request'}\n\n[Add your pricing details here]\n\nPlease reply to confirm or ask any questions.\n\nBest regards,\nThe Team`);
+                      window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+                    }}
+                  >
+                    <DollarSign className="size-3.5" />
+                    Send Quote
                   </Button>
                 )}
 

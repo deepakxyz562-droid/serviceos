@@ -17,7 +17,10 @@ const nextConfig: NextConfig = {
   output: "standalone",
   compress: true, // Enable gzip compression — critical for sitemaps (Google prefers compressed responses)
   typescript: {
-    ignoreBuildErrors: true,
+    // Production safety: do NOT ignore TypeScript errors at build time.
+    // Previously set to true, which masked fatal type errors and let
+    // broken code ship to production silently.
+    ignoreBuildErrors: false,
   },
   reactStrictMode: false,
   serverExternalPackages: ["bcryptjs", "jsonwebtoken"],

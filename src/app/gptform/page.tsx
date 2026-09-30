@@ -2,40 +2,38 @@ import type { Metadata } from 'next';
 import { GptFormClientView } from './gptform-client';
 
 export const metadata: Metadata = {
-  title: 'GPTForm™ — Free AI Form Builder, Online Forms & Conversational Booking',
+  title: 'GPTForm — AI Intake Employee: Turn Website Visitors Into Qualified Customers',
   description:
-    'Build high-converting smart forms in seconds with AI. JotForm-grade visual form builder with live formula calculations, 33+ payment gateways, conversational AI agents, and 20,000+ templates with 0% platform fees.',
+    'GPTForm is an AI intake employee that talks to your website visitors, collects the right information, qualifies requests, books appointments, and takes payments. Not just a form builder — a 24/7 AI employee.',
   keywords: [
+    'AI intake employee',
+    'AI intake agent',
+    'AI customer intake',
+    'AI employee for website',
+    'AI receptionist',
+    'AI lead qualification',
+    'conversational AI intake',
+    'AI booking agent',
     'AI form builder',
-    'free online form builder',
     'Jotform alternative',
     'Typeform alternative',
-    'conversational form builder',
-    'form calculation widget',
-    'online form creator',
-    'payment forms 0 percent fee',
-    'Stripe payment forms',
-    'quote calculator form',
-    'booking form scheduler',
-    'multi step form builder',
-    'AI intake agent',
     'Fieseros GPTForm',
   ],
   alternates: {
     canonical: 'https://fieseros.com/gptform',
   },
   openGraph: {
-    title: 'GPTForm™ — Free AI Form Builder, Online Forms & Conversational Booking',
+    title: 'GPTForm — AI Intake Employee: Turn Website Visitors Into Qualified Customers',
     description:
-      'Build smart online forms, live price calculators, and conversational AI booking agents in seconds. Connect 33+ payment gateways with 0% platform transaction fees.',
+      'An AI employee that talks to your website visitors, collects the right information, qualifies requests, books appointments, and takes payments. 24/7, in any industry.',
     url: 'https://fieseros.com/gptform',
-    siteName: 'Fieseros AI Service OS',
+    siteName: 'GPTForm',
     images: [
       {
         url: 'https://fieseros.com/og-gptform.png',
         width: 1200,
         height: 630,
-        alt: 'GPTForm AI Form Builder & Conversational Intake Engine',
+        alt: 'GPTForm AI Intake Employee — Turn Website Visitors Into Qualified Customers',
       },
     ],
     locale: 'en_US',
@@ -43,9 +41,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'GPTForm™ — Free AI Form Builder & Conversational Intake Engine',
+    title: 'GPTForm — AI Intake Employee',
     description:
-      'Turn online forms and website conversations into booked jobs and direct payments. 33+ gateways, 0% fees, JotForm-grade calculations.',
+      'Turn your website into a 24/7 AI employee that interviews customers, qualifies requests, books appointments, and takes payments.',
     images: ['https://fieseros.com/og-gptform.png'],
     creator: '@fieseros',
   },
@@ -69,13 +67,13 @@ export default function GptFormPage() {
       {
         '@type': 'SoftwareApplication',
         '@id': 'https://fieseros.com/gptform#software',
-        name: 'GPTForm™ AI Form Builder',
+        name: 'GPTForm AI Intake Employee',
         url: 'https://fieseros.com/gptform',
         operatingSystem: 'All (Web, iOS, Android)',
         applicationCategory: 'BusinessApplication',
-        applicationSubCategory: 'Online Form Builder & Conversational Intake',
+        applicationSubCategory: 'AI Customer Intake & Autonomous Action Platform',
         description:
-          'AI-powered online form builder, live pricing formula calculator, and conversational intake engine with 33+ payment gateways and 0% platform fees.',
+          'GPTForm is an AI intake employee that turns website visitors into qualified customers. It interviews customers conversationally, collects photos and documents, qualifies requests, books appointments, and takes payments — 24/7, in any industry.',
         aggregateRating: {
           '@type': 'AggregateRating',
           ratingValue: '4.9',
@@ -119,16 +117,16 @@ export default function GptFormPage() {
           },
         ],
         featureList: [
-          'Natural language AI form generator',
-          'JotForm-grade visual formula calculation pad',
-          'Date difference calculation (checkout - checkin)',
-          '33+ Connected payment gateways with 0% platform fees',
-          '2 form layouts: Classic Paper and Card Swipe, plus a separate AI Agent chatbot',
-          '20,000+ free canonical industry form templates',
-          'HTML5 smooth canvas digital e-signatures',
-          'Direct appointment scheduling with calendar availability sync',
-          'Elementor-style 2-column live estimate breakdown',
+          'AI employee that interviews customers conversationally',
+          'Collects photos, documents, and project scope in chat',
+          'Qualifies leads with urgency scoring (Hot / Warm / Cold)',
+          'Books confirmed appointments with live calendar availability',
+          'Accepts payments via 33+ gateways with 0% platform fees',
+          'AI form generator with natural language',
+          '20,000+ industry-specific templates',
           '1-click embed on WordPress, Webflow, Shopify, Wix, Squarespace & HTML',
+          'Webhooks and integrations to HubSpot, Salesforce, Zapier, Slack',
+          'Hosted intake pages for SMS, Instagram bio, and Google Business',
         ],
       },
       {
@@ -163,10 +161,18 @@ export default function GptFormPage() {
           },
           {
             '@type': 'Question',
+            name: 'What is an AI Intake Employee?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'An AI Intake Employee is a 24/7 AI agent that lives on your website. It greets visitors, interviews them conversationally to understand their needs, collects photos and documents, qualifies the request (Hot / Warm / Cold), books appointments with live calendar availability, and takes payments — all without human intervention. The form builder is underneath; the AI employee is the product.',
+            },
+          },
+          {
+            '@type': 'Question',
             name: 'How is GPTForm different from Jotform and Typeform?',
             acceptedAnswer: {
               '@type': 'Answer',
-              text: 'GPTForm keeps form presentation and AI chat separate: choose Classic Paper or Card Swipe for the form, then optionally deploy a separate AI Agent chatbot that can open connected forms inside the chat. GPTForm also supports 33+ payment gateways with 0% platform transaction fees, JotForm-grade visual formula calculations, and 20,000+ free canonical templates.',
+              text: 'Jotform and Typeform are form builders — they collect text responses that sit in an inbox. GPTForm is an AI employee that has a real conversation with your customer, understands their intent, asks only the necessary questions, collects photos of the problem, qualifies the lead, books a confirmed appointment, and sends the structured submission to your CRM or webhook. The form is just the interface; the autonomous intake-to-action workflow is the product.',
             },
           },
           {

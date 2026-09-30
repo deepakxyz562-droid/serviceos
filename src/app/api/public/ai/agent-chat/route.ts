@@ -120,21 +120,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fallback to first primary tenant if neither tenantId nor workspaceId was resolved
-    if (!tenantId && !workspaceId) {
-      const fallbackTenant = await db.tenant.findFirst({
-        select: { id: true, name: true, phone: true, email: true },
-      }).catch(() => null);
-      if (fallbackTenant) {
-        tenantId = fallbackTenant.id;
-        tenantName = fallbackTenant.name;
-        tenantPhone = fallbackTenant.phone || '';
-        tenantEmail = fallbackTenant.email || '';
-      }
-    }
-
-    // Hard requirement: we must have EITHER a tenantId OR a workspaceId.
-    // No silent fallback — return a clear error if context is unresolved.
+    // SECURITY: No silent tenant fallback.
+    // Previously this fell back to db.tenant.findFirst() — allowing anonymous
+    // visitors to bill AI calls to an arbitrary tenant. The comment below said
+    // "No silent fallback" but the fallback had already executed above.
+    // Now we return a clear 400 if no tenant/workspace context was resolved.
     if (!tenantId && !workspaceId) {
       return NextResponse.json(
         { error: 'Unable to resolve agent context. Provide a valid agentId, tenantId, or form slug.' },
@@ -146,12 +136,13 @@ export async function POST(req: NextRequest) {
     if (action === 'check_availability') {
       const targetDate = body.date || new Date().toISOString().split('T')[0];
       const slotDuration = Number(body.slotDuration) || 30;
-      
-      // Default working hours: 09:00 to 17:00
+
+      // Default working hours: 09:00 to 17:00 (configurable per tenant in future)
       const startHour = 9;
       const endHour = 17;
       const slots: string[] = [];
-      
+      const tz = body.timezone || 'America/New_York';
+
       for (let h = startHour; h < endHour; h++) {
         // Exclude 12:00 to 13:00 lunch break
         if (h === 12) continue;
@@ -168,7 +159,7 @@ export async function POST(req: NextRequest) {
           success: true,
           date: targetDate,
           slots,
-          timezone: 'America/New_York',
+          timezone: tz,
         },
         { headers: CORS_HEADERS },
       );
