@@ -188,24 +188,51 @@ export async function POST(
       });
     }
 
-    // B. Create Lead in CRM (Optional Action)
-    if (normalizedSchema.settings.actions.createCrmLead?.enabled && form.tenantId) {
+    // B. Create / Update Lead in CRM & AI Intake Pipeline
+    let createdLeadId: string | null = null;
+    if (form.tenantId || normalizedSchema.settings.actions.createCrmLead?.enabled) {
       try {
         const leadNotes = Object.entries(submissionData)
-          .map(([k, v]) => `${k}: ${v}`)
+          .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`)
           .join('\n');
 
-        await db.lead.create({
+        const urgencyVal = String(submissionData.f_urgency || submissionData.urgency || '').toLowerCase();
+        const fullText = (leadNotes + ' ' + (respondentName || '')).toLowerCase();
+        const isEmergency = urgencyVal.includes('emergency') ||
+          fullText.includes('emergency') ||
+          fullText.includes('burst') ||
+          fullText.includes('leak') ||
+          fullText.includes('flood') ||
+          fullText.includes('no heat') ||
+          fullText.includes('locked out');
+
+        const tags = ['ai_intake', form.name];
+        if (isEmergency) tags.push('emergency_priority');
+        if (createdBooking) tags.push('appointment_scheduled');
+
+        const address = String(submissionData.f_address || submissionData.address || submissionData.location || '');
+
+        const lead = await db.lead.create({
           data: {
             ...(form.tenantId ? { tenantId: form.tenantId } : {}),
-            name: respondentName || respondentEmail || 'Website Form Lead',
+            name: respondentName || respondentEmail || respondentPhone || 'Intake Visitor',
             email: respondentEmail || null,
             phone: respondentPhone || '',
-            source: 'Website Form',
-            description: `Generated via form: ${form.name}\n\n${leadNotes}`,
-            status: 'new',
+            address: address || null,
+            source: body.source ? `AI Intake (${body.source})` : `Form: ${form.name}`,
+            description: `AI Intake Submission: ${form.name}\n${isEmergency ? '🚨 URGENCY: EMERGENCY DETECTED\n' : ''}\n${leadNotes}`,
+            status: isEmergency ? 'hot' : 'new',
+            tagsJson: JSON.stringify(tags),
           },
         });
+
+        createdLeadId = lead.id;
+
+        // Link lead back to the form response
+        await db.formResponse.update({
+          where: { id: response.id },
+          data: { leadId: lead.id },
+        }).catch(() => {});
       } catch (err) {
         console.error('[form-submit] Failed to auto-create lead:', err);
       }

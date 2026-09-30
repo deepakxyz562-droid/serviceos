@@ -647,7 +647,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     }
 
     return sections;
-  }, [isSuperAdmin, isEmployee, isListingOnly, disabledMenus, auth.tenant]);
+  }, [isSuperAdmin, isEmployee, isListingOnly, isStandalone, disabledMenus, auth.tenant]);
 
   const handleNavClick = (view: ViewType) => {
     setCurrentView(view);

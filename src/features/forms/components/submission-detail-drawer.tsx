@@ -26,8 +26,11 @@ import {
   Loader2,
   Clock,
   Sparkles,
+  Copy,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 export interface FormSubmissionItem {
   id: string;
@@ -115,6 +118,24 @@ export function SubmissionDetailDrawer({
     }
   };
 
+  const handleCopyDispatchBrief = () => {
+    const urgencyVal = String(submission.data.f_urgency || submission.data.urgency || '').toLowerCase();
+    const address = String(submission.data.f_address || submission.data.address || submission.data.location || 'Not specified');
+    const notes = String(submission.data.f_notes || submission.data.notes || submission.data.message || submission.data.description || 'None provided');
+    const service = String(submission.data.f_service || submission.data.service || submission.form?.name || 'Service Request');
+    const brief = `🚨 INTAKE DISPATCH BRIEF
+Customer: ${submission.respondentName}
+Phone: ${phone || 'N/A'}
+Email: ${email || 'N/A'}
+Service: ${service}
+Location: ${address}
+Urgency: ${urgencyVal.includes('emergency') ? 'EMERGENCY 🚨' : 'Standard Routine'}
+Customer Notes: ${notes}
+Received: ${new Date(submission.createdAt).toLocaleString()}`;
+    navigator.clipboard.writeText(brief);
+    toast.success('Dispatch brief copied to clipboard!');
+  };
+
   // Human friendly source badge
   const getSourceBadge = (source: string) => {
     switch (source) {
@@ -195,6 +216,79 @@ export function SubmissionDetailDrawer({
             )}
           </div>
 
+          {/* AI Intake Dossier & Urgency Callout */}
+          {(() => {
+            const urgencyVal = String(submission.data.f_urgency || submission.data.urgency || '').toLowerCase();
+            const isEmergency = urgencyVal.includes('emergency') || String(submission.data.notes || submission.data.f_notes || '').toLowerCase().includes('leak') || String(submission.data.notes || submission.data.f_notes || '').toLowerCase().includes('burst');
+            const photoEntries = Object.entries(submission.data || {}).filter(([k, v]) =>
+              (k.toLowerCase().includes('photo') || k.toLowerCase().includes('image') || k.toLowerCase().includes('file')) &&
+              typeof v === 'string' &&
+              (v.startsWith('http') || v.startsWith('/'))
+            );
+
+            return (
+              <div className="space-y-3">
+                <div className={cn(
+                  'p-4 rounded-xl border space-y-2',
+                  isEmergency
+                    ? 'bg-rose-500/10 border-rose-500/30 dark:bg-rose-950/20'
+                    : 'bg-emerald-500/10 border-emerald-500/25 dark:bg-emerald-950/20'
+                )}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="size-3.5 text-emerald-600" /> AI Intake Dossier
+                    </span>
+                    <Badge className={cn(
+                      'text-[10px] font-bold uppercase',
+                      isEmergency
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-emerald-600 text-white'
+                    )}>
+                      {isEmergency ? '🚨 Emergency Priority' : 'Standard Intake'}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-foreground leading-relaxed">
+                    {String(submission.data.f_notes || submission.data.notes || submission.data.description || 'Customer inquiry captured via AI Intake.')}
+                  </p>
+                  {Boolean(submission.data.f_address) && (
+                    <div className="text-xs text-muted-foreground pt-1 border-t border-border/40">
+                      <strong>Service Location:</strong> {String(submission.data.f_address)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Uploaded Photos Gallery Preview */}
+                {photoEntries.length > 0 && (
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+                      Customer Uploaded Photos ({photoEntries.length})
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {photoEntries.map(([k, v]) => (
+                        <a
+                          key={k}
+                          href={String(v)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group relative rounded-xl overflow-hidden border border-border/80 aspect-video bg-muted block shadow-2xs"
+                        >
+                          <img
+                            src={String(v)}
+                            alt="Uploaded customer photo"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity">
+                            View Full Photo
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {/* CRM Status & Conversion Actions */}
           <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/20">
             <CardContent className="p-4 space-y-3">
@@ -234,6 +328,34 @@ export function SubmissionDetailDrawer({
                     Create Job / Booking
                   </Button>
                 )}
+
+                {phone && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300 text-xs gap-1.5"
+                    asChild
+                  >
+                    <a
+                      href={`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hi ${submission.respondentName || 'there'}, thanks for reaching out to us regarding ${submission.form?.name || 'your inquiry'}. How can we assist you?`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <MessageSquare className="size-3.5 text-emerald-600" />
+                      WhatsApp Follow-up
+                    </a>
+                  </Button>
+                )}
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs gap-1.5"
+                  onClick={handleCopyDispatchBrief}
+                >
+                  <Copy className="size-3.5" />
+                  Copy Dispatch Brief
+                </Button>
               </div>
             </CardContent>
           </Card>

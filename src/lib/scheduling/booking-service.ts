@@ -231,28 +231,86 @@ export async function createAppointmentBooking(
     attendeeEmail: customer.email || undefined,
   });
 
-  // 2. Create CRM Lead if Customer Contact Exists
+  // 2. Create or Update CRM Lead (Strict Deduplication on phone/email)
   let createdLead: any = null;
   if (customer.name || customer.email || customer.phone) {
     try {
-      createdLead = await db.lead.create({
-        data: {
-          tenantId: tenantId || null,
-          name: customer.name || 'Appointment Client',
-          email: customer.email || '',
-          phone: customer.phone || '',
-          serviceType: serviceName,
-          status: 'new',
-          source: source === 'form' ? 'form_submission' : 'ai_chat_widget',
-          notes: `[Appointment Scheduled: ${dateStr} at ${timeStr}]\nSource: ${source}\nNotes: ${notes || 'None'}`,
-        },
-      });
+      const existingLead = tenantId
+        ? await db.lead.findFirst({
+            where: {
+              tenantId,
+              OR: [
+                ...(customer.phone ? [{ phone: customer.phone }] : []),
+                ...(customer.email ? [{ email: customer.email }] : []),
+              ],
+            },
+          })
+        : null;
+
+      if (existingLead) {
+        createdLead = await db.lead.update({
+          where: { id: existingLead.id },
+          data: {
+            name: customer.name && customer.name !== 'Valued Visitor' ? customer.name : existingLead.name,
+            phone: customer.phone || existingLead.phone,
+            email: customer.email || existingLead.email,
+            address: customer.address || existingLead.address,
+            description: `${existingLead.description || ''}\n[Appointment Scheduled: ${dateStr} at ${timeStr}]\nSource: ${source}\nNotes: ${notes || 'None'}`.trim(),
+          },
+        });
+      } else {
+        createdLead = await db.lead.create({
+          data: {
+            tenantId: tenantId || null,
+            name: customer.name || 'Appointment Client',
+            email: customer.email || '',
+            phone: customer.phone || 'N/A',
+            serviceType: serviceName,
+            status: 'new',
+            source: source === 'form' ? 'form_submission' : 'ai_chat_widget',
+            description: `[Appointment Scheduled: ${dateStr} at ${timeStr}]\nSource: ${source}\nNotes: ${notes || 'None'}`.trim(),
+          },
+        });
+      }
     } catch (leadErr) {
-      console.warn('[booking-service] Lead record creation warning:', leadErr);
+      console.warn('[booking-service] Lead record creation/update warning:', leadErr);
     }
   }
 
-  // 3. Create Booking Record in Database
+  // 3. Create Booking Record in Database (Prevent Double-Booking)
+  if (tenantId) {
+    const existingBooking = await db.booking.findFirst({
+      where: {
+        tenantId,
+        scheduledAt,
+        OR: [
+          ...(customer.email ? [{ customerEmail: customer.email }] : []),
+          ...(customer.phone ? [{ customerPhone: customer.phone }] : []),
+        ],
+      },
+    });
+
+    if (existingBooking) {
+      return {
+        success: true,
+        booking: existingBooking,
+        lead: createdLead,
+        availableSlotMatched: true,
+        meetingUrl: existingBooking.location?.includes('meet.google.com') ? existingBooking.location : null,
+        calendarUrls: {
+          google: googleCalendarUrl,
+          outlook: outlookCalendarUrl,
+        },
+        icsContent,
+        scheduledAt,
+        scheduledEndTime,
+        dateStr,
+        timeStr,
+        timezone,
+      };
+    }
+  }
+
   const booking = await db.booking.create({
     data: {
       title: displayTitle,

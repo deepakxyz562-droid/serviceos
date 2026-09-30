@@ -450,10 +450,13 @@ export function FormSubmissionsView({
                 submissions.map((sub) => {
                   const email = (sub.data.email as string) || (sub.respondent?.includes('@') ? sub.respondent : null);
                   const phone = (sub.data.phone as string) || (!sub.respondent?.includes('@') ? sub.respondent : null);
+                  const urgencyStr = String(sub.data.f_urgency || sub.data.urgency || '').toLowerCase();
+                  const isEmergency = urgencyStr.includes('emergency') || String(sub.data.notes || sub.data.f_notes || '').toLowerCase().includes('leak');
+                  const hasPhotos = Object.keys(sub.data || {}).some((k) => k.toLowerCase().includes('photo') || k.toLowerCase().includes('image'));
 
                   // Extract 2 key fields for the summary snippet
                   const summaryEntries = Object.entries(sub.data || {})
-                    .filter(([k]) => !['name', 'fullName', 'email', 'phone', 'website'].includes(k))
+                    .filter(([k]) => !['name', 'fullName', 'email', 'phone', 'website', 'f_urgency', 'urgency'].includes(k))
                     .slice(0, 2);
 
                   return (
@@ -464,22 +467,36 @@ export function FormSubmissionsView({
                     >
                       {/* Status Dot */}
                       <td className="p-3">
-                        {sub.leadId ? (
+                        {isEmergency ? (
+                          <span title="Emergency Priority" className="size-2.5 rounded-full bg-rose-500 block animate-pulse" />
+                        ) : sub.leadId ? (
                           <span title="Converted to Lead" className="size-2.5 rounded-full bg-emerald-500 block" />
                         ) : sub.jobId ? (
                           <span title="Job Created" className="size-2.5 rounded-full bg-blue-500 block" />
                         ) : (
-                          <span title="New Inquiry" className="size-2.5 rounded-full bg-amber-500 block animate-pulse" />
+                          <span title="New Inquiry" className="size-2.5 rounded-full bg-amber-500 block" />
                         )}
                       </td>
 
                       {/* Respondent */}
                       <td className="p-3 font-medium">
                         <div className="space-y-0.5">
-                          <p className="font-semibold text-foreground flex items-center gap-1.5">
-                            <User className="size-3 text-muted-foreground" />
-                            {sub.respondentName}
-                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-semibold text-foreground flex items-center gap-1.5">
+                              <User className="size-3 text-muted-foreground" />
+                              {sub.respondentName}
+                            </p>
+                            {isEmergency && (
+                              <Badge className="bg-rose-600 text-white text-[9px] font-extrabold px-1.5 py-0 h-4">
+                                🚨 Emergency
+                              </Badge>
+                            )}
+                            {hasPhotos && (
+                              <Badge variant="outline" className="text-[9px] font-semibold text-muted-foreground px-1.5 py-0 h-4">
+                                📷 Photos
+                              </Badge>
+                            )}
+                          </div>
                           <div className="text-[11px] text-muted-foreground flex items-center gap-2">
                             {phone && <span>{phone}</span>}
                             {phone && email && <span>•</span>}
@@ -497,14 +514,19 @@ export function FormSubmissionsView({
 
                       {/* Submission Summary Snippet */}
                       <td className="p-3 text-muted-foreground max-w-xs truncate">
+                        {sub.data.f_address ? (
+                          <div className="text-[11px] text-foreground font-medium truncate mb-0.5">
+                            📍 {String(sub.data.f_address)}
+                          </div>
+                        ) : null}
                         {summaryEntries.length > 0 ? (
                           summaryEntries.map(([k, v]) => (
                             <span key={k} className="mr-2">
-                              <strong className="text-foreground capitalize">{k}:</strong> {String(v)}
+                              <strong className="text-foreground capitalize">{k.replace(/^f_/, '')}:</strong> {String(v)}
                             </span>
                           ))
                         ) : (
-                          <span className="italic text-[11px]">General inquiry submitted</span>
+                          <span className="italic text-[11px]">General intake submitted</span>
                         )}
                       </td>
 

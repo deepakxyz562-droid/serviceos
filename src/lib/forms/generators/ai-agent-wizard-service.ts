@@ -18,6 +18,12 @@ export interface WizardGenerationInput {
   knowledgeUrl?: string;
   tone?: 'friendly' | 'professional' | 'medical' | 'sales' | 'empathetic';
   crawledContext?: CrawledWebsiteResult;
+  requiredCustomerInfo?: string[]; // e.g. ['name', 'phone', 'email', 'address', 'photos', 'urgency', 'notes']
+  bookingConfig?: {
+    durationMinutes?: number;
+    businessHours?: string;
+    autoConfirmMessage?: string;
+  };
 }
 
 export interface WizardGenerationResult {
@@ -227,7 +233,7 @@ export function generateAgentAndFormFromWizard(input: WizardGenerationInput): Wi
   const agentFirstName = selectedAvatar.name.split(' ')[0] || 'Sarah';
 
   // 1. Quick Action Buttons
-  const quickActions = [];
+  const quickActions: any[] = [];
   if (capabilities.includes('generate_quotes') || capabilities.includes('capture_leads')) {
     quickActions.push({
       id: 'qa_quote',
@@ -293,51 +299,75 @@ export function generateAgentAndFormFromWizard(input: WizardGenerationInput): Wi
 
   // 3. System Prompt
   const servicesListStr = services.map((s) => `• ${s}`).join('\n');
-  const systemPrompt = `You are ${agentFirstName}, the official AI assistant for ${businessName}.
+  const durationText = input.bookingConfig?.durationMinutes
+    ? `Standard appointment duration: ${input.bookingConfig.durationMinutes} minutes.`
+    : 'Standard appointment duration: 30-45 minutes.';
+  const hoursText = input.bookingConfig?.businessHours
+    ? `Operating hours: ${input.bookingConfig.businessHours}.`
+    : 'Operating hours: Monday to Friday 8:00 AM – 6:00 PM, Saturday 9:00 AM – 3:00 PM.';
+  const autoConfirmText = input.bookingConfig?.autoConfirmMessage
+    ? `When an appointment is confirmed, tell the customer: "${input.bookingConfig.autoConfirmMessage}"`
+    : '';
+
+  const systemPrompt = `You are ${agentFirstName}, the official AI customer intake employee for ${businessName}.
 Your Role: ${agentRole}
-Location: ${location || 'our service area'}
+Location: ${location || 'our metro service area'}
 ${crawled?.phone ? `Contact Phone: ${crawled.phone}` : ''}
 ${crawled?.address ? `Physical Address: ${crawled.address}` : ''}
+${hoursText}
+${durationText}
 
-Our Services:
+Our Core Services:
 ${servicesListStr}
 
 About Us:
 ${crawled?.description || `${businessName} provides high-quality ${industry.toLowerCase()} across ${location || 'our service area'}.`}
 
-Your Goals:
-1. Answer customer questions politely, concisely, and accurately with a ${tone} tone.
-2. When customers want an estimate, price, or booking, proactively guide them to click "Get Instant Estimate" or fill out our intake form.
-3. Be transparent: explain that quotes are based on project specifications and verified by our team.
-4. If an urgent or emergency request is made, reassure the customer and prioritize collecting their name, phone number, and address immediately.`;
+Your Goals as our 24/7 AI Intake Employee:
+1. Conduct a friendly, conversational intake interview with a ${tone} tone. Ask questions 1 or 2 at a time — never overwhelm the visitor with a wall of questions.
+2. Qualify lead urgency immediately: check if this is an active emergency (burst pipe, active flooding, no heat/AC, sparks, roof breach) or standard scheduled service. Urgency classification is strictly advisory. If you detect severe life-safety hazards (smell of gas, live exposed wiring, severe flooding near electrical panels), immediately advise the customer to prioritize safety, call emergency services (911) if needed, and reach out to our emergency dispatch line directly.
+3. Collect necessary customer info: full name, phone number, service address, and prompt them to snap/upload a photo of the problem area.
+4. ESTIMATES & PRICING RULES: Never invent, guess, or fabricate custom rates or flat fees. Only quote pricing that is explicitly provided in our verified knowledge base or FAQs. Whenever providing any estimated price, you MUST explicitly state: "Please note that all initial estimates are preliminary and subject to on-site evaluation by our technician/contractor." If the customer asks for a price not listed in our knowledge, invite them to describe the job details so our team can provide an accurate quote or schedule a free diagnostic assessment.
+5. BOOKING CONFIRMATION RULES: Never claim an appointment is "booked and confirmed" until the booking system confirms successful scheduling. If a customer provides a date and time, acknowledge the requested window and advise that our dispatch team will finalize the slot, unless the system provides immediate automated booking confirmation.
+6. ${autoConfirmText || 'Confirm all booking requests warmly with date, time, and service location details.'}
+7. If an urgent emergency is reported, reassure the customer and prioritize collecting their callback phone and physical address immediately for rapid dispatch.`;
 
   // 4. Form Fields Construction
-  const formFields: FormField[] = [
-    {
+  const reqInfo = input.requiredCustomerInfo;
+  const formFields: FormField[] = [];
+
+  if (!reqInfo || reqInfo.includes('name')) {
+    formFields.push({
       id: 'f_name',
       type: 'short_answer',
       label: 'Full Name',
       placeholder: 'e.g. John Doe',
       required: true,
-      layoutWidth: 'half',
-    },
-    {
+      width: 'half',
+    });
+  }
+
+  if (!reqInfo || reqInfo.includes('phone')) {
+    formFields.push({
       id: 'f_phone',
       type: 'phone',
       label: 'Phone Number',
       placeholder: 'e.g. (555) 000-0000',
       required: true,
-      layoutWidth: 'half',
-    },
-    {
+      width: 'half',
+    });
+  }
+
+  if (!reqInfo || reqInfo.includes('email')) {
+    formFields.push({
       id: 'f_email',
       type: 'email',
       label: 'Email Address',
       placeholder: 'e.g. john@example.com',
       required: false,
-      layoutWidth: 'full',
-    },
-  ];
+      width: 'full',
+    });
+  }
 
   // Industry-specific service selector
   if (services.length > 0) {
@@ -347,7 +377,7 @@ Your Goals:
       label: 'Service Required',
       placeholder: 'Select a service...',
       required: true,
-      layoutWidth: 'full',
+      width: 'full',
       options: services.map((s, idx) => ({
         label: s,
         value: `service_${idx + 1}`,
@@ -364,7 +394,7 @@ Your Goals:
         label: 'Property Type',
         placeholder: 'Select property type',
         required: true,
-        layoutWidth: 'half',
+        width: 'half',
         options: [
           { label: 'Apartment / Flat', value: 'apartment' },
           { label: 'House / Detached', value: 'house' },
@@ -377,7 +407,7 @@ Your Goals:
         label: 'Bedrooms',
         placeholder: 'Number of bedrooms',
         required: true,
-        layoutWidth: 'half',
+        width: 'half',
         options: [
           { label: 'Studio / 1 Bedroom', value: '1' },
           { label: '2 Bedrooms', value: '2' },
@@ -394,7 +424,7 @@ Your Goals:
         label: 'Project or Damage Type',
         placeholder: 'Select roofing project...',
         required: true,
-        layoutWidth: 'half',
+        width: 'half',
         options: [
           { label: 'Free Roof Damage Inspection', value: 'inspection' },
           { label: 'Active Leak / Emergency Repair', value: 'leak' },
@@ -410,7 +440,7 @@ Your Goals:
         label: 'Building / Property Type',
         placeholder: 'Select property type...',
         required: true,
-        layoutWidth: 'half',
+        width: 'half',
         options: [
           { label: 'Residential (Single-Family)', value: 'residential' },
           { label: 'Multi-Family / Townhouse', value: 'multi_family' },
@@ -423,7 +453,7 @@ Your Goals:
         label: 'Roof Material',
         placeholder: 'Select current or desired material...',
         required: false,
-        layoutWidth: 'half',
+        width: 'half',
         options: [
           { label: 'Asphalt Architectural Shingles', value: 'asphalt' },
           { label: 'Standing Seam Metal Roof', value: 'metal' },
@@ -438,7 +468,7 @@ Your Goals:
         widgetType: 'slider',
         label: 'Estimated Roof Size (sq ft)',
         required: false,
-        layoutWidth: 'half',
+        width: 'half',
         defaultValue: 2400,
         widgetConfig: {
           min: 500,
@@ -449,32 +479,39 @@ Your Goals:
         },
       }
     );
-  } else if (industry.includes('Plumbing') || industry.includes('HVAC')) {
-    formFields.push(
-      {
-        id: 'f_urgency',
-        type: 'radio',
-        label: 'Urgency Level',
-        required: true,
-        layoutWidth: 'full',
-        options: [
-          { label: '🚨 Emergency — Immediate Response Needed', value: 'emergency' },
-          { label: '📅 Routine — Within Next 24-48 Hours', value: 'routine' },
-          { label: '💬 Consultation / Future Project', value: 'consultation' },
-        ],
-      }
-    );
+  }
+
+  // Urgency
+  const shouldIncludeUrgency = reqInfo
+    ? reqInfo.includes('urgency')
+    : (industry.includes('Plumbing') || industry.includes('HVAC') || industry.includes('Roofing'));
+
+  if (shouldIncludeUrgency) {
+    formFields.push({
+      id: 'f_urgency',
+      type: 'radio',
+      label: 'Urgency Level',
+      required: true,
+      width: 'full',
+      options: [
+        { label: '🚨 Emergency — Immediate Response Needed', value: 'emergency' },
+        { label: '📅 Routine — Within Next 24-48 Hours', value: 'routine' },
+        { label: '💬 Consultation / Future Project', value: 'consultation' },
+      ],
+    });
   }
 
   // Address
-  formFields.push({
-    id: 'f_address',
-    type: 'address',
-    label: 'Service Location / Address',
-    placeholder: location ? `Street address in ${location}...` : 'Enter service address and postal code',
-    required: true,
-    layoutWidth: 'full',
-  });
+  if (!reqInfo || reqInfo.includes('address')) {
+    formFields.push({
+      id: 'f_address',
+      type: 'address',
+      label: 'Service Location / Address',
+      placeholder: location ? `Street address in ${location}...` : 'Enter service address and postal code',
+      required: true,
+      width: 'full',
+    });
+  }
 
   // Date & Time
   if (capabilities.includes('book_appointments')) {
@@ -483,38 +520,44 @@ Your Goals:
       type: 'date',
       label: 'Preferred Appointment Date',
       required: false,
-      layoutWidth: 'half',
+      width: 'half',
     });
     formFields.push({
       id: 'f_preferred_time',
       type: 'time',
       label: 'Preferred Time Window',
       required: false,
-      layoutWidth: 'half',
+      width: 'half',
     });
   }
 
   // Photo / File upload
-  if (capabilities.includes('collect_files') || industry.includes('Cleaning') || industry.includes('Roofing') || industry.includes('Plumbing')) {
+  const shouldIncludePhotos = reqInfo
+    ? reqInfo.includes('photos')
+    : (capabilities.includes('collect_files') || industry.includes('Cleaning') || industry.includes('Roofing') || industry.includes('Plumbing'));
+
+  if (shouldIncludePhotos) {
     formFields.push({
       id: 'f_photos',
       type: 'photo',
       label: 'Upload Photos of Property / Area (Optional)',
       helpText: 'Helps us calculate a faster, more accurate estimate.',
       required: false,
-      layoutWidth: 'full',
+      width: 'full',
     });
   }
 
   // Notes
-  formFields.push({
-    id: 'f_notes',
-    type: 'long_answer',
-    label: 'Additional Project Details or Special Requests',
-    placeholder: 'Tell us anything specific we should know before dispatch...',
-    required: false,
-    layoutWidth: 'full',
-  });
+  if (!reqInfo || reqInfo.includes('notes')) {
+    formFields.push({
+      id: 'f_notes',
+      type: 'long_answer',
+      label: 'Additional Project Details or Special Requests',
+      placeholder: 'Tell us anything specific we should know before dispatch...',
+      required: false,
+      width: 'full',
+    });
+  }
 
   // Prepare memory documents
   const memoryDocuments = crawled?.document ? [crawled.document] : [];
@@ -539,7 +582,10 @@ Your Goals:
       systemPrompt,
       guardrails: [
         'Be polite, reassuring, and concise.',
-        'Never invent pricing not verified by the company.',
+        'Never invent pricing or rates not explicitly verified in our company knowledge base.',
+        'Always append the disclaimer that initial estimates are preliminary and subject to on-site technician inspection.',
+        'Never falsely claim an appointment is confirmed before the booking is executed.',
+        'If life-safety hazards (gas leak, active electrical sparks) are detected, immediately advise calling emergency services or our 24/7 emergency dispatch line.',
         'Always guide ready customers to complete the intake form or booking.',
       ],
     },

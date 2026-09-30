@@ -4,7 +4,7 @@ import { callAI } from '@/lib/ai-client';
 import { searchKnowledgeBase, searchKnowledgeBaseHybrid } from '@/lib/ai-knowledge';
 import { requestHumanHandoff, isEscalationIntent } from '@/lib/chat/handoff-service';
 import { createAppointmentBooking } from '@/lib/scheduling/booking-service';
-import { tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
+import { tryExecuteChatBooking, extractBookingIntent } from '@/lib/scheduling/chat-booking-helper';
 import { syncChatConversation } from '@/lib/chat/chat-session-sync';
 
 export const runtime = 'nodejs';
@@ -342,6 +342,12 @@ YOUR CAPABILITIES:
 5. If the user asks to speak with a real human agent or support team, politely let them know they can click the "Talk to a Human" button or leave their contact details.
 6. Keep replies concise, helpful, friendly, and under 3 paragraphs.
 
+MANDATORY CONTRACTOR & INTAKE GUARDRAILS:
+1. NEVER INVENT PRICING: Only quote rates or flat fees that exist word-for-word in our verified knowledge base. If not listed, invite the customer to describe their issue so our technician can provide an accurate quote on-site.
+2. ESTIMATE DISCLAIMER: Whenever you mention an estimated price, range, or fee, you MUST explicitly append: "Please note that all initial estimates are preliminary and subject to on-site evaluation by our technician/contractor."
+3. BOOKING VERIFICATION: Never tell the customer an appointment is confirmed until the system provides a confirmed booking record. If a requested time is given, politely say: "I have recorded your request for [Time/Date]. Our dispatch team will confirm your slot shortly."
+4. ADVISORY URGENCY: If the visitor reports active life-safety hazards (e.g. smell of natural gas, live electrical sparks, severe flooding near outlets), advise them immediately to step away to safety, call emergency services (911) if needed, and contact our 24/7 emergency dispatch line directly.
+
 SPECIAL PROTOCOL FOR CARDS:
 If the user expresses clear interest in booking or asks for available dates/slots, append this EXACT JSON block at the very end of your response on its own line:
 \`\`\`card
@@ -363,9 +369,17 @@ If the user asks for a price/quote and matches a known service, you can optional
 \`\`\`
 `;
 
-    // 5. Build conversation history
+    // 5. Build conversation history with intake action guidance
+    const bookingIntent = extractBookingIntent(message, history, primaryConnectedForm?.name || 'Appointment');
+    let dynamicMissingPrompt = '';
+    if (bookingIntent.hasIntent) {
+      if (bookingIntent.missingFields.length > 0) {
+        dynamicMissingPrompt = `\n\nINTAKE ACTION GUIDANCE:\nThe visitor is interested in scheduling or an estimate. Missing required details: ${bookingIntent.missingFields.join(', ')}. Guide them conversationally to provide their preferred date/time and callback phone number so our team can schedule them!`;
+      }
+    }
+
     const conversationMessages = [
-      { role: 'system' as const, content: systemPrompt },
+      { role: 'system' as const, content: `${systemPrompt}${dynamicMissingPrompt}` },
       ...history.slice(-6).map((m: ChatMessage) => ({
         role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
         content: m.content,
@@ -385,6 +399,7 @@ If the user asks for a price/quote and matches a known service, you can optional
       serviceName: primaryConnectedForm?.name || 'Appointment & Consultation',
       message,
       history,
+      imageUrl: body.imageUrl || undefined,
     });
 
     if (bookingResult && bookingResult.success) {

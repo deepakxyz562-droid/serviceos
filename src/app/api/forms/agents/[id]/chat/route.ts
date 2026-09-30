@@ -5,7 +5,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
 import { isEscalationIntent, requestHumanHandoff } from '@/lib/chat/handoff-service';
-import { tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
+import { tryExecuteChatBooking, extractBookingIntent } from '@/lib/scheduling/chat-booking-helper';
 import { syncChatConversation } from '@/lib/chat/chat-session-sync';
 
 /**
@@ -224,6 +224,11 @@ export async function POST(
       agent.knowledge?.faqPairs?.length
         ? `Known FAQs:\n${agent.knowledge.faqPairs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')}`
         : '',
+      `MANDATORY CONTRACTOR & INTAKE GUARDRAILS:
+1. NEVER INVENT PRICING: Only quote rates or flat fees that exist word-for-word in our verified knowledge base or FAQs. If pricing is not in knowledge, invite the customer to describe their issue so our technician can provide an accurate quote on-site.
+2. ESTIMATE DISCLAIMER: Whenever you mention an estimated price, range, or fee, you MUST explicitly append: "Please note that all initial estimates are preliminary and subject to on-site evaluation by our technician/contractor."
+3. BOOKING VERIFICATION: Never tell the customer an appointment is confirmed until the system provides a confirmed booking record. If a requested time is given, politely say: "I have recorded your request for [Time/Date]. Our dispatch team will confirm your slot shortly."
+4. ADVISORY URGENCY: If the visitor reports active life-safety hazards (e.g. smell of natural gas, live electrical sparks, severe flooding near outlets), advise them immediately to step away to safety, call emergency services (911) if needed, and contact our 24/7 emergency dispatch line directly.`,
       retrievedKnowledge,
       formFieldsPrompt,
       agent.connectedForms?.length
@@ -284,6 +289,7 @@ export async function POST(
       serviceName: primaryConnectedForm?.name || agent.roleTitle || 'Consultation & Appointment',
       message,
       history,
+      imageUrl: body.imageUrl || undefined,
     });
 
     if (bookingResult && bookingResult.success) {
@@ -308,10 +314,18 @@ export async function POST(
 
     if (!replyText) {
       try {
+        const bookingIntent = extractBookingIntent(message, history, primaryConnectedForm?.name || agent.roleTitle);
+        let dynamicMissingPrompt = '';
+        if (bookingIntent.hasIntent) {
+          if (bookingIntent.missingFields.length > 0) {
+            dynamicMissingPrompt = `\n\nINTAKE ACTION GUIDANCE:\nThe visitor is interested in scheduling an appointment or estimate. Missing required details: ${bookingIntent.missingFields.join(', ')}. Guide them conversationally to provide their preferred time window and callback phone number so our team can schedule them!`;
+          }
+        }
+
         const messages = [
           {
             role: 'system' as const,
-            content: `${knowledgeContext}\n\nKeep responses concise, helpful, and formatted with markdown. Never say cold deflective phrases like "please use our connected form". Help visitors conversationally: answer their questions directly, guide them through booking or submitting their inquiry right here in the chat, or invite them to tap the interactive form card below.\nIf the visitor provides appointment details (date, time, name), warmly summarize and confirm their appointment request.`,
+            content: `${knowledgeContext}${dynamicMissingPrompt}\n\nKeep responses concise, helpful, and formatted with markdown. Never say cold deflective phrases like "please use our connected form". Help visitors conversationally: answer their questions directly, guide them through booking or submitting their inquiry right here in the chat, or invite them to tap the interactive form card below.\nIf the visitor provides appointment details (date, time, name), warmly summarize and confirm their appointment request.`,
           },
           ...history.slice(-6).map((h: any) => ({
             role: h.sender === 'user' ? ('user' as const) : ('assistant' as const),

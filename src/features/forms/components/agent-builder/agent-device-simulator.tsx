@@ -54,6 +54,7 @@ interface ChatMsg {
   sender: 'ai' | 'user' | 'agent';
   text: string;
   timestamp: string;
+  imageUrl?: string;
   suggestedForm?: ConnectedFormRef;
   senderName?: string;
   isLiveAgent?: boolean;
@@ -339,6 +340,25 @@ export function AgentDeviceSimulator({
   const [agentSpeaking, setAgentSpeaking] = useState<boolean>(false);
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachedImage, setAttachedImage] = useState<{ name: string; url: string } | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (JPEG, PNG, WebP).');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAttachedImage({ name: file.name, url: dataUrl });
+      toast.success(`Attached photo: ${file.name}`);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // Text-to-speech engine matching agent voice tone
   const speakAiResponse = useCallback((text: string) => {
@@ -531,14 +551,18 @@ export function AgentDeviceSimulator({
   }, [liveSessionId]);
 
   const handleSendMessage = async (textToSend?: string) => {
+    const currentAttachment = attachedImage;
     const message = (textToSend || inputText).trim();
-    if (!message || sending) return;
+    if ((!message && !currentAttachment) || sending) return;
+
+    setAttachedImage(null);
 
     const userMsg: ChatMsg = {
       id: `user_${Date.now()}`,
       sender: 'user',
-      text: message,
+      text: message || (currentAttachment ? `[Uploaded photo: ${currentAttachment.name}]` : ''),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      imageUrl: currentAttachment?.url,
     };
 
     setMessages((prev) => [...prev, userMsg]);
@@ -555,7 +579,7 @@ export function AgentDeviceSimulator({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            body: message,
+            body: currentAttachment ? `${message} [Photo attached: ${currentAttachment.name}]` : message,
             visitorName: 'Visitor',
           }),
         });
@@ -573,7 +597,8 @@ export function AgentDeviceSimulator({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message,
+          message: currentAttachment ? `${message} [Customer Attached Photo: ${currentAttachment.name}]` : message,
+          imageUrl: currentAttachment?.url,
           sessionId: aiSessionId || undefined,
           history: messages,
           agentConfig: agent,
@@ -1084,6 +1109,15 @@ export function AgentDeviceSimulator({
                       style={isUser ? { background: brandColor } : undefined}
                     >
                       {renderChatContent(msg.text, isDark, isUser)}
+                      {msg.imageUrl && (
+                        <div className="mt-2 rounded-xl overflow-hidden border border-white/20 max-w-[260px] bg-black/10">
+                          <img
+                            src={msg.imageUrl}
+                            alt="Customer uploaded photo"
+                            className="w-full h-auto object-cover max-h-52 rounded-lg"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* Quick action buttons on initial greeting message */}
@@ -1261,33 +1295,61 @@ export function AgentDeviceSimulator({
           {/* ── BOTTOM INPUT BAR ── */}
           <div
             className={cn(
-              'p-3 border-t shrink-0 sticky bottom-0 z-20',
+              'p-2.5 border-t shrink-0 sticky bottom-0 z-20 space-y-2',
               isDark ? 'bg-slate-900/95 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
             )}
           >
+            {/* Attached Image Preview Chip */}
+            {attachedImage && (
+              <div className="flex items-center justify-between px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs animate-in fade-in">
+                <div className="flex items-center gap-2 truncate">
+                  <img src={attachedImage.url} alt="Attached thumbnail" className="size-6 rounded-md object-cover border border-emerald-500/40" />
+                  <span className="truncate text-emerald-800 dark:text-emerald-300 font-semibold text-[11px] max-w-[200px]">
+                    {attachedImage.name}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAttachedImage(null)}
+                  className="size-5 rounded-full hover:bg-emerald-500/20 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            )}
+
             <div
               className={cn(
                 'flex items-center gap-2 rounded-2xl px-3 py-1.5 border',
                 isDark ? 'bg-slate-800/90 border-slate-700' : 'bg-slate-100/90 border-slate-200'
               )}
             >
-              {allowFileUpload && (
-                <button
-                  type="button"
-                  className={cn(
-                    'p-0.5 transition-colors',
-                    isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-700'
-                  )}
-                >
-                  <Paperclip className="size-4" />
-                </button>
-              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach photo of leak, damage or problem area"
+                className={cn(
+                  'p-1 rounded-lg transition-colors cursor-pointer',
+                  attachedImage
+                    ? 'text-emerald-600 bg-emerald-500/20'
+                    : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-700'
+                )}
+              >
+                <Paperclip className="size-4" />
+              </button>
 
               <Input
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleSendMessage())}
-                placeholder={placeholderMessage}
+                placeholder={attachedImage ? 'Add a note about this photo...' : placeholderMessage}
                 className={cn(
                   'text-xs h-7 flex-1 bg-transparent border-0 focus-visible:ring-0 shadow-none px-1',
                   isDark ? 'text-slate-100 placeholder:text-slate-400' : 'text-slate-900 placeholder:text-slate-500'

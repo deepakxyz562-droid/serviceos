@@ -35,13 +35,27 @@ import {
   CheckSquare,
   Mic,
   MicOff,
+  Copy,
+  ExternalLink,
+  Wrench,
+  Search,
+  Activity,
+  Briefcase,
+  Car,
+  Clock,
+  MapPin,
+  Mail,
+  ShieldCheck,
+  Code,
+  Flame,
+  Home,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -57,82 +71,101 @@ export interface AgentSetupWizardProps {
   initialAgent?: FormAgentData;
 }
 
-const QUICK_STARTERS = [
-  {
-    id: 'cleaning',
-    label: '🧹 Cleaning & Maid',
-    text: 'We are a home cleaning company serving London. We offer regular cleaning, deep cleaning, end-of-tenancy cleaning, and carpet sanitation.',
-  },
+// ─── 4 Core Contractor & Field-Service Trades ────────────────────────────────
+const VERTICAL_PRESETS = [
   {
     id: 'plumbing',
-    label: '🔧 Plumbing & Drains',
-    text: 'We are a 24/7 emergency plumbing service in Manchester. We fix burst pipes, clogged drains, leaking faucets, and install hot water systems.',
+    label: 'Plumbing & Drain Care',
+    icon: Wrench,
+    desc: 'Burst pipes, active leaks, water heaters, clogged drains, emergency triage',
+    prompt: 'We are a 24/7 licensed emergency plumbing service. We repair leaks, clear drains, install water heaters, and provide fast on-site dispatch.',
+    defaultCapabilities: ['capture_leads', 'generate_quotes', 'book_appointments', 'collect_files', 'answer_questions'],
+    defaultCustomerInfo: ['name', 'phone', 'address', 'urgency', 'photos', 'notes'],
   },
   {
     id: 'hvac',
-    label: '❄️ HVAC & Heating',
-    text: 'We provide heating, air conditioning repair, furnace maintenance, and new heat pump installations across Austin, Texas.',
+    label: 'HVAC, Heating & Cooling',
+    icon: Flame,
+    desc: 'AC repair, furnace diagnostics, heat pumps, seasonal tune-ups, no-heat calls',
+    prompt: 'We provide residential and commercial HVAC services including emergency AC repair, furnace diagnostics, heat pump maintenance, and seasonal tune-ups.',
+    defaultCapabilities: ['capture_leads', 'generate_quotes', 'book_appointments', 'answer_questions'],
+    defaultCustomerInfo: ['name', 'phone', 'address', 'urgency', 'notes'],
   },
   {
     id: 'roofing',
-    label: '🏠 Roofing & Repairs',
-    text: 'We are a licensed roofing contractor in Dallas specializing in storm damage inspection, roof replacement, shingle repair, and gutter systems.',
+    label: 'Roofing & Storm Repairs',
+    icon: Home,
+    desc: 'Missing shingles, active roof leaks, gutter repair, free inspection estimates',
+    prompt: 'We are a licensed roofing contractor specializing in roof leak repair, storm damage insurance claims, shingle replacement, and gutter installations.',
+    defaultCapabilities: ['capture_leads', 'generate_quotes', 'book_appointments', 'collect_files', 'answer_questions'],
+    defaultCustomerInfo: ['name', 'phone', 'address', 'urgency', 'photos', 'notes'],
   },
   {
-    id: 'clinic',
-    label: '🩺 Clinic & Dental',
-    text: 'We are a modern family dental clinic offering routine checkups, emergency toothache care, teeth whitening, and hygiene appointments.',
-  },
-  {
-    id: 'auto',
-    label: '🚗 Auto Repair',
-    text: 'We operate a full-service auto repair and diagnostic garage in Birmingham, offering brakes, engine diagnostics, oil changes, and towing.',
+    id: 'cleaning',
+    label: 'Cleaning & Maid Services',
+    icon: Sparkles,
+    desc: 'Move-out deep cleans, recurring house cleaning, carpet sanitation & offices',
+    prompt: 'We are a premier home and commercial cleaning company offering recurring maid visits, move-out deep cleaning, and post-construction sanitation.',
+    defaultCapabilities: ['capture_leads', 'generate_quotes', 'book_appointments', 'answer_questions'],
+    defaultCustomerInfo: ['name', 'phone', 'email', 'address', 'photos', 'notes'],
   },
 ];
 
+// ─── 6 Core Mission Tasks ───────────────────────────────────────────────────
 const CAPABILITY_OPTIONS = [
   {
-    id: 'answer_questions',
-    title: 'Answer Questions & FAQs',
-    desc: 'Respond to business hours, pricing inquiries, policies, and service questions 24/7.',
-    icon: MessageSquare,
-    badge: 'KNOWLEDGE',
-  },
-  {
     id: 'capture_leads',
-    title: 'Capture & Qualify Leads',
-    desc: 'Collect customer name, phone number, email, and project scope instantly.',
+    title: 'Qualify Leads & Emergencies',
+    desc: 'Collect customer name, phone, address, and categorize urgent requests.',
     icon: Zap,
     badge: 'CRM',
   },
   {
     id: 'generate_quotes',
-    title: 'Provide Instant Estimates',
-    desc: 'Calculate preliminary price quotes based on customer property details and choices.',
+    title: 'Instant Scope & Price Estimates',
+    desc: 'Calculate estimated project prices based on property size and choices.',
     icon: FileText,
     badge: 'ESTIMATOR',
   },
   {
     id: 'book_appointments',
-    title: 'Book Appointments & Visits',
-    desc: 'Let customers choose preferred dates and time windows directly in chat.',
+    title: 'Book Appointments & Consultations',
+    desc: 'Let customers choose preferred dates and times directly in conversation.',
     icon: Calendar,
     badge: 'SCHEDULING',
   },
   {
     id: 'collect_files',
-    title: 'Collect Photos & Files',
-    desc: 'Prompt customers to upload pictures of their property, repair issue, or documents.',
+    title: 'Collect Photos & Project Files',
+    desc: 'Prompt visitors to upload pictures of damaged areas or documents.',
     icon: ImageIcon,
     badge: 'MEDIA',
   },
   {
+    id: 'answer_questions',
+    title: 'Answer Questions & FAQs 24/7',
+    desc: 'Respond to business hours, service areas, licenses, and pricing inquiries.',
+    icon: MessageSquare,
+    badge: 'KNOWLEDGE',
+  },
+  {
     id: 'take_payments',
-    title: 'Accept Payments & Deposits',
-    desc: 'Request upfront deposits or service booking fees via Stripe or PayPal.',
+    title: 'Accept Upfront Deposits',
+    desc: 'Request preliminary deposits or booking fees via Stripe or PayPal.',
     icon: CreditCard,
     badge: 'PAYMENTS',
   },
+];
+
+// ─── Customer Info Checklist Options ─────────────────────────────────────────
+const CUSTOMER_INFO_OPTIONS = [
+  { id: 'name', label: 'Full Name', desc: 'Customer legal or contact name', requiredAlways: true },
+  { id: 'phone', label: 'Phone Number', desc: 'SMS updates and callback confirmation', requiredAlways: true },
+  { id: 'email', label: 'Email Address', desc: 'Calendar invite and email confirmation' },
+  { id: 'address', label: 'Service / Property Address', desc: 'Where the work or consultation will take place' },
+  { id: 'photos', label: 'Problem / Property Photos', desc: 'Customer uploads photos of issue or area' },
+  { id: 'urgency', label: 'Urgency Level', desc: 'Emergency 24hr vs. Scheduled vs. Gathering quotes' },
+  { id: 'notes', label: 'Project Description / Notes', desc: 'Customer explains details in their own words' },
 ];
 
 export function AgentSetupWizard({
@@ -141,16 +174,42 @@ export function AgentSetupWizard({
   siteOrigin,
   initialAgent,
 }: AgentSetupWizardProps) {
-  // Wizard Stepper (1: Business -> 2: Goals -> 3: Form -> 4: Launch)
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  // 6-Step Guided Flow
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
 
-  // Step 1: Business Profile
-  const [businessDescription, setBusinessDescription] = useState('');
+  // Step 1: Business Profile & Vertical
+  const [selectedVertical, setSelectedVertical] = useState<string>('contractors');
+  const [businessDescription, setBusinessDescription] = useState(VERTICAL_PRESETS[0].prompt);
   const [websiteScanUrl, setWebsiteScanUrl] = useState('');
   const [isScanningUrl, setIsScanningUrl] = useState(false);
   const [crawledData, setCrawledData] = useState<CrawledWebsiteResult | null>(null);
   const [isListening, setIsListening] = useState(false);
 
+  // Step 2: Capabilities & Tasks
+  const [capabilities, setCapabilities] = useState<string[]>(VERTICAL_PRESETS[0].defaultCapabilities);
+
+  // Step 3: Knowledge & Website Context
+  const [knowledgeUrl, setKnowledgeUrl] = useState('');
+  const [customFaqs, setCustomFaqs] = useState<Array<{ id: string; question: string; answer: string }>>([]);
+  const [tone, setTone] = useState<'friendly' | 'professional' | 'medical' | 'sales' | 'empathetic'>('friendly');
+
+  // Step 4: Required Customer Information
+  const [requiredCustomerInfo, setRequiredCustomerInfo] = useState<string[]>(VERTICAL_PRESETS[0].defaultCustomerInfo);
+  const [activeFields, setActiveFields] = useState<FormField[]>([]);
+  const [newFieldLabel, setNewFieldLabel] = useState('');
+
+  // Step 5: Booking & Follow-up
+  const [bookingDuration, setBookingDuration] = useState<number>(30);
+  const [businessHours, setBusinessHours] = useState('Mon - Fri: 8:00 AM – 6:00 PM, Sat: 9:00 AM – 3:00 PM');
+  const [autoConfirmMsg, setAutoConfirmMsg] = useState('Your appointment request has been scheduled! Our team will contact you shortly.');
+
+  // Step 6: Preview & Launch
+  const [previewTab, setPreviewTab] = useState<'agent' | 'form'>('agent');
+  const [isSaving, setIsSaving] = useState(false);
+  const [publishedAgent, setPublishedAgent] = useState<FormAgentData | null>(null);
+  const [publishedFormId, setPublishedFormId] = useState<string | null>(null);
+
+  // Voice dictation helper
   const toggleVoiceInput = () => {
     if (typeof window === 'undefined') return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -216,66 +275,67 @@ export function AgentSetupWizard({
     }
   };
 
-  // Step 2: Capabilities & Goals
-  const [capabilities, setCapabilities] = useState<string[]>([
-    'answer_questions',
-    'capture_leads',
-    'generate_quotes',
-    'book_appointments',
-    'collect_files',
-  ]);
-  const [audience, setAudience] = useState<'new_customers' | 'existing_customers' | 'both'>('both');
-
-  // Step 3: Form Fields Customization
-  const [activeFields, setActiveFields] = useState<FormField[]>([]);
-  const [newFieldLabel, setNewFieldLabel] = useState('');
-
-  // Step 4: Knowledge & Personality
-  const [knowledgeUrl, setKnowledgeUrl] = useState('');
-  const [tone, setTone] = useState<'friendly' | 'professional' | 'medical' | 'sales' | 'empathetic'>('friendly');
-
-  // Preview State
-  const [previewTab, setPreviewTab] = useState<'agent' | 'form'>('agent');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-
   // Real-time generated artifacts
   const [generatedResult, setGeneratedResult] = useState(() =>
     generateAgentAndFormFromWizard({
-      businessDescription: 'Integrity Roofing and Repair: residential and commercial roof repair, storm damage restoration, full roof replacement, and gutter solutions.',
-      capabilities: ['answer_questions', 'capture_leads', 'generate_quotes', 'book_appointments', 'collect_files'],
+      businessDescription: VERTICAL_PRESETS[0].prompt,
+      capabilities: VERTICAL_PRESETS[0].defaultCapabilities,
+      requiredCustomerInfo: VERTICAL_PRESETS[0].defaultCustomerInfo,
+      bookingConfig: {
+        durationMinutes: 30,
+        businessHours: 'Mon - Fri: 8:00 AM – 6:00 PM, Sat: 9:00 AM – 3:00 PM',
+        autoConfirmMessage: 'Your appointment request has been scheduled! Our team will contact you shortly.',
+      },
       tone: 'friendly',
     })
   );
 
-  // Real-time regeneration whenever businessDescription, capabilities, tone, or crawledData changes
+  // Synchronize generated state
   const updateGeneratedState = useCallback((overrideCrawled?: CrawledWebsiteResult) => {
     try {
       const activeCrawled = overrideCrawled !== undefined ? overrideCrawled : (crawledData || undefined);
       const res = generateAgentAndFormFromWizard({
-        businessDescription: businessDescription.trim() || activeCrawled?.description || 'Integrity Roofing and Repair: residential and commercial roof repair, storm damage restoration, full roof replacement, and gutter solutions.',
+        businessDescription: businessDescription.trim() || activeCrawled?.description || VERTICAL_PRESETS[0].prompt,
         capabilities,
         knowledgeUrl: knowledgeUrl || websiteScanUrl || activeCrawled?.url,
         tone,
         crawledContext: activeCrawled,
+        requiredCustomerInfo,
+        bookingConfig: {
+          durationMinutes: bookingDuration,
+          businessHours,
+          autoConfirmMessage: autoConfirmMsg,
+        },
       });
       setGeneratedResult(res);
       setActiveFields(res.form.fields);
+      if (res.agent.knowledge?.faqPairs) {
+        setCustomFaqs(res.agent.knowledge.faqPairs);
+      }
     } catch (e) {
       console.error('Wizard generator error:', e);
     }
-  }, [businessDescription, capabilities, knowledgeUrl, websiteScanUrl, tone, crawledData]);
+  }, [businessDescription, capabilities, knowledgeUrl, websiteScanUrl, tone, crawledData, requiredCustomerInfo, bookingDuration, businessHours, autoConfirmMsg]);
 
   // Initial populate
   useEffect(() => {
     updateGeneratedState();
   }, [updateGeneratedState]);
 
-  // Scan Website URL to automatically extract business name, industry, services, FAQs, hero image, and memory
+  // Select Vertical Preset
+  const handleSelectVertical = (vertical: typeof VERTICAL_PRESETS[0]) => {
+    setSelectedVertical(vertical.id);
+    setBusinessDescription(vertical.prompt);
+    setCapabilities(vertical.defaultCapabilities);
+    setRequiredCustomerInfo(vertical.defaultCustomerInfo);
+    toast.success(`Loaded preset: ${vertical.label}`);
+  };
+
+  // Fast-track website crawler
   const handleScanWebsite = async (urlToScan?: string) => {
     const target = (urlToScan || websiteScanUrl || knowledgeUrl).trim();
     if (!target) {
-      toast.error('Please enter a website URL to scan (e.g. https://integrityroofingandrepair.com)');
+      toast.error('Please enter a website URL to scan (e.g. https://mybusiness.com)');
       return;
     }
 
@@ -298,8 +358,11 @@ export function AgentSetupWizard({
         setKnowledgeUrl(target);
         const autoDesc = `${crawled.businessName} - ${crawled.description}`;
         setBusinessDescription(autoDesc);
+        if (crawled.faqPairs && crawled.faqPairs.length > 0) {
+          setCustomFaqs(crawled.faqPairs);
+        }
         updateGeneratedState(crawled);
-        toast.success(`✨ Successfully scanned ${crawled.businessName}! Extracted ${crawled.services.length} services & 5 FAQs.`);
+        toast.success(`✨ Successfully scanned ${crawled.businessName}! Extracted ${crawled.services.length} services & FAQs.`);
       } else {
         toast.error(data.error || 'Could not scan website. You can continue by entering business details manually.');
       }
@@ -311,20 +374,22 @@ export function AgentSetupWizard({
     }
   };
 
-  // Handle quick starter selection
-  const handleSelectQuickStarter = (starterText: string) => {
-    setBusinessDescription(starterText);
-    toast.success('✨ Business description updated!');
-  };
-
-  // Toggle capabilities
+  // Toggle tasks / capabilities
   const toggleCapability = (capId: string) => {
     setCapabilities((prev) =>
       prev.includes(capId) ? prev.filter((id) => id !== capId) : [...prev, capId]
     );
   };
 
-  // Add custom form field in Step 3
+  // Toggle required customer info
+  const toggleCustomerInfo = (infoId: string) => {
+    if (infoId === 'name' || infoId === 'phone') return; // Mandatory
+    setRequiredCustomerInfo((prev) =>
+      prev.includes(infoId) ? prev.filter((id) => id !== infoId) : [...prev, infoId]
+    );
+  };
+
+  // Add custom form field
   const handleAddCustomField = () => {
     if (!newFieldLabel.trim()) return;
     const customId = `f_custom_${Date.now()}`;
@@ -338,34 +403,27 @@ export function AgentSetupWizard({
     };
     setActiveFields((prev) => [...prev, newField]);
     setNewFieldLabel('');
-    toast.success(`Added field "${newField.label}"`);
+    toast.success(`Added question: "${newField.label}"`);
   };
 
-  // Remove field in Step 3
+  // Remove field
   const handleRemoveField = (fieldId: string) => {
     setActiveFields((prev) => prev.filter((f) => f.id !== fieldId));
   };
 
-  // Toggle field required state
-  const handleToggleRequired = (fieldId: string) => {
-    setActiveFields((prev) =>
-      prev.map((f) => (f.id === fieldId ? { ...f, required: !f.required } : f))
-    );
-  };
-
-  // Save & Launch
+  // Save & Deploy
   const handleFinalLaunch = async (mode: 'direct' | 'studio') => {
     setIsSaving(true);
     try {
       const targetKnowledgeUrl = knowledgeUrl || websiteScanUrl || crawledData?.url;
 
-      // Build final agent and form payload
-      const finalAgent = {
+      const finalAgent: FormAgentData = {
         ...generatedResult.agent,
         voiceTone: tone,
         knowledge: {
           ...generatedResult.agent.knowledge,
           crawledUrls: targetKnowledgeUrl ? [targetKnowledgeUrl] : [],
+          faqPairs: customFaqs.length > 0 ? customFaqs : generatedResult.agent.knowledge?.faqPairs || [],
         },
       };
 
@@ -373,19 +431,25 @@ export function AgentSetupWizard({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          businessDescription: businessDescription.trim() || crawledData?.description || 'Integrity Roofing and Repair',
+          businessDescription: businessDescription.trim() || crawledData?.description || 'Service Pro',
           businessName: crawledData?.businessName || undefined,
           capabilities,
           knowledgeUrl: targetKnowledgeUrl || undefined,
           tone,
           crawledContext: crawledData || undefined,
+          requiredCustomerInfo,
+          bookingConfig: {
+            durationMinutes: bookingDuration,
+            businessHours,
+            autoConfirmMessage: autoConfirmMsg,
+          },
           save: true,
         }),
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
-        toast.success('🎉 AI Agent and Customer Intake Form created successfully!');
+        toast.success('🎉 AI Intake Employee deployed successfully!');
         const savedAgent: FormAgentData = {
           ...finalAgent,
           id: data.savedAgentId || finalAgent.id,
@@ -401,10 +465,11 @@ export function AgentSetupWizard({
               ]
             : [],
         };
+        setPublishedAgent(savedAgent);
+        setPublishedFormId(data.savedFormId || null);
         onComplete(savedAgent, data.savedFormId);
       } else {
-        // Fallback: save locally
-        toast.success('🎉 AI Agent generated!');
+        toast.success('🎉 AI Employee generated!');
         onComplete(finalAgent);
       }
     } catch (e) {
@@ -429,6 +494,12 @@ export function AgentSetupWizard({
     return parseBusinessText(businessDescription);
   }, [businessDescription, crawledData]);
 
+  // Origin for links
+  const origin = siteOrigin || (typeof window !== 'undefined' ? window.location.origin : '');
+  const agentSlug = publishedAgent?.slug || generatedResult.agent.slug || 'intake-agent';
+  const hostedIntakeUrl = `${origin}/chat/${publishedAgent?.id || 'preview'}`;
+  const embedCodeSnippet = `<script src="${origin}/embed.js" data-agent-id="${publishedAgent?.id || 'ai_agent_id'}" async></script>`;
+
   return (
     <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans select-none">
       {/* ─── TOP WIZARD NAVIGATION BAR ─── */}
@@ -439,24 +510,26 @@ export function AgentSetupWizard({
           </div>
           <div>
             <h1 className="text-sm font-black text-foreground flex items-center gap-2">
-              AI Agent &amp; Intake Form Setup Wizard
+              AI Employee &amp; Intake Setup
               <Badge variant="outline" className="text-[10px] uppercase font-bold text-emerald-600 border-emerald-500/30 bg-emerald-500/10">
-                GPTForm 2026
+                2026 AI-Native
               </Badge>
             </h1>
             <p className="text-[11px] text-muted-foreground">
-              Answer 4 simple questions — AI creates your agent, intake form, and CRM workflow automatically.
+              Configure your 24/7 AI employee to interview visitors, collect project photos, qualify leads, and book appointments.
             </p>
           </div>
         </div>
 
-        {/* Step Indicator Badges */}
-        <div className="hidden md:flex items-center gap-2">
+        {/* Step Indicator Badges (6 Steps) */}
+        <div className="hidden lg:flex items-center gap-1.5">
           {[
-            { num: 1, label: 'Business Profile' },
-            { num: 2, label: 'Capabilities' },
-            { num: 3, label: 'Intake Form' },
-            { num: 4, label: 'Launch & Test' },
+            { num: 1, label: '1. Business' },
+            { num: 2, label: '2. Tasks' },
+            { num: 3, label: '3. Website & Info' },
+            { num: 4, label: '4. Intake Info' },
+            { num: 5, label: '5. Booking' },
+            { num: 6, label: '6. Publish' },
           ].map((s) => {
             const isActive = step === s.num;
             const isDone = step > s.num;
@@ -466,7 +539,7 @@ export function AgentSetupWizard({
                 type="button"
                 onClick={() => setStep(s.num as any)}
                 className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer',
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer',
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-xs'
                     : isDone
@@ -492,7 +565,7 @@ export function AgentSetupWizard({
           })}
         </div>
 
-        {/* Exit / Skip */}
+        {/* Skip / Exit */}
         <div className="flex items-center gap-2">
           {onCancel && (
             <Button
@@ -501,100 +574,70 @@ export function AgentSetupWizard({
               onClick={onCancel}
               className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
             >
-              Skip Wizard (Manual Mode)
+              Exit Setup
             </Button>
           )}
         </div>
       </header>
 
-      {/* ─── SPLIT VIEW BODY (Left: Wizard Stepper | Right: Live Simulator) ─── */}
+      {/* ─── SPLIT VIEW BODY (Left: Stepper Controls | Right: Live Simulator) ─── */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* LEFT COLUMN: GUIDED STEPPER CONTROLS */}
         <div className="w-full lg:w-[55%] xl:w-[50%] h-full flex flex-col justify-between overflow-y-auto p-6 md:p-8 border-r border-border/70 bg-white dark:bg-slate-900/60">
           <div className="space-y-6 max-w-xl mx-auto w-full">
-            {/* ─── STEP 1: BUSINESS PROFILE ─── */}
+            {/* ─── STEP 1: BUSINESS TYPE & VERTICAL ─── */}
             {step === 1 && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="space-y-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    Step 1 of 4 · Business Profile
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Step 1 of 6 · Business Type
                   </span>
                   <h2 className="text-2xl font-black tracking-tight text-foreground">
-                    What does your business do?
+                    What business do you run?
                   </h2>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Describe your services and location in a sentence or two. Our AI will automatically infer your industry, customer inquiries, and required intake fields.
+                    Select your vertical below or describe your business. Your AI Employee will automatically adopt the vocabulary, urgency thresholds, and workflows for your profession.
                   </p>
                 </div>
 
-                {/* Fast Track: Scan Website */}
-                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200/90 dark:border-blue-900/50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Globe className="size-4 text-blue-600 dark:text-blue-400" />
-                      <span className="text-xs font-black text-blue-900 dark:text-blue-200 uppercase tracking-wide">
-                        Instant Setup · Extract From Website
-                      </span>
-                    </div>
-                    <Badge className="bg-blue-600/15 text-blue-700 dark:text-blue-300 border-0 text-[10px] font-bold">
-                      Recommended
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Paste your website URL (e.g. <code>https://integrityroofingandrepair.com/</code>). We'll automatically extract your services, logo, FAQs, and brand theme.
-                  </p>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <Input
-                      value={websiteScanUrl}
-                      onChange={(e) => setWebsiteScanUrl(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleScanWebsite()}
-                      placeholder="https://integrityroofingandrepair.com"
-                      className="text-xs h-9 rounded-xl font-sans bg-white dark:bg-slate-900 border-border/80"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={isScanningUrl}
-                      onClick={() => handleScanWebsite()}
-                      className="h-9 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shrink-0 cursor-pointer shadow-xs gap-1.5"
-                    >
-                      {isScanningUrl ? (
-                        <>
-                          <Loader2 className="size-3.5 animate-spin" /> Scanning...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="size-3.5" /> Scan &amp; Build
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Quick Starters */}
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                    Or pick a fast-starter:
-                  </label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {QUICK_STARTERS.map((qs) => (
+                {/* Vertical Presets Grid */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  {VERTICAL_PRESETS.map((vp) => {
+                    const isSelected = selectedVertical === vp.id;
+                    const Icon = vp.icon;
+                    return (
                       <button
-                        key={qs.id}
+                        key={vp.id}
                         type="button"
-                        onClick={() => handleSelectQuickStarter(qs.text)}
-                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 border border-border/80 transition-all cursor-pointer text-foreground"
+                        onClick={() => handleSelectVertical(vp)}
+                        className={cn(
+                          'p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col gap-1.5',
+                          isSelected
+                            ? 'bg-emerald-500/10 dark:bg-emerald-950/30 border-emerald-500/60 shadow-xs ring-1 ring-emerald-500/30'
+                            : 'bg-white dark:bg-slate-950 border-border/80 hover:border-slate-300 dark:hover:border-slate-700'
+                        )}
                       >
-                        {qs.label}
+                        <div className="flex items-center justify-between">
+                          <div className={cn(
+                            'size-7 rounded-lg flex items-center justify-center',
+                            isSelected ? 'bg-emerald-600 text-white' : 'bg-muted text-muted-foreground'
+                          )}>
+                            <Icon className="size-3.5" />
+                          </div>
+                          {isSelected && <Badge className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0 h-4">Selected</Badge>}
+                        </div>
+                        <p className="text-xs font-black text-foreground">{vp.label}</p>
+                        <p className="text-[10px] text-muted-foreground leading-snug line-clamp-2">{vp.desc}</p>
                       </button>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
 
-                {/* Description Input */}
-                <div className="space-y-2">
+                {/* Description & Voice Dictation */}
+                <div className="space-y-2 pt-2">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-                      Describe your services or dictate:
+                      Fine-tune your business services:
                     </label>
                     <button
                       type="button"
@@ -602,94 +645,41 @@ export function AgentSetupWizard({
                       className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer",
                         isListening
-                          ? "bg-red-500 hover:bg-red-600 text-white border-red-500 animate-pulse shadow-xs"
-                          : "bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-foreground border-border/80"
+                          ? "bg-red-500 text-white border-red-500 animate-pulse shadow-xs"
+                          : "bg-slate-100 dark:bg-slate-800 text-foreground border-border/80"
                       )}
                     >
-                      {isListening ? (
-                        <>
-                          <MicOff className="size-3.5" />
-                          <span>Listening...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Mic className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                          <span>Voice Dictation</span>
-                        </>
-                      )}
+                      {isListening ? <MicOff className="size-3.5" /> : <Mic className="size-3.5 text-emerald-600" />}
+                      <span>{isListening ? 'Listening...' : 'Voice Dictate'}</span>
                     </button>
                   </div>
                   <Textarea
                     value={businessDescription}
                     onChange={(e) => setBusinessDescription(e.target.value)}
-                    placeholder="e.g. We are a home cleaning company serving London. We offer regular cleaning, deep cleaning and end-of-tenancy cleaning."
-                    rows={4}
-                    className="text-xs leading-relaxed resize-none rounded-xl bg-slate-50/80 dark:bg-slate-950/50 border-border/90 focus-visible:ring-emerald-500 font-sans p-3.5"
+                    rows={3}
+                    className="text-xs leading-relaxed resize-none rounded-xl bg-slate-50/80 dark:bg-slate-950/50 border-border/90"
+                    placeholder="Describe your services, location, or emergency response policy..."
                   />
-                  <div className="flex justify-between items-center text-[11px] text-muted-foreground">
-                    <span>💡 Tip: Mentioning your city or services helps the agent personalize responses.</span>
-                  </div>
-                </div>
-
-                {/* AI Understood Card */}
-                <div className="p-4 rounded-2xl bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/25 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wide">
-                      AI Understood
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Business Name</p>
-                      <p className="font-extrabold text-foreground truncate">{parsedBusiness.businessName}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Industry</p>
-                      <p className="font-extrabold text-foreground truncate">{parsedBusiness.industry}</p>
-                    </div>
-                    {parsedBusiness.location && (
-                      <div>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase">Service Location</p>
-                        <p className="font-extrabold text-foreground">{parsedBusiness.location}</p>
-                      </div>
-                    )}
-                  </div>
-                  {parsedBusiness.services.length > 0 && (
-                    <div className="pt-2 border-t border-emerald-500/20">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1.5">Detected Services</p>
-                      <div className="flex flex-wrap gap-1">
-                        {parsedBusiness.services.map((srv, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white dark:bg-slate-900 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
-                          >
-                            ✓ {srv}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
 
-            {/* ─── STEP 2: CAPABILITIES & GOALS ─── */}
+            {/* ─── STEP 2: AGENT TASKS & MISSIONS ─── */}
             {step === 2 && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="space-y-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    Step 2 of 4 · Capabilities &amp; Goals
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Step 2 of 6 · Tasks &amp; Actions
                   </span>
                   <h2 className="text-2xl font-black tracking-tight text-foreground">
-                    What should your AI Agent help with?
+                    What should your AI employee do?
                   </h2>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Select all functions you want the agent to handle automatically for your website visitors.
+                    Choose the specific jobs you want automated. Rather than just chatting, your agent will execute these real business actions.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {CAPABILITY_OPTIONS.map((cap) => {
                     const isSelected = capabilities.includes(cap.id);
                     const Icon = cap.icon;
@@ -705,20 +695,16 @@ export function AgentSetupWizard({
                         )}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div
-                            className={cn(
-                              'size-8 rounded-xl flex items-center justify-center shrink-0',
-                              isSelected ? 'bg-emerald-600 text-white' : 'bg-muted text-muted-foreground'
-                            )}
-                          >
+                          <div className={cn(
+                            'size-8 rounded-xl flex items-center justify-center shrink-0',
+                            isSelected ? 'bg-emerald-600 text-white' : 'bg-muted text-muted-foreground'
+                          )}>
                             <Icon className="size-4" />
                           </div>
-                          <div
-                            className={cn(
-                              'size-4 rounded-md border flex items-center justify-center transition-all',
-                              isSelected ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 dark:border-slate-700'
-                            )}
-                          >
+                          <div className={cn(
+                            'size-4 rounded-md border flex items-center justify-center transition-all',
+                            isSelected ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 dark:border-slate-700'
+                          )}>
                             {isSelected && <Check className="size-3 stroke-[3]" />}
                           </div>
                         </div>
@@ -730,152 +716,200 @@ export function AgentSetupWizard({
                     );
                   })}
                 </div>
-
-                {/* Audience Selection */}
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-border/80 space-y-2">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wide text-foreground">
-                    Target Audience
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: 'new_customers', label: 'New Leads' },
-                      { id: 'existing_customers', label: 'Existing Clients' },
-                      { id: 'both', label: 'Both' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => setAudience(opt.id as any)}
-                        className={cn(
-                          'py-1.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center',
-                          audience === opt.id
-                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                            : 'bg-white dark:bg-slate-900 border-border/80 text-muted-foreground hover:text-foreground'
-                        )}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
             )}
 
-            {/* ─── STEP 3: INTAKE FORM FIELDS ─── */}
+            {/* ─── STEP 3: WEBSITE & KNOWLEDGE BASE ─── */}
             {step === 3 && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="space-y-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    Step 3 of 4 · Auto-Generated Intake Form
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Step 3 of 6 · Website &amp; Knowledge
                   </span>
                   <h2 className="text-2xl font-black tracking-tight text-foreground">
-                    We built your customer intake form
+                    Connect your website &amp; knowledge
                   </h2>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Based on your business type, the agent will present this form when customers request quotes or bookings. Toggle or add fields as needed.
+                    Paste your website URL. Our crawler will extract your services, FAQs, service area, and brand colors so your AI speaks with complete accuracy.
                   </p>
                 </div>
 
-                {/* Fields List */}
-                <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
-                  {activeFields.map((field, idx) => (
-                    <div
-                      key={field.id}
-                      className="p-3 rounded-xl bg-white dark:bg-slate-950 border border-border/80 flex items-center justify-between gap-3 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all"
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200/90 dark:border-blue-900/50 space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Globe className="size-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-black text-blue-900 dark:text-blue-200 uppercase tracking-wide">
+                      Scan Website
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <Input
+                      value={websiteScanUrl}
+                      onChange={(e) => setWebsiteScanUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleScanWebsite()}
+                      placeholder="https://mybusiness.com"
+                      className="text-xs h-9 rounded-xl font-sans bg-white dark:bg-slate-900 border-border/80"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isScanningUrl}
+                      onClick={() => handleScanWebsite()}
+                      className="h-9 px-4 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shrink-0 cursor-pointer shadow-xs gap-1.5"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="text-[11px] font-bold text-muted-foreground/60 w-4 text-center">
-                          0{idx + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-foreground truncate">{field.label}</p>
-                          <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                            {field.type.replace('_', ' ')} · {field.required ? 'Required' : 'Optional'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleRequired(field.id)}
-                          className={cn(
-                            'text-[10px] font-bold h-7 px-2 rounded-lg cursor-pointer',
-                            field.required
-                              ? 'text-rose-600 bg-rose-50 dark:bg-rose-950/30'
-                              : 'text-muted-foreground bg-muted/60'
-                          )}
-                        >
-                          {field.required ? 'Required' : 'Optional'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveField(field.id)}
-                          className="size-7 rounded-lg text-muted-foreground hover:text-rose-600 cursor-pointer"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                      {isScanningUrl ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" /> Scanning...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="size-3.5" /> Scan Website
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
-                {/* Add Custom Field */}
-                <div className="flex items-center gap-2 pt-2">
-                  <Input
-                    value={newFieldLabel}
-                    onChange={(e) => setNewFieldLabel(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddCustomField()}
-                    placeholder="e.g. Number of pets, Gate code, Referral source..."
-                    className="text-xs h-9 rounded-xl font-sans"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={handleAddCustomField}
-                    className="h-9 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 cursor-pointer"
-                  >
-                    <Plus className="size-3.5 mr-1" /> Add Field
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* ─── STEP 4: KNOWLEDGE, PERSONALITY & LAUNCH ─── */}
-            {step === 4 && (
-              <div className="space-y-5 animate-in fade-in duration-200">
-                <div className="space-y-1">
-                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                    Step 4 of 4 · Personality &amp; Launch
-                  </span>
-                  <h2 className="text-2xl font-black tracking-tight text-foreground">
-                    Fine-tune personality and review
-                  </h2>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Choose how your AI communicates and link your website for automatic FAQ learning.
+                {/* Owner Knowledge Review & Verification Card */}
+                <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-950/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                      <ShieldCheck className="size-4 text-emerald-600" />
+                      Verify Extracted Business Knowledge
+                    </span>
+                    <Badge variant="outline" className="text-[10px] text-emerald-700 dark:text-emerald-300 border-emerald-500/30 bg-emerald-500/10">
+                      Owner Review
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Review and adjust these key facts before publishing. Your AI Employee strictly uses this data to qualify visitors and dispatch emergency technicians.
                   </p>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Business Name
+                      </label>
+                      <Input
+                        value={crawledData?.businessName || parsedBusiness.businessName || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (crawledData) {
+                            const updated = { ...crawledData, businessName: val };
+                            setCrawledData(updated);
+                            updateGeneratedState(updated);
+                          } else {
+                            setBusinessDescription(val);
+                            updateGeneratedState();
+                          }
+                        }}
+                        placeholder="e.g. Apex Plumbing & HVAC"
+                        className="h-8 text-xs bg-white dark:bg-slate-900 border-border/80"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Dispatch Phone (Callbacks)
+                      </label>
+                      <Input
+                        value={crawledData?.phone || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const updated = crawledData ? { ...crawledData, phone: val } : {
+                            url: websiteScanUrl,
+                            businessName: parsedBusiness.businessName || 'Business',
+                            industry: 'Contractors',
+                            description: businessDescription,
+                            services: parsedBusiness.services,
+                            phone: val,
+                            faqPairs: customFaqs,
+                            primaryColor: '#059669',
+                          };
+                          setCrawledData(updated);
+                          updateGeneratedState(updated);
+                        }}
+                        placeholder="e.g. (555) 234-5678"
+                        className="h-8 text-xs bg-white dark:bg-slate-900 border-border/80"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Service Area / Location
+                      </label>
+                      <Input
+                        value={crawledData?.location || parsedBusiness.location || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const updated = crawledData ? { ...crawledData, location: val } : {
+                            url: websiteScanUrl,
+                            businessName: parsedBusiness.businessName || 'Business',
+                            industry: 'Contractors',
+                            description: businessDescription,
+                            services: parsedBusiness.services,
+                            location: val,
+                            faqPairs: customFaqs,
+                            primaryColor: '#059669',
+                          };
+                          setCrawledData(updated);
+                          updateGeneratedState(updated);
+                        }}
+                        placeholder="e.g. Austin & Travis County"
+                        className="h-8 text-xs bg-white dark:bg-slate-900 border-border/80"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Operating Hours
+                      </label>
+                      <Input
+                        value={businessHours}
+                        onChange={(e) => {
+                          setBusinessHours(e.target.value);
+                          updateGeneratedState();
+                        }}
+                        placeholder="Mon - Fri: 8am - 6pm"
+                        className="h-8 text-xs bg-white dark:bg-slate-900 border-border/80"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Personality Tone */}
+                {/* FAQs Preview */}
                 <div className="space-y-2">
-                  <label className="text-[11px] font-extrabold uppercase tracking-wide text-foreground">
-                    Communication Tone
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+                    Extracted Business FAQs ({customFaqs.length})
                   </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                    {customFaqs.slice(0, 4).map((faq, idx) => (
+                      <div key={idx} className="p-2.5 rounded-xl border border-border/70 bg-white dark:bg-slate-900/50 text-xs space-y-1">
+                        <p className="font-bold text-foreground">Q: {faq.question}</p>
+                        <p className="text-[11px] text-muted-foreground">A: {faq.answer}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tone of Voice */}
+                <div className="space-y-2 pt-1">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+                    Conversation Tone
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
                     {[
-                      { id: 'friendly', label: '😊 Friendly' },
-                      { id: 'professional', label: '💼 Professional' },
-                      { id: 'empathetic', label: '🤝 Empathetic' },
-                      { id: 'sales', label: '🚀 Direct & Sales' },
+                      { id: 'friendly', label: 'Friendly & Warm' },
+                      { id: 'professional', label: 'Professional & Direct' },
+                      { id: 'medical', label: 'Clinical / Empathetic' },
                     ].map((t) => (
                       <button
                         key={t.id}
                         type="button"
                         onClick={() => setTone(t.id as any)}
                         className={cn(
-                          'py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center',
+                          'py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center',
                           tone === t.id
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
                             : 'bg-white dark:bg-slate-900 border-border/80 text-muted-foreground hover:text-foreground'
                         )}
                       >
@@ -884,76 +918,213 @@ export function AgentSetupWizard({
                     ))}
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Website Knowledge URL */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-extrabold uppercase tracking-wide text-foreground flex items-center gap-1.5">
-                      <Globe className="size-3.5 text-blue-500" />
-                      Website Knowledge Source (Auto-crawl)
-                    </label>
-                    {crawledData && (
-                      <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0 text-[10px]">
-                        ✓ {crawledData.services.length} services indexed
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={knowledgeUrl}
-                      onChange={(e) => setKnowledgeUrl(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleScanWebsite(knowledgeUrl)}
-                      placeholder="https://integrityroofingandrepair.com"
-                      className="text-xs h-9 rounded-xl font-sans"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={isScanningUrl || !knowledgeUrl.trim()}
-                      onClick={() => handleScanWebsite(knowledgeUrl)}
-                      className="h-9 px-3 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shrink-0 cursor-pointer rounded-xl gap-1 shadow-xs"
-                    >
-                      {isScanningUrl ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="size-3.5" />
-                      )}
-                      Sync
-                    </Button>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    We will extract your services, pricing, and FAQ answers to train your agent automatically.
+            {/* ─── STEP 4: REQUIRED CUSTOMER INFORMATION ─── */}
+            {step === 4 && (
+              <div className="space-y-5 animate-in fade-in duration-200">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Step 4 of 6 · Intake Checklist
+                  </span>
+                  <h2 className="text-2xl font-black tracking-tight text-foreground">
+                    Required customer information
+                  </h2>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Check the details your AI employee must collect before booking an appointment or providing an estimate.
                   </p>
                 </div>
 
-                {/* Everything Ready Summary Box */}
-                <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-3 shadow-md">
+                <div className="space-y-2">
+                  {CUSTOMER_INFO_OPTIONS.map((opt) => {
+                    const isChecked = requiredCustomerInfo.includes(opt.id);
+                    const isLocked = opt.requiredAlways;
+                    return (
+                      <div
+                        key={opt.id}
+                        onClick={() => toggleCustomerInfo(opt.id)}
+                        className={cn(
+                          'p-3 rounded-xl border flex items-center justify-between gap-3 transition-all cursor-pointer',
+                          isChecked
+                            ? 'bg-emerald-500/10 dark:bg-emerald-950/20 border-emerald-500/40 shadow-2xs'
+                            : 'bg-white dark:bg-slate-950 border-border/70 hover:border-slate-300'
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={cn(
+                            'size-4 rounded border flex items-center justify-center transition-all shrink-0',
+                            isChecked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-slate-300 dark:border-slate-700'
+                          )}>
+                            {isChecked && <Check className="size-3 stroke-[3]" />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-foreground">{opt.label}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">{opt.desc}</p>
+                          </div>
+                        </div>
+                        {isLocked && (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground shrink-0">
+                            Always Required
+                          </Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Add Custom Question */}
+                <div className="flex items-center gap-2 pt-2">
+                  <Input
+                    value={newFieldLabel}
+                    onChange={(e) => setNewFieldLabel(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddCustomField()}
+                    placeholder="Add custom question (e.g. Gate code, Pet in house?)..."
+                    className="text-xs h-9 rounded-xl font-sans"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleAddCustomField}
+                    className="h-9 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 cursor-pointer"
+                  >
+                    <Plus className="size-3.5 mr-1" /> Add
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ─── STEP 5: BOOKING & FOLLOW-UP ─── */}
+            {step === 5 && (
+              <div className="space-y-5 animate-in fade-in duration-200">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Step 5 of 6 · Booking &amp; Follow-Up
+                  </span>
+                  <h2 className="text-2xl font-black tracking-tight text-foreground">
+                    Configure scheduling rules
+                  </h2>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Set up appointment windows, working hours, and the automatic confirmation message your AI delivers immediately upon booking.
+                  </p>
+                </div>
+
+                {/* Appointment Duration */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Clock className="size-3.5 text-emerald-600" /> Default Appointment Duration
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[15, 30, 45, 60].map((dur) => (
+                      <button
+                        key={dur}
+                        type="button"
+                        onClick={() => setBookingDuration(dur)}
+                        className={cn(
+                          'py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center',
+                          bookingDuration === dur
+                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                            : 'bg-white dark:bg-slate-900 border-border/80 text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {dur} Mins
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Business Operating Hours */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+                    Operating Schedule
+                  </label>
+                  <Input
+                    value={businessHours}
+                    onChange={(e) => setBusinessHours(e.target.value)}
+                    className="text-xs h-9 rounded-xl font-sans"
+                    placeholder="e.g. Mon-Fri 8:00 AM - 6:00 PM, Sat 9:00 AM - 3:00 PM"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    The agent references these hours when scheduling visits and informing customers.
+                  </p>
+                </div>
+
+                {/* Auto-Confirmation Message */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Mail className="size-3.5 text-blue-600" /> Instant Confirmation Message
+                  </label>
+                  <Textarea
+                    value={autoConfirmMsg}
+                    onChange={(e) => setAutoConfirmMsg(e.target.value)}
+                    rows={3}
+                    className="text-xs leading-relaxed resize-none rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ─── STEP 6: PREVIEW, TEST & PUBLISH ─── */}
+            {step === 6 && (
+              <div className="space-y-5 animate-in fade-in duration-200">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                    Step 6 of 6 · Ready to Deploy
+                  </span>
+                  <h2 className="text-2xl font-black tracking-tight text-foreground">
+                    Test and publish your AI Employee
+                  </h2>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Test the conversation live on the simulator on the right. Once you're ready, deploy with one click to get your embed snippet and hosted link.
+                  </p>
+                </div>
+
+                {/* Summary Card */}
+                <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-border/80 space-y-3 shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="size-11 rounded-xl bg-emerald-600 text-white font-bold flex items-center justify-center text-sm shadow-md">
+                      <Sparkles className="size-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-foreground">{generatedResult.agent.name}</h4>
+                      <p className="text-xs text-muted-foreground">{generatedResult.agent.roleTitle}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/60 text-xs">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold block">Tasks Enabled</span>
+                      <span className="font-semibold text-foreground">{capabilities.length} autonomous tasks</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold block">Intake Fields</span>
+                      <span className="font-semibold text-foreground">{requiredCustomerInfo.length} data points</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Publish & Embed Snippet Box */}
+                <div className="p-4 rounded-2xl bg-slate-900 text-white space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                      <Sparkles className="size-4" /> Ready to Deploy
+                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
+                      <Code className="size-3.5" /> 1-Line Website Embed
                     </span>
-                    <Badge className="bg-emerald-500/20 text-emerald-300 border-0 text-[10px]">
-                      Unified System
-                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(embedCodeSnippet);
+                        toast.success('Embed snippet copied!');
+                      }}
+                      className="text-xs h-7 px-2 text-slate-300 hover:text-white"
+                    >
+                      <Copy className="size-3 mr-1" /> Copy
+                    </Button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
-                    <div className="flex items-center gap-1.5">
-                      <Check className="size-3.5 text-emerald-400 shrink-0" />
-                      <span>{generatedResult.agent.name}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Check className="size-3.5 text-emerald-400 shrink-0" />
-                      <span>{activeFields.length} Custom Intake Fields</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Check className="size-3.5 text-emerald-400 shrink-0" />
-                      <span>Automatic CRM Lead Sync</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Check className="size-3.5 text-emerald-400 shrink-0" />
-                      <span>1-Line Website Embed Ready</span>
-                    </div>
-                  </div>
+                  <pre className="text-[11px] font-mono bg-black/40 p-2.5 rounded-lg overflow-x-auto text-emerald-300">
+                    {embedCodeSnippet}
+                  </pre>
+                  <p className="text-[10px] text-slate-400">
+                    Paste this snippet before <code>&lt;/body&gt;</code> on your website, WordPress, Squarespace, or Webflow.
+                  </p>
                 </div>
               </div>
             )}
@@ -974,7 +1145,7 @@ export function AgentSetupWizard({
               <div />
             )}
 
-            {step < 4 ? (
+            {step < 6 ? (
               <Button
                 size="sm"
                 onClick={() => setStep((prev) => (prev + 1) as any)}
@@ -991,7 +1162,7 @@ export function AgentSetupWizard({
                   variant="outline"
                   className="text-xs font-bold h-9 px-4 rounded-xl gap-1.5 cursor-pointer"
                 >
-                  Open in Visual Studio
+                  Open in Studio
                 </Button>
                 <Button
                   size="sm"
@@ -1001,11 +1172,11 @@ export function AgentSetupWizard({
                 >
                   {isSaving ? (
                     <>
-                      <Loader2 className="size-3.5 animate-spin" /> Creating Agent...
+                      <Loader2 className="size-3.5 animate-spin" /> Deploying...
                     </>
                   ) : (
                     <>
-                      <Sparkles className="size-3.5" /> Launch My AI Agent
+                      <Sparkles className="size-3.5" /> Deploy AI Employee
                     </>
                   )}
                 </Button>
@@ -1016,7 +1187,7 @@ export function AgentSetupWizard({
 
         {/* RIGHT COLUMN: LIVE SIDE-BY-SIDE SIMULATOR & PREVIEW */}
         <div className="w-full lg:w-[45%] xl:w-[50%] h-full bg-slate-100/70 dark:bg-slate-950 flex flex-col items-center justify-between p-4 md:p-6 overflow-hidden">
-          {/* Header Switcher: 💬 Agent vs 📄 Form */}
+          {/* Header Switcher: 💬 Agent vs 📄 Intake Form */}
           <div className="w-full max-w-sm flex items-center justify-between mb-3 shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -1035,7 +1206,7 @@ export function AgentSetupWizard({
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                <MessageSquare className="size-3" /> Agent
+                <MessageSquare className="size-3" /> AI Employee
               </button>
               <button
                 type="button"
@@ -1092,7 +1263,7 @@ export function AgentSetupWizard({
                           rows={2}
                           className="text-xs rounded-xl bg-slate-50 dark:bg-slate-950/50"
                         />
-                      ) : f.type === 'dropdown' ? (
+                      ) : f.type === 'dropdown' || f.type === 'radio' ? (
                         <div className="h-9 rounded-xl border border-border/80 bg-slate-50 dark:bg-slate-950/50 px-3 flex items-center justify-between text-xs text-muted-foreground">
                           <span>{f.placeholder || 'Select option...'}</span>
                           <span className="text-[10px]">▼</span>

@@ -1,20 +1,29 @@
 /**
- * Natural Language Booking Intent Detector & Executor
+ * Natural Language Booking & Intake Intent Detector & Executor
  *
- * Automatically parses date, time, customer name, email, and phone from chat messages
- * and executes createAppointmentBooking() into the database.
+ * Automatically parses date, time, customer name, email, phone, property address,
+ * urgency score, and conversation summaries from chat messages, and executes:
+ * 1. createAppointmentBooking() into the database when booking criteria is met.
+ * 2. Structured Lead Capture and qualification into the CRM database.
  */
 
+import { db } from '@/lib/db';
 import { createAppointmentBooking, BookingResult } from '@/lib/scheduling/booking-service';
 
 export interface ExtractedBookingIntent {
-  isBooking: boolean;
+  hasIntent: boolean;
+  isBookingReady: boolean;
+  isEmergency: boolean;
+  urgency: 'emergency' | 'high' | 'normal' | 'flexible';
   dateStr?: string;
   timeStr?: string;
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
+  customerAddress?: string;
   serviceName?: string;
+  missingFields: string[];
+  executiveSummary: string;
 }
 
 const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -35,7 +44,7 @@ function getNextWeekdayDate(dayName: string): string {
 }
 
 /**
- * Extracts booking parameters from current message and conversation history.
+ * Extracts booking & intake parameters from message and history.
  */
 export function extractBookingIntent(
   message: string,
@@ -43,13 +52,28 @@ export function extractBookingIntent(
   fallbackServiceName = 'Appointment Inquiry'
 ): ExtractedBookingIntent {
   const combinedText = [
-    ...history.slice(-4).map((h) => h.content || h.text || ''),
+    ...history.slice(-5).map((h) => h.content || h.text || ''),
     message,
   ].join(' ');
 
   const lower = message.toLowerCase();
   const lowerCombined = combinedText.toLowerCase();
 
+  // 1. Urgency Classification
+  let urgency: 'emergency' | 'high' | 'normal' | 'flexible' = 'normal';
+  const emergencyKeywords = ['leak', 'flooding', 'flooded', 'burst', 'sparks', 'no heat', 'freezing', 'emergency', 'urgent', 'overflow', 'broken pipe', 'shingle blown'];
+  const highKeywords = ['asap', 'today', 'tomorrow morning', 'right away', 'immediately', 'soon as possible'];
+  const flexibleKeywords = ['quote', 'estimate', 'gathering', 'sometime', 'planning', 'curious'];
+
+  if (emergencyKeywords.some((kw) => lowerCombined.includes(kw))) {
+    urgency = 'emergency';
+  } else if (highKeywords.some((kw) => lowerCombined.includes(kw))) {
+    urgency = 'high';
+  } else if (flexibleKeywords.some((kw) => lowerCombined.includes(kw))) {
+    urgency = 'flexible';
+  }
+
+  // 2. Booking Intent Detection
   const bookingKeywords = [
     'book',
     'appointment',
@@ -58,17 +82,20 @@ export function extractBookingIntent(
     'meeting',
     'reserve',
     'slot',
+    'visit',
     'consultation',
+    'come over',
+    'dispatch',
   ];
 
-  const hasBookingKeyword = bookingKeywords.some((kw) => lower.includes(kw) || lowerCombined.includes(kw));
+  const hasIntent = bookingKeywords.some((kw) => lower.includes(kw) || lowerCombined.includes(kw));
 
-  // Time extraction: e.g. "2:00 PM", "2 PM", "14:00", "10:30am", "2pm"
+  // 3. Time extraction: e.g. "2:00 PM", "2 PM", "14:00", "10:30am", "2pm"
   const timeRegex = /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM))\b/i;
   const timeMatch = combinedText.match(timeRegex);
   let timeStr: string | undefined = timeMatch ? timeMatch[1].toUpperCase() : undefined;
 
-  // If "at 2" or "at 3" without AM/PM:
+  // If "at 2" or "at 10" without AM/PM
   if (!timeStr) {
     const atHourMatch = combinedText.match(/\bat\s+(\d{1,2})\b/i);
     if (atHourMatch) {
@@ -77,7 +104,7 @@ export function extractBookingIntent(
     }
   }
 
-  // Date extraction
+  // 4. Date extraction
   let dateStr: string | undefined;
   if (lower.includes('tomorrow') || lowerCombined.includes('tomorrow')) {
     const tomorrow = new Date();
@@ -86,7 +113,6 @@ export function extractBookingIntent(
   } else if (lower.includes('today') || lowerCombined.includes('today')) {
     dateStr = new Date().toISOString().split('T')[0];
   } else {
-    // Check weekdays: "on friday", "next monday", etc.
     for (const day of WEEKDAYS) {
       if (lower.includes(day) || lowerCombined.includes(day)) {
         dateStr = getNextWeekdayDate(day);
@@ -95,7 +121,6 @@ export function extractBookingIntent(
     }
   }
 
-  // YYYY-MM-DD or MM/DD/YYYY regex
   if (!dateStr) {
     const isoDateMatch = combinedText.match(/\b(202\d-\d{2}-\d{2})\b/);
     if (isoDateMatch) {
@@ -111,15 +136,22 @@ export function extractBookingIntent(
     }
   }
 
-  // Email extraction
+  // 5. Email extraction
   const emailMatch = combinedText.match(/\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/);
   const customerEmail = emailMatch ? emailMatch[1] : undefined;
 
-  // Phone extraction
+  // 6. Phone extraction
   const phoneMatch = combinedText.match(/\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/);
   const customerPhone = phoneMatch ? phoneMatch[0] : undefined;
 
-  // Name extraction: e.g. "my name is Deepak", "I'm Deepak", "Deepak here", or capitalized name after "for [Name]"
+  // 7. Address extraction
+  let customerAddress: string | undefined;
+  const addressMatch = combinedText.match(/(?:at|address(?: is)?|located at|property at)\s+([0-9]+\s+[A-Za-z0-9\s,.-]+?)(?:\.|\n|tomorrow|at|my|$)/i);
+  if (addressMatch && addressMatch[1] && addressMatch[1].trim().length > 5) {
+    customerAddress = addressMatch[1].trim();
+  }
+
+  // 8. Name extraction
   let customerName: string | undefined;
   const namePatterns = [
     /(?:my name is|i am|i'm|name:)\s+([A-Za-z]{2,20})/i,
@@ -130,7 +162,7 @@ export function extractBookingIntent(
     const match = combinedText.match(pat);
     if (match && match[1]) {
       const candidate = match[1].trim();
-      const forbidden = ['Tomorrow', 'Today', 'Monday', 'Friday', 'Saturday', 'Sunday', 'Call', 'Confirmation', 'Appointment'];
+      const forbidden = ['Tomorrow', 'Today', 'Monday', 'Friday', 'Saturday', 'Sunday', 'Call', 'Confirmation', 'Appointment', 'Emergency'];
       if (!forbidden.includes(candidate)) {
         customerName = candidate;
         break;
@@ -138,29 +170,121 @@ export function extractBookingIntent(
     }
   }
 
-  // Fallback: If message ends with single name or starts with "Deepak,"
-  if (!customerName) {
-    const singleNameMatch = message.match(/\b([A-Z][a-z]{2,15})\b/);
-    if (singleNameMatch) {
-      const candidate = singleNameMatch[1];
-      const forbidden = ['Book', 'Booking', 'Schedule', 'Tomorrow', 'Today', 'Hello', 'Hi', 'Please', 'Thanks', 'Yes'];
-      if (!forbidden.includes(candidate)) {
-        customerName = candidate;
-      }
-    }
+  // Missing fields for complete booking execution
+  const missingFields: string[] = [];
+  if (!dateStr) missingFields.push('date');
+  if (!timeStr) missingFields.push('time');
+  if (!customerPhone && !customerEmail) missingFields.push('contact_info');
+
+  const isBookingReady = hasIntent && Boolean(dateStr) && Boolean(timeStr) && (Boolean(customerPhone) || Boolean(customerEmail));
+
+  // Executive Summary of Customer Needs
+  let executiveSummary = 'Customer initiated contact via AI Intake.';
+  if (urgency === 'emergency') {
+    executiveSummary = `🚨 URGENT: Customer reported active emergency needing rapid dispatch.`;
+  } else if (hasIntent && dateStr) {
+    executiveSummary = `Customer requested service appointment for ${dateStr}${timeStr ? ` at ${timeStr}` : ''}.`;
+  } else if (customerPhone) {
+    executiveSummary = `Customer requested callback/quote at ${customerPhone}.`;
   }
 
-  const isBooking = hasBookingKeyword && (Boolean(dateStr) || Boolean(timeStr));
-
   return {
-    isBooking,
-    dateStr: dateStr || new Date().toISOString().split('T')[0],
-    timeStr: timeStr || '02:00 PM',
+    hasIntent,
+    isBookingReady,
+    isEmergency: urgency === 'emergency',
+    urgency,
+    dateStr,
+    timeStr,
     customerName: customerName || 'Valued Visitor',
     customerEmail,
     customerPhone,
+    customerAddress,
     serviceName: fallbackServiceName,
+    missingFields,
+    executiveSummary,
   };
+}
+
+/**
+ * Captures or updates a Lead record in the CRM from conversation details.
+ */
+export async function tryCaptureChatLead(params: {
+  tenantId?: string | null;
+  workspaceId?: string | null;
+  agentId?: string | null;
+  formId?: string | null;
+  intent: ExtractedBookingIntent;
+  message: string;
+  imageUrl?: string;
+}) {
+  const { tenantId, workspaceId, intent, imageUrl } = params;
+  if (!tenantId || (!intent.customerPhone && !intent.customerEmail)) {
+    return null;
+  }
+
+  try {
+    const existing = await db.lead.findFirst({
+      where: {
+        tenantId,
+        OR: [
+          ...(intent.customerPhone ? [{ phone: intent.customerPhone }] : []),
+          ...(intent.customerEmail ? [{ email: intent.customerEmail }] : []),
+        ],
+      },
+    });
+
+    const priority = intent.isEmergency ? 'urgent' : intent.hasIntent ? 'high' : 'medium';
+    const tag = intent.isEmergency ? 'emergency_intake' : 'ai_intake_lead';
+    const photoNote = imageUrl ? `\n[Customer Uploaded Photo]: ${imageUrl}` : '';
+
+    if (existing) {
+      let existingTags: string[] = [];
+      try {
+        existingTags = JSON.parse(existing.tagsJson || '[]');
+      } catch {}
+
+      let existingImages: string[] = [];
+      try {
+        existingImages = JSON.parse(existing.imagesJson || '[]');
+      } catch {}
+
+      const updatedTags = Array.from(new Set([...existingTags, tag]));
+      const updatedImages = imageUrl ? Array.from(new Set([...existingImages, imageUrl])) : existingImages;
+
+      return await db.lead.update({
+        where: { id: existing.id },
+        data: {
+          name: intent.customerName !== 'Valued Visitor' ? intent.customerName : existing.name,
+          phone: intent.customerPhone || existing.phone,
+          email: intent.customerEmail || existing.email,
+          address: intent.customerAddress || existing.address,
+          priority: intent.isEmergency ? 'urgent' : existing.priority,
+          description: `${existing.description || ''}\n[AI Update]: ${intent.executiveSummary}${photoNote}`.trim(),
+          tagsJson: JSON.stringify(updatedTags),
+          imagesJson: JSON.stringify(updatedImages),
+        },
+      });
+    }
+
+    return await db.lead.create({
+      data: {
+        tenantId,
+        name: intent.customerName || 'Inquiry Contact',
+        phone: intent.customerPhone || 'N/A',
+        email: intent.customerEmail || null,
+        address: intent.customerAddress || null,
+        priority,
+        status: intent.isEmergency ? 'hot' : 'new',
+        source: 'ai_intake_chat',
+        description: `[AI Intake Session]: ${intent.executiveSummary}${photoNote}`.trim(),
+        tagsJson: JSON.stringify([tag]),
+        imagesJson: imageUrl ? JSON.stringify([imageUrl]) : '[]',
+      },
+    });
+  } catch (err) {
+    console.warn('[chat-booking-helper] Lead capture notice:', err);
+    return null;
+  }
 }
 
 /**
@@ -173,32 +297,51 @@ export async function tryExecuteChatBooking(params: {
   agentId?: string | null;
   serviceName?: string;
   message: string;
+  imageUrl?: string;
   history?: Array<{ role?: string; sender?: string; content?: string; text?: string }>;
 }): Promise<BookingResult | null> {
   const intent = extractBookingIntent(params.message, params.history, params.serviceName);
 
-  if (!intent.isBooking) {
+  // If user provided contact info, capture lead asynchronously
+  if (params.tenantId && (intent.customerPhone || intent.customerEmail)) {
+    tryCaptureChatLead({
+      tenantId: params.tenantId,
+      workspaceId: params.workspaceId,
+      agentId: params.agentId,
+      formId: params.formId,
+      intent,
+      message: params.message,
+      imageUrl: params.imageUrl,
+    }).catch(() => {});
+  }
+
+  // Only execute booking if ready with date and time
+  if (!intent.isBookingReady && !(intent.hasIntent && intent.dateStr && intent.timeStr)) {
     return null;
   }
 
   try {
+    const effectiveDate = intent.dateStr || new Date().toISOString().split('T')[0];
+    const effectiveTime = intent.timeStr || '10:00 AM';
+
     const result = await createAppointmentBooking({
       tenantId: params.tenantId || null,
       workspaceId: params.workspaceId || null,
       formId: params.formId || null,
       agentId: params.agentId || null,
       serviceName: intent.serviceName || params.serviceName || 'Consultation & Appointment',
-      date: intent.dateStr!,
-      time: intent.timeStr || '02:00 PM',
+      date: effectiveDate,
+      time: effectiveTime,
       durationMinutes: 30,
       customer: {
         name: intent.customerName,
         email: intent.customerEmail || '',
         phone: intent.customerPhone || '',
+        address: intent.customerAddress || '',
       },
-      notes: `[Booked via AI Chat Session]\nVisitor: ${intent.customerName}\nOriginal message: "${params.message}"`,
+      notes: `[Booked via AI Chat Session]\nVisitor: ${intent.customerName}\nUrgency: ${intent.urgency.toUpperCase()}\nSummary: ${intent.executiveSummary}${params.imageUrl ? `\nPhoto: ${params.imageUrl}` : ''}`,
       source: 'ai_chat_widget',
-      bypassAvailabilityCheck: true,
+      bypassAvailabilityCheck: false,
     });
 
     return result;
