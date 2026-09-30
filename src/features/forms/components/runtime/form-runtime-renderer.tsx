@@ -107,23 +107,18 @@ export function FormMediaHeroPanel({
   onSelectMediaField?: (field: string) => void;
 }) {
   const [isMuted, setIsMuted] = useState(mediaPanel?.videoMuted ?? true);
-  const hasInjectedContent = leftFields.some(
-    (f) =>
-      f.id.startsWith('mp_') ||
-      (f as any).kind === 'content' ||
-      f.widgetType === 'badge_widget' ||
-      f.widgetType === 'list_widget' ||
-      f.widgetType === 'image_widget'
-  );
+  const hasLeftWidgets = (leftFields && leftFields.length > 0) || Boolean(children);
   const rawPanel = (mediaPanel || {}) as any;
   const rawBadge = mediaPanel?.badgeText || rawPanel.badge;
   const hasBadge = Boolean(rawBadge && typeof rawBadge === 'string' && rawBadge.trim().length > 0);
-  const showBadge = !hasInjectedContent && (editable || (mediaPanel?.showBadge !== false && hasBadge));
-  const showMedia = !hasInjectedContent && mediaPanel?.showMedia !== false;
-  const showHeadline = !hasInjectedContent && mediaPanel?.showHeadline !== false;
-  const showSubtitle = !hasInjectedContent && mediaPanel?.showSubtitle !== false;
-  const showBenefits = !hasInjectedContent && mediaPanel?.showBenefits !== false;
-  const showTestimonial = mediaPanel?.showTestimonial !== false;
+  // In editor mode or when real widgets are present, suppress uneditable hardcoded pseudo-blocks.
+  // All left column elements are rendered as first-class sidebar widgets via children/leftFields.
+  const showBadge = !hasLeftWidgets && !editable && mediaPanel?.showBadge === true && hasBadge;
+  const showMedia = !hasLeftWidgets && !editable && mediaPanel?.showMedia === true && Boolean(mediaPanel?.mediaUrl);
+  const showHeadline = !hasLeftWidgets && !editable && mediaPanel?.showHeadline === true && Boolean(mediaPanel?.headline);
+  const showSubtitle = !hasLeftWidgets && !editable && mediaPanel?.showSubtitle === true && Boolean(mediaPanel?.subtitle);
+  const showBenefits = !hasLeftWidgets && !editable && mediaPanel?.showBenefits === true && Boolean(mediaPanel?.benefitsList?.length);
+  const showTestimonial = !hasLeftWidgets && !editable && mediaPanel?.showTestimonial === true && Boolean(mediaPanel?.testimonial?.quote);
 
   const mediaType = mediaPanel?.mediaType || rawPanel.type || 'image';
   const mediaUrl = mediaPanel?.mediaUrl || rawPanel.url;

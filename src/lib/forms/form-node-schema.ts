@@ -237,3 +237,34 @@ export function injectMediaPanelContent(
   const contentNodes = mediaPanelToContentWidgets(mediaPanel, formName, formDescription);
   return [...contentNodes, ...fields];
 }
+
+/**
+ * Ensures that when a form is in split_media mode, the left column has
+ * real, fully editable sidebar widgets (Heading, Paragraph, Badge, List, etc.)
+ * rather than showing uneditable hardcoded fallbacks.
+ */
+export function ensureSplitMediaLeftWidgets(
+  fields: FormField[],
+  mediaPanel: FormMediaPanel | undefined | null,
+  formName?: string,
+  formDescription?: string | null,
+): FormField[] {
+  const hasLeftFields = fields.some((f) => f.layoutColumn === 'left');
+  if (hasLeftFields) return fields;
+
+  const fallbackPanel: FormMediaPanel = {
+    headline: formName || 'Fast & Reliable Professional Service',
+    subtitle: formDescription || 'Fill out the form below to receive upfront pricing and schedule top-rated pros.',
+    badgeText: '⭐ 5-Star Rated Service Pro',
+    benefitsList: [
+      'Guaranteed response within 15 minutes',
+      'Licensed, insured & background-checked',
+      '100% Price Match & Escrow Guarantee',
+    ],
+  };
+
+  const targetPanel = mediaPanelHasContent(mediaPanel) ? mediaPanel : fallbackPanel;
+  const contentNodes = mediaPanelToContentWidgets(targetPanel, formName, formDescription);
+  return [...contentNodes, ...fields];
+}
+

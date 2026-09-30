@@ -643,9 +643,75 @@ export async function POST(request: NextRequest) {
           theme: { ...(currentSchema.theme || {}), layout: 'card' },
         };
       } else if (lower.includes('split') || lower.includes('hero layout') || lower.includes('split media')) {
+        const currentFields = [...(currentSchema.fields || [])];
+        const hasLeft = currentFields.some((f: any) => f.layoutColumn === 'left');
+        let finalFields = currentFields;
+        if (!hasLeft) {
+          finalFields = [
+            {
+              id: `hero_badge_${Date.now()}`,
+              type: 'control_widget',
+              widgetType: 'badge_widget',
+              label: 'Trust Badge',
+              layoutColumn: 'left',
+              width: 'full',
+              widgetConfig: { text: '⭐ 5-Star Rated Service Pro', variant: 'solid' },
+              required: false,
+            },
+            {
+              id: `hero_heading_${Date.now()}`,
+              type: 'heading',
+              widgetType: 'heading',
+              label: currentSchema.name || 'Fast & Reliable Professional Service',
+              layoutColumn: 'left',
+              width: 'full',
+              widgetConfig: { text: currentSchema.name || 'Fast & Reliable Professional Service', level: 'h2', align: 'left' },
+              required: false,
+            },
+            {
+              id: `hero_sub_${Date.now()}`,
+              type: 'paragraph',
+              widgetType: 'paragraph',
+              label: 'Description',
+              layoutColumn: 'left',
+              width: 'full',
+              widgetConfig: { text: 'Fill out the form below to receive upfront pricing and schedule top-rated pros.', alignment: 'left' },
+              required: false,
+            },
+            {
+              id: `hero_benefits_${Date.now()}`,
+              type: 'control_widget',
+              widgetType: 'list_widget',
+              label: 'Guarantees',
+              layoutColumn: 'left',
+              width: 'full',
+              widgetConfig: {
+                items: [
+                  'Guaranteed response within 15 minutes',
+                  'Licensed, insured & background-checked',
+                  '100% Price Match & Escrow Guarantee',
+                ],
+                style: 'checkmark',
+              },
+              required: false,
+            },
+            ...currentFields.map((f: any) => ({ ...f, layoutColumn: f.layoutColumn || 'right' })),
+          ];
+        }
         updatedSchema = {
           ...currentSchema,
+          fields: finalFields,
           theme: { ...(currentSchema.theme || {}), layout: 'split_media' },
+          mediaPanel: {
+            ...(currentSchema.mediaPanel || {}),
+            enabled: true,
+            backgroundColor: '#0f172a',
+            showBadge: false,
+            showHeadline: false,
+            showSubtitle: false,
+            showBenefits: false,
+            showMedia: false,
+          },
         };
       } else if (lower.includes('classic') || lower.includes('document')) {
         updatedSchema = {
@@ -680,7 +746,20 @@ export async function POST(request: NextRequest) {
         const systemPrompt = `You are the Fieseros AI Form Studio Co-Pilot.
 You receive a FormSchema JSON and a user prompt to build or modify form questions, options, widgets, and layout.
 
+Layouts supported:
+- 'classic' (Single page form document)
+- 'card' (One question at a time)
+- 'split_media' (Two-column split hero layout: Left Column = Hero Branding / Value Proposition Widgets; Right Column = Form Questions)
+
 Available Widget Types:
+Content & Hero Widgets (Set layoutColumn="left" for split hero):
+- heading (Title / Headline with widgetConfig: { text: "...", level: "h2", align: "left" })
+- paragraph (Text description with widgetConfig: { text: "...", alignment: "left" })
+- badge_widget (Trust badge with widgetConfig: { text: "⭐ 5-Star Rated Service", variant: "solid" })
+- list_widget (Value benefits / guarantees list with widgetConfig: { items: ["Item 1", "Item 2"], style: "checkmark" })
+- image_widget (Brand photo or hero image with widgetConfig: { src: "https://...", alt: "..." })
+
+Functional & Input Widgets:
 - route_planner_map (Interactive Route Map & Mileage)
 - nearest_location_finder (Nearest Depot/Branch Locator)
 - google_places_autocomplete (Live Address & Postal Autocomplete)
@@ -692,12 +771,14 @@ Available Widget Types:
 - calendar_booking (Date & Time slot booking)
 
 Standard Field Types:
-- short_answer, long_answer, dropdown (with options array), email, phone, numerical, date, time, checkbox, radio.
+- short_answer, long_answer, dropdown (with options array), email, phone, numerical, date, time, checkbox, radio, address.
 
-Rules:
-1. For widgets, set type="control_widget" and widgetType to the appropriate widget ID.
-2. If the user asks for estimates/calculations, include numerical fields for scope (e.g. sq ft) and dropdown/radio for tiers with price rates.
-3. Return ONLY valid JSON matching FormSchema (no markdown formatting, no explanations).`;
+Critical Rules:
+1. When creating or updating a 'split_media' form, ALWAYS put the left-side hero branding as real widgets in the "fields" array with layoutColumn="left" (e.g. badge_widget, heading, paragraph, list_widget with 3 benefits).
+2. The form questions should have layoutColumn="right" (or omitted, which defaults to right).
+3. Do NOT put hardcoded uneditable text in mediaPanel. All left content MUST be real, fully editable widgets from the widget list in the "fields" array with layoutColumn="left".
+4. For widgets, set type="control_widget" (except heading and paragraph which have type="heading" and type="paragraph") and widgetType to the appropriate widget ID.
+5. Return ONLY valid JSON matching FormSchema (no markdown formatting, no explanations).`;
 
         const userMessage = `Current Form Schema:
 ${JSON.stringify(currentSchema, null, 2)}

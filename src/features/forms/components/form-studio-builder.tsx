@@ -63,7 +63,7 @@ import { AgentDeviceSimulator } from './agent-builder/agent-device-simulator';
 import { AgentSetupWizard } from './agent-builder/agent-setup-wizard';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '../types/agent-types';
 import { getFormContentFingerprint } from '@/features/forms/utils/form-helpers';
-import { injectMediaPanelContent } from '@/lib/forms/form-node-schema';
+import { ensureSplitMediaLeftWidgets, injectMediaPanelContent } from '@/lib/forms/form-node-schema';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
 import { TemplateExplorer } from './builder/template-explorer';
 import type { FormTemplate } from '@/lib/forms/templates';
@@ -272,6 +272,35 @@ export function FormStudioBuilder({
     const resolved = resolveFormLayout(formData as any);
     setFormLayout(resolved);
   }, [formData.theme?.layout, formData.settings?.formLayout]);
+
+  // Ensure split_media forms have real, editable sidebar widgets on the left column
+  useEffect(() => {
+    if (formLayout === 'split_media' || formData.theme?.layout === 'split_media') {
+      const hasLeftFields = formData.fields?.some((f) => f.layoutColumn === 'left');
+      if (!hasLeftFields && (formData.fields?.length || 0) > 0) {
+        const enriched = ensureSplitMediaLeftWidgets(
+          formData.fields,
+          formData.mediaPanel,
+          formData.name,
+          formData.description
+        );
+        if (enriched.length !== formData.fields.length) {
+          onFormDataChange((prev) => ({
+            ...prev,
+            fields: enriched,
+            mediaPanel: {
+              ...(prev.mediaPanel || {}),
+              showBadge: false,
+              showHeadline: false,
+              showSubtitle: false,
+              showBenefits: false,
+              showMedia: false,
+            },
+          }));
+        }
+      }
+    }
+  }, [formLayout, formData.theme?.layout, formData.fields, formData.mediaPanel, formData.name, formData.description, onFormDataChange]);
 
   // Preview mode — derived from formLayout (no separate state)
   const previewFormat = layoutToRuntimeMode(formLayout);
@@ -583,9 +612,14 @@ export function FormStudioBuilder({
             widgetConfig: f.widgetConfig,
           }));
 
+          const targetLayout = (updatedSchema.theme?.layout as FormLayout) || formLayout;
+          const finalFields = targetLayout === 'split_media'
+            ? ensureSplitMediaLeftWidgets(newFields, updatedSchema.mediaPanel, updatedSchema.name, updatedSchema.description)
+            : newFields;
+
           onFormDataChangeWithHistory((prev) => ({
             ...prev,
-            fields: newFields,
+            fields: finalFields,
             primaryColor: updatedSchema.theme?.primaryColor || prev.primaryColor,
             theme: updatedSchema.theme
               ? {
@@ -1461,7 +1495,28 @@ export function FormStudioBuilder({
                 type="button"
                 onClick={() => {
                   setFormLayout('split_media');
-                  updateMediaPanel({ enabled: true });
+                  updateMediaPanel({
+                    enabled: true,
+                    showBadge: false,
+                    showHeadline: false,
+                    showSubtitle: false,
+                    showBenefits: false,
+                    showMedia: false,
+                  });
+                  onFormDataChange((prev) => {
+                    const fieldsWithLeft = ensureSplitMediaLeftWidgets(
+                      prev.fields || [],
+                      prev.mediaPanel,
+                      prev.name,
+                      prev.description
+                    );
+                    return {
+                      ...prev,
+                      fields: fieldsWithLeft,
+                      theme: { ...(prev.theme || {}), layout: 'split_media' } as any,
+                      settings: { ...(prev.settings || {}), formLayout: 'split_media' },
+                    };
+                  });
                   setSelectedFieldId('__media_panel__');
                   setShowInspector(true);
                 }}

@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import type { EditorFormData, FormField } from '@/features/forms/types';
+import { ensureSplitMediaLeftWidgets } from '@/lib/forms/form-node-schema';
 import { THEME_GALLERY_PRESETS } from './studio-theme-gallery-modal';
 
 interface AiChatMessage {
@@ -156,14 +157,22 @@ export function StudioAiCopilotSidebar({
           helpText: f.helpText || f.description || '',
           required: Boolean(f.required),
           width: f.width || 'full',
+          layoutColumn: f.layoutColumn,
+          stepId: f.stepId,
+          defaultValue: f.defaultValue,
           options: f.options?.map((o: any) => (typeof o === 'string' ? o : o.label)) || [],
           widgetType: f.widgetType,
           widgetConfig: f.widgetConfig,
         }));
 
+        const targetLayout = updatedSchema.theme?.layout || formData.theme?.layout;
+        const finalFields = targetLayout === 'split_media'
+          ? ensureSplitMediaLeftWidgets(newFields, updatedSchema.mediaPanel || formData.mediaPanel, updatedSchema.name || formData.name, updatedSchema.description || formData.description)
+          : newFields;
+
         onFormDataChange((prev) => ({
           ...prev,
-          fields: newFields,
+          fields: finalFields,
           primaryColor: updatedSchema.theme?.primaryColor || prev.primaryColor,
           theme: updatedSchema.theme
             ? {
@@ -171,6 +180,7 @@ export function StudioAiCopilotSidebar({
                 primaryColor: updatedSchema.theme.primaryColor,
                 backgroundColor: updatedSchema.theme.backgroundColor,
                 textColor: updatedSchema.theme.textColor,
+                layout: updatedSchema.theme.layout || prev.theme?.layout,
               }
             : prev.theme,
           submitButtonText: updatedSchema.settings?.submitButtonText || prev.submitButtonText,
