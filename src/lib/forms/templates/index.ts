@@ -82,3 +82,6 @@ import './canonical/canonical-master-suite-200'; // Master suite batch to reach 
 // ─── AI Agent Templates (F5) ────────────────────────────────────────────────
 // Re-export agent templates so they're importable from the templates barrel.
 export { AGENT_TEMPLATES, getAgentTemplateById, getAgentTemplatesByCategory, type AgentTemplate } from './canonical/agent-templates';
+
+// ─── 50 Form Experience Structures (F6) ──────────────────────────────────────
+export * from './form-structures';

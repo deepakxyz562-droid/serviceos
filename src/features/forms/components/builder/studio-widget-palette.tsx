@@ -138,27 +138,17 @@ export function StudioWidgetPalette({
     <aside
       className={`w-80 lg:w-88 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200/90 dark:border-slate-800 shrink-0 h-full overflow-hidden select-none z-20 shadow-sm ${className}`}
     >
-      {/* Header */}
-      <div className="p-3.5 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/60">
-        <div className="flex items-center gap-2">
-          <div className="size-6 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
-            <Sparkles className="size-3.5" />
-          </div>
-          <div>
-            <h3 className="font-bold text-xs text-foreground leading-tight">Form Elements</h3>
-            {activeStepTitle && (
-              <p className="text-[10px] text-muted-foreground truncate max-w-[170px]">
-                Adding to: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{activeStepTitle}</span>
-              </p>
-            )}
-          </div>
-        </div>
+      {/* Header — Reference Image 2 Minimal Style */}
+      <div className="px-4 py-3 border-b border-slate-200/80 dark:border-zinc-800 flex items-center justify-between shrink-0 bg-white dark:bg-zinc-900">
+        <h3 className="font-bold text-[11px] uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+          ADD FIELDS
+        </h3>
 
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
             title="Hide Widget Palette"
           >
             <PanelLeftClose className="size-4" />
@@ -251,7 +241,7 @@ export function StudioWidgetPalette({
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-1 gap-1.5">
+              <div className="space-y-0.5">
                 {contentWidgets.map((def) => {
                   const Icon = resolveIcon(def.iconName || (def as any).icon);
                   return (
@@ -259,24 +249,15 @@ export function StudioWidgetPalette({
                       key={def.id}
                       type="button"
                       onClick={() => onAddRegistryField(def.id)}
-                      className="group w-full flex items-center justify-between p-2.5 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 bg-emerald-50/30 dark:bg-emerald-950/20 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-left transition-all shadow-2xs cursor-pointer"
+                      className="group w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="size-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 transition-colors">
-                          <Icon className="size-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-xs font-bold text-foreground group-hover:text-emerald-950 dark:group-hover:text-emerald-200 truncate">
-                              {def.name}
-                            </p>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground line-clamp-1">
-                            {def.description}
-                          </p>
-                        </div>
+                        <Icon className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="text-xs font-medium text-slate-700 dark:text-zinc-300 group-hover:text-emerald-900 dark:group-hover:text-emerald-100 truncate">
+                          {def.name}
+                        </span>
                       </div>
-                      <Plus className="size-4 text-emerald-600 transition-transform group-hover:scale-110 shrink-0" />
+                      <Plus className="size-3.5 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                     </button>
                   );
                 })}
@@ -286,7 +267,7 @@ export function StudioWidgetPalette({
 
           {/* Section B: Standard Form Inputs */}
           {formInputFields.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div className="flex items-center justify-between px-1">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   Standard Form Inputs
@@ -294,7 +275,7 @@ export function StudioWidgetPalette({
                 <span className="text-[10px] text-muted-foreground">{formInputFields.length} fields</span>
               </div>
 
-              <div className="grid grid-cols-1 gap-1.5">
+              <div className="space-y-0.5">
                 {formInputFields.map((def) => {
                   const Icon = resolveIcon(def.iconName || (def as any).icon);
                   return (
@@ -302,22 +283,15 @@ export function StudioWidgetPalette({
                       key={def.id}
                       type="button"
                       onClick={() => onAddRegistryField(def.id)}
-                      className="group w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 text-left transition-all shadow-2xs cursor-pointer"
+                      className="group w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors hover:bg-slate-100 dark:hover:bg-zinc-800/80 cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/50 text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 flex items-center justify-center shrink-0 transition-colors">
-                          <Icon className="size-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-foreground group-hover:text-emerald-950 dark:group-hover:text-emerald-200 truncate">
-                            {def.name}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground line-clamp-1">
-                            {def.description}
-                          </p>
-                        </div>
+                        <Icon className="size-4 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-zinc-200 shrink-0 transition-colors" />
+                        <span className="text-xs font-medium text-slate-700 dark:text-zinc-300 group-hover:text-slate-900 dark:group-hover:text-zinc-100 truncate">
+                          {def.name}
+                        </span>
                       </div>
-                      <Plus className="size-4 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0" />
+                      <Plus className="size-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                     </button>
                   );
                 })}
@@ -358,33 +332,24 @@ export function StudioWidgetPalette({
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 gap-1.5">
+            <div className="space-y-0.5">
               {filteredPayments.map((gw) => (
                 <button
                   key={gw.id}
                   type="button"
                   onClick={() => onAddPaymentGateway(gw)}
-                  className="group w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 text-left transition-all shadow-2xs cursor-pointer"
+                  className="group w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors hover:bg-slate-100 dark:hover:bg-zinc-800/80 cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/50 text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 flex items-center justify-center shrink-0 transition-colors">
-                      <CreditCard className="size-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-xs font-bold text-foreground group-hover:text-emerald-950 dark:group-hover:text-emerald-200 truncate">
-                          {gw.name}
-                        </p>
-                        <span className="text-[9px] font-bold uppercase px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                          {gw.region}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground line-clamp-1">
-                        {gw.description}
-                      </p>
-                    </div>
+                    <CreditCard className="size-4 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 shrink-0 transition-colors" />
+                    <span className="text-xs font-medium text-slate-700 dark:text-zinc-300 group-hover:text-slate-900 dark:group-hover:text-zinc-100 truncate">
+                      {gw.name}
+                    </span>
+                    <span className="text-[9px] font-semibold uppercase px-1 rounded bg-slate-100 dark:bg-zinc-800 text-slate-500">
+                      {gw.region}
+                    </span>
                   </div>
-                  <Plus className="size-4 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0" />
+                  <Plus className="size-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </button>
               ))}
             </div>
@@ -424,7 +389,7 @@ export function StudioWidgetPalette({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 gap-1.5">
+            <div className="space-y-0.5">
               {filteredWidgets.map((def) => {
                 const Icon = resolveIcon(def.iconName || (def as any).icon);
                 return (
@@ -432,29 +397,20 @@ export function StudioWidgetPalette({
                     key={def.id}
                     type="button"
                     onClick={() => onAddRegistryField(def.id)}
-                    className="group w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 text-left transition-all shadow-2xs cursor-pointer"
+                    className="group w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors hover:bg-slate-100 dark:hover:bg-zinc-800/80 cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/50 text-slate-700 dark:text-slate-300 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 flex items-center justify-center shrink-0 transition-colors">
-                        <Icon className="size-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs font-bold text-foreground group-hover:text-emerald-950 dark:group-hover:text-emerald-200 truncate">
-                            {def.name}
-                          </p>
-                          {def.tier === 'advanced' && (
-                            <span className="text-[8px] font-bold uppercase px-1 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                              PRO
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground line-clamp-1">
-                          {def.description}
-                        </p>
-                      </div>
+                      <Icon className="size-4 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 shrink-0 transition-colors" />
+                      <span className="text-xs font-medium text-slate-700 dark:text-zinc-300 group-hover:text-slate-900 dark:group-hover:text-zinc-100 truncate">
+                        {def.name}
+                      </span>
+                      {def.tier === 'advanced' && (
+                        <span className="text-[8px] font-bold uppercase px-1 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                          PRO
+                        </span>
+                      )}
                     </div>
-                    <Plus className="size-4 text-muted-foreground group-hover:text-emerald-600 transition-colors shrink-0" />
+                    <Plus className="size-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   </button>
                 );
               })}

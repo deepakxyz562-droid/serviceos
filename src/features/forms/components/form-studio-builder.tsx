@@ -91,6 +91,7 @@ import type { FormSchema } from '@/lib/forms/form-schema-types';
 import { resolveFormLayout, layoutToRuntimeMode, type FormLayout } from '@/lib/forms/resolve-form-layout';
 import { QRCodePlaceholder } from '@/features/forms/components/field-editor';
 import { FormImporterDialog } from './form-importer-dialog';
+import { FormSubmissionsView } from '@/components/views/form-submissions-view';
 
 export interface FormStudioBuilderProps {
   formData: EditorFormData;
@@ -250,7 +251,7 @@ export function FormStudioBuilder({
     return result;
   }, [onSave, formData]);
   // Studio navigation
-  const [studioTab, setStudioTab] = useState<'build' | 'agent' | 'settings' | 'publish' | 'templates'>('build');
+  const [studioTab, setStudioTab] = useState<'build' | 'agent' | 'settings' | 'publish' | 'templates' | 'responses'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   // ─── Unified Layout Vocabulary (Phase 2) ──────────────────────────────
@@ -1157,6 +1158,18 @@ export function FormStudioBuilder({
     }
   };
 
+  const handleCopyPublicLink = useCallback(() => {
+    const formKey = formData.slug ? formData.slug.replace(/^-+|-+$/g, '') : (formData.id || '');
+    if (!formKey) {
+      toast.error('Please save your form first to generate a public link');
+      return;
+    }
+    const origin = siteOrigin || (typeof window !== 'undefined' ? window.location.origin : '');
+    const url = `${origin}/form/${formKey}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Form link copied to clipboard!');
+  }, [formData.slug, formData.id, siteOrigin]);
+
   if (showAgentWizard) {
     return (
       <AgentSetupWizard
@@ -1176,158 +1189,134 @@ export function FormStudioBuilder({
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col w-full h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex flex-col w-screen h-screen bg-slate-100/70 dark:bg-zinc-950 overflow-hidden">
       {/* ═════════════════════════════════════════════════════════════════════════
-          TIER 1: GLOBAL STUDIO HEADER & LIFECYCLE BAR (Uncluttered, High Polish)
+          STUDIO HEADER (Reference Image 2 — Clean, Minimalist, Distraction-Free)
          ═════════════════════════════════════════════════════════════════════════ */}
-      <header className="h-14 border-b border-border/80 bg-background/95 backdrop-blur px-3 sm:px-5 flex items-center justify-between gap-3 shrink-0 z-30 select-none">
-        {/* Left: Back + Form Name + Status */}
+      <header className="h-14 border-b border-slate-200/80 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 backdrop-blur px-3 sm:px-5 flex items-center justify-between gap-3 shrink-0 z-30 select-none">
+        {/* Left: Back to dashboard + Form Name + Status */}
         <div className="flex items-center gap-2.5 min-w-0">
           <Button
             variant="ghost"
             size="sm"
             onClick={onExit}
-            className="h-8 px-2 text-xs font-semibold gap-1 text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+            className="h-8 px-2.5 text-xs font-semibold gap-1.5 text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-lg shrink-0 cursor-pointer"
           >
             <ArrowLeft className="size-3.5" />
-            <span className="hidden sm:inline">Forms</span>
+            <span className="hidden sm:inline font-semibold">Back to dashboard</span>
+            <span className="sm:hidden font-semibold">Back</span>
           </Button>
 
-          <Separator orientation="vertical" className="h-5" />
+          <Separator orientation="vertical" className="h-5 bg-slate-200 dark:bg-zinc-800" />
 
           <div className="flex items-center gap-2 min-w-0">
-            <div className="size-7 rounded-lg bg-emerald-600/10 dark:bg-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
-              <FileInput className="size-4" />
-            </div>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => onFormDataChange((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Untitled Form"
-              className="font-bold text-sm bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded px-1.5 py-0.5 max-w-[160px] md:max-w-xs truncate"
+              className="font-bold text-sm bg-transparent border border-transparent hover:border-slate-300 dark:hover:border-zinc-700 focus:border-slate-400 dark:focus:border-zinc-600 focus:outline-none rounded-md px-2 py-0.5 max-w-[160px] md:max-w-xs truncate transition-colors text-slate-900 dark:text-zinc-100"
             />
-            <Badge variant="outline" className="text-[10px] hidden md:inline-flex bg-muted/40 font-medium">
-              {FORM_TYPES.find((t) => t.value === formData.type)?.label || 'Lead Capture'}
+            <Badge variant="outline" className="text-[10px] hidden md:inline-flex bg-slate-50 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-400 border-slate-200 dark:border-zinc-700 font-medium">
+              {formData.status === 'active' ? 'Published' : 'Draft'}
             </Badge>
           </div>
         </div>
 
-        {/* Center: 5 Core Lifecycle Tabs (BUILD | DESIGN | AI AGENT | SETTINGS | PUBLISH) */}
-        <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-border/60">
+        {/* Center: 4 Segmented Tabs (BUILD | DESIGN | RESPONSES | SETTINGS) */}
+        <div className="flex items-center bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl border border-slate-200/60 dark:border-zinc-700/60">
           <button
             type="button"
             onClick={() => { setStudioTab('build'); setIsPreviewMode(false); }}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
+              'px-3.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
               studioTab === 'build' && !isPreviewMode
-                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 shadow-xs font-bold'
+                : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200'
             )}
           >
-            <Hammer className="size-3.5" />
-            <span>Build</span>
+            Build
           </button>
 
           <button
             type="button"
             onClick={() => setThemeModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg text-muted-foreground hover:text-foreground transition-all cursor-pointer"
+            className="px-3.5 py-1 text-xs font-semibold rounded-lg text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200 transition-all cursor-pointer"
           >
-            <Palette className="size-3.5" />
-            <span>Design</span>
+            Design
           </button>
 
           <button
             type="button"
-            onClick={() => { setStudioTab('agent'); setIsPreviewMode(false); }}
+            onClick={() => { setStudioTab('responses'); setIsPreviewMode(false); }}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
-              studioTab === 'agent' && !isPreviewMode
-                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+              'px-3.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
+              studioTab === 'responses' && !isPreviewMode
+                ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 shadow-xs font-bold'
+                : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200'
             )}
           >
-            <Bot className="size-3.5" />
-            <span>AI Agent</span>
+            Responses
           </button>
 
           <button
             type="button"
             onClick={() => { setStudioTab('settings'); setIsPreviewMode(false); }}
             className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
-              studioTab === 'settings'
-                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+              'px-3.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
+              studioTab === 'settings' && !isPreviewMode
+                ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 shadow-xs font-bold'
+                : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200'
             )}
           >
-            <Settings className="size-3.5" />
-            <span>Settings</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setStudioTab('publish'); setIsPreviewMode(false); }}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
-              studioTab === 'publish'
-                ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Share2 className="size-3.5" />
-            <span>Publish</span>
+            Settings
           </button>
         </div>
 
-        {/* Right: Open Live, Templates Button, Preview Switch, and Save CTA */}
+        {/* Right: Autosave Status, Undo/Redo, Preview Switch, Quick Actions */}
         <div className="flex items-center gap-2 shrink-0">
+          {/* Templates Quick Button */}
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => { setStudioTab('templates'); setIsPreviewMode(false); }}
             className={cn(
-              'h-8 gap-1.5 text-xs font-semibold rounded-xl border-slate-200 dark:border-slate-800 cursor-pointer hidden lg:flex',
-              studioTab === 'templates' ? 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40' : ''
+              'h-8 px-2.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer hidden lg:flex gap-1.5',
+              studioTab === 'templates' ? 'bg-slate-100 text-slate-900 dark:bg-zinc-800 dark:text-zinc-100' : ''
             )}
+            title="Browse 50+ Form Templates"
           >
-            <LayoutTemplate className="size-3.5 text-emerald-600" />
+            <LayoutTemplate className="size-3.5 text-slate-500" />
             <span>Templates</span>
           </Button>
 
-          {/* Open Live Button */}
+          {/* AI Agent Studio Quick Button */}
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
-            onClick={handleOpenLive}
-            className="h-8 gap-1.5 text-xs font-semibold rounded-xl border-emerald-300/80 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 cursor-pointer hidden sm:flex"
-            title="Open live public form in new tab"
+            onClick={() => { setStudioTab('agent'); setIsPreviewMode(false); }}
+            className={cn(
+              'h-8 px-2.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer hidden xl:flex gap-1.5',
+              studioTab === 'agent' ? 'bg-slate-100 text-slate-900 dark:bg-zinc-800 dark:text-zinc-100' : ''
+            )}
+            title="Configure AI Voice & Chatbot Agent"
           >
-            <ExternalLink className="size-3.5 text-emerald-600" />
-            <span>Open Live</span>
+            <Bot className="size-3.5 text-blue-500" />
+            <span>AI Agent</span>
           </Button>
 
-          {/* Preview Toggle */}
-          <div className="flex items-center gap-1.5 border border-border/80 rounded-xl px-2.5 py-1 bg-slate-50/60 dark:bg-slate-900/60">
-            <Eye className={cn('size-3.5', isPreviewMode ? 'text-emerald-600' : 'text-muted-foreground')} />
-            <span className="text-[11px] font-semibold hidden sm:inline">Preview</span>
-            <Switch
-              checked={isPreviewMode}
-              onCheckedChange={setIsPreviewMode}
-              className="scale-75 origin-right"
-            />
-          </div>
+          <Separator orientation="vertical" className="h-4 hidden lg:block bg-slate-200 dark:bg-zinc-800" />
 
-          {/* Undo / Redo Buttons (Jotform/Elementor parity) */}
-          <div className="flex items-center gap-0.5 mr-1">
+          {/* Undo / Redo Buttons */}
+          <div className="flex items-center gap-0.5">
             <Button
               size="sm"
               variant="ghost"
               onClick={undo}
               disabled={!canUndo}
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="h-8 w-8 p-0 text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer rounded-lg"
               title="Undo (Cmd/Ctrl+Z)"
             >
               <Undo2 className="size-3.5" />
@@ -1337,23 +1326,23 @@ export function FormStudioBuilder({
               variant="ghost"
               onClick={redo}
               disabled={!canRedo}
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="h-8 w-8 p-0 text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer rounded-lg"
               title="Redo (Cmd/Ctrl+Shift+Z)"
             >
               <Redo2 className="size-3.5" />
             </Button>
           </div>
 
-          {/* Save Status Indicator (Jotform/Elementor parity) */}
-          <div className="hidden md:flex items-center text-[10px] font-medium mr-1 min-w-[80px]">
+          {/* Save Status Indicator */}
+          <div className="hidden sm:flex items-center text-[11px] font-medium min-w-[70px]">
             {autosaveStatus === 'saving' && (
-              <span className="text-muted-foreground flex items-center gap-1">
+              <span className="text-slate-500 flex items-center gap-1">
                 <Loader2 className="size-3 animate-spin" /> Saving...
               </span>
             )}
             {autosaveStatus === 'saved' && (
-              <span className="text-emerald-600 flex items-center gap-1">
-                <Check className="size-3" /> Saved
+              <span className="text-emerald-600 flex items-center gap-1 font-semibold">
+                <Check className="size-3 text-emerald-600" /> Saved
               </span>
             )}
             {autosaveStatus === 'error' && (
@@ -1361,27 +1350,26 @@ export function FormStudioBuilder({
             )}
             {autosaveStatus === 'idle' && isDirty && (
               <span className="text-amber-600 flex items-center gap-1">
-                <span className="size-1.5 rounded-full bg-amber-500" /> Unsaved changes
+                <span className="size-1.5 rounded-full bg-amber-500" /> Unsaved
               </span>
             )}
-            {autosaveStatus === 'idle' && !isDirty && lastSavedAt && (
-              <span className="text-muted-foreground">
-                Saved {lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {autosaveStatus === 'idle' && !isDirty && (
+              <span className="text-slate-400 dark:text-zinc-500">
+                All saved
               </span>
             )}
           </div>
 
-          {/* Save Button */}
-          <Button
-            size="sm"
-            onClick={handleManualSave}
-            disabled={saving}
-            className="h-8 gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-md shadow-emerald-600/25 rounded-xl px-3.5 cursor-pointer disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-            <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save Form'}</span>
-            <span className="sm:hidden">{saving ? '...' : 'Save'}</span>
-          </Button>
+          {/* Preview Toggle Switch */}
+          <div className="flex items-center gap-1.5 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 py-1 bg-slate-50 dark:bg-zinc-800/60">
+            <Eye className={cn('size-3.5', isPreviewMode ? 'text-slate-900 dark:text-zinc-100' : 'text-slate-400')} />
+            <span className="text-[11px] font-medium hidden md:inline text-slate-700 dark:text-zinc-300">Preview</span>
+            <Switch
+              checked={isPreviewMode}
+              onCheckedChange={setIsPreviewMode}
+              className="scale-75 origin-right"
+            />
+          </div>
         </div>
       </header>
 
@@ -2930,6 +2918,21 @@ export function FormStudioBuilder({
           </div>
         )}
 
+        {/* ─── 5.5 RESPONSES TAB (INQUIRIES & SUBMISSIONS) ─── */}
+        {studioTab === 'responses' && !isPreviewMode && (
+          <main className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center bg-slate-50/60 dark:bg-zinc-950">
+            <div className="w-full max-w-5xl space-y-4 pb-24">
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <div>
+                  <h2 className="text-base font-bold text-foreground">Form Responses &amp; Submissions</h2>
+                  <p className="text-xs text-muted-foreground">Inquiries, leads, and customer submissions collected through this form</p>
+                </div>
+              </div>
+              <FormSubmissionsView embedded={true} />
+            </div>
+          </main>
+        )}
+
         {/* ─── 6. INTERACTIVE FORM PREVIEW (PAPER / CARD) ─── */}
         {isPreviewMode && (
           <div className="flex-1 min-h-0 h-full flex flex-col bg-slate-200 dark:bg-slate-900/90 overflow-hidden">
@@ -3360,6 +3363,108 @@ export function FormStudioBuilder({
         onUpdateMediaPanel={updateMediaPanel}
         formName={formData.name}
       />
+
+      {/* ═════════════════════════════════════════════════════════════════════════
+          FLOATING BOTTOM PILL DOCK (Reference Image 1)
+         ═════════════════════════════════════════════════════════════════════════ */}
+      <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-slate-200/90 dark:border-zinc-800 shadow-2xl rounded-full p-1.5 px-3 flex items-center gap-1.5 transition-all">
+        {/* Status Badge */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-xs font-semibold">
+          <Lock className="size-3 text-slate-400" />
+          <span>{formData.status === 'active' ? 'Published' : 'Draft'}</span>
+        </div>
+
+        <div className="h-4 w-px bg-slate-200 dark:bg-zinc-800" />
+
+        {/* Share */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setStudioTab('publish');
+            setIsPreviewMode(false);
+          }}
+          className="h-8 px-3 rounded-full text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 gap-1.5 cursor-pointer"
+        >
+          <Share2 className="size-3.5 text-slate-500" />
+          <span>Share</span>
+        </Button>
+
+        {/* Copy link */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleCopyPublicLink}
+          className="h-8 px-3 rounded-full text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 gap-1.5 cursor-pointer"
+        >
+          <Copy className="size-3.5 text-slate-500" />
+          <span>Copy link</span>
+        </Button>
+
+        {/* Preview */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsPreviewMode((v) => !v)}
+          className={cn(
+            'h-8 px-3 rounded-full text-xs font-medium gap-1.5 cursor-pointer transition-colors',
+            isPreviewMode
+              ? 'bg-slate-900 text-white dark:bg-white dark:text-zinc-900 font-semibold'
+              : 'text-slate-700 dark:text-zinc-300 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-zinc-800'
+          )}
+        >
+          <Eye className="size-3.5" />
+          <span>Preview</span>
+        </Button>
+
+        {/* Fillable PDF */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            window.print();
+            toast.success('Print dialog opened. Choose "Save as PDF" to export.');
+          }}
+          className="h-8 px-3 rounded-full text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 gap-1.5 cursor-pointer hidden sm:flex"
+        >
+          <FileText className="size-3.5 text-slate-500" />
+          <span>Fillable PDF</span>
+        </Button>
+
+        {/* Save */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleManualSave}
+          disabled={saving}
+          className="h-8 px-3 rounded-full text-xs font-medium text-slate-700 dark:text-zinc-300 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 gap-1.5 cursor-pointer disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5 text-slate-500" />}
+          <span>{autosaveStatus === 'saved' ? 'Saved' : saving ? 'Saving...' : 'Save'}</span>
+        </Button>
+
+        {/* Publish form */}
+        <Button
+          type="button"
+          onClick={async () => {
+            onFormDataChange((prev) => ({ ...prev, status: 'active' }));
+            const res = await handleManualSave();
+            if (res) {
+              setStudioTab('publish');
+              toast.success('🎉 Form published successfully!');
+            }
+          }}
+          className="h-8 px-4 rounded-full text-xs font-semibold bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/20 gap-1.5 cursor-pointer transition-all hover:scale-[1.02]"
+        >
+          <Globe className="size-3.5" />
+          <span>Publish form</span>
+        </Button>
+      </div>
     </div>
   );
 }
