@@ -475,52 +475,6 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
         </>
       )}
 
-      {/* ─── Floating Edge Panels Re-Open Triggers ─── */}
-      <div className="absolute top-4 left-4 flex items-center gap-2 z-30">
-        {isWidgetPaletteCollapsed && onToggleWidgetPalette && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onToggleWidgetPalette}
-            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 shadow-md gap-1.5 rounded-xl hover:bg-emerald-50 cursor-pointer"
-          >
-            <Plus className="size-3.5 text-emerald-600" /> Widgets Palette
-          </Button>
-        )}
-        {isPagesTreeCollapsed && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onTogglePagesTree}
-            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 shadow-md gap-1.5 rounded-xl cursor-pointer"
-          >
-            <Layers className="size-3.5" /> Pages &amp; Stepper
-          </Button>
-        )}
-        {isAiCopilotCollapsed && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onToggleAiCopilot}
-            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 shadow-md gap-1.5 rounded-xl hover:bg-emerald-50 cursor-pointer"
-          >
-            <Sparkles className="size-3.5 text-emerald-600" /> AI Copilot
-          </Button>
-        )}
-      </div>
-
-      <div className="absolute top-4 right-4 z-30">
-        {isInspectorCollapsed && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onToggleInspector}
-            className="h-8 text-xs font-semibold bg-white/95 dark:bg-slate-900/95 shadow-md gap-1.5 rounded-xl cursor-pointer"
-          >
-            <PanelRightOpen className="size-3.5" /> Field Settings
-          </Button>
-        )}
-      </div>
 
       {/* ─── Top Stepper Progress Bar (Shown in Multi-Step mode for focus & paper views) ─── */}
       {isMultiStep && viewMode !== 'split_media' && (
