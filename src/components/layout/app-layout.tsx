@@ -220,7 +220,7 @@ const viewComponents: Record<string, any> = {
   variables: VariablesView,
   executions: ExecutionsView,
   formBuilder: FormBuilderView,
-  agentStudio: (props: any) => <FormBuilderView {...props} initialAgentStudio={true} />,
+  agentStudio: ChatbotBuilderView,
   formSubmissions: FormSubmissionsView,
   formAppointments: (props: any) => <FormSubmissionsView {...props} initialTab="appointments" />,
   creatorProfile: CreatorProfileView,

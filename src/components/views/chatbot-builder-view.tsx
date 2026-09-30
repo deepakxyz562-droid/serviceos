@@ -163,14 +163,18 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
 
   const handleCreateFromForm = (form: { id: string; name: string; description?: string }) => {
     const timestamp = Date.now();
+    const cleanBusinessName = (form.name || 'Service')
+      .replace(/\s+(Intake|Quote|Form|Application|Contact|Lead|Request|Booking)(\s+Form)?/gi, '')
+      .trim() || 'Service';
+
     const newAgent: FormAgentData = {
       ...DEFAULT_FORM_AGENT,
       id: `agent_${timestamp}`,
       slug: `${form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-agent`,
-      name: `${form.name} Assistant`,
-      roleTitle: `${form.name} Concierge`,
-      welcomeGreeting: `Hello! I am your AI assistant for ${form.name}. How can I assist you today?`,
-      greetingSubtitle: 'I can answer your questions and help you complete the form.',
+      name: `${cleanBusinessName} Assistant`,
+      roleTitle: `${cleanBusinessName} Service Specialist`,
+      welcomeGreeting: `Hi! 👋 Welcome to **${cleanBusinessName}**. I'm your 24/7 Service Specialist. How can I assist you today?`,
+      greetingSubtitle: form.description || 'Instant estimates, appointment scheduling, and 24/7 answers.',
       connectedForms: [
         {
           id: form.id,
@@ -181,24 +185,31 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
       quickActions: [
         {
           id: `qa_${timestamp}_1`,
-          label: `Complete ${form.name}`,
+          label: 'Get Instant Estimate',
           actionType: 'open_form',
           payload: form.id,
           icon: 'FileText',
         },
         {
           id: `qa_${timestamp}_2`,
-          label: 'Ask a Question',
-          actionType: 'custom_message',
-          payload: 'Can you tell me more about your services and pricing?',
-          icon: 'MessageSquare',
+          label: 'Book Service',
+          actionType: 'booking',
+          payload: 'booking',
+          icon: 'Calendar',
+        },
+        {
+          id: `qa_${timestamp}_3`,
+          label: 'Services & Rates',
+          actionType: 'message',
+          payload: 'What services do you offer and what are your rates?',
+          icon: 'Sparkles',
         },
       ],
       channels: {
         ...DEFAULT_FORM_AGENT.channels,
         chatbot: {
           ...DEFAULT_FORM_AGENT.channels.chatbot,
-          greetingBubble: `👋 Need help completing ${form.name}? Chat with our AI!`,
+          greetingBubble: `👋 Need help with ${cleanBusinessName}? Chat with our AI!`,
         },
       },
     };
@@ -315,9 +326,8 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
           <Button
             className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold gap-1.5 h-9 shadow-xs"
             onClick={() => {
-              const blankAgent = createAgentFromPreset('generic_business', { name: 'New AI Agent', roleTitle: 'Custom Business Concierge' });
-              setAgents((prev) => [blankAgent, ...prev]);
-              setActiveStudioAgent(blankAgent);
+              setCreationTab('ai');
+              setPresetDialogOpen(true);
             }}
           >
             <Plus className="size-4" /> Create New AI Agent
@@ -870,14 +880,14 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
           </DialogHeader>
 
           <div className="p-3 bg-slate-950 text-emerald-400 font-mono text-xs rounded-xl border border-slate-800 break-all select-all">
-            {`<script src="${siteOrigin}/api/forms/agents/${embedModalAgent?.id || 'agent_1'}/embed.js" async defer></script>`}
+            {`<script src="${siteOrigin}/api/public/agents/${embedModalAgent?.slug || embedModalAgent?.id || 'agent_1'}/embed.js" async defer></script>`}
           </div>
 
           <DialogFooter>
             <Button
               className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-1.5"
               onClick={() => {
-                const code = `<script src="${siteOrigin}/api/forms/agents/${embedModalAgent?.id || 'agent_1'}/embed.js" async defer></script>`;
+                const code = `<script src="${siteOrigin}/api/public/agents/${embedModalAgent?.slug || embedModalAgent?.id || 'agent_1'}/embed.js" async defer></script>`;
                 navigator.clipboard.writeText(code);
                 toast.success('Embed code copied to clipboard!');
                 setEmbedModalAgent(null);
