@@ -84,9 +84,12 @@ export function useIsStandalone(): boolean {
   const isEmployee = auth.user?.role === 'employee';
   if (isSuperAdmin || isEmployee) return false;
   return (
+    !auth.user?.tenantId ||
     (auth.tenant as any)?.signupMode === 'standalone' ||
     (auth.tenant as any)?.plan === 'standalone_starter' ||
     (auth.tenant as any)?.plan === 'standalone_business' ||
+    (auth.tenant as any)?.productType === 'forms' ||
+    (auth.workspace as any)?.productType === 'forms' ||
     String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
     (auth.user as any)?.role === 'standalone_user'
   );

@@ -490,9 +490,12 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   }, [isListingOnlyTenant, currentView, setCurrentView, listingAllowedViews]);
 
   const isStandaloneTenant =
+    !auth?.user?.tenantId ||
     (auth?.tenant as any)?.signupMode === 'standalone' ||
     (auth?.tenant as any)?.plan === 'standalone_starter' ||
     (auth?.tenant as any)?.plan === 'standalone_business' ||
+    (auth?.tenant as any)?.productType === 'forms' ||
+    (auth?.workspace as any)?.productType === 'forms' ||
     String((auth?.tenant as any)?.plan || '').startsWith('standalone') ||
     (auth?.user as any)?.role === 'standalone_user';
   const standaloneAllowedViews = useMemo(() => new Set([
@@ -501,14 +504,13 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     'creatorProfile', 'creatorOffers',
     'scheduling', 'meetingTypes', 'appointmentTypes',
     'formsAnalytics', 'chatbotBuilder',
-    // CRM, Deals & Bookings
-    'leads', 'customers', 'contacts', 'crm', 'customer360',
+    // Bookings & Calendar
     'booking', 'calendar',
     // System & Integrations
     'integrations', 'billing', 'settings', 'notifications', 'helpCenter', 'activityLogs',
   ]), []);
   useEffect(() => {
-    if (isStandaloneTenant && !standaloneAllowedViews.has(currentView)) {
+    if (isStandaloneTenant && (!standaloneAllowedViews.has(currentView) || currentView === 'dashboard')) {
       setCurrentView('formsDashboard');
     }
   }, [isStandaloneTenant, currentView, setCurrentView, standaloneAllowedViews]);

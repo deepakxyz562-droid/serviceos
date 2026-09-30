@@ -95,7 +95,7 @@ export function resolveAgentTheme(agent?: Partial<FormAgentData> | null): AgentT
     ? matchedScheme.letterColor
     : (agent?.brandColor || matchedScheme?.letterColor || '#0284c7');
   const chatBg = agent?.style?.chatBg || (matchedScheme ? (matchedScheme.isDark ? '#0f172a' : '#ffffff') : '#ffffff');
-  const isDark = (agent?.style as any)?.isDark ?? (matchedScheme ? matchedScheme.isDark : isColorDark(chatBg));
+  const isDark = (agent?.style as any)?.isDark ?? (agent?.style?.chatBg ? isColorDark(agent.style.chatBg) : (matchedScheme ? matchedScheme.isDark : isColorDark(chatBg)));
   const titleColor = agent?.style?.titleColor || matchedScheme?.titleColor || (isDark ? '#ffffff' : '#0A1551');
 
   const pageBackgroundStart = agent?.style?.pageBackgroundStart || matchedScheme?.bg || '#F1F5F9';

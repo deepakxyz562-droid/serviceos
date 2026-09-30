@@ -226,6 +226,12 @@ export function generateAgentAndFormFromWizard(input: WizardGenerationInput): Wi
     ? 'Estimate & Inspection Specialist'
     : industry.includes('Medical') || industry.includes('Dental')
     ? 'Patient Intake & Care Navigator'
+    : industry.includes('Legal') || industry.includes('Law')
+    ? 'Legal Intake & Case Specialist'
+    : industry.includes('Real Estate') || industry.includes('Property')
+    ? 'Property Concierge & Viewing Specialist'
+    : industry.includes('Education') || industry.includes('Admissions')
+    ? 'Admissions Advisor & Program Navigator'
     : industry.includes('Auto')
     ? 'Service Advisor & Diagnostics Assistant'
     : 'Client Concierge & Intake Assistant';

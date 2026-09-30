@@ -109,7 +109,8 @@ export async function POST(
     const response = await db.formResponse.create({
       data: {
         formId: form.id,
-        tenantId: form.tenantId,
+        tenantId: form.tenantId || null,
+        workspaceId: form.workspaceId || null,
         dataJson: JSON.stringify(submissionData),
         respondent: respondentEmail || respondentPhone || 'Anonymous',
         respondentName: respondentName || null,
@@ -141,6 +142,7 @@ export async function POST(
       try {
         const bookingResult = await createAppointmentBooking({
           tenantId: form.tenantId || null,
+          workspaceId: form.workspaceId || null,
           formId: form.id,
           title: `${form.name} - ${respondentName || respondentEmail || 'Scheduled Appointment'}`,
           serviceName: form.name,

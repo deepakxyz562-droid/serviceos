@@ -278,10 +278,10 @@ export async function createAppointmentBooking(
   }
 
   // 3. Create Booking Record in Database (Prevent Double-Booking)
-  if (tenantId) {
+  if (tenantId || workspaceId) {
     const existingBooking = await db.booking.findFirst({
       where: {
-        tenantId,
+        ...(tenantId ? { tenantId } : { workspaceId }),
         scheduledAt,
         OR: [
           ...(customer.email ? [{ customerEmail: customer.email }] : []),

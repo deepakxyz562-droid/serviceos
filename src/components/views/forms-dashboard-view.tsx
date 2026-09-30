@@ -102,6 +102,16 @@ const DASHBOARD_QUICK_STARTERS = [
     text: 'We are a licensed roofing contractor in Dallas specializing in storm damage inspection, roof replacement, shingle repair, and gutter systems.',
   },
   {
+    id: 'legal',
+    label: '⚖️ Legal Consultation',
+    text: 'We are a boutique law firm offering confidential case reviews, personal injury consultations, contract drafts, and corporate advice.',
+  },
+  {
+    id: 'real_estate',
+    label: '🏢 Real Estate & Tours',
+    text: 'We are a premier real estate agency helping buyers and tenants book private property viewings and request comprehensive home market valuations.',
+  },
+  {
     id: 'auto',
     label: '🚗 Auto Repair',
     text: 'We operate a full-service auto repair and diagnostic garage in Birmingham, offering brakes, engine diagnostics, oil changes, and towing.',

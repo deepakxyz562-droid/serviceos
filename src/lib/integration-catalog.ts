@@ -68,11 +68,14 @@ export const DEFAULT_INTEGRATIONS: IntegrationDef[] = [
   { key: 'stripe', name: 'Stripe', description: 'Accept payments & manage subscriptions via Stripe', category: 'payments', icon: 'CreditCard', color: 'violet', provider: 'stripe', enabled: true, featured: true, sortOrder: 0, detailType: 'generic' },
   { key: 'paypal', name: 'PayPal', description: 'Accept PayPal payments & subscriptions', category: 'payments', icon: 'Wallet', color: 'violet', provider: 'paypal', enabled: true, featured: false, sortOrder: 1, detailType: 'generic' },
   { key: 'razorpay', name: 'Razorpay', description: 'Accept payments via Razorpay (cards, UPI, netbanking)', category: 'payments', icon: 'Banknote', color: 'violet', provider: 'razorpay', enabled: false, featured: false, sortOrder: 2, detailType: 'generic' },
-  // ── Productivity ───────────────────────────────────────
-  { key: 'google-workspace', name: 'Google Workspace', description: 'Sync calendar, contacts & drive with Google Workspace', category: 'productivity', icon: 'Calendar', color: 'rose', provider: 'google-workspace', enabled: true, featured: true, sortOrder: 0, detailType: 'generic' },
-  { key: 'slack', name: 'Slack', description: 'Send notifications & alerts to Slack channels', category: 'productivity', icon: 'Hash', color: 'rose', provider: 'slack', enabled: true, featured: false, sortOrder: 1, detailType: 'generic' },
-  { key: 'notion', name: 'Notion', description: 'Sync notes & databases with Notion', category: 'productivity', icon: 'FileText', color: 'rose', provider: 'notion', enabled: false, featured: false, sortOrder: 2, detailType: 'generic' },
-  { key: 'zoom', name: 'Zoom', description: 'Create meetings & sync recordings with Zoom', category: 'productivity', icon: 'Video', color: 'rose', provider: 'zoom', enabled: false, featured: false, sortOrder: 3, detailType: 'generic' },
+  // ── Productivity & CRM Integrations ───────────────────
+  { key: 'fieseros', name: 'Fieseros Field Operations', description: 'Automatically convert qualified GPTForm intakes into Fieseros CRM leads, jobs, and dispatch orders', category: 'productivity', icon: 'Briefcase', color: 'emerald', provider: 'fieseros', enabled: true, featured: true, sortOrder: 0, detailType: 'generic' },
+  { key: 'webhooks', name: 'Custom Webhooks', description: 'Send real-time JSON payloads of submissions & bookings to any external URL or endpoint', category: 'productivity', icon: 'Plug', color: 'sky', provider: 'webhooks', enabled: true, featured: true, sortOrder: 1, detailType: 'generic' },
+  { key: 'zapier', name: 'Zapier & Make', description: 'Connect GPTForm with 5,000+ apps to automate spreadsheets, CRM updates, and alerts', category: 'productivity', icon: 'Zap', color: 'amber', provider: 'zapier', enabled: true, featured: true, sortOrder: 2, detailType: 'generic' },
+  { key: 'google-workspace', name: 'Google Workspace', description: 'Sync calendar, contacts & drive with Google Workspace', category: 'productivity', icon: 'Calendar', color: 'rose', provider: 'google-workspace', enabled: true, featured: true, sortOrder: 3, detailType: 'generic' },
+  { key: 'slack', name: 'Slack', description: 'Send notifications & alerts to Slack channels', category: 'productivity', icon: 'Hash', color: 'rose', provider: 'slack', enabled: true, featured: false, sortOrder: 4, detailType: 'generic' },
+  { key: 'notion', name: 'Notion', description: 'Sync notes & databases with Notion', category: 'productivity', icon: 'FileText', color: 'rose', provider: 'notion', enabled: false, featured: false, sortOrder: 5, detailType: 'generic' },
+  { key: 'zoom', name: 'Zoom', description: 'Create meetings & sync recordings with Zoom', category: 'productivity', icon: 'Video', color: 'rose', provider: 'zoom', enabled: false, featured: false, sortOrder: 6, detailType: 'generic' },
 ];
 
 export const INTEGRATION_CATALOG_CONFIG_KEY = 'integrationCatalog';

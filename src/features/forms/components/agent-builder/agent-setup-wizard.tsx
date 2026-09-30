@@ -49,6 +49,9 @@ import {
   Code,
   Flame,
   Home,
+  Stethoscope,
+  Scale,
+  GraduationCap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,7 +74,7 @@ export interface AgentSetupWizardProps {
   initialAgent?: FormAgentData;
 }
 
-// ─── 4 Core Contractor & Field-Service Trades ────────────────────────────────
+// ─── High-Converting Intake & AI Employee Presets ───────────────────────────
 const VERTICAL_PRESETS = [
   {
     id: 'plumbing',
@@ -109,6 +112,42 @@ const VERTICAL_PRESETS = [
     defaultCapabilities: ['capture_leads', 'generate_quotes', 'book_appointments', 'answer_questions'],
     defaultCustomerInfo: ['name', 'phone', 'email', 'address', 'photos', 'notes'],
   },
+  {
+    id: 'dental',
+    label: 'Dental & Medical Clinic',
+    icon: Stethoscope,
+    desc: 'New patient intake, emergency toothache relief, cleanings & insurance',
+    prompt: 'We are a modern dental practice providing routine exams, dental hygiene, emergency toothache care, and cosmetic dentistry with convenient online booking.',
+    defaultCapabilities: ['capture_leads', 'book_appointments', 'answer_questions'],
+    defaultCustomerInfo: ['name', 'phone', 'email', 'urgency', 'notes'],
+  },
+  {
+    id: 'legal',
+    label: 'Legal & Attorney Intake',
+    icon: Scale,
+    desc: 'Confidential case evaluation, consultation booking & conflict screening',
+    prompt: 'We are a law firm offering free, confidential case evaluations in personal injury, business contracts, and family law. Book an initial consultation with our attorneys.',
+    defaultCapabilities: ['capture_leads', 'book_appointments', 'collect_files', 'answer_questions'],
+    defaultCustomerInfo: ['name', 'phone', 'email', 'urgency', 'photos', 'notes'],
+  },
+  {
+    id: 'real_estate',
+    label: 'Real Estate & Property',
+    icon: Building2,
+    desc: 'Property inquiries, buyer/seller qualification & private tour scheduling',
+    prompt: 'We are a residential and commercial real estate agency. We assist buyers, sellers, and tenants with listings, market valuations, and private property viewings.',
+    defaultCapabilities: ['capture_leads', 'book_appointments', 'answer_questions'],
+    defaultCustomerInfo: ['name', 'phone', 'email', 'address', 'notes'],
+  },
+  {
+    id: 'education',
+    label: 'Admissions & Consulting',
+    icon: GraduationCap,
+    desc: 'Student enrollment, campus visit booking & executive program inquiries',
+    prompt: 'We provide specialized education and executive training programs. We answer curriculum questions, guide applicants through prerequisites, and book admissions interviews.',
+    defaultCapabilities: ['capture_leads', 'book_appointments', 'collect_files', 'answer_questions'],
+    defaultCustomerInfo: ['name', 'phone', 'email', 'notes'],
+  },
 ];
 
 // ─── 6 Core Mission Tasks ───────────────────────────────────────────────────
@@ -118,7 +157,7 @@ const CAPABILITY_OPTIONS = [
     title: 'Qualify Leads & Emergencies',
     desc: 'Collect customer name, phone, address, and categorize urgent requests.',
     icon: Zap,
-    badge: 'CRM',
+    badge: 'INTAKE',
   },
   {
     id: 'generate_quotes',

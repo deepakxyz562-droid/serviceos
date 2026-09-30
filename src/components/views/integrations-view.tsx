@@ -9,7 +9,7 @@ import {
   Linkedin, Music, Phone, Mail, MessageCircle, BookOpen, FileSpreadsheet,
   BookMarked, CreditCard, Wallet, Banknote, Calendar, Hash, FileText,
   Video, Briefcase, Settings2, Plus, X, KeyRound, ExternalLink, LayoutGrid,
-  ShoppingBag, Calculator, MessageSquare,
+  ShoppingBag, Calculator, MessageSquare, Zap,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   ShoppingBag, ShoppingCart, Store, Package, Megaphone, Facebook, Search: SearchIcon,
   Linkedin, Music, Phone, Mail, MessageCircle, BookOpen, FileSpreadsheet, BookMarked,
   CreditCard, Wallet, Banknote, Calendar, Hash, FileText, Video, Briefcase, Calculator,
-  MessageSquare,
+  MessageSquare, Plug, Zap,
 };
 
 // ─── Color map ──────────────────────────────────────────────────────────────

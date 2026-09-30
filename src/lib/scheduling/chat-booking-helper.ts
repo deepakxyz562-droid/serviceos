@@ -217,25 +217,51 @@ export async function tryCaptureChatLead(params: {
   message: string;
   imageUrl?: string;
 }) {
-  const { tenantId, workspaceId, intent, imageUrl } = params;
-  if (!tenantId || (!intent.customerPhone && !intent.customerEmail)) {
+  const { tenantId, workspaceId, intent, imageUrl, formId } = params;
+  if (!intent.customerPhone && !intent.customerEmail) {
     return null;
   }
 
   try {
-    const existing = await db.lead.findFirst({
-      where: {
-        tenantId,
-        OR: [
-          ...(intent.customerPhone ? [{ phone: intent.customerPhone }] : []),
-          ...(intent.customerEmail ? [{ email: intent.customerEmail }] : []),
-        ],
-      },
-    });
+    const existing = tenantId
+      ? await db.lead.findFirst({
+          where: {
+            tenantId,
+            OR: [
+              ...(intent.customerPhone ? [{ phone: intent.customerPhone }] : []),
+              ...(intent.customerEmail ? [{ email: intent.customerEmail }] : []),
+            ],
+          },
+        })
+      : null;
 
     const priority = intent.isEmergency ? 'urgent' : intent.hasIntent ? 'high' : 'medium';
     const tag = intent.isEmergency ? 'emergency_intake' : 'ai_intake_lead';
     const photoNote = imageUrl ? `\n[Customer Uploaded Photo]: ${imageUrl}` : '';
+
+    // Record submission into FormResponse so standalone GPTForm users see it in their Submissions tab
+    if (formId) {
+      await db.formResponse.create({
+        data: {
+          formId,
+          workspaceId: workspaceId || null,
+          tenantId: tenantId || null,
+          respondent: intent.customerEmail || intent.customerPhone || 'Chat Visitor',
+          respondentName: intent.customerName !== 'Valued Visitor' ? intent.customerName : null,
+          source: 'ai_chat_widget',
+          dataJson: JSON.stringify({
+            f_name: intent.customerName !== 'Valued Visitor' ? intent.customerName : undefined,
+            f_phone: intent.customerPhone,
+            f_email: intent.customerEmail,
+            f_address: intent.customerAddress,
+            f_urgency: intent.urgency,
+            f_notes: intent.executiveSummary,
+            notes: intent.executiveSummary,
+            photo: imageUrl || null,
+          }),
+        },
+      }).catch((e) => console.warn('[chat-intake] FormResponse record notice:', e));
+    }
 
     if (existing) {
       let existingTags: string[] = [];
@@ -266,21 +292,26 @@ export async function tryCaptureChatLead(params: {
       });
     }
 
-    return await db.lead.create({
-      data: {
-        tenantId,
-        name: intent.customerName || 'Inquiry Contact',
-        phone: intent.customerPhone || 'N/A',
-        email: intent.customerEmail || null,
-        address: intent.customerAddress || null,
-        priority,
-        status: intent.isEmergency ? 'hot' : 'new',
-        source: 'ai_intake_chat',
-        description: `[AI Intake Session]: ${intent.executiveSummary}${photoNote}`.trim(),
-        tagsJson: JSON.stringify([tag]),
-        imagesJson: imageUrl ? JSON.stringify([imageUrl]) : '[]',
-      },
-    });
+    // Only create Lead if tenantId exists (CRM mode) or if explicitly standalone
+    if (tenantId) {
+      return await db.lead.create({
+        data: {
+          tenantId,
+          name: intent.customerName || 'Inquiry Contact',
+          phone: intent.customerPhone || 'N/A',
+          email: intent.customerEmail || null,
+          address: intent.customerAddress || null,
+          priority,
+          status: intent.isEmergency ? 'hot' : 'new',
+          source: 'ai_intake_chat',
+          description: `[AI Intake Session]: ${intent.executiveSummary}${photoNote}`.trim(),
+          tagsJson: JSON.stringify([tag]),
+          imagesJson: imageUrl ? JSON.stringify([imageUrl]) : '[]',
+        },
+      });
+    }
+
+    return null;
   } catch (err) {
     console.warn('[chat-booking-helper] Lead capture notice:', err);
     return null;
@@ -302,8 +333,8 @@ export async function tryExecuteChatBooking(params: {
 }): Promise<BookingResult | null> {
   const intent = extractBookingIntent(params.message, params.history, params.serviceName);
 
-  // If user provided contact info, capture lead asynchronously
-  if (params.tenantId && (intent.customerPhone || intent.customerEmail)) {
+  // If user provided contact info, capture intake lead & submission asynchronously
+  if (intent.customerPhone || intent.customerEmail) {
     tryCaptureChatLead({
       tenantId: params.tenantId,
       workspaceId: params.workspaceId,

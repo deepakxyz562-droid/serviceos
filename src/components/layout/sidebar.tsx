@@ -237,15 +237,14 @@ const standaloneNavSections: NavSection[] = [
   {
     title: 'Inbox & Activity',
     items: [
-      { view: 'leads', label: 'Submissions', icon: Inbox },
+      { view: 'formSubmissions', label: 'Submissions', icon: Inbox },
       { view: 'booking', label: 'Bookings', icon: CalendarCheck },
-      { view: 'customers', label: 'Contacts', icon: Users },
     ],
   },
   {
     title: 'Growth & Embeds',
     items: [
-      { view: 'integrations', label: 'Embeds & API', icon: Share2 },
+      { view: 'integrations', label: 'Integrations & Webhooks', icon: Share2 },
       { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
   },
@@ -527,9 +526,12 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   const isStandalone =
     !isSuperAdmin &&
     !isEmployee &&
-    ((auth.tenant as any)?.signupMode === 'standalone' ||
+    (!auth.user?.tenantId ||
+     (auth.tenant as any)?.signupMode === 'standalone' ||
      (auth.tenant as any)?.plan === 'standalone_starter' ||
      (auth.tenant as any)?.plan === 'standalone_business' ||
+     (auth.tenant as any)?.productType === 'forms' ||
+     (auth.workspace as any)?.productType === 'forms' ||
      String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
      (auth.user as any)?.role === 'standalone_user');
 

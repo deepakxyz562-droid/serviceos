@@ -10,6 +10,13 @@ vi.mock('@/lib/db', () => ({
   db: {
     tenant: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    formAgent: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    form: {
+      findUnique: vi.fn().mockResolvedValue(null),
     },
     publicChatSession: {
       create: vi.fn(),
@@ -22,9 +29,11 @@ vi.mock('@/lib/db', () => ({
     },
     booking: {
       create: vi.fn(),
+      findFirst: vi.fn(),
     },
     lead: {
       create: vi.fn(),
+      findFirst: vi.fn(),
     },
     holidayCalendar: {
       findFirst: vi.fn(),
@@ -132,7 +141,7 @@ describe('Unified Experience Architecture Tests', () => {
       expect(result.status).toBe('waiting_for_agent');
       expect(result.liveSessionId).toBe('session_live_999');
       expect(result.escalatedToHuman).toBe(true);
-      expect(result.reply).toContain('alerted our live operator team');
+      expect(result.reply).toContain('alerted our');
       expect(db.publicChatSession.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({

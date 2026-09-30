@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Customers don't need a tenantId — they're scoped by customerId.
-    // Admins/employees DO need a tenantId (their bookings are tenant-scoped).
-    if (user.role !== 'customer' && !user.tenantId) {
+    // Non-customers need either a tenantId (CRM) OR a workspaceId (standalone GPTForm).
+    if (user.role !== 'customer' && !user.tenantId && !user.workspaceId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
@@ -57,17 +57,24 @@ export async function GET(request: NextRequest) {
     // raw Customer.id that matches Booking.customerId.
     if (user.role === 'customer') {
       where.customerId = user.id;
-    } else {
+    } else if (user.tenantId) {
       andConditions.push({
         OR: [
           { tenantId: user.tenantId },
-          { tenantId: null },
+          { tenantId: null, workspaceId: user.workspaceId || undefined },
           { tenantId: 'preview' },
         ],
       });
       if (searchParams.get('customerId')) {
         where.customerId = searchParams.get('customerId');
       }
+    } else if (user.workspaceId) {
+      andConditions.push({
+        OR: [
+          { workspaceId: user.workspaceId },
+          { tenantId: null, workspaceId: user.workspaceId },
+        ],
+      });
     }
 
     if (status) {
@@ -218,7 +225,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user || !user.tenantId) {
+    if (!user || (!user.tenantId && !user.workspaceId)) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
@@ -301,8 +308,8 @@ export async function POST(request: NextRequest) {
         duration: duration || 60,
         notes: notes || null,
         confirmedAt: initialStatus === 'confirmed' ? new Date() : null,
-        tenantId: user.tenantId,
-        workspaceId: workspaceId || user.workspaceId,
+        tenantId: user.tenantId || null,
+        workspaceId: workspaceId || user.workspaceId || null,
         metadataJson: metadataJson || '{}',
       },
       include: {
@@ -313,61 +320,60 @@ export async function POST(request: NextRequest) {
     });
 
     // ─── Notify the tenant owner via Email + WhatsApp ──────────────
-    try {
-      const scheduledStr = booking.scheduledAt
-        ? new Date(booking.scheduledAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
-        : 'TBD'
+    if (user.tenantId) {
+      try {
+        const scheduledStr = booking.scheduledAt
+          ? new Date(booking.scheduledAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+          : 'TBD';
 
-      const waMessage = [
-        '📅 *New Booking Created*',
-        '',
-        `*Title:* ${booking.title}`,
-        `*Customer:* ${finalCustomerName || 'N/A'}`,
-        finalCustomerPhone ? `*Phone:* ${finalCustomerPhone}` : '',
-        finalCustomerEmail ? `*Email:* ${finalCustomerEmail}` : '',
-        booking.address ? `*Address:* ${booking.address}` : '',
-        `*Scheduled:* ${scheduledStr}`,
-        `*Source:* ${finalSource}`,
-        `*Status:* ${booking.status}`,
-        booking.description ? `*Notes:* ${booking.description.slice(0, 120)}` : '',
-      ].filter(Boolean).join('\n')
+        const waMessage = [
+          '📅 *New Booking Created*',
+          '',
+          `*Title:* ${booking.title}`,
+          `*Customer:* ${finalCustomerName || 'N/A'}`,
+          finalCustomerPhone ? `*Phone:* ${finalCustomerPhone}` : '',
+          finalCustomerEmail ? `*Email:* ${finalCustomerEmail}` : '',
+          booking.address ? `*Address:* ${booking.address}` : '',
+          `*Scheduled:* ${scheduledStr}`,
+          `*Source:* ${finalSource}`,
+          `*Status:* ${booking.status}`,
+          booking.description ? `*Notes:* ${booking.description.slice(0, 120)}` : '',
+        ].filter(Boolean).join('\n');
 
-      const emailSubject = `📅 New Booking: ${booking.title}`
-      const emailHtml = [
-        `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
-        `<h2 style="color:#0f172a">📅 New Booking Created</h2>`,
-        `<p>A new booking has been created. Here are the details:</p>`,
-        `<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">`,
-        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;width:35%">Title</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.title}</td></tr>`,
-        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Customer</td><td style="padding:10px;border:1px solid #e5e7eb">${finalCustomerName || 'N/A'}</td></tr>`,
-        finalCustomerPhone ? `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Phone</td><td style="padding:10px;border:1px solid #e5e7eb">${finalCustomerPhone}</td></tr>` : '',
-        finalCustomerEmail ? `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Email</td><td style="padding:10px;border:1px solid #e5e7eb">${finalCustomerEmail}</td></tr>` : '',
-        booking.address ? `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Address</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.address}</td></tr>` : '',
-        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Scheduled</td><td style="padding:10px;border:1px solid #e5e7eb">${scheduledStr}</td></tr>`,
-        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Source</td><td style="padding:10px;border:1px solid #e5e7eb">${finalSource}</td></tr>`,
-        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Status</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.status}</td></tr>`,
-        `</table>`,
-        `<p style="font-size:12px;color:#9ca3af">— Sent from Fieseros</p>`,
-        `</div>`,
-      ].filter(Boolean).join('\n')
-      const emailText = `New Booking Created\n\nTitle: ${booking.title}\nCustomer: ${finalCustomerName || 'N/A'}\n${finalCustomerPhone ? `Phone: ${finalCustomerPhone}\n` : ''}${finalCustomerEmail ? `Email: ${finalCustomerEmail}\n` : ''}${booking.address ? `Address: ${booking.address}\n` : ''}Scheduled: ${scheduledStr}\nSource: ${finalSource}\nStatus: ${booking.status}\n\n— Sent from Fieseros`
+        const emailSubject = `📅 New Booking: ${booking.title}`;
+        const emailHtml = [
+          `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
+          `<h2 style="color:#0f172a">📅 New Booking Created</h2>`,
+          `<p>A new booking has been created. Here are the details:</p>`,
+          `<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">`,
+          `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;width:35%">Title</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.title}</td></tr>`,
+          `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Customer</td><td style="padding:10px;border:1px solid #e5e7eb">${finalCustomerName || 'N/A'}</td></tr>`,
+          finalCustomerPhone ? `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Phone</td><td style="padding:10px;border:1px solid #e5e7eb">${finalCustomerPhone}</td></tr>` : '',
+          finalCustomerEmail ? `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Email</td><td style="padding:10px;border:1px solid #e5e7eb">${finalCustomerEmail}</td></tr>` : '',
+          booking.address ? `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Address</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.address}</td></tr>` : '',
+          `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Scheduled</td><td style="padding:10px;border:1px solid #e5e7eb">${scheduledStr}</td></tr>`,
+          `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Source</td><td style="padding:10px;border:1px solid #e5e7eb">${finalSource}</td></tr>`,
+          `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Status</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.status}</td></tr>`,
+          `</table>`,
+          `<p style="font-size:12px;color:#9ca3af">— Sent from GPTForm Booking</p>`,
+          `</div>`,
+        ].filter(Boolean).join('\n');
+        const emailText = `New Booking Created\n\nTitle: ${booking.title}\nCustomer: ${finalCustomerName || 'N/A'}\n${finalCustomerPhone ? `Phone: ${finalCustomerPhone}\n` : ''}${finalCustomerEmail ? `Email: ${finalCustomerEmail}\n` : ''}${booking.address ? `Address: ${booking.address}\n` : ''}Scheduled: ${scheduledStr}\nSource: ${finalSource}\nStatus: ${booking.status}`;
 
-      await notifyOwner(user.tenantId, {
-        eventType: 'booking.created',
-        eventLabel: 'New Booking',
-        whatsappMessage: waMessage,
-        // Plain-ASCII SMS body (no emojis) for reliable SNS delivery to
-        // Indian (+91) numbers. Emojis force UCS-2 encoding which TRAI
-        // frequently filters without a registered sender ID.
-        smsMessage: `New Booking: ${booking.title}, customer: ${finalCustomerName || 'N/A'}, scheduled: ${scheduledStr}, status: ${booking.status}.`,
-        emailSubject,
-        emailHtml,
-        emailText,
-        bookingId: booking.id,
-        customerId: finalCustomerId || undefined,
-      })
-    } catch (ownerErr) {
-      console.error('[BookingsCreate] Owner notification failed:', ownerErr)
+        await notifyOwner(user.tenantId, {
+          eventType: 'booking.created',
+          eventLabel: 'New Booking',
+          whatsappMessage: waMessage,
+          smsMessage: `New Booking: ${booking.title}, customer: ${finalCustomerName || 'N/A'}, scheduled: ${scheduledStr}, status: ${booking.status}.`,
+          emailSubject,
+          emailHtml,
+          emailText,
+          bookingId: booking.id,
+          customerId: finalCustomerId || undefined,
+        });
+      } catch (ownerErr) {
+        console.error('[BookingsCreate] Owner notification notice:', ownerErr);
+      }
     }
 
     // ─── Send WhatsApp confirmation to customer ────────────────────
