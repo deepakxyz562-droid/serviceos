@@ -48,6 +48,7 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
   const [presetDialogOpen, setPresetDialogOpen] = useState(false);
   const [creationTab, setCreationTab] = useState<'ai' | 'form' | 'templates' | 'scratch'>('ai');
   const [promptInput, setPromptInput] = useState('');
+  const [websiteUrlInput, setWebsiteUrlInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [availableForms, setAvailableForms] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [loadingForms, setLoadingForms] = useState(false);
@@ -466,26 +467,37 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
       {/* ─── Active AI Agents Grid or Empty State ────────────────────────────── */}
       {agents.length === 0 && !loading ? (
         <Card className="border-dashed border-border/80 p-12 text-center bg-card/40">
-          <Bot className="size-12 mx-auto text-blue-500/40 mb-3" />
-          <h3 className="text-base font-bold text-foreground">No AI Agents Deployed Yet</h3>
-          <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-            Build your first 24/7 conversational AI agent. Train it on your documents or website, and deploy across web widgets, WhatsApp, and phone lines in seconds.
+          <div className="size-16 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-center mx-auto mb-4 shadow-2xs">
+            <Bot className="size-8 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h3 className="text-lg font-bold text-foreground">Deploy your first 24/7 AI Employee</h3>
+          <p className="text-xs text-muted-foreground mt-1.5 max-w-lg mx-auto leading-relaxed">
+            Your conversational AI agent learns from your website, services, and documents to answer customer questions, qualify leads, and schedule appointments 24/7 across website widgets, WhatsApp, and phone lines.
           </p>
-          <div className="flex items-center justify-center gap-3 mt-5">
+          <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
             <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold gap-1.5"
-              onClick={() => setPresetDialogOpen(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold gap-2 shadow-xs h-9 px-4"
+              onClick={() => {
+                setCreationTab('ai');
+                setPresetDialogOpen(true);
+              }}
             >
-              <Sparkles className="size-3.5" /> Launch from Industry Template
+              <Wand2 className="size-4" /> Train on Website or Prompt
             </Button>
             <Button
               variant="outline"
-              className="text-xs font-semibold gap-1.5"
+              className="text-xs font-semibold gap-2 border-border/80 h-9 px-4"
               onClick={() => {
-                const blankAgent = createAgentFromPreset('generic_business', { name: 'New AI Agent', roleTitle: 'Custom Business Concierge' });
-                setAgents([blankAgent]);
-                setActiveStudioAgent(blankAgent);
+                setCreationTab('templates');
+                setPresetDialogOpen(true);
               }}
+            >
+              <LayoutTemplate className="size-4 text-purple-600" /> Choose Industry Template
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-xs font-semibold gap-1.5 text-muted-foreground hover:text-foreground h-9 px-3"
+              onClick={handleCreateFromScratch}
             >
               <Plus className="size-3.5" /> Start from Scratch
             </Button>
@@ -684,15 +696,46 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
             <div className="flex-1 overflow-y-auto p-5">
               {/* TAB 1: GENERATE WITH AI */}
               <TabsContent value="ai" className="mt-0 space-y-4">
+                <div className="p-3 rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-500/20 space-y-2">
+                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Globe className="size-3.5 text-blue-600" />
+                    Option A: Train from Business Website URL
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="https://yourbusiness.com"
+                      value={websiteUrlInput}
+                      onChange={(e) => setWebsiteUrlInput(e.target.value)}
+                      className="text-xs h-8.5 bg-background"
+                    />
+                    <Button
+                      type="button"
+                      disabled={!websiteUrlInput.trim() || isGenerating}
+                      onClick={() => {
+                        const url = websiteUrlInput.trim();
+                        const prompt = `Generate autonomous booking and quote intake assistant trained for website: ${url}`;
+                        setPromptInput(prompt);
+                        handleGenerateWithAI(prompt);
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-8.5 shrink-0 gap-1.5 px-3"
+                    >
+                      <Wand2 className="size-3.5" /> Scan &amp; Generate
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    Scans your website to extract your company name, services, rates, FAQs, and brand tone.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-foreground">
-                    Describe what you want your AI Chatbot to do:
+                    Option B: Or describe what you want your AI Chatbot to do:
                   </label>
                   <Textarea
                     placeholder="e.g., Create a 24/7 dental emergency intake bot that collects patient symptoms, verifies insurance, and books urgent appointments."
                     value={promptInput}
                     onChange={(e) => setPromptInput(e.target.value)}
-                    rows={4}
+                    rows={3}
                     className="text-xs resize-none"
                   />
                 </div>

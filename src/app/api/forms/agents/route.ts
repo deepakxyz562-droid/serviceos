@@ -93,16 +93,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    // List all agents for the tenant
+    // List all agents strictly for the authenticated tenant
+    if (!user?.tenantId) {
+      return NextResponse.json({ agents: [] });
+    }
+
     const agents = await db.formAgent.findMany({
-      where: user?.tenantId
-        ? {
-            OR: [
-              { tenantId: user.tenantId },
-              { tenantId: null },
-            ],
-          }
-        : {},
+      where: {
+        tenantId: user.tenantId,
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -309,12 +308,18 @@ export async function DELETE(request: NextRequest) {
     const id = searchParams.get('id');
     const user = await getAuthUser();
 
+    const cleanupOrphans = searchParams.get('cleanupOrphans') === 'true';
+    if (cleanupOrphans && user?.isSuperAdmin) {
+      const res = await db.formAgent.deleteMany({ where: { tenantId: null } });
+      return NextResponse.json({ success: true, deletedOrphans: res.count });
+    }
+
     if (!id) {
       return NextResponse.json({ error: 'Agent ID is required' }, { status: 400 });
     }
 
     const whereClause: any = { id };
-    if (user?.tenantId) {
+    if (user?.tenantId && !user.isSuperAdmin) {
       whereClause.tenantId = user.tenantId;
     }
 
