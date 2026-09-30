@@ -36,7 +36,10 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { Copy, Trash2, Settings, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Layers, Columns, Check } from 'lucide-react';
+import {
+  Copy, Trash2, Settings, ArrowLeft, ArrowRight, ArrowUp, ArrowDown,
+  Layers, Columns, Check, AlignLeft, AlignCenter, AlignRight, ArrowRightLeft,
+} from 'lucide-react';
 
 export interface SortableFieldWrapperProps {
   field: FormField;
@@ -50,12 +53,13 @@ export interface SortableFieldWrapperProps {
   /** Show drag handle (default: true in edit mode) */
   showDragHandle?: boolean;
 
-  /** Field action callbacks (for the chevron dropdown) */
+  /** Field action callbacks (for the chevron dropdown and floating toolbar) */
   onDuplicate?: (field: FormField) => void;
   onDelete?: (fieldId: string) => void;
   onMoveUp?: (fieldId: string) => void;
   onMoveDown?: (fieldId: string) => void;
   onSetWidth?: (fieldId: string, width: 'full' | 'half' | 'third' | 'quarter') => void;
+  onSetAlign?: (fieldId: string, align: 'left' | 'center' | 'right') => void;
   onMoveToColumn?: (fieldId: string, column: 'left' | 'right') => void;
   onMoveToStep?: (fieldId: string, stepId: string) => void;
   onOpenSettings?: (fieldId: string) => void;
@@ -81,6 +85,7 @@ export const SortableFieldWrapper = React.memo(function SortableFieldWrapper({
   onMoveUp,
   onMoveDown,
   onSetWidth,
+  onSetAlign,
   onMoveToColumn,
   onMoveToStep,
   onOpenSettings,
@@ -105,18 +110,178 @@ export const SortableFieldWrapper = React.memo(function SortableFieldWrapper({
   const isSelected = selectedFieldId === field.id;
   const widthClass = getFieldWidthClass(field.width);
   const currentWidth = field.width || 'full';
-  const hasActions = !!(onDuplicate || onDelete || onMoveUp || onMoveDown || onSetWidth || onMoveToColumn || onMoveToStep || onOpenSettings);
+  const currentAlign = field.align || 'left';
+  const hasActions = !!(onDuplicate || onDelete || onMoveUp || onMoveDown || onSetWidth || onSetAlign || onMoveToColumn || onMoveToStep || onOpenSettings);
+
+  const alignClass =
+    currentAlign === 'center'
+      ? 'mx-auto text-center'
+      : currentAlign === 'right'
+      ? 'ml-auto text-right'
+      : 'mr-auto text-left';
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'relative group',
+        'relative group transition-all',
         widthClass,
+        alignClass,
         isDragging && 'z-50 shadow-lg ring-2 ring-emerald-500 rounded-lg',
       )}
     >
+      {/* Wix-Style Floating Quick Positioning Bar (Appears on Selection) */}
+      {isSelected && (
+        <div
+          className="absolute -top-10 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 dark:bg-zinc-800/95 text-white backdrop-blur-md px-2 py-1 rounded-xl shadow-xl border border-white/10 flex items-center gap-1.5 select-none animate-in fade-in zoom-in-95 duration-150"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Horizontal Position / Alignment: Left, Center, Right */}
+          {onSetAlign && (
+            <div className="flex items-center bg-white/10 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => onSetAlign(field.id, 'left')}
+                className={cn(
+                  'size-6 rounded flex items-center justify-center transition-colors cursor-pointer',
+                  currentAlign === 'left' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-white/70 hover:text-white'
+                )}
+                title="Align Left"
+              >
+                <AlignLeft className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onSetAlign(field.id, 'center')}
+                className={cn(
+                  'size-6 rounded flex items-center justify-center transition-colors cursor-pointer',
+                  currentAlign === 'center' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-white/70 hover:text-white'
+                )}
+                title="Align Center"
+              >
+                <AlignCenter className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onSetAlign(field.id, 'right')}
+                className={cn(
+                  'size-6 rounded flex items-center justify-center transition-colors cursor-pointer',
+                  currentAlign === 'right' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-white/70 hover:text-white'
+                )}
+                title="Align Right"
+              >
+                <AlignRight className="size-3.5" />
+              </button>
+            </div>
+          )}
+
+          <div className="h-3.5 w-px bg-white/20" />
+
+          {/* Move Up / Down */}
+          {onMoveUp && (
+            <button
+              type="button"
+              onClick={() => onMoveUp(field.id)}
+              className="size-6 rounded flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Move Up"
+            >
+              <ArrowUp className="size-3.5" />
+            </button>
+          )}
+          {onMoveDown && (
+            <button
+              type="button"
+              onClick={() => onMoveDown(field.id)}
+              className="size-6 rounded flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Move Down"
+            >
+              <ArrowDown className="size-3.5" />
+            </button>
+          )}
+
+          <div className="h-3.5 w-px bg-white/20" />
+
+          {/* Width Selector */}
+          {onSetWidth && (
+            <div className="flex items-center bg-white/10 rounded-lg p-0.5 text-[10px] font-semibold">
+              <button
+                type="button"
+                onClick={() => onSetWidth(field.id, 'quarter')}
+                className={cn('px-1.5 py-0.5 rounded cursor-pointer transition-colors', currentWidth === 'quarter' ? 'bg-white text-slate-900 font-bold' : 'text-white/70 hover:text-white')}
+                title="25% Width"
+              >
+                25%
+              </button>
+              <button
+                type="button"
+                onClick={() => onSetWidth(field.id, 'third')}
+                className={cn('px-1.5 py-0.5 rounded cursor-pointer transition-colors', currentWidth === 'third' ? 'bg-white text-slate-900 font-bold' : 'text-white/70 hover:text-white')}
+                title="33% Width"
+              >
+                33%
+              </button>
+              <button
+                type="button"
+                onClick={() => onSetWidth(field.id, 'half')}
+                className={cn('px-1.5 py-0.5 rounded cursor-pointer transition-colors', currentWidth === 'half' ? 'bg-white text-slate-900 font-bold' : 'text-white/70 hover:text-white')}
+                title="50% Width"
+              >
+                50%
+              </button>
+              <button
+                type="button"
+                onClick={() => onSetWidth(field.id, 'full')}
+                className={cn('px-1.5 py-0.5 rounded cursor-pointer transition-colors', (currentWidth === 'full' || !field.width) ? 'bg-white text-slate-900 font-bold' : 'text-white/70 hover:text-white')}
+                title="100% Full Width"
+              >
+                100%
+              </button>
+            </div>
+          )}
+
+          {/* Column Switcher (if split_media) */}
+          {hasColumns && onMoveToColumn && (
+            <>
+              <div className="h-3.5 w-px bg-white/20" />
+              <button
+                type="button"
+                onClick={() => onMoveToColumn(field.id, field.layoutColumn === 'left' ? 'right' : 'left')}
+                className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[10.5px] font-semibold text-white flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                title={`Move to ${field.layoutColumn === 'left' ? 'Right' : 'Left'} Column`}
+              >
+                <ArrowRightLeft className="size-3" />
+                <span>{field.layoutColumn === 'left' ? 'To Right' : 'To Left'}</span>
+              </button>
+            </>
+          )}
+
+          <div className="h-3.5 w-px bg-white/20" />
+
+          {/* Duplicate & Delete */}
+          {onDuplicate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(field)}
+              className="size-6 rounded flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Duplicate"
+            >
+              <Copy className="size-3.5" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(field.id)}
+              className="size-6 rounded flex items-center justify-center text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 transition-colors cursor-pointer"
+              title="Delete"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Drag Handle — appears on hover / selection (Jotform style) */}
       {showDragHandle && (
         <button

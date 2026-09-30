@@ -154,9 +154,32 @@ export function FormMediaHeroPanel({
   ];
   const testimonial = mediaPanel?.testimonial;
 
+  const verticalAlignClass =
+    mediaPanel?.verticalAlign === 'top'
+      ? 'justify-start'
+      : mediaPanel?.verticalAlign === 'center'
+      ? 'justify-center'
+      : mediaPanel?.verticalAlign === 'bottom'
+      ? 'justify-end'
+      : 'justify-between';
+
+  const contentAlignClass =
+    mediaPanel?.contentAlign === 'center'
+      ? 'text-center items-center'
+      : mediaPanel?.contentAlign === 'right'
+      ? 'text-right items-end'
+      : 'text-left items-start';
+
+  const paddingClass =
+    mediaPanel?.padding === 'compact'
+      ? 'p-3 sm:p-4'
+      : mediaPanel?.padding === 'spacious'
+      ? 'p-6 sm:p-8 lg:p-10'
+      : 'p-3.5 sm:p-5 lg:p-7';
+
   return (
     <div
-      className="relative flex flex-col justify-between overflow-hidden text-white p-3.5 sm:p-5 lg:p-7 rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-0 lg:min-h-full select-text"
+      className={`relative flex flex-col ${verticalAlignClass} ${contentAlignClass} ${paddingClass} overflow-hidden text-white rounded-2xl lg:rounded-l-3xl lg:rounded-r-none min-h-0 lg:min-h-full select-text transition-all duration-300`}
       style={{
         backgroundColor: mediaPanel?.backgroundColor || '#0f172a',
       }}
@@ -341,8 +364,16 @@ export function FormMediaHeroPanel({
         </div>
       )}
 
-      {/* 3. Headline, Subtitle, Value Benefits & Left Fields (at the bottom) */}
-      <div className="relative z-10 space-y-3 mt-auto">
+      {/* 3. Headline, Subtitle, Value Benefits & Left Fields */}
+      <div
+        className={`relative z-10 space-y-3 w-full ${
+          mediaPanel?.verticalAlign === 'top'
+            ? 'mt-2'
+            : mediaPanel?.verticalAlign === 'center'
+            ? 'my-auto'
+            : 'mt-auto'
+        }`}
+      >
         {showHeadline && (
           editable ? (
             <div
@@ -467,11 +498,11 @@ export function FormMediaHeroPanel({
 
         {/* Left Column Form Fields / Widgets or interactive children (Editor Mode) */}
         {children ? (
-          <div className="pt-3 border-t border-white/10 text-left">
+          <div className="w-full text-left">
             {children}
           </div>
         ) : leftFields && leftFields.length > 0 ? (
-          <div className="space-y-3 pt-3 border-t border-white/10 text-left">
+          <div className="space-y-3 w-full text-left">
             {leftFields.map((field) => {
               const isContent =
                 field.type === 'heading' ||

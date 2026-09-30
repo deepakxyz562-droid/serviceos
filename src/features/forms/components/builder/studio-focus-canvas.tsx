@@ -273,6 +273,12 @@ export function StudioFocusCanvas({
     toast.success(`Set field width to ${label}`);
   };
 
+  // Field alignment updater (Wix-style generic positioning: left | center | right)
+  const handleSetFieldAlign = (fieldId: string, align: 'left' | 'center' | 'right') => {
+    handleUpdateField(fieldId, { align });
+    toast.success(`Set field alignment to ${align}`);
+  };
+
   // Move Field Up/Down within list
   const handleMoveField = (fieldId: string, direction: 'up' | 'down') => {
     const idx = fields.findIndex((f) => f.id === fieldId);
@@ -651,15 +657,15 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                     }}
                   >
                     {/* Draggable sortable left-column fields if present */}
-                    {leftColumnFields.length > 0 && (
-                      <div className="mt-4 pt-3 border-t border-white/10 space-y-3">
+                    <div className="space-y-3 w-full">
+                      {leftColumnFields.length > 0 && (
                         <DndContext
                           sensors={dndSensors}
                           collisionDetection={closestCenter}
                           onDragEnd={handleDragEnd}
                         >
                           <SortableContext items={leftColumnFields.map((f) => f.id)} strategy={verticalListSortingStrategy}>
-                            <div className="space-y-3">
+                            <div className="space-y-3 w-full">
                               {leftColumnFields.map((f) => (
                                 <SortableFieldWrapper
                                   key={f.id}
@@ -671,6 +677,8 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                   onSelectField={(id) => { onSelectColumn?.('left'); onSelectField(id); }}
                                   inputBorderRadius={inputBorderRadius}
                                   defaultInputHeightCls={defaultInputHeightCls}
+                                  onSetWidth={handleSetFieldWidth}
+                                  onSetAlign={handleSetFieldAlign}
                                   onDuplicate={handleDuplicateField}
                                   onDelete={handleDeleteField}
                                   onMoveUp={(id) => handleMoveField(id, 'up')}
@@ -685,8 +693,24 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                             </div>
                           </SortableContext>
                         </DndContext>
-                      </div>
-                    )}
+                      )}
+
+                      {/* Add Element to Left Column Button */}
+                      {onOpenAddWidgetDialog && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectColumn?.('left');
+                            onOpenAddWidgetDialog(currentStepIndex, activeStep.id);
+                          }}
+                          className="w-full h-9 border border-dashed border-white/20 hover:border-emerald-400/60 rounded-xl text-[11px] font-medium text-white/60 hover:text-white hover:bg-white/5 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                        >
+                          <Plus className="size-3.5 text-emerald-400" />
+                          <span>Add element to Left Column</span>
+                        </button>
+                      )}
+                    </div>
                   </FormMediaHeroPanel>
                 </div>
               );
@@ -792,6 +816,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                                   inputBorderRadius={inputBorderRadius}
                                   defaultInputHeightCls={defaultInputHeightCls}
                                   onSetWidth={handleSetFieldWidth}
+                                  onSetAlign={handleSetFieldAlign}
                                   onDuplicate={handleDuplicateField}
                                   onDelete={handleDeleteField}
                                   onMoveUp={(id) => handleMoveField(id, 'up')}
@@ -915,6 +940,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                           inputBorderRadius={inputBorderRadius}
                           defaultInputHeightCls={defaultInputHeightCls}
                           onSetWidth={handleSetFieldWidth}
+                          onSetAlign={handleSetFieldAlign}
                           onDuplicate={handleDuplicateField}
                           onDelete={handleDeleteField}
                           onMoveUp={(id) => handleMoveField(id, 'up')}
@@ -1059,6 +1085,7 @@ const StudioFieldPreview = React.memo(function StudioFieldPreview({
                         inputBorderRadius={inputBorderRadius}
                         defaultInputHeightCls={defaultInputHeightCls}
                         onSetWidth={handleSetFieldWidth}
+                        onSetAlign={handleSetFieldAlign}
                         onDuplicate={handleDuplicateField}
                         onDelete={handleDeleteField}
                         onMoveUp={(id) => handleMoveField(id, 'up')}

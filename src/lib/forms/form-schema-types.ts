@@ -149,6 +149,8 @@ export interface FormMediaPanel {
   backgroundBlur?: 'none' | 'sm' | 'md' | 'lg' | string;
   customGradient?: string | null;
   padding?: 'compact' | 'normal' | 'spacious' | string;
+  verticalAlign?: 'top' | 'center' | 'bottom' | 'space_between';
+  contentAlign?: 'left' | 'center' | 'right';
   borderRadius?: string;
   showBadge?: boolean;
   showHeadline?: boolean;

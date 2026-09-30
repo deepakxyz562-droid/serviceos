@@ -6,22 +6,16 @@ import {
   Image as ImageIcon,
   MapPin,
   Sparkles,
-  Layers,
-  CheckCircle2,
-  Plus,
-  Trash2,
   Sliders,
-  Smartphone,
-  Eye,
-  Type,
-  Youtube,
-  Film,
-  Award,
-  Compass,
-  MessageSquareQuote,
   Palette,
-  Check,
-  X,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  ArrowUp,
+  ArrowDown,
+  LayoutGrid,
+  Columns,
+  Maximize2,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -105,18 +99,16 @@ export function FormSplitMediaInspector({
     headline: formName || 'Fast & Reliable Professional Service',
     subtitle: 'Fill out the form below to receive upfront pricing and schedule top-rated pros.',
     badgeText: '⭐ 5-Star Rated Service Pro',
-    showBadge: true,
-    showHeadline: true,
-    showSubtitle: true,
-    showMedia: true,
-    showBenefits: true,
+    showBadge: false,
+    showHeadline: false,
+    showSubtitle: false,
+    showMedia: false,
+    showBenefits: false,
     showTestimonial: false,
     backgroundColor: '#0f172a',
-    benefitsList: [
-      'Guaranteed response within 15 minutes',
-      'Licensed, insured & background-checked',
-      '100% Price Match & Escrow Guarantee',
-    ],
+    verticalAlign: 'top',
+    contentAlign: 'left',
+    padding: 'normal',
   };
 
   const updateField = <K extends keyof FormMediaPanel>(key: K, value: FormMediaPanel[K]) => {
@@ -126,71 +118,45 @@ export function FormSplitMediaInspector({
     });
   };
 
-  const handleAddBenefit = () => {
-    const list = panel.benefitsList || [];
-    updateField('benefitsList', [...list, 'New key benefit / guarantee point']);
-  };
-
-  const handleUpdateBenefit = (index: number, text: string) => {
-    const list = [...(panel.benefitsList || [])];
-    list[index] = text;
-    updateField('benefitsList', list);
-  };
-
-  const handleRemoveBenefit = (index: number) => {
-    const list = [...(panel.benefitsList || [])];
-    list.splice(index, 1);
-    updateField('benefitsList', list);
-  };
-
   return (
     <div className="space-y-4 text-xs">
-      {/* Header Banner */}
-      <div className="p-3.5 rounded-xl bg-gradient-to-br from-indigo-50/80 via-white to-emerald-50/80 dark:from-indigo-950/30 dark:via-slate-900 dark:to-emerald-950/30 border border-border/80 shadow-xs space-y-1.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-primary text-primary-foreground shadow-xs">
-              <Sparkles className="size-3.5" />
-            </div>
-            <div>
-              <span className="font-bold text-foreground text-xs block">
-                Left Hero Column (Elementor Style)
-              </span>
-              <span className="text-[10px] text-muted-foreground">
-                Modular Column Background &amp; Widgets
-              </span>
-            </div>
+      {/* Clean Header Bar */}
+      <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-border">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-primary/10 text-primary">
+            <Columns className="size-4" />
           </div>
-          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[9px] font-bold">
-            Split Layout
-          </Badge>
+          <div>
+            <h4 className="font-bold text-foreground text-xs">Column Settings</h4>
+            <p className="text-[10px] text-muted-foreground">Background, padding &amp; alignment</p>
+          </div>
         </div>
+        <Badge variant="outline" className="text-[10px] font-semibold capitalize bg-background">
+          {panel.position || 'left'} column
+        </Badge>
       </div>
 
-      <Tabs defaultValue="style" className="w-full">
-        <TabsList className="grid grid-cols-4 w-full bg-slate-100 dark:bg-slate-900 h-9 p-1 rounded-lg">
-          <TabsTrigger value="style" className="text-[10.5px] font-semibold">
-            🎨 Style &amp; BG
+      <Tabs defaultValue="background" className="w-full">
+        <TabsList className="grid grid-cols-3 w-full bg-slate-100 dark:bg-slate-900 h-9 p-1 rounded-lg">
+          <TabsTrigger value="background" className="text-[11px] font-semibold">
+            🎨 Background
           </TabsTrigger>
-          <TabsTrigger value="widgets" className="text-[10.5px] font-semibold">
-            🧩 Widgets
+          <TabsTrigger value="layout" className="text-[11px] font-semibold">
+            📐 Layout &amp; Align
           </TabsTrigger>
-          <TabsTrigger value="media" className="text-[10.5px] font-semibold">
+          <TabsTrigger value="media" className="text-[11px] font-semibold">
             🎥 Media
-          </TabsTrigger>
-          <TabsTrigger value="layout" className="text-[10.5px] font-semibold">
-            📐 Layout
           </TabsTrigger>
         </TabsList>
 
         {/* ═════════════════════════════════════════════════════════════════════
-            TAB 1: COLUMN STYLE & BACKGROUND (Elementor Parity)
+            TAB 1: COLUMN BACKGROUND (Color, Image Backdrop, Overlay, Blur)
            ═════════════════════════════════════════════════════════════════════ */}
-        <TabsContent value="style" className="space-y-4 pt-3">
+        <TabsContent value="background" className="space-y-4 pt-3">
           {/* Column Background Color */}
           <div className="space-y-2">
             <Label className="text-[11px] font-bold text-foreground flex items-center justify-between">
-              <span>Left Column Background Color</span>
+              <span>Background Color</span>
               <span className="font-mono text-[10px] text-muted-foreground">
                 {panel.backgroundColor || '#0f172a'}
               </span>
@@ -219,7 +185,7 @@ export function FormSplitMediaInspector({
                   key={p.value}
                   type="button"
                   onClick={() => updateField('backgroundColor', p.value)}
-                  className={`p-1 rounded-lg border text-center text-[10px] font-semibold flex items-center gap-1.5 transition-all ${
+                  className={`p-1 rounded-lg border text-center text-[10px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                     panel.backgroundColor === p.value
                       ? 'border-primary ring-2 ring-primary/20 font-bold'
                       : 'border-border/80 hover:border-slate-300'
@@ -232,17 +198,17 @@ export function FormSplitMediaInspector({
             </div>
           </div>
 
-          {/* Column Background Image (Optional full column backdrop) */}
+          {/* Column Background Image / Backdrop */}
           <div className="space-y-2 pt-2 border-t border-border/60">
             <Label className="text-[11px] font-bold text-foreground flex items-center justify-between">
-              <span>Column Backdrop Photo (Optional)</span>
+              <span>Backdrop Image (Optional)</span>
               {panel.backgroundImageUrl && (
                 <button
                   type="button"
                   onClick={() => updateField('backgroundImageUrl', null)}
-                  className="text-[10px] text-rose-500 hover:underline font-semibold"
+                  className="text-[10px] text-rose-500 hover:underline font-semibold cursor-pointer"
                 >
-                  Remove Backdrop
+                  Clear Backdrop
                 </button>
               )}
             </Label>
@@ -251,38 +217,42 @@ export function FormSplitMediaInspector({
               type="url"
               value={panel.backgroundImageUrl || ''}
               onChange={(e) => updateField('backgroundImageUrl', e.target.value || null)}
-              placeholder="Paste custom Unsplash or image URL..."
+              placeholder="Paste image URL (e.g. Unsplash)..."
               className="h-8 text-xs"
             />
 
-            {/* Curated Backdrop Photo Presets */}
-            <div className="space-y-1 pt-1">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                1-Click 4K Presets
-              </span>
-              <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
-                {CURATED_UNSPLASH_HEROES.map((hero) => (
-                  <button
-                    key={hero.url}
-                    type="button"
-                    onClick={() => updateField('backgroundImageUrl', hero.url)}
-                    className={`group relative h-12 rounded-lg overflow-hidden border text-left p-1.5 flex flex-col justify-end transition-all ${
-                      panel.backgroundImageUrl === hero.url ? 'ring-2 ring-primary border-primary' : 'border-border'
-                    }`}
-                  >
-                    <img src={hero.url} alt={hero.name} className="absolute inset-0 size-full object-cover brightness-50 group-hover:scale-105 transition-transform" />
-                    <span className="relative z-10 text-[9.5px] font-bold text-white drop-shadow truncate">
-                      {hero.name}
-                    </span>
-                  </button>
-                ))}
+            {/* Backdrop Blur */}
+            {panel.backgroundImageUrl && (
+              <div className="space-y-1.5 pt-1">
+                <Label className="text-[10.5px] font-medium text-muted-foreground">Backdrop Blur</Label>
+                <div className="grid grid-cols-4 gap-1">
+                  {[
+                    { id: 'none', label: 'None' },
+                    { id: 'sm', label: 'Subtle' },
+                    { id: 'md', label: 'Medium' },
+                    { id: 'lg', label: 'Heavy' },
+                  ].map((blur) => (
+                    <button
+                      key={blur.id}
+                      type="button"
+                      onClick={() => updateField('backgroundBlur', blur.id)}
+                      className={`py-1 text-[10px] font-semibold rounded-md border transition-all cursor-pointer ${
+                        (panel.backgroundBlur || 'none') === blur.id
+                          ? 'border-primary bg-primary/10 text-primary font-bold'
+                          : 'border-border hover:bg-slate-100 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      {blur.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Dark Vignette Overlay Opacity */}
+            {/* Dark Overlay Opacity */}
             <div className="space-y-1 pt-2">
               <div className="flex items-center justify-between text-[11px] font-semibold">
-                <Label>Backdrop Dark Overlay</Label>
+                <Label>Backdrop Overlay Opacity</Label>
                 <span className="font-mono text-muted-foreground">{panel.overlayOpacity ?? 70}%</span>
               </div>
               <input
@@ -295,162 +265,194 @@ export function FormSplitMediaInspector({
                 className="w-full accent-primary h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer"
               />
             </div>
-          </div>
-        </TabsContent>
 
-        {/* ═════════════════════════════════════════════════════════════════════
-            TAB 2: MODULAR WIDGETS & COPY (1-Click Toggle / Edit / Delete)
-           ═════════════════════════════════════════════════════════════════════ */}
-        <TabsContent value="widgets" className="space-y-3.5 pt-3">
-          <p className="text-[10px] text-muted-foreground">
-            Toggle on/off or delete any block on the left panel.
-          </p>
-
-          {/* 1. Trust Badge Widget */}
-          <div className="p-3 rounded-xl border border-border/80 bg-card space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Award className="size-3.5 text-amber-500" />
-                <Label className="text-[11px] font-bold">⭐ Trust Badge Pill</Label>
-              </div>
-              <Switch
-                checked={panel.showBadge ?? Boolean(panel.badgeText)}
-                onCheckedChange={(checked) => updateField('showBadge', checked)}
-              />
-            </div>
-            {(panel.showBadge ?? Boolean(panel.badgeText)) && (
-              <Input
-                type="text"
-                value={panel.badgeText || ''}
-                onChange={(e) => updateField('badgeText', e.target.value)}
-                placeholder="⭐ 5-Star Rated Service Pro"
-                className="h-8 text-xs"
-              />
-            )}
-          </div>
-
-          {/* 2. Hero Headline Widget */}
-          <div className="p-3 rounded-xl border border-border/80 bg-card space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Type className="size-3.5 text-emerald-500" />
-                <Label className="text-[11px] font-bold">🔤 Headline Title</Label>
-              </div>
-              <Switch
-                checked={panel.showHeadline ?? true}
-                onCheckedChange={(checked) => updateField('showHeadline', checked)}
-              />
-            </div>
-            {(panel.showHeadline ?? true) && (
-              <Input
-                type="text"
-                value={panel.headline || ''}
-                onChange={(e) => updateField('headline', e.target.value)}
-                placeholder="Fast & Reliable Professional Service"
-                className="h-8 text-xs font-semibold"
-              />
-            )}
-          </div>
-
-          {/* 3. Subtitle Paragraph Widget */}
-          <div className="p-3 rounded-xl border border-border/80 bg-card space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquareQuote className="size-3.5 text-blue-500" />
-                <Label className="text-[11px] font-bold">📝 Supporting Subtitle</Label>
-              </div>
-              <Switch
-                checked={panel.showSubtitle ?? true}
-                onCheckedChange={(checked) => updateField('showSubtitle', checked)}
-              />
-            </div>
-            {(panel.showSubtitle ?? true) && (
-              <Textarea
-                value={panel.subtitle || ''}
-                onChange={(e) => updateField('subtitle', e.target.value)}
-                placeholder="Fill out the form below to receive upfront pricing."
-                rows={2}
-                className="text-xs resize-none"
-              />
-            )}
-          </div>
-
-          {/* 4. Value Benefits Checklist Widget */}
-          <div className="p-3 rounded-xl border border-border/80 bg-card space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="size-3.5 text-primary" />
-                <Label className="text-[11px] font-bold">
-                  ✅ Benefits Checklist ({panel.benefitsList?.length || 0})
-                </Label>
-              </div>
-              <Switch
-                checked={panel.showBenefits ?? (panel.benefitsList && panel.benefitsList.length > 0)}
-                onCheckedChange={(checked) => updateField('showBenefits', checked)}
-              />
-            </div>
-
-            {(panel.showBenefits ?? true) && (
-              <div className="space-y-2 pt-1">
-                {(panel.benefitsList || []).map((benefit, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5">
-                    <CheckCircle2 className="size-3.5 text-emerald-500 shrink-0" />
-                    <Input
-                      type="text"
-                      value={benefit}
-                      onChange={(e) => handleUpdateBenefit(idx, e.target.value)}
-                      className="h-7 text-xs flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveBenefit(idx)}
-                      className="size-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
-                      title="Delete Benefit"
-                    >
-                      <Trash2 className="size-3" />
-                    </Button>
-                  </div>
+            {/* Curated Backdrop Presets */}
+            <div className="space-y-1 pt-2">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                1-Click Preset Backdrops
+              </span>
+              <div className="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto pr-1">
+                {CURATED_UNSPLASH_HEROES.map((hero) => (
+                  <button
+                    key={hero.url}
+                    type="button"
+                    onClick={() => updateField('backgroundImageUrl', hero.url)}
+                    className={`group relative h-11 rounded-lg overflow-hidden border text-left p-1.5 flex flex-col justify-end transition-all cursor-pointer ${
+                      panel.backgroundImageUrl === hero.url ? 'ring-2 ring-primary border-primary' : 'border-border'
+                    }`}
+                  >
+                    <img src={hero.url} alt={hero.name} className="absolute inset-0 size-full object-cover brightness-50 group-hover:scale-105 transition-transform" />
+                    <span className="relative z-10 text-[9.5px] font-bold text-white drop-shadow truncate">
+                      {hero.name}
+                    </span>
+                  </button>
                 ))}
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddBenefit}
-                  className="w-full h-7 text-[10.5px] font-semibold gap-1 border-dashed"
-                >
-                  <Plus className="size-3" /> Add Benefit Point
-                </Button>
               </div>
-            )}
+            </div>
           </div>
         </TabsContent>
 
         {/* ═════════════════════════════════════════════════════════════════════
-            TAB 3: MEDIA DISPLAY (Photo / Map / Video)
+            TAB 2: LAYOUT & GENERIC POSITIONING (Wix-style Parity)
+           ═════════════════════════════════════════════════════════════════════ */}
+        <TabsContent value="layout" className="space-y-4 pt-3">
+          {/* Vertical Alignment */}
+          <div className="space-y-1.5">
+            <Label className="text-[11px] font-bold">Vertical Alignment</Label>
+            <div className="grid grid-cols-4 gap-1">
+              {[
+                { id: 'top', label: 'Top' },
+                { id: 'center', label: 'Center' },
+                { id: 'bottom', label: 'Bottom' },
+                { id: 'space_between', label: 'Distribute' },
+              ].map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => updateField('verticalAlign', v.id as any)}
+                  className={`py-1.5 text-[10.5px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                    (panel.verticalAlign || 'top') === v.id
+                      ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
+                      : 'border-border hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Horizontal Content Alignment */}
+          <div className="space-y-1.5 pt-2 border-t border-border/60">
+            <Label className="text-[11px] font-bold">Content Alignment</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'left', label: 'Left', icon: AlignLeft },
+                { id: 'center', label: 'Center', icon: AlignCenter },
+                { id: 'right', label: 'Right', icon: AlignRight },
+              ].map((item) => {
+                const Icon = item.icon;
+                const isSelected = (panel.contentAlign || 'left') === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => updateField('contentAlign', item.id as any)}
+                    className={`py-1.5 px-2 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      isSelected
+                        ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
+                        : 'border-border hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Icon className="size-3.5" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Column Padding */}
+          <div className="space-y-1.5 pt-2 border-t border-border/60">
+            <Label className="text-[11px] font-bold">Column Padding</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { id: 'compact', label: 'Compact' },
+                { id: 'normal', label: 'Normal' },
+                { id: 'spacious', label: 'Spacious' },
+              ].map((pad) => (
+                <button
+                  key={pad.id}
+                  type="button"
+                  onClick={() => updateField('padding', pad.id as any)}
+                  className={`py-1.5 text-[10.5px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                    (panel.padding || 'normal') === pad.id
+                      ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs'
+                      : 'border-border hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {pad.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Desktop Split Ratio */}
+          <div className="space-y-1.5 pt-2 border-t border-border/60">
+            <Label className="text-[11px] font-bold">Desktop Width Ratio</Label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { id: '50-50', label: '50 : 50 Balanced' },
+                { id: '40-60', label: '40 : 60 Form Wide' },
+                { id: '60-40', label: '60 : 40 Column Wide' },
+                { id: '35-65', label: '35 : 65 Slim' },
+                { id: '30-70', label: '30 : 70 Sidebar' },
+              ].map((ratio) => (
+                <button
+                  key={ratio.id}
+                  type="button"
+                  onClick={() => updateField('splitRatio', ratio.id as any)}
+                  className={`p-2 rounded-lg border text-left text-[11px] transition-all cursor-pointer ${
+                    (panel.splitRatio || '50-50') === ratio.id
+                      ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
+                      : 'border-border hover:border-slate-300'
+                  }`}
+                >
+                  {ratio.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Panel Position (Left / Right) */}
+          <div className="space-y-1.5 pt-2 border-t border-border/60">
+            <Label className="text-[11px] font-bold">Column Position</Label>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => updateField('position', 'left')}
+                className={`p-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+                  (panel.position || 'left') === 'left' ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs' : 'border-border'
+                }`}
+              >
+                👈 Left Column
+              </button>
+              <button
+                type="button"
+                onClick={() => updateField('position', 'right')}
+                className={`p-2 rounded-lg border text-xs font-semibold cursor-pointer ${
+                  panel.position === 'right' ? 'border-primary bg-primary/10 text-primary font-bold shadow-xs' : 'border-border'
+                }`}
+              >
+                👉 Right Column
+              </button>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ═════════════════════════════════════════════════════════════════════
+            TAB 3: MEDIA (Optional Photo / Map / Video / Glow)
            ═════════════════════════════════════════════════════════════════════ */}
         <TabsContent value="media" className="space-y-4 pt-3">
           <div className="flex items-center justify-between p-2.5 rounded-xl border bg-card">
             <div className="space-y-0.5">
               <Label className="text-[11px] font-bold">Display Visual Media</Label>
-              <p className="text-[10px] text-muted-foreground">Show hero photo, map, or video</p>
+              <p className="text-[10px] text-muted-foreground">Add hero image, video, map, or glow</p>
             </div>
             <Switch
-              checked={panel.showMedia ?? true}
+              checked={panel.showMedia ?? false}
               onCheckedChange={(checked) => updateField('showMedia', checked)}
             />
           </div>
 
-          {(panel.showMedia ?? true) && (
-            <div className="space-y-3">
+          {(panel.showMedia ?? false) && (
+            <div className="space-y-3 pt-1">
               {/* Media Type Switcher */}
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   onClick={() => updateField('mediaType', 'image')}
-                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all ${
+                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all cursor-pointer ${
                     (panel.mediaType || 'image') === 'image'
                       ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
                       : 'border-border hover:border-slate-300'
@@ -461,7 +463,7 @@ export function FormSplitMediaInspector({
                 <button
                   type="button"
                   onClick={() => updateField('mediaType', 'video')}
-                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all ${
+                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all cursor-pointer ${
                     panel.mediaType === 'video' || panel.mediaType === 'youtube' || panel.mediaType === 'vimeo'
                       ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
                       : 'border-border hover:border-slate-300'
@@ -472,7 +474,7 @@ export function FormSplitMediaInspector({
                 <button
                   type="button"
                   onClick={() => updateField('mediaType', 'map')}
-                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all ${
+                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all cursor-pointer ${
                     panel.mediaType === 'map'
                       ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
                       : 'border-border hover:border-slate-300'
@@ -483,7 +485,7 @@ export function FormSplitMediaInspector({
                 <button
                   type="button"
                   onClick={() => updateField('mediaType', 'gradient')}
-                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all ${
+                  className={`p-2 rounded-xl border flex items-center gap-2 font-medium transition-all cursor-pointer ${
                     panel.mediaType === 'gradient'
                       ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
                       : 'border-border hover:border-slate-300'
@@ -531,61 +533,6 @@ export function FormSplitMediaInspector({
               )}
             </div>
           )}
-        </TabsContent>
-
-        {/* ═════════════════════════════════════════════════════════════════════
-            TAB 4: LAYOUT & SPLIT RATIO
-           ═════════════════════════════════════════════════════════════════════ */}
-        <TabsContent value="layout" className="space-y-4 pt-3">
-          <div className="space-y-2">
-            <Label className="text-[11px] font-bold">Desktop Split Ratio</Label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {[
-                { id: '50-50', label: '50 : 50 Balanced' },
-                { id: '40-60', label: '40 : 60 Form Wide' },
-                { id: '60-40', label: '60 : 40 Media Wide' },
-                { id: '35-65', label: '35 : 65 Slim Media' },
-                { id: '30-70', label: '30 : 70 Sidebar' },
-              ].map((ratio) => (
-                <button
-                  key={ratio.id}
-                  type="button"
-                  onClick={() => updateField('splitRatio', ratio.id as any)}
-                  className={`p-2 rounded-lg border text-left text-xs transition-all ${
-                    (panel.splitRatio || '50-50') === ratio.id
-                      ? 'border-primary bg-primary/10 text-primary font-bold ring-2 ring-primary/20 shadow-xs'
-                      : 'border-border hover:border-slate-300'
-                  }`}
-                >
-                  {ratio.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2 pt-2 border-t border-border/60">
-            <Label className="text-[11px] font-bold">Panel Position</Label>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => updateField('position', 'left')}
-                className={`p-2 rounded-lg border text-xs font-semibold ${
-                  (panel.position || 'left') === 'left' ? 'border-primary bg-primary/10 text-primary font-bold' : 'border-border'
-                }`}
-              >
-                👈 Left Column
-              </button>
-              <button
-                type="button"
-                onClick={() => updateField('position', 'right')}
-                className={`p-2 rounded-lg border text-xs font-semibold ${
-                  panel.position === 'right' ? 'border-primary bg-primary/10 text-primary font-bold' : 'border-border'
-                }`}
-              >
-                👉 Right Column
-              </button>
-            </div>
-          </div>
         </TabsContent>
       </Tabs>
     </div>
