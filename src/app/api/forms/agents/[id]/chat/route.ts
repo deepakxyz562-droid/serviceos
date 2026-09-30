@@ -280,7 +280,46 @@ export async function POST(
     let suggestedFormId: string | null = null;
     let bookingCard: any = null;
 
-    // Check for real appointment booking execution
+    // ── Step 1: Always run the LLM to generate the primary AI response.
+    //    The LLM answers the visitor's ACTUAL question (website, services, pricing, booking, etc.)
+    //    before any booking logic fires. This prevents booking confirmations from
+    //    silently hijacking responses to informational queries.
+    try {
+      const bookingIntent = extractBookingIntent(message, history, primaryConnectedForm?.name || agent.roleTitle);
+      let dynamicMissingPrompt = '';
+      if (bookingIntent.hasIntent) {
+        if (bookingIntent.missingFields.length > 0) {
+          dynamicMissingPrompt = `\n\nINTAKE ACTION GUIDANCE:\nThe visitor is interested in scheduling an appointment or estimate. Missing required details: ${bookingIntent.missingFields.join(', ')}. Guide them conversationally to provide their preferred time window and callback phone number so our team can schedule them!`;
+        }
+      }
+
+      const messages = [
+        {
+          role: 'system' as const,
+          content: `${knowledgeContext}${dynamicMissingPrompt}\n\nKeep responses concise, helpful, and formatted with markdown. Never say cold deflective phrases like "please use our connected form". Help visitors conversationally: answer their questions directly, guide them through booking or submitting their inquiry right here in the chat, or invite them to tap the interactive form card below.\nIf the visitor provides appointment details (date, time, name), warmly summarize and confirm their appointment request.`,
+        },
+        ...history.slice(-6).map((h: any) => ({
+          role: h.sender === 'user' ? ('user' as const) : ('assistant' as const),
+          content: h.text,
+        })),
+        { role: 'user' as const, content: message },
+      ];
+
+      const aiRes = await callAI({
+        messages,
+        temperature: 0.3,
+        model: agent.llm?.model || undefined,
+      });
+
+      replyText = aiRes.content || '';
+    } catch (e) {
+      console.warn('Chat AI call failed, using intelligent rule responder:', e);
+    }
+
+    // ── Step 2: Attempt real appointment booking execution AFTER the LLM has answered.
+    //    The booking engine uses the fixed extractBookingIntent (whole-word matching,
+    //    current-message-only scoping, informational-query guard) so it only fires
+    //    when the visitor explicitly requests a booking with date + time + contact info.
     const bookingResult = await tryExecuteChatBooking({
       tenantId: effectiveTenantId,
       workspaceId: effectiveWorkspaceId,
@@ -309,41 +348,13 @@ export async function POST(
         ? `\n\n🎥 **Video Meeting Link:** [Join Google Meet](${bookingResult.meetingUrl})`
         : '';
 
-      replyText = `🎉 Great news, ${bookingResult.lead?.name || 'there'}! Your appointment has been successfully scheduled and confirmed for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.${meetInfo}\n\nOur team has added this to our calendar. You can also add it to your calendar below!`;
-    }
-
-    if (!replyText) {
-      try {
-        const bookingIntent = extractBookingIntent(message, history, primaryConnectedForm?.name || agent.roleTitle);
-        let dynamicMissingPrompt = '';
-        if (bookingIntent.hasIntent) {
-          if (bookingIntent.missingFields.length > 0) {
-            dynamicMissingPrompt = `\n\nINTAKE ACTION GUIDANCE:\nThe visitor is interested in scheduling an appointment or estimate. Missing required details: ${bookingIntent.missingFields.join(', ')}. Guide them conversationally to provide their preferred time window and callback phone number so our team can schedule them!`;
-          }
-        }
-
-        const messages = [
-          {
-            role: 'system' as const,
-            content: `${knowledgeContext}${dynamicMissingPrompt}\n\nKeep responses concise, helpful, and formatted with markdown. Never say cold deflective phrases like "please use our connected form". Help visitors conversationally: answer their questions directly, guide them through booking or submitting their inquiry right here in the chat, or invite them to tap the interactive form card below.\nIf the visitor provides appointment details (date, time, name), warmly summarize and confirm their appointment request.`,
-          },
-          ...history.slice(-6).map((h: any) => ({
-            role: h.sender === 'user' ? ('user' as const) : ('assistant' as const),
-            content: h.text,
-          })),
-          { role: 'user' as const, content: message },
-        ];
-
-        const aiRes = await callAI({
-          messages,
-          temperature: 0.3,
-          model: agent.llm?.model || undefined,
-        });
-
-        replyText = aiRes.content || '';
-      } catch (e) {
-        console.warn('Chat AI call failed, using intelligent rule responder:', e);
-      }
+      // Booking card is shown as a supplementary UI element below the LLM reply.
+      // If the LLM already gave a great conversational answer, append the confirmation line.
+      // If LLM failed (replyText is empty), use the confirmation as the reply.
+      const confirmationLine = `🎉 Your appointment has been confirmed for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.${meetInfo}\n\nYou can add it to your calendar below!`;
+      replyText = replyText
+        ? `${replyText}\n\n${confirmationLine}`
+        : `🎉 Great news, ${bookingResult.lead?.name || 'there'}! ${confirmationLine}`;
     }
 
     // Intelligent heuristic response fallback (used when LLM provider is temporarily unavailable)

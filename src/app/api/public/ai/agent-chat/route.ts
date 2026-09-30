@@ -387,10 +387,37 @@ If the user asks for a price/quote and matches a known service, you can optional
       { role: 'user' as const, content: message },
     ];
 
-    // 6. Check for real natural language appointment booking execution
+    // 6. Run LLM FIRST to generate a real answer to the visitor's question.
+    //    Booking execution runs second and only attaches a confirmation card if
+    //    the intent engine (now fixed with whole-word matching and informational-
+    //    query guard) determines this is a genuine booking request.
     let rawReply = '';
     let cardData: Record<string, unknown> | null = null;
 
+    // Lower temperature from 0.6 → 0.3 to reduce hallucination when the
+    // system prompt is generic. The forms chat route already uses 0.3.
+    const aiResponse = await callAI({
+      messages: conversationMessages,
+      temperature: hybridResult?.shouldFallback ? 0.2 : 0.3,
+      maxTokens: 500,
+    });
+
+    rawReply = aiResponse.content || "Hello! How can I assist you today?";
+
+    // Check for ```card ... ```
+    const cardMatch = rawReply.match(/```card\s*([\s\S]*?)\s*```/);
+    if (cardMatch) {
+      try {
+        cardData = JSON.parse(cardMatch[1]);
+        rawReply = rawReply.replace(/```card[\s\S]*?```/, '').trim();
+      } catch (err) {
+        console.warn('[agent-chat] Failed to parse card JSON:', err);
+      }
+    }
+
+    // 7. Check for real natural language appointment booking execution (AFTER LLM).
+    //    The booking helper now uses whole-word keyword matching and an informational-
+    //    query guard, so "website", "services", "jobs" etc. will NOT trigger a booking.
     const bookingResult = await tryExecuteChatBooking({
       tenantId: tenantId || null,
       workspaceId: workspaceId || null,
@@ -419,30 +446,11 @@ If the user asks for a price/quote and matches a known service, you can optional
         ? `\n\n📹 **Google Meet Video Call Link:** ${bookingResult.meetingUrl}`
         : '';
 
-      rawReply = `🎉 Great news, ${bookingResult.lead?.name || 'there'}! Your appointment request has been confirmed and booked for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.${meetInfo}\n\nOur team has added this to the calendar and will follow up with you. You can also add it to your calendar below!`;
-    }
-
-    if (!rawReply) {
-      // Lower temperature from 0.6 → 0.3 to reduce hallucination when the
-      // system prompt is generic. The forms chat route already uses 0.3.
-      const aiResponse = await callAI({
-        messages: conversationMessages,
-        temperature: hybridResult?.shouldFallback ? 0.2 : 0.3,
-        maxTokens: 500,
-      });
-
-      rawReply = aiResponse.content || "Hello! How can I assist you today?";
-
-      // Check for ```card ... ```
-      const cardMatch = rawReply.match(/```card\s*([\s\S]*?)\s*```/);
-      if (cardMatch) {
-        try {
-          cardData = JSON.parse(cardMatch[1]);
-          rawReply = rawReply.replace(/```card[\s\S]*?```/, '').trim();
-        } catch (err) {
-          console.warn('[agent-chat] Failed to parse card JSON:', err);
-        }
-      }
+      // Append booking confirmation below the LLM answer (not replace it).
+      const confirmationLine = `🎉 Your appointment request has been confirmed and booked for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.${meetInfo}\n\nOur team has added this to the calendar and will follow up with you. You can also add it to your calendar below!`;
+      rawReply = rawReply
+        ? `${rawReply}\n\n${confirmationLine}`
+        : `🎉 Great news, ${bookingResult.lead?.name || 'there'}! ${confirmationLine}`;
     }
 
     // Sync conversation into PublicChatSession and PublicChatMessage for real-time Live Chat board

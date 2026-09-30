@@ -5,6 +5,13 @@
  * urgency score, and conversation summaries from chat messages, and executes:
  * 1. createAppointmentBooking() into the database when booking criteria is met.
  * 2. Structured Lead Capture and qualification into the CRM database.
+ *
+ * FIX (2026-09-30): Prevents false-positive booking execution caused by:
+ *   - Substring collisions: "website" was matching "visit", "services" was matching "service"
+ *   - History bleed: stale date/time from prior turns was triggering auto-booking
+ *     on completely unrelated questions like "jobs", "services", "your website"
+ *   - No informational query guard: questions about pricing, hours, location, website
+ *     must NEVER auto-execute a booking regardless of history context
  */
 
 import { db } from '@/lib/db';
@@ -45,6 +52,16 @@ function getNextWeekdayDate(dayName: string): string {
 
 /**
  * Extracts booking & intake parameters from message and history.
+ *
+ * IMPORTANT DESIGN RULES:
+ *  1. Booking INTENT is only detected from the CURRENT message — history is used
+ *     for urgency/context enrichment, never as the trigger for auto-booking.
+ *  2. Keyword matching uses whole-word regex patterns, NOT .includes(), to prevent
+ *     substring collisions (e.g. "website" must NOT match "visit").
+ *  3. Informational queries (website, services, jobs, pricing, hours, location, etc.)
+ *     block booking execution even if a booking keyword is present elsewhere.
+ *  4. Date/time from history only carries forward if the CURRENT message has explicit
+ *     booking intent — preventing stale date/time from prior turns triggering a booking.
  */
 export function extractBookingIntent(
   message: string,
@@ -59,7 +76,7 @@ export function extractBookingIntent(
   const lower = message.toLowerCase();
   const lowerCombined = combinedText.toLowerCase();
 
-  // 1. Urgency Classification
+  // 1. Urgency Classification (history is safe to use for this — urgency context)
   let urgency: 'emergency' | 'high' | 'normal' | 'flexible' = 'normal';
   const emergencyKeywords = ['leak', 'flooding', 'flooded', 'burst', 'sparks', 'no heat', 'freezing', 'emergency', 'urgent', 'overflow', 'broken pipe', 'shingle blown'];
   const highKeywords = ['asap', 'today', 'tomorrow morning', 'right away', 'immediately', 'soon as possible'];
@@ -74,30 +91,75 @@ export function extractBookingIntent(
   }
 
   // 2. Booking Intent Detection
-  const bookingKeywords = [
-    'book',
-    'appointment',
-    'schedule',
-    'confirmation call',
-    'meeting',
-    'reserve',
-    'slot',
-    'visit',
-    'consultation',
-    'come over',
-    'dispatch',
+  //
+  //    RULE: Use WHOLE-WORD regex patterns, NOT .includes() substring matching.
+  //    This prevents false positives like:
+  //      - "website" ⊃ "visit"  → was triggering booking intent
+  //      - "services" ⊃ "service" + history → was triggering booking
+  //      - "jobs" → was bleeding stale history date/time
+  //
+  //    Intent ONLY fires on the CURRENT message, not on history.
+  const bookingKeywordPatterns = [
+    /\bbook\b/,
+    /\bappointment\b/,
+    /\bschedule\b/,
+    /\bconfirmation\s+call\b/,
+    /\bmeeting\b/,
+    /\breserve\b/,
+    /\bslot\b/,
+    /\bsite\s+visit\b/,        // "site visit" only — NOT bare "visit" (prevents "website" collision)
+    /\bhouse\s+visit\b/,
+    /\bon-?site\s+visit\b/,
+    /\bconsultation\b/,
+    /\bcome\s+over\b/,
+    /\bdispatch\b/,
   ];
 
-  const hasIntent = bookingKeywords.some((kw) => lower.includes(kw) || lowerCombined.includes(kw));
+  // Explicit user confirmation phrases (user is explicitly confirming a prior booking offer)
+  const confirmationPatterns = [
+    /\byes\s+(please|book|confirm|schedule|go\s+ahead|do\s+it|that\s+works?)\b/i,
+    /\bconfirm\s+(my|the|this)?\s*(booking|appointment|slot|schedule)\b/i,
+    /\bgo\s+ahead\s+(and\s+)?(book|schedule|confirm)\b/i,
+    /\bbook\s+(me|it|that|us)\b/i,
+    /\byes,?\s*(please|book|schedule|confirm)\b/i,
+  ];
 
-  // 3. Time extraction: e.g. "2:00 PM", "2 PM", "14:00", "10:30am", "2pm"
+  // Informational queries that MUST NOT trigger booking execution under any circumstances.
+  // These represent questions about the business, not requests to book.
+  const informationalPatterns = [
+    /\b(website|web\s*site|your\s+site|your\s+url|site\s+url)\b/i,
+    /\b(services?|what\s+do\s+you\s+(do|offer)|offerings?)\b/i,
+    /\b(jobs?|careers?|hiring|employ|open\s+positions?)\b/i,
+    /\b(how\s+much|what\s+(does\s+it\s+)?cost|rates?|fees?|pricing)\b/i,
+    /\b(hours?|open\s+today|when\s+(do\s+you\s+)?open|are\s+you\s+open|closed)\b/i,
+    /\b(phone\s+number|your\s+number|how\s+do\s+i\s+contact|contact\s+info)\b/i,
+    /\b(where\s+are\s+you\s+located|your\s+address|directions?|location)\b/i,
+    /\b(who\s+are\s+you|tell\s+me\s+about|what\s+is\s+your|about\s+your)\b/i,
+  ];
+
+  const hasIntentInCurrentMessage =
+    bookingKeywordPatterns.some((re) => re.test(lower)) ||
+    confirmationPatterns.some((re) => re.test(lower));
+
+  const isInformationalQuery = informationalPatterns.some((re) => re.test(lower));
+
+  // Final intent: requires booking keyword in CURRENT message AND not an informational query
+  const hasIntent = hasIntentInCurrentMessage && !isInformationalQuery;
+
+  // 3. Time extraction
+  //    - Current message: always extracted if present
+  //    - History: ONLY carried forward if current message also has explicit booking intent
+  //      (prevents a time from 3 turns ago triggering a booking on "your services")
   const timeRegex = /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM))\b/i;
-  const timeMatch = combinedText.match(timeRegex);
-  let timeStr: string | undefined = timeMatch ? timeMatch[1].toUpperCase() : undefined;
+  const timeMatchCurrent = message.match(timeRegex);
+  const timeMatchCombined = combinedText.match(timeRegex);
+  let timeStr: string | undefined = timeMatchCurrent
+    ? timeMatchCurrent[1].toUpperCase()
+    : (hasIntent && timeMatchCombined ? timeMatchCombined[1].toUpperCase() : undefined);
 
-  // If "at 2" or "at 10" without AM/PM
+  // "at 2" or "at 10" without AM/PM — current message only
   if (!timeStr) {
-    const atHourMatch = combinedText.match(/\bat\s+(\d{1,2})\b/i);
+    const atHourMatch = message.match(/\bat\s+(\d{1,2})\b/i);
     if (atHourMatch) {
       const h = parseInt(atHourMatch[1], 10);
       timeStr = h < 8 || h === 12 ? `${h}:00 PM` : `${h}:00 AM`;
@@ -105,16 +167,19 @@ export function extractBookingIntent(
   }
 
   // 4. Date extraction
+  //    Current message is checked first. History is only used if hasIntent is true
+  //    to prevent stale dates bleeding into unrelated responses.
   let dateStr: string | undefined;
-  if (lower.includes('tomorrow') || lowerCombined.includes('tomorrow')) {
+
+  if (lower.includes('tomorrow')) {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     dateStr = tomorrow.toISOString().split('T')[0];
-  } else if (lower.includes('today') || lowerCombined.includes('today')) {
+  } else if (lower.includes('today')) {
     dateStr = new Date().toISOString().split('T')[0];
   } else {
     for (const day of WEEKDAYS) {
-      if (lower.includes(day) || lowerCombined.includes(day)) {
+      if (lower.includes(day)) {
         dateStr = getNextWeekdayDate(day);
         break;
       }
@@ -122,17 +187,39 @@ export function extractBookingIntent(
   }
 
   if (!dateStr) {
-    const isoDateMatch = combinedText.match(/\b(202\d-\d{2}-\d{2})\b/);
-    if (isoDateMatch) {
-      dateStr = isoDateMatch[1];
+    const isoDateMatchCurrent = message.match(/\b(202\d-\d{2}-\d{2})\b/);
+    if (isoDateMatchCurrent) {
+      dateStr = isoDateMatchCurrent[1];
     } else {
-      const slashDateMatch = combinedText.match(/\b(\d{1,2})\/(\d{1,2})\/(202\d|\d{2})\b/);
-      if (slashDateMatch) {
-        const m = slashDateMatch[1].padStart(2, '0');
-        const d = slashDateMatch[2].padStart(2, '0');
-        const y = slashDateMatch[3].length === 2 ? `20${slashDateMatch[3]}` : slashDateMatch[3];
+      const slashDateMatchCurrent = message.match(/\b(\d{1,2})\/(\d{1,2})\/(202\d|\d{2})\b/);
+      if (slashDateMatchCurrent) {
+        const m = slashDateMatchCurrent[1].padStart(2, '0');
+        const d = slashDateMatchCurrent[2].padStart(2, '0');
+        const y = slashDateMatchCurrent[3].length === 2 ? `20${slashDateMatchCurrent[3]}` : slashDateMatchCurrent[3];
         dateStr = `${y}-${m}-${d}`;
       }
+    }
+  }
+
+  // Fallback to history dates ONLY when current message has explicit booking intent
+  if (!dateStr && hasIntent) {
+    if (lowerCombined.includes('tomorrow')) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      dateStr = tomorrow.toISOString().split('T')[0];
+    } else if (lowerCombined.includes('today')) {
+      dateStr = new Date().toISOString().split('T')[0];
+    } else {
+      for (const day of WEEKDAYS) {
+        if (lowerCombined.includes(day)) {
+          dateStr = getNextWeekdayDate(day);
+          break;
+        }
+      }
+    }
+    if (!dateStr) {
+      const isoDateMatch = combinedText.match(/\b(202\d-\d{2}-\d{2})\b/);
+      if (isoDateMatch) dateStr = isoDateMatch[1];
     }
   }
 
@@ -146,7 +233,7 @@ export function extractBookingIntent(
 
   // 7. Address extraction
   let customerAddress: string | undefined;
-  const addressMatch = combinedText.match(/(?:at|address(?: is)?|located at|property at)\s+([0-9]+\s+[A-Za-z0-9\s,.-]+?)(?:\.|\n|tomorrow|at|my|$)/i);
+  const addressMatch = combinedText.match(/(?:at|address(?: is)?|located at|property at)\s+([0-9]+\s+[A-Za-z0-9\s,.-]+?)(?:\.|\\n|tomorrow|at|my|$)/i);
   if (addressMatch && addressMatch[1] && addressMatch[1].trim().length > 5) {
     customerAddress = addressMatch[1].trim();
   }
@@ -176,7 +263,15 @@ export function extractBookingIntent(
   if (!timeStr) missingFields.push('time');
   if (!customerPhone && !customerEmail) missingFields.push('contact_info');
 
-  const isBookingReady = hasIntent && Boolean(dateStr) && Boolean(timeStr) && (Boolean(customerPhone) || Boolean(customerEmail));
+  // Booking is "ready to execute" ONLY when ALL of the following are true:
+  //   ✓ Current message has explicit booking intent (not informational)
+  //   ✓ Date AND time are present
+  //   ✓ Contact info (phone or email) is available
+  const isBookingReady =
+    hasIntent &&
+    Boolean(dateStr) &&
+    Boolean(timeStr) &&
+    (Boolean(customerPhone) || Boolean(customerEmail));
 
   // Executive Summary of Customer Needs
   let executiveSummary = 'Customer initiated contact via AI Intake.';
