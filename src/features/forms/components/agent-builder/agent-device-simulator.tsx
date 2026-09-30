@@ -476,19 +476,17 @@ export function AgentDeviceSimulator({
     };
   }, []);
 
-  // Initialize greeting on load — automatically attach primary connected form if available
+  // Initialize greeting on load
   useEffect(() => {
-    const primaryForm = agent.connectedForms?.[0];
     setMessages([
       {
         id: 'msg_greet',
         sender: 'ai',
-        text: agent.welcomeGreeting || `Hi! I'm **${agent.name}**, your **AI Agent** and **${agent.roleTitle}**. How can I help you?`,
+        text: agent.welcomeGreeting || `Hi! 👋 I'm **${agent.name}**, your **${agent.roleTitle || '24/7 AI Service Specialist'}**. How can I help you today?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        suggestedForm: primaryForm,
       },
     ]);
-  }, [agent.welcomeGreeting, agent.name, agent.roleTitle, agent.connectedForms]);
+  }, [agent.welcomeGreeting, agent.name, agent.roleTitle]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1121,45 +1119,63 @@ export function AgentDeviceSimulator({
                     </div>
 
                     {/* Quick action buttons on initial greeting message */}
-                    {index === 0 && isAi && (agent.channels?.chatbot?.showButtons ?? true) && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {/* Auto-injected Connected Form Quick Chip if available */}
-                        {agent.connectedForms && agent.connectedForms.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const f = agent.connectedForms![0];
-                              setActiveFormModal(f);
-                              onOpenFormInModal?.(f);
-                            }}
-                            className={cn(
-                              'py-1.5 px-3 rounded-xl border text-xs font-semibold transition-all shadow-2xs flex items-center gap-1.5 text-left',
-                              isDark
-                                ? 'bg-blue-950/70 border-blue-600/70 text-blue-200 hover:bg-blue-900/80 hover:border-blue-400'
-                                : 'bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100 hover:border-blue-400'
-                            )}
-                          >
-                            <FileText className="size-3 text-blue-500" />
-                            <span>Fill {agent.connectedForms[0].name}</span>
-                          </button>
-                        )}
-                        {(agent.quickActions || []).map((qa) => (
-                          <button
-                            key={qa.id}
-                            type="button"
-                            onClick={() => handleQuickActionClick(qa)}
-                            className={cn(
-                              'py-1.5 px-3 rounded-xl border text-xs font-semibold transition-all shadow-2xs text-left',
-                              isDark
-                                ? 'bg-slate-800/90 border-slate-700 text-slate-100 hover:bg-slate-700 hover:border-slate-500'
-                                : 'bg-white border-slate-300 text-slate-800 hover:bg-blue-50 hover:border-blue-400'
-                            )}
-                          >
-                            {qa.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    {index === 0 && isAi && (agent.channels?.chatbot?.showButtons ?? true) && (() => {
+                      const existingActions = agent.quickActions || [];
+                      const hasFormAction = existingActions.some(
+                        (qa) => qa.actionType === 'open_form' || qa.label.toLowerCase().includes('form') || qa.label.toLowerCase().includes('estimate')
+                      );
+                      const displayActions = [...existingActions];
+
+                      // If connected form exists and no form action is present, add a single primary action
+                      if (!hasFormAction && agent.connectedForms && agent.connectedForms.length > 0) {
+                        const cleanName = agent.connectedForms[0].name.replace(/\s+(Intake|Quote|Form|Application)(\s+Form)?/gi, '').trim() || 'Service';
+                        displayActions.unshift({
+                          id: 'qa_auto_form',
+                          label: `Fill ${cleanName} Form`,
+                          actionType: 'open_form' as const,
+                          payload: agent.connectedForms[0].id,
+                        });
+                      }
+
+                      // Deduplicate by normalized label
+                      const seen = new Set<string>();
+                      const uniqueActions = displayActions.filter((qa) => {
+                        const key = (qa.label || '').trim().toLowerCase();
+                        if (!key || seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                      });
+
+                      if (uniqueActions.length === 0) return null;
+
+                      return (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {uniqueActions.map((qa) => {
+                            const isFormBtn = qa.actionType === 'open_form';
+                            return (
+                              <button
+                                key={qa.id}
+                                type="button"
+                                onClick={() => handleQuickActionClick(qa)}
+                                className={cn(
+                                  'py-1.5 px-3 rounded-xl border text-xs font-semibold transition-all shadow-2xs flex items-center gap-1.5 text-left',
+                                  isFormBtn
+                                    ? isDark
+                                      ? 'bg-blue-950/70 border-blue-600/70 text-blue-200 hover:bg-blue-900/80 hover:border-blue-400'
+                                      : 'bg-blue-50 border-blue-300 text-blue-800 hover:bg-blue-100 hover:border-blue-400'
+                                    : isDark
+                                      ? 'bg-slate-800/90 border-slate-700 text-slate-100 hover:bg-slate-700 hover:border-slate-500'
+                                      : 'bg-white border-slate-300 text-slate-800 hover:bg-blue-50 hover:border-blue-400'
+                                )}
+                              >
+                                {isFormBtn && <FileText className="size-3 text-blue-500" />}
+                                <span>{qa.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
 
                     {/* Card Protocol Rendering */}
                     {msg.card?.type === 'slot_picker' && (

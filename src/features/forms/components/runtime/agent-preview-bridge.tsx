@@ -77,15 +77,19 @@ function synthesizeAgentFromSchema(
     submissionCount: 0,
   };
 
+  const cleanBusinessName = (formName || 'Service')
+    .replace(/\s+(Intake|Quote|Form|Application|Contact|Lead|Request|Booking)(\s+Form)?/gi, '')
+    .trim() || 'Service';
+
   return {
     ...DEFAULT_FORM_AGENT,
-    id: `agent_preview_${formName.toLowerCase().replace(/\s+/g, '_').slice(0, 24)}`,
+    id: `agent_preview_${cleanBusinessName.toLowerCase().replace(/\s+/g, '_').slice(0, 24)}`,
     slug: `preview-agent`,
-    name: formName ? `${formName.slice(0, 24)} Assistant` : 'AI Assistant',
-    roleTitle: formName ? `${formName.slice(0, 32)} AI Assistant` : 'AI Assistant',
+    name: `${cleanBusinessName} Assistant`,
+    roleTitle: `${cleanBusinessName} Service Specialist`,
     brandColor: buttonColor,
-    welcomeGreeting: `Hi! I'm **${formName ? `${formName.slice(0, 24)} Assistant` : 'your AI Agent'}**, your AI Agent and ${formName || 'Service'} Assistant. How can I help you?`,
-    greetingSubtitle: formDescription || 'Ask me anything, or tap a quick action below.',
+    welcomeGreeting: `Hi! 👋 Welcome to **${cleanBusinessName}**. I'm your 24/7 Service Specialist. How can I help you today?`,
+    greetingSubtitle: formDescription || 'Instant estimates, appointment booking, and quick answers.',
     quickActions: quickActions.length > 0 ? quickActions : DEFAULT_FORM_AGENT.quickActions,
     connectedForms: [connectedForm],
     channels: {

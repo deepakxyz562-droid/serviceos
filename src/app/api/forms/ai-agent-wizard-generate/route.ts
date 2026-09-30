@@ -108,6 +108,7 @@ export async function POST(req: NextRequest) {
               successTitle: 'Thank You!',
               successMessage: 'Your request has been received. Our team will contact you shortly.',
             },
+            agentConfig: generated.agent,
           }),
         },
       });
@@ -142,6 +143,25 @@ export async function POST(req: NextRequest) {
 
       generated.agent.id = savedAgent.id;
       generated.agent.slug = savedAgent.slug;
+
+      // Update Form schemaJson with final agentConfig (containing ID and connected forms)
+      await db.form.update({
+        where: { id: savedForm.id },
+        data: {
+          schemaJson: JSON.stringify({
+            fields: generated.form.fields,
+            theme: generated.form.theme,
+            mediaPanel: generated.form.mediaPanel || generated.form.theme?.mediaPanel,
+            layout: generated.form.theme?.layout || 'split_media',
+            settings: {
+              submitButtonText: generated.form.submitButtonText,
+              successTitle: 'Thank You!',
+              successMessage: 'Your request has been received. Our team will contact you shortly.',
+            },
+            agentConfig: generated.agent,
+          }),
+        },
+      }).catch((err) => console.warn('[ai-agent-wizard-generate] Form agentConfig update notice:', err));
 
       // Also persist to KnowledgeSource & KnowledgeDocument if crawled
       if (crawledContext && validTenantId) {

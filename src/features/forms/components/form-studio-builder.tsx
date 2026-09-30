@@ -564,11 +564,40 @@ export function FormStudioBuilder({
   }, [formData, formLayout]);
 
   const activeAgentData: FormAgentData = useMemo(() => {
-    return (formData.agentConfig as FormAgentData) || {
+    if (formData.agentConfig) {
+      return formData.agentConfig as FormAgentData;
+    }
+    const cleanBusinessName = (formData.name || 'Service')
+      .replace(/\s+(Intake|Quote|Form|Application|Contact|Lead|Request|Booking)(\s+Form)?/gi, '')
+      .trim() || 'Service';
+
+    return {
       ...DEFAULT_FORM_AGENT,
       id: `agent_${formData.id || 'form'}`,
-      name: `${formData.name || 'Service'} Assistant`,
-      welcomeMessage: `Hi! I'm your ${formData.name || 'Service'} Assistant. How can I help you today?`,
+      name: `${cleanBusinessName} Assistant`,
+      roleTitle: '24/7 Intake & Service Specialist',
+      welcomeGreeting: `Hi! 👋 Welcome to **${cleanBusinessName}**. I'm your 24/7 Service Specialist. How can I help you today?`,
+      greetingSubtitle: 'Instant estimates, service booking, and quick answers.',
+      quickActions: [
+        {
+          id: 'qa_quote',
+          label: 'Get Instant Estimate',
+          actionType: 'open_form',
+          payload: formData.id || 'form_current',
+        },
+        {
+          id: 'qa_book',
+          label: 'Book Service',
+          actionType: 'booking',
+          payload: 'booking',
+        },
+        {
+          id: 'qa_services',
+          label: 'Services & Pricing',
+          actionType: 'message',
+          payload: 'What services do you offer and what are your rates?',
+        },
+      ],
       connectedForms: [{
         id: formData.id || 'form_current',
         name: formData.name || 'Service Form',
@@ -2922,17 +2951,7 @@ export function FormStudioBuilder({
         {studioTab === 'agent' && !isPreviewMode && (
           <div className="flex-1 flex overflow-hidden w-full">
             <FormAgentStudio
-              initialAgent={formData.agentConfig || {
-                ...DEFAULT_FORM_AGENT,
-                id: `agent_${formData.id || 'form'}`,
-                name: `${formData.name || 'Form'} Assistant`,
-                connectedForms: formData.id ? [{
-                  id: formData.id,
-                  name: formData.name || 'Form',
-                  description: formData.description,
-                  fields: formData.fields,
-                }] : []
-              }}
+              initialAgent={formData.agentConfig || activeAgentData}
               onChange={(updated) => {
                 onFormDataChangeWithHistory((prev) => ({
                   ...prev,
