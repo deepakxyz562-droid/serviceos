@@ -49,7 +49,8 @@ export interface BookingCardHandlers {
   onEdit: (booking: Booking) => void;
   onDelete: (booking: Booking) => void;
   onStatusChange: (booking: Booking, newStatus: string) => void;
-  onCreateJobFromBooking: (bookingId: string) => void;
+  /** Optional for standalone subscribers who don't have job management. */
+  onCreateJobFromBooking?: (bookingId: string) => void;
   /** PAGINATION-ARCHIVE-1: soft-delete (archive) handler. */
   onArchive?: (bookingId: string) => void;
   /** PAGINATION-ARCHIVE-1: restore handler (used when `archiveMode` is true). */
@@ -172,11 +173,11 @@ export function BookingCard({ booking, handlers }: BookingCardProps) {
             </Button>
           ) : (
             <>
-              {!isClosed && (
+              {!isClosed && handlers.onCreateJobFromBooking && (
                 <Button
                   size="sm"
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-8 text-xs shadow-xs"
-                  onClick={() => handlers.onCreateJobFromBooking(booking.id)}
+                  onClick={() => handlers.onCreateJobFromBooking!(booking.id)}
                 >
                   <ArrowRight className="size-3.5 mr-1" /> Convert to Job
                 </Button>
@@ -195,8 +196,8 @@ export function BookingCard({ booking, handlers }: BookingCardProps) {
                   <DropdownMenuItem onClick={() => handlers.onEdit(booking)}>
                     <Pencil className="size-3.5 mr-2" /> Edit Booking
                   </DropdownMenuItem>
-                  {!isClosed && (
-                    <DropdownMenuItem onClick={() => handlers.onCreateJobFromBooking(booking.id)}>
+                  {!isClosed && handlers.onCreateJobFromBooking && (
+                    <DropdownMenuItem onClick={() => handlers.onCreateJobFromBooking!(booking.id)}>
                       <ArrowRight className="size-3.5 mr-2" /> Convert to Job
                     </DropdownMenuItem>
                   )}

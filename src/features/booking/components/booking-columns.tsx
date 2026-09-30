@@ -50,7 +50,8 @@ export interface BookingColumnHandlers {
   onEdit: (booking: Booking) => void;
   onDelete: (booking: Booking) => void;
   onStatusChange: (booking: Booking, newStatus: string) => void;
-  onCreateJobFromBooking: (bookingId: string) => void;
+  /** Optional for standalone subscribers who don't have job management. */
+  onCreateJobFromBooking?: (bookingId: string) => void;
   /**
    * PAGINATION-ARCHIVE-1: Archive (soft-delete) handler. When provided, an
    * "Archive" item is added to the row dropdown. Used by the Active list.
@@ -247,7 +248,7 @@ export function buildBookingColumns(handlers: BookingColumnHandlers): Column<Boo
             className="flex items-center justify-end gap-1"
             onClick={(e) => e.stopPropagation()}
           >
-            {!isClosed && (
+            {!isClosed && onCreateJobFromBooking && (
               <Button
                 size="sm"
                 className="h-7 text-[11px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"

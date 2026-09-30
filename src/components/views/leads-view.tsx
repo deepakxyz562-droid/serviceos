@@ -39,6 +39,7 @@ import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/api';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useIsStandalone } from '@/hooks/use-tenant-plan';
 import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/lib/query-keys';
 import {
@@ -117,6 +118,7 @@ export {
 
 export function LeadsView() {
   const { currency, formatCompact, format: formatCurrency, symbol } = useCompanyCurrency();
+  const isStandalone = useIsStandalone();
 
   // Global store — used to hand off a lead's data to the Jobs view when the
   // user clicks "Convert" so the New Job form opens pre-filled.
@@ -874,7 +876,7 @@ export function LeadsView() {
           className="flex items-center justify-end gap-1"
           onClick={(e) => e.stopPropagation()}
         >
-          {!['won', 'lost'].includes(lead.status) && (
+          {!isStandalone && !['won', 'lost'].includes(lead.status) && (
             <Button
               size="sm"
               className="h-7 text-[11px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
@@ -1039,7 +1041,7 @@ export function LeadsView() {
         <LeadDetailPage
           lead={selectedLead}
           onBack={closeLeadDetail}
-          onConvert={openConvertDialog}
+          onConvert={isStandalone ? undefined : openConvertDialog}
           onEdit={openEditLead}
           onDelete={openDeleteDialog}
           onStatusChange={handleStatusChange}

@@ -88,7 +88,7 @@ export interface BookingDetailPageProps {
   /** Trigger AI auto-assignment. */
   onAutoAssign: (bookingId: string) => Promise<void> | void;
   /** Convert booking to a full Job. */
-  onCreateJob: (bookingId: string) => Promise<void> | void;
+  onCreateJob?: (bookingId: string) => Promise<void> | void;
   /** Available employees for dispatch. */
   employees: EmployeeOption[];
   /** Submitting/loading flag. */
@@ -177,16 +177,18 @@ export function BookingDetailPage({
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             {/* Convert to Job */}
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => onCreateJob(booking.id)}
-              disabled={submitting || booking.status === 'completed' || booking.status === 'cancelled'}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-2xs"
-            >
-              <Briefcase className="size-4" />
-              <span className="hidden sm:inline">Convert to Job</span>
-            </Button>
+            {onCreateJob && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => onCreateJob(booking.id)}
+                disabled={submitting || booking.status === 'completed' || booking.status === 'cancelled'}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-2xs"
+              >
+                <Briefcase className="size-4" />
+                <span className="hidden sm:inline">Convert to Job</span>
+              </Button>
+            )}
 
             {/* Edit Booking */}
             <Button

@@ -78,8 +78,8 @@ export interface LeadDetailPageProps {
   lead: Lead | null;
   /** Back to list. */
   onBack: () => void;
-  /** Open the convert-to-job flow (hands off to Jobs view). */
-  onConvert: (lead: Lead) => void;
+  /** Open the convert-to-job flow (hands off to Jobs view). Optional for standalone subscribers. */
+  onConvert?: (lead: Lead) => void;
   /** Open the edit form. */
   onEdit: (lead: Lead) => void;
   /** Open the delete confirmation dialog. */
@@ -197,7 +197,7 @@ export function LeadDetailPage({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {!isClosed && (
+            {!isClosed && onConvert && (
               <button
                 type="button"
                 onClick={() => onConvert(lead)}
@@ -224,7 +224,7 @@ export function LeadDetailPage({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {!isClosed && (
+                {!isClosed && onConvert && (
                   <DropdownMenuItem onClick={() => onConvert(lead)}>
                     <ArrowRight className="size-3.5 mr-2" /> Convert to Job
                   </DropdownMenuItem>

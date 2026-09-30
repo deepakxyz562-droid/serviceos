@@ -741,6 +741,105 @@ export function getIndustrySpecificFields(industryId: string, categoryId: string
       );
       break;
 
+    case 'wedding':
+    case 'events':
+      fields.push(
+        {
+          id: 'event_date',
+          type: 'date',
+          widgetType: 'date_picker',
+          label: 'Wedding / Event Date',
+          required: true,
+        },
+        {
+          id: 'estimated_guest_count',
+          type: 'numerical',
+          widgetType: 'numerical',
+          label: 'Estimated Guest Count',
+          placeholder: 'e.g. 150',
+          required: true,
+        },
+        {
+          id: 'venue_location',
+          type: 'short_answer',
+          label: 'Venue Name or City / Region',
+          placeholder: 'e.g. The Grand Ballroom, Napa Valley',
+        },
+        {
+          id: 'services_requested',
+          type: 'checkbox',
+          label: 'Services & Coordination Desired',
+          options: [
+            { label: 'Full Wedding Planning & Design', value: 'full_planning' },
+            { label: 'Day-Of Coordination', value: 'day_of' },
+            { label: 'Photography & Videography Package', value: 'photo_video' },
+            { label: 'Floral Design & Decor Styling', value: 'floral' },
+            { label: 'Catering & Bar Service', value: 'catering' },
+          ],
+        }
+      );
+      break;
+
+    case 'photography':
+      fields.push(
+        {
+          id: 'session_type',
+          type: 'radio',
+          label: 'Type of Photography Session',
+          options: [
+            { label: '💍 Wedding & Engagement', value: 'wedding' },
+            { label: '👨‍👩‍👧 Family & Portrait', value: 'portrait' },
+            { label: '🏢 Corporate & Brand', value: 'commercial' },
+            { label: '🏠 Real Estate & Architecture', value: 'real_estate' },
+            { label: '🎉 Special Event / Party', value: 'event' },
+          ],
+          required: true,
+        },
+        {
+          id: 'preferred_date',
+          type: 'date',
+          widgetType: 'date_picker',
+          label: 'Target Shoot Date',
+        },
+        {
+          id: 'deliverables_requested',
+          type: 'checkbox',
+          label: 'Package Inclusions & Deliverables',
+          options: [
+            { label: 'Full Digital Gallery (High-Res)', value: 'digital_gallery' },
+            { label: 'Fine-Art Hardcover Album', value: 'album' },
+            { label: 'Second Lead Photographer', value: 'second_shooter' },
+            { label: 'Drone Aerial Photography', value: 'drone' },
+          ],
+        }
+      );
+      break;
+
+    case 'catering':
+      fields.push(
+        {
+          id: 'service_style',
+          type: 'radio',
+          label: 'Preferred Catering Service Style',
+          options: [
+            { label: '🍽️ Plated Multi-Course Dinner', value: 'plated' },
+            { label: '🥗 Gourmet Buffet Service', value: 'buffet' },
+            { label: '🍢 Passed Hors d’Oeuvres & Cocktails', value: 'passed_bites' },
+            { label: '🌮 Interactive Food Stations', value: 'stations' },
+          ],
+          required: true,
+        },
+        {
+          id: 'event_guest_count',
+          type: 'numerical',
+          widgetType: 'numerical',
+          label: 'Estimated Guest Headcount',
+          placeholder: 'e.g. 100',
+          required: true,
+        }
+      );
+      break;
+
     default:
       fields.push({
         id: 'service_details',
@@ -1126,6 +1225,87 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         ...baseContact.slice(0, 2),
       ];
 
+    case 'membership':
+      return [
+        {
+          id: 'membership_tier',
+          type: 'radio',
+          label: 'Select Membership Tier',
+          options: [
+            { label: '🌟 Basic Member ($29 / month)', value: 'basic' },
+            { label: '💎 VIP Premium Pass ($79 / month)', value: 'vip' },
+            { label: '👑 Executive Elite Patron ($199 / month)', value: 'executive' },
+            { label: '🏆 Annual Founding Member ($499 / year)', value: 'founding' },
+          ],
+          required: true,
+        },
+        {
+          id: 'billing_cycle',
+          type: 'radio',
+          label: 'Billing Frequency',
+          options: [
+            { label: 'Monthly Automatic Renewal', value: 'monthly' },
+            { label: 'Annual Upfront (Save 20%)', value: 'annual' },
+          ],
+          required: true,
+        },
+        {
+          id: 'member_perks_opt_in',
+          type: 'checkbox',
+          label: 'Member Benefits & Club Preferences',
+          options: [
+            { label: 'VIP Lounge & Priority Access', value: 'vip_lounge' },
+            { label: 'Exclusive Partner Discounts & Perks', value: 'partner_discounts' },
+            { label: 'Monthly Masterclass & Networking Sessions', value: 'masterclasses' },
+          ],
+        },
+        ...baseContact,
+      ];
+
+    case 'donation':
+      return [
+        {
+          id: 'donation_amount',
+          type: 'radio',
+          label: 'Contribution Amount',
+          options: [
+            { label: '$25 — Supporter', value: '25' },
+            { label: '$50 — Advocate', value: '50' },
+            { label: '$100 — Champion', value: '100' },
+            { label: '$250 — Patron Circle', value: '250' },
+            { label: '$500 — Benefactor', value: '500' },
+          ],
+          required: true,
+        },
+        {
+          id: 'donation_frequency',
+          type: 'radio',
+          label: 'Gift Frequency',
+          options: [
+            { label: 'One-Time Contribution', value: 'one_time' },
+            { label: 'Recurring Monthly Gift', value: 'monthly' },
+          ],
+          required: true,
+        },
+        ...baseContact,
+      ];
+
+    case 'package':
+      return [
+        {
+          id: 'selected_package',
+          type: 'radio',
+          label: 'Select Your Service Package',
+          options: [
+            { label: '🥉 Essential Package', value: 'essential' },
+            { label: '🥈 Signature Package (Most Popular)', value: 'signature' },
+            { label: '🥇 Premier All-Inclusive Luxury', value: 'premier' },
+          ],
+          required: true,
+        },
+        ...baseContact,
+      ];
+
     default:
       return [
         ...baseContact,
@@ -1215,6 +1395,10 @@ export function synthesizeTemplate(
     agency: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80',
     consulting: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=1200&q=80',
     nonprofit: 'https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&w=1200&q=80',
+    wedding: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80',
+    events: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80',
+    photography: 'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&w=1200&q=80',
+    catering: 'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=1200&q=80',
   };
 
   const primaryPhoto =
@@ -1228,8 +1412,8 @@ export function synthesizeTemplate(
   // - quote_calculator → split_media (calculator left, form right)
   // - booking_scheduler → split_media (calendar left, form right)
   // - field_inspection → split_media (checklist left, form right)
-  // - visual_choice_grid → card (card-by-card selection)
-  // - ai_dynamic_concierge → card (conversational card mode)
+  // - visual_choice_grid → split_media (hero panel left, choice grid right)
+  // - ai_dynamic_concierge → split_media (concierge panel left, form right)
   // - milestone_stepper → classic (multi-step with step nav, stays classic)
   // - card_swipe → card (one question per screen)
   // - split_hero → split_media (already split)
@@ -1239,8 +1423,8 @@ export function synthesizeTemplate(
     quote_calculator: 'split_media',
     booking_scheduler: 'split_media',
     field_inspection: 'split_media',
-    visual_choice_grid: 'card',
-    ai_dynamic_concierge: 'card',
+    visual_choice_grid: 'split_media',
+    ai_dynamic_concierge: 'split_media',
     card_swipe: 'card',
     split_hero: 'split_media',
     milestone_stepper: 'classic',

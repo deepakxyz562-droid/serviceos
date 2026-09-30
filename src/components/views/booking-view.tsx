@@ -40,6 +40,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/lib/query-keys';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useAppStore } from '@/store/app-store';
+import { useIsStandalone } from '@/hooks/use-tenant-plan';
 import { lineItemsSubtotal, type LineItem } from '@/features/line-items';
 
 import {
@@ -69,6 +70,7 @@ import { BookingStatusChips } from '@/features/booking/components/booking-status
 
 export function BookingView() {
   const { symbol } = useCompanyCurrency();
+  const isStandalone = useIsStandalone();
   const pendingCreate = useAppStore((s) => s.pendingCreate);
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
 
@@ -673,7 +675,7 @@ export function BookingView() {
     onEdit: handleEdit,
     onDelete: handleDelete,
     onStatusChange: handleStatusChange,
-    onCreateJobFromBooking: handleCreateJobFromBooking,
+    onCreateJobFromBooking: isStandalone ? undefined : handleCreateJobFromBooking,
     // PAGINATION-ARCHIVE-1: pass archive handlers + current mode so the
     // columns render the right actions (Restore-only in archive mode).
     onArchive: handleArchiveBooking,
@@ -695,7 +697,7 @@ export function BookingView() {
         setFormData={setFormData}
         onSave={editingBooking ? submitEdit : submitCreate}
         onSaveAndAssign={submitCreateAndAssign}
-        onSaveAndCreateJob={editingBooking ? submitEditAndCreateJob : submitCreateAndJob}
+        onSaveAndCreateJob={isStandalone ? undefined : (editingBooking ? submitEditAndCreateJob : submitCreateAndJob)}
         onCancel={() => {
           setIsCreatingBooking(false);
           setEditingBooking(null);
@@ -726,7 +728,7 @@ export function BookingView() {
         onStatusChange={handleStatusChange}
         onAssignEmployee={handleAssignEmployee}
         onAutoAssign={handleAutoAssign}
-        onCreateJob={handleCreateJobFromBooking}
+        onCreateJob={isStandalone ? undefined : handleCreateJobFromBooking}
         employees={employees}
         submitting={submitting}
         symbol={symbol}
@@ -960,7 +962,7 @@ export function BookingView() {
                     onEdit: handleEdit,
                     onDelete: handleDelete,
                     onStatusChange: handleStatusChange,
-                    onCreateJobFromBooking: handleCreateJobFromBooking,
+                    onCreateJobFromBooking: isStandalone ? undefined : handleCreateJobFromBooking,
                     onArchive: handleArchiveBooking,
                     archiveMode: false,
                     archiveActionLoadingId,

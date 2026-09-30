@@ -500,10 +500,10 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     'formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments',
     'creatorProfile', 'creatorOffers',
     'scheduling', 'meetingTypes', 'appointmentTypes',
-    'liveChat', 'formsAnalytics', 'aiReceptionist', 'chatbotBuilder',
+    'formsAnalytics', 'chatbotBuilder',
     // CRM, Deals & Bookings
     'leads', 'customers', 'contacts', 'crm', 'customer360',
-    'booking', 'calendar', 'salesPipeline',
+    'booking', 'calendar',
     // System & Integrations
     'integrations', 'billing', 'settings', 'notifications', 'helpCenter', 'activityLogs',
   ]), []);

@@ -74,6 +74,24 @@ export function useTenantPlan(): TenantPlanInfo {
   };
 }
 
+/**
+ * Check whether the current user/tenant is on a standalone plan
+ * (e.g. GPTForm & AI Agent standalone suite without ERP jobs/dispatch).
+ */
+export function useIsStandalone(): boolean {
+  const auth = useAppStore((s) => s.auth);
+  const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
+  const isEmployee = auth.user?.role === 'employee';
+  if (isSuperAdmin || isEmployee) return false;
+  return (
+    (auth.tenant as any)?.signupMode === 'standalone' ||
+    (auth.tenant as any)?.plan === 'standalone_starter' ||
+    (auth.tenant as any)?.plan === 'standalone_business' ||
+    String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
+    (auth.user as any)?.role === 'standalone_user'
+  );
+}
+
 // ─── Module-level cache for useFeatureAccess ─────────────────────────────────
 //
 // One entry per featureKey. Cached for 60s (SWR-style): after the cache entry

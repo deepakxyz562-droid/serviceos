@@ -224,32 +224,29 @@ const ownerNavSections: NavSection[] = [
   },
 ];
 
-// ─── Standalone AI Employee & Forms Navigation ──────────────────────────────
+// ─── Standalone GPTForm & AI Agent Navigation (Topmate / Calendly Architecture) ─
 const standaloneNavSections: NavSection[] = [
   {
-    title: 'AI & Forms Suite',
+    title: 'Assets & Builders',
     items: [
       { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { view: 'formBuilder', label: 'AI Forms & Studio', icon: FileInput },
+      { view: 'formBuilder', label: 'Forms & Studio', icon: FileInput },
       { view: 'agentStudio', label: 'AI Agent Studio', icon: Bot, badge: 'AI' },
-      { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
+    ],
+  },
+  {
+    title: 'Inbox & Activity',
+    items: [
+      { view: 'leads', label: 'Submissions', icon: Inbox },
+      { view: 'booking', label: 'Bookings', icon: CalendarCheck },
+      { view: 'customers', label: 'Contacts', icon: Users },
+    ],
+  },
+  {
+    title: 'Growth & Embeds',
+    items: [
+      { view: 'integrations', label: 'Embeds & API', icon: Share2 },
       { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
-      { view: 'aiReceptionist', label: 'AI Employee', icon: PhoneCall },
-    ],
-  },
-  {
-    title: 'CRM & Pipeline',
-    items: [
-      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
-      { view: 'leads', label: 'Leads', icon: Target },
-      { view: 'customers', label: 'Customers & Contacts', icon: Users },
-      { view: 'booking', label: 'CRM Bookings', icon: CalendarCheck },
-    ],
-  },
-  {
-    title: 'Distribution & Embeds',
-    items: [
-      { view: 'integrations', label: 'Embeds & API', icon: Plug },
     ],
   },
   {
