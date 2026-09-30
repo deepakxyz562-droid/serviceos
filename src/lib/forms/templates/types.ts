@@ -209,6 +209,10 @@ export interface FormTemplate {
   ratingAverage?: number;
   ratingCount?: number;
 
+  // ─── Form Experience Structure (100 Archetypes / 10 Engines) ──────────
+  structureId?: string;
+  engine?: string;
+
   // ─── SEO ────────────────────────────────────────────────────────────────
   seo: TemplateSeoMeta;
 

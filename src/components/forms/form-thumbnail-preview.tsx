@@ -24,6 +24,14 @@ import {
   Zap,
   Phone,
   LayoutTemplate,
+  SlidersHorizontal,
+  Bot,
+  Camera,
+  CheckCircle2,
+  Sliders,
+  CalendarCheck,
+  ClipboardCheck,
+  LayoutGrid,
 } from 'lucide-react';
 import type { FormTemplate, TemplateCategoryId, TemplateIndustryId } from '@/lib/forms/templates';
 import { getCategoryLabel, getIndustryLabel } from '@/lib/forms/templates';
@@ -98,94 +106,22 @@ const CATEGORY_THEMES: Record<
     badgeText: 'text-emerald-200',
     icon: DollarSign,
     actionLabel: 'Pay Now · Secure',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1556742049-0a67c5574f73?auto=format&fit=crop&w=800&q=80',
   },
   booking_forms: {
-    gradient: 'from-teal-600 via-emerald-600 to-cyan-600',
-    accentColor: 'text-teal-400',
-    badgeBg: 'bg-teal-500/20 border-teal-400/30',
-    badgeText: 'text-teal-200',
-    icon: Calendar,
-    actionLabel: 'Book Appointment',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&w=800&q=80',
-  },
-  appointment_forms: {
-    gradient: 'from-sky-600 via-blue-600 to-indigo-600',
-    accentColor: 'text-sky-400',
-    badgeBg: 'bg-sky-500/20 border-sky-400/30',
-    badgeText: 'text-sky-200',
-    icon: Clock,
-    actionLabel: 'Confirm Time Slot',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&w=800&q=80',
-  },
-  registration_forms: {
-    gradient: 'from-purple-600 via-violet-600 to-indigo-600',
-    accentColor: 'text-purple-400',
-    badgeBg: 'bg-purple-500/20 border-purple-400/30',
-    badgeText: 'text-purple-200',
-    icon: User,
-    actionLabel: 'Register Attendee',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80',
-  },
-  application_forms: {
-    gradient: 'from-blue-600 via-indigo-600 to-slate-700',
-    accentColor: 'text-blue-400',
-    badgeBg: 'bg-blue-500/20 border-blue-400/30',
-    badgeText: 'text-blue-200',
-    icon: Briefcase,
-    actionLabel: 'Submit Application',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80',
-  },
-  inspection_checklist: {
-    gradient: 'from-amber-600 via-orange-600 to-yellow-600',
-    accentColor: 'text-amber-400',
-    badgeBg: 'bg-amber-500/20 border-amber-400/30',
-    badgeText: 'text-amber-200',
-    icon: CheckSquare,
-    actionLabel: 'Complete Inspection',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1581244277943-fe4a9c777189?auto=format&fit=crop&w=800&q=80',
-  },
-  waiver_consent: {
-    gradient: 'from-slate-800 via-zinc-800 to-slate-950',
-    accentColor: 'text-slate-300',
-    badgeBg: 'bg-slate-500/20 border-slate-400/30',
-    badgeText: 'text-slate-200',
-    icon: ShieldCheck,
-    actionLabel: 'Sign & Agree Digitally',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=800&q=80',
-  },
-  consent_forms: {
-    gradient: 'from-rose-600 via-pink-600 to-purple-600',
-    accentColor: 'text-rose-400',
-    badgeBg: 'bg-rose-500/20 border-rose-400/30',
-    badgeText: 'text-rose-200',
-    icon: HeartPulse,
-    actionLabel: 'Submit Patient Info',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=800&q=80',
-  },
-  survey_forms: {
-    gradient: 'from-cyan-600 via-sky-600 to-blue-600',
+    gradient: 'from-blue-600 via-cyan-600 to-teal-600',
     accentColor: 'text-cyan-400',
     badgeBg: 'bg-cyan-500/20 border-cyan-400/30',
     badgeText: 'text-cyan-200',
-    icon: Star,
-    actionLabel: 'Submit Survey',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1551434678-e076c223a692?auto=format&fit=crop&w=800&q=80',
-  },
-  feedback_forms: {
-    gradient: 'from-fuchsia-600 via-pink-600 to-rose-600',
-    accentColor: 'text-fuchsia-400',
-    badgeBg: 'bg-fuchsia-500/20 border-fuchsia-400/30',
-    badgeText: 'text-fuchsia-200',
-    icon: Sparkles,
-    actionLabel: 'Send Review',
-    fallbackPhoto: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=800&q=80',
+    icon: CalendarCheck,
+    actionLabel: 'Confirm Appointment',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&w=800&q=80',
   },
   contact_forms: {
-    gradient: 'from-emerald-600 via-teal-600 to-blue-600',
-    accentColor: 'text-emerald-400',
-    badgeBg: 'bg-emerald-500/20 border-emerald-400/30',
-    badgeText: 'text-emerald-200',
+    gradient: 'from-slate-700 via-slate-800 to-slate-900',
+    accentColor: 'text-slate-300',
+    badgeBg: 'bg-slate-700/40 border-slate-600/40',
+    badgeText: 'text-slate-200',
     icon: Mail,
     actionLabel: 'Send Inquiry',
     fallbackPhoto: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80',
@@ -221,13 +157,19 @@ const DEFAULT_THEME = {
 };
 
 /**
- * 2026 UI/UX Modernized Form Thumbnail Preview
+ * Modern Form Thumbnail Preview
  *
- * Dynamically visualizes:
- * - 4K High-Res Hero Media Backdrop (from template mediaPanel or curated industry photography)
- * - 2-Part Split Hero dual-column layout vs Single/Stepped Glassmorphism forms
- * - Live scaled schema fields with luminous interactive tokens
- * - Multi-Step Stepper indicators and 2026 design style badges
+ * Visually distinguishes templates according to their 10 Master Experience Engines:
+ * 1. Quote Calculator (Sliders, dynamic math, price pills)
+ * 2. Booking / Calendar First (Calendar dates, available time slots)
+ * 3. Operational / Field Checklist (Inspection items, pass/fail, photo evidence)
+ * 4. Visual Choice Card Grid (Product/service cards with badges)
+ * 5. Conversational / Card Swipe (Typeform-style one-at-a-time viewport)
+ * 6. E-Signature Contract & Waiver (Legal terms, digital signature draw path)
+ * 7. Two-Column Split Hero (Dual-column with persistent hero media)
+ * 8. Multi-Step Milestone Stepper (01, 02, 03 step milestones)
+ * 9. Hero + Form Landing Page (Prominent hero banner + floating input card)
+ * 10. AI Dynamic Concierge (AI prompt bubble + adaptive quick chips)
  */
 export function FormThumbnailPreview({
   template,
@@ -235,12 +177,11 @@ export function FormThumbnailPreview({
 }: FormThumbnailPreviewProps) {
   const primaryCat = template.categories[0] || 'general';
   const theme = CATEGORY_THEMES[primaryCat] || DEFAULT_THEME;
-  const CategoryIcon = theme.icon;
 
   const rawFields = template.schema?.fields || [];
   const primaryColor = template.schema?.theme?.primaryColor || '#059669';
   const submitText = template.schema?.settings?.submitButtonText || theme.actionLabel;
-  const isMultiStep = (template.schema?.steps?.length || 0) > 1 && template.schema?.theme?.layout !== 'classic';
+  const isMultiStep = (template.schema?.steps?.length || 0) > 1;
   const stepsCount = template.schema?.steps?.length || 1;
 
   const mediaPanel = template.schema?.mediaPanel || template.schema?.theme?.mediaPanel;
@@ -257,9 +198,42 @@ export function FormThumbnailPreview({
 
   const isMap = mediaPanel?.mediaType === 'map';
   const isGradient = mediaPanel?.mediaType === 'gradient';
-  const isVideo = mediaPanel?.mediaType === 'video' || mediaPanel?.mediaType === 'youtube';
 
-  const displayFields = rawFields.slice(0, 3);
+  // ─── Detect Master Engine Archetype ──────────────────────────────────────
+  const engine = (() => {
+    if (template.engine) return template.engine;
+    const c = (template.categories?.[0] || '').toLowerCase();
+    const i = (template.industries?.[0] || '').toLowerCase();
+    const hasSlider = rawFields.some((f) => f.widgetType === 'slider' || f.type === 'calculated');
+    if (hasSlider || c.includes('quote') || c.includes('estimate') || c.includes('calculator') || i.includes('solar') || i.includes('roof')) {
+      return 'quote_calculator';
+    }
+    const hasAppt = rawFields.some((f) => f.widgetType === 'appointment' || f.type === 'date');
+    if (hasAppt || c.includes('booking') || c.includes('appointment') || i.includes('salon') || i.includes('barber')) {
+      return 'booking_scheduler';
+    }
+    const hasChecklist = rawFields.some((f) => f.widgetType === 'image_upload_with_notes' || f.id.includes('inspection'));
+    if (hasChecklist || c.includes('inspection') || c.includes('checklist') || c.includes('audit')) {
+      return 'field_inspection';
+    }
+    const hasSig = rawFields.some((f) => f.type === 'signature' || f.widgetType === 'smooth_signature');
+    if (hasSig || c.includes('waiver') || c.includes('consent')) {
+      return 'contract_signature';
+    }
+    if (template.schema?.theme?.layout === 'card' || c.includes('quiz') || c.includes('survey')) {
+      return 'card_swipe';
+    }
+    if (isSplitLayout) {
+      return 'split_hero';
+    }
+    if (isMultiStep) {
+      return 'milestone_stepper';
+    }
+    if (c.includes('package') || c.includes('tier') || c.includes('menu')) {
+      return 'visual_choice_grid';
+    }
+    return 'classic_business';
+  })();
 
   return (
     <div
@@ -277,29 +251,61 @@ export function FormThumbnailPreview({
             <img
               src={photoUrl}
               alt={template.name}
-              className="w-full h-full object-cover opacity-50 scale-100 group-hover:scale-105 transition-transform duration-700 ease-out"
+              className="w-full h-full object-cover opacity-40 scale-100 group-hover:scale-105 transition-transform duration-700 ease-out"
               loading="lazy"
             />
             {/* Cinematic Gradient Vignette */}
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-slate-900/30" />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/80 to-slate-900/40" />
           </>
         )}
       </div>
 
-      {/* ─── Top 2026 Layout / Industry Badge Bar ─── */}
+      {/* ─── Top Layout & Experience Engine Badge ─── */}
       <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-10 pointer-events-none">
         <div className="flex items-center gap-1">
-          {isSplitLayout ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-black/60 text-white backdrop-blur-md border border-white/20 shadow-xs">
-              <LayoutTemplate className="size-2.5 text-emerald-400" /> 2-Part Split
+          {engine === 'quote_calculator' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/90 text-amber-950 backdrop-blur-md shadow-xs">
+              <Sliders className="size-2.5" /> Interactive Calculator
             </span>
-          ) : isMultiStep ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-black/60 text-white backdrop-blur-md border border-white/20 shadow-xs">
-              <Zap className="size-2.5 text-amber-400" /> {stepsCount} Steps
+          )}
+          {engine === 'booking_scheduler' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-sky-500/90 text-sky-950 backdrop-blur-md shadow-xs">
+              <CalendarCheck className="size-2.5" /> Calendar &amp; Slots
             </span>
-          ) : (
+          )}
+          {engine === 'field_inspection' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/90 text-emerald-950 backdrop-blur-md shadow-xs">
+              <ClipboardCheck className="size-2.5" /> Field Inspection
+            </span>
+          )}
+          {engine === 'card_swipe' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-500/90 text-purple-950 backdrop-blur-md shadow-xs">
+              <Zap className="size-2.5" /> 1-Question Swipe
+            </span>
+          )}
+          {engine === 'visual_choice_grid' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-500/90 text-indigo-950 backdrop-blur-md shadow-xs">
+              <LayoutGrid className="size-2.5" /> Visual Cards
+            </span>
+          )}
+          {engine === 'split_hero' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-500/90 text-teal-950 backdrop-blur-md shadow-xs">
+              <LayoutTemplate className="size-2.5" /> Split Hero
+            </span>
+          )}
+          {engine === 'contract_signature' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-rose-500/90 text-white backdrop-blur-md shadow-xs">
+              <PenTool className="size-2.5" /> E-Signature
+            </span>
+          )}
+          {engine === 'milestone_stepper' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-500/90 text-white backdrop-blur-md shadow-xs">
+              <Layers className="size-2.5" /> {stepsCount} Milestone Steps
+            </span>
+          )}
+          {engine === 'classic_business' && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-black/60 text-white backdrop-blur-md border border-white/20 shadow-xs">
-              <Sparkles className="size-2.5 text-teal-300" /> 2026 UI
+              <Sparkles className="size-2.5 text-emerald-400" /> Standard Form
             </span>
           )}
         </div>
@@ -309,20 +315,234 @@ export function FormThumbnailPreview({
         </span>
       </div>
 
-      {/* ─── Visual Form Container: Split vs Standard Card ─── */}
-      {isSplitLayout ? (
-        /* ════ 2-PART SPLIT HERO MINIATURE CARD ════ */
+      {/* ─── Distinct Engine Miniature Renderers ─── */}
+      {engine === 'quote_calculator' ? (
+        /* ════ 1. QUOTE CALCULATOR MINIATURE ════ */
+        <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-amber-500/30 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[9px] font-black text-amber-700 dark:text-amber-300 flex items-center gap-1">
+              <SlidersHorizontal className="size-2.5 text-amber-500" /> Dynamic Estimator
+            </span>
+            <span className="text-[8px] font-extrabold text-white bg-amber-600 px-1.5 py-0.2 rounded-full shadow-xs">
+              $1,250 – $3,400
+            </span>
+          </div>
+
+          <div className="space-y-1.5 py-1">
+            <div className="space-y-0.5">
+              <div className="flex justify-between text-[7px] font-bold text-slate-600 dark:text-slate-300">
+                <span>Scope / Square Footage</span>
+                <span className="text-amber-600 dark:text-amber-400">1,450 sq ft</span>
+              </div>
+              <div className="h-2 w-full bg-slate-200 dark:bg-slate-800 rounded-full relative overflow-hidden">
+                <div className="h-full w-2/3 bg-amber-500 rounded-full" />
+                <div className="absolute top-0 bottom-0 left-[66%] size-2 -translate-x-1/2 rounded-full bg-white shadow-xs border border-amber-500" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1 text-[7px]">
+              <div className="p-1 rounded bg-slate-100 dark:bg-slate-800/60 flex items-center justify-between">
+                <span className="text-slate-500">Tier:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">Premium Pro</span>
+              </div>
+              <div className="p-1 rounded bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-between text-emerald-700 dark:text-emerald-300">
+                <span>Deposit:</span>
+                <span className="font-bold">$250.00</span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className="h-4.5 w-full rounded text-[8px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+            style={{ backgroundColor: primaryColor }}
+          >
+            <span>Lock In Instant Estimate →</span>
+          </div>
+        </div>
+      ) : engine === 'booking_scheduler' ? (
+        /* ════ 2. BOOKING & CALENDAR FIRST MINIATURE ════ */
+        <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-sky-500/30 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[9px] font-black text-sky-700 dark:text-sky-300 flex items-center gap-1">
+              <CalendarCheck className="size-2.5 text-sky-500" /> October 2026
+            </span>
+            <span className="text-[7.5px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-1 py-0.2 rounded">
+              3 Slots Open
+            </span>
+          </div>
+
+          {/* 5-Day Mini Calendar Strip */}
+          <div className="grid grid-cols-5 gap-1 py-1">
+            {['14 Mon', '15 Tue', '16 Wed', '17 Thu', '18 Fri'].map((d, i) => (
+              <div
+                key={d}
+                className={`py-1 text-center rounded text-[6.5px] font-bold ${
+                  i === 2
+                    ? 'bg-sky-500 text-white shadow-xs'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Available Slot Pills */}
+          <div className="grid grid-cols-3 gap-1">
+            {['09:00 AM', '11:30 AM', '02:00 PM'].map((slot, i) => (
+              <div
+                key={slot}
+                className={`py-0.5 text-center rounded text-[7px] font-bold border ${
+                  i === 1
+                    ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300'
+                    : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                }`}
+              >
+                {slot}
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="h-4.5 w-full rounded text-[8px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+            style={{ backgroundColor: primaryColor }}
+          >
+            <span>Confirm Booking Time</span>
+          </div>
+        </div>
+      ) : engine === 'field_inspection' ? (
+        /* ════ 3. FIELD INSPECTION & CHECKLIST MINIATURE ════ */
+        <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-emerald-500/30 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[9px] font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+              <ClipboardCheck className="size-2.5 text-emerald-500" /> Multi-Point Audit
+            </span>
+            <span className="text-[7.5px] font-bold text-slate-500">12 Points</span>
+          </div>
+
+          <div className="space-y-1 py-0.5">
+            <div className="flex items-center justify-between p-1 rounded bg-slate-50 dark:bg-slate-800/40 text-[7px]">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">1. Mechanical Integrity</span>
+              <span className="inline-flex items-center gap-0.5 text-emerald-600 font-bold">
+                <Check className="size-2" /> PASS
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-1 rounded bg-slate-50 dark:bg-slate-800/40 text-[7px]">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">2. Safety Controls</span>
+              <span className="inline-flex items-center gap-0.5 text-emerald-600 font-bold">
+                <Check className="size-2" /> PASS
+              </span>
+            </div>
+            <div className="flex items-center justify-between p-1 rounded bg-amber-50 dark:bg-amber-950/30 text-[7px]">
+              <span className="font-semibold text-amber-800 dark:text-amber-200 flex items-center gap-1">
+                <Camera className="size-2" /> Photo Evidence
+              </span>
+              <span className="font-bold text-amber-600">Verified</span>
+            </div>
+          </div>
+
+          <div
+            className="h-4.5 w-full rounded text-[8px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+            style={{ backgroundColor: primaryColor }}
+          >
+            <span>Complete &amp; Sign-Off</span>
+          </div>
+        </div>
+      ) : engine === 'card_swipe' ? (
+        /* ════ 4. CONVERSATIONAL / TYPEFORM 1-QUESTION MINIATURE ════ */
+        <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-purple-500/30 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between text-[7px] text-purple-600 dark:text-purple-400 font-bold">
+            <span>QUESTION 1 OF 4</span>
+            <span>25% COMPLETED</span>
+          </div>
+
+          <div className="my-auto space-y-1.5">
+            <p className="text-[9px] font-black text-slate-900 dark:text-white leading-tight">
+              What is your primary project goal?
+            </p>
+            <div className="h-6 rounded-lg border border-purple-300 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30 px-2 flex items-center justify-between text-[7.5px] text-purple-900 dark:text-purple-200">
+              <span className="truncate">e.g. Complete Renovation</span>
+              <span className="bg-purple-200 dark:bg-purple-800 text-[6.5px] font-bold px-1 rounded">
+                Enter ↵
+              </span>
+            </div>
+          </div>
+
+          <div
+            className="h-4 w-full rounded text-[7.5px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+            style={{ backgroundColor: primaryColor }}
+          >
+            <span>Next Question →</span>
+          </div>
+        </div>
+      ) : engine === 'contract_signature' ? (
+        /* ════ 5. E-SIGNATURE CONTRACT MINIATURE ════ */
+        <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-rose-500/30 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[9px] font-black text-rose-800 dark:text-rose-300 flex items-center gap-1">
+              <PenTool className="size-2.5 text-rose-500" /> Digital Agreement
+            </span>
+            <span className="text-[7px] font-bold text-slate-500">Legal Binding</span>
+          </div>
+
+          <div className="space-y-1 py-1">
+            <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded" />
+            <div className="h-1.5 w-4/5 bg-slate-200 dark:bg-slate-800 rounded" />
+            <div className="h-5 rounded border border-dashed border-rose-300 dark:border-rose-800 bg-rose-50/40 dark:bg-rose-950/20 px-1.5 flex items-center justify-between text-[7px]">
+              <span className="text-slate-500">Signature:</span>
+              <svg className="w-12 h-3 text-rose-600 dark:text-rose-400" viewBox="0 0 60 12" fill="none">
+                <path d="M2 9 C 8 2, 16 11, 26 4 C 36 -2, 42 10, 56 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+          </div>
+
+          <div
+            className="h-4.5 w-full rounded text-[8px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+            style={{ backgroundColor: primaryColor }}
+          >
+            <span>Execute &amp; Sign</span>
+          </div>
+        </div>
+      ) : engine === 'visual_choice_grid' ? (
+        /* ════ 6. VISUAL CHOICE CARDS MINIATURE ════ */
+        <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-indigo-500/30 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[9px] font-black text-indigo-800 dark:text-indigo-300 flex items-center gap-1">
+              <LayoutGrid className="size-2.5 text-indigo-500" /> Select Tier
+            </span>
+            <span className="text-[7px] font-bold text-indigo-600">3 Packages</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-1 py-1">
+            <div className="p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-center">
+              <p className="text-[7px] font-bold text-slate-800 dark:text-slate-200">Basic</p>
+              <p className="text-[6.5px] text-slate-500">$49</p>
+            </div>
+            <div className="p-1 rounded-lg border-2 border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40 text-center shadow-xs">
+              <p className="text-[7px] font-black text-indigo-700 dark:text-indigo-300">Pro ✓</p>
+              <p className="text-[6.5px] font-bold text-indigo-600">$89</p>
+            </div>
+            <div className="p-1 rounded-lg border border-slate-200 dark:border-slate-800 text-center">
+              <p className="text-[7px] font-bold text-slate-800 dark:text-slate-200">Elite</p>
+              <p className="text-[6.5px] text-slate-500">$149</p>
+            </div>
+          </div>
+
+          <div
+            className="h-4.5 w-full rounded text-[8px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+            style={{ backgroundColor: primaryColor }}
+          >
+            <span>Continue with Selected Tier</span>
+          </div>
+        </div>
+      ) : isSplitLayout ? (
+        /* ════ 7. TWO-COLUMN SPLIT HERO MINIATURE ════ */
         <div className="relative z-10 w-full h-[78%] bg-slate-900/90 dark:bg-slate-950/90 backdrop-blur-md rounded-xl border border-white/15 shadow-2xl grid grid-cols-12 overflow-hidden">
-          {/* Left Mini Hero Column */}
           <div className="col-span-5 relative p-2 flex flex-col justify-between overflow-hidden border-r border-white/10 bg-slate-950/40">
             <div className="space-y-1">
               {isMap ? (
                 <span className="inline-flex items-center gap-0.5 text-[7px] font-bold text-rose-300 bg-rose-500/20 border border-rose-500/30 px-1 py-0.2 rounded">
                   <MapPin className="size-2 text-rose-400" /> Map Dispatch
-                </span>
-              ) : isVideo ? (
-                <span className="inline-flex items-center gap-0.5 text-[7px] font-bold text-sky-300 bg-sky-500/20 border border-sky-500/30 px-1 py-0.2 rounded">
-                  ▶ Video Hero
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-0.5 text-[7px] font-bold text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1 py-0.2 rounded">
@@ -340,15 +560,13 @@ export function FormThumbnailPreview({
             </div>
           </div>
 
-          {/* Right Mini Form Fields Column */}
           <div className="col-span-7 p-2 flex flex-col justify-between space-y-1 bg-white/95 dark:bg-slate-900/95 text-slate-900 dark:text-white">
             <div className="space-y-1 flex-1">
-              {displayFields.map((field, idx) => (
+              {rawFields.slice(0, 3).map((field, idx) => (
                 <MiniFieldRow key={field.id || idx} field={field} primaryColor={primaryColor} />
               ))}
             </div>
 
-            {/* Mini Submit Button */}
             <div
               className="h-4 w-full rounded text-[7.5px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
               style={{ backgroundColor: primaryColor }}
@@ -357,48 +575,56 @@ export function FormThumbnailPreview({
             </div>
           </div>
         </div>
+      ) : isMultiStep ? (
+        /* ════ 8. MULTI-STEP MILESTONE STEPPER MINIATURE ════ */
+        <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-blue-500/30 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[9px] font-black text-blue-800 dark:text-blue-300 flex items-center gap-1">
+              <Layers className="size-2.5 text-blue-500" /> Step 1 of {stepsCount}
+            </span>
+            <span className="text-[7px] font-bold text-slate-500">Contact &amp; Details</span>
+          </div>
+
+          <div className="h-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden my-0.5">
+            <div className="h-full w-1/3 bg-blue-500 rounded-full" />
+          </div>
+
+          <div className="space-y-1 flex-1 py-0.5">
+            {rawFields.slice(0, 2).map((field, idx) => (
+              <MiniFieldRow key={field.id || idx} field={field} primaryColor={primaryColor} />
+            ))}
+          </div>
+
+          <div
+            className="h-4.5 w-full rounded text-[8px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
+            style={{ backgroundColor: primaryColor }}
+          >
+            <span>Next Step →</span>
+          </div>
+        </div>
       ) : (
-        /* ════ MODERN GLASSMORPHIC SINGLE / MULTI-STEP CARD ════ */
+        /* ════ 9. CLASSIC MODERN CARD MINIATURE ════ */
         <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
-          {/* Header Bar */}
           <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-1 shrink-0">
             <div className="flex items-center gap-1.5 min-w-0">
               <div
                 className="size-4 rounded-md flex items-center justify-center text-white shrink-0 shadow-2xs text-[9px]"
                 style={{ backgroundColor: primaryColor }}
               >
-                <CategoryIcon className="size-2.5" />
+                <FileText className="size-2.5" />
               </div>
               <p className="text-[9px] font-extrabold text-slate-900 dark:text-white truncate leading-tight">
                 {template.name}
               </p>
             </div>
-
-            {isMultiStep && (
-              <span className="text-[7.5px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1 py-0.2 rounded shrink-0">
-                Step 1 of {stepsCount}
-              </span>
-            )}
           </div>
 
-          {/* Form Fields Preview */}
           <div className="space-y-1 flex-1 py-0.5">
-            {displayFields.map((field, idx) => (
+            {rawFields.slice(0, 3).map((field, idx) => (
               <MiniFieldRow key={field.id || idx} field={field} primaryColor={primaryColor} />
             ))}
           </div>
 
-          {/* Stepper Progress Bar (if Multi-Step) */}
-          {isMultiStep && (
-            <div className="h-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mb-1">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${Math.round((1 / stepsCount) * 100)}%`, backgroundColor: primaryColor }}
-              />
-            </div>
-          )}
-
-          {/* Mini Submit Button */}
           <div
             className="h-4.5 w-full rounded text-[8px] font-bold flex items-center justify-center text-white shadow-2xs shrink-0"
             style={{ backgroundColor: primaryColor }}
@@ -415,10 +641,10 @@ export function FormThumbnailPreview({
  * Renders miniature representation of individual form field types
  */
 function MiniFieldRow({ field, primaryColor }: { field: any; primaryColor: string }) {
-  const type = field.type || 'text';
+  const type = field.widgetType || field.type || 'short_answer';
   const label = field.label || 'Field';
 
-  if (type === 'rating') {
+  if (type === 'rating' || type === 'star_rating') {
     return (
       <div className="h-4 rounded border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20 px-1 flex items-center justify-between text-[7px]">
         <span className="font-bold text-amber-800 dark:text-amber-300 truncate max-w-[50%]">{label}</span>
@@ -431,7 +657,7 @@ function MiniFieldRow({ field, primaryColor }: { field: any; primaryColor: strin
     );
   }
 
-  if (type === 'signature') {
+  if (type === 'signature' || type === 'smooth_signature') {
     return (
       <div className="h-4 rounded border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1 flex items-center justify-between text-[7px]">
         <span className="text-slate-600 dark:text-slate-300 font-semibold truncate max-w-[45%] flex items-center gap-0.5">
@@ -444,36 +670,41 @@ function MiniFieldRow({ field, primaryColor }: { field: any; primaryColor: strin
     );
   }
 
-  if (type === 'checkbox') {
+  if (type === 'checkbox' || type === 'terms_and_conditions') {
     return (
       <div className="h-4 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1 flex items-center gap-1 text-[7px]">
         <div className="size-2 rounded bg-emerald-500 flex items-center justify-center text-white shrink-0">
-          <Check className="size-1.5" />
+          <Check className="size-1.5 stroke-[3]" />
         </div>
         <span className="text-slate-600 dark:text-slate-300 font-medium truncate">{label}</span>
       </div>
     );
   }
 
-  if (type === 'radio' || type === 'select' || type === 'dropdown') {
+  if (type === 'date' || type === 'date_picker') {
     return (
       <div className="h-4 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1 flex items-center justify-between text-[7px]">
-        <span className="text-slate-600 dark:text-slate-300 font-medium truncate max-w-[50%]">{label}</span>
-        <span className="text-[6.5px] text-slate-400 font-semibold bg-white dark:bg-slate-700 px-1 rounded border border-slate-200 dark:border-slate-600 truncate max-w-[45%]">
-          Options ▼
-        </span>
+        <span className="text-slate-600 dark:text-slate-300 font-medium truncate">{label}</span>
+        <Calendar className="size-2 text-slate-400 shrink-0" />
       </div>
     );
   }
 
-  const Icon = type === 'email' ? Mail : type === 'phone' ? Phone : type === 'date' ? Calendar : User;
-  return (
-    <div className="h-4 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1 flex items-center justify-between text-[7px]">
-      <div className="flex items-center gap-1 min-w-0 max-w-[60%]">
-        <Icon className="size-1.5 text-slate-400 shrink-0" />
+  if (type === 'slider') {
+    return (
+      <div className="h-4 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 px-1 flex items-center justify-between text-[7px]">
         <span className="text-slate-600 dark:text-slate-300 font-medium truncate">{label}</span>
+        <div className="w-10 h-1 bg-slate-200 dark:bg-slate-700 rounded-full relative">
+          <div className="w-1/2 h-full bg-emerald-500 rounded-full" />
+        </div>
       </div>
-      <div className="h-1 w-6 bg-slate-200 dark:bg-slate-700 rounded-full" />
+    );
+  }
+
+  return (
+    <div className="h-4 rounded border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/40 px-1.5 flex items-center justify-between text-[7px]">
+      <span className="text-slate-500 dark:text-slate-400 font-medium truncate">{label}</span>
+      <span className="text-slate-300 dark:text-slate-600 text-[6.5px]">...</span>
     </div>
   );
 }

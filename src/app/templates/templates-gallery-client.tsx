@@ -1321,10 +1321,31 @@ function ModernTemplateCard({
 
         {/* Top Badges */}
         <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none z-10">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-wrap">
             <Badge variant="outline" className="bg-white/95 dark:bg-slate-900/95 text-[10px] font-bold shadow-xs">
               {getCategoryLabel(primaryCat)}
             </Badge>
+            {template.engine && (
+              <Badge variant="outline" className="bg-emerald-50/95 dark:bg-emerald-950/90 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border-emerald-300 dark:border-emerald-800 shadow-xs">
+                {template.engine === 'quote_calculator'
+                  ? '⚡ Calculator'
+                  : template.engine === 'booking_scheduler'
+                  ? '📅 Calendar & Slots'
+                  : template.engine === 'field_inspection'
+                  ? '📋 Checklist'
+                  : template.engine === 'card_swipe'
+                  ? '🃏 1-Question'
+                  : template.engine === 'visual_choice_grid'
+                  ? '🖼️ Visual Grid'
+                  : template.engine === 'contract_signature'
+                  ? '✍️ Signature'
+                  : template.engine === 'split_hero'
+                  ? '📐 Split Hero'
+                  : template.engine === 'milestone_stepper'
+                  ? '🔢 Stepper'
+                  : '✨ Pro'}
+              </Badge>
+            )}
             {industries[0] && industries[0] !== 'general' && (
               <Badge variant="outline" className="bg-blue-50/90 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-[10px] border-blue-200">
                 {getIndustryLabel(industries[0])}

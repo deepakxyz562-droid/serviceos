@@ -9,6 +9,7 @@ import { TEMPLATE_CATEGORIES } from '../taxonomy/categories';
 import { TEMPLATE_INDUSTRIES } from '../taxonomy/industries';
 import type { FormTemplate, TemplateCategoryId, TemplateIndustryId } from '../types';
 import type { FormField } from '../../form-schema-types';
+import { recommendStructureForTemplate } from '../form-structures';
 
 export interface GeneratedTemplateConfig {
   slug: string;
@@ -759,14 +760,16 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
   const baseContact: FormField[] = [
     {
       id: 'full_name',
-      type: 'text',
+      type: 'short_answer',
+      widgetType: 'full_name',
       label: 'Full Legal Name',
       placeholder: 'John Doe',
       required: true,
     },
     {
       id: 'phone',
-      type: 'tel',
+      type: 'phone',
+      widgetType: 'phone',
       label: 'Phone Number',
       placeholder: '(555) 000-0000',
       required: true,
@@ -774,6 +777,7 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
     {
       id: 'email',
       type: 'email',
+      widgetType: 'email',
       label: 'Email Address',
       placeholder: 'john@example.com',
       required: true,
@@ -788,7 +792,8 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         ...baseContact,
         {
           id: 'candidate_address',
-          type: 'text',
+          type: 'address',
+          widgetType: 'address',
           label: 'Current Address (City, State, Zip)',
           placeholder: 'e.g. Austin, TX 78701',
           required: true,
@@ -820,7 +825,8 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         },
         {
           id: 'years_experience',
-          type: 'select',
+          type: 'dropdown',
+          widgetType: 'dropdown',
           label: 'Years of Relevant Experience',
           options: [
             { label: 'Entry Level (No prior experience / Willing to train)', value: 'entry' },
@@ -833,18 +839,25 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         {
           id: 'earliest_start_date',
           type: 'date',
+          widgetType: 'date_picker',
           label: 'Earliest Available Start Date',
           required: true,
         },
         {
           id: 'desired_pay_rate',
-          type: 'text',
+          type: 'short_answer',
           label: 'Desired Pay / Hourly Rate ($)',
           placeholder: 'e.g. $18 - $24 / hr or Negotiable',
         },
         {
+          id: 'resume_upload',
+          type: 'file',
+          widgetType: 'file_upload',
+          label: 'Attach Resume / CV (PDF or DOCX)',
+        },
+        {
           id: 'skills_and_summary',
-          type: 'textarea',
+          type: 'long_answer',
           label: 'Key Skills, Past Work Experience & Why You Want to Join',
           placeholder: 'Briefly summarize your background, key strengths, and why you are interested in this role...',
           required: true,
@@ -857,13 +870,15 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         ...baseContact,
         {
           id: 'organization_name',
-          type: 'text',
+          type: 'short_answer',
+          widgetType: 'company',
           label: 'Organization / Company Name',
           placeholder: 'e.g. Acme Corporation',
         },
         {
           id: 'registration_tier',
-          type: 'select',
+          type: 'dropdown',
+          widgetType: 'dropdown',
           label: 'Registration Type',
           options: [
             { label: 'Standard General Admission', value: 'general' },
@@ -874,8 +889,16 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           required: true,
         },
         {
+          id: 'event_date_choice',
+          type: 'date',
+          widgetType: 'date_picker',
+          label: 'Preferred Event Session Date',
+          required: true,
+        },
+        {
           id: 'dietary_accommodations',
-          type: 'select',
+          type: 'dropdown',
+          widgetType: 'dropdown',
           label: 'Dietary or Accessibility Needs',
           options: [
             { label: 'No Special Requirements', value: 'none' },
@@ -892,14 +915,16 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         ...baseContact,
         {
           id: 'delivery_address',
-          type: 'text',
+          type: 'address',
+          widgetType: 'address',
           label: 'Delivery / Service Address',
           placeholder: 'Street, City, State, ZIP',
           required: true,
         },
         {
           id: 'order_quantity',
-          type: 'number',
+          type: 'numerical',
+          widgetType: 'numerical',
           label: 'Quantity / Units Required',
           placeholder: 'e.g. 1',
           required: true,
@@ -907,12 +932,13 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         {
           id: 'fulfillment_date',
           type: 'date',
+          widgetType: 'date_picker',
           label: 'Requested Delivery / Fulfillment Date',
           required: true,
         },
         {
           id: 'special_instructions',
-          type: 'textarea',
+          type: 'long_answer',
           label: 'Special Preparation / Delivery Instructions',
           placeholder: 'Add gate code, custom specifications, or packaging requests...',
         },
@@ -923,21 +949,23 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
       return [
         ...baseContact,
         {
-          id: 'preferred_date',
-          type: 'date',
-          label: 'Preferred Appointment Date',
+          id: 'appointment_slot',
+          type: 'control_widget',
+          widgetType: 'appointment',
+          label: 'Book Date & Live Time Slot',
           required: true,
         },
         {
+          id: 'preferred_date',
+          type: 'date',
+          widgetType: 'date_picker',
+          label: 'Preferred Appointment Date',
+        },
+        {
           id: 'preferred_time_slot',
-          type: 'select',
+          type: 'time',
+          widgetType: 'time_picker',
           label: 'Preferred Time Window',
-          options: [
-            { label: 'Morning (8:00 AM – 12:00 PM)', value: 'morning' },
-            { label: 'Afternoon (12:00 PM – 4:00 PM)', value: 'afternoon' },
-            { label: 'Evening (4:00 PM – 7:00 PM)', value: 'evening' },
-          ],
-          required: true,
         },
       ];
 
@@ -947,7 +975,8 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         ...baseContact,
         {
           id: 'service_address',
-          type: 'text',
+          type: 'address',
+          widgetType: 'address',
           label: 'Service Location Address',
           placeholder: '123 Main St, City, State, ZIP',
           required: true,
@@ -957,7 +986,7 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           type: 'radio',
           label: 'Project Urgency',
           options: [
-            { label: '🚨 Emergency (Immediate)', value: 'emergency' },
+            { label: '🚨 Emergency (Immediate Dispatch)', value: 'emergency' },
             { label: '⚡ Same Day / Next Day', value: 'same_day' },
             { label: '📅 Within this week', value: 'this_week' },
             { label: '🕒 Flexible / Planning stage', value: 'flexible' },
@@ -965,16 +994,58 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           required: true,
         },
         {
-          id: 'budget_range',
-          type: 'select',
-          label: 'Estimated Budget Range',
+          id: 'project_scale_slider',
+          type: 'numerical',
+          widgetType: 'slider',
+          label: 'Estimated Scope / Size (Units or Sq Ft)',
+          widgetConfig: { min: 100, max: 5000, step: 50, defaultValue: 1200 },
+        },
+        {
+          id: 'calculated_estimate',
+          type: 'calculated',
+          widgetType: 'form_calculation',
+          label: 'Estimated Investment Range ($)',
+          widgetConfig: { formula: '{{project_scale_slider}} * 3.5' },
+        },
+      ];
+
+    case 'inspection':
+    case 'checklist':
+    case 'audit':
+      return [
+        ...baseContact,
+        {
+          id: 'inspection_address',
+          type: 'address',
+          widgetType: 'address',
+          label: 'Inspection Site Location',
+          required: true,
+        },
+        {
+          id: 'inspection_checklist',
+          type: 'checkbox',
+          widgetType: 'multiple_choice',
+          label: 'Multi-Point Inspection Verification Checklist',
           options: [
-            { label: 'Under $250', value: 'under_250' },
-            { label: '$250 – $500', value: '250_500' },
-            { label: '$500 – $1,500', value: '500_1500' },
-            { label: '$1,500 – $5,000', value: '1500_5000' },
-            { label: '$5,000+', value: '5000_plus' },
+            { label: 'Exterior & Structural Integrity (Pass)', value: 'pass_exterior' },
+            { label: 'Mechanical & Systems Operational (Pass)', value: 'pass_mechanical' },
+            { label: 'Safety & Emergency Controls (Pass)', value: 'pass_safety' },
+            { label: 'Sanitation & Cleanliness Standards (Pass)', value: 'pass_clean' },
           ],
+          required: true,
+        },
+        {
+          id: 'inspection_photos',
+          type: 'photo',
+          widgetType: 'image_upload_with_notes',
+          label: 'Site Photo Evidence & Inspection Annotations',
+        },
+        {
+          id: 'inspector_signature',
+          type: 'signature',
+          widgetType: 'smooth_signature',
+          label: 'Inspector Sign-Off Signature',
+          required: true,
         },
       ];
 
@@ -983,7 +1054,8 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         ...baseContact,
         {
           id: 'timeline_goal',
-          type: 'select',
+          type: 'dropdown',
+          widgetType: 'dropdown',
           label: 'Desired Implementation Timeline',
           options: [
             { label: 'Immediately (Within 1-2 weeks)', value: 'immediate' },
@@ -995,7 +1067,7 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         },
         {
           id: 'prior_experience_notes',
-          type: 'textarea',
+          type: 'long_answer',
           label: 'Current Setup & Key Pain Points',
           placeholder: 'Describe your current process, systems, and primary objectives...',
           required: true,
@@ -1009,19 +1081,21 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         {
           id: 'terms_agreement',
           type: 'checkbox',
-          label: 'I have read, understood, and voluntarily agree to all terms, safety guidelines, and waiver conditions.',
+          widgetType: 'terms_and_conditions',
+          label: 'I have read, understood, and voluntarily agree to all legal terms, safety guidelines, and waiver conditions.',
           required: true,
         },
         {
           id: 'digital_signature',
-          type: 'text',
-          label: 'Type Full Legal Name as Electronic Signature',
-          placeholder: 'e.g. Johnathan Doe',
+          type: 'signature',
+          widgetType: 'smooth_signature',
+          label: 'Electronic Signature',
           required: true,
         },
         {
           id: 'signature_date',
           type: 'date',
+          widgetType: 'date_picker',
           label: 'Date of Signature',
           required: true,
         },
@@ -1033,33 +1107,22 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         ...baseContact.slice(0, 2),
         {
           id: 'rating_overall',
-          type: 'select',
+          type: 'rating',
+          widgetType: 'star_rating',
           label: 'Overall Satisfaction Rating',
-          options: [
-            { label: '⭐⭐⭐⭐⭐ 5 - Exceptional', value: '5' },
-            { label: '⭐⭐⭐⭐ 4 - Very Good', value: '4' },
-            { label: '⭐⭐⭐ 3 - Average', value: '3' },
-            { label: '⭐⭐ 2 - Poor', value: '2' },
-            { label: '⭐ 1 - Very Dissatisfied', value: '1' },
-          ],
           required: true,
         },
         {
-          id: 'feedback_comments',
-          type: 'textarea',
-          label: 'What did we do well, and what could we improve?',
-          placeholder: 'Share your thoughts...',
+          id: 'recommend_nps',
+          type: 'rating',
+          widgetType: 'nps_slider',
+          label: 'Likelihood to Recommend (0–10 NPS)',
         },
         {
-          id: 'recommend_nps',
-          type: 'radio',
-          label: 'How likely are you to recommend us to a friend or colleague?',
-          options: [
-            { label: '10 - Extremely Likely', value: '10' },
-            { label: '9 - Very Likely', value: '9' },
-            { label: '7-8 - Somewhat Likely', value: '8' },
-            { label: '0-6 - Unlikely', value: '5' },
-          ],
+          id: 'feedback_comments',
+          type: 'long_answer',
+          label: 'What did we do well, and what could we improve?',
+          placeholder: 'Share your thoughts...',
         },
       ];
 
@@ -1068,7 +1131,7 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
         ...baseContact,
         {
           id: 'subject_line',
-          type: 'text',
+          type: 'short_answer',
           label: 'Subject / Topic',
           placeholder: 'What is this regarding?',
         },
@@ -1145,9 +1208,9 @@ export function synthesizeTemplate(
     INDUSTRY_PHOTO_MAP[indId] ||
     'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80';
 
-  // Intelligent 2026 Layout: Default to split_media for rich visual presentation.
-  // Never default general business templates to single-question 'card' sliders.
-  const chosenLayout = 'split_media';
+  // Intelligent 2026 Layout: Map dynamically to 100 Form Experience Structures across 10 Master Engines
+  const structure = recommendStructureForTemplate(catId, indId, variantIndex);
+  const chosenLayout = structure.layout;
 
   const shortDesc = getTemplateShortDescription(catId, indLabel, subLabel);
   const longDesc = getTemplateLongDescription(catId, indLabel, subLabel);
@@ -1155,16 +1218,83 @@ export function synthesizeTemplate(
   const badgeText = getTemplateBadgeText(catId, indLabel);
   const benefitsList = getTemplateBenefits(catId, indLabel);
 
+  // If Split-Media layout: inject real editable left-column content widgets
+  if (chosenLayout === 'split_media') {
+    const leftWidgets: FormField[] = [
+      {
+        id: 'left_badge',
+        type: 'control_widget',
+        widgetType: 'badge_widget',
+        label: 'Badge',
+        layoutColumn: 'left',
+        widgetConfig: { text: badgeText },
+      },
+      {
+        id: 'left_heading',
+        type: 'heading',
+        widgetType: 'heading',
+        label: 'Headline',
+        layoutColumn: 'left',
+        widgetConfig: { text: `${indLabel} ${subLabel}`, level: 'h1' },
+      },
+      {
+        id: 'left_sub',
+        type: 'paragraph',
+        widgetType: 'paragraph',
+        label: 'Subtitle',
+        layoutColumn: 'left',
+        widgetConfig: { text: heroSubtitle },
+      },
+      {
+        id: 'left_benefits',
+        type: 'control_widget',
+        widgetType: 'list_widget',
+        label: 'Benefits',
+        layoutColumn: 'left',
+        widgetConfig: { items: benefitsList },
+      },
+      {
+        id: 'left_image',
+        type: 'control_widget',
+        widgetType: 'image_widget',
+        label: 'Media Showcase',
+        layoutColumn: 'left',
+        widgetConfig: { imageUrl: primaryPhoto },
+      },
+    ];
+    allFields.unshift(...leftWidgets);
+  }
+
+  // If Milestone Stepper engine: partition fields into real multi-step sequence
+  const steps = structure.engine === 'milestone_stepper'
+    ? [
+        { id: 'step_contact', title: '1. Contact Details' },
+        { id: 'step_scope', title: '2. Project Scope' },
+        { id: 'step_confirm', title: '3. Schedule & Review' },
+      ]
+    : [];
+
+  if (steps.length > 0) {
+    const fieldsPerStep = Math.ceil(allFields.length / steps.length);
+    allFields.forEach((f, idx) => {
+      const sIdx = Math.min(Math.floor(idx / fieldsPerStep), steps.length - 1);
+      f.stepId = steps[sIdx]?.id;
+    });
+  }
+
   const template: FormTemplate = {
     id: slug,
     name: cycle > 0 ? `${indLabel} ${subLabel} (Variant ${cycle + 1})` : `${indLabel} ${subLabel}`,
     shortDescription: shortDesc,
     description: longDesc,
+    structureId: structure.id,
+    engine: structure.engine,
     schema: {
       id: slug,
       title: `${indLabel} ${subLabel}`,
       description: `Please fill out the form below. All information is securely encrypted.`,
       fields: allFields,
+      steps: steps,
       theme: {
         primaryColor: indDef?.color ? `#${indDef.color}` : '#0284c7',
         backgroundColor: '#ffffff',
@@ -1177,7 +1307,7 @@ export function synthesizeTemplate(
         fontFamily: 'Inter, sans-serif',
         layout: chosenLayout,
         mediaPanel: {
-          enabled: true,
+          enabled: chosenLayout === 'split_media',
           position: 'left',
           splitRatio: '40-60',
           mediaType: 'image',
