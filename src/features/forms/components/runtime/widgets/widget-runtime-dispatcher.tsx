@@ -146,7 +146,7 @@ export function WidgetRuntimeDispatcher({
   disabled = false,
   formId,
 }: WidgetRuntimeDispatcherProps) {
-  const widgetType = field.widgetType || '';
+  const widgetType = field.widgetType || field.type || '';
   // Cast to Record<string, any> so property access returns `any` instead of `unknown`.
   // The widget config is freeform JSON defined per-widget — we trust the runtime
   // to pass the right shape based on widgetType.
@@ -573,17 +573,20 @@ export function WidgetRuntimeDispatcher({
     }
 
     default: {
-      // Default fallback widget input
-      return (
-        <Input
-          value={typeof value === 'string' ? value : ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder || 'Enter value...'}
-          className="text-xs"
-          disabled={disabled}
-          readOnly={isReadOnly}
-        />
-      );
+      // Unknown / unregistered widgetType — do NOT render a phantom <Input>.
+      // Previously this default case rendered an <input placeholder="Enter value...">,
+      // which appeared as a mystery field in split-media left columns when a
+      // field had an unregistered widgetType. The dispatcher should never
+      // silently invent a widget that doesn't exist.
+      // In production: render nothing. In dev: show a small hint for debugging.
+      if (process.env.NODE_ENV !== 'production') {
+        return (
+          <div className="text-xs text-muted-foreground italic p-2 border border-dashed border-muted-foreground/30 rounded-md">
+            Unsupported field type: <code className="font-mono">{widgetType || field.type || 'unknown'}</code>
+          </div>
+        );
+      }
+      return null;
     }
   }
 }

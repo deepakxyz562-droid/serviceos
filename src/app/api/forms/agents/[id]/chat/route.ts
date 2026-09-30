@@ -8,6 +8,65 @@ import { isEscalationIntent, requestHumanHandoff } from '@/lib/chat/handoff-serv
 import { tryExecuteChatBooking } from '@/lib/scheduling/chat-booking-helper';
 import { syncChatConversation } from '@/lib/chat/chat-session-sync';
 
+/**
+ * Parse FormAgent.configJson (which stores the full FormAgentData shape) back
+ * into a partial config we can merge with DEFAULT_FORM_AGENT.
+ */
+function parseConfigJson(raw: unknown): Partial<FormAgentData> {
+  if (!raw) return {};
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Partial<FormAgentData>;
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+/**
+ * Load the full FormAgent config (including knowledge, guardrails, FAQs) from
+ * the DB by route `id`. This is critical because the client may send a
+ * sanitized agentConfig (via sanitizePublicAgent) that strips knowledge /
+ * tenantId / settings — trusting it would cause the agent to ignore its
+ * configured persona, guardrails, and FAQs.
+ *
+ * Falls back to the client-supplied agentConfig only for preview mode
+ * (id === 'preview') or when the DB lookup fails.
+ */
+async function loadAgentFromDb(id: string, fallback: FormAgentData | undefined): Promise<FormAgentData> {
+  // Preview mode (studio simulator) — no DB record exists yet.
+  if (!id || id === 'preview') {
+    return fallback || DEFAULT_FORM_AGENT;
+  }
+  try {
+    const agent = await db.formAgent.findFirst({
+      where: { OR: [{ id }, { slug: id }] },
+    });
+    if (!agent) {
+      return fallback || DEFAULT_FORM_AGENT;
+    }
+    const config = parseConfigJson(agent.configJson);
+    const merged: FormAgentData = {
+      ...DEFAULT_FORM_AGENT,
+      ...config,
+      id: agent.id,
+      tenantId: agent.tenantId || undefined,
+      slug: agent.slug || undefined,
+      name: agent.name || config.name || DEFAULT_FORM_AGENT.name,
+      roleTitle: agent.roleTitle || config.roleTitle || DEFAULT_FORM_AGENT.roleTitle,
+    };
+    return merged;
+  } catch (err) {
+    console.warn('[forms/agent-chat] DB agent load failed, falling back to client config:', err);
+    return fallback || DEFAULT_FORM_AGENT;
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -17,7 +76,10 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const { message = '', history = [], agentConfig } = body;
 
-    const agent: FormAgentData = agentConfig || DEFAULT_FORM_AGENT;
+    // Re-fetch the full agent config (with knowledge/guardrails/FAQs) from DB
+    // instead of trusting the client-supplied agentConfig, which may be
+    // sanitized (knowledge stripped) by sanitizePublicAgent().
+    const agent: FormAgentData = await loadAgentFromDb(id, agentConfig);
 
     // Retrieve relevant vector embeddings from knowledge base (Hybrid RAG)
     let retrievedKnowledge = '';
@@ -110,7 +172,10 @@ export async function POST(
             }).catch(() => null);
 
             if (tenant) {
-              businessProfilePrompt = `BUSINESS PROFILE & OPERATING HOURS:\n- Business Name: ${tenant.name}\n- Industry / Trade: ${tenant.industry || 'Professional Services'}\n- Phone: ${tenant.phone || 'Available online'}\n- Email: ${tenant.email || ''}\n- Operating Hours & Availability:\n  * Monday – Friday: 8:00 AM – 6:00 PM\n  * Saturday: 9:00 AM – 3:00 PM\n  * Sunday: Closed for regular calls (Online booking & emergency requests accepted 24/7)\n  * Appointment scheduling & online form available 24/7 with immediate confirmation\n- Offered Services: ${extractedServices.length > 0 ? extractedServices.slice(0, 12).join(', ') : 'Custom quotes, on-site service, consultations, and professional service inquiries'}`;
+              // NOTE: business hours are not stored on the Tenant model — do NOT
+              // fabricate "Mon-Fri 8-6, Sat 9-3" which is wrong for most businesses.
+              // The agent will ask visitors to confirm hours if asked.
+              businessProfilePrompt = `BUSINESS PROFILE:\n- Business Name: ${tenant.name}\n- Industry / Trade: ${tenant.industry || 'Professional Services'}\n- Phone: ${tenant.phone || 'Available online'}\n- Email: ${tenant.email || ''}\n- Operating Hours: Not specified in our records — if the visitor asks, ask them to contact us or check our website for current hours.\n- Online scheduling & inquiry form available 24/7 with immediate confirmation\n- Offered Services: ${extractedServices.length > 0 ? extractedServices.slice(0, 12).join(', ') : 'Custom quotes, on-site service, consultations, and professional service inquiries'}`;
             }
           }
         } else if (primaryConnectedForm) {
@@ -140,7 +205,11 @@ export async function POST(
     }
 
     if (!businessProfilePrompt) {
-      businessProfilePrompt = `BUSINESS & AVAILABILITY TIMINGS:\n- Hours: Monday through Friday 8:00 AM – 6:00 PM, Saturday 9:00 AM – 3:00 PM.\n- Availability: Online scheduling and inquiry form available 24/7.\n- Response Time: Typically within 15 minutes during operating hours.`;
+      // No tenant record loaded — do NOT fabricate business hours.
+      // Previously this hardcoded "Mon-Fri 8-6, Sat 9-3" which was wrong for
+      // most businesses. Instead, instruct the agent to ask the visitor to
+      // confirm hours rather than state potentially incorrect ones.
+      businessProfilePrompt = `BUSINESS & AVAILABILITY:\n- Operating Hours: Not specified in our records — if the visitor asks about hours, ask them to contact us or check our website for current hours.\n- Availability: Online scheduling and inquiry form available 24/7.\n- Response Time: Typically within 15 minutes during operating hours.`;
     }
 
     // Build context from agent knowledge base
@@ -195,8 +264,11 @@ export async function POST(
     }
 
     const authUser = await getAuthUser().catch(() => null);
-    const firstTenant = await db.tenant.findFirst({ select: { id: true } }).catch(() => null);
-    const effectiveTenantId = formRecord?.tenantId || agent.tenantId || authUser?.tenantId || firstTenant?.id || null;
+    // NOTE: removed the `firstTenant` fallback — it caused conversations and
+    // KB queries to be scoped to the wrong tenant when no tenantId could be
+    // resolved from the agent/form/auth context. The public chat route
+    // (/api/public/ai/agent-chat) already fixed this; this route now matches.
+    const effectiveTenantId = formRecord?.tenantId || agent.tenantId || authUser?.tenantId || null;
     const effectiveWorkspaceId = formRecord?.workspaceId || (agent as any).workspaceId || authUser?.workspaceId || null;
 
     let replyText = '';

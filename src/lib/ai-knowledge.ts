@@ -398,8 +398,13 @@ export async function searchKnowledgeBaseHybrid(
   }
 
   const shouldClarify = confidenceTier === 'LOW_CLARIFY';
+  // Only trigger the strict "I don't know" fallback for truly unverified
+  // queries (no KB match at all). LOW_CLARIFY queries (0.38-0.59 score) get
+  // a clarifying question instead of a refusal — the previous logic forced
+  // "I don't know" for most queries because the default embedding model
+  // (local-hash-v1) rarely exceeds 0.60 hybrid score.
   const shouldFallback = strictMode
-    ? confidenceTier === 'UNVERIFIED_FALLBACK' || confidenceTier === 'LOW_CLARIFY'
+    ? confidenceTier === 'UNVERIFIED_FALLBACK'
     : confidenceTier === 'UNVERIFIED_FALLBACK';
 
   // Build structured citations

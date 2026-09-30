@@ -86,13 +86,16 @@ const GEMINI_BASE_URL =
  * array if a model returns 404 ("No endpoints found") or persistent 429s.
  */
 const OPENROUTER_MODELS = [
-  'openrouter/free',
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'nvidia/nemotron-3.5-lightning:free',
-  'qwen/qwen3.8-27b:free',
-  'google/gemma-4-26b-a4b-it:free',
-  'inclusionai/ling-3.0-flash-sante:free',
-  'cohere/north-mini-code:free',
+  // Verified live free models on OpenRouter (Sep 2026).
+  // Previous list contained fictitious IDs (nvidia/nemotron-3-super-120b-a12b:free,
+  // qwen/qwen3.8-27b:free, google/gemma-4-26b-a4b-it:free, etc.) that 404'd on
+  // every request, burning ~7 failed attempts before falling through to the
+  // next provider.
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'google/gemma-2-9b-it:free',
+  'qwen/qwen-2.5-7b-instruct:free',
+  'mistralai/mistral-7b-instruct:free',
+  'deepseek/deepseek-r1:free',
 ]
 
 /** Per-attempt timeout. Free models can be slow on cold starts. */

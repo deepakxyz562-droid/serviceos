@@ -2,6 +2,7 @@
 
 import React from 'react';
 import dynamic from 'next/dynamic';
+import { normalizeFormSchema } from '@/lib/forms/form-schema-types';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
 
 const FormRuntimeRenderer = dynamic(
@@ -23,10 +24,15 @@ interface TemplateRuntimePreviewProps {
 }
 
 export function TemplateRuntimePreview({ formName, schema }: TemplateRuntimePreviewProps) {
+  // Normalize the schema before rendering — matches the gallery modal preview path
+  // (FormPreviewCanvas). This ensures show* mediaPanel flags default to true when
+  // undefined, so canonical templates that declare mediaPanel.enabled + content
+  // but omit explicit show* flags still render the left hero column.
+  const normalizedSchema = React.useMemo(() => normalizeFormSchema(schema), [schema]);
   return (
     <FormRuntimeRenderer
       formName={formName}
-      schema={schema}
+      schema={normalizedSchema}
       previewMode={true}
     />
   );

@@ -408,9 +408,11 @@ If the user asks for a price/quote and matches a known service, you can optional
     }
 
     if (!rawReply) {
+      // Lower temperature from 0.6 → 0.3 to reduce hallucination when the
+      // system prompt is generic. The forms chat route already uses 0.3.
       const aiResponse = await callAI({
         messages: conversationMessages,
-        temperature: hybridResult?.shouldFallback ? 0.2 : 0.6,
+        temperature: hybridResult?.shouldFallback ? 0.2 : 0.3,
         maxTokens: 500,
       });
 

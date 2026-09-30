@@ -113,12 +113,14 @@ export function FormMediaHeroPanel({
   const hasBadge = Boolean(rawBadge && typeof rawBadge === 'string' && rawBadge.trim().length > 0);
   // In editor mode or when real widgets are present, suppress uneditable hardcoded pseudo-blocks.
   // All left column elements are rendered as first-class sidebar widgets via children/leftFields.
-  const showBadge = !hasLeftWidgets && !editable && mediaPanel?.showBadge === true && hasBadge;
-  const showMedia = !hasLeftWidgets && !editable && mediaPanel?.showMedia === true && Boolean(mediaPanel?.mediaUrl);
-  const showHeadline = !hasLeftWidgets && !editable && mediaPanel?.showHeadline === true && Boolean(mediaPanel?.headline);
-  const showSubtitle = !hasLeftWidgets && !editable && mediaPanel?.showSubtitle === true && Boolean(mediaPanel?.subtitle);
-  const showBenefits = !hasLeftWidgets && !editable && mediaPanel?.showBenefits === true && Boolean(mediaPanel?.benefitsList?.length);
-  const showTestimonial = !hasLeftWidgets && !editable && mediaPanel?.showTestimonial === true && Boolean(mediaPanel?.testimonial?.quote);
+  // NOTE: show* flags default to visible when undefined (!== false) so canonical templates
+  // that declare mediaPanel.enabled + content but omit explicit show* flags still render.
+  const showBadge = !hasLeftWidgets && !editable && mediaPanel?.showBadge !== false && hasBadge;
+  const showMedia = !hasLeftWidgets && !editable && mediaPanel?.showMedia !== false && Boolean(mediaPanel?.mediaUrl);
+  const showHeadline = !hasLeftWidgets && !editable && mediaPanel?.showHeadline !== false && Boolean(mediaPanel?.headline);
+  const showSubtitle = !hasLeftWidgets && !editable && mediaPanel?.showSubtitle !== false && Boolean(mediaPanel?.subtitle);
+  const showBenefits = !hasLeftWidgets && !editable && mediaPanel?.showBenefits !== false && Boolean((mediaPanel?.benefitsList?.length || 0) > 0 || (rawPanel.bullets?.length || 0) > 0);
+  const showTestimonial = !hasLeftWidgets && !editable && mediaPanel?.showTestimonial !== false && Boolean(mediaPanel?.testimonial?.quote);
 
   const mediaType = mediaPanel?.mediaType || rawPanel.type || 'image';
   const mediaUrl = mediaPanel?.mediaUrl || rawPanel.url;
@@ -1005,6 +1007,12 @@ export function FormRuntimeRenderer({
   // when enabled was undefined, forcing split_media layout on Classic forms.
   // Now: split_media is only active when theme.layout === 'split_media'.
   const isSplitLayout = formLayout === 'split_media' && activeMode === 'paper';
+  const leftHasHeadline = Boolean(
+    isSplitLayout && (
+      schema.fields?.some((f) => f.layoutColumn === 'left' && (f.type === 'heading' || f.widgetType === 'heading')) ||
+      (mediaPanel?.showHeadline !== false && Boolean(mediaPanel?.headline))
+    )
+  );
   const splitRatio = mediaPanel?.splitRatio || '50-50';
   const isRightSide = mediaPanel?.position === 'right';
   const isMobile = device === 'mobile' || Boolean(forceSingleColumn);
@@ -1518,7 +1526,14 @@ export function FormRuntimeRenderer({
               )}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h1 className="text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground">
+                  {/* In split-media layout, when the left panel already renders the headline,
+                      suppress the visible H1 here to avoid duplicate form-name display.
+                      Keep an sr-only H1 for accessibility/SEO so screen readers still see it. */}
+                  <h1
+                    className={`text-xl sm:text-2xl font-black leading-tight tracking-tight text-foreground ${
+                      leftHasHeadline ? 'sr-only' : ''
+                    }`}
+                  >
                     {formName}
                   </h1>
                   {formDescription && (

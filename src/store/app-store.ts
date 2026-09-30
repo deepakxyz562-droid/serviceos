@@ -195,11 +195,13 @@ export const useAppStore = create<AppState>()(
   setAuthHydrated: (hydrated: boolean) => set({ authHydrated: hydrated }),
   clearAuth: () => set({ auth: initialAuthState, authHydrated: true }),
 
-  // Active view — both naming conventions point to the same state
+  // Active view — both naming conventions point to the same state.
+  // Auto-close the global Create Form/AI Agent wizard on view change so the
+  // modal doesn't follow the user into unrelated views (e.g. AI Agents list).
   activeView: 'dashboard',
-  setActiveView: (view: ActiveView) => set({ activeView: view, currentView: view, mobileSidebarOpen: false }),
+  setActiveView: (view: ActiveView) => set({ activeView: view, currentView: view, mobileSidebarOpen: false, createFormWizardOpen: false, createFormWizardInitialType: null }),
   currentView: 'dashboard',
-  setCurrentView: (view: ActiveView) => set({ currentView: view, activeView: view, mobileSidebarOpen: false }),
+  setCurrentView: (view: ActiveView) => set({ currentView: view, activeView: view, mobileSidebarOpen: false, createFormWizardOpen: false, createFormWizardInitialType: null }),
 
   // Onboarding
   showOnboarding: false,
