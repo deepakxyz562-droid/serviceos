@@ -10,6 +10,7 @@ import type { FormTemplate } from './types';
 export function navigateToUseTemplate(template: FormTemplate) {
   try {
     sessionStorage.setItem('pendingTemplateId', template.id);
+    sessionStorage.removeItem('fieseros_active_edit_form_id');
     localStorage.setItem('fieseros_pending_template_id', template.id);
     localStorage.setItem(
       'fieseros_pending_template',

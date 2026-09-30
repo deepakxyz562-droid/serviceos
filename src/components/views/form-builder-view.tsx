@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   FileInput, Plus, Search, Trash2, Eye, Pencil, Code, MessageCircle,
   CheckCircle2, Loader2, BarChart3, MoreVertical, TrendingUp,
@@ -130,6 +130,8 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   // Create/Edit form state
   const [editMode, setEditMode] = useState(false);
   const [editFormId, setEditFormId] = useState<string | null>(null);
+  const isEditingRef = useRef(false);
+  const activeEditIdRef = useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState('details');
 
   const [formData, setFormData] = useState<EditorFormData>({
@@ -191,6 +193,8 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           if (targetId) {
             const targetForm = formItems.find((f) => f.id === targetId || f.slug === targetId);
             if (targetForm) {
+              isEditingRef.current = true;
+              activeEditIdRef.current = targetForm.id;
               setEditMode(true);
               setEditFormId(targetForm.id);
               setFormData({
@@ -299,9 +303,14 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const resetFormData = useCallback(() => {
+    isEditingRef.current = false;
+    activeEditIdRef.current = null;
     try {
       if (typeof window !== 'undefined') {
         sessionStorage.removeItem('fieseros_active_edit_form_id');
+        sessionStorage.removeItem('pendingTemplateId');
+        localStorage.removeItem('fieseros_pending_template_id');
+        localStorage.removeItem('fieseros_pending_template');
       }
     } catch {}
     setFormData({
@@ -329,6 +338,16 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   // already loaded.
   useEffect(() => {
     try {
+      // If user is currently editing an existing form or an edit session is active, NEVER load template
+      if (isEditingRef.current) return;
+      if (typeof window !== 'undefined') {
+        const storedEdit = sessionStorage.getItem('fieseros_active_edit_form_id');
+        const spCheck = new URLSearchParams(window.location.search);
+        if (storedEdit || spCheck.get('editFormId') || spCheck.get('formId')) {
+          return;
+        }
+      }
+
       let pendingId = sessionStorage.getItem('pendingTemplateId');
       if (!pendingId && typeof window !== 'undefined') {
         const sp = new URLSearchParams(window.location.search);
@@ -340,14 +359,29 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
       }
       if (!pendingId) return;
 
-      // Consume the id so a refresh doesn't re-apply it endlessly
+      // Consume the id immediately so a refresh or subsequent action doesn't re-apply it endlessly
       sessionStorage.removeItem('pendingTemplateId');
       if (typeof window !== 'undefined') {
         localStorage.removeItem('fieseros_pending_template_id');
+        localStorage.removeItem('fieseros_pending_template');
+        // Clean URL query parameters so templateId does not linger in browser location
+        if (window.location.search.includes('templateId') || window.location.search.includes('template=')) {
+          const sp = new URLSearchParams(window.location.search);
+          sp.delete('templateId');
+          sp.delete('template');
+          const clean = sp.toString() ? `${window.location.pathname}?${sp.toString()}` : window.location.pathname;
+          window.history.replaceState({}, '', clean);
+        }
       }
+
+      let cancelled = false;
 
       // Dynamically import to avoid pulling the registry into the bundle
       import('@/lib/forms/templates').then(({ getTemplateSync }) => {
+        // Abort if unmounted or if user entered edit mode while chunk was loading
+        if (cancelled || isEditingRef.current || activeEditIdRef.current) return;
+        if (typeof window !== 'undefined' && sessionStorage.getItem('fieseros_active_edit_form_id')) return;
+
         let template = getTemplateSync(pendingId);
         if (!template && typeof window !== 'undefined') {
           const rawPending = localStorage.getItem('fieseros_pending_template');
@@ -362,6 +396,10 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           console.warn(`[form-builder-view] Template '${pendingId}' not found in registry.`);
           return;
         }
+
+        // Final sanity check before modifying state
+        if (isEditingRef.current || activeEditIdRef.current) return;
+
         // Map template FormField[] → builder FormField[] (preserving IDs, layoutColumn, defaultValues, and options)
         const templateFields = (template.schema.fields || []).map((f: any, idx: number) => ({
           id: f.id || `tpl-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
@@ -429,15 +467,31 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         setActiveTab('details');
         setShowCreateDialog(true);
       });
+
+      return () => {
+        cancelled = true;
+      };
     } catch {
       // sessionStorage unavailable — non-fatal.
     }
   }, []);
 
   const handleOpenEdit = (form: FormItem) => {
+    isEditingRef.current = true;
+    activeEditIdRef.current = form.id;
     try {
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('fieseros_active_edit_form_id', form.id);
+        sessionStorage.removeItem('pendingTemplateId');
+        localStorage.removeItem('fieseros_pending_template_id');
+        localStorage.removeItem('fieseros_pending_template');
+        if (window.location.search.includes('templateId') || window.location.search.includes('template=')) {
+          const sp = new URLSearchParams(window.location.search);
+          sp.delete('templateId');
+          sp.delete('template');
+          const clean = sp.toString() ? `${window.location.pathname}?${sp.toString()}` : window.location.pathname;
+          window.history.replaceState({}, '', clean);
+        }
       }
     } catch {}
     setEditMode(true);
@@ -477,13 +531,15 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
       .then(async (res) => {
         if (!res.ok) return;
         const data = await res.json();
-        if (data.form) {
+        if (data.form && activeEditIdRef.current === form.id) {
           const fullItem = apiFormToFormItem(data.form as ApiForm);
           setFormData((prev) => {
             if (prev.id !== form.id) return prev;
             return {
               ...prev,
               ...fullItem,
+              id: form.id,
+              name: fullItem.name || form.name,
               fields: Array.isArray(fullItem.fields) && fullItem.fields.length > 0 ? fullItem.fields : prev.fields,
               theme: fullItem.theme || prev.theme,
               mediaPanel: fullItem.mediaPanel || fullItem.theme?.mediaPanel || prev.mediaPanel,
@@ -538,8 +594,8 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         const data = await res.json();
         const updated = apiFormToFormItem(data.form as ApiForm);
         setForms((prev) => {
-          const exists = prev.some((f) => f.id === updated.id || f.id === targetId);
-          return exists ? prev.map((f) => (f.id === targetId || f.id === updated.id ? updated : f)) : [updated, ...prev];
+          const exists = prev.some((f) => (updated.id && f.id === updated.id) || (targetId && f.id === targetId));
+          return exists ? prev.map((f) => ((targetId && f.id === targetId) || (updated.id && f.id === updated.id) ? updated : f)) : [updated, ...prev];
         });
         setEditMode(true);
         setEditFormId(updated.id);
