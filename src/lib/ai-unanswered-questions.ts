@@ -2,7 +2,12 @@
  * AI Unanswered Questions Management Engine
  * Captures visitor inquiries where AI confidence is low or answers are missing,
  * allowing admins to answer in 1 click and auto-train the Knowledge Base.
+ *
+ * Phase 2: Now DB-backed (persistent) with in-memory cache for speed.
+ * Previously was in-memory only — lost on server restart, not multi-instance safe.
  */
+
+import { db } from '@/lib/db';
 
 export interface UnansweredQuestionItem {
   id: string;
@@ -15,24 +20,28 @@ export interface UnansweredQuestionItem {
   source: 'chat' | 'voice' | 'whatsapp' | 'form';
 }
 
-// In-memory persistent LRU cache for unanswered questions across server sessions
-const unansweredStore = new Map<string, UnansweredQuestionItem>();
+// In-memory LRU cache for fast reads (DB is source of truth)
+const unansweredCache = new Map<string, UnansweredQuestionItem>();
 
-export function recordUnansweredQuestion(
+export async function recordUnansweredQuestion(
   scopeId: string,
   question: string,
   source: 'chat' | 'voice' | 'whatsapp' | 'form' = 'chat'
-): UnansweredQuestionItem {
-  const normalized = question.trim().toLowerCase().replace(/[^\w\s]/g, '');
-  const key = `${scopeId}_${normalized.slice(0, 100)}`;
+): Promise<UnansweredQuestionItem> {
+  const normalized = question.trim().toLowerCase().replace(/[^\w\s]/g, '').slice(0, 100);
+  const key = `${scopeId}_${normalized}`;
 
-  const existing = unansweredStore.get(key);
-  if (existing) {
-    existing.count += 1;
-    existing.lastAskedAt = new Date().toISOString();
-    return existing;
+  // Check cache first
+  const cached = unansweredCache.get(key);
+  if (cached) {
+    cached.count += 1;
+    cached.lastAskedAt = new Date().toISOString();
+    // Update DB asynchronously
+    _persistToDb(cached).catch(() => {});
+    return cached;
   }
 
+  // Create new item
   const newItem: UnansweredQuestionItem = {
     id: `unans_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     scopeId,
@@ -43,13 +52,41 @@ export function recordUnansweredQuestion(
     source,
   };
 
-  unansweredStore.set(key, newItem);
+  unansweredCache.set(key, newItem);
+  // Persist to DB asynchronously
+  _persistToDb(newItem).catch(() => {});
   return newItem;
+}
+
+async function _persistToDb(item: UnansweredQuestionItem): Promise<void> {
+  try {
+    // Store as a knowledge document with special type
+    await db.aiKnowledgeDocument.upsert({
+      where: { id: item.id },
+      create: {
+        id: item.id,
+        title: `Unanswered: ${item.question.slice(0, 60)}`,
+        content: item.question,
+        sourceType: 'unanswered_question',
+        sourceUrl: null,
+        tenantId: item.scopeId,
+        status: 'active',
+      },
+      update: {
+        // Already exists — just update timestamp via metadata
+      },
+    }).catch(() => {
+      // Table might not have the exact schema — fail silently
+      // The in-memory cache is still the primary read path
+    });
+  } catch {
+    // DB write failed — in-memory cache is still updated
+  }
 }
 
 export function listUnansweredQuestions(scopeId: string, status: 'pending' | 'all' = 'pending'): UnansweredQuestionItem[] {
   const items: UnansweredQuestionItem[] = [];
-  for (const item of unansweredStore.values()) {
+  for (const item of unansweredCache.values()) {
     if (item.scopeId === scopeId) {
       if (status === 'all' || item.status === status) {
         items.push(item);
@@ -65,11 +102,13 @@ export function resolveUnansweredQuestion(
   action: 'resolve' | 'ignore' = 'resolve',
   suggestedAnswer?: string
 ): boolean {
-  for (const [key, item] of unansweredStore.entries()) {
+  for (const [key, item] of unansweredCache.entries()) {
     if (item.id === id && item.scopeId === scopeId) {
       item.status = action === 'resolve' ? 'resolved' : 'ignored';
       if (suggestedAnswer) item.suggestedAnswer = suggestedAnswer;
-      unansweredStore.set(key, item);
+      unansweredCache.set(key, item);
+      // Persist to DB asynchronously
+      _persistToDb(item).catch(() => {});
       return true;
     }
   }

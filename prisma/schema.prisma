@@ -6,7 +6,6 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
   
   
   
@@ -270,6 +269,7 @@ model Tenant {
   googleAdsLeads    GoogleAdsLead[]
   // Public chat (visitor widget)
   publicChatSessions PublicChatSession[]
+  aiChatTurns        AiChatTurn[]
   // AI Receptionist (Vapi.ai BYOK)
   aiAgents           AiAgent[]
   aiPhoneNumbers     AiPhoneNumber[]
@@ -1315,11 +1315,11 @@ model FormTemplate {
   schemaJson        Json
 
   // Multi-dimensional classification (JSON arrays of taxonomy IDs)
-  categories        Json     @default("[]")     // TemplateCategoryId[]
-  industries        Json     @default("[]")     // TemplateIndustryId[]
-  useCases          Json     @default("[]")     // TemplateUseCaseId[]
-  audiences         Json     @default("[]")     // TemplateAudienceId[]
-  tags              Json     @default("[]")     // string[]
+  categories        String  @default("[]")     // TemplateCategoryId[]
+  industries        String  @default("[]")     // TemplateIndustryId[]
+  useCases          String  @default("[]")     // TemplateUseCaseId[]
+  audiences         String  @default("[]")     // TemplateAudienceId[]
+  tags              String  @default("[]")     // string[]
 
   // Lifecycle
   source            String   @default("curated") // curated, ai_generated, community
@@ -1338,7 +1338,7 @@ model FormTemplate {
   // SEO
   seoTitle          String?
   seoDescription    String?
-  seoKeywords       Json     @default("[]")      // string[]
+  seoKeywords       String  @default("[]")      // string[]
 
   // Authorship (for community templates — Release 5)
   authorId          String?
@@ -1374,7 +1374,7 @@ model FormAgent {
   
   // Full agent config (FormAgentData serialized) — channels, knowledge,
   // settings, navigation, quickActions, connectedForms
-  configJson      Json     @default("{}")
+  configJson      String   @default("{}")
   
   // Agent status
   status          String   @default("active") // active | inactive | draft
@@ -4390,7 +4390,7 @@ model KnowledgeDocument {
   tenantId        String?
   workspaceId     String?
   title           String
-  content         String              @db.Text
+  content         String              
   url             String?
   status          String              @default("ready")
   chunksCount     Int                 @default(0)
@@ -4409,7 +4409,7 @@ model KnowledgeChunk {
   documentId      String
   tenantId        String?
   workspaceId     String?
-  content         String              @db.Text
+  content         String              
   tokenCount      Int                 @default(0)
   chunkIndex      Int                 @default(0)
   metadataJson    String              @default("{}")
@@ -5463,6 +5463,7 @@ model PublicChatSession {
   workspace       Workspace? @relation(fields: [workspaceId], references: [id])
   form            Form?    @relation(fields: [formId], references: [id], onDelete: SetNull)
   messages        PublicChatMessage[]
+  chatTurns       AiChatTurn[]
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
@@ -5487,6 +5488,78 @@ model PublicChatMessage {
 
   @@index([sessionId, createdAt])
   @@index([senderType, readAt])
+}
+
+// ==========================================
+// AI CHAT TURN TRACE (Enterprise Agent Architecture — Phase 8)
+// ==========================================
+// Per-turn trace for text-based AI agent conversations. Every message the AI
+// processes generates one row here, storing the full execution context:
+// intent detected, model used, prompt version, retrieved knowledge docs,
+// tool calls, latency, token usage, cost, confidence, and outcome.
+//
+// This is the foundation for:
+//   - Debugging ("why did the AI say that?")
+//   - Evaluation (Phase 7 — score conversations against expected outcomes)
+//   - Continuous improvement (feed failed traces into eval datasets)
+//   - Cost monitoring per tenant
+//
+// Voice calls already have AiCall; this is the text-chat equivalent.
+
+model AiChatTurn {
+  id              String   @id @default(cuid())
+  sessionId       String?  // link to PublicChatSession (nullable for embed widget without session)
+  tenantId        String?
+  workspaceId     String?
+  agentId         String?  // FormAgent id or slug
+  formId          String?  // connected form
+
+  // Input
+  userMessage     String   // the visitor's message
+  historyLength   Int      @default(0)  // number of prior turns
+
+  // Intent
+  intent          String?  // service_request, booking, pricing, faq, escalation, informational, other
+  urgency         String?  // emergency, high, normal, flexible
+
+  // Knowledge retrieval
+  retrievedDocIds String   @default("[]")  // JSON array of AiKnowledgeDocument IDs
+  confidenceTier  String?  // HIGH, MEDIUM, LOW_CLARIFY, UNVERIFIED_FALLBACK
+  confidenceScore Float?
+
+  // Model
+  modelUsed       String?  // e.g. "glm-4-plus", "llama-3.3-70b"
+  promptVersion   String?  // agent config version (future)
+  temperature     Float?
+
+  // Token usage + cost
+  promptTokens    Int      @default(0)
+  completionTokens Int     @default(0)
+  costUsd         Float   @default(0)
+
+  // Tool calls
+  toolCallsJson   String   @default("[]")  // JSON array of {tool, args, result, status}
+
+  // Output
+  responseText    String   @default("")  // AI's reply (truncated to 2000 chars)
+  cardType        String?  // quote_card, slot_picker, booking_confirmation, media_upload, etc.
+
+  // Performance
+  latencyMs       Int      @default(0)
+
+  // Outcome
+  outcome         String   @default("answered")  // answered, booked, escalated, failed, blocked
+  failureCategory String?  // llm_timeout, kb_miss, tool_exception, guardrail_block, parse_error
+
+  createdAt       DateTime @default(now())
+
+  session         PublicChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([agentId, createdAt])
+  @@index([outcome, createdAt])
 }
 
 // ==========================================
@@ -6039,7 +6112,7 @@ model MarketplaceCustomer {
   notifyByPush    Boolean  @default(true)
   
   // Favorites (providers the customer has saved)
-  favoriteTenantIds String[] @default([])
+  favoriteTenantIds String  @default("[]")
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -6066,7 +6139,7 @@ model MarketplaceProviderProfile {
   // Business description for the marketplace listing
   tagline         String?
   bio             String?
-  portfolioUrls   String[] @default([])
+  portfolioUrls    String  @default("[]")
   
   // Availability rules (JSON: business hours, blackout dates, capacity)
   availabilityJson String  @default("{}")
@@ -6080,7 +6153,7 @@ model MarketplaceProviderProfile {
   // Provider "Find Work" preferences
   maxDistanceMiles  Float? @default(50)
   minBudgetFilter    Float? @default(0)
-  preferredCategories String[] @default([])
+  preferredCategories String @default("[]")
   
   // Verification summary (mirrors Tenant flags for fast marketplace queries)
   verificationSummary String @default("{}") // {identity, business, license, insurance}

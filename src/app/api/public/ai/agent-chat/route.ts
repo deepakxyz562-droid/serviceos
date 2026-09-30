@@ -6,6 +6,7 @@ import { requestHumanHandoff, isEscalationIntent } from '@/lib/chat/handoff-serv
 import { createAppointmentBooking } from '@/lib/scheduling/booking-service';
 import { tryExecuteChatBooking, extractBookingIntent } from '@/lib/scheduling/chat-booking-helper';
 import { syncChatConversation } from '@/lib/chat/chat-session-sync';
+import { traceChatTurn } from '@/lib/ai-chat-tracer';
 
 export const runtime = 'nodejs';
 
@@ -28,6 +29,7 @@ interface ChatMessage {
 }
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = await req.json();
     const {
@@ -459,6 +461,28 @@ If the user asks for a price/quote and matches a known service, you can optional
       agentName: tenantName,
     });
 
+    // ── Write per-turn trace (Phase 8: Traces) ──
+    traceChatTurn({
+      sessionId: syncRes?.sessionId || body.sessionId || null,
+      tenantId: tenantId || null,
+      workspaceId: workspaceId || null,
+      agentId: agentId || null,
+      formId: primaryConnectedForm?.id || null,
+      userMessage: message,
+      historyLength: history?.length || 0,
+      retrievedDocIds: citations?.map((c: any) => c.id?.toString()) || [],
+      confidenceTier: hybridResult?.confidenceTier || null,
+      confidenceScore: hybridResult?.confidenceScore || null,
+      modelUsed: aiResponse?.model || null,
+      temperature: 0.3,
+      promptTokens: aiResponse?.usage?.prompt_tokens || 0,
+      completionTokens: aiResponse?.usage?.completion_tokens || 0,
+      responseText: rawReply,
+      cardType: cardData?.type || null,
+      latencyMs: Date.now() - startTime,
+      outcome: bookingResult?.success ? 'booked' : isEscalationIntent(message) ? 'escalated' : 'answered',
+    });
+
     return NextResponse.json(
       {
         reply: rawReply,
@@ -482,6 +506,17 @@ If the user asks for a price/quote and matches a known service, you can optional
     );
   } catch (error) {
     console.error('[agent-chat] Fatal error:', error);
+    // Trace the failure
+    traceChatTurn({
+      userMessage: body?.message || '',
+      historyLength: body?.history?.length || 0,
+      tenantId: tenantId || null,
+      agentId: agentId || null,
+      latencyMs: Date.now() - startTime,
+      outcome: 'failed',
+      failureCategory: 'llm_timeout',
+      responseText: String(error?.message || error).slice(0, 500),
+    });
     return NextResponse.json(
       {
         reply: "I'm having a little trouble checking our calendar right now. Please leave your name and phone number and our team will get right back to you!",

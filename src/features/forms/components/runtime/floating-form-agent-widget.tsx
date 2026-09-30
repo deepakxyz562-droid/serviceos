@@ -24,6 +24,8 @@ import {
   ArrowRight,
   Video,
   ImageIcon,
+  PenTool,
+  CreditCard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -734,6 +736,68 @@ export function FloatingFormAgentWidget({
                                 }}
                               />
                             </label>
+                          </div>
+                        )}
+
+                        {/* Choice Card — AI presents selectable options */}
+                        {m.card?.type === 'choice_card' && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-white dark:bg-slate-900 border border-purple-500/30 shadow-xs space-y-2">
+                            {m.card.prompt && (
+                              <p className="text-xs font-bold text-purple-950 dark:text-purple-100">{m.card.prompt}</p>
+                            )}
+                            <div className="grid grid-cols-1 gap-1.5">
+                              {(m.card.options || []).map((opt: string, i: number) => (
+                                <button
+                                  key={i}
+                                  type="button"
+                                  onClick={() => handleSendMessage(opt)}
+                                  className="text-left py-1.5 px-2.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 text-[11px] font-semibold text-purple-800 dark:text-purple-200 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Payment Card — AI requests payment */}
+                        {m.card?.type === 'payment_card' && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-white dark:bg-slate-900 border border-emerald-500/30 shadow-xs space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-emerald-950 dark:text-emerald-100">{m.card.description || 'Payment Required'}</span>
+                              <span className="text-sm font-black text-emerald-700 dark:text-emerald-300">
+                                ${typeof m.card.amount === 'number' ? m.card.amount.toFixed(2) : m.card.amount}
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="w-full h-7 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                              onClick={() => handleSendMessage(`I'd like to proceed with the payment of $${m.card.amount} for ${m.card.description}.`)}
+                            >
+                              <CreditCard className="size-3" />
+                              Pay Now
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* Signature Card — AI requests a signature */}
+                        {m.card?.type === 'signature_card' && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-white dark:bg-slate-900 border border-rose-500/30 shadow-xs space-y-2">
+                            <p className="text-xs font-bold text-rose-950 dark:text-rose-100">{m.card.prompt || 'Please sign to confirm'}</p>
+                            <div className="h-12 rounded-lg border-2 border-dashed border-rose-300 dark:border-rose-800 bg-rose-50/40 dark:bg-rose-950/20 flex items-center justify-center">
+                              <PenTool className="size-5 text-rose-400" />
+                              <span className="text-[10px] text-rose-500 ml-1.5">Tap to sign</span>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="w-full h-6 text-[10px] font-bold border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300"
+                              onClick={() => handleSendMessage('I have signed the document.')}
+                            >
+                              I Agree & Sign
+                            </Button>
                           </div>
                         )}
 

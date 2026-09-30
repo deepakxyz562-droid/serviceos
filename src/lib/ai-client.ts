@@ -981,7 +981,100 @@ export async function callAI(options: {
   throw new Error(`All AI providers exhausted${lastErrorMsg ? ` (${lastErrorMsg})` : ''}`)
 }
 
-// ─── callOpenRouter (back-compat wrapper) ───────────────────────────────────
+// ─── callAIStream — streaming version (Phase 1: Agent Core) ────────────────
+//
+// Returns an async generator that yields content chunks as they arrive.
+// The widget can render tokens incrementally instead of showing a spinner.
+// Falls back to non-streaming if the provider doesn't support streaming.
+
+export async function* callAIStream(options: {
+  messages: ChatMessage[]
+  temperature?: number
+  maxTokens?: number
+  preferredModel?: string
+}): AsyncGenerator<string, void, unknown> {
+  const { messages, temperature, maxTokens, preferredModel } = options;
+  const chain = await loadAiKeyChain();
+
+  for (const provider of PROVIDER_ORDER) {
+    const keys = chain[provider];
+    if (keys.length === 0) continue;
+
+    const defaults = DEFAULT_MODELS[provider];
+    const models = preferredModel
+      ? Array.from(new Set([preferredModel, ...defaults]))
+      : defaults;
+
+    for (const key of keys) {
+      for (const model of models) {
+        try {
+          // Try streaming via fetch SSE
+          const endpoint = provider === 'zai'
+            ? 'https://api.z.ai/api/paas/v4/chat/completions'
+            : provider === 'openrouter'
+            ? 'https://openrouter.ai/api/v1/chat/completions'
+            : provider === 'openai'
+            ? 'https://api.openai.com/v1/chat/completions'
+            : null;
+
+          if (!endpoint) continue;
+
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${key.apiKey}`,
+              ...(provider === 'openrouter' ? { 'HTTP-Referer': 'https://fieseros.com', 'X-Title': 'Fieseros' } : {}),
+            },
+            body: JSON.stringify({
+              model,
+              messages,
+              temperature: temperature ?? 0.3,
+              max_tokens: maxTokens ?? 500,
+              stream: true,
+            }),
+            signal: AbortSignal.timeout(60_000),
+          });
+
+          if (!response.ok || !response.body) continue;
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6).trim();
+                if (data === '[DONE]') return;
+                try {
+                  const json = JSON.parse(data);
+                  const chunk = json.choices?.[0]?.delta?.content;
+                  if (chunk) yield chunk;
+                } catch { /* skip malformed chunks */ }
+              }
+            }
+          }
+          return; // success — stop trying other providers
+        } catch {
+          // Fall through to next provider/model
+          continue;
+        }
+      }
+    }
+  }
+
+  // If all streaming attempts failed, fall back to non-streaming
+  const result = await callAI({ messages, temperature, maxTokens, preferredModel });
+  yield result.content;
+}
+
 
 export interface CallOpenRouterOptions {
   messages?: ChatMessage[]
