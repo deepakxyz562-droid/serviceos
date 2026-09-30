@@ -1210,7 +1210,33 @@ export function synthesizeTemplate(
 
   // Intelligent 2026 Layout: Map dynamically to 100 Form Experience Structures across 10 Master Engines
   const structure = recommendStructureForTemplate(catId, indId, variantIndex);
-  const chosenLayout = structure.layout;
+
+  // Override layout per-engine for visual diversity. Previously 93% of synthesized
+  // templates used 'classic' layout because most FORM_EXPERIENCE_ENGINES default to
+  // 'classic'. Now we promote engines to more visually distinct layouts:
+  // - hero_landing → split_media (hero panel left, form right)
+  // - quote_calculator → split_media (calculator left, form right)
+  // - booking_scheduler → split_media (calendar left, form right)
+  // - field_inspection → split_media (checklist left, form right)
+  // - visual_choice_grid → card (card-by-card selection)
+  // - ai_dynamic_concierge → card (conversational card mode)
+  // - milestone_stepper → classic (multi-step with step nav, stays classic)
+  // - card_swipe → card (one question per screen)
+  // - split_hero → split_media (already split)
+  // - classic_business → classic (stays classic)
+  const ENGINE_LAYOUT_OVERRIDE: Record<string, string> = {
+    hero_landing: 'split_media',
+    quote_calculator: 'split_media',
+    booking_scheduler: 'split_media',
+    field_inspection: 'split_media',
+    visual_choice_grid: 'card',
+    ai_dynamic_concierge: 'card',
+    card_swipe: 'card',
+    split_hero: 'split_media',
+    milestone_stepper: 'classic',
+    classic_business: 'classic',
+  };
+  const chosenLayout = ENGINE_LAYOUT_OVERRIDE[structure.engine] || structure.layout;
 
   const shortDesc = getTemplateShortDescription(catId, indLabel, subLabel);
   const longDesc = getTemplateLongDescription(catId, indLabel, subLabel);

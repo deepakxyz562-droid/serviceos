@@ -54,7 +54,29 @@ const SYNTHESIZED_CACHE = new Map<string, FormTemplate>();
  * Register a template. Called by each `canonical/*.ts` file at import time.
  * Idempotent — re-registering the same id overwrites (useful for HMR).
  */
+import { synthesizeTemplate, getTemplateShortDescription } from './generators/mass-template-synthesizer';
+import { TEMPLATE_INDUSTRIES } from './taxonomy/industries';
+import { TEMPLATE_CATEGORIES } from './taxonomy/categories';
+import { recommendStructureForTemplate } from './form-structures';
+
+/**
+ * Register a single template into the in-memory REGISTRY.
+ * Idempotent — re-registering the same id overwrites (useful for HMR).
+ *
+ * Auto-stamps `structureId` + `engine` if missing (e.g. on curated templates
+ * that don't declare them). This ensures every template in the catalog has
+ * the experience-structure metadata needed for the gallery badge + thumbnail
+ * archetype selection.
+ */
 export function registerTemplate(template: FormTemplate): void {
+  // Backfill structureId + engine for curated templates that don't set them.
+  if (!template.engine || !template.structureId) {
+    const cat = template.categories?.[0];
+    const ind = template.industries?.[0];
+    const structure = recommendStructureForTemplate(cat, ind, 0);
+    if (!template.engine) template.engine = structure.engine;
+    if (!template.structureId) template.structureId = structure.id;
+  }
   REGISTRY.set(template.id, template);
 }
 
@@ -64,10 +86,6 @@ export function registerTemplate(template: FormTemplate): void {
 export function registerTemplates(templates: FormTemplate[]): void {
   for (const t of templates) registerTemplate(t);
 }
-
-import { synthesizeTemplate, getTemplateShortDescription } from './generators/mass-template-synthesizer';
-import { TEMPLATE_INDUSTRIES } from './taxonomy/industries';
-import { TEMPLATE_CATEGORIES } from './taxonomy/categories';
 
 export interface TemplateIndexEntry {
   id: string;

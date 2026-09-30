@@ -1325,27 +1325,38 @@ function ModernTemplateCard({
             <Badge variant="outline" className="bg-white/95 dark:bg-slate-900/95 text-[10px] font-bold shadow-xs">
               {getCategoryLabel(primaryCat)}
             </Badge>
-            {template.engine && (
-              <Badge variant="outline" className="bg-emerald-50/95 dark:bg-emerald-950/90 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border-emerald-300 dark:border-emerald-800 shadow-xs">
-                {template.engine === 'quote_calculator'
-                  ? '⚡ Calculator'
-                  : template.engine === 'booking_scheduler'
-                  ? '📅 Calendar & Slots'
-                  : template.engine === 'field_inspection'
-                  ? '📋 Checklist'
-                  : template.engine === 'card_swipe'
-                  ? '🃏 1-Question'
-                  : template.engine === 'visual_choice_grid'
-                  ? '🖼️ Visual Grid'
-                  : template.engine === 'contract_signature'
-                  ? '✍️ Signature'
-                  : template.engine === 'split_hero'
-                  ? '📐 Split Hero'
-                  : template.engine === 'milestone_stepper'
-                  ? '🔢 Stepper'
-                  : '✨ Pro'}
-              </Badge>
-            )}
+            {/* Always show engine badge — compute from engine field or infer from category/layout */}
+            {(() => {
+              const engine = template.engine
+                || (template.schema?.theme?.layout === 'split_media' ? 'split_hero'
+                  : template.schema?.theme?.layout === 'card' ? 'card_swipe'
+                  : template.schema?.steps && template.schema.steps.length > 1 ? 'milestone_stepper'
+                  : (template.categories?.[0] || '').includes('quote') || (template.categories?.[0] || '').includes('estimate') ? 'quote_calculator'
+                  : (template.categories?.[0] || '').includes('booking') || (template.categories?.[0] || '').includes('appointment') ? 'booking_scheduler'
+                  : (template.categories?.[0] || '').includes('inspection') || (template.categories?.[0] || '').includes('checklist') ? 'field_inspection'
+                  : (template.categories?.[0] || '').includes('consent') || (template.categories?.[0] || '').includes('waiver') ? 'contract_signature'
+                  : (template.categories?.[0] || '').includes('survey') || (template.categories?.[0] || '').includes('feedback') ? 'card_swipe'
+                  : (template.categories?.[0] || '').includes('package') || (template.categories?.[0] || '').includes('tier') ? 'visual_choice_grid'
+                  : (template.categories?.[0] || '').includes('lead') || (template.categories?.[0] || '').includes('marketing') ? 'hero_landing'
+                  : (template.categories?.[0] || '').includes('intake') || (template.categories?.[0] || '').includes('application') ? 'milestone_stepper'
+                  : 'classic_business');
+              const engineLabel = engine === 'quote_calculator' ? '⚡ Calculator'
+                : engine === 'booking_scheduler' ? '📅 Calendar'
+                : engine === 'field_inspection' ? '📋 Checklist'
+                : engine === 'card_swipe' ? '🃏 1-Question'
+                : engine === 'visual_choice_grid' ? '🖼️ Visual Grid'
+                : engine === 'contract_signature' ? '✍️ Signature'
+                : engine === 'split_hero' ? '📐 Split Hero'
+                : engine === 'milestone_stepper' ? '🔢 Stepper'
+                : engine === 'hero_landing' ? '✨ Landing'
+                : engine === 'ai_dynamic_concierge' ? '🤖 AI Concierge'
+                : '📄 Standard';
+              return (
+                <Badge variant="outline" className="bg-emerald-50/95 dark:bg-emerald-950/90 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold border-emerald-300 dark:border-emerald-800 shadow-xs">
+                  {engineLabel}
+                </Badge>
+              );
+            })()}
             {industries[0] && industries[0] !== 'general' && (
               <Badge variant="outline" className="bg-blue-50/90 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 text-[10px] border-blue-200">
                 {getIndustryLabel(industries[0])}

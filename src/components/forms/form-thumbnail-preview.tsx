@@ -144,6 +144,232 @@ const CATEGORY_THEMES: Record<
     actionLabel: 'Donate Now',
     fallbackPhoto: 'https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?auto=format&fit=crop&w=800&q=80',
   },
+  // ── 25 additional category themes for visual diversity ──
+  registration: {
+    gradient: 'from-blue-600 via-indigo-600 to-violet-600',
+    accentColor: 'text-blue-400',
+    badgeBg: 'bg-blue-500/20 border-blue-400/30',
+    badgeText: 'text-blue-200',
+    icon: User,
+    actionLabel: 'Register Now',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=800&q=80',
+  },
+  application: {
+    gradient: 'from-violet-600 via-purple-600 to-fuchsia-600',
+    accentColor: 'text-violet-400',
+    badgeBg: 'bg-violet-500/20 border-violet-400/30',
+    badgeText: 'text-violet-200',
+    icon: Briefcase,
+    actionLabel: 'Submit Application',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=800&q=80',
+  },
+  survey: {
+    gradient: 'from-purple-600 via-fuchsia-600 to-pink-600',
+    accentColor: 'text-purple-400',
+    badgeBg: 'bg-purple-500/20 border-purple-400/30',
+    badgeText: 'text-purple-200',
+    icon: Star,
+    actionLabel: 'Submit Feedback',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=800&q=80',
+  },
+  feedback: {
+    gradient: 'from-orange-600 via-amber-600 to-yellow-600',
+    accentColor: 'text-orange-400',
+    badgeBg: 'bg-orange-500/20 border-orange-400/30',
+    badgeText: 'text-orange-200',
+    icon: Star,
+    actionLabel: 'Share Feedback',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=800&q=80',
+  },
+  lead_generation: {
+    gradient: 'from-emerald-600 via-green-600 to-teal-600',
+    accentColor: 'text-emerald-400',
+    badgeBg: 'bg-emerald-500/20 border-emerald-400/30',
+    badgeText: 'text-emerald-200',
+    icon: Zap,
+    actionLabel: 'Get Started',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1556761175-5973dc0f32f7?auto=format&fit=crop&w=800&q=80',
+  },
+  request: {
+    gradient: 'from-cyan-600 via-blue-600 to-indigo-600',
+    accentColor: 'text-cyan-400',
+    badgeBg: 'bg-cyan-500/20 border-cyan-400/30',
+    badgeText: 'text-cyan-200',
+    icon: Phone,
+    actionLabel: 'Submit Request',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80',
+  },
+  inspection: {
+    gradient: 'from-emerald-600 via-green-600 to-lime-600',
+    accentColor: 'text-emerald-400',
+    badgeBg: 'bg-emerald-500/20 border-emerald-400/30',
+    badgeText: 'text-emerald-200',
+    icon: ClipboardCheck,
+    actionLabel: 'Complete Inspection',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80',
+  },
+  checklist: {
+    gradient: 'from-green-600 via-emerald-600 to-teal-600',
+    accentColor: 'text-green-400',
+    badgeBg: 'bg-green-500/20 border-green-400/30',
+    badgeText: 'text-green-200',
+    icon: CheckSquare,
+    actionLabel: 'Complete Checklist',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=800&q=80',
+  },
+  consent: {
+    gradient: 'from-rose-600 via-red-600 to-orange-600',
+    accentColor: 'text-rose-400',
+    badgeBg: 'bg-rose-500/20 border-rose-400/30',
+    badgeText: 'text-rose-200',
+    icon: ShieldCheck,
+    actionLabel: 'I Consent',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=800&q=80',
+  },
+  waiver: {
+    gradient: 'from-red-600 via-rose-600 to-pink-600',
+    accentColor: 'text-red-400',
+    badgeBg: 'bg-red-500/20 border-red-400/30',
+    badgeText: 'text-red-200',
+    icon: ShieldCheck,
+    actionLabel: 'Sign Waiver',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=800&q=80',
+  },
+  intake: {
+    gradient: 'from-indigo-600 via-blue-600 to-cyan-600',
+    accentColor: 'text-indigo-400',
+    badgeBg: 'bg-indigo-500/20 border-indigo-400/30',
+    badgeText: 'text-indigo-200',
+    icon: User,
+    actionLabel: 'Begin Intake',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=800&q=80',
+  },
+  onboarding: {
+    gradient: 'from-teal-600 via-cyan-600 to-blue-600',
+    accentColor: 'text-teal-400',
+    badgeBg: 'bg-teal-500/20 border-teal-400/30',
+    badgeText: 'text-teal-200',
+    icon: User,
+    actionLabel: 'Get Onboarded',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80',
+  },
+  event: {
+    gradient: 'from-fuchsia-600 via-purple-600 to-violet-600',
+    accentColor: 'text-fuchsia-400',
+    badgeBg: 'bg-fuchsia-500/20 border-fuchsia-400/30',
+    badgeText: 'text-fuchsia-200',
+    icon: CalendarCheck,
+    actionLabel: 'Register for Event',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&q=80',
+  },
+  employment: {
+    gradient: 'from-slate-600 via-blue-600 to-indigo-600',
+    accentColor: 'text-blue-400',
+    badgeBg: 'bg-blue-500/20 border-blue-400/30',
+    badgeText: 'text-blue-200',
+    icon: Briefcase,
+    actionLabel: 'Apply Now',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=800&q=80',
+  },
+  healthcare: {
+    gradient: 'from-rose-600 via-pink-600 to-red-600',
+    accentColor: 'text-rose-400',
+    badgeBg: 'bg-rose-500/20 border-rose-400/30',
+    badgeText: 'text-rose-200',
+    icon: HeartPulse,
+    actionLabel: 'Complete Intake',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=800&q=80',
+  },
+  real_estate: {
+    gradient: 'from-amber-600 via-orange-600 to-red-600',
+    accentColor: 'text-amber-400',
+    badgeBg: 'bg-amber-500/20 border-amber-400/30',
+    badgeText: 'text-amber-200',
+    icon: MapPin,
+    actionLabel: 'Request Info',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=800&q=80',
+  },
+  education: {
+    gradient: 'from-blue-600 via-indigo-600 to-purple-600',
+    accentColor: 'text-blue-400',
+    badgeBg: 'bg-blue-500/20 border-blue-400/30',
+    badgeText: 'text-blue-200',
+    icon: FileText,
+    actionLabel: 'Enroll Now',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=800&q=80',
+  },
+  assessment: {
+    gradient: 'from-purple-600 via-violet-600 to-indigo-600',
+    accentColor: 'text-purple-400',
+    badgeBg: 'bg-purple-500/20 border-purple-400/30',
+    badgeText: 'text-purple-200',
+    icon: CheckCircle2,
+    actionLabel: 'Start Assessment',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=800&q=80',
+  },
+  report: {
+    gradient: 'from-slate-600 via-gray-600 to-zinc-600',
+    accentColor: 'text-slate-400',
+    badgeBg: 'bg-slate-500/20 border-slate-400/30',
+    badgeText: 'text-slate-200',
+    icon: FileText,
+    actionLabel: 'Submit Report',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=800&q=80',
+  },
+  membership: {
+    gradient: 'from-violet-600 via-purple-600 to-fuchsia-600',
+    accentColor: 'text-violet-400',
+    badgeBg: 'bg-violet-500/20 border-violet-400/30',
+    badgeText: 'text-violet-200',
+    icon: Star,
+    actionLabel: 'Join Now',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=800&q=80',
+  },
+  finance: {
+    gradient: 'from-emerald-600 via-green-600 to-teal-600',
+    accentColor: 'text-emerald-400',
+    badgeBg: 'bg-emerald-500/20 border-emerald-400/30',
+    badgeText: 'text-emerald-200',
+    icon: DollarSign,
+    actionLabel: 'Submit',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=800&q=80',
+  },
+  legal: {
+    gradient: 'from-slate-700 via-gray-700 to-zinc-700',
+    accentColor: 'text-slate-300',
+    badgeBg: 'bg-slate-600/40 border-slate-500/40',
+    badgeText: 'text-slate-200',
+    icon: ShieldCheck,
+    actionLabel: 'Submit',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=800&q=80',
+  },
+  internal_operations: {
+    gradient: 'from-gray-600 via-slate-600 to-zinc-600',
+    accentColor: 'text-gray-400',
+    badgeBg: 'bg-gray-500/20 border-gray-400/30',
+    badgeText: 'text-gray-200',
+    icon: Briefcase,
+    actionLabel: 'Submit',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=800&q=80',
+  },
+  marketing: {
+    gradient: 'from-fuchsia-600 via-pink-600 to-rose-600',
+    accentColor: 'text-fuchsia-400',
+    badgeBg: 'bg-fuchsia-500/20 border-fuchsia-400/30',
+    badgeText: 'text-fuchsia-200',
+    icon: Zap,
+    actionLabel: 'Get Started',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1556761175-5973dc0f32f7?auto=format&fit=crop&w=800&q=80',
+  },
+  customer_service: {
+    gradient: 'from-teal-600 via-cyan-600 to-blue-600',
+    accentColor: 'text-teal-400',
+    badgeBg: 'bg-teal-500/20 border-teal-400/30',
+    badgeText: 'text-teal-200',
+    icon: Phone,
+    actionLabel: 'Submit Ticket',
+    fallbackPhoto: 'https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=800&q=80',
+  },
 };
 
 const DEFAULT_THEME = {
@@ -301,6 +527,16 @@ export function FormThumbnailPreview({
           {engine === 'milestone_stepper' && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-500/90 text-white backdrop-blur-md shadow-xs">
               <Layers className="size-2.5" /> {stepsCount} Milestone Steps
+            </span>
+          )}
+          {engine === 'hero_landing' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-fuchsia-500/90 text-white backdrop-blur-md shadow-xs">
+              <Sparkles className="size-2.5" /> Hero Landing
+            </span>
+          )}
+          {engine === 'ai_dynamic_concierge' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-violet-500/90 text-white backdrop-blur-md shadow-xs">
+              <Bot className="size-2.5" /> AI Concierge
             </span>
           )}
           {engine === 'classic_business' && (
@@ -535,6 +771,65 @@ export function FormThumbnailPreview({
             <span>Continue with Selected Tier</span>
           </div>
         </div>
+      ) : engine === 'hero_landing' ? (
+        /* ════ 7. HERO LANDING MINIATURE ════ */
+        <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-fuchsia-500/30 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[9px] font-black text-fuchsia-700 dark:text-fuchsia-300 flex items-center gap-1">
+              <Sparkles className="size-2.5 text-fuchsia-500" /> Landing Page
+            </span>
+            <span className="text-[7px] font-bold text-fuchsia-600">Conversion</span>
+          </div>
+
+          {/* Hero headline + CTA */}
+          <div className="flex-1 flex flex-col justify-center space-y-1.5">
+            <div className="h-2 w-4/5 rounded bg-fuchsia-200 dark:bg-fuchsia-900/40" />
+            <div className="h-1.5 w-3/5 rounded bg-slate-200 dark:bg-slate-800" />
+            <div className="h-1.5 w-2/3 rounded bg-slate-200 dark:bg-slate-800" />
+            <div
+              className="h-4 w-2/3 rounded text-[7px] font-bold flex items-center justify-center text-white shadow-xs mt-1"
+              style={{ backgroundColor: primaryColor }}
+            >
+              Get Started Free →
+            </div>
+          </div>
+
+          {/* Mini form fields below hero */}
+          <div className="grid grid-cols-2 gap-1 pt-1 border-t border-slate-100 dark:border-slate-800">
+            {rawFields.slice(3, 5).map((field, idx) => (
+              <MiniFieldRow key={field.id || idx} field={field} primaryColor={primaryColor} />
+            ))}
+          </div>
+        </div>
+      ) : engine === 'ai_dynamic_concierge' ? (
+        /* ════ 8. AI DYNAMIC CONCIERGE MINIATURE ════ */
+        <div className="relative z-10 w-full h-[78%] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl border border-violet-500/30 shadow-2xl p-2.5 flex flex-col justify-between overflow-hidden">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[9px] font-black text-violet-700 dark:text-violet-300 flex items-center gap-1">
+              <Bot className="size-2.5 text-violet-500" /> AI Assistant
+            </span>
+            <span className="text-[7px] font-bold text-violet-600">Smart Intake</span>
+          </div>
+
+          {/* Chat bubbles */}
+          <div className="flex-1 flex flex-col justify-center space-y-1.5 py-1">
+            <div className="self-start max-w-[75%] rounded-lg rounded-tl-sm bg-violet-100 dark:bg-violet-950/50 px-1.5 py-0.5 text-[7px] text-violet-900 dark:text-violet-200">
+              Hi! I'll help you get started.
+            </div>
+            <div className="self-end max-w-[65%] rounded-lg rounded-tr-sm bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 text-[7px] text-slate-700 dark:text-slate-300">
+              I need a quote for my project
+            </div>
+            <div className="self-start max-w-[80%] rounded-lg rounded-tl-sm bg-violet-100 dark:bg-violet-950/50 px-1.5 py-0.5 text-[7px] text-violet-900 dark:text-violet-200">
+              Great! What type of project? 🔧
+            </div>
+          </div>
+
+          {/* AI summary card */}
+          <div className="rounded bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900/50 px-1.5 py-1 text-[6.5px] text-violet-700 dark:text-violet-300 flex items-center justify-between">
+            <span className="flex items-center gap-0.5"><Check className="size-2" /> Extracting details...</span>
+            <span className="font-bold">AI</span>
+          </div>
+        </div>
       ) : isSplitLayout ? (
         /* ════ 7. TWO-COLUMN SPLIT HERO MINIATURE ════ */
         <div className="relative z-10 w-full h-[78%] bg-slate-900/90 dark:bg-slate-950/90 backdrop-blur-md rounded-xl border border-white/15 shadow-2xl grid grid-cols-12 overflow-hidden">
@@ -562,7 +857,8 @@ export function FormThumbnailPreview({
 
           <div className="col-span-7 p-2 flex flex-col justify-between space-y-1 bg-white/95 dark:bg-slate-900/95 text-slate-900 dark:text-white">
             <div className="space-y-1 flex-1">
-              {rawFields.slice(0, 3).map((field, idx) => (
+              {/* Skip baseContact fields — show category-specific fields */}
+              {(rawFields.length > 3 ? rawFields.slice(3, 6) : rawFields.slice(0, 3)).map((field, idx) => (
                 <MiniFieldRow key={field.id || idx} field={field} primaryColor={primaryColor} />
               ))}
             </div>
@@ -590,7 +886,8 @@ export function FormThumbnailPreview({
           </div>
 
           <div className="space-y-1 flex-1 py-0.5">
-            {rawFields.slice(0, 2).map((field, idx) => (
+            {/* Skip baseContact fields — show category-specific fields */}
+            {(rawFields.length > 3 ? rawFields.slice(3, 5) : rawFields.slice(0, 2)).map((field, idx) => (
               <MiniFieldRow key={field.id || idx} field={field} primaryColor={primaryColor} />
             ))}
           </div>
@@ -620,7 +917,11 @@ export function FormThumbnailPreview({
           </div>
 
           <div className="space-y-1 flex-1 py-0.5">
-            {rawFields.slice(0, 3).map((field, idx) => (
+            {/* Skip the first 3 baseContact fields (Full Legal Name, Phone, Email)
+                which are identical across ALL synthesized templates — show
+                category-specific fields (positions 4-6) instead so each
+                template's thumbnail looks distinct. */}
+            {(rawFields.length > 3 ? rawFields.slice(3, 6) : rawFields.slice(0, 3)).map((field, idx) => (
               <MiniFieldRow key={field.id || idx} field={field} primaryColor={primaryColor} />
             ))}
           </div>

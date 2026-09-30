@@ -1463,7 +1463,47 @@ export function recommendStructureForTemplate(
     return aiStructures[variantIndex % aiStructures.length]!;
   }
 
-  // 10. Default / Corporate / Procurement / Consent / Contact -> Engine 1 (1-10)
-  const classicStructures = FORM_STRUCTURES_100.filter((s) => s.engine === 'classic_business');
-  return classicStructures[variantIndex % classicStructures.length]!;
+  // 10. Consent / Waiver / Legal / Contract -> Engine 5 (hero_landing with signature focus)
+  if (c.includes('consent') || c.includes('waiver') || c.includes('legal')) {
+    const landingStructures = FORM_STRUCTURES_100.filter((s) => s.engine === 'hero_landing');
+    return landingStructures[variantIndex % landingStructures.length]!;
+  }
+
+  // 11. Order / Payment / Donation / Membership -> Engine 6 (visual_choice_grid for pricing tiers)
+  if (c.includes('order') || c.includes('payment') || c.includes('donation') || c.includes('membership')) {
+    const visualStructures = FORM_STRUCTURES_100.filter((s) => s.engine === 'visual_choice_grid');
+    return visualStructures[variantIndex % visualStructures.length]!;
+  }
+
+  // 12. Intake / Healthcare / Education / Employment -> Engine 2 (milestone_stepper)
+  if (c.includes('intake') || c.includes('healthcare') || c.includes('education') || c.includes('employment') || c.includes('report')) {
+    const wizardStructures = FORM_STRUCTURES_100.filter((s) => s.engine === 'milestone_stepper');
+    return wizardStructures[variantIndex % wizardStructures.length]!;
+  }
+
+  // 13. Contact / Request / Lead / Marketing / Customer Service -> Engine 5 (hero_landing)
+  if (c.includes('contact') || c.includes('request') || c.includes('lead') || c.includes('marketing') || c.includes('customer_service')) {
+    const landingStructures = FORM_STRUCTURES_100.filter((s) => s.engine === 'hero_landing');
+    return landingStructures[variantIndex % landingStructures.length]!;
+  }
+
+  // 14. Assessment / Finance / Internal Operations -> Engine 2 (milestone_stepper)
+  if (c.includes('assessment') || c.includes('finance') || c.includes('internal_operations')) {
+    const wizardStructures = FORM_STRUCTURES_100.filter((s) => s.engine === 'milestone_stepper');
+    return wizardStructures[variantIndex % wizardStructures.length]!;
+  }
+
+  // 15. Event -> Engine 9 (booking_scheduler)
+  if (c.includes('event')) {
+    const bookingStructures = FORM_STRUCTURES_100.filter((s) => s.engine === 'booking_scheduler');
+    return bookingStructures[variantIndex % bookingStructures.length]!;
+  }
+
+  // 16. Default — rotate across multiple engines by variantIndex to avoid sameness
+  // Previously 53% of combos fell here. Now only truly unmatched categories reach
+  // this branch, and we rotate them across 4 engines for visual diversity.
+  const fallbackEngines = ['classic_business', 'hero_landing', 'milestone_stepper', 'split_hero'] as const;
+  const fallbackEngine = fallbackEngines[variantIndex % fallbackEngines.length]!;
+  const fallbackStructures = FORM_STRUCTURES_100.filter((s) => s.engine === fallbackEngine);
+  return fallbackStructures[variantIndex % fallbackStructures.length]!;
 }
