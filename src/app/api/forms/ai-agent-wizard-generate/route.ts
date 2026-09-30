@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
     const generated = generateAgentAndFormFromWizard({
       ...body,
       businessDescription: effectiveDescription,
+      businessName: (body.businessName || crawledContext?.businessName || '').trim() || undefined,
       knowledgeUrl: targetUrl || body.knowledgeUrl,
       crawledContext,
     });
@@ -181,8 +182,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         ...generated,
+        form: {
+          ...generated.form,
+          id: savedForm.id,
+          slug: savedForm.slug,
+        },
+        agent: {
+          ...generated.agent,
+          id: savedAgent.id,
+          slug: savedAgent.slug,
+        },
         savedFormId: savedForm.id,
+        savedFormSlug: savedForm.slug,
         savedAgentId: savedAgent.id,
+        savedAgentSlug: savedAgent.slug,
       });
     }
 

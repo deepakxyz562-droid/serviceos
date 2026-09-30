@@ -212,6 +212,10 @@ export function FormsDashboardView() {
         toast.success('🎉 AI Form and Agent generated successfully!');
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('fieseros_active_edit_form_id', data.savedFormId);
+          try {
+            sessionStorage.removeItem('pendingTemplateId');
+            localStorage.removeItem('fieseros_pending_template_id');
+          } catch {}
         }
         setCurrentView('formBuilder');
       } else {

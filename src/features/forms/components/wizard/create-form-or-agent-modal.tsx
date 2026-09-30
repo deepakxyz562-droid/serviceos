@@ -257,9 +257,12 @@ export function CreateFormOrAgentModal({
         setGenerationStatus('Publishing live endpoints and linking workflows...');
 
         if (res.ok && data.success) {
-          setCreatedFormId(data.savedFormId || null);
-          setCreatedAgentId(data.savedAgentId || null);
-          setCreatedSlug(data.form?.slug || data.agent?.slug || 'new-intake');
+          const effectiveFormId = data.savedFormId || data.form?.id || null;
+          const effectiveAgentId = data.savedAgentId || data.agent?.id || null;
+          const effectiveSlug = data.savedFormSlug || data.form?.slug || data.savedAgentSlug || data.agent?.slug || 'new-intake';
+          setCreatedFormId(effectiveFormId);
+          setCreatedAgentId(effectiveAgentId);
+          setCreatedSlug(effectiveSlug);
           setGenerationProgress(100);
           setGenerationStatus('Complete!');
           setStep(5);
@@ -370,6 +373,10 @@ export function CreateFormOrAgentModal({
     } else {
       if (createdFormId) {
         sessionStorage.setItem('fieseros_active_edit_form_id', createdFormId);
+        try {
+          sessionStorage.removeItem('pendingTemplateId');
+          localStorage.removeItem('fieseros_pending_template_id');
+        } catch {}
       }
       setCurrentView('formBuilder');
     }
@@ -401,8 +408,9 @@ export function CreateFormOrAgentModal({
   if (!open) return null;
 
   const siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com';
-  const liveFormUrl = `${siteOrigin}/f/${createdSlug}`;
-  const embedCode = `<script src="${siteOrigin}/embed.js" data-form="${createdSlug}" async></script>`;
+  const targetFormRef = createdSlug || createdFormId || 'new-intake';
+  const liveFormUrl = `${siteOrigin}/f/${targetFormRef}`;
+  const embedCode = `<script src="${siteOrigin}/embed.js" data-form="${targetFormRef}" async></script>`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200">

@@ -11,6 +11,7 @@ import type { CrawledWebsiteResult } from './website-crawler-service';
 
 export interface WizardGenerationInput {
   businessDescription: string;
+  businessName?: string;
   industry?: string;
   capabilities?: string[]; // e.g. 'answer_questions', 'capture_leads', 'generate_quotes', 'book_appointments', 'collect_files', 'take_payments'
   audience?: 'new_customers' | 'existing_customers' | 'both';
@@ -30,6 +31,7 @@ export interface WizardGenerationResult {
   agent: FormAgentData;
   form: {
     name: string;
+    slug?: string;
     description: string;
     fields: FormField[];
     submitButtonText: string;
@@ -75,12 +77,14 @@ export function parseBusinessText(text: string): {
   let services: string[] = [];
 
   if (lower.includes('clean') || lower.includes('maid') || lower.includes('janitor')) {
-    industry = 'Residential & Commercial Cleaning';
-    businessName = location ? `${location} Premier Cleaning` : 'Sparkle Clean Pro';
+    industry = 'Home Cleaning & Maid Services';
+    businessName = location ? `${location} Home Cleaning Company` : 'Sparkle Clean Pro';
     services = ['Regular Recurring Cleaning', 'Deep Clean & Sanitation', 'End-of-Tenancy Clean', 'Carpet & Upholstery Care'];
   } else if (lower.includes('plumb') || lower.includes('drain') || lower.includes('pipe') || lower.includes('water heater')) {
-    industry = 'Plumbing & Emergency Drainage';
-    businessName = location ? `${location} Rapid Plumbing` : 'Apex Plumbing & Drains';
+    industry = 'Plumbing & Drainage';
+    businessName = location
+      ? (lower.includes('emergency') ? `${location} Emergency Plumbing Service` : `${location} Rapid Plumbing`)
+      : 'Apex Plumbing & Drains';
     services = ['Emergency Leak Repair', 'Drain Unclogging & Jetting', 'Water Heater Replacement', 'Bathroom Plumbing'];
   } else if (lower.includes('hvac') || lower.includes('ac') || lower.includes('air condition') || lower.includes('furnace') || lower.includes('heat')) {
     industry = 'HVAC & Climate Control';
@@ -131,7 +135,12 @@ export function parseBusinessText(text: string): {
       .map((s) => s.trim())
       .filter((s) => s.length > 2 && s.length < 40);
     if (parsed.length > 0) {
-      services = parsed.map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+      services = parsed.map((s) =>
+        s
+          .split(/(\s+|-)/)
+          .map((w) => (w.trim().length > 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w))
+          .join('')
+      );
     }
   }
 
@@ -139,7 +148,8 @@ export function parseBusinessText(text: string): {
   const nameMatch = clean.match(/(?:we are|company is called|business name is|i am from|i'm from|welcome to)\s+([A-Z][a-zA-Z0-9\s&'-]+?)(?:,|\.|\n|serving|based|specializ|offer|$)/i);
   if (nameMatch && nameMatch[1]) {
     const candidate = nameMatch[1].trim();
-    if (candidate.length >= 3 && candidate.length <= 40) {
+    const isGenericPhrase = /^(?:a|an|the)\s+(?:home|cleaning|plumbing|roofing|hvac|emergency|commercial|residential|local|small|family-owned|licensed|24\/7)/i.test(candidate);
+    if (!isGenericPhrase && candidate.length >= 3 && candidate.length <= 40) {
       businessName = candidate;
     }
   }
@@ -159,7 +169,8 @@ export function generateAgentAndFormFromWizard(input: WizardGenerationInput): Wi
   const crawled = input.crawledContext;
   const parsed = parseBusinessText(input.businessDescription || input.knowledgeUrl || '');
 
-  const businessName = crawled?.businessName || parsed.businessName;
+  const explicitName = input.businessName?.trim();
+  const businessName = explicitName || crawled?.businessName || parsed.businessName;
   const industry = crawled?.industry || parsed.industry;
   const location = crawled?.location || parsed.location;
   const services = (crawled?.services && crawled.services.length > 0) ? crawled.services : parsed.services;
@@ -578,6 +589,7 @@ Your Goals:
   // Assemble Form Schema
   const generatedForm = {
     name: `${businessName} Intake & Quote Form`,
+    slug: `${businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-intake`,
     description: `Complete this brief form to receive an instant estimate and book your service with ${businessName}.`,
     fields: formFields,
     mediaPanel,

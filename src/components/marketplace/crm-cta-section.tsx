@@ -140,17 +140,36 @@ export function CrmCtaSection({
         </button>
       </div>
 
-      {/* ── Services cross-sell (Phase 4) ──────────────────────────────────
-          Subtle tertiary link for business owners who already have a listing
-          but might want a website + SEO. Per review direction: "Subtle — don't
-          compete with the business's own CTAs." This is a small text link,
-          not a third button. */}
-      <div className="mt-4 border-t border-emerald-200/50 pt-3 text-center">
+      {/* ── SEO Authority Bridges & Services Cross-sell ─────────────────── */}
+      <div className="mt-4 border-t border-emerald-200/50 pt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="font-medium text-foreground">Compare:</span>
+          <Link
+            href="/best-field-service-software"
+            className="hover:text-emerald-700 dark:hover:text-emerald-400 underline-offset-2 hover:underline transition-colors"
+          >
+            Best Field Service Software
+          </Link>
+          <span className="text-muted-foreground/40">•</span>
+          <Link
+            href="/jobber-alternatives"
+            className="hover:text-emerald-700 dark:hover:text-emerald-400 underline-offset-2 hover:underline transition-colors"
+          >
+            Jobber Alternatives
+          </Link>
+          <span className="text-muted-foreground/40">•</span>
+          <Link
+            href="/fieseros-vs-jobber"
+            className="hover:text-emerald-700 dark:hover:text-emerald-400 underline-offset-2 hover:underline transition-colors"
+          >
+            Fieseros vs Jobber
+          </Link>
+        </div>
         <Link
           href="/services/website-development"
-          className="text-xs text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
+          className="hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors"
         >
-          Need a website for your business? <span className="font-medium">Build it with Fieseros →</span>
+          Need a website? <span className="font-medium">Build it with Fieseros →</span>
         </Link>
       </div>
 

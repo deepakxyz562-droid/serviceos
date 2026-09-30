@@ -12,6 +12,9 @@ import {
   ShieldCheck,
   CalendarCheck,
   CheckCircle2,
+  Award,
+  Building2,
+  LayoutGrid,
 } from 'lucide-react';
 import { CornerstoneLayout, CornerstoneHero, ContentSection } from '@/components/seo/cornerstone-layout';
 import { FaqSection } from '@/components/seo/faq-section';
@@ -275,6 +278,68 @@ export default function FieserosVsJobberPage() {
         subtitle="Common questions from trade business owners considering a switch from Jobber."
         faqs={faqs}
       />
+
+      {/* Hub-and-spoke internal linking */}
+      <section className="border-t bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-14 lg:py-20">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-3 text-center">
+            Related Field Service Software Guides
+          </h2>
+          <p className="text-muted-foreground text-center mb-10 max-w-2xl mx-auto">
+            Compare top platforms and explore our full market analyses for service contractors.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link
+              href="/best-field-service-software"
+              className="group rounded-xl border border-border bg-card p-5 shadow-xs transition-all hover:border-emerald-500/50 hover:shadow-md"
+            >
+              <Award className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">
+                Best Field Service Software (2026)
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Comprehensive 10-platform ranking, pricing matrix &amp; buyer&apos;s guide.
+              </p>
+            </Link>
+            <Link
+              href="/jobber-alternatives"
+              className="group rounded-xl border border-border bg-card p-5 shadow-xs transition-all hover:border-emerald-500/50 hover:shadow-md"
+            >
+              <Scale className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">
+                10 Best Jobber Alternatives
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Honest pricing breakdowns, per-seat fee comparisons, and feature reviews.
+              </p>
+            </Link>
+            <Link
+              href="/housecall-pro-alternatives"
+              className="group rounded-xl border border-border bg-card p-5 shadow-xs transition-all hover:border-emerald-500/50 hover:shadow-md"
+            >
+              <Building2 className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">
+                Housecall Pro Alternatives
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Top residential service software alternatives compared.
+              </p>
+            </Link>
+            <Link
+              href="/field-service-software"
+              className="group rounded-xl border border-border bg-card p-5 shadow-xs transition-all hover:border-emerald-500/50 hover:shadow-md"
+            >
+              <LayoutGrid className="h-6 w-6 text-emerald-600 mb-3" />
+              <h3 className="font-semibold text-foreground group-hover:text-emerald-700 mb-1">
+                Fieseros FSM Platform
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                All-in-one Voice AI, scheduling, GPS dispatch, and contractor CRM.
+              </p>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       <CtaSection
         title="Ready to Switch to Fieseros?"

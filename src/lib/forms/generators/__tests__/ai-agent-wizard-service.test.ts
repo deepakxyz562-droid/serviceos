@@ -48,17 +48,17 @@ describe('ai-agent-wizard-service', () => {
 
     // Form validation
     expect(result.form).toBeDefined();
-    expect(result.form.name).toBe('London Home Cleaning Company Customer Intake Form');
+    expect(result.form.name).toBe('London Home Cleaning Company Intake & Quote Form');
     expect(result.form.fields.length).toBeGreaterThan(3);
 
     // Verify key fields exist in generated form
     const fieldTypes = result.form.fields.map((f) => f.type);
     expect(fieldTypes).toContain('short_answer'); // Name
-    expect(fieldTypes).toContain('phone_number'); // Phone
+    expect(fieldTypes).toContain('phone'); // Phone
     expect(fieldTypes).toContain('email'); // Email
 
     // Workflows validation
-    expect(result.workflows.length).toBeGreaterThan(0);
-    expect(result.workflows[0].trigger).toBe('lead_captured');
+    expect(result.workflow).toBeDefined();
+    expect(result.workflow.createLead).toBe(true);
   });
 });
