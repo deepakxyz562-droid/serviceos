@@ -24,8 +24,6 @@ import {
   Hash,
   CheckSquare,
   Plus,
-  Send,
-  Loader2,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -83,16 +81,6 @@ export function StudioWidgetPalette({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedWidgetCategory, setSelectedWidgetCategory] = useState<FieldDefinition['category'] | 'booking' | 'all'>('all');
   const [selectedPaymentCategory, setSelectedPaymentCategory] = useState<PaymentCategory>('all');
-  const [copilotPrompt, setCopilotPrompt] = useState('');
-
-  const handleSendCopilotPrompt = async (textToSend?: string) => {
-    const text = (textToSend || copilotPrompt).trim();
-    if (!text || isAiProcessing) return;
-    if (onAiPrompt) {
-      await onAiPrompt(text);
-      setCopilotPrompt('');
-    }
-  };
 
   // Filter Basic Fields
   const filteredBasic = useMemo(() => {
@@ -176,60 +164,6 @@ export function StudioWidgetPalette({
             <PanelLeftClose className="size-4" />
           </button>
         )}
-      </div>
-
-      {/* ── CONVERSATIONAL AI EDIT CARD ── */}
-      <div className="p-3 border-b border-border/80 bg-gradient-to-b from-emerald-500/10 via-teal-500/5 to-transparent dark:from-emerald-950/30 space-y-2 shrink-0">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-            <Sparkles className="size-3 text-emerald-600" />
-            AI Co-Pilot Edit
-          </span>
-          <span className="text-[9px] text-muted-foreground font-semibold">Enter to send</span>
-        </div>
-        <div className="relative">
-          <Input
-            value={copilotPrompt}
-            onChange={(e) => setCopilotPrompt(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleSendCopilotPrompt();
-              }
-            }}
-            placeholder="Tell AI: 'Add $50 deposit', 'Add photo'..."
-            className="text-xs h-8 pr-7 bg-white dark:bg-slate-900 border-border/80 font-sans focus-visible:ring-emerald-500"
-          />
-          <button
-            type="button"
-            disabled={isAiProcessing || !copilotPrompt.trim()}
-            onClick={() => handleSendCopilotPrompt()}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-emerald-600 hover:text-emerald-700 disabled:opacity-40 cursor-pointer"
-          >
-            {isAiProcessing ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
-          </button>
-        </div>
-
-        {/* Quick Suggestion Chips */}
-        <div className="flex flex-wrap gap-1 pt-0.5">
-          {[
-            { label: '+ Photo Upload', cmd: 'Add a photo upload field with notes' },
-            { label: '+ £50 Deposit', cmd: 'Add £50 deposit payment with Stripe' },
-            { label: '+ E-Signature', cmd: 'Add a customer e-signature pad' },
-            { label: '+ 30m Booking', cmd: 'Add appointment calendar booking with 30-min slots' },
-            { label: 'Card Layout', cmd: 'Switch layout to card form' },
-          ].map((chip) => (
-            <button
-              key={chip.label}
-              type="button"
-              disabled={isAiProcessing}
-              onClick={() => handleSendCopilotPrompt(chip.cmd)}
-              className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white/90 dark:bg-slate-800/90 border border-border/70 hover:border-emerald-500 hover:text-emerald-600 transition-all cursor-pointer text-muted-foreground shrink-0 shadow-2xs"
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Search Input */}
