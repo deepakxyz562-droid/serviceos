@@ -4,6 +4,7 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import { normalizeFormSchema } from '@/lib/forms/form-schema-types';
 import type { FormSchema } from '@/lib/forms/form-schema-types';
+import { resolveFormLayout, layoutToRuntimeMode } from '@/lib/forms/resolve-form-layout';
 
 const FormRuntimeRenderer = dynamic(
   () => import('@/features/forms/components/runtime/form-runtime-renderer').then((m) => ({ default: m.FormRuntimeRenderer })),
@@ -29,11 +30,13 @@ export function TemplateRuntimePreview({ formName, schema }: TemplateRuntimePrev
   // undefined, so canonical templates that declare mediaPanel.enabled + content
   // but omit explicit show* flags still render the left hero column.
   const normalizedSchema = React.useMemo(() => normalizeFormSchema(schema), [schema]);
+  const mode = React.useMemo(() => layoutToRuntimeMode(resolveFormLayout(normalizedSchema)), [normalizedSchema]);
   return (
     <FormRuntimeRenderer
       formName={formName}
       schema={normalizedSchema}
       previewMode={true}
+      mode={mode}
     />
   );
 }

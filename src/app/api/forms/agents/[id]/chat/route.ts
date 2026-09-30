@@ -323,6 +323,7 @@ export async function POST(
         const aiRes = await callAI({
           messages,
           temperature: 0.3,
+          model: agent.llm?.model || undefined,
         });
 
         replyText = aiRes.content || '';
@@ -336,33 +337,46 @@ export async function POST(
       const lower = lowerMessage;
       const firstForm = primaryConnectedForm;
       const formName = firstForm?.name || 'Inquiry Form';
-      
-      const isServiceQuery = lower.includes('service') || lower.includes('clean') || lower.includes('window') ||
-        lower.includes('repair') || lower.includes('install') || lower.includes('wash') || lower.includes('roof') ||
-        lower.includes('hvac') || lower.includes('plumb') || lower.includes('offer') || lower.includes('work') ||
-        lower.includes('what do you do');
-      
-      const isTimingQuery = lower.includes('hour') || lower.includes('time') || lower.includes('open') ||
-        lower.includes('availab') || lower.includes('when') || lower.includes('day') || lower.includes('schedule') ||
-        lower.includes('weekend') || lower.includes('sunday') || lower.includes('saturday');
 
-      if (isTimingQuery) {
-        replyText = `Our team is available Monday through Friday from 8:00 AM to 6:00 PM, and Saturday from 9:00 AM to 3:00 PM. Our online booking form is available 24/7 for you to select your preferred date and time!`;
+      // 1. Check agent's configured FAQs first
+      const matchedFaq = agent.knowledge?.faqPairs?.find((f) => {
+        const q = (f.question || '').toLowerCase();
+        if (!q) return false;
+        const words = lower.split(/\s+/).filter((w) => w.length > 3);
+        return lower.includes(q) || q.includes(lower) || (words.length > 0 && words.some((w) => q.includes(w)));
+      });
+
+      if (matchedFaq) {
+        replyText = matchedFaq.answer;
         suggestedFormId = firstForm?.id || null;
-      } else if (isServiceQuery) {
-        const servicesList = extractedServices.length > 0
-          ? `including **${extractedServices.slice(0, 4).join('**, **')}**`
-          : 'tailored to your exact project specifications';
-        replyText = `Yes! We provide professional services ${servicesList}. To get an accurate quote and confirm immediate availability, you can complete our **${formName}** or let me know the details of your project!`;
-        suggestedFormId = firstForm?.id || null;
-      } else if (lower.includes('price') || lower.includes('cost') || lower.includes('estimate') || lower.includes('quote') || lower.includes('fee') || lower.includes('rate')) {
-        replyText = `We provide upfront, competitive pricing. You can submit a quick request through our **${formName}** to receive an immediate estimate.`;
-        suggestedFormId = firstForm?.id || null;
-      } else if (lower.includes('question') || lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
-        replyText = `Hello! I would be glad to help answer your questions. What service or project are you looking for assistance with today?`;
       } else {
-        replyText = `Thank you for reaching out! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I assist you with your project today? You can also complete our **${formName}** at any time.`;
-        suggestedFormId = firstForm?.id || null;
+        const isServiceQuery = lower.includes('service') || lower.includes('clean') || lower.includes('window') ||
+          lower.includes('repair') || lower.includes('install') || lower.includes('wash') || lower.includes('roof') ||
+          lower.includes('hvac') || lower.includes('plumb') || lower.includes('offer') || lower.includes('work') ||
+          lower.includes('what do you do');
+        
+        const isTimingQuery = lower.includes('hour') || lower.includes('time') || lower.includes('open') ||
+          lower.includes('availab') || lower.includes('when') || lower.includes('day') || lower.includes('schedule') ||
+          lower.includes('weekend') || lower.includes('sunday') || lower.includes('saturday');
+
+        if (isTimingQuery) {
+          replyText = `Our online booking and appointment request system is available 24/7 for you to select your preferred date and time, and our team responds promptly to confirm scheduling during operating hours!`;
+          suggestedFormId = firstForm?.id || null;
+        } else if (isServiceQuery) {
+          const servicesList = extractedServices.length > 0
+            ? `including **${extractedServices.slice(0, 4).join('**, **')}**`
+            : 'tailored to your exact project specifications';
+          replyText = `Yes! We provide professional services ${servicesList}. To get an accurate quote and confirm immediate availability, you can complete our **${formName}** or let me know the details of your project!`;
+          suggestedFormId = firstForm?.id || null;
+        } else if (lower.includes('price') || lower.includes('cost') || lower.includes('estimate') || lower.includes('quote') || lower.includes('fee') || lower.includes('rate')) {
+          replyText = `We provide upfront, transparent pricing. You can submit a quick request through our **${formName}** to receive an immediate estimate.`;
+          suggestedFormId = firstForm?.id || null;
+        } else if (lower.includes('question') || lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
+          replyText = `Hello! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I help you today? Feel free to ask any question or let me know what project you have in mind!`;
+        } else {
+          replyText = `Thank you for reaching out! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I assist you with your project today? You can also complete our **${formName}** at any time.`;
+          suggestedFormId = firstForm?.id || null;
+        }
       }
     }
 

@@ -1280,18 +1280,6 @@ export function FormStudioBuilder({
             Design
           </button>
 
-          <button
-            type="button"
-            onClick={() => { setStudioTab('responses'); setIsPreviewMode(false); }}
-            className={cn(
-              'px-3.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
-              studioTab === 'responses' && !isPreviewMode
-                ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 shadow-xs font-bold'
-                : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200'
-            )}
-          >
-            Responses
-          </button>
 
           <button
             type="button"
@@ -1707,15 +1695,7 @@ export function FormStudioBuilder({
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => setShowAgentWizard(true)}
-                      className="h-7 text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg shadow-xs gap-1.5 cursor-pointer"
-                    >
-                      <Sparkles className="size-3" />
-                      <span>✨ AI Setup Wizard</span>
-                    </Button>
+
                     <Button
                       type="button"
                       variant="outline"

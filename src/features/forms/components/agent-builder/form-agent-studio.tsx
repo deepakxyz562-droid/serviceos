@@ -327,15 +327,6 @@ export function FormAgentStudio({
 
         {/* Right: AI Wizard + Settings + Test Mode */}
         <div className="flex items-center gap-2.5">
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setShowWizard(true)}
-            className="h-8 text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-3 rounded-lg shadow-xs gap-1.5 cursor-pointer"
-          >
-            <Sparkles className="size-3.5" />
-            <span>AI Setup Wizard</span>
-          </Button>
 
           <Button
             type="button"

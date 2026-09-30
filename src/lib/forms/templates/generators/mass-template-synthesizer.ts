@@ -912,15 +912,6 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
     case 'order':
     case 'product':
       return [
-        ...baseContact,
-        {
-          id: 'delivery_address',
-          type: 'address',
-          widgetType: 'address',
-          label: 'Delivery / Service Address',
-          placeholder: 'Street, City, State, ZIP',
-          required: true,
-        },
         {
           id: 'order_quantity',
           type: 'numerical',
@@ -937,17 +928,25 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           required: true,
         },
         {
+          id: 'delivery_address',
+          type: 'address',
+          widgetType: 'address',
+          label: 'Delivery / Service Address',
+          placeholder: 'Street, City, State, ZIP',
+          required: true,
+        },
+        {
           id: 'special_instructions',
           type: 'long_answer',
           label: 'Special Preparation / Delivery Instructions',
           placeholder: 'Add gate code, custom specifications, or packaging requests...',
         },
+        ...baseContact,
       ];
 
     case 'booking':
     case 'appointment':
       return [
-        ...baseContact,
         {
           id: 'appointment_slot',
           type: 'control_widget',
@@ -967,32 +966,12 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           widgetType: 'time_picker',
           label: 'Preferred Time Window',
         },
+        ...baseContact,
       ];
 
     case 'quote':
     case 'estimate':
       return [
-        ...baseContact,
-        {
-          id: 'service_address',
-          type: 'address',
-          widgetType: 'address',
-          label: 'Service Location Address',
-          placeholder: '123 Main St, City, State, ZIP',
-          required: true,
-        },
-        {
-          id: 'urgency',
-          type: 'radio',
-          label: 'Project Urgency',
-          options: [
-            { label: '🚨 Emergency (Immediate Dispatch)', value: 'emergency' },
-            { label: '⚡ Same Day / Next Day', value: 'same_day' },
-            { label: '📅 Within this week', value: 'this_week' },
-            { label: '🕒 Flexible / Planning stage', value: 'flexible' },
-          ],
-          required: true,
-        },
         {
           id: 'project_scale_slider',
           type: 'numerical',
@@ -1007,20 +986,33 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           label: 'Estimated Investment Range ($)',
           widgetConfig: { formula: '{{project_scale_slider}} * 3.5' },
         },
+        {
+          id: 'urgency',
+          type: 'radio',
+          label: 'Project Urgency',
+          options: [
+            { label: '🚨 Emergency (Immediate Dispatch)', value: 'emergency' },
+            { label: '⚡ Same Day / Next Day', value: 'same_day' },
+            { label: '📅 Within this week', value: 'this_week' },
+            { label: '🕒 Flexible / Planning stage', value: 'flexible' },
+          ],
+          required: true,
+        },
+        {
+          id: 'service_address',
+          type: 'address',
+          widgetType: 'address',
+          label: 'Service Location Address',
+          placeholder: '123 Main St, City, State, ZIP',
+          required: true,
+        },
+        ...baseContact,
       ];
 
     case 'inspection':
     case 'checklist':
     case 'audit':
       return [
-        ...baseContact,
-        {
-          id: 'inspection_address',
-          type: 'address',
-          widgetType: 'address',
-          label: 'Inspection Site Location',
-          required: true,
-        },
         {
           id: 'inspection_checklist',
           type: 'checkbox',
@@ -1041,6 +1033,14 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           label: 'Site Photo Evidence & Inspection Annotations',
         },
         {
+          id: 'inspection_address',
+          type: 'address',
+          widgetType: 'address',
+          label: 'Inspection Site Location',
+          required: true,
+        },
+        ...baseContact,
+        {
           id: 'inspector_signature',
           type: 'signature',
           widgetType: 'smooth_signature',
@@ -1051,7 +1051,6 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
 
     case 'intake':
       return [
-        ...baseContact,
         {
           id: 'timeline_goal',
           type: 'dropdown',
@@ -1072,12 +1071,12 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           placeholder: 'Describe your current process, systems, and primary objectives...',
           required: true,
         },
+        ...baseContact,
       ];
 
     case 'waiver':
     case 'consent':
       return [
-        ...baseContact,
         {
           id: 'terms_agreement',
           type: 'checkbox',
@@ -1085,6 +1084,7 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           label: 'I have read, understood, and voluntarily agree to all legal terms, safety guidelines, and waiver conditions.',
           required: true,
         },
+        ...baseContact,
         {
           id: 'digital_signature',
           type: 'signature',
@@ -1104,7 +1104,6 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
     case 'feedback':
     case 'survey':
       return [
-        ...baseContact.slice(0, 2),
         {
           id: 'rating_overall',
           type: 'rating',
@@ -1124,6 +1123,7 @@ export function getCategoryBaseFields(categoryId: string): FormField[] {
           label: 'What did we do well, and what could we improve?',
           placeholder: 'Share your thoughts...',
         },
+        ...baseContact.slice(0, 2),
       ];
 
     default:
@@ -1166,10 +1166,23 @@ export function synthesizeTemplate(
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 
+  // Intelligent 2026 Layout: Map dynamically to 100 Form Experience Structures across 10 Master Engines
+  const structure = recommendStructureForTemplate(catId, indId, variantIndex);
+
   const baseFields = getCategoryBaseFields(catId);
   const industryFields = getIndustrySpecificFields(indId, catId);
 
-  const allFields: FormField[] = [...baseFields, ...industryFields];
+  // For specialized engines, prioritize industry-specific fields before generic contact fields
+  // so the form's unique purpose and identity are immediately visible in previews.
+  const allFields: FormField[] = (
+    structure.engine === 'quote_calculator' ||
+    structure.engine === 'booking_scheduler' ||
+    structure.engine === 'field_inspection' ||
+    structure.engine === 'visual_choice_grid' ||
+    structure.engine === 'card_swipe'
+  )
+    ? [...industryFields, ...baseFields]
+    : [...baseFields, ...industryFields];
 
   // Curated 2026 4K Unsplash Imagery Presets per Industry
   const INDUSTRY_PHOTO_MAP: Record<string, string> = {
@@ -1207,9 +1220,6 @@ export function synthesizeTemplate(
   const primaryPhoto =
     INDUSTRY_PHOTO_MAP[indId] ||
     'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1200&q=80';
-
-  // Intelligent 2026 Layout: Map dynamically to 100 Form Experience Structures across 10 Master Engines
-  const structure = recommendStructureForTemplate(catId, indId, variantIndex);
 
   // Override layout per-engine for visual diversity. Previously 93% of synthesized
   // templates used 'classic' layout because most FORM_EXPERIENCE_ENGINES default to

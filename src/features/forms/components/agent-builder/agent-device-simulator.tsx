@@ -575,7 +575,7 @@ export function AgentDeviceSimulator({
         body: JSON.stringify({
           message,
           sessionId: aiSessionId || undefined,
-          history: [...messages, userMsg],
+          history: messages,
           agentConfig: agent,
         }),
       });

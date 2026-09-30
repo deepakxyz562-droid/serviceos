@@ -4,6 +4,7 @@ import React, { Component, useMemo, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { normalizeFormSchema } from '@/lib/forms/form-schema-types';
 import type { FormTemplate } from '@/lib/forms/templates';
+import { resolveFormLayout, layoutToRuntimeMode } from '@/lib/forms/resolve-form-layout';
 import { Button } from '@/components/ui/button';
 
 const FormRuntimeRenderer = dynamic(
@@ -65,6 +66,10 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
     return normalizeFormSchema(template?.schema);
   }, [template?.schema]);
 
+  const runtimeMode = useMemo(() => {
+    return layoutToRuntimeMode(resolveFormLayout(normalizedSchema));
+  }, [normalizedSchema]);
+
   const renderFallback = () => (
     <div className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-md space-y-6">
       <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -119,6 +124,7 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
                 formDescription={template.shortDescription}
                 schema={normalizedSchema}
                 previewMode={true}
+                mode={runtimeMode}
                 device="mobile"
               />
             </FormErrorBoundary>
@@ -134,6 +140,7 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
                 formDescription={template.shortDescription}
                 schema={normalizedSchema}
                 previewMode={true}
+                mode={runtimeMode}
                 device="tablet"
               />
             </FormErrorBoundary>
@@ -148,6 +155,7 @@ export function FormPreviewCanvas({ template, device }: FormPreviewCanvasProps) 
               formDescription={template.shortDescription}
               schema={normalizedSchema}
               previewMode={true}
+              mode={runtimeMode}
               device="desktop"
             />
           </FormErrorBoundary>
