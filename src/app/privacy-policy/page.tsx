@@ -169,16 +169,32 @@ export default function PrivacyPolicyPage() {
                 <p className="text-muted-foreground leading-relaxed mb-3">
                   When you use our communication features, we collect and process
                   data related to the messages and notifications sent through the
-                  Service (Email, SMS, Push, and In-App notifications):
+                  Service (Email, SMS, WhatsApp, Push, and In-App notifications):
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
                   <li>Email content, headers, and delivery metadata</li>
                   <li>SMS message content and delivery status</li>
+                  <li>WhatsApp message content (text, media) and metadata (message IDs, timestamps, direction)</li>
+                  <li>WhatsApp customer phone numbers and profile names</li>
+                  <li>WhatsApp Business Account ID (WABA), phone number ID, and access tokens (stored encrypted)</li>
                   <li>Push notification payloads and delivery receipts</li>
                   <li>In-app notification content and read status</li>
                   <li>Contact preferences and opt-in/opt-out status</li>
                   <li>Conversation metadata (timestamps, status indicators)</li>
                 </ul>
+                <p className="text-muted-foreground leading-relaxed mb-3">
+                  <strong>WhatsApp Business Messaging:</strong> Fieseros integrates
+                  with the WhatsApp Business Platform (Cloud API) as a Tech Provider.
+                  When businesses connect their WhatsApp Business account, Fieseros
+                  processes WhatsApp messages on behalf of the connected business.
+                  WhatsApp message data is processed by Meta Platforms, Inc. as a
+                  data processor. Businesses are responsible for complying with
+                  WhatsApp&apos;s Business Messaging Policy and the 24-hour
+                  customer service window rule. Fieseros does not send marketing
+                  messages via WhatsApp — all WhatsApp messages are transactional
+                  (appointment reminders, invoice delivery, quotes, verification
+                  codes, and customer service responses).
+                </p>
                 <p className="text-muted-foreground leading-relaxed mb-6">
                   Communication data is stored temporarily for service delivery
                   and is subject to the data retention settings configured in

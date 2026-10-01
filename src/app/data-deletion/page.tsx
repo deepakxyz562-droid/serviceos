@@ -229,15 +229,34 @@ export default function DataDeletionPage() {
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">
-                  2.3 Meta Platform Terms
+                  2.3 Meta Platform Terms (Facebook & WhatsApp)
                 </h3>
-                <p className="text-muted-foreground leading-relaxed">
+                <p className="text-muted-foreground leading-relaxed mb-3">
                   If you interact with Fieseros through Meta integrations
-                  (Facebook Login), you have the right to
+                  (Facebook Login, WhatsApp Business API), you have the right to
                   request deletion of the data we receive from Meta. We provide a
                   data deletion callback URL and honor all deletion requests
                   received through the Meta Platform in compliance with their
                   developer policies.
+                </p>
+                <p className="text-muted-foreground leading-relaxed mb-3">
+                  <strong>WhatsApp Data:</strong> When a business connects their
+                  WhatsApp Business Account to Fieseros, we process WhatsApp
+                  messages (text content, media, message metadata, customer phone
+                  numbers, delivery status) on behalf of the business. If you
+                  request data deletion through Meta, we will:
+                </p>
+                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-3">
+                  <li>Delete or anonymize your user account and personal information</li>
+                  <li>Delete OAuth connections and access tokens linked to your Meta account</li>
+                  <li>Revoke WhatsApp Business API credentials associated with your Meta user ID</li>
+                  <li>Anonymize your contributions to conversations (your name and phone number are removed, but the business may retain conversation history as their own business records)</li>
+                </ul>
+                <p className="text-muted-foreground leading-relaxed">
+                  Our Meta data deletion callback URL is:
+                  <code className="ml-2 px-2 py-0.5 rounded bg-muted text-foreground text-sm">
+                    https://fieseros.com/api/meta/data-deletion
+                  </code>
                 </p>
               </section>
 

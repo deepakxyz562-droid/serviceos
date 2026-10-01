@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 // ==========================================
 // WHATSAPP WORKFLOW TEMPLATE DEFINITIONS
@@ -247,6 +248,12 @@ function mapTemplateTypeToNodeType(type: string, subtype: string): string {
 
 export async function GET() {
   try {
+    // Auth check — this endpoint was previously unauthenticated
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     // Check which templates are already installed as workflows
     const existingWorkflows = await db.workflow.findMany({
       where: {
@@ -289,6 +296,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth check
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { templateId, workspaceId, credentialId } = body;
 

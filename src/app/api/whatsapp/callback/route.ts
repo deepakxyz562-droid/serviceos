@@ -4,6 +4,42 @@ import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
 import { executeWorkflow, type NodeOutput } from '@/lib/workflow-executor';
 import { maybeAutoReply } from '@/lib/auto-reply';
 import { createInboundMessage } from '@/lib/inbox-message-service';
+import crypto from 'crypto';
+
+/**
+ * Verify the X-Hub-Signature-256 header sent by Meta.
+ * Meta signs every webhook payload with HMAC-SHA256 using the App Secret.
+ * Without this check, anyone can POST fake inbound messages to the webhook.
+ *
+ * Meta App Review specifically tests that unsigned payloads are rejected.
+ */
+function verifySignature(request: NextRequest, rawBody: string): boolean {
+  const appSecret = process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET;
+  if (!appSecret) {
+    // If no app secret is configured, skip verification (dev mode).
+    // In production, this should ALWAYS be set.
+    console.warn('[whatsapp/callback] WHATSAPP_APP_SECRET not set — skipping signature verification (dev mode only)');
+    return true;
+  }
+
+  const signature = request.headers.get('x-hub-signature-256');
+  if (!signature) {
+    console.warn('[whatsapp/callback] Missing X-Hub-Signature-256 header');
+    return false;
+  }
+
+  const expectedSignature = 'sha256=' + crypto
+    .createHmac('sha256', appSecret)
+    .update(rawBody)
+    .digest('hex');
+
+  if (signature !== expectedSignature) {
+    console.warn('[whatsapp/callback] Invalid X-Hub-Signature-256 — possible spoofing attempt');
+    return false;
+  }
+
+  return true;
+}
 
 /**
  * GET - Webhook verification endpoint
@@ -41,10 +77,23 @@ export async function GET(request: NextRequest) {
  * - Interactive message responses (button clicks, list item selections)
  * - On-select webhook triggers (dynamic list item selection → trigger webhook/workflow)
  * - Native updateJobAssignee action (update job table on selection)
+ *
+ * SECURITY: Verifies X-Hub-Signature-256 header before processing.
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    // Read raw body for signature verification BEFORE parsing JSON
+    const rawBody = await request.text();
+
+    // Verify the webhook signature (Meta App Review requirement)
+    if (!verifySignature(request, rawBody)) {
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+
+    const body = JSON.parse(rawBody);
 
     console.log('WhatsApp webhook callback received:', JSON.stringify(body, null, 2));
 

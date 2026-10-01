@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
 
 function safeParseJson(str: string): unknown[] {
   try {
@@ -11,6 +12,12 @@ function safeParseJson(str: string): unknown[] {
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth check — this endpoint was previously unauthenticated
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { jobId } = body
 
