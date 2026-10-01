@@ -250,12 +250,12 @@ export function extractBookingIntent(
   // "I'm your AI assistant" → captured "your" as the customer name.
   let customerName: string | undefined;
   const namePatterns = [
-    /(?:my name is|name:)\s+([A-Z][a-z]{2,20})/,
-    /(?:i am|i'm)\s+([A-Z][a-z]{2,20})\b/,
+    /(?:my name is|name:)\s+([a-zA-Z]{2,20})/i,
+    /(?:i am|i'm)\s+([a-zA-Z]{2,20})\b/i,
   ];
 
   for (const pat of namePatterns) {
-    const match = lower.match(pat);
+    const match = message.match(pat);
     if (match && match[1]) {
       const candidate = match[1].trim();
       // Expanded forbidden list — includes pronouns/articles that follow
