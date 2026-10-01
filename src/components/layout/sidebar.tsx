@@ -224,26 +224,30 @@ const ownerNavSections: NavSection[] = [
   },
 ];
 
-// ─── Standalone GPTForm & AI Agent Navigation (Topmate / Calendly Architecture) ─
+// ─── Standalone GPTForm & AI Agent Navigation (Chatley / Enterprise Architecture) ─
 const standaloneNavSections: NavSection[] = [
   {
-    title: 'Assets & Builders',
+    title: 'AI Agents & Builders',
     items: [
       { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { view: 'formBuilder', label: 'Forms & Studio', icon: FileInput },
       { view: 'agentStudio', label: 'AI Agent Studio', icon: Bot, badge: 'AI' },
+      { view: 'aiReceptionist', label: 'AI Voice Receptionist', icon: PhoneCall, badge: 'VOICE' },
+      { view: 'formBuilder', label: 'Forms & Studio', icon: FileInput },
     ],
   },
   {
-    title: 'Inbox & Activity',
+    title: 'Inbox & Communications',
     items: [
+      { view: 'omnichannel', label: 'AI Live Inbox', icon: RadioTower },
+      { view: 'aiCallHistory', label: 'AI Calls & Transcripts', icon: History },
       { view: 'formSubmissions', label: 'Submissions', icon: Inbox },
       { view: 'booking', label: 'Bookings', icon: CalendarCheck },
     ],
   },
   {
-    title: 'Growth & Embeds',
+    title: 'Growth & Outreach',
     items: [
+      { view: 'workflowAutomations', label: 'Automated Workflows', icon: GitBranch },
       { view: 'integrations', label: 'Integrations & Webhooks', icon: Share2 },
       { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
     ],

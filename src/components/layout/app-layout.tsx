@@ -499,8 +499,9 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     String((auth?.tenant as any)?.plan || '').startsWith('standalone') ||
     (auth?.user as any)?.role === 'standalone_user';
   const standaloneAllowedViews = useMemo(() => new Set([
-    // AI Forms & Creator Suite
+    // AI Forms, Voice Agents & Creator Suite
     'formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments',
+    'aiReceptionist', 'aiCallHistory', 'aiAgents', 'aiPhoneNumbers', 'omnichannel', 'workflowAutomations',
     'creatorProfile', 'creatorOffers',
     'scheduling', 'meetingTypes', 'appointmentTypes',
     'formsAnalytics', 'chatbotBuilder',
