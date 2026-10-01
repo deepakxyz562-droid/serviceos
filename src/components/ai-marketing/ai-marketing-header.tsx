@@ -62,10 +62,17 @@ export const aiFormLinks: NavItem[] = [
     badge: 'Lead Gen',
   },
   {
+    label: 'IntakeAI™ Autonomous Agent',
+    desc: 'Autonomous customer intake, lead scoring, live booking & triage across Voice, Chat & SMS',
+    href: '/intakeai',
+    icon: Sparkles,
+    badge: 'New AI',
+  },
+  {
     label: 'GPTForm™ AI Platform',
     desc: 'Visual form builder, formula calculator pad, 200+ widgets & 33 gateways',
     href: '/gptform',
-    icon: Sparkles,
+    icon: LayoutTemplate,
     badge: 'Core Builder',
   },
   {

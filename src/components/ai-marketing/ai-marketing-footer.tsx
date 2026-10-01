@@ -4,6 +4,7 @@ import { BrandMark } from '@/components/brand/brand-mark';
 
 export function AiMarketingFooter() {
   const aiFormLinks = [
+    { href: '/intakeai', label: 'IntakeAI™ Autonomous Agent' },
     { href: '/ai-employee', label: '24/7 AI Voice Receptionist' },
     { href: '/chatbot', label: 'AI Chatbot Builder' },
     { href: '/gptform', label: 'GPTForm™ AI Platform' },
