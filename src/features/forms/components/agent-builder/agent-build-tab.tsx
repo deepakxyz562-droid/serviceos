@@ -56,6 +56,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { COLOR_SCHEMES } from '@/lib/theme/agent-theme';
+import { useAppStore } from '@/store/app-store';
 
 interface AgentBuildTabProps {
   agent: FormAgentData;
@@ -1657,6 +1658,29 @@ export function AgentBuildTab({
           {/* Phone Channel Settings */}
           {activeChannel === 'phone' && (
             <div className="space-y-3.5">
+              <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-800/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="size-3.5 text-purple-400" />
+                    <span className="text-xs font-bold text-purple-200">AI Phone Receptionist Addon</span>
+                  </div>
+                  <Badge variant="outline" className="text-[9px] h-4 px-1.5 text-purple-300 border-purple-500/50 bg-purple-900/50">
+                    $29 / month
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-purple-300/80 leading-relaxed">
+                  Includes 1 dedicated inbound phone number + 150 AI voice minutes per month. Answers incoming calls 24/7, captures caller requests, and books appointments.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => useAppStore.getState().setCurrentView('aiReceptionist')}
+                  className="w-full text-xs h-7 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border-purple-500/50 font-semibold"
+                >
+                  Manage Addon &amp; Voice Numbers &rarr;
+                </Button>
+              </div>
+
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Dedicated AI Reception Phone Number</Label>
                 <Input
@@ -1665,7 +1689,7 @@ export function AgentBuildTab({
                   onChange={(e) => updatePhoneConfig({ phoneNumber: e.target.value })}
                   className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
                 />
-                <p className="text-[10px] text-slate-400">Inbound phone number routed to AI voice receptionist.</p>
+                <p className="text-[10px] text-slate-400">Your provisioned phone number routed to AI voice receptionist.</p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">After-Hours Emergency Escalation</Label>
@@ -1679,7 +1703,7 @@ export function AgentBuildTab({
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
                 <div className="space-y-0.5">
-                  <span className="text-xs font-medium text-slate-200">Record & Transcribe Calls</span>
+                  <span className="text-xs font-medium text-slate-200">Record &amp; Transcribe Calls</span>
                   <p className="text-[10px] text-slate-400">Generate transcripts and AI call summaries automatically</p>
                 </div>
                 <Switch
@@ -1907,8 +1931,184 @@ export function AgentBuildTab({
             </div>
           )}
 
+          {/* WordPress Channel Settings */}
+          {activeChannel === 'wordpress' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">WordPress Snippet (functions.php or WPCode)</Label>
+                <div className="relative">
+                  <Textarea
+                    readOnly
+                    rows={6}
+                    value={`// Add to functions.php or Code Snippets plugin:\nadd_action('wp_footer', function () {\n    ?>\n    <script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>\n    <?php\n});`}
+                    className="text-[11px] bg-slate-800 border-slate-700 font-mono text-slate-200"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`add_action('wp_footer', function () {\n    ?>\n    <script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>\n    <?php\n});`);
+                      toast.success('WordPress snippet copied!');
+                    }}
+                    className="absolute top-2 right-2 h-6 px-2 text-[10px] bg-slate-700 hover:bg-slate-600 text-white"
+                  >
+                    <Copy className="size-3 mr-1" /> Copy
+                  </Button>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700 space-y-1.5 text-xs text-slate-300">
+                <p className="font-semibold text-white">How to Install on WordPress:</p>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-400">
+                  <li>In WP Admin, install the free <strong>WPCode</strong> plugin.</li>
+                  <li>Click <em>Code Snippets &rarr; Add Snippet &rarr; Custom Code</em>.</li>
+                  <li>Set code type to <strong>PHP Snippet</strong> and paste the code above.</li>
+                  <li>Activate the snippet to engage visitors 24/7!</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
+          {/* Shopify Channel Settings */}
+          {activeChannel === 'shopify' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Shopify Liquid Code (theme.liquid)</Label>
+                <div className="relative">
+                  <Textarea
+                    readOnly
+                    rows={4}
+                    value={`<!-- Paste right before </body> in layout/theme.liquid -->\n<script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`}
+                    className="text-[11px] bg-slate-800 border-slate-700 font-mono text-slate-200"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`<script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`);
+                      toast.success('Shopify script copied!');
+                    }}
+                    className="absolute top-2 right-2 h-6 px-2 text-[10px] bg-slate-700 hover:bg-slate-600 text-white"
+                  >
+                    <Copy className="size-3 mr-1" /> Copy
+                  </Button>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700 space-y-1.5 text-xs text-slate-300">
+                <p className="font-semibold text-white">How to Install on Shopify:</p>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-400">
+                  <li>In Shopify Admin &rarr; <em>Online Store &rarr; Themes</em>.</li>
+                  <li>Click <em>Actions &rarr; Edit code</em>.</li>
+                  <li>Open <code>layout/theme.liquid</code>.</li>
+                  <li>Paste the script tag directly above <code>&lt;/body&gt;</code> and save!</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
+          {/* Agent App (PWA) Channel Settings */}
+          {activeChannel === 'agent_app' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Shareable Agent Web App Link</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={`https://fieseros.com/chat/${agent.slug || agent.id}`}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://fieseros.com/chat/${agent.slug || agent.id}`);
+                      toast.success('Agent App link copied!');
+                    }}
+                    className="h-8 px-2 text-xs"
+                  >
+                    <Copy className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700 space-y-2 text-xs text-slate-300">
+                <p className="font-semibold text-white">Mobile PWA Capabilities:</p>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  When visited on mobile Safari or Chrome, customers and technicians can tap <em>&quot;Add to Home Screen&quot;</em> to install your AI Agent as a standalone app with offline asset caching and full-screen UI.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Canva AI Chatbot Channel Settings */}
+          {activeChannel === 'canva' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Canva Website Embed Link</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={`https://fieseros.com/chat/${agent.slug || agent.id}?embed=1`}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://fieseros.com/chat/${agent.slug || agent.id}?embed=1`);
+                      toast.success('Canva embed URL copied!');
+                    }}
+                    className="h-8 px-2 text-xs"
+                  >
+                    <Copy className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700 space-y-1.5 text-xs text-slate-300">
+                <p className="font-semibold text-white">How to Embed in Canva:</p>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-400">
+                  <li>In your Canva site editor, click <em>Apps &rarr; Embed</em> on the left bar.</li>
+                  <li>Paste the URL copied above into the Canva embed field.</li>
+                  <li>Resize the chatbot box to fit your site layout!</li>
+                </ol>
+              </div>
+            </div>
+          )}
+
+          {/* Platforms (Webflow, Wix, Squarespace, GTM, HTML) */}
+          {activeChannel === 'platforms' && (
+            <div className="space-y-3.5">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Universal JavaScript Embed Code</Label>
+                <div className="relative">
+                  <Textarea
+                    readOnly
+                    rows={4}
+                    value={`<!-- Fieseros AI Agent Embed -->\n<script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`}
+                    className="text-[11px] bg-slate-800 border-slate-700 font-mono text-slate-200"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`<script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`);
+                      toast.success('Embed script copied!');
+                    }}
+                    className="absolute top-2 right-2 h-6 px-2 text-[10px] bg-slate-700 hover:bg-slate-600 text-white"
+                  >
+                    <Copy className="size-3 mr-1" /> Copy
+                  </Button>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700 space-y-1 text-xs text-slate-300">
+                <p className="font-semibold text-white">Compatible Platforms:</p>
+                <p className="text-[11px] text-slate-400">
+                  Works instantly with <strong>Webflow</strong> (Custom Code), <strong>Wix</strong> (Custom Element / Tracking Tools), <strong>Squarespace</strong> (Code Injection), <strong>Google Tag Manager</strong> (Custom HTML tag), and any custom HTML website.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* General Webhook / API Parameters for Other Custom Channels */}
-          {!['standalone', 'whatsapp', 'phone', 'instagram', 'sms', 'gmail', 'voice', 'messenger', 'crm', 'presentation'].includes(activeChannel) && (
+          {!['standalone', 'whatsapp', 'phone', 'instagram', 'sms', 'gmail', 'voice', 'messenger', 'crm', 'presentation', 'wordpress', 'shopify', 'agent_app', 'canva', 'platforms'].includes(activeChannel) && (
             <div className="space-y-3">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Webhook / Dispatch Endpoint</Label>

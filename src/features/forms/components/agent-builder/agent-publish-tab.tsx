@@ -30,6 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { useAppStore } from '@/store/app-store';
 
 interface AgentPublishTabProps {
   agent: FormAgentData;
@@ -338,7 +339,9 @@ export function AgentPublishTab({
                 <MessageCircle className="size-4" />
               </div>
               <div>
-                <CardTitle className="text-xs font-bold">WhatsApp Business</CardTitle>
+                <div className="flex items-center gap-1.5">
+                  <CardTitle className="text-xs font-bold">WhatsApp Business</CardTitle>
+                </div>
                 <p className="text-[10px] text-muted-foreground">Automated WhatsApp scheduler</p>
               </div>
             </div>
@@ -356,7 +359,23 @@ export function AgentPublishTab({
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            Status: <span className="font-semibold text-emerald-600">{agent.channels?.whatsapp?.phoneNumber ? `Configured (${agent.channels.whatsapp.phoneNumber})` : 'Not configured'}</span>
+            {agent.channels?.whatsapp?.phoneNumber ? (
+              <div>
+                Status: <span className="font-semibold text-emerald-600">Connected ({agent.channels.whatsapp.phoneNumber})</span>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div>Status: <span className="font-semibold text-amber-600 dark:text-amber-400">Not connected</span></div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => useAppStore.getState().setCurrentView('whatsapp')}
+                  className="text-[11px] h-6 px-2 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                >
+                  Connect WhatsApp via Meta &rarr;
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -368,8 +387,13 @@ export function AgentPublishTab({
                 <Phone className="size-4" />
               </div>
               <div>
-                <CardTitle className="text-xs font-bold">AI Phone Receptionist</CardTitle>
-                <p className="text-[10px] text-muted-foreground">24/7 Inbound voice calling</p>
+                <div className="flex items-center gap-1.5">
+                  <CardTitle className="text-xs font-bold">AI Phone Receptionist</CardTitle>
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 text-purple-600 border-purple-300">
+                    Addon $29/mo
+                  </Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground">24/7 Inbound voice calling (150 mins included)</p>
               </div>
             </div>
             <Switch
@@ -386,7 +410,25 @@ export function AgentPublishTab({
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            Number: <span className="font-semibold text-foreground">{agent.channels?.phone?.phoneNumber || 'Not assigned'}</span>
+            {agent.channels?.phone?.phoneNumber ? (
+              <div>
+                Number: <span className="font-semibold text-foreground">{agent.channels.phone.phoneNumber}</span>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Addon required ($29/mo — includes 1 dedicated number &amp; 150 minutes).
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => useAppStore.getState().setCurrentView('aiReceptionist')}
+                  className="text-[11px] h-6 px-2 text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                >
+                  Activate Addon ($29/mo) &rarr;
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -416,7 +458,23 @@ export function AgentPublishTab({
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            Status: <span className="font-semibold text-emerald-600">{agent.channels?.sms?.phoneNumber ? `Configured (${agent.channels.sms.phoneNumber})` : (agent.channels?.sms?.enabled ? 'Active' : 'Disabled')}</span>
+            {agent.channels?.sms?.phoneNumber ? (
+              <div>
+                Status: <span className="font-semibold text-emerald-600">Active ({agent.channels.sms.phoneNumber})</span>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div>Status: <span className="font-semibold text-slate-500">No SMS number assigned</span></div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => useAppStore.getState().setCurrentView('smsNumbers')}
+                  className="text-[11px] h-6 px-2 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                >
+                  Configure SMS Number &rarr;
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
