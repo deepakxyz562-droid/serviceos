@@ -25,6 +25,14 @@ import {
   ArrowRight,
   Database,
   RefreshCw,
+  MapPin,
+  Phone,
+  Clock,
+  Wrench,
+  ShieldCheck,
+  AlertCircle,
+  X,
+  Building,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +40,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
@@ -401,6 +410,113 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   };
 
 
+  const [newAreaInput, setNewAreaInput] = useState('');
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServicePrice, setNewServicePrice] = useState('');
+
+  const currentFacts = agent.knowledge?.structuredFacts || {};
+  const currentAreas: string[] = (agent.knowledge?.serviceAreas && agent.knowledge.serviceAreas.length > 0)
+    ? agent.knowledge.serviceAreas
+    : (Array.isArray(currentFacts.serviceAreas) ? currentFacts.serviceAreas : []);
+  const isEmergencyActive = !!(
+    currentFacts.emergencyAvailable === true ||
+    currentFacts.emergencyAvailable === '24/7' ||
+    String(currentFacts.emergencyAvailable).toLowerCase().includes('24/7') ||
+    String(currentFacts.emergencyAvailable).toLowerCase().includes('yes')
+  );
+
+  const handleAddArea = () => {
+    if (!newAreaInput.trim()) return;
+    const formatted = newAreaInput.trim();
+    if (currentAreas.map((a: string) => a.toLowerCase()).includes(formatted.toLowerCase())) {
+      toast.info(`"${formatted}" is already in service areas`);
+      return;
+    }
+    const updatedAreas = [...currentAreas, formatted];
+    onChange({
+      ...agent,
+      knowledge: {
+        ...agent.knowledge,
+        serviceAreas: updatedAreas,
+        structuredFacts: {
+          ...currentFacts,
+          serviceAreas: updatedAreas,
+        },
+      },
+    });
+    setNewAreaInput('');
+    toast.success(`Added "${formatted}" to verified service areas`);
+  };
+
+  const handleRemoveArea = (areaToRemove: string) => {
+    const updatedAreas = currentAreas.filter((a: string) => a !== areaToRemove);
+    onChange({
+      ...agent,
+      knowledge: {
+        ...agent.knowledge,
+        serviceAreas: updatedAreas,
+        structuredFacts: {
+          ...currentFacts,
+          serviceAreas: updatedAreas,
+        },
+      },
+    });
+    toast.info(`Removed "${areaToRemove}" from service areas`);
+  };
+
+  const handleToggleEmergency = (checked: boolean) => {
+    onChange({
+      ...agent,
+      knowledge: {
+        ...agent.knowledge,
+        structuredFacts: {
+          ...currentFacts,
+          emergencyAvailable: checked ? '24/7' : false,
+        },
+      },
+    });
+    toast.success(checked ? '24/7 Emergency response enabled' : 'Emergency 24/7 disabled (standard hours only)');
+  };
+
+  const handleAddService = () => {
+    if (!newServiceName.trim()) return;
+    const currentServices = Array.isArray(currentFacts.services) ? currentFacts.services : [];
+    const newService = {
+      name: newServiceName.trim(),
+      price: newServicePrice.trim() || undefined,
+    };
+    const updatedServices = [...currentServices, newService];
+    onChange({
+      ...agent,
+      knowledge: {
+        ...agent.knowledge,
+        structuredFacts: {
+          ...currentFacts,
+          services: updatedServices,
+        },
+      },
+    });
+    setNewServiceName('');
+    setNewServicePrice('');
+    toast.success(`Added "${newService.name}" to service catalog`);
+  };
+
+  const handleRemoveService = (index: number) => {
+    const currentServices = Array.isArray(currentFacts.services) ? currentFacts.services : [];
+    const updatedServices = currentServices.filter((_: any, i: number) => i !== index);
+    onChange({
+      ...agent,
+      knowledge: {
+        ...agent.knowledge,
+        structuredFacts: {
+          ...currentFacts,
+          services: updatedServices,
+        },
+      },
+    });
+    toast.info('Service removed from catalog');
+  };
+
   return (
     <div className="space-y-4">
       {/* ── 1. AUTOMATED SITEMAP & WEBPAGE CRAWLER ── */}
@@ -549,7 +665,162 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
         </CardContent>
       </Card>
 
-      {/* ── 2. UNANSWERED QUESTIONS REVIEW INBOX ── */}
+      {/* ── 2. DETERMINISTIC BUSINESS FACTS & SERVICE AREAS (ZERO-HALLUCINATION GUI) ── */}
+      <Card className="rounded-xl border-violet-200/80 dark:border-violet-900/60 bg-violet-50/20 dark:bg-violet-950/10 shadow-xs">
+        <CardHeader className="p-4 pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xs font-bold flex items-center gap-1.5 text-violet-900 dark:text-violet-200">
+              <Database className="size-3.5 text-violet-600" />
+              Deterministic Business Facts &amp; Service Areas
+              <Badge variant="outline" className="text-[9px] text-violet-700 dark:text-violet-300 border-violet-300 ml-1">
+                Zero Hallucination
+              </Badge>
+            </CardTitle>
+          </div>
+          <CardDescription className="text-[11px]">
+            Explicit company parameters that the AI runtime treats as non-negotiable ground truth for location, emergency policies, and pricing.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 pt-1 space-y-4">
+
+          {/* Service Areas (Chips) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-[11px] font-bold flex items-center gap-1 text-foreground">
+                <MapPin className="size-3 text-violet-600" /> Verified Service Areas &amp; Cities
+              </Label>
+              <span className="text-[10px] text-muted-foreground">
+                {currentAreas.length} active location{currentAreas.length === 1 ? '' : 's'}
+              </span>
+            </div>
+
+            {/* Chips Container */}
+            <div className="flex flex-wrap gap-1.5 p-2 bg-background border border-border/80 rounded-lg min-h-[38px]">
+              {currentAreas.length === 0 ? (
+                <span className="text-[11px] text-muted-foreground self-center px-1 italic">
+                  No service areas set. The AI will accept inquiries from any area.
+                </span>
+              ) : (
+                currentAreas.map((area: string, idx: number) => (
+                  <Badge
+                    key={idx}
+                    variant="secondary"
+                    className="bg-violet-100 dark:bg-violet-900/50 text-violet-900 dark:text-violet-200 text-[11px] font-semibold flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-md"
+                  >
+                    <span>{area}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveArea(area)}
+                      className="size-3.5 rounded-full hover:bg-violet-200 dark:hover:bg-violet-800 flex items-center justify-center transition-colors"
+                    >
+                      <X className="size-2.5" />
+                    </button>
+                  </Badge>
+                ))
+              )}
+            </div>
+
+            {/* Add Location Input */}
+            <div className="flex gap-2">
+              <Input
+                value={newAreaInput}
+                onChange={(e) => setNewAreaInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddArea();
+                  }
+                }}
+                placeholder="Add city or ZIP (e.g. Beaverton, OR or 97005)"
+                className="text-xs h-8"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddArea}
+                disabled={!newAreaInput.trim()}
+                className="text-xs h-8 bg-violet-600 hover:bg-violet-700 text-white shrink-0 gap-1"
+              >
+                <Plus className="size-3" /> Add City
+              </Button>
+            </div>
+          </div>
+
+          {/* Emergency & 24/7 Availability Toggle */}
+          <div className="p-3 bg-background border border-border/80 rounded-xl flex items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-1.5 font-bold text-xs">
+                <ShieldCheck className={cn('size-4', isEmergencyActive ? 'text-emerald-500' : 'text-muted-foreground')} />
+                <span>24/7 Emergency &amp; Urgent Dispatch Service</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                When enabled, the AI explicitly informs visitors that 24/7 emergency response is available outside standard hours.
+              </p>
+            </div>
+            <Switch
+              checked={isEmergencyActive}
+              onCheckedChange={handleToggleEmergency}
+            />
+          </div>
+
+          {/* Core Services Catalog */}
+          <div className="space-y-2">
+            <Label className="text-[11px] font-bold flex items-center gap-1 text-foreground">
+              <Wrench className="size-3 text-violet-600" /> Core Service Offerings &amp; Rates
+            </Label>
+            
+            {Array.isArray(currentFacts.services) && currentFacts.services.length > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                {currentFacts.services.map((srv: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="p-2 bg-background border border-border/80 rounded-lg flex items-center justify-between text-xs"
+                  >
+                    <div className="min-w-0 pr-1">
+                      <p className="font-semibold truncate text-[11px]">{srv.name}</p>
+                      {srv.price && <p className="text-[10px] text-emerald-600 font-bold">{srv.price}</p>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveService(idx)}
+                      className="size-4 rounded text-muted-foreground hover:text-destructive hover:bg-muted flex items-center justify-center shrink-0"
+                    >
+                      <Trash2 className="size-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Input
+                value={newServiceName}
+                onChange={(e) => setNewServiceName(e.target.value)}
+                placeholder="Service name (e.g. Water Heater Repair)"
+                className="text-xs h-8 flex-1"
+              />
+              <Input
+                value={newServicePrice}
+                onChange={(e) => setNewServicePrice(e.target.value)}
+                placeholder="Price / Scope (e.g. $150 - $450)"
+                className="text-xs h-8 w-36"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddService}
+                disabled={!newServiceName.trim()}
+                className="text-xs h-8 bg-violet-600 hover:bg-violet-700 text-white shrink-0 gap-1"
+              >
+                <Plus className="size-3" /> Add
+              </Button>
+            </div>
+          </div>
+
+        </CardContent>
+      </Card>
+
+      {/* ── 3. UNANSWERED QUESTIONS REVIEW INBOX ── */}
       <Card className="rounded-xl border-amber-200 dark:border-amber-900/40 bg-amber-50/20 dark:bg-amber-950/10 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <div className="flex items-center justify-between">
