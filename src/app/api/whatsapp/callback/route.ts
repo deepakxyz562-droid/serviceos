@@ -4,6 +4,8 @@ import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
 import { executeWorkflow, type NodeOutput } from '@/lib/workflow-executor';
 import { maybeAutoReply } from '@/lib/auto-reply';
 import { createInboundMessage } from '@/lib/inbox-message-service';
+import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
+import { getAppUrl } from '@/lib/brand';
 import crypto from 'crypto';
 
 /**
@@ -202,14 +204,36 @@ async function handleIncomingMessage(
       context?: { id?: string; forwarded?: boolean };
     };
 
+    // ─── Template Button Quick Reply branch (Meta sends message.type === 'button') ─
+    const messageType = (message as { type?: string }).type;
+    if (messageType === 'button') {
+      const btn = (message as { button?: { text?: string; payload?: string } }).button;
+      const btnText = btn?.text || btn?.payload || '';
+      console.log(`[WhatsApp Callback] Template button clicked: text="${btnText}", from=${senderPhone}`);
+      await handleJobAcceptanceOrDecline({
+        buttonText: btnText,
+        senderPhone,
+      });
+      return;
+    }
+
     // ─── Plain-text inbound branch ──────────────────────────────────────────
     // Triggered when there's no `interactive` field. Delegates to
     // handlePlainTextInbound which creates a Conversation + InboxMessage and
     // calls maybeAutoReply. Interactive messages fall through to the original
     // list/button reply handlers below.
     if (!interactive) {
-      const messageType = (message as { type?: string }).type;
       if (messageType === 'text') {
+        const textBody = ((message as { text?: { body?: string } }).text?.body || '').trim().toLowerCase();
+        // Check if technician sent "accept job", "accept", "decline", or "reject"
+        if (textBody === 'accept job' || textBody === 'accept' || textBody === 'decline' || textBody === 'reject job' || textBody === 'reject') {
+          console.log(`[WhatsApp Callback] Text command received: "${textBody}", from=${senderPhone}`);
+          await handleJobAcceptanceOrDecline({
+            buttonText: textBody,
+            senderPhone,
+          });
+          return;
+        }
         await handlePlainTextInbound(message, value);
       } else {
         // Other non-text, non-interactive types (image, audio, location,
@@ -249,26 +273,29 @@ async function handleIncomingMessage(
     // ─── Handle button reply (user clicked a quick reply button) ────────────
     if (interactive.type === 'button_reply') {
       const buttonReply = interactive.button_reply as Record<string, string> | undefined;
-      const buttonId = buttonReply?.id; // e.g., "accept_jobId" or "reject_jobId"
+      const buttonId = buttonReply?.id || '';
+      const buttonTitle = buttonReply?.title || '';
 
-      console.log(`[WhatsApp Callback] Button reply: id=${buttonId}, from=${senderPhone}`);
+      console.log(`[WhatsApp Callback] Button reply: id=${buttonId}, title=${buttonTitle}, from=${senderPhone}`);
 
       // Check for on-select action
       const originalMessageId = messageContext?.id;
       if (originalMessageId) {
         await handleOnSelectAction(originalMessageId, {
-          selectedId: buttonId || '',
-          selectedTitle: buttonReply?.title || '',
+          selectedId: buttonId,
+          selectedTitle: buttonTitle,
           selectedDescription: '',
           senderPhone,
           interactiveType: 'button_reply',
         });
       }
 
-      // Legacy: handle accept_/reject_ prefixed button IDs
-      if (buttonId?.startsWith('accept_') || buttonId?.startsWith('reject_')) {
-        await handleButtonReply(buttonId, senderPhone);
-      }
+      // Handle accept/decline action
+      await handleJobAcceptanceOrDecline({
+        buttonId,
+        buttonText: buttonTitle,
+        senderPhone,
+      });
     }
   } catch (error) {
     console.error('Error handling incoming message:', error);
@@ -850,58 +877,155 @@ async function handleDriverSelection(selectedId: string, senderPhone: string) {
 }
 
 /**
- * Legacy: Handle accept/reject button replies
+ * Handle accept/reject actions from buttons (interactive or template) or plain text.
+ * When a technician accepts:
+ * 1. Updates job.assignmentStatus = 'accepted', job.status = 'assigned'.
+ * 2. Marks technician employee.status = 'busy'.
+ * 3. Immediately sends a WhatsApp confirmation back with customer details and
+ *    a 1-tap deep link to open the job in the app (https://fieseros.com/?view=jobs&job={id}).
  */
-async function handleButtonReply(buttonId: string, senderPhone: string) {
+async function handleJobAcceptanceOrDecline({
+  buttonId = '',
+  buttonText = '',
+  senderPhone,
+}: {
+  buttonId?: string;
+  buttonText?: string;
+  senderPhone: string;
+}) {
   try {
-    if (buttonId.startsWith('accept_')) {
-      const jobId = buttonId.replace('accept_', '');
-      const job = await db.job.findUnique({ where: { id: jobId } });
+    const cleanPhone = senderPhone.replace(/[^0-9]/g, '');
+    const last10 = cleanPhone.slice(-10);
 
-      if (job) {
-        const cleanPhone = senderPhone.replace(/[^0-9]/g, '');
-        const employee = await db.employee.findFirst({
+    const textLower = buttonText.trim().toLowerCase();
+    const isAccept =
+      buttonId.startsWith('accept_') ||
+      textLower === 'accept job' ||
+      textLower === 'accept' ||
+      textLower.includes('accept');
+
+    const isDecline =
+      buttonId.startsWith('reject_') ||
+      buttonId.startsWith('decline_') ||
+      textLower === 'decline' ||
+      textLower === 'reject job' ||
+      textLower === 'reject' ||
+      textLower.includes('decline') ||
+      textLower.includes('reject');
+
+    if (!isAccept && !isDecline) return;
+
+    // Find the employee by matching phone number
+    const employee = await db.employee.findFirst({
+      where: {
+        OR: [
+          { phone: { contains: last10 } },
+          { whatsappId: { contains: last10 } },
+        ],
+      },
+    });
+
+    // Find the relevant job:
+    let job = null;
+    if (buttonId.startsWith('accept_') || buttonId.startsWith('reject_') || buttonId.startsWith('decline_')) {
+      const explicitId = buttonId.replace('accept_', '').replace('reject_', '').replace('decline_', '');
+      job = await db.job.findUnique({ where: { id: explicitId } });
+    }
+
+    if (!job && employee) {
+      // Find latest pending or assigned job for this employee
+      job = await db.job.findFirst({
+        where: {
+          assigneeId: employee.id,
+          assignmentStatus: { in: ['pending', 'sent', 'delivered', 'read'] },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+
+      // Fallback: any recent job assigned to this employee
+      if (!job) {
+        job = await db.job.findFirst({
           where: {
-            OR: [
-              { phone: { contains: cleanPhone } },
-              { whatsappId: { contains: cleanPhone } },
-            ],
+            assigneeId: employee.id,
           },
+          orderBy: { updatedAt: 'desc' },
         });
-
-        if (employee) {
-          await db.job.update({
-            where: { id: jobId },
-            data: {
-              assigneeId: employee.id,
-              assigneeName: employee.name,
-              assigneePhone: employee.phone,
-              status: 'assigned',
-              assignmentStatus: 'accepted',
-            },
-          });
-
-          await db.employee.update({
-            where: { id: employee.id },
-            data: { status: 'busy' },
-          });
-
-          console.log(`Job ${jobId} accepted by ${employee.name}`);
-        }
       }
-    } else if (buttonId.startsWith('reject_')) {
-      const jobId = buttonId.replace('reject_', '');
+    }
 
+    if (!job) {
+      console.warn(`[WhatsApp Callback] No job found to ${isAccept ? 'accept' : 'decline'} for phone: ${senderPhone}`);
+      return;
+    }
+
+    const appUrl = getAppUrl();
+    const jobNumber = job.jobNumber ? `#${job.jobNumber}` : `#${job.id.slice(-6)}`;
+    const viewJobUrl = `${appUrl}/?view=jobs&job=${job.id}`;
+
+    if (isAccept) {
       await db.job.update({
-        where: { id: jobId },
+        where: { id: job.id },
+        data: {
+          status: 'assigned',
+          assignmentStatus: 'accepted',
+          ...(employee ? {
+            assigneeId: employee.id,
+            assigneeName: employee.name,
+            assigneePhone: employee.phone,
+          } : {}),
+        },
+      });
+
+      if (employee) {
+        await db.employee.update({
+          where: { id: employee.id },
+          data: { status: 'busy' },
+        });
+      }
+
+      console.log(`[WhatsApp Callback] Job ${job.id} ACCEPTED by ${employee?.name || senderPhone}`);
+
+      // Send 1-tap confirmation reply with deep-link into the Fieseros app
+      const confirmMsg = [
+        `✅ *Job ${jobNumber} Accepted!*`,
+        '',
+        `Customer: ${job.customerName || 'Customer on file'}`,
+        `Service: ${job.title || 'Service details in app'}`,
+        `Address: ${job.address || job.location || 'Address in app'}`,
+        '',
+        `👉 *Open Job & Navigate in App:*`,
+        viewJobUrl,
+      ].join('\n');
+
+      await sendWhatsAppMessage({
+        to: senderPhone,
+        message: confirmMsg,
+        tenantId: job.tenantId || employee?.tenantId || undefined,
+      });
+    } else if (isDecline) {
+      await db.job.update({
+        where: { id: job.id },
         data: {
           assignmentStatus: 'rejected',
         },
       });
 
-      console.log(`Job ${jobId} rejected by driver`);
+      console.log(`[WhatsApp Callback] Job ${job.id} DECLINED by ${employee?.name || senderPhone}`);
+
+      await sendWhatsAppMessage({
+        to: senderPhone,
+        message: `Job ${jobNumber} declined. Dispatch has been notified.`,
+        tenantId: job.tenantId || employee?.tenantId || undefined,
+      });
     }
   } catch (error) {
-    console.error('Error handling button reply:', error);
+    console.error('[WhatsApp Callback] Error in handleJobAcceptanceOrDecline:', error);
   }
+}
+
+/**
+ * Legacy: Handle accept/reject button replies
+ */
+async function handleButtonReply(buttonId: string, senderPhone: string) {
+  return handleJobAcceptanceOrDecline({ buttonId, senderPhone });
 }
