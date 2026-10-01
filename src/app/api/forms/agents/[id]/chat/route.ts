@@ -314,7 +314,7 @@ export async function POST(
       const aiRes = await callAI({
         messages,
         temperature: 0.3,
-        model: agent.llm?.model || undefined,
+        preferredModel: agent.llm?.model || undefined,
       });
 
       replyText = aiRes.content || '';
@@ -394,7 +394,31 @@ export async function POST(
 
       // Contextual fallbacks
       if (!replyText) {
-        if (isInformationalQuery && serviceAreasList && (lower.includes('location') || lower.includes('area') || lower.includes('serve') || lower.includes('where'))) {
+        const knownServices = Array.from(
+          new Set([
+            ...(structuredFacts?.services?.map((s) => s.name) || []),
+            ...((agent.knowledge as any)?.services || []),
+            ...extractedServices,
+          ])
+        ).filter(Boolean);
+
+        if (
+          lower.includes('service') ||
+          lower.includes('rate') ||
+          lower.includes('pricing') ||
+          lower.includes('cost') ||
+          lower.includes('price') ||
+          lower.includes('fee') ||
+          lower.includes('offer') ||
+          lower.includes('what do you do') ||
+          lower.includes('what can you do')
+        ) {
+          if (knownServices.length > 0) {
+            replyText = `**${agent.name}** offers a full range of professional services, including:\n\n${knownServices.map((s) => `• **${s}**`).join('\n')}\n\nOur rates depend on the specific scope of work, and we provide transparent, upfront estimates before beginning any job. Would you like an instant quote or to schedule an appointment?`;
+          } else {
+            replyText = `**${agent.name}** provides comprehensive ${agent.roleTitle || 'services'} with upfront, transparent rates and free estimates. Would you like to tell me more about your project so I can provide an accurate quote?`;
+          }
+        } else if (isInformationalQuery && serviceAreasList && (lower.includes('location') || lower.includes('area') || lower.includes('serve') || lower.includes('where'))) {
           replyText = `**${agent.name}** proudly serves **${serviceAreasList}** and surrounding communities! Feel free to let me know what you need or ask any questions.`;
         } else if (lower.includes('question') || lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
           replyText = `Hello! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I help you today? Feel free to ask about our services, service areas, or request an estimate!`;

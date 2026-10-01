@@ -570,23 +570,48 @@ export function AgentDeviceSimulator({
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 50);
 
-    // If already escalated to a human operator, route message directly to live chat
-    if (escalatedToHuman && liveSessionId) {
-      try {
-        await fetch(`/api/public/chat/${encodeURIComponent(liveSessionId)}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            body: currentAttachment ? `${message} [Photo attached: ${currentAttachment.name}]` : message,
-            visitorName: 'Visitor',
-          }),
-        });
-      } catch (err) {
-        console.warn('[live-chat send] error:', err);
-      } finally {
-        setSending(false);
+    // If escalated to a human operator:
+    if (escalatedToHuman) {
+      const lower = (message || '').toLowerCase();
+      const wantsAiOrBooking =
+        lower.includes('appointment') ||
+        lower.includes('book') ||
+        lower.includes('schedule') ||
+        lower.includes('tomorrow') ||
+        lower.includes('today') ||
+        lower.includes('service') ||
+        lower.includes('price') ||
+        lower.includes('rate') ||
+        lower.includes('cost') ||
+        lower.includes('ai') ||
+        lower.includes('robot') ||
+        lower.includes('bot') ||
+        lower.includes('resume') ||
+        lower.includes('back') ||
+        lower.includes('not available') ||
+        lower.includes('not replying') ||
+        lower.includes('anyone there');
+
+      if (wantsAiOrBooking || !liveSessionId) {
+        // Automatically un-mute AI so user can book or get answers
+        setEscalatedToHuman(false);
+      } else {
+        try {
+          await fetch(`/api/public/chat/${encodeURIComponent(liveSessionId)}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              body: currentAttachment ? `${message} [Photo attached: ${currentAttachment.name}]` : message,
+              visitorName: 'Visitor',
+            }),
+          });
+        } catch (err) {
+          console.warn('[live-chat send] error:', err);
+        } finally {
+          setSending(false);
+        }
+        return;
       }
-      return;
     }
 
     try {
@@ -618,7 +643,7 @@ export function AgentDeviceSimulator({
       if (res.ok && data.reply) {
         const matchedForm = data.suggestedFormId
           ? agent.connectedForms?.find((f) => f.id === data.suggestedFormId) || agent.connectedForms?.[0]
-          : agent.connectedForms?.[0];
+          : undefined;
 
         const aiMsg: ChatMsg = {
           id: `ai_${Date.now()}`,
@@ -637,11 +662,13 @@ export function AgentDeviceSimulator({
       }
 
       // If live API returned non-OK status or in test mode without live keys, provide contextual fallback
-      const matchedForm = agent.connectedForms?.[0];
+      const matchedForm = data.suggestedFormId
+        ? agent.connectedForms?.find((f) => f.id === data.suggestedFormId)
+        : undefined;
       const aiMsg: ChatMsg = {
         id: `ai_${Date.now()}`,
         sender: 'ai',
-        text: data.reply || `Thank you for reaching out! As ${agent.name || 'your AI Assistant'} (${agent.roleTitle || 'Customer Concierge'}), I'm ready to help. You can ask anything or complete ${matchedForm?.name || 'our form'} to proceed.`,
+        text: data.reply || `Thank you for reaching out! As ${agent.name || 'your AI Assistant'} (${agent.roleTitle || 'Customer Concierge'}), I'm ready to help. Feel free to ask about our services, rates, or schedule an appointment!`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedForm: matchedForm,
         card: data.card,
@@ -1030,22 +1057,33 @@ export function AgentDeviceSimulator({
                   : 'Connecting with a live specialist... An operator has been notified.'}
               </span>
             </div>
-            {agentAvailable === false && (
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onClick={() => {
-                  const matchedForm = agent.connectedForms?.[0];
-                  if (matchedForm) {
-                    setActiveFormModal(matchedForm);
-                    onOpenFormInModal?.(matchedForm);
-                  }
-                }}
-                className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                onClick={() => setEscalatedToHuman(false)}
+                className="shrink-0 text-[10px] font-bold px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-white transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                title="Switch back to automated AI Assistant"
               >
-                <Calendar className="size-3" />
-                Book on Calendar
+                <Bot className="size-3 text-emerald-400" />
+                Resume AI
               </button>
-            )}
+              {agentAvailable === false && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const matchedForm = agent.connectedForms?.[0];
+                    if (matchedForm) {
+                      setActiveFormModal(matchedForm);
+                      onOpenFormInModal?.(matchedForm);
+                    }
+                  }}
+                  className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                >
+                  <Calendar className="size-3" />
+                  Book on Calendar
+                </button>
+              )}
+            </div>
           </div>
         )}
       </header>

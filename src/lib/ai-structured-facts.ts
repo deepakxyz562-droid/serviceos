@@ -380,7 +380,7 @@ export function queryStructuredFacts(
     }
   }
 
-  // 5. Pricing & Services Inquiry
+  // 5. Pricing, Rates & Services Inquiry
   if (
     query.includes('price') ||
     query.includes('pricing') ||
@@ -388,8 +388,14 @@ export function queryStructuredFacts(
     query.includes('how much') ||
     query.includes('fee') ||
     query.includes('rate') ||
+    query.includes('rates') ||
     query.includes('estimate') ||
-    query.includes('quote')
+    query.includes('quote') ||
+    query.includes('service') ||
+    query.includes('services') ||
+    query.includes('what do you do') ||
+    query.includes('what do you offer') ||
+    query.includes('what can you do')
   ) {
     // Check if the query matches a specific service in the catalog
     if (facts.services && facts.services.length > 0) {
@@ -416,6 +422,37 @@ export function queryStructuredFacts(
           citations: matchedServices.map((s) => ({
             title: s.name,
             snippet: `${s.name}: ${s.price || 'Quote based'}. ${s.description || ''}`,
+          })),
+        };
+      }
+
+      // If user asked general question about services or services & rates ("what services do you offer", "what are your rates"):
+      if (
+        query.includes('service') ||
+        query.includes('services') ||
+        query.includes('rate') ||
+        query.includes('rates') ||
+        query.includes('offer') ||
+        query.includes('what do you do') ||
+        query.includes('what can you do')
+      ) {
+        const allServicesLines = facts.services.map((s) => {
+          const priceStr = s.price ? ` — **${s.price}**` : '';
+          const desc = s.description ? ` (${s.description})` : '';
+          return `• **${s.name}**${priceStr}${desc}`;
+        }).join('\n');
+
+        const freeEst = facts.pricingPolicies.freeEstimates ? '\n\n✨ *We offer free, upfront estimates with transparent pricing.*' : '';
+        return {
+          matched: true,
+          category: 'service_details',
+          answer: `At **${facts.businessName}**, we offer the following professional services:\n\n${allServicesLines}${freeEst}\n\nWould you like an instant quote or to schedule an appointment for one of these services?`,
+          confidence: 0.98,
+          badge: 'Verified Services & Rates',
+          sourceField: 'services',
+          citations: facts.services.map((s) => ({
+            title: s.name,
+            snippet: `${s.name}: ${s.price || 'Standard rate'}. ${s.description || ''}`,
           })),
         };
       }

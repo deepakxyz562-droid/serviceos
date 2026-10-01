@@ -447,16 +447,48 @@ DO NOT output any \`\`\`card block when the visitor is asking general questions 
     //    query guard) determines this is a genuine booking request.
     let rawReply = '';
     let cardData: Record<string, unknown> | null = null;
+    let aiResponse: any = null;
 
     // Lower temperature from 0.6 → 0.3 to reduce hallucination when the
     // system prompt is generic. The forms chat route already uses 0.3.
-    const aiResponse = await callAI({
-      messages: conversationMessages,
-      temperature: hybridResult?.shouldFallback ? 0.2 : 0.3,
-      maxTokens: 500,
-    });
+    try {
+      aiResponse = await callAI({
+        messages: conversationMessages,
+        temperature: hybridResult?.shouldFallback ? 0.2 : 0.3,
+        maxTokens: 500,
+      });
+      rawReply = aiResponse?.content || '';
+    } catch (err) {
+      console.warn('[agent-chat] AI call failed, using intelligent rule responder:', err);
+    }
 
-    rawReply = aiResponse.content || "Hello! How can I assist you today?";
+    if (!rawReply) {
+      if (hybridResult?.structuredFactMatch?.answer) {
+        rawReply = hybridResult.structuredFactMatch.answer;
+      } else if (agentKnowledge?.faqPairs) {
+        const lowerMsg = (message || '').toLowerCase();
+        const matchedFaq = agentKnowledge.faqPairs.find((f) => {
+          const q = (f.question || '').toLowerCase();
+          return q && lowerMsg.includes(q);
+        });
+        if (matchedFaq) rawReply = matchedFaq.answer;
+      }
+      if (!rawReply) {
+        const lowerMsg = (message || '').toLowerCase();
+        if (
+          lowerMsg.includes('service') ||
+          lowerMsg.includes('rate') ||
+          lowerMsg.includes('pricing') ||
+          lowerMsg.includes('cost') ||
+          lowerMsg.includes('offer') ||
+          lowerMsg.includes('what do you do')
+        ) {
+          rawReply = `At **${tenantName}**, we provide full professional services with transparent, upfront rates and no hidden fees. Feel free to let me know what you need or ask for an estimate!`;
+        } else {
+          rawReply = `Hello! I'm your AI Service Assistant for **${tenantName}**. How can I help you today?`;
+        }
+      }
+    }
 
     // ── Phase B: Tool Registry — check for tool_call JSON block and execute ──
     // The LLM can propose a tool call by emitting:
@@ -595,13 +627,19 @@ DO NOT output any \`\`\`card block when the visitor is asking general questions 
       updateSessionMemory(syncRes.sessionId, extractedFields).catch(() => {});
     }
 
+    const intentClassification = classifyIntent(message);
+    const shouldAttachForm =
+      primaryConnectedForm?.id &&
+      intentClassification.isBookingOrIntake &&
+      !intentClassification.isInformationalQuery;
+
     return NextResponse.json(
       {
         reply: rawReply,
         card: cardData,
         sessionId: syncRes.sessionId,
-        suggestedForm: primaryConnectedForm || undefined,
-        suggestedFormId: primaryConnectedForm?.id || undefined,
+        suggestedForm: shouldAttachForm ? primaryConnectedForm : undefined,
+        suggestedFormId: shouldAttachForm ? primaryConnectedForm?.id : undefined,
         citations: citations.length > 0 ? citations : undefined,
         confidence: hybridResult
           ? {
