@@ -86,28 +86,20 @@ const GEMINI_BASE_URL =
  * array if a model returns 404 ("No endpoints found") or persistent 429s.
  */
 const OPENROUTER_MODELS = [
-  // Verified live free models on OpenRouter (Sep 2026).
-  // Previous list contained fictitious IDs (nvidia/nemotron-3-super-120b-a12b:free,
-  // qwen/qwen3.8-27b:free, google/gemma-4-26b-a4b-it:free, etc.) that 404'd on
-  // every request, burning ~7 failed attempts before falling through to the
-  // next provider.
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'google/gemma-2-9b-it:free',
-  'qwen/qwen-2.5-7b-instruct:free',
-  'mistralai/mistral-7b-instruct:free',
-  'deepseek/deepseek-r1:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'google/gemma-4-31b-it:free',
+  'qwen/qwen3.8-27b:free',
+  'inclusionai/ling-3.0-flash-sante:free',
+  'liquid/lfm-2.5-2.6b:free',
+  'dots-studio/dots-3-note-preview:free',
 ]
 
-/** Per-attempt timeout. Free models can be slow on cold starts. */
-const REQUEST_TIMEOUT_MS = 60_000
+/** Per-attempt timeout (15s). Fast failure allows rapid fallback to next model or Gemini. */
+const REQUEST_TIMEOUT_MS = 15_000
 
-/** Provider order — OpenRouter is preferred (cheapest + free pool), then
- *  paid providers in increasing cost-per-call order. ZAI (z-ai-web-dev-sdk)
- *  is the LAST resort: it auto-configures from the SDK's built-in sandbox key
- *  and is only reached when the superadmin has configured zero provider keys.
- *  In production, superadmin-managed AiProviderKey rows (OpenRouter/OpenAI/
- *  Anthropic/Gemini) are always tried first. */
-const PROVIDER_ORDER = ['openrouter', 'openai', 'anthropic', 'gemini', 'zai'] as const
+/** Provider order — OpenRouter is tried first (free pool), followed immediately
+ *  by Gemini (where active DB key is configured), then OpenAI/Anthropic/ZAI. */
+const PROVIDER_ORDER = ['openrouter', 'gemini', 'openai', 'anthropic', 'zai'] as const
 type ProviderName = (typeof PROVIDER_ORDER)[number]
 
 function isProviderName(s: string): s is ProviderName {
@@ -119,12 +111,9 @@ const DEFAULT_MODELS: Record<ProviderName, string[]> = {
   openai: ['gpt-4o-mini'],
   anthropic: ['claude-3-5-haiku-20241022'],
   gemini: [
-    'gemini-2.5-flash',
-    'gemini-2.5-pro',
-    'gemini-pro-latest',
-    'gemini-flash-latest',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
+    'gemini-3.8-flash',
+    'gemini-3.5-flash',
+    'gemini-3.1-flash-lite',
   ],
   zai: ['glm-4-plus'],
 }
@@ -317,12 +306,18 @@ function classifyHttpError(
     }
   }
   if (status === 429) {
-    // Rate limit on this key / quota exceeded — rotate to next key for this provider
+    // Model-specific upstream rate limits (very common on OpenRouter free pool)
+    // should try the next model with the same key before rotating keys.
+    const isModelSpecific =
+      provider === 'openrouter' ||
+      body.toLowerCase().includes('model') ||
+      body.toLowerCase().includes('upstream') ||
+      body.toLowerCase().includes('provider returned error');
     return {
       ok: false,
       status,
       error,
-      shouldRotateKey: true,
+      shouldRotateKey: !isModelSpecific,
       shouldSwitchProvider: false,
     }
   }

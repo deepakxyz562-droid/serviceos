@@ -355,17 +355,45 @@ export function queryStructuredFacts(
     }
   }
 
-  // 4. Service Area & Cities
+  // 3.5 Website / URL / Online Presence
   if (
+    query.includes('website') ||
+    query.includes('site') ||
+    query.includes('url') ||
+    query.includes('web page') ||
+    query.includes('domain') ||
+    query.includes('homepage') ||
+    query.includes('link')
+  ) {
+    if (facts.sourceUrl) {
+      return {
+        matched: true,
+        category: 'contact',
+        answer: `You can visit our official website at **[${facts.sourceUrl}](${facts.sourceUrl})** for complete details on our services, company credentials, and online scheduling.`,
+        confidence: 0.99,
+        badge: 'Verified Website',
+        sourceField: 'sourceUrl',
+        citations: [{ title: 'Official Website', snippet: facts.sourceUrl }],
+      };
+    }
+  }
+
+  // 4. Service Area & Cities
+  const isAreaQuery =
     query.includes('area') ||
     query.includes('city') ||
     query.includes('cities') ||
     query.includes('location') ||
     query.includes('serve') ||
     query.includes('service zone') ||
+    query.includes('coverage') ||
+    query.includes('region') ||
+    query.includes('where do you') ||
+    query.includes('where are you') ||
     query.includes('do you come to') ||
-    query.includes('do you cover')
-  ) {
+    query.includes('do you cover');
+
+  if (isAreaQuery) {
     if (facts.serviceAreas && facts.serviceAreas.length > 0) {
       const areaList = facts.serviceAreas.join(', ');
       return {
@@ -380,8 +408,9 @@ export function queryStructuredFacts(
     }
   }
 
-  // 5. Pricing, Rates & Services Inquiry
+  // 5. Pricing, Rates & Services Inquiry (Skip if query is asking about location/area)
   if (
+    !isAreaQuery && (
     query.includes('price') ||
     query.includes('pricing') ||
     query.includes('cost') ||
@@ -396,12 +425,13 @@ export function queryStructuredFacts(
     query.includes('what do you do') ||
     query.includes('what do you offer') ||
     query.includes('what can you do')
+    )
   ) {
     // Check if the query matches a specific service in the catalog
     if (facts.services && facts.services.length > 0) {
       const matchedServices = facts.services.filter((s) => {
         const sName = s.name.toLowerCase();
-        return query.includes(sName) || sName.split(' ').some((word) => word.length > 3 && query.includes(word));
+        return query.includes(sName) || sName.includes(query.replace(/(how much|cost|price|pricing|rates?|fee|tell me|can you|please)/g, '').trim());
       });
 
       if (matchedServices.length > 0) {

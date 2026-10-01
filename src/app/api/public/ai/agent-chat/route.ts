@@ -475,7 +475,42 @@ DO NOT output any \`\`\`card block when the visitor is asking general questions 
       }
       if (!rawReply) {
         const lowerMsg = (message || '').toLowerCase();
-        if (
+        const isAreaQuery =
+          lowerMsg.includes('area') ||
+          lowerMsg.includes('location') ||
+          lowerMsg.includes('city') ||
+          lowerMsg.includes('cities') ||
+          lowerMsg.includes('serve') ||
+          lowerMsg.includes('where');
+
+        const isWebsiteQuery =
+          lowerMsg.includes('website') ||
+          lowerMsg.includes('site') ||
+          lowerMsg.includes('url') ||
+          lowerMsg.includes('web page') ||
+          lowerMsg.includes('homepage') ||
+          lowerMsg.includes('link');
+
+        const isBookingQuery =
+          bookingIntent.hasIntent ||
+          lowerMsg.includes('book') ||
+          lowerMsg.includes('appointment') ||
+          lowerMsg.includes('schedule') ||
+          lowerMsg.includes('tomorrow');
+
+        if (isAreaQuery) {
+          rawReply = `**${tenantName}** proudly provides services across our local metro area and surrounding communities. Please share your city or zip code, and I'll confirm immediate coverage for your location!`;
+        } else if (isWebsiteQuery) {
+          rawReply = `You can learn more about **${tenantName}** right here in this chat, or let me know what questions you have and I'll be glad to help!`;
+        } else if (isBookingQuery) {
+          if (bookingIntent.dateStr && bookingIntent.timeStr) {
+            rawReply = `I've noted your requested appointment for **${bookingIntent.dateStr} at ${bookingIntent.timeStr}**! To complete your reservation with **${tenantName}**, please provide your **name** and **phone number** (or email).`;
+          } else if (bookingIntent.dateStr) {
+            rawReply = `We'd be glad to schedule an appointment for you on **${bookingIntent.dateStr}**! What time window works best for you (for example, morning 9:00 AM – 12:00 PM or afternoon 1:00 PM – 5:00 PM)?`;
+          } else {
+            rawReply = `I would be happy to help you schedule an appointment with **${tenantName}**! Which day and time window works best for you, and what service do you need?`;
+          }
+        } else if (
           lowerMsg.includes('service') ||
           lowerMsg.includes('rate') ||
           lowerMsg.includes('pricing') ||
@@ -483,7 +518,7 @@ DO NOT output any \`\`\`card block when the visitor is asking general questions 
           lowerMsg.includes('offer') ||
           lowerMsg.includes('what do you do')
         ) {
-          rawReply = `At **${tenantName}**, we provide full professional services with transparent, upfront rates and no hidden fees. Feel free to let me know what you need or ask for an estimate!`;
+          rawReply = `At **${tenantName}**, we provide full professional services with transparent, upfront rates and free estimates. Feel free to let me know what you need or ask for an estimate!`;
         } else {
           rawReply = `Hello! I'm your AI Service Assistant for **${tenantName}**. How can I help you today?`;
         }

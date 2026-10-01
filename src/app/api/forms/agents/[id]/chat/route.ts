@@ -146,26 +146,18 @@ export async function POST(
     let businessProfilePrompt = '';
     const primaryConnectedForm = agent.connectedForms?.[0];
     let formRecord: any = null;
+    let fields: any[] = [];
 
     if (primaryConnectedForm?.id) {
       try {
         formRecord = await db.form.findFirst({
           where: { OR: [{ id: primaryConnectedForm.id }, { slug: primaryConnectedForm.id }] },
-          select: { id: true, name: true, description: true, fieldsJson: true, schemaJson: true, tenantId: true, workspaceId: true },
+          select: { id: true, name: true, description: true, fieldsJson: true, tenantId: true, workspaceId: true },
         });
 
         if (formRecord) {
-          let fields: any[] = [];
           let schemaObj: any = null;
-
-          if (formRecord.schemaJson) {
-            try {
-              schemaObj = typeof formRecord.schemaJson === 'string' ? JSON.parse(formRecord.schemaJson) : formRecord.schemaJson;
-              if (Array.isArray(schemaObj?.fields)) fields = schemaObj.fields;
-            } catch {}
-          }
-
-          if (fields.length === 0 && formRecord.fieldsJson) {
+          if (formRecord.fieldsJson) {
             try {
               const parsed = typeof formRecord.fieldsJson === 'string' ? JSON.parse(formRecord.fieldsJson) : formRecord.fieldsJson;
               if (Array.isArray(parsed)) {
@@ -177,11 +169,30 @@ export async function POST(
           }
 
           for (const f of fields) {
-            if (f?.options && Array.isArray(f.options)) {
+            const fieldId = (f?.id || '').toLowerCase();
+            const fieldLabel = (f?.label || '').toLowerCase();
+            const isServiceField =
+              fieldId.includes('service') ||
+              fieldId.includes('job') ||
+              fieldId.includes('repair') ||
+              fieldLabel.includes('service') ||
+              fieldLabel.includes('work required') ||
+              fieldLabel.includes('trade');
+            const isNonServiceField =
+              fieldId.includes('urgency') ||
+              fieldId.includes('priority') ||
+              fieldId.includes('status') ||
+              fieldLabel.includes('urgency') ||
+              fieldLabel.includes('priority') ||
+              fieldLabel.includes('time window');
+
+            if (isServiceField && !isNonServiceField && f?.options && Array.isArray(f.options)) {
               for (const opt of f.options) {
                 const label = typeof opt === 'string' ? opt : opt?.label || opt?.value;
-                if (label && typeof label === 'string' && label.length < 50) {
-                  extractedServices.push(label);
+                if (label && typeof label === 'string' && label.length < 60) {
+                  if (!label.startsWith('🚨') && !label.startsWith('📅') && !label.startsWith('💬')) {
+                    extractedServices.push(label.trim());
+                  }
                 }
               }
             }
@@ -194,31 +205,76 @@ export async function POST(
               .join('\n');
             formFieldsPrompt = `Connected Form: "${formRecord.name}" (${formRecord.description || 'Customer inquiry'})\nFields to Collect Conversationally (Only in Action Mode):\n${fieldSummaries}\n\nCONVERSATIONAL FORM FILLING INSTRUCTIONS:\nWhen a visitor expresses explicit interest in booking, getting a quote, or requesting service, guide them conversationally through these questions 1 or 2 at a time. Validate inputs gently.`;
           }
-
-          const tenantId = formRecord.tenantId || agent.tenantId;
-          if (tenantId) {
-            const tenant = await db.tenant.findUnique({
-              where: { id: tenantId },
-              select: { name: true, industry: true, phone: true, email: true, address: true },
-            }).catch(() => null);
-
-            if (tenant) {
-              businessProfilePrompt = `BUSINESS PROFILE:\n- Business Name: ${tenant.name}\n- Industry / Trade: ${tenant.industry || 'Professional Services'}\n- Phone: ${tenant.phone || 'Available online'}\n- Email: ${tenant.email || ''}\n- Online scheduling available 24/7`;
-            }
-          }
         }
       } catch (err) {
         console.warn('[forms/agent-chat] Form context load warning:', err);
       }
     }
 
-    // 3. Extract service areas & structured facts from agent config
-    const structuredFacts = agent.knowledge?.structuredFacts;
-    const serviceAreasList = agent.knowledge?.serviceAreas?.length
+    // 3. Resolve Tenant & Verified Facts
+    const tenantId = formRecord?.tenantId || agent.tenantId;
+    let tenantRecord: any = null;
+    if (tenantId) {
+      tenantRecord = await db.tenant.findUnique({
+        where: { id: tenantId },
+        select: { name: true, industry: true, phone: true, email: true, address: true, website: true },
+      }).catch(() => null);
+    }
+
+    let structuredFacts = agent.knowledge?.structuredFacts;
+    if (!structuredFacts && tenantId) {
+      try {
+        const factsDoc = await db.aiKnowledgeDocument.findFirst({
+          where: { tenantId, title: { contains: 'Verified Facts' } },
+          select: { content: true },
+        });
+        if (factsDoc?.content) {
+          try {
+            structuredFacts = JSON.parse(factsDoc.content);
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('[forms/agent-chat] Verified facts doc load warning:', err);
+      }
+    }
+
+    const websiteUrl =
+      structuredFacts?.sourceUrl ||
+      agent.knowledge?.websiteUrl ||
+      agent.knowledge?.crawledUrls?.[0] ||
+      tenantRecord?.website ||
+      null;
+
+    let serviceAreasList = agent.knowledge?.serviceAreas?.length
       ? agent.knowledge.serviceAreas.join(', ')
       : structuredFacts?.serviceAreas?.length
       ? structuredFacts.serviceAreas.join(', ')
       : '';
+
+    if (!serviceAreasList && fields.length > 0) {
+      const addressField = fields.find((f: any) => f?.id?.includes('address') || f?.type === 'address');
+      if (addressField?.placeholder && addressField.placeholder.includes(',')) {
+        const cleaned = addressField.placeholder.replace(/^Street address in /i, '').replace(/\.\.\.$/, '').trim();
+        if (cleaned) serviceAreasList = cleaned;
+      }
+    }
+
+    const bName = structuredFacts?.businessName || tenantRecord?.name || agent.name;
+    const bPhone = structuredFacts?.phone || tenantRecord?.phone || '';
+    const bEmail = structuredFacts?.email || tenantRecord?.email || '';
+    const bAddress = structuredFacts?.address || tenantRecord?.address || '';
+    const bWebsite = websiteUrl || '';
+
+    businessProfilePrompt = [
+      `BUSINESS PROFILE:`,
+      `- Business Name: ${bName}`,
+      `- Industry / Trade: ${tenantRecord?.industry || 'Professional Services'}`,
+      bPhone ? `- Phone: ${bPhone}` : '',
+      bEmail ? `- Email: ${bEmail}` : '',
+      bAddress ? `- Address: ${bAddress}` : '',
+      bWebsite ? `- Official Website: ${bWebsite}` : '',
+      `- Online scheduling available 24/7`,
+    ].filter(Boolean).join('\n');
 
     // 4. Intent Classification: Answer Mode vs Action Mode
     const intentResult = classifyIntent(safeMessage);
@@ -402,7 +458,80 @@ export async function POST(
           ])
         ).filter(Boolean);
 
-        if (
+        // A. Service Area & Location check (MUST RUN BEFORE GENERAL SERVICES)
+        const isAreaQuery =
+          lower.includes('area') ||
+          lower.includes('location') ||
+          lower.includes('city') ||
+          lower.includes('cities') ||
+          lower.includes('serve') ||
+          lower.includes('coverage') ||
+          lower.includes('region') ||
+          lower.includes('where do you') ||
+          lower.includes('where are you') ||
+          lower.includes('come to');
+
+        // B. Website / URL query
+        const isWebsiteQuery =
+          lower.includes('website') ||
+          lower.includes('site') ||
+          lower.includes('url') ||
+          lower.includes('web page') ||
+          lower.includes('homepage') ||
+          lower.includes('link');
+
+        // C. Contact info query
+        const isContactQuery =
+          lower.includes('phone') ||
+          lower.includes('call') ||
+          lower.includes('number') ||
+          lower.includes('email') ||
+          lower.includes('contact');
+
+        // D. Booking / Scheduling query
+        const bookingIntent = extractBookingIntent(message, history, primaryConnectedForm?.name || agent.roleTitle);
+        const isBookingQuery =
+          bookingIntent.hasIntent ||
+          lower.includes('book') ||
+          lower.includes('appointment') ||
+          lower.includes('schedule') ||
+          lower.includes('tomorrow') ||
+          lower.includes('calendar');
+
+        if (isAreaQuery) {
+          if (serviceAreasList) {
+            replyText = `**${agent.name}** proudly serves **${serviceAreasList}** and surrounding communities! Are you located within our service area, or would you like to schedule a service visit?`;
+          } else {
+            replyText = `**${agent.name}** provides services across our local metro area and surrounding communities. Please share your city or zip code, and I'll confirm immediate coverage for your location!`;
+          }
+        } else if (isWebsiteQuery) {
+          if (websiteUrl) {
+            replyText = `You can visit our official website at **[${websiteUrl}](${websiteUrl})** for complete information about our services, testimonials, and online booking!`;
+          } else {
+            replyText = `You can learn more about **${agent.name}** right here, or let me know what questions you have and I'll be glad to help!`;
+          }
+        } else if (isContactQuery) {
+          const details: string[] = [];
+          const phoneVal = structuredFacts?.phone || tenantRecord?.phone;
+          const emailVal = structuredFacts?.email || tenantRecord?.email;
+          const addressVal = structuredFacts?.address || tenantRecord?.address;
+          if (phoneVal) details.push(`📞 **Phone:** ${phoneVal}`);
+          if (emailVal) details.push(`✉️ **Email:** ${emailVal}`);
+          if (addressVal) details.push(`📍 **Address:** ${addressVal}`);
+          if (details.length > 0) {
+            replyText = `You can contact **${agent.name}** through:\n\n${details.join('\n')}\n\nOur team is available to assist you!`;
+          } else {
+            replyText = `You can contact **${agent.name}** directly through this chat, or submit an inquiry to have our team reach out to you!`;
+          }
+        } else if (isBookingQuery) {
+          if (bookingIntent.dateStr && bookingIntent.timeStr) {
+            replyText = `I've noted your requested appointment for **${bookingIntent.dateStr} at ${bookingIntent.timeStr}**! To complete your reservation with **${agent.name}**, please provide your **name** and **phone number** (or email).`;
+          } else if (bookingIntent.dateStr) {
+            replyText = `We'd be glad to schedule an appointment for you on **${bookingIntent.dateStr}**! What time window works best for you (for example, morning 9:00 AM – 12:00 PM or afternoon 1:00 PM – 5:00 PM)?`;
+          } else {
+            replyText = `I would be happy to help you schedule an appointment with **${agent.name}**! Which day and time window works best for you, and what service do you need?`;
+          }
+        } else if (
           lower.includes('service') ||
           lower.includes('rate') ||
           lower.includes('pricing') ||
@@ -413,13 +542,19 @@ export async function POST(
           lower.includes('what do you do') ||
           lower.includes('what can you do')
         ) {
-          if (knownServices.length > 0) {
+          // Check if user asked about a specific service
+          const matchedService = knownServices.find((s) => {
+            const sLower = s.toLowerCase();
+            return lower.includes(sLower) || (sLower.length > 5 && lower.includes(sLower.replace(/\s+(repair|replacement|installation|services?)/g, '')));
+          });
+
+          if (matchedService) {
+            replyText = `**${agent.name}** provides professional **${matchedService}**! We offer upfront, transparent pricing and free estimates before starting any job. Would you like an instant quote or to schedule an appointment for ${matchedService}?`;
+          } else if (knownServices.length > 0) {
             replyText = `**${agent.name}** offers a full range of professional services, including:\n\n${knownServices.map((s) => `• **${s}**`).join('\n')}\n\nOur rates depend on the specific scope of work, and we provide transparent, upfront estimates before beginning any job. Would you like an instant quote or to schedule an appointment?`;
           } else {
             replyText = `**${agent.name}** provides comprehensive ${agent.roleTitle || 'services'} with upfront, transparent rates and free estimates. Would you like to tell me more about your project so I can provide an accurate quote?`;
           }
-        } else if (isInformationalQuery && serviceAreasList && (lower.includes('location') || lower.includes('area') || lower.includes('serve') || lower.includes('where'))) {
-          replyText = `**${agent.name}** proudly serves **${serviceAreasList}** and surrounding communities! Feel free to let me know what you need or ask any questions.`;
         } else if (lower.includes('question') || lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
           replyText = `Hello! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I help you today? Feel free to ask about our services, service areas, or request an estimate!`;
         } else {
