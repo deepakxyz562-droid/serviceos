@@ -573,10 +573,19 @@ function buildMetaTemplatePayload(
     // UTILITY / MARKETING: body with text, ensuring compliance
     let bodyText = stripEmojis(template.content);
     bodyText = ensureBodyNotStartsOrEndsWithVariable(bodyText);
-    components.push({
+    const bodyComp: Record<string, unknown> = {
       type: 'BODY',
       text: bodyText,
-    });
+    };
+    // Meta requires an example object for any template containing positional variables {{1}}, {{2}}
+    const varMatches = bodyText.match(/\{\{\d+\}\}/g);
+    if (varMatches && varMatches.length > 0) {
+      const sampleVals = varMatches.map((_, idx) => `Sample ${idx + 1}`);
+      bodyComp.example = {
+        body_text: [sampleVals],
+      };
+    }
+    components.push(bodyComp);
   }
 
   // Footer — strip emojis and variables (Meta doesn't allow variables in footer)

@@ -46,6 +46,31 @@ export async function checkWhatsAppCredits(tenantId: string): Promise<CreditChec
   })
 
   if (!subscription) {
+    // Check if platform has an active WhatsApp provider (SuperAdmin configured or env)
+    const platformProvider = await db.communicationProvider.findFirst({
+      where: {
+        type: 'whatsapp',
+        status: 'active',
+        sendingEnabled: true,
+        isPlatform: true,
+      },
+    })
+    const hasPlatformWhatsApp = !!platformProvider || !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID)
+
+    if (hasPlatformWhatsApp) {
+      return {
+        allowed: true,
+        remainingCredits: -1,
+        usedCredits: 0,
+        totalCredits: -1,
+        isTrial: false,
+        ownWhatsappConnected: false,
+        platformWhatsappEnabled: true,
+        planStatus: 'active',
+        plan: 'enterprise',
+      }
+    }
+
     return {
       allowed: false,
       reason: 'No subscription found. Please contact support.',
@@ -159,7 +184,33 @@ export async function checkWhatsAppCredits(tenantId: string): Promise<CreditChec
     }
   }
 
-  // No own WhatsApp connected → block with a clear reason.
+  // Check if platform has an active WhatsApp provider (SuperAdmin configured or env)
+  const platformProvider = await db.communicationProvider.findFirst({
+    where: {
+      type: 'whatsapp',
+      status: 'active',
+      sendingEnabled: true,
+      isPlatform: true,
+    },
+  })
+
+  const hasPlatformWhatsApp = !!platformProvider || !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID)
+
+  if (hasPlatformWhatsApp) {
+    return {
+      allowed: true,
+      remainingCredits: -1,
+      usedCredits: subscription.whatsappUsageCount,
+      totalCredits: -1,
+      isTrial,
+      ownWhatsappConnected: false,
+      platformWhatsappEnabled: true,
+      planStatus,
+      plan,
+    }
+  }
+
+  // No own WhatsApp connected and no platform provider → block with a clear reason.
   const reason = isTrial
     ? 'WhatsApp is available on paid plans with your own Meta Business Account. Upgrade and connect your WhatsApp to send messages.'
     : 'Connect your own WhatsApp Business Account (Meta Cloud API) to send WhatsApp messages. The platform provides Email, SMS, and Push notifications only.';

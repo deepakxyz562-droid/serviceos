@@ -10,6 +10,7 @@ interface SendWhatsAppOptions {
   type?: 'text' | 'template'
   templateName?: string
   templateLanguage?: string
+  templateComponents?: Array<Record<string, unknown>>
   tenantId?: string
 }
 
@@ -156,9 +157,7 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
         }
       }
 
-      // 2c. Legacy fallback: any active WhatsApp provider that is NOT a
-      //     platform/shared provider. (Previously this fell back to platform
-      //     providers — that path is removed per Issue 5.)
+      // 2c. Legacy fallback: any active WhatsApp provider that is NOT a platform provider
       if (!accessToken) {
         const waProviders = await db.communicationProvider.findMany({
           where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: false },
@@ -171,6 +170,26 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
             accessToken = resolved.accessToken
             phoneNumberId = resolved.phoneNumberId
             credentialSource = `communicationProvider:${prov.id}(${prov.name}/${prov.provider})`
+            break
+          }
+        }
+      }
+
+      // 2d. Platform provider fallback (SuperAdmin configured):
+      // When a tenant does not have their own connected Meta account, use
+      // the SuperAdmin platform provider to deliver notifications.
+      if (!accessToken) {
+        const platformProviders = await db.communicationProvider.findMany({
+          where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: true },
+          orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+          include: { credential: true },
+        })
+        for (const prov of platformProviders) {
+          const resolved = resolveWACreds(prov)
+          if (resolved) {
+            accessToken = resolved.accessToken
+            phoneNumberId = resolved.phoneNumberId
+            credentialSource = `communicationProvider:${prov.id}(${prov.name}/platform)`
             break
           }
         }
@@ -203,13 +222,22 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
     } catch { /* fall through */ }
   }
 
-  // 4. No credentials found → simulated
-  //    IMPORTANT: this is now a true no-op (no real send). Previously the
-  //    platform WhatsApp provider would have been used here. With platform
-  //    WhatsApp removed, we log + return simulated so the caller can show
-  //    "connect your own WhatsApp" in the UI.
+  // 3b. Environment variables fallback
   if (!accessToken || !phoneNumberId) {
-    console.log(`[WhatsApp SIMULATED — no own credentials] To: ${to}, Tenant: ${tenantId || 'none'}`)
+    const envToken = process.env.WHATSAPP_ACCESS_TOKEN
+    const envPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID
+    if (envToken && envPhoneId) {
+      accessToken = envToken
+      phoneNumberId = envPhoneId
+      credentialSource = 'env:WHATSAPP_ACCESS_TOKEN'
+    }
+  }
+
+  // 4. No credentials found → simulated
+  //    If no credentials are found in tenant providers, platform providers, or env,
+  //    log + return simulated so the caller can show "connect WhatsApp" in UI.
+  if (!accessToken || !phoneNumberId) {
+    console.log(`[WhatsApp SIMULATED — no credentials] To: ${to}, Tenant: ${tenantId || 'none'}`)
     return {
       success: true,
       simulated: true,
@@ -228,11 +256,18 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
   // Build payload
   let payload: Record<string, unknown>
   if (type === 'template') {
+    const templateObj: Record<string, unknown> = {
+      name: templateName || message,
+      language: { code: templateLanguage || 'en_US' },
+    }
+    if (options.templateComponents && options.templateComponents.length > 0) {
+      templateObj.components = options.templateComponents
+    }
     payload = {
       messaging_product: 'whatsapp',
       to: recipientPhone,
       type: 'template',
-      template: { name: templateName || message, language: { code: templateLanguage || 'en_US' } },
+      template: templateObj,
     }
   } else {
     payload = {

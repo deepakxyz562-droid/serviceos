@@ -100,6 +100,37 @@ async function sendNotificationWhatsAppMessage(
   // For text messages, use the unified sendWhatsAppMessage (tenant own → platform fallback)
   if (type !== 'interactive' || !interactive) {
     const result = await sendWhatsAppMessage({ to, message, tenantId })
+    // If text send failed because outside 24h window (Meta code 131047 / Re-engagement):
+    if (!result.success && (result.error?.includes('24 hours') || result.error?.includes('Re-engagement') || result.error?.includes('template') || result.error?.includes('131047'))) {
+      console.log(`[WhatsApp] Text rejected due to 24h window for ${to}. Falling back to approved template fieseros_job_assignment...`)
+      const templateRes = await sendWhatsAppMessage({
+        to,
+        message: 'fieseros_job_assignment',
+        type: 'template',
+        templateName: 'fieseros_job_assignment',
+        templateLanguage: 'en_US',
+        templateComponents: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: 'Team Member' },
+              { type: 'text', text: 'Notification' },
+              { type: 'text', text: 'Customer' },
+              { type: 'text', text: 'Service Update' },
+              { type: 'text', text: 'Check your app' },
+            ],
+          },
+        ],
+        tenantId,
+      })
+      if (templateRes.success) {
+        return {
+          success: true,
+          externalId: templateRes.messageId,
+          simulated: templateRes.simulated,
+        }
+      }
+    }
     return {
       success: result.success,
       error: result.error,
@@ -148,6 +179,38 @@ async function sendNotificationWhatsAppMessage(
         try { await deductWhatsAppCredit(tenantId, 1) } catch { /* non-blocking */ }
       }
       return { success: true, externalId: messages?.[0]?.id || `real_${Date.now()}` }
+    }
+
+    const errCode = (errorObj?.code as number) || 0
+    if (errCode === 131047 || String(errorObj?.message).includes('24 hours')) {
+      console.log(`[WhatsApp] Interactive rejected due to 24h window for ${recipientPhone}. Falling back to approved template fieseros_job_assignment...`)
+      const templateRes = await sendWhatsAppMessage({
+        to: recipientPhone,
+        message: 'fieseros_job_assignment',
+        type: 'template',
+        templateName: 'fieseros_job_assignment',
+        templateLanguage: 'en_US',
+        templateComponents: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: 'Team Member' },
+              { type: 'text', text: 'Notification' },
+              { type: 'text', text: 'Customer' },
+              { type: 'text', text: 'Service Update' },
+              { type: 'text', text: 'Check your app' },
+            ],
+          },
+        ],
+        tenantId,
+      })
+      if (templateRes.success) {
+        return {
+          success: true,
+          externalId: templateRes.messageId,
+          simulated: templateRes.simulated,
+        }
+      }
     }
 
     return {
