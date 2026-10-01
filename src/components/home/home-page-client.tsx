@@ -335,7 +335,7 @@ export default function HomePageClient() {
 
           const tenantPlan = (data.tenant as any)?.plan as string | null | undefined;
           const sm = (data.tenant as any)?.signupMode as string | null | undefined;
-          const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone');
+          const isStandalone = !isPlatformAdmin(data.user) && urlView !== 'superadmin' && (sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone'));
 
           const needsOnboarding =
             data.tenant &&
@@ -451,7 +451,7 @@ export default function HomePageClient() {
               }
               const tenantPlan = (parsed.tenant as any)?.plan as string | null | undefined;
               const sm = (parsed.tenant as any)?.signupMode as string | null | undefined;
-              const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone');
+              const isStandalone = !isPlatformAdmin(parsed.user) && (sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone'));
 
               const needsOnboarding =
                 parsed.tenant &&

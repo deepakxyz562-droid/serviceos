@@ -477,11 +477,19 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   // before downgrade) or the old 'settings' view, redirect them to their
   // marketplace dashboard. This is a UI guard; the API layer enforces the
   // same restriction with 403 responses (see require-crm-tenant).
+  const isSuperAdmin = !!(
+    auth?.user?.isSuperAdmin ||
+    auth?.user?.role === 'superadmin' ||
+    auth?.user?.role === 'super_admin' ||
+    (auth?.user?.role === 'admin' && !auth?.user?.tenantId)
+  );
+
   const isListingOnlyTenant =
-    (auth?.tenant as any)?.signupMode === 'listing_only' ||
-    (auth?.tenant as any)?.listingTier === 'claimed_free';
+    !isSuperAdmin &&
+    ((auth?.tenant as any)?.signupMode === 'listing_only' ||
+     (auth?.tenant as any)?.listingTier === 'claimed_free');
   const listingAllowedViews = useMemo(() => new Set([
-    'marketplaceDashboard', 'serviceCatalog', 'billing', 'helpCenter', 'claimBusiness',
+    'superadmin', 'marketplaceDashboard', 'serviceCatalog', 'billing', 'helpCenter', 'claimBusiness',
   ]), []);
   useEffect(() => {
     if (isListingOnlyTenant && !listingAllowedViews.has(currentView)) {
@@ -490,15 +498,16 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   }, [isListingOnlyTenant, currentView, setCurrentView, listingAllowedViews]);
 
   const isStandaloneTenant =
-    !auth?.user?.tenantId ||
-    (auth?.tenant as any)?.signupMode === 'standalone' ||
-    (auth?.tenant as any)?.plan === 'standalone_starter' ||
-    (auth?.tenant as any)?.plan === 'standalone_business' ||
-    (auth?.tenant as any)?.productType === 'forms' ||
-    (auth?.workspace as any)?.productType === 'forms' ||
-    String((auth?.tenant as any)?.plan || '').startsWith('standalone') ||
-    (auth?.user as any)?.role === 'standalone_user';
+    !isSuperAdmin &&
+    ((auth?.tenant as any)?.signupMode === 'standalone' ||
+     (auth?.tenant as any)?.plan === 'standalone_starter' ||
+     (auth?.tenant as any)?.plan === 'standalone_business' ||
+     (auth?.tenant as any)?.productType === 'forms' ||
+     (auth?.workspace as any)?.productType === 'forms' ||
+     String((auth?.tenant as any)?.plan || '').startsWith('standalone') ||
+     (auth?.user as any)?.role === 'standalone_user');
   const standaloneAllowedViews = useMemo(() => new Set([
+    'superadmin',
     // AI Forms, Voice Agents & Creator Suite
     'formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments',
     'aiReceptionist', 'aiCallHistory', 'aiAgents', 'aiPhoneNumbers', 'omnichannel', 'workflowAutomations',
